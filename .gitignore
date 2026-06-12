@@ -3,3 +3,6 @@
 
 # Gepackte Addon-Archive
 *.zip
+
+# VSCode Workspace Dateien
+*.code-workspace
