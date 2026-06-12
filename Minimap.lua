@@ -5,10 +5,10 @@ miniButton:SetSize(31, 31)
 miniButton:SetFrameLevel(10)
 miniButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-local icon = miniButton:CreateTexture(nil, "ARTWORK")
-icon:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.jpg")
-icon:SetSize(20, 20)
-icon:SetPoint("CENTER")
+miniButton.icon = miniButton:CreateTexture(nil, "ARTWORK")
+miniButton.icon:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.jpg")
+miniButton.icon:SetSize(20, 20)
+miniButton.icon:SetPoint("CENTER")
 
 function KART.UpdateMinimapButton()
     if not KART_Settings then return end

@@ -2,6 +2,7 @@ local addonName, KART = ...
 
 KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.0"
 local frame = CreateFrame("Frame")
+
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("CHAT_MSG_GUILD")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
@@ -34,7 +35,7 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
     end,
 })
 
-frame:SetScript("OnEvent", function(self, event, arg1, arg2, ...)
+frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     if event == "ADDON_LOADED" and arg1 == addonName then
         C_ChatInfo.RegisterAddonMessagePrefix("KART")
 
@@ -244,36 +245,36 @@ frame:SetScript("OnEvent", function(self, event, arg1, arg2, ...)
                     end
                 elseif msg == "REQ_VERSION" then
                     C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version, channel)
-            elseif msg:sub(1, 8) == "VERSION:" or msg:sub(1, 17) == "ANNOUNCE_VERSION:" then
-                local isAnnounce = (msg:sub(1, 17) == "ANNOUNCE_VERSION:")
-                local ver = isAnnounce and msg:sub(18) or msg:sub(9)
-                
-                if not KART.UpdateWarned and ver ~= KART.Version then
-                    local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
-                    local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
-                    nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
-                    oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
+                elseif msg:sub(1, 8) == "VERSION:" or msg:sub(1, 17) == "ANNOUNCE_VERSION:" then
+                    local isAnnounce = (msg:sub(1, 17) == "ANNOUNCE_VERSION:")
+                    local ver = isAnnounce and msg:sub(18) or msg:sub(9)
                     
-                    if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
-                        KART.UpdateWarned = true
-                        print(string.format(KART.L.UPDATE_AVAILABLE or "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).", ver, KART.Version))
+                    if not KART.UpdateWarned and ver ~= KART.Version then
+                        local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
+                        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
+                        nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
+                        oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
+                        
+                        if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
+                            KART.UpdateWarned = true
+                            print(string.format(KART.L.UPDATE_AVAILABLE or "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).", ver, KART.Version))
+                        end
                     end
-                end
 
-                if KART.VersionCheckActive and not isAnnounce then
-                    print(string.format(KART.L.VERSION_CHECK_RES or "KART Version von %s: %s", shortName, ver))
-                end
-            elseif msg:sub(1, 10) == "RC_REASON:" then
-                local reason = msg:sub(11)
-                KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
-                KART.ReadyCheckReasons[shortName] = reason
-                
-                if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
-                    print(string.format("|cff00ff00KART:|r %s ist nicht bereit: |cffffaa00%s|r", shortName, reason))
-                end
-                
-                if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-                    KART.UpdateBuffCheckThrottled()
+                    if KART.VersionCheckActive and not isAnnounce then
+                        print(string.format(KART.L.VERSION_CHECK_RES or "KART Version von %s: %s", shortName, ver))
+                    end
+                elseif msg:sub(1, 10) == "RC_REASON:" then
+                    local reason = msg:sub(11)
+                    KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
+                    KART.ReadyCheckReasons[shortName] = reason
+                    
+                    if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
+                        print(string.format("|cff00ff00KART:|r %s ist nicht bereit: |cffffaa00%s|r", shortName, reason))
+                    end
+                    
+                    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
+                        KART.UpdateBuffCheckThrottled()
                     end
                 end
             end

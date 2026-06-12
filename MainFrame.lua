@@ -33,7 +33,7 @@ mainFrame:SetBackdropBorderColor(0, 0, 0, 1)
 mainFrame:Hide()
 
 -- Ermöglicht das Schließen des gesamten KART-Fensters mit der ESC-Taste
-tinsert(UISpecialFrames, mainFrame:GetName())
+table.insert(UISpecialFrames, mainFrame:GetName())
 
 -- Header & Dragging
 mainFrame.header = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
@@ -60,10 +60,10 @@ local mainInset = CreateFrame("Frame", nil, mainFrame)
 mainInset:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 5, -30)
 mainInset:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -5, 5)
 
-local sidebarBG = mainInset:CreateTexture(nil, "BACKGROUND")
-sidebarBG:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 0, 0)
-sidebarBG:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMLEFT", 140, 0)
-sidebarBG:SetColorTexture(0.05, 0.05, 0.05, 0.8)
+mainInset.sidebarBG = mainInset:CreateTexture(nil, "BACKGROUND")
+mainInset.sidebarBG:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 0, 0)
+mainInset.sidebarBG:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMLEFT", 140, 0)
+mainInset.sidebarBG:SetColorTexture(0.05, 0.05, 0.05, 0.8)
 
 KART.BtnInvite = KART.CreateModernButton(mainFrame, L.TAB_INVITE)
 KART.BtnInvite:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 5, -10)
@@ -86,11 +86,11 @@ KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(5) end)
 
 -- Sichtbare Trennlinie (Vertical Divider)
-local line = mainInset:CreateTexture(nil, "BACKGROUND")
-line:SetColorTexture(0.2, 0.2, 0.2, 1)
-line:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 140, 0)
-line:SetPoint("BOTTOMLEFT", mainInset, "BOTTOMLEFT", 140, 0)
-line:SetWidth(1)
+mainInset.divider = mainInset:CreateTexture(nil, "BACKGROUND")
+mainInset.divider:SetColorTexture(0.2, 0.2, 0.2, 1)
+mainInset.divider:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 140, 0)
+mainInset.divider:SetPoint("BOTTOMLEFT", mainInset, "BOTTOMLEFT", 140, 0)
+mainInset.divider:SetWidth(1)
 
 -- 4. Content Bereich (ScrollFrame)
 local scrollFrame = CreateFrame("ScrollFrame", "KART_ContentScrollFrame", mainInset, "UIPanelScrollFrameTemplate")
@@ -118,30 +118,8 @@ KART.SettingsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.SettingsPanel:SetAllPoints()
 
 -- Scrollbar Thumb für KART.UpdateStyles() registrieren
-local scrollbar = _G[scrollFrame:GetName().."ScrollBar"]
-if scrollbar then
-    local up = _G[scrollbar:GetName().."ScrollUpButton"]
-    local down = _G[scrollbar:GetName().."ScrollDownButton"]
-    for _, btn in ipairs({up, down}) do
-        btn:Hide()
-        btn:SetSize(1, 1)
-        for i = 1, btn:GetNumRegions() do
-            local region = select(i, btn:GetRegions())
-            if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-        end
-    end
-    for i = 1, scrollbar:GetNumRegions() do
-        local region = select(i, scrollbar:GetRegions())
-        if region and region:IsObjectType("Texture") then
-            region:SetTexture(nil)
-        end
-    end
-    KART.ScrollThumb = scrollbar:GetThumbTexture()
-    if KART.ScrollThumb then
-        KART.ScrollThumb:SetTexture("Interface\\Buttons\\WHITE8X8")
-        KART.ScrollThumb:SetSize(8, 30)
-    end
-end
+KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
+if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
 
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)
 local rlTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -248,26 +226,8 @@ local bulkScroll = CreateFrame("ScrollFrame", "KART_BulkInviteScrollFrame", bulk
 bulkScroll:SetPoint("TOPLEFT", 5, -5)
 bulkScroll:SetPoint("BOTTOMRIGHT", -25, 5)
 
-local sb = _G[bulkScroll:GetName().."ScrollBar"]
-if sb then
-    local up, down = _G[sb:GetName().."ScrollUpButton"], _G[sb:GetName().."ScrollDownButton"]
-    for _, btn in ipairs({up, down}) do
-        btn:Hide() btn:SetSize(1, 1)
-        for i = 1, btn:GetNumRegions() do
-            local region = select(i, btn:GetRegions())
-            if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-        end
-    end
-    for i = 1, sb:GetNumRegions() do
-        local region = select(i, sb:GetRegions())
-        if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-    end
-    KART.BulkScrollThumb = sb:GetThumbTexture()
-    if KART.BulkScrollThumb then
-        KART.BulkScrollThumb:SetTexture("Interface\\Buttons\\WHITE8X8")
-        KART.BulkScrollThumb:SetSize(8, 20)
-    end
-end
+KART.BulkScrollThumb = KART.StripScrollbarTextures(bulkScroll)
+if KART.BulkScrollThumb then KART.BulkScrollThumb:SetSize(8, 20) end
 
 KART.BulkInviteEditBox = CreateFrame("EditBox", "KART_BulkInviteEditBox", bulkScroll)
 KART.BulkInviteEditBox:SetWidth(230)
@@ -288,6 +248,7 @@ KART.BulkInviteProcessBtn:SetScript("OnClick", function() KART.ProcessBulkInvite
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -20)
 settingsTitle:SetText(L.LABEL_GENERAL_SETTINGS)
+table.insert(KART.DynamicLabels, settingsTitle)
 
 KART.CbMinimap = KART.CreateSettingsCheckbox(KART.SettingsPanel, "KART_MinimapCheck", L.SET_MINIMAP, "showMinimapIcon", -60, function()
     KART.UpdateMinimapButton()
@@ -324,7 +285,7 @@ end)
 KART.BtnLang = KART.CreateModernButton(KART.SettingsPanel, (L.BTN_LANGUAGE_PREFIX or "Language: ") .. (L.LANG_AUTO or "Auto"), L.DESC_LANGUAGE)
 KART.BtnLang:SetPoint("TOPLEFT", KART.BtnFont, "TOPRIGHT", 10, 0)
 KART.BtnLang:SetScript("OnClick", function(self)
-    MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
         rootDescription:CreateTitle(L.LABEL_LANGUAGE)
         local options = {
             {name = L.LANG_AUTO, value = "Auto"},
@@ -351,10 +312,10 @@ KART.BtnAccentColor:SetScript("OnClick", function() KART.OpenColorPicker("accent
 KART.ColorPreview = KART.SettingsPanel:CreateTexture(nil, "OVERLAY")
 KART.ColorPreview:SetSize(25, 25)
 KART.ColorPreview:SetPoint("LEFT", KART.BtnAccentColor, "RIGHT", 10, 0)
-local cpBG = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
-cpBG:SetPoint("TOPLEFT", KART.ColorPreview, "TOPLEFT", -1, 1)
-cpBG:SetPoint("BOTTOMRIGHT", KART.ColorPreview, "BOTTOMRIGHT", 1, -1)
-cpBG:SetColorTexture(0, 0, 0, 1)
+KART.ColorPreview.bg = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
+KART.ColorPreview.bg:SetPoint("TOPLEFT", KART.ColorPreview, "TOPLEFT", -1, 1)
+KART.ColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.ColorPreview, "BOTTOMRIGHT", 1, -1)
+KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 
 KART.BtnBgColor = KART.CreateModernButton(KART.SettingsPanel, L.BTN_BG_COLOR, L.DESC_BG_COLOR)
 KART.BtnBgColor:SetPoint("TOPLEFT", KART.BtnAccentColor, "TOPRIGHT", 45, 0)
@@ -364,10 +325,10 @@ KART.BtnBgColor:SetScript("OnClick", function() KART.OpenColorPicker("bgR", "bgG
 KART.BgColorPreview = KART.SettingsPanel:CreateTexture(nil, "OVERLAY")
 KART.BgColorPreview:SetSize(25, 25)
 KART.BgColorPreview:SetPoint("LEFT", KART.BtnBgColor, "RIGHT", 10, 0)
-local bgCpBG = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
-bgCpBG:SetPoint("TOPLEFT", KART.BgColorPreview, "TOPLEFT", -1, 1)
-bgCpBG:SetPoint("BOTTOMRIGHT", KART.BgColorPreview, "BOTTOMRIGHT", 1, -1)
-bgCpBG:SetColorTexture(0, 0, 0, 1)
+KART.BgColorPreview.bg = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
+KART.BgColorPreview.bg:SetPoint("TOPLEFT", KART.BgColorPreview, "TOPLEFT", -1, 1)
+KART.BgColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.BgColorPreview, "BOTTOMRIGHT", 1, -1)
+KART.BgColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 
 -- Reset Button
 KART.BtnReset = KART.CreateModernButton(KART.SettingsPanel, L.BTN_RESET, L.DESC_RESET)
@@ -378,13 +339,13 @@ KART.BtnReset:SetScript("OnClick", function()
 end)
 
 -- 8. Resize Handle (Unten Rechts)
-local resizeBtn = CreateFrame("Button", nil, mainFrame)
-resizeBtn:SetSize(16, 16)
-resizeBtn:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -2, 2)
-resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-resizeBtn:SetScript("OnMouseDown", function() mainFrame:StartSizing("BOTTOMRIGHT") end)
-resizeBtn:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing() end)
+mainFrame.resizeBtn = CreateFrame("Button", nil, mainFrame)
+mainFrame.resizeBtn:SetSize(16, 16)
+mainFrame.resizeBtn:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -2, 2)
+mainFrame.resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+mainFrame.resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+mainFrame.resizeBtn:SetScript("OnMouseDown", function() mainFrame:StartSizing("BOTTOMRIGHT") end)
+mainFrame.resizeBtn:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing() end)
 
 -- 8. Schließen Button
 local closeBtn = CreateFrame("Button", nil, mainFrame.header, "BackdropTemplate")

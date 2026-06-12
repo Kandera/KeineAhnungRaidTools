@@ -39,7 +39,7 @@ KART.SlotNames = {
 -- Integration von LibDurability (wird durch BigWigs/MRT bereitgestellt)
 local LibDurability = LibStub and LibStub("LibDurability", true)
 if LibDurability and LibDurability.Register then
-    LibDurability:Register("KeineAhnungRaidTools", function(percent, broken, sender)
+    LibDurability:Register("KeineAhnungRaidTools", function(percent, _, sender)
         if type(sender) ~= "string" or type(percent) ~= "number" then return end
         
         KART.DurabilityCache[sender] = percent
@@ -129,28 +129,8 @@ function KART.CreateBuffCheckFrame()
     sf:SetPoint("TOPLEFT", 10, -55)
     sf:SetPoint("BOTTOMRIGHT", -30, 40)
 
-    local sb = _G[sf:GetName().."ScrollBar"]
-    if sb then
-        local up = _G[sb:GetName().."ScrollUpButton"]
-        local down = _G[sb:GetName().."ScrollDownButton"]
-        for _, btn in ipairs({up, down}) do
-            btn:Hide()
-            btn:SetSize(1, 1)
-            for i = 1, btn:GetNumRegions() do
-                local region = select(i, btn:GetRegions())
-                if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-            end
-        end
-        for i = 1, sb:GetNumRegions() do
-            local region = select(i, sb:GetRegions())
-            if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-        end
-        KART.BuffScrollThumb = sb:GetThumbTexture()
-        if KART.BuffScrollThumb then
-            KART.BuffScrollThumb:SetTexture("Interface\\Buttons\\WHITE8X8")
-            KART.BuffScrollThumb:SetSize(8, 30)
-        end
-    end
+    KART.BuffScrollThumb = KART.StripScrollbarTextures(sf)
+    if KART.BuffScrollThumb then KART.BuffScrollThumb:SetSize(8, 30) end
 
     local content = CreateFrame("Frame", nil, sf)
     content:SetSize(660, 1)
@@ -237,6 +217,15 @@ function KART.CreateBuffCheckFrame()
     close:SetScript("OnClick", function() f:Hide() end)
     f.closeBtn = close
 
+    local function RequestAdvancedData()
+        if IsInGroup() then
+            local chan = IsInRaid() and "RAID" or "PARTY"
+            C_ChatInfo.SendAddonMessage("KART", "REQ_OIL", chan)
+            C_ChatInfo.SendAddonMessage("KART", "REQ_ILVL", chan)
+            C_ChatInfo.SendAddonMessage("KART", "REQ_GEAR", chan)
+        end
+    end
+
     local modeBtn = KART.CreateModernButton(f, L.BTN_MODE_ADVANCED or "Ansicht: Erweitert")
     modeBtn:SetPoint("BOTTOMLEFT", 10, 10)
     modeBtn:SetSize(150, 22)
@@ -248,28 +237,18 @@ function KART.CreateBuffCheckFrame()
             KART.BuffCheckMode = "advanced"
             modeBtn.text:SetText(L.BTN_MODE_DEFAULT or "Ansicht: Ready Check")
             -- Einmaliges Abrufen beim Wechseln auf die erweiterte Ansicht
-            if IsInGroup() then
-                local chan = IsInRaid() and "RAID" or "PARTY"
-                C_ChatInfo.SendAddonMessage("KART", "REQ_OIL", chan)
-                C_ChatInfo.SendAddonMessage("KART", "REQ_ILVL", chan)
-                C_ChatInfo.SendAddonMessage("KART", "REQ_GEAR", chan)
-            end
+            RequestAdvancedData()
         end
         KART.UpdateBuffCheck()
     end)
     f.modeBtn = modeBtn
 
-    local refresh = KART.CreateModernButton(f, L.BTN_REFRESH)
-    refresh:SetPoint("BOTTOM", -45, 10)
-    refresh:SetSize(80, 22)
-    refresh:SetScript("OnClick", function() 
+    f.refreshBtn = KART.CreateModernButton(f, L.BTN_REFRESH)
+    f.refreshBtn:SetPoint("BOTTOM", -45, 10)
+    f.refreshBtn:SetSize(80, 22)
+    f.refreshBtn:SetScript("OnClick", function() 
         -- Alle erweiterten Daten einmalig abrufen (verhindert Dauerspam)
-        if IsInGroup() then
-            local chan = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage("KART", "REQ_OIL", chan)
-            C_ChatInfo.SendAddonMessage("KART", "REQ_ILVL", chan)
-            C_ChatInfo.SendAddonMessage("KART", "REQ_GEAR", chan)
-        end
+        RequestAdvancedData()
         KART.UpdateBuffCheck() 
         local lib = LibStub and LibStub("LibDurability", true)
         if lib and lib.RequestDurability then
@@ -277,18 +256,18 @@ function KART.CreateBuffCheckFrame()
         end
     end)
 
-    local report = KART.CreateModernButton(f, L.BTN_REPORT)
-    report:SetPoint("BOTTOM", 45, 10)
-    report:SetSize(80, 22)
-    report:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
+    f.reportBtn = KART.CreateModernButton(f, L.BTN_REPORT)
+    f.reportBtn:SetPoint("BOTTOM", 45, 10)
+    f.reportBtn:SetSize(80, 22)
+    f.reportBtn:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
 
-    local resizeBtn = CreateFrame("Button", nil, f)
-    resizeBtn:SetSize(16, 16)
-    resizeBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
-    resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-    resizeBtn:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
-    resizeBtn:SetScript("OnMouseUp", function() 
+    f.resizeBtn = CreateFrame("Button", nil, f)
+    f.resizeBtn:SetSize(16, 16)
+    f.resizeBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
+    f.resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    f.resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    f.resizeBtn:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
+    f.resizeBtn:SetScript("OnMouseUp", function() 
         f:StopMovingOrSizing() 
         KART_Settings.bcWidth = f:GetWidth()
         KART_Settings.bcHeight = f:GetHeight()
@@ -605,8 +584,7 @@ function KART.UpdateBuffCheck(isPreview)
             -- Überprüfen, ob die Aura "geheime" (secret) Werte enthält (Private Auras).
             -- Ein Vergleich (==) löst bei Secrets einen Fehler aus, den pcall sicher abfängt.
             local isSafe = pcall(function() 
-                local _ = aura.spellId == 0
-                local _ = aura.name == "" 
+                return aura.spellId == 0 and type(aura.name) == "string"
             end)
 
             if isSafe and aura.name then

@@ -125,9 +125,3 @@ KART.L_deDE = {
     VERSION_CHECK_RES = "KART Version von %s: %s",
     UPDATE_AVAILABLE = "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).",
 }
--- German is only loaded automatically if the game client language is German.
-if GetLocale() == "deDE" then
-    -- Set English as fallback for missing keys in German
-    setmetatable(KART.L_deDE, { __index = KART.L_enUS })
-    KART.L = KART.L_deDE
-end

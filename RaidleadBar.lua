@@ -150,7 +150,7 @@ CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-Group
 CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK)
 
 -- Buff-Checker Toggle Button
-CreateBarButton(rlBar, 249, -5, 22, 22, function(self, button, down)
+CreateBarButton(rlBar, 249, -5, 22, 22, function(_, _, down)
     if down then return end -- Verhindert, dass der Klick doppelt (beim Drücken und Loslassen) ausgelöst wird
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()

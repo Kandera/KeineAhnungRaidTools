@@ -270,3 +270,26 @@ function KART.CountMissingGear()
     if gStr == "" then gStr = "0" end
     return eStr, gStr
 end
+
+-- Helper: Scrollbars bereinigen (verhindert Code-Duplizierung)
+function KART.StripScrollbarTextures(scrollFrame)
+    local sb = _G[scrollFrame:GetName().."ScrollBar"]
+    if not sb then return nil end
+    local up, down = _G[sb:GetName().."ScrollUpButton"], _G[sb:GetName().."ScrollDownButton"]
+    for _, btn in ipairs({up, down}) do
+        if btn then
+            btn:Hide() btn:SetSize(1, 1)
+            for i = 1, btn:GetNumRegions() do
+                local region = select(i, btn:GetRegions())
+                if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
+            end
+        end
+    end
+    for i = 1, sb:GetNumRegions() do
+        local region = select(i, sb:GetRegions())
+        if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
+    end
+    local thumb = sb:GetThumbTexture()
+    if thumb then thumb:SetTexture("Interface\\Buttons\\WHITE8X8") end
+    return thumb
+end
