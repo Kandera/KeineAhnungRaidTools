@@ -1,0 +1,5 @@
+# VSCode Ordner
+.vscode/
+
+# Gepackte Addon-Archive
+*.zip
