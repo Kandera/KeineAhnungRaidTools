@@ -5,9 +5,10 @@ local LC = KART.LC
 
 LC.sessionActive        = false
 LC.promptedThisSession  = false
-LC.votes                = {}  -- [rollID][playerShortName] = buttonIndex
+LC.votes                = {}  -- [rollID][playerShortName] = {idx, note}
 LC.rollItems            = {}  -- [rollID] = itemLink
 LC.CouncilNamesTable    = {}  -- shortName:lower() -> true
+LC.currentWinnerShort   = nil -- short name of last announced winner
 
 -- Preset accent colors per button position
 local BUTTON_COLORS = {
@@ -182,7 +183,12 @@ function LC.ShowVotePopup(rollID, itemLink, seconds)
         f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
         f:SetBackdropBorderColor(0, 0, 0, 1)
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        f:SetScript("OnDragStop",  function(self) self:StopMovingOrSizing() end)
+        f:SetScript("OnDragStop",  function(self)
+            self:StopMovingOrSizing()
+            if KART_Settings then
+                KART_Settings.lcVotePopupPos = {x = self:GetLeft(), y = self:GetTop()}
+            end
+        end)
         table.insert(UISpecialFrames, f:GetName())
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -197,26 +203,57 @@ function LC.ShowVotePopup(rollID, itemLink, seconds)
         f.timerText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         f.timerText:SetPoint("TOPRIGHT", -10, -10)
 
+        -- Button area sits above the note field
         f.btnArea = CreateFrame("Frame", nil, f)
         f.btnArea:SetPoint("TOPLEFT", 10, -52)
-        f.btnArea:SetPoint("BOTTOMRIGHT", -10, 10)
+        f.btnArea:SetPoint("BOTTOMRIGHT", -10, 62)
+
+        -- Note label
+        local noteLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        noteLabel:SetPoint("BOTTOMLEFT", 10, 42)
+        noteLabel:SetText(KART.L.LC_NOTE_LABEL or "Anmerkung (optional):")
+        noteLabel:SetTextColor(0.65, 0.65, 0.65)
+        table.insert(KART.DynamicLabels, noteLabel)
+
+        -- Note editbox
+        local noteBox = CreateFrame("EditBox", "KART_LCNoteBox", f, "BackdropTemplate")
+        noteBox:SetSize(270, 24)
+        noteBox:SetPoint("BOTTOMLEFT", 10, 12)
+        noteBox:SetAutoFocus(false)
+        noteBox:SetMaxLetters(80)
+        noteBox:SetFontObject("GameFontHighlightSmall")
+        noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        noteBox:SetBackdropColor(0, 0, 0, 0.5)
+        noteBox:SetTextInsets(5, 5, 0, 0)
+        noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        table.insert(KART.EditBoxes, noteBox)
+        f.noteBox = noteBox
 
         f.voteButtons = {}
         LC.votePopup  = f
         popup         = f
+
+        -- Restore saved position
+        local pos = KART_Settings and KART_Settings.lcVotePopupPos
+        if pos and type(pos) == "table" and pos.x and pos.y then
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+        end
     end
 
     popup.rollID = rollID
     popup.voted  = false
     popup.title:SetText(KART.L.LC_VOTE_TITLE)
     popup.itemText:SetText(itemLink or "???")
+    if popup.noteBox then popup.noteBox:SetText("") end
 
     local buttons = LC.GetButtonConfig()
     local cols    = math.min(#buttons, 3)
     local rows    = math.ceil(#buttons / cols)
     local btnW    = math.floor((270 - (cols - 1) * 6) / cols)
     local btnH    = 28
-    popup:SetHeight(60 + rows * (btnH + 6) + 8)
+    -- 52px header + button rows + 62px note area
+    popup:SetHeight(52 + rows * (btnH + 6) + 62)
 
     for i = #buttons + 1, #popup.voteButtons do
         if popup.voteButtons[i] then popup.voteButtons[i]:Hide() end
@@ -244,7 +281,8 @@ function LC.ShowVotePopup(rollID, itemLink, seconds)
         btn:SetScript("OnClick", function()
             if popup.voted or popup.rollID ~= capturedRollID then return end
             popup.voted = true
-            SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx)
+            local note = KART.TrimString(popup.noteBox and popup.noteBox:GetText() or "")
+            SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
             popup.title:SetText(KART.L.LC_VOTED)
             C_Timer.After(2.5, function()
                 if popup.rollID == capturedRollID then popup:Hide() end
@@ -309,7 +347,12 @@ function LC.CreateCouncilPanel()
     f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
     f:SetBackdropBorderColor(0, 0, 0, 1)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    f:SetScript("OnDragStop",  function(self) self:StopMovingOrSizing() end)
+    f:SetScript("OnDragStop",  function(self)
+        self:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcCouncilPanelPos = {x = self:GetLeft(), y = self:GetTop()}
+        end
+    end)
     table.insert(UISpecialFrames, f:GetName())
 
     -- Header
@@ -392,6 +435,13 @@ function LC.CreateCouncilPanel()
     btnClose:SetScript("OnClick", function() f:Hide() end)
 
     LC.councilPanel = f
+
+    -- Restore saved position
+    local pos = KART_Settings and KART_Settings.lcCouncilPanelPos
+    if pos and type(pos) == "table" and pos.x and pos.y then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    end
 end
 
 function LC.RefreshCouncilRows()
@@ -409,17 +459,23 @@ function LC.RefreshCouncilRows()
         local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
         local fullName = UnitName(unit)
         if fullName then
-            local short   = fullName:match("([^%-]+)")
-            local voteIdx = votes[short]
-            local voteDef = voteIdx and buttons[voteIdx]
-            table.insert(members, {short=short, unit=unit, voteIdx=voteIdx, voteDef=voteDef})
+            local short    = fullName:match("([^%-]+)")
+            local voteData = votes[short]
+            -- Support both legacy number and new {idx, note} table
+            local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
+            local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
+            local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
+            table.insert(members, {short=short, unit=unit, voteIdx=voteIdx, voteNote=voteNote, voteDef=voteDef})
         end
     end
 
+    -- Sort: voted rows first, sorted by button index ascending; unvoted last; alpha within group
     table.sort(members, function(a, b)
-        local av = a.voteIdx ~= nil
-        local bv = b.voteIdx ~= nil
-        if av ~= bv then return av end
+        if a.voteIdx ~= b.voteIdx then
+            if a.voteIdx == nil then return false end
+            if b.voteIdx == nil then return true end
+            return tonumber(a.voteIdx) < tonumber(b.voteIdx)
+        end
         return (a.short or "") < (b.short or "")
     end)
 
@@ -428,6 +484,7 @@ function LC.RefreshCouncilRows()
         if not row then
             row = CreateFrame("Button", nil, panel.scrollChild, "BackdropTemplate")
             row:SetHeight(24)
+            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -443,13 +500,26 @@ function LC.RefreshCouncilRows()
             panel.rows[i] = row
         end
 
-        local rowIdx = i
+        local rowIdx       = i
+        local isWinner     = (m.short == LC.currentWinnerShort)
+        local capturedShort = m.short
+        local capturedRoll  = rollID
+        local capturedNote  = m.voteNote or ""
+
         row:Show()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(rowIdx - 1) * 26)
         row:SetPoint("RIGHT", panel.scrollChild, "RIGHT", 0, 0)
-        row:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
         row.memberShort = m.short
+
+        -- Winner gets green highlight; others get alternating grey
+        if isWinner then
+            row:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
+            row:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
+        else
+            row:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
+            row:SetBackdropBorderColor(0, 0, 0, 1)
+        end
 
         -- Class colour for name
         local nr, ng, nb = 0.8, 0.8, 0.8
@@ -474,24 +544,33 @@ function LC.RefreshCouncilRows()
             row.voteText:SetText("|cff666666-|r")
         end
 
-        local capturedShort = m.short
-        local capturedRoll  = rollID
-        local capturedNR, capturedNG, capturedNB = nr, ng, nb
-        row:SetScript("OnClick", function()
-            if capturedRoll and capturedShort then
-                LC.AnnounceResult(capturedRoll, capturedShort)
+        row:SetScript("OnClick", function(_, mouseBtn)
+            if not capturedRoll or not capturedShort then return end
+            LC.AnnounceResult(capturedRoll, capturedShort)
+            if mouseBtn ~= "RightButton" then
                 panel:Hide()
             end
         end)
         row:SetScript("OnEnter", function(self)
             self:SetBackdropColor(0.2, 0.3, 0.15, 0.9)
+            self:SetBackdropBorderColor(0.4, 0.7, 0.3, 1)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.memberShort or "?", capturedNR, capturedNG, capturedNB)
+            GameTooltip:SetText(self.memberShort or "?", nr, ng, nb)
             GameTooltip:AddLine(KART.L.LC_TOOLTIP_WINNER, 0.9, 0.8, 0.1, true)
+            if capturedNote and capturedNote ~= "" then
+                GameTooltip:AddLine(capturedNote, 0.7, 0.7, 0.7, true)
+            end
+            GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: re-award without closing", 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
-            self:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
+            if self.memberShort == LC.currentWinnerShort then
+                self:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
+                self:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
+            else
+                self:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
+                self:SetBackdropBorderColor(0, 0, 0, 1)
+            end
             GameTooltip:Hide()
         end)
     end
@@ -506,6 +585,8 @@ end
 -- =====================================================================
 
 function LC.AnnounceResult(rollID, winnerName)
+    LC.currentWinnerShort = (winnerName ~= "NONE") and winnerName or nil
+
     SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName)
 
     if winnerName ~= "NONE" then
@@ -513,6 +594,10 @@ function LC.AnnounceResult(rollID, winnerName)
         local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
         if IsInRaid()      then SendChatMessage(msg, "RAID")
         elseif IsInGroup() then SendChatMessage(msg, "PARTY") end
+    end
+
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        LC.RefreshCouncilRows()
     end
 end
 
@@ -578,14 +663,16 @@ function LC.HandleStart(payload)
 end
 
 function LC.HandleVote(payload, senderShort)
-    -- payload = "rollID:buttonIndex"
-    local rollID, idx = payload:match("^(%d+):(%d+)$")
+    -- payload = "rollID:buttonIndex:note"
+    local rollID, idx = payload:match("^(%d+):(%d+)")
     rollID = tonumber(rollID)
     idx    = tonumber(idx)
     if not rollID or not idx then return end
 
+    local note = payload:match("^%d+:%d+:(.*)") or ""
+
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][senderShort] = idx
+    LC.votes[rollID][senderShort] = {idx = idx, note = note}
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
         LC.RefreshCouncilRows()
@@ -617,7 +704,8 @@ end
 --  Test Function
 -- =====================================================================
 
-function LC.StartTest()
+-- mode: "looter" = always show vote popup; "master" = always show council panel; nil = auto-detect
+function LC.StartTest(mode)
     local testRollID = 99999
     local testItem   = "|cffff8000[Sulfuras, Hand von Ragnaros] (TEST)|r"
     local buttons    = LC.GetButtonConfig()
@@ -625,8 +713,8 @@ function LC.StartTest()
     LC.rollItems[testRollID] = testItem
     LC.votes[testRollID]     = {}
 
+    -- Pre-fill votes from current group members so the council panel looks populated
     if IsInGroup() then
-        -- Pre-fill votes for current group members so council panel looks populated
         local isRaid  = IsInRaid()
         local numMem  = GetNumGroupMembers()
         local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
@@ -637,19 +725,26 @@ function LC.StartTest()
             if name then
                 local short = name:match("([^%-]+)")
                 if short and short ~= myShort then
-                    LC.votes[testRollID][short] = voteIdx
+                    LC.votes[testRollID][short] = {idx = voteIdx, note = ""}
                     voteIdx = (voteIdx % #buttons) + 1
                 end
             end
         end
+    end
 
-        if IsCouncil() then
-            LC.ShowCouncilPanel(testRollID, KART_Settings.lcVoteSeconds or 20)
-        else
-            LC.ShowVotePopup(testRollID, testItem, KART_Settings.lcVoteSeconds or 20)
-        end
+    local showCouncil
+    if mode == "looter" then
+        showCouncil = false
+    elseif mode == "master" then
+        showCouncil = true
     else
-        -- Solo: only vote popup makes sense (no group roster for council panel)
+        -- Auto: follow actual role
+        showCouncil = IsCouncil() and IsInGroup()
+    end
+
+    if showCouncil then
+        LC.ShowCouncilPanel(testRollID, KART_Settings.lcVoteSeconds or 20)
+    else
         LC.ShowVotePopup(testRollID, testItem, KART_Settings.lcVoteSeconds or 20)
     end
 
@@ -728,9 +823,9 @@ function LC.BuildSettingsPanel(parent)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
 
-    -- Toggle session (compact) + Test button side by side
+    -- Toggle session (full width)
     KART.LC.BtnToggleSession = KART.CreateModernButton(parent, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
-    KART.LC.BtnToggleSession:SetSize(122, 28)
+    KART.LC.BtnToggleSession:SetSize(255, 28)
     KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -325)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         if IsInGroup() and UnitIsGroupLeader("player") then
@@ -740,10 +835,16 @@ function LC.BuildSettingsPanel(parent)
         end
     end)
 
-    KART.LC.BtnTest = KART.CreateModernButton(parent, L.LC_BTN_TEST, L.LC_DESC_TEST)
-    KART.LC.BtnTest:SetSize(122, 28)
-    KART.LC.BtnTest:SetPoint("LEFT", KART.LC.BtnToggleSession, "RIGHT", 8, 0)
-    KART.LC.BtnTest:SetScript("OnClick", function() LC.StartTest() end)
+    -- Two test buttons side by side: Looter view / Lootmaster view
+    KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
+    KART.LC.BtnTestLooter:SetSize(122, 28)
+    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -361)
+    KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
+
+    KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
+    KART.LC.BtnTestMaster:SetSize(122, 28)
+    KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 8, 0)
+    KART.LC.BtnTestMaster:SetScript("OnClick", function() LC.StartTest("master") end)
 end
 
 -- Called at file load time; KART.LootCouncilPanel is created by MainFrame.lua

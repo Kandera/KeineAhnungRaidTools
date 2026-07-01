@@ -36,6 +36,8 @@ KART.Defaults = {
     lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass",
     lcCouncilMembers = "",
     wuImportText = "",
+    lcVotePopupPos = false,
+    lcCouncilPanelPos = false,
 }
 
 function KART.TrimString(s)

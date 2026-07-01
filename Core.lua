@@ -152,6 +152,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end)
 
+        -- Korrekte Version in Titelleiste setzen (KART.Version ist erst hier verfügbar)
+        if KART.MainFrame and KART.MainFrame.title then
+            KART.MainFrame.title:SetText((KART.L.ADDON_TITLE or "Keine Ahnung Raid Tools") .. " v" .. KART.Version)
+        end
+
         -- Styles nach der Erstellung aller Frames final anwenden
         KART.UpdateStyles()
 

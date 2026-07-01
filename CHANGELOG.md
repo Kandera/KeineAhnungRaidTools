@@ -5,11 +5,22 @@
 - **WoWUtils Import:** Neues Modul (`Invite.lua`) und neuer Tab „WoWUtils" in der Sidebar.
   - Raid-Setups können direkt aus WoWUtils in das Addon eingefügt werden (Boss-für-Boss-Format mit `EncounterID`, `Difficulty`, `Name` und `invitelist`).
   - Nach dem Importieren erscheint für jeden Boss eine eigene Zeile mit der Spieleranzahl.
-  - **[Einladen]:** Lädt alle Spieler der jeweiligen Boss-Liste in den Raid ein (nutzt bestehende `autoConvertToRaid`-Einstellung).
+  - **[Einladen]:** Lädt alle Spieler der jeweiligen Boss-Liste in den Raid ein — Mitglieder die bereits im Raid sind werden übersprungen (Ausgabe: „X eingeladen. (Y bereits im Raid)").
   - **[Entfernen]:** Kickt alle aktuellen Raid-Mitglieder, die NICHT in der Boss-Liste stehen — ideal zum schnellen Umbau zwischen Bosskompositionen.
-  - Der Import wird sitzungsübergreifend gespeichert; beim Login wird er automatisch geparst, sodass die Boss-Buttons sofort verfügbar sind.
-  - Hover-Tooltip pro Boss zeigt Difficulty und EncounterID.
+  - Der Import wird sitzungsübergreifend gespeichert; beim Login wird er automatisch geparst.
   - Scrollbalken im Eingabefeld folgt dem Addon-Farbschema.
+
+### Geändert (Loot Council)
+- **Auto-Pass:** Wird jetzt sofort beim Start einer Loot-Roll ausgelöst (`START_LOOT_ROLL`), nicht erst nach der Gewinner-Bekanntgabe — verhindert versehentliche Need/Gier/Transmog-Klicks des Raidleiters.
+- **Notizfeld im Vote-Popup:** Raider können ihrer Stimme einen optionalen Freitext-Kommentar hinzufügen (max. 80 Zeichen). Die Notiz ist für Council-Mitglieder im Hover-Tooltip der jeweiligen Zeile sichtbar.
+- **Bewegbare Fenster mit Positionsspeicherung:** Vote-Popup und Council-Panel sind jetzt per Drag verschiebbar; die Position wird in den SavedVariables gespeichert und beim nächsten Öffnen wiederhergestellt.
+- **Sortierung im Council-Panel:** Zeilen werden nach Button-Index aufsteigend sortiert (BIS zuerst, dann Upgrade usw.); Nicht-Abstimmer landen am Ende.
+- **Rechtsklick zum Neu-Vergeben:** Ein Rechtsklick auf eine Zeile im Council-Panel vergibt den Loot neu, ohne das Panel zu schließen — für schnelle Korrekturen ohne erneutes Öffnen.
+- **Gewinner-Hervorhebung:** Die zuletzt gewählte Gewinner-Zeile wird grün hinterlegt und bleibt markiert, bis das Panel geschlossen oder ein neuer Gewinner gewählt wird.
+- **Test-Modus getrennt:** Der einzelne „Test starten"-Button wurde durch zwei separate Buttons ersetzt:
+  - **Test: Looter** — zeigt das Vote-Popup inkl. Notizfeld, unabhängig von der eigenen Rolle.
+  - **Test: Lootmaster** — zeigt das Council-Panel inkl. vorbefüllter Votes (aus aktuellen Gruppenmitgliedern), unabhängig von der eigenen Rolle.
+- **Versionsnummer im Titel:** Die Anzeige „v1.3.0" im Hauptfenster-Titel wird jetzt immer aus den Addon-Metadaten gelesen und ist damit immer korrekt.
 
 Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
