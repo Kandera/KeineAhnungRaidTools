@@ -161,4 +161,21 @@ KART.L_deDE = {
     LC_BTN_CANCEL          = "Schließen",
     LC_RESULT_ANNOUNCE     = "[Loot Council] %s erhält %s!",
     LC_YOU_WIN             = "Du erhältst dieses Item!",
+
+    -- WoWUtils Import
+    TAB_WOWUTILS           = "WoWUtils",
+    WU_TITLE               = "WoWUtils Import",
+    WU_LABEL_PASTE         = "WoWUtils-Export hier einfügen:",
+    WU_BTN_IMPORT          = "Importieren",
+    WU_STATUS_EMPTY        = "Noch kein Import.",
+    WU_STATUS_LOADED       = "%d Bosse geladen.",
+    WU_STATUS_PARSE_ERROR  = "Kein gültiges WoWUtils-Format gefunden.",
+    WU_COL_BOSS            = "Boss",
+    WU_BTN_INVITE          = "Einladen",
+    WU_BTN_REMOVE          = "Entfernen",
+    WU_PLAYERS             = "Spieler",
+    WU_MSG_NOT_LEADER      = "Nur Gruppenleiter können Spieler einladen oder entfernen.",
+    WU_MSG_COMBAT          = "Gruppe kann nicht während des Kampfes geändert werden.",
+    WU_MSG_INVITED         = "%d Spieler für %s eingeladen.",
+    WU_MSG_REMOVED         = "%d Spieler für %s entfernt.",
 }

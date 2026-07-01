@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.0] - 2026-07-01
+### Hinzugefügt
+- **WoWUtils Import:** Neues Modul (`Invite.lua`) und neuer Tab „WoWUtils" in der Sidebar.
+  - Raid-Setups können direkt aus WoWUtils in das Addon eingefügt werden (Boss-für-Boss-Format mit `EncounterID`, `Difficulty`, `Name` und `invitelist`).
+  - Nach dem Importieren erscheint für jeden Boss eine eigene Zeile mit der Spieleranzahl.
+  - **[Einladen]:** Lädt alle Spieler der jeweiligen Boss-Liste in den Raid ein (nutzt bestehende `autoConvertToRaid`-Einstellung).
+  - **[Entfernen]:** Kickt alle aktuellen Raid-Mitglieder, die NICHT in der Boss-Liste stehen — ideal zum schnellen Umbau zwischen Bosskompositionen.
+  - Der Import wird sitzungsübergreifend gespeichert; beim Login wird er automatisch geparst, sodass die Boss-Buttons sofort verfügbar sind.
+  - Hover-Tooltip pro Boss zeigt Difficulty und EncounterID.
+  - Scrollbalken im Eingabefeld folgt dem Addon-Farbschema.
+
 Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

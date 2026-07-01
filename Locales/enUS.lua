@@ -164,6 +164,23 @@ KART.L_enUS = {
     LC_BTN_CANCEL          = "Close",
     LC_RESULT_ANNOUNCE     = "[Loot Council] %s receives %s!",
     LC_YOU_WIN             = "You receive this item!",
+
+    -- WoWUtils Import
+    TAB_WOWUTILS           = "WoWUtils",
+    WU_TITLE               = "WoWUtils Import",
+    WU_LABEL_PASTE         = "Paste WoWUtils export here:",
+    WU_BTN_IMPORT          = "Import",
+    WU_STATUS_EMPTY        = "No import yet.",
+    WU_STATUS_LOADED       = "%d bosses loaded.",
+    WU_STATUS_PARSE_ERROR  = "No valid WoWUtils format found.",
+    WU_COL_BOSS            = "Boss",
+    WU_BTN_INVITE          = "Invite",
+    WU_BTN_REMOVE          = "Remove",
+    WU_PLAYERS             = "players",
+    WU_MSG_NOT_LEADER      = "Only group leaders can invite or remove players.",
+    WU_MSG_COMBAT          = "Cannot modify the group during combat.",
+    WU_MSG_INVITED         = "%d players invited for %s.",
+    WU_MSG_REMOVED         = "%d players removed for %s.",
 }
 -- English is the master language.
 KART.L_enUS = KART.L_enUS or {}

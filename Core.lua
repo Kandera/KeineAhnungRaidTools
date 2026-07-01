@@ -90,6 +90,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
         if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
         if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
+        if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
         if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
         if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
         if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
@@ -107,6 +108,18 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif widget.SetText then widget:SetText(KART_Settings[key]) end
             end
         end
+        -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
+        if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuImportText ~= "" then
+            local count = KART.WU.ParseImport(KART_Settings.wuImportText)
+            if count > 0 and KART.WU.RefreshBossList then
+                KART.WU.RefreshBossList()
+                if KART.WU.statusLabel then
+                    KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED or "%d bosses loaded.", count))
+                    KART.WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
+                end
+            end
+        end
+
         if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
         
         if KART.BtnLang then
@@ -355,6 +368,7 @@ function KART.UpdateStyles()
     if KART.ScrollThumb then KART.ScrollThumb:SetColorTexture(r, g, b, 0.6) end -- KART.ScrollThumb aus MainFrame.lua
     if KART.BuffScrollThumb then KART.BuffScrollThumb:SetColorTexture(r, g, b, 0.6) end
     if KART.BulkScrollThumb then KART.BulkScrollThumb:SetColorTexture(r, g, b, 0.6) end
+    if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetColorTexture(r, g, b, 0.6) end
 
     if KART.BuffCheckFrame then
         KART.BuffCheckFrame:SetBackdropColor(br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)
