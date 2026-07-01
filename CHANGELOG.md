@@ -5,6 +5,21 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.4.0] - 2026-07-01
+### Hinzugefügt
+- **Loot Council:** Neues Modul (`LootCouncil.lua`) für die koordinierte Lootverteilung im Raid.
+  - Beim Betreten eines Raids wird der Raidleiter gefragt, ob der Loot Council für diese Session aktiviert werden soll – für Spaßruns einfach ablehnen.
+  - **Raider-Abstimmung:** Sobald ein Item zur Verteilung ansteht (`START_LOOT_ROLL`), erscheint bei allen KART-Nutzern gleichzeitig ein Popup mit konfigurierbaren Vote-Buttons (Standard: BIS / Upgrade / Offspec / Sonstiges / Pass). Die Abstimmungszeit ist einstellbar (Standard: 20 Sek).
+  - **Council-Panel:** Raidleiter und Assistenten sehen stattdessen ein scrollbares Panel mit allen Raidern und deren Votes (klassengefärbt). Ein Klick auf einen Spieler wählt ihn als Gewinner.
+  - **Gewinner-Benachrichtigung:** Der ausgewählte Spieler erhält ein grünes Hinweisfenster. Die Entscheidung wird automatisch im Raid- bzw. Gruppenchat angekündigt.
+  - **Auto-Pass:** Optionaler Haken – wenn aktiv, passen alle Nicht-Gewinner mit KART sofort und ohne Rückfrage.
+  - **Konfigurierbare Buttons:** Anzahl und Bezeichnung der Vote-Buttons frei einstellbar (Semikolon-getrennt, bis zu 6 Buttons).
+  - **Manueller Toggle:** Session lässt sich jederzeit über den neuen Tab „Loot Council" im Hauptfenster oder per Schaltfläche umschalten.
+  - **Erweiterte Council-Mitglieder:** Neben Raidleiter und Assistenten können beliebige Spieler per Namen in den Council berufen werden – sie sehen das Council-Panel, ohne Assistenten-Rang zu benötigen.
+  - **Test-Funktion:** „Test starten" simuliert den kompletten LC-Ablauf mit einem Classic-Dummy-Item. Im Raid werden vorhandene Gruppenmitglieder mit zufälligen Teststimmen vorbelegt; solo erscheint das Vote-Popup zur Überprüfung des Button-Layouts.
+- **Neuer Tab:** „Loot Council" in der Sidebar des Hauptfensters mit allen zugehörigen Einstellungen.
+- **Lokalisierung:** Alle neuen Texte auf Deutsch und Englisch übersetzt.
+
 ## [1.3.0] - 2026-06-12
 ### Hinzugefügt
 - **Erweiterte Ansicht:** Der Buff-Checker besitzt nun einen Button, um zwischen "Ready Check" (Standard-Buffs) und "Erweitert" umzuschalten.

@@ -15,6 +15,7 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("START_LOOT_ROLL")
 
 -- DataBroker Object für Minimap und Compartment
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
@@ -59,6 +60,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
 
         KART.UpdateCache()
+        if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
         KART.UpdateStyles()
 
         -- Minimap Icon mit LibDBIcon registrieren
@@ -84,6 +86,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
         if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
         if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
+        if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
+        if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
+        if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
+        if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
         if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
         if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
         if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
@@ -139,7 +145,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
         KART.HandleChatInvite(arg1, arg2, event, ...)
 
+    elseif event == "START_LOOT_ROLL" then
+        if KART.LC then KART.LC.OnStartLootRoll(arg1) end
+
     elseif event == "GROUP_ROSTER_UPDATE" then
+        if KART.LC then KART.LC.CheckRaidJoin() end
         KART.UpdateRaidleadBarVisibility()
         
         if IsInGroup() and not KART.VersionAnnouncedToGroup then
@@ -264,6 +274,14 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.VersionCheckActive and not isAnnounce then
                         print(string.format(KART.L.VERSION_CHECK_RES or "KART Version von %s: %s", shortName, ver))
                     end
+                elseif msg:sub(1, 10) == "LC_ACTIVE:" then
+                    if KART.LC then KART.LC.HandleActive(msg:sub(11)) end
+                elseif msg:sub(1, 9) == "LC_START:" then
+                    if KART.LC then KART.LC.HandleStart(msg:sub(10)) end
+                elseif msg:sub(1, 8) == "LC_VOTE:" then
+                    if KART.LC then KART.LC.HandleVote(msg:sub(9), shortName) end
+                elseif msg:sub(1, 10) == "LC_RESULT:" then
+                    if KART.LC then KART.LC.HandleResult(msg:sub(11)) end
                 elseif msg:sub(1, 10) == "RC_REASON:" then
                     local reason = msg:sub(11)
                     KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}

@@ -30,7 +30,11 @@ KART.Defaults = {
     fontName = "Friz Quadrata",
     accentR = 0, accentG = 60, accentB = 100,
     bgR = 10, bgG = 10, bgB = 10,
-    language = "Auto"
+    language = "Auto",
+    lcAutoPass = false,
+    lcVoteSeconds = 20,
+    lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass",
+    lcCouncilMembers = "",
 }
 
 function KART.TrimString(s)
