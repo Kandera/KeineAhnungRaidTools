@@ -152,6 +152,11 @@ function LC.OnStartLootRoll(rollID)
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
+    -- Pass immediately so the WoW roll popup cannot be accidentally clicked.
+    if KART_Settings.lcAutoPass then
+        RollOnLoot(rollID, 0)
+    end
+
     if UnitIsGroupLeader("player") then
         local secs = KART_Settings.lcVoteSeconds or 20
         SendLC("LC_START:" .. rollID .. ":" .. secs)
@@ -555,8 +560,13 @@ function LC.HandleStart(payload)
     secs   = tonumber(secs)
     if not rollID then return end
 
-    LC.votes[rollID]    = LC.votes[rollID] or {}
+    LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = LC.rollItems[rollID] or GetLootRollItemLink(rollID) or "???"
+
+    -- Pass immediately so the WoW roll popup cannot be accidentally clicked.
+    if KART_Settings.lcAutoPass then
+        RollOnLoot(rollID, 0)
+    end
 
     if IsCouncil() then
         if not (LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID) then
@@ -596,12 +606,11 @@ function LC.HandleResult(payload)
     if winner == "NONE" then return end
 
     local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-
     if winner == myShort then
         LC.ShowWinnerNotification(LC.rollItems[rollID])
-    elseif KART_Settings.lcAutoPass then
-        RollOnLoot(rollID, 0)
     end
+    -- Auto-pass is now done immediately in OnStartLootRoll / HandleStart,
+    -- so there is nothing left to do here.
 end
 
 -- =====================================================================
