@@ -307,6 +307,58 @@ function LC.ShowVotePopup(rollID, itemLink, seconds)
 end
 
 -- =====================================================================
+--  Equipped-item helper for council panel
+-- =====================================================================
+
+local EQUIP_LOC_TO_SLOT = {
+    INVTYPE_HEAD           = {1},
+    INVTYPE_NECK           = {2},
+    INVTYPE_SHOULDER       = {3},
+    INVTYPE_CHEST          = {5},
+    INVTYPE_ROBE           = {5},
+    INVTYPE_WAIST          = {6},
+    INVTYPE_LEGS           = {7},
+    INVTYPE_FEET           = {8},
+    INVTYPE_WRIST          = {9},
+    INVTYPE_HAND           = {10},
+    INVTYPE_FINGER         = {11, 12},
+    INVTYPE_TRINKET        = {13, 14},
+    INVTYPE_CLOAK          = {15},
+    INVTYPE_WEAPON         = {16},
+    INVTYPE_2HWEAPON       = {16},
+    INVTYPE_WEAPONMAINHAND = {16},
+    INVTYPE_WEAPONOFFHAND  = {17},
+    INVTYPE_SHIELD         = {17},
+    INVTYPE_HOLDABLE       = {17},
+    INVTYPE_RANGED         = {18},
+    INVTYPE_RANGEDRIGHT    = {18},
+}
+
+-- Returns (equippedLink, equippedIlvl) for the slot matching rollItemLink on unit.
+-- For two-slot items (rings, trinkets) returns the lower-ilvl piece (most likely to be replaced).
+function LC.GetEquippedForUnit(unit, rollItemLink)
+    if not unit or not rollItemLink then return nil, nil end
+    local rollInfo = C_Item.GetItemInfo(rollItemLink)
+    if not rollInfo then return nil, nil end
+    local slots = EQUIP_LOC_TO_SLOT[rollInfo["equipLoc"]]
+    if not slots then return nil, nil end
+
+    local bestLink, bestIlvl
+    for _, slot in ipairs(slots) do
+        local link = GetInventoryItemLink(unit, slot)
+        if link then
+            local info = C_Item.GetItemInfo(link)
+            local ilvl = info and info["itemLevel"]
+            if ilvl and (not bestIlvl or ilvl < bestIlvl) then
+                bestLink  = link
+                bestIlvl  = ilvl
+            end
+        end
+    end
+    return bestLink, bestIlvl
+end
+
+-- =====================================================================
 --  Council Panel  (shown to leader & assistants)
 -- =====================================================================
 
@@ -392,8 +444,13 @@ function LC.CreateCouncilPanel()
     hName:SetPoint("TOPLEFT", 10, -56)
     hName:SetText(KART.L.LC_COL_NAME)
 
+    local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hIlvl:SetPoint("TOPLEFT", 130, -56)
+    hIlvl:SetText("iLvl")
+    hIlvl:SetTextColor(0.5, 0.5, 0.5)
+
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hVote:SetPoint("TOPLEFT", 185, -56)
+    hVote:SetPoint("TOPLEFT", 182, -56)
     hVote:SetText(KART.L.LC_COL_VOTE)
 
     local divider = f:CreateTexture(nil, "ARTWORK")
@@ -454,6 +511,8 @@ function LC.RefreshCouncilRows()
     local isRaid  = IsInRaid()
     local numMem  = GetNumGroupMembers()
 
+    local rollItem = LC.rollItems[rollID]
+
     local members = {}
     for i = 1, numMem do
         local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
@@ -465,7 +524,12 @@ function LC.RefreshCouncilRows()
             local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
             local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
             local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
-            table.insert(members, {short=short, unit=unit, voteIdx=voteIdx, voteNote=voteNote, voteDef=voteDef})
+            local equippedLink, equippedIlvl = LC.GetEquippedForUnit(unit, rollItem)
+            table.insert(members, {
+                short = short, unit = unit,
+                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
+                equippedLink = equippedLink, equippedIlvl = equippedIlvl,
+            })
         end
     end
 
@@ -489,22 +553,36 @@ function LC.RefreshCouncilRows()
 
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.nameText:SetPoint("LEFT", 6, 0)
-            row.nameText:SetWidth(170)
+            row.nameText:SetWidth(114)
             row.nameText:SetJustifyH("LEFT")
 
+            -- Equipped item level in the matching slot
+            row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.equippedText:SetPoint("LEFT", 124, 0)
+            row.equippedText:SetWidth(48)
+            row.equippedText:SetJustifyH("CENTER")
+
             row.voteText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.voteText:SetPoint("LEFT", 185, 0)
-            row.voteText:SetWidth(95)
+            row.voteText:SetPoint("LEFT", 176, 0)
+            row.voteText:SetWidth(82)
             row.voteText:SetJustifyH("LEFT")
+
+            -- Small dot shown when raider left a note
+            row.noteIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.noteIcon:SetPoint("RIGHT", -4, 0)
+            row.noteIcon:SetWidth(16)
+            row.noteIcon:SetJustifyH("CENTER")
 
             panel.rows[i] = row
         end
 
-        local rowIdx       = i
-        local isWinner     = (m.short == LC.currentWinnerShort)
-        local capturedShort = m.short
-        local capturedRoll  = rollID
-        local capturedNote  = m.voteNote or ""
+        local rowIdx              = i
+        local isWinner            = (m.short == LC.currentWinnerShort)
+        local capturedShort       = m.short
+        local capturedRoll        = rollID
+        local capturedNote        = m.voteNote or ""
+        local capturedEquipLink   = m.equippedLink
+        local capturedEquipIlvl   = m.equippedIlvl
 
         row:Show()
         row:ClearAllPoints()
@@ -534,6 +612,14 @@ function LC.RefreshCouncilRows()
         row.nameText:SetText(m.short or "?")
         row.nameText:SetTextColor(nr, ng, nb)
 
+        -- Equipped ilvl column
+        if capturedEquipIlvl then
+            row.equippedText:SetText("|cff888888" .. capturedEquipIlvl .. "|r")
+        else
+            row.equippedText:SetText("|cff444444—|r")
+        end
+
+        -- Vote column
         if m.voteDef then
             row.voteText:SetText(string.format("|cff%02x%02x%02x%s|r",
                 math.floor(m.voteDef.r * 255),
@@ -544,12 +630,14 @@ function LC.RefreshCouncilRows()
             row.voteText:SetText("|cff666666-|r")
         end
 
-        row:SetScript("OnClick", function(_, mouseBtn)
+        -- Note indicator dot
+        row.noteIcon:SetText(capturedNote ~= "" and "|cff66aaff•|r" or "")
+
+        -- Both left- and right-click announce the winner; panel stays open.
+        -- Only the X button / Close button closes the panel.
+        row:SetScript("OnClick", function()
             if not capturedRoll or not capturedShort then return end
             LC.AnnounceResult(capturedRoll, capturedShort)
-            if mouseBtn ~= "RightButton" then
-                panel:Hide()
-            end
         end)
         row:SetScript("OnEnter", function(self)
             self:SetBackdropColor(0.2, 0.3, 0.15, 0.9)
@@ -557,10 +645,18 @@ function LC.RefreshCouncilRows()
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.memberShort or "?", nr, ng, nb)
             GameTooltip:AddLine(KART.L.LC_TOOLTIP_WINNER, 0.9, 0.8, 0.1, true)
-            if capturedNote and capturedNote ~= "" then
-                GameTooltip:AddLine(capturedNote, 0.7, 0.7, 0.7, true)
+            -- Equipped item in relevant slot
+            if capturedEquipLink then
+                local equipLine = capturedEquipLink
+                if capturedEquipIlvl then
+                    equipLine = equipLine .. " (" .. capturedEquipIlvl .. ")"
+                end
+                GameTooltip:AddLine(equipLine, 1, 1, 1, true)
             end
-            GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: re-award without closing", 0.5, 0.5, 0.5, true)
+            -- Raider note
+            if capturedNote ~= "" then
+                GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
+            end
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -592,8 +688,11 @@ function LC.AnnounceResult(rollID, winnerName)
     if winnerName ~= "NONE" then
         local link = LC.rollItems[rollID] or ""
         local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
-        if IsInRaid()      then SendChatMessage(msg, "RAID")
-        elseif IsInGroup() then SendChatMessage(msg, "PARTY") end
+        if IsInRaid() then
+            SendChatMessage(msg, "RAID")   ---@diagnostic disable-line: deprecated
+        elseif IsInGroup() then
+            SendChatMessage(msg, "PARTY") ---@diagnostic disable-line: deprecated
+        end
     end
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
