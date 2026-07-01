@@ -58,12 +58,37 @@ function WU.InviteBoss(idx)
         C_PartyInfo.ConvertToRaid()
     end
 
-    local count = 0
-    for _, player in ipairs(boss.players) do
-        C_PartyInfo.InviteUnit(player)
-        count = count + 1
+    -- Build a lookup of players already in the group (with and without realm).
+    local alreadyIn = {}
+    local isRaid = IsInRaid()
+    local numMem = GetNumGroupMembers()
+    for i = 1, numMem do
+        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+        local name, realm = UnitName(unit)
+        if name then
+            local full = (realm and realm ~= "") and (name.."-"..realm) or name
+            alreadyIn[full:lower()] = true
+            alreadyIn[name:lower()] = true
+        end
     end
-    print(string.format("|cff00ff00KART:|r " .. (KART.L.WU_MSG_INVITED or "%d players invited for %s."), count, boss.name))
+
+    local invited = 0
+    local skipped = 0
+    for _, player in ipairs(boss.players) do
+        local short = player:match("([^%-]+)") or player
+        if alreadyIn[player:lower()] or alreadyIn[short:lower()] then
+            skipped = skipped + 1
+        else
+            C_PartyInfo.InviteUnit(player)
+            invited = invited + 1
+        end
+    end
+
+    local msg = string.format("|cff00ff00KART:|r " .. (KART.L.WU_MSG_INVITED or "%d players invited for %s."), invited, boss.name)
+    if skipped > 0 then
+        msg = msg .. string.format(" " .. (KART.L.WU_MSG_ALREADY_IN or "(%d already in raid)"), skipped)
+    end
+    print(msg)
 end
 
 -- Removes current group members who are NOT in the boss's player list.

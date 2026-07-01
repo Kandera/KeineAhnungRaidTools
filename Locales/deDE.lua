@@ -177,5 +177,6 @@ KART.L_deDE = {
     WU_MSG_NOT_LEADER      = "Nur Gruppenleiter können Spieler einladen oder entfernen.",
     WU_MSG_COMBAT          = "Gruppe kann nicht während des Kampfes geändert werden.",
     WU_MSG_INVITED         = "%d Spieler für %s eingeladen.",
+    WU_MSG_ALREADY_IN      = "(%d bereits im Raid)",
     WU_MSG_REMOVED         = "%d Spieler für %s entfernt.",
 }

@@ -180,6 +180,7 @@ KART.L_enUS = {
     WU_MSG_NOT_LEADER      = "Only group leaders can invite or remove players.",
     WU_MSG_COMBAT          = "Cannot modify the group during combat.",
     WU_MSG_INVITED         = "%d players invited for %s.",
+    WU_MSG_ALREADY_IN      = "(%d already in raid)",
     WU_MSG_REMOVED         = "%d players removed for %s.",
 }
 -- English is the master language.
