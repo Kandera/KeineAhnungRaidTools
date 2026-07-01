@@ -724,7 +724,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnToggleSession:SetSize(122, 28)
     KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -325)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
-        if IsInGroup() and (UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")) then
+        if IsInGroup() and UnitIsGroupLeader("player") then
             LC.SetSessionActive(not LC.sessionActive)
         else
             print("|cff00ff00KART:|r " .. KART.L.LC_NOT_LEADER)
