@@ -26,12 +26,12 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
         if button == "LeftButton" then
             if KART.MainFrame:IsShown() then KART.MainFrame:Hide() else KART.MainFrame:Show() KART.ShowTab(1) end
         elseif button == "RightButton" then
-            if KART.MainFrame then KART.MainFrame:Show() KART.ShowTab(5) end
+            if KART.MainFrame then KART.MainFrame:Show() KART.ShowTab(4) end
         end
     end,
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("Keine Ahnung Raid Tools")
-        tooltip:AddLine("|cffeda55fLeft-Click:|r " .. (KART.L.TAB_INVITE or "Open"))
+        tooltip:AddLine("|cffeda55fLeft-Click:|r " .. (KART.L.TAB_PROMOTE or "Open"))
         tooltip:AddLine("|cffeda55fRight-Click:|r " .. (KART.L.TAB_SETTINGS or "Settings"))
     end,
 })
@@ -41,6 +41,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         C_ChatInfo.RegisterAddonMessagePrefix("KART")
 
         KART_Settings = KART_Settings or {}
+        KART_LootHistory = KART_LootHistory or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         for k, v in pairs(KART.Defaults) do
@@ -128,7 +129,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             elseif KART_Settings.language == "deDE" then langText = KART.L.LANG_DE end
             KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
         end
-        
+
+        if KART.LC and KART.LC.BtnMinQuality and KART.LC.QualityLabel then
+            KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
+        end
+
         KART.UpdateMinimapButton()
         KART.UpdateRaidleadBarVisibility()
 
@@ -300,6 +305,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC then KART.LC.HandleVote(msg:sub(9), shortName) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
                     if KART.LC then KART.LC.HandleResult(msg:sub(11)) end
+                elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
+                    if KART.LC then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
+                elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
+                    if KART.LC then KART.LC.HandleHistoryEntry(msg:sub(15)) end
                 elseif msg:sub(1, 10) == "RC_REASON:" then
                     local reason = msg:sub(11)
                     KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
@@ -372,8 +381,17 @@ function KART.UpdateStyles()
 
     if KART.ScrollThumb then KART.ScrollThumb:SetColorTexture(r, g, b, 0.6) end -- KART.ScrollThumb aus MainFrame.lua
     if KART.BuffScrollThumb then KART.BuffScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.BulkScrollThumb then KART.BulkScrollThumb:SetColorTexture(r, g, b, 0.6) end
     if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetColorTexture(r, g, b, 0.6) end
+    if KART.LHScrollThumb then KART.LHScrollThumb:SetColorTexture(r, g, b, 0.6) end
+
+    if KART.LH and KART.LH.historyWindow then
+        local w = KART.LH.historyWindow
+        w:SetBackdropColor(br, bg, bb, KART_Settings.bgAlpha / 100)
+        if w.title then
+            w.title:SetFont(fontPath, titleSize, "OUTLINE")
+            w.title:SetTextColor(r, g, b)
+        end
+    end
 
     if KART.BuffCheckFrame then
         KART.BuffCheckFrame:SetBackdropColor(br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)

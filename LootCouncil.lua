@@ -72,6 +72,21 @@ local function SendLC(msg)
     end
 end
 
+-- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
+local function IsRealItemLink(link)
+    return type(link) == "string" and link:find("|Hitem:") ~= nil
+end
+
+-- Colored label for an item quality index (0=Poor .. 5=Legendary), used by the min-quality filter UI.
+function LC.QualityLabel(q)
+    local name = (KART.L and KART.L["LC_QUALITY_" .. q]) or tostring(q)
+    local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] ---@diagnostic disable-line: undefined-global
+    if c then
+        return c.hex .. name .. "|r"
+    end
+    return name
+end
+
 -- =====================================================================
 --  Session Prompt  (shown to RL when joining a raid)
 -- =====================================================================
@@ -130,8 +145,16 @@ function LC.CheckRaidJoin()
     if not IsInRaid() then
         LC.promptedThisSession = false
         LC.sessionActive = false
+        LC.historySyncRequested = false
         return
     end
+
+    -- Ask peers (once per raid join) for any loot-history entries logged while we weren't around.
+    if not LC.historySyncRequested then
+        LC.historySyncRequested = true
+        LC.RequestHistorySync()
+    end
+
     if not UnitIsGroupLeader("player") then return end
     if LC.promptedThisSession then return end
     LC.promptedThisSession = true
@@ -149,6 +172,11 @@ end
 
 function LC.OnStartLootRoll(rollID)
     if not LC.sessionActive then return end
+
+    -- Below the configured minimum rarity: let Blizzard's own roll UI handle it, untouched.
+    local _, _, _, quality = GetLootRollItemInfo(rollID)
+    local minQuality = KART_Settings.lcMinQuality or 4
+    if quality and quality < minQuality then return end
 
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
     LC.votes[rollID]     = LC.votes[rollID] or {}
@@ -199,6 +227,20 @@ function LC.ShowVotePopup(rollID, itemLink, seconds)
         f.itemText:SetWidth(240)
         f.itemText:SetJustifyH("LEFT")
         f.itemText:SetWordWrap(false)
+
+        -- FontStrings can't take mouse scripts directly; overlay a hover frame for the tooltip.
+        -- SetHyperlink on an equippable item triggers Blizzard's own compare-to-equipped tooltip automatically.
+        f.itemHover = CreateFrame("Frame", nil, f)
+        f.itemHover:SetAllPoints(f.itemText)
+        f.itemHover:EnableMouse(true)
+        f.itemHover:SetScript("OnEnter", function(self)
+            local link = LC.rollItems[f.rollID]
+            if not IsRealItemLink(link) then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(link)
+            GameTooltip:Show()
+        end)
+        f.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         f.timerText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         f.timerText:SetPoint("TOPRIGHT", -10, -10)
@@ -439,18 +481,31 @@ function LC.CreateCouncilPanel()
     f.itemText:SetJustifyH("LEFT")
     f.itemText:SetWordWrap(false)
 
+    -- FontStrings can't take mouse scripts directly; overlay a hover frame for the tooltip.
+    f.itemHover = CreateFrame("Frame", nil, f)
+    f.itemHover:SetAllPoints(f.itemText)
+    f.itemHover:EnableMouse(true)
+    f.itemHover:SetScript("OnEnter", function(self)
+        local link = LC.rollItems[LC.activeRollID]
+        if not IsRealItemLink(link) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(link)
+        GameTooltip:Show()
+    end)
+    f.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -- Column headers
     local hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hName:SetPoint("TOPLEFT", 10, -56)
     hName:SetText(KART.L.LC_COL_NAME)
 
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hIlvl:SetPoint("TOPLEFT", 130, -56)
+    hIlvl:SetPoint("TOPLEFT", 100, -56)
     hIlvl:SetText("iLvl")
     hIlvl:SetTextColor(0.5, 0.5, 0.5)
 
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hVote:SetPoint("TOPLEFT", 182, -56)
+    hVote:SetPoint("TOPLEFT", 160, -56)
     hVote:SetText(KART.L.LC_COL_VOTE)
 
     local divider = f:CreateTexture(nil, "ARTWORK")
@@ -548,23 +603,30 @@ function LC.RefreshCouncilRows()
         if not row then
             row = CreateFrame("Button", nil, panel.scrollChild, "BackdropTemplate")
             row:SetHeight(24)
-            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+            -- Left-click is intentionally inert; right-click opens the assign menu.
+            row:RegisterForClicks("RightButtonUp")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.nameText:SetPoint("LEFT", 6, 0)
-            row.nameText:SetWidth(114)
+            row.nameText:SetWidth(88)
             row.nameText:SetJustifyH("LEFT")
+
+            -- Icon of the item currently equipped in the matching slot
+            row.equipIcon = row:CreateTexture(nil, "ARTWORK")
+            row.equipIcon:SetSize(18, 18)
+            row.equipIcon:SetPoint("LEFT", 96, 0)
+            row.equipIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
             -- Equipped item level in the matching slot
             row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.equippedText:SetPoint("LEFT", 124, 0)
-            row.equippedText:SetWidth(48)
+            row.equippedText:SetPoint("LEFT", 118, 0)
+            row.equippedText:SetWidth(34)
             row.equippedText:SetJustifyH("CENTER")
 
             row.voteText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.voteText:SetPoint("LEFT", 176, 0)
-            row.voteText:SetWidth(82)
+            row.voteText:SetPoint("LEFT", 156, 0)
+            row.voteText:SetWidth(100)
             row.voteText:SetJustifyH("LEFT")
 
             -- Small dot shown when raider left a note
@@ -583,6 +645,7 @@ function LC.RefreshCouncilRows()
         local capturedNote        = m.voteNote or ""
         local capturedEquipLink   = m.equippedLink
         local capturedEquipIlvl   = m.equippedIlvl
+        local capturedVoteDef     = m.voteDef
 
         row:Show()
         row:ClearAllPoints()
@@ -612,7 +675,14 @@ function LC.RefreshCouncilRows()
         row.nameText:SetText(m.short or "?")
         row.nameText:SetTextColor(nr, ng, nb)
 
-        -- Equipped ilvl column
+        -- Equipped item icon + ilvl column
+        if capturedEquipLink then
+            local icon = C_Item.GetItemIconByID(capturedEquipLink)
+            row.equipIcon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            row.equipIcon:Show()
+        else
+            row.equipIcon:Hide()
+        end
         if capturedEquipIlvl then
             row.equippedText:SetText("|cff888888" .. capturedEquipIlvl .. "|r")
         else
@@ -633,31 +703,36 @@ function LC.RefreshCouncilRows()
         -- Note indicator dot
         row.noteIcon:SetText(capturedNote ~= "" and "|cff66aaff•|r" or "")
 
-        -- Both left- and right-click announce the winner; panel stays open.
-        -- Only the X button / Close button closes the panel.
-        row:SetScript("OnClick", function()
+        -- Left-click has no function. Right-click opens the assign menu.
+        -- The panel never closes on its own here — only the X / Close button does.
+        row:SetScript("OnClick", function(self)
             if not capturedRoll or not capturedShort then return end
-            LC.AnnounceResult(capturedRoll, capturedShort)
+            LC.ShowAssignMenu(self, capturedRoll, capturedShort, capturedVoteDef)
         end)
         row:SetScript("OnEnter", function(self)
             self:SetBackdropColor(0.2, 0.3, 0.15, 0.9)
             self:SetBackdropBorderColor(0.4, 0.7, 0.3, 1)
+
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.memberShort or "?", nr, ng, nb)
-            GameTooltip:AddLine(KART.L.LC_TOOLTIP_WINNER, 0.9, 0.8, 0.1, true)
-            -- Equipped item in relevant slot
-            if capturedEquipLink then
-                local equipLine = capturedEquipLink
-                if capturedEquipIlvl then
-                    equipLine = equipLine .. " (" .. capturedEquipIlvl .. ")"
-                end
-                GameTooltip:AddLine(equipLine, 1, 1, 1, true)
+            if IsRealItemLink(rollItem) then
+                GameTooltip:SetHyperlink(rollItem)
+                GameTooltip:AddLine(" ")
+            else
+                GameTooltip:SetText(rollItem or "???", 1, 1, 1)
             end
-            -- Raider note
+            GameTooltip:AddLine(self.memberShort or "?", nr, ng, nb)
             if capturedNote ~= "" then
                 GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
             end
+            GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: assign this item", 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
+
+            -- Side-by-side comparison: this raider's currently equipped item in the matching slot
+            if capturedEquipLink then
+                ShoppingTooltip1:SetOwner(GameTooltip, "ANCHOR_LEFT")     ---@diagnostic disable-line: undefined-global
+                ShoppingTooltip1:SetHyperlink(capturedEquipLink)          ---@diagnostic disable-line: undefined-global
+                ShoppingTooltip1:Show()                                  ---@diagnostic disable-line: undefined-global
+            end
         end)
         row:SetScript("OnLeave", function(self)
             if self.memberShort == LC.currentWinnerShort then
@@ -668,6 +743,7 @@ function LC.RefreshCouncilRows()
                 self:SetBackdropBorderColor(0, 0, 0, 1)
             end
             GameTooltip:Hide()
+            ShoppingTooltip1:Hide() ---@diagnostic disable-line: undefined-global
         end)
     end
 
@@ -680,14 +756,19 @@ end
 --  Result announcement & winner notification
 -- =====================================================================
 
-function LC.AnnounceResult(rollID, winnerName)
+-- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
+-- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
+function LC.AnnounceResult(rollID, winnerName, reason)
     LC.currentWinnerShort = (winnerName ~= "NONE") and winnerName or nil
 
-    SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName)
+    SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName .. ":" .. (reason or ""))
 
     if winnerName ~= "NONE" then
         local link = LC.rollItems[rollID] or ""
         local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
+        if reason and reason ~= "" then
+            msg = msg .. " (" .. reason .. ")"
+        end
         if IsInRaid() then
             SendChatMessage(msg, "RAID")   ---@diagnostic disable-line: deprecated
         elseif IsInGroup() then
@@ -698,6 +779,211 @@ function LC.AnnounceResult(rollID, winnerName)
     if LC.councilPanel and LC.councilPanel:IsShown() then
         LC.RefreshCouncilRows()
     end
+end
+
+-- =====================================================================
+--  Loot History  (SavedVariable: KART_LootHistory)
+-- =====================================================================
+
+local MAX_HISTORY_ENTRIES = 500
+
+-- classFile is captured on a best-effort basis (only known while the raider is in range/group).
+-- colorDef (optional) is the button definition {r,g,b,...} the reason came from; stored so the
+-- history keeps its original color even if button labels/colors are changed later.
+-- Difficulty is captured locally on whichever client logs the entry (assigner or synced receiver),
+-- since every client in the same instance sees the same difficulty.
+function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef)
+    KART_LootHistory = KART_LootHistory or {}
+    local _, _, _, difficultyName = GetInstanceInfo()
+    table.insert(KART_LootHistory, {
+        time       = time(),
+        item       = itemLink or "",
+        winner     = winnerShort or "",
+        reason     = reason or "",
+        class      = classFile,
+        color      = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
+        difficulty = difficultyName or "",
+    })
+    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
+        table.remove(KART_LootHistory, 1)
+    end
+    if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+        KART.LH.Refresh()
+    end
+end
+
+-- =====================================================================
+--  Loot History catch-up sync (silent — never touches chat, addon-channel only)
+-- =====================================================================
+-- When someone rejoins a raid after missing a session, their KART_LootHistory is missing whatever
+-- was assigned while they were away. On join, they broadcast the timestamp of their newest known
+-- entry; any peer who has newer entries whispers just those back (addon channel, invisible to the
+-- player) after a small random delay so several peers answering at once don't all fire at exactly
+-- the same instant. Capped and time-scoped to keep this cheap even after long absences.
+
+local HISTORY_SYNC_MAX_ENTRIES = 30
+local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
+
+function LC.RequestHistorySync()
+    local latest = 0
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if e.time and e.time > latest then latest = e.time end
+    end
+    SendLC("LC_HIST_REQ:" .. latest)
+end
+
+-- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
+-- never a visible chat message) if it actually has entries the requester is missing.
+function LC.HandleHistoryRequest(payload, senderFullName)
+    local sinceTime = tonumber(payload)
+    if not sinceTime or not senderFullName then return end
+
+    local cutoff = time() - HISTORY_SYNC_MAX_AGE
+    local toSend = {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if (e.time or 0) > sinceTime and (e.time or 0) > cutoff then
+            table.insert(toSend, e)
+        end
+    end
+    if #toSend == 0 then return end
+
+    table.sort(toSend, function(a, b) return (a.time or 0) < (b.time or 0) end)
+    if #toSend > HISTORY_SYNC_MAX_ENTRIES then
+        local trimmed = {}
+        for i = #toSend - HISTORY_SYNC_MAX_ENTRIES + 1, #toSend do
+            table.insert(trimmed, toSend[i])
+        end
+        toSend = trimmed
+    end
+
+    C_Timer.After(math.random() * 2, function()
+        for _, e in ipairs(toSend) do
+            local colorPacked = ""
+            if e.color then
+                colorPacked = string.format("%d,%d,%d",
+                    math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
+            end
+            -- itemLink is last on purpose: item links are full of colons internally.
+            local msg = string.format("LC_HIST_ENTRY:%d:%s:%s:%s:%s:%s:%s",
+                e.time or 0, e.winner or "", e.difficulty or "", e.reason or "", e.class or "", colorPacked, e.item or "")
+            C_ChatInfo.SendAddonMessage("KART", msg, "WHISPER", senderFullName)
+        end
+    end)
+end
+
+-- Runs on the requester when a peer whispers back a missing entry.
+function LC.HandleHistoryEntry(payload)
+    local t, winner, difficulty, reason, classFile, colorPacked, itemLink =
+        payload:match("^(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
+    t = tonumber(t)
+    if not t or not winner then return end
+
+    KART_LootHistory = KART_LootHistory or {}
+    for _, e in ipairs(KART_LootHistory) do
+        if e.time == t and e.winner == winner and e.item == itemLink then
+            return -- already have it (e.g. another peer answered first)
+        end
+    end
+
+    local color
+    if colorPacked and colorPacked ~= "" then
+        local cr, cg, cb = colorPacked:match("^(%d+),(%d+),(%d+)$")
+        if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
+    end
+
+    table.insert(KART_LootHistory, {
+        time       = t,
+        item       = itemLink or "",
+        winner     = winner,
+        reason     = reason or "",
+        class      = (classFile ~= "" and classFile) or nil,
+        color      = color,
+        difficulty = difficulty or "",
+    })
+    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
+        table.remove(KART_LootHistory, 1)
+    end
+    if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+        KART.LH.Refresh()
+    end
+end
+
+-- rollID -> shortName of whoever this roll has already been awarded to (guards against accidental
+-- double-assignment when the assign menu is used more than once for the same item).
+LC.assignedWinners = LC.assignedWinners or {}
+
+StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] = { ---@diagnostic disable-line: undefined-global
+    text = "Bereits zugewiesen.",
+    button1 = YES, ---@diagnostic disable-line: undefined-global
+    button2 = NO,  ---@diagnostic disable-line: undefined-global
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function DoAssignWinner(rollID, playerShort, reason, colorDef)
+    local classFile
+    local unit = LC.FindUnitForShortName(playerShort)
+    if unit then
+        local _, cf = UnitClass(unit)
+        classFile = cf
+    end
+    LC.AnnounceResult(rollID, playerShort, reason)
+    LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef)
+    LC.assignedWinners[rollID] = playerShort
+end
+
+-- Awards the item to playerShort with the given reason (may be "" for no reason) and logs it.
+-- colorDef is the vote-button definition the reason was taken from (nil for "no reason").
+-- If this rollID was already assigned, asks for confirmation first to avoid accidental double entries.
+function LC.AssignWinner(rollID, playerShort, reason, colorDef)
+    local prevWinner = LC.assignedWinners[rollID]
+    if prevWinner then
+        local dialog = StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] ---@diagnostic disable-line: undefined-global
+        dialog.text = string.format(KART.L.LC_REASSIGN_CONFIRM_TEXT, prevWinner, playerShort)
+        dialog.OnAccept = function() DoAssignWinner(rollID, playerShort, reason, colorDef) end
+        StaticPopup_Show("KART_LC_REASSIGN_CONFIRM") ---@diagnostic disable-line: undefined-global
+    else
+        DoAssignWinner(rollID, playerShort, reason, colorDef)
+    end
+end
+
+-- Resolves a raid/party unit token for a given short (unrealmed) player name.
+function LC.FindUnitForShortName(shortName)
+    local isRaid = IsInRaid()
+    local numMem = GetNumGroupMembers()
+    for i = 1, numMem do
+        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+        local fullName = UnitName(unit)
+        if fullName and fullName:match("([^%-]+)") == shortName then
+            return unit
+        end
+    end
+    return nil
+end
+
+-- Right-click menu on a council row: quick-assign, change reason, or assign without a reason.
+function LC.ShowAssignMenu(anchor, rollID, playerShort, voteDef)
+    MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
+        rootDescription:CreateTitle(playerShort)
+
+        rootDescription:CreateButton(KART.L.LC_MENU_ASSIGN, function()
+            LC.AssignWinner(rollID, playerShort, voteDef and voteDef.label or "", voteDef)
+        end)
+
+        -- No callback here on purpose: this makes CreateButton return a submenu descriptor.
+        local changeMenu = rootDescription:CreateButton(KART.L.LC_MENU_CHANGE_ASSIGN) ---@diagnostic disable-line: missing-parameter
+        for _, def in ipairs(LC.GetButtonConfig()) do
+            changeMenu:CreateButton(def.label, function()
+                LC.AssignWinner(rollID, playerShort, def.label, def)
+            end)
+        end
+
+        rootDescription:CreateButton(KART.L.LC_MENU_ASSIGN_NO_REASON, function()
+            LC.AssignWinner(rollID, playerShort, "", nil)
+        end)
+    end)
 end
 
 function LC.ShowWinnerNotification(itemLink)
@@ -778,11 +1064,22 @@ function LC.HandleVote(payload, senderShort)
     end
 end
 
+-- Finds the button definition (with its color) whose label matches reason, for entries received
+-- from other clients where only the label string traveled over the wire, not the color itself.
+function LC.ResolveColorForReason(reason)
+    if not reason or reason == "" then return nil end
+    for _, def in ipairs(LC.GetButtonConfig()) do
+        if def.label == reason then return def end
+    end
+    return nil
+end
+
 function LC.HandleResult(payload)
-    -- payload = "rollID:winnerName"
-    local rollID, winner = payload:match("^(%d+):(.+)$")
+    -- payload = "rollID:winnerName:reason"
+    local rollID, winner = payload:match("^(%d+):([^:]+)")
     rollID = tonumber(rollID)
-    if not rollID then return end
+    if not rollID or not winner then return end
+    local reason = payload:match("^%d+:[^:]+:(.*)$") or ""
 
     -- Hide vote popup if open for this roll
     if LC.votePopup and LC.votePopup:IsShown() and LC.votePopup.rollID == rollID then
@@ -795,8 +1092,17 @@ function LC.HandleResult(payload)
     if winner == myShort then
         LC.ShowWinnerNotification(LC.rollItems[rollID])
     end
-    -- Auto-pass is now done immediately in OnStartLootRoll / HandleStart,
-    -- so there is nothing left to do here.
+
+    -- Every KART user logs the same entry locally, so everyone's loot history stays in sync
+    -- without depending on the lootmaster being online later. The assigner already logged this
+    -- locally (SendAddonMessage never echoes back to its own sender), so no duplicate here.
+    local classFile
+    local unit = LC.FindUnitForShortName(winner)
+    if unit then
+        local _, cf = UnitClass(unit)
+        classFile = cf
+    end
+    LC.LogHistory(LC.rollItems[rollID], winner, reason, classFile, LC.ResolveColorForReason(reason))
 end
 
 -- =====================================================================
@@ -944,6 +1250,35 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnTestMaster:SetSize(122, 28)
     KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 8, 0)
     KART.LC.BtnTestMaster:SetScript("OnClick", function() LC.StartTest("master") end)
+
+    -- Loot history (full width)
+    KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
+    KART.LC.BtnHistory:SetSize(255, 28)
+    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -397)
+    KART.LC.BtnHistory:SetScript("OnClick", function()
+        if KART.LH then KART.LH.Toggle() end
+    end)
+
+    -- Minimum item quality that triggers the Loot Council flow (full width)
+    local lblQuality = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lblQuality:SetPoint("TOPLEFT", 20, -433)
+    lblQuality:SetText(L.LC_SET_MIN_QUALITY)
+    table.insert(KART.DynamicLabels, lblQuality)
+
+    KART.LC.BtnMinQuality = KART.CreateModernButton(parent, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
+    KART.LC.BtnMinQuality:SetSize(255, 28)
+    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -451)
+    KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+            rootDescription:CreateTitle(L.LC_SET_MIN_QUALITY)
+            for q = 0, 5 do
+                rootDescription:CreateButton(LC.QualityLabel(q), function()
+                    KART_Settings.lcMinQuality = q
+                    self.text:SetText(LC.QualityLabel(q))
+                end)
+            end
+        end)
+    end)
 end
 
 -- Called at file load time; KART.LootCouncilPanel is created by MainFrame.lua

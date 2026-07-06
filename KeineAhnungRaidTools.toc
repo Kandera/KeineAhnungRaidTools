@@ -2,8 +2,9 @@
 ## Title: Keine Ahnung Raid Tools
 ## Notes: Ein Tool für Invites, Auto-Promote und Buff-Checks.
 ## Author: Kandera
-## Version: 1.5.0
-## SavedVariables: KART_Settings
+## Version: 1.8.1
+## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.jpg
+## SavedVariables: KART_Settings, KART_LootHistory
 
 Locales\enUS.lua
 Locales\deDE.lua
@@ -14,5 +15,6 @@ GroupLogic.lua
 RaidleadBar.lua
 BuffChecker.lua
 LootCouncil.lua
+LootHistory.lua
 Invite.lua
 Core.lua

@@ -1,5 +1,54 @@
 # Changelog
 
+Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
+Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.8.1] - 2026-07-06
+### Geändert
+- **Buff-Checker Design:** Ready-Check-Begründungen werden nicht mehr als Inline-Text angezeigt, sondern als kleines goldenes Info-Icon direkt nach dem Namen — der volle Text erscheint im Tooltip beim Hovern. Das Layout bleibt dadurch unabhängig von der Textlänge stabil, ganz ohne Fenster-Resize.
+
+### Behoben
+- **Addon-Symbol in der WoW-Addonliste:** Der TOC-Datei fehlte das `## IconTexture`-Feld, wodurch in der Blizzard-Addonliste (ESC → AddOns) statt des Icons ein Fragezeichen-Platzhalter angezeigt wurde. Das Minimap-Icon war davon nicht betroffen (eigener Mechanismus über LibDBIcon). Jetzt wird `KAimg.jpg` auch dort korrekt referenziert; sichtbar nach einem vollständigen Client-Neustart bzw. beim nächsten Login-Bildschirm.
+- **Buff-Checker: Ready-Check-Begründungen überlappten Buff-Icons:** Lange "Nicht bereit"-Texte (z. B. AFK-Gründe) wurden bisher direkt als Text hinter den Spielernamen gehängt, in einer Spalte mit fester Breite ohne Zeilenumbruch. Dadurch überlappten längere Texte sofort die Buff-Icons, bis man das Fenster manuell breiter zog.
+
+## [1.8.0] - 2026-07-06
+### Geändert
+- **Tab „Auto-Invite" entfernt, Tab „Auto-Promote" → „Automation":** Da die Keyword-basierte Auto-Invite-Funktion (Whisper/Gildenchat/Battle.net) ihren einzigen verbleibenden Zweck erfüllt, wurde sie in den Auto-Promote-Tab verschoben. Da dieser Tab jetzt mehrere Automatisierungs-Funktionen bündelt (Auto-Invite per Keyword, Auto-Promote, Auto-Raid-Convert), wurde er in „Automation" umbenannt.
+- **„Automatisch in Raid umwandeln":** Die Einstellung ist aus dem Settings-Tab in den neuen Automation-Tab gewandert, direkt neben die anderen automatischen Gruppen-Funktionen.
+
+### Entfernt
+- **Bulk-Invite ("Raid-Zusammenstellung einfügen"):** Die alte Copy-Paste-Funktion im Auto-Invite-Tab ist komplett entfernt worden — sie wurde vollständig durch den WoWUtils Import abgelöst, der dieselbe Aufgabe zuverlässiger und komfortabler löst.
+
+## [1.7.0] - 2026-07-06
+### Hinzugefügt
+- **Mindest-Itemqualität für Loot Council:** Neue Einstellung (Standard: Episch) — Items unterhalb der gewählten Qualität lösen den Loot Council gar nicht erst aus; das normale WoW-Würfelfenster greift stattdessen. Verhindert unnötige Abstimmungs-Popups bei Trash-Loot.
+- **Sperre gegen Doppelzuweisung:** Wird ein Item über das Zuweisungs-Menü ein zweites Mal vergeben (z. B. aus Versehen), erscheint vor der eigentlichen Zuweisung ein Bestätigungsdialog mit dem bisherigen und neuen Empfänger.
+- **Vollständig synchronisierte Loot-Historie:** Jeder KART-Nutzer im Raid protokolliert nun automatisch dieselben Zuweisungen mit (Grund inklusive) — nicht mehr nur der Lootmaster. Dadurch hat jeder Spieler eine vollständige, gemeinsame Historie, unabhängig davon, wer gerade zuweist.
+  - **Difficulty-Spalte:** Jeder Historien-Eintrag speichert jetzt zusätzlich die Raid-Schwierigkeitsstufe (z. B. Heroic, Mythic) zum Zeitpunkt der Vergabe.
+  - **Automatischer Nachhol-Sync:** Betritt ein Spieler einen Raid erneut, nachdem er eine Session verpasst hat, fragt sein Client einmalig und still bei den anderen KART-Nutzern nach fehlenden Einträgen an. Antworten laufen ausschließlich über den unsichtbaren Addon-Kanal (kein Chat/Whisper sichtbar für den Spieler), sind auf die letzten 30 fehlenden Einträge bzw. 14 Tage begrenzt und werden leicht zeitversetzt beantwortet, um Traffic-Spitzen zu vermeiden.
+
+## [1.6.0] - 2026-07-06
+### Hinzugefügt
+- **Loot-Historie:** Neues Modul (`LootHistory.lua`), das jede über den Loot Council vergebene Beute dauerhaft protokolliert (SavedVariable `KART_LootHistory`, max. 500 Einträge).
+  - Neues Fenster mit Datum, klassengefärbtem Spielernamen, Item (Icon + Hover-Tooltip) und Grund.
+  - **Filter:** Freitextsuche über den Item-Namen, Dropdown-Filter nach Spieler, Dropdown-Filter nach Grund (inkl. „Ohne Grund"), sowie ein Reset-Button.
+  - Fußzeile zeigt „X von Y Einträgen"; **„Verlauf leeren"**-Button mit Bestätigungsdialog.
+  - Fenster ist bewegbar, Position wird gespeichert; über einen neuen Button „Loot-Historie" im Loot-Council-Optionsmenü erreichbar.
+- **Zuweisungs-Menü im Council-Panel:** Rechtsklick auf eine Raider-Zeile öffnet jetzt ein Kontextmenü statt sofort zuzuweisen:
+  - **Zuweisen:** Vergibt das Item mit der aktuell abgegebenen Stimme des Spielers als Grund.
+  - **Zuweisung ändern:** Untermenü mit allen konfigurierten Vote-Buttons, um den Grund nachträglich zu korrigieren (z. B. von BIS auf Upgrade).
+  - **Ohne Grund zuweisen:** Vergibt das Item ohne Grundangabe — praktisch, wenn niemand das Item will, aber die Loot-Historie nicht verfälscht werden soll.
+  - Das Panel schließt sich dabei nie von selbst; nur der „Schließen"-Button oder das „×" schließen es.
+
+### Geändert
+- **Linksklick im Council-Panel:** Hat jetzt keine Funktion mehr (verhinderte versehentliche Zuweisungen); alle Aktionen laufen über das neue Rechtsklick-Menü.
+- **Item-Icon im Council-Panel:** Jede Raider-Zeile zeigt zusätzlich zur Item-Stufe das Icon des aktuell getragenen Vergleichs-Items im passenden Slot.
+- **Echte Item-Tooltips:** Der Item-Name im Vote-Popup und im Council-Panel ist jetzt hoverbar und zeigt den vollständigen Item-Tooltip; im Council-Panel wird zusätzlich das getragene Item des jeweiligen Raiders per nativem Vergleichs-Tooltip (`ShoppingTooltip`) gegenübergestellt.
+- **Lootmaster-Fenster schließt nicht mehr automatisch** beim Zuweisen — ermöglicht Korrekturen ohne erneutes Öffnen.
+
 ## [1.5.0] - 2026-07-01
 ### Hinzugefügt
 - **WoWUtils Import:** Neues Modul (`Invite.lua`) und neuer Tab „WoWUtils" in der Sidebar.
@@ -10,7 +59,7 @@
   - Der Import wird sitzungsübergreifend gespeichert; beim Login wird er automatisch geparst.
   - Scrollbalken im Eingabefeld folgt dem Addon-Farbschema.
 
-### Geändert (Loot Council)
+### Geändert
 - **Auto-Pass:** Wird jetzt sofort beim Start einer Loot-Roll ausgelöst (`START_LOOT_ROLL`), nicht erst nach der Gewinner-Bekanntgabe — verhindert versehentliche Need/Gier/Transmog-Klicks des Raidleiters.
 - **Notizfeld im Vote-Popup:** Raider können ihrer Stimme einen optionalen Freitext-Kommentar hinzufügen (max. 80 Zeichen). Die Notiz ist für Council-Mitglieder im Hover-Tooltip der jeweiligen Zeile sichtbar.
 - **Bewegbare Fenster mit Positionsspeicherung:** Vote-Popup und Council-Panel sind jetzt per Drag verschiebbar; die Position wird in den SavedVariables gespeichert und beim nächsten Öffnen wiederhergestellt.
@@ -21,11 +70,6 @@
   - **Test: Looter** — zeigt das Vote-Popup inkl. Notizfeld, unabhängig von der eigenen Rolle.
   - **Test: Lootmaster** — zeigt das Council-Panel inkl. vorbefüllter Votes (aus aktuellen Gruppenmitgliedern), unabhängig von der eigenen Rolle.
 - **Versionsnummer im Titel:** Die Anzeige „v1.3.0" im Hauptfenster-Titel wird jetzt immer aus den Addon-Metadaten gelesen und ist damit immer korrekt.
-
-Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
-Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
-und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 
 ## [1.4.0] - 2026-07-01
 ### Hinzugefügt
@@ -59,7 +103,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [1.2.0] - 2026-06-12
 ### Hinzugefügt
 - **Erweiterter Ready-Check:** Wenn Spieler auf "Nicht bereit" klicken, öffnet sich nun ein kleines Fenster zur Angabe von Gründen (Bio, Trinken, 1 Min oder freier Text). Die Gründe werden dem Raidlead im Chat und direkt im Buff-Checker angezeigt.
-
 - **Addon-Synchronisation (KART Sync):** KART kommuniziert nun unsichtbar mit anderen KART-Nutzern im Raid. Dadurch wird u.A. aufgetragenes Waffenöl exakt ausgelesen, auch wenn Blizzard die API limitiert.
 - **Versions-Checker:** KART vergleicht Versionen innerhalb der Gilde/des Raids und gibt im Chat einen Hinweis aus, sobald eine neuere Version verfügbar ist. Über `/kart v` können die KART-Versionen der Mitspieler überprüft werden.
 - **Tooltips für Raidlead-Leiste:** Die Tasten auf der Raidlead-Leiste (Bereitschaftscheck, Weltmarker löschen, Pull-Timer) erklären nun ihre Funktion, wenn man mit der Maus darüberfährt.
@@ -77,13 +120,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Fehler behoben, bei dem die Sprachdatei `enUS.lua` asynchron zur `deDE.lua` lief.
 
 ## [1.1.1] - 2026-05-24
-### Hinzugefügt
-- Moderne Farbauswahl-API (ColorPickerFrame) für die Einstellungen hinzugefügt, um Abstürze beim Ändern der UI-Farben zu verhindern.
-
 ### Geändert
 - Code-Bereinigung: Veraltete Datei `Minimap.lua` entfernt (Minimap-Logik wird nun sauberer über LibDBIcon gesteuert).
 
 ### Behoben
+- **Absturz beim Ändern der UI-Farben:** Die veraltete Farbauswahl-API wurde durch die moderne `ColorPickerFrame`-API ersetzt, die keine Abstürze mehr verursacht.
 - **Sicherheit (Taint):** Die automatische Schlachtzugs-Umwandlung bei Keyword- und Bulk-Invites blockiert nun korrekt während des Kampfes (`InCombatLockdown`), um Lua-Fehler zu vermeiden.
 - **Sicherheit (Taint):** Der Aktualisierungsprozess für den Pull-Timer-Button auf der Raidlead-Leiste wurde gegen Combat-Taints abgesichert (`GROUP_ROSTER_UPDATE`).
 - **Lokalisierung:** Fehlender Fallback für Spiel-Clients mit anderen Sprachen (z. B. Französisch, Russisch) korrigiert. Das Addon fällt nun in diesen Fällen immer fehlerfrei auf Englisch (enUS) zurück.
@@ -109,6 +150,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Automatisches Umwandeln in Raid blockiert nun korrekt während des Kampfes (Taint-Vermeidung).
 
 ## [1.0.0] - Initial Release
+### Hinzugefügt
 - Grundlegende Auto-Invite Funktionalität über Keywords.
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.

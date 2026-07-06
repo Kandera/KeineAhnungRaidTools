@@ -150,10 +150,26 @@ function KART.CreateBuffCheckFrame()
         
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.name:SetPoint("LEFT", row, "LEFT", offsets[1], 0)
-        row.name:SetWidth(110)
+        row.name:SetWidth(82) -- leaves just enough room for the reason icon before the next column
         row.name:SetJustifyH("LEFT")
         row.name:SetWordWrap(false) -- Verhindert Zeilenumbrüche, nutzt stattdessen den neuen Platz beim Resizen
-        
+
+        -- Kleines Hinweis-Icon statt Inline-Text für Ready-Check-Begründungen: unabhängig von der
+        -- Textlänge, kein Überlappen mit den Buff-Icons mehr nötig (siehe voller Text im Tooltip).
+        row.reasonIcon = row:CreateTexture(nil, "OVERLAY")
+        row.reasonIcon:SetSize(14, 14)
+        row.reasonIcon:SetPoint("LEFT", row.name, "RIGHT", 2, 0)
+        row.reasonIcon:SetTexture("Interface\\Common\\help-i")
+        row.reasonIcon:SetVertexColor(1, 0.85, 0.1)
+        row.reasonIcon:Hide()
+        row.reasonIcon:EnableMouse(true)
+        row.reasonIcon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.reasonText or "", 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        row.reasonIcon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
         row.ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.ilvlText:SetPoint("LEFT", row, "LEFT", offsets[2] - 10, 0)
         row.ilvlText:Hide()
@@ -297,7 +313,7 @@ function KART.CreateBuffCheckFrame()
             local row = self.rows[i]
             if row then
                 row:SetWidth(660 + extra)
-                if row.name then row.name:SetWidth(110 + extra) end
+                if row.name then row.name:SetWidth(82 + extra) end
                 if row.ilvlText then
                     row.ilvlText:ClearAllPoints()
                     row.ilvlText:SetPoint("LEFT", row, "LEFT", offsets[2] - 10 + extra, 0)
@@ -451,18 +467,21 @@ function KART.UpdateBuffCheck(isPreview)
 
     if isPreview then
         local rcPreview = {"ready", "notready", "waiting", nil, "ready"}
-        local rcReasonsPreview = {nil, "Katze brennt", "Postbote", nil, nil}
+        local rcReasonsPreview = {nil, "Katze brennt", "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil}
         for i = 1, 5 do
             local row = KART.BuffCheckFrame.rows[i]
-            
-            local displayStr = L.BC_EXAMPLE_PLAYER .. i
-            local rc = rcPreview[i]
-            if (rc == "notready" or rc == "waiting") and rcReasonsPreview[i] then
-                displayStr = displayStr .. " |cffaaaaaa(" .. rcReasonsPreview[i] .. ")|r"
-            end
-            
-            row.name:SetText(displayStr)
+
+            row.name:SetText(L.BC_EXAMPLE_PLAYER .. i)
             row.name:SetTextColor(0.5, 0.5, 1)
+
+            local rc = rcPreview[i]
+            local reason = (rc == "notready" or rc == "waiting") and rcReasonsPreview[i] or nil
+            if reason then
+                row.reasonIcon.reasonText = reason
+                row.reasonIcon:Show()
+            else
+                row.reasonIcon:Hide()
+            end
             
             if rc == "ready" then
                 row.rcIcon:SetTexture(136814)
@@ -732,15 +751,18 @@ function KART.UpdateBuffCheck(isPreview)
         end
 
         -- Row Update
-        local displayStr = nameStr
         local shortName = nameStr:match("([^%-]+)")
-        if rcStatus == "notready" and shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName] then
-            displayStr = nameStr .. " |cffaaaaaa(" .. KART.ReadyCheckReasons[shortName] .. ")|r"
-        end
-        
-        row.name:SetText(displayStr)
+        row.name:SetText(nameStr)
         local c = RAID_CLASS_COLORS[class] or {r=1, g=1, b=1}
         row.name:SetTextColor(c.r, c.g, c.b)
+
+        local reason = rcStatus == "notready" and shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName]
+        if reason then
+            row.reasonIcon.reasonText = reason
+            row.reasonIcon:Show()
+        else
+            row.reasonIcon:Hide()
+        end
 
         if UnitIsUnit(unit, "player") then
             row.ilvlText:SetText(string.format("%.1f", select(2, GetAverageItemLevel())))

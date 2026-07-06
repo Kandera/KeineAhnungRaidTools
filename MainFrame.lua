@@ -5,7 +5,6 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 -- 1. Tab-Wechsel Logik (wird in KART Tabelle gespeichert)
 function KART.ShowTab(tabIndex)
     local panels = {
-        KART.InvitePanel,
         KART.PromotePanel,
         KART.RaidleadPanel,
         KART.BuffCheckPanel,
@@ -67,33 +66,29 @@ mainInset.sidebarBG:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 0, 0)
 mainInset.sidebarBG:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMLEFT", 140, 0)
 mainInset.sidebarBG:SetColorTexture(0.05, 0.05, 0.05, 0.8)
 
-KART.BtnInvite = KART.CreateModernButton(mainFrame, L.TAB_INVITE)
-KART.BtnInvite:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 5, -10)
-KART.BtnInvite:SetScript("OnClick", function() KART.ShowTab(1) end)
-
 KART.BtnPromote = KART.CreateModernButton(mainFrame, L.TAB_PROMOTE)
-KART.BtnPromote:SetPoint("TOPLEFT", KART.BtnInvite, "BOTTOMLEFT", 0, -5)
-KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(2) end)
+KART.BtnPromote:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 5, -10)
+KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
 KART.BtnRaidlead = KART.CreateModernButton(mainFrame, L.TAB_RAIDLEAD)
 KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
-KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(3) end)
+KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
 KART.BtnBuffCheck = KART.CreateModernButton(mainFrame, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
-KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(4) end)
+KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
 KART.BtnSettings = KART.CreateModernButton(mainFrame, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
-KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(5) end)
+KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
 KART.BtnLootCouncil = KART.CreateModernButton(mainFrame, L.TAB_LOOTCOUNCIL or "Loot Council")
 KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnSettings, "BOTTOMLEFT", 0, -5)
-KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(6) end)
+KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
 KART.BtnWoWUtils = KART.CreateModernButton(mainFrame, L.TAB_WOWUTILS or "WoWUtils")
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
-KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(7) end)
+KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 
 -- Sichtbare Trennlinie (Vertical Divider)
 mainInset.divider = mainInset:CreateTexture(nil, "BACKGROUND")
@@ -112,9 +107,6 @@ scrollChild:SetSize(310, 600)
 scrollFrame:SetScrollChild(scrollChild)
 
 -- Panels erstellen
-KART.InvitePanel = CreateFrame("Frame", nil, scrollChild)
-KART.InvitePanel:SetAllPoints()
-
 KART.PromotePanel = CreateFrame("Frame", nil, scrollChild)
 KART.PromotePanel:SetAllPoints()
 
@@ -191,25 +183,7 @@ KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC
 KART.SldCombatDelay = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -190, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
 KART.CbGrayOffline = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -235, nil, L.DESC_GRAY_OFFLINE)
 
--- 6. Invite & Promote Editboxen
-local invLabel = KART.InvitePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-invLabel:SetPoint("TOPLEFT", KART.InvitePanel, "TOPLEFT", 20, -20)
-invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
-table.insert(KART.DynamicLabels, invLabel)
-
-KART.InviteEditBox = CreateFrame("EditBox", "KART_InviteEditBox", KART.InvitePanel, "BackdropTemplate")
-KART.InviteEditBox:SetSize(250, 30)
-KART.InviteEditBox:SetPoint("TOPLEFT", invLabel, "BOTTOMLEFT", 0, -10)
-KART.InviteEditBox:SetAutoFocus(false)
-KART.InviteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-KART.InviteEditBox:SetBackdropColor(0,0,0,0.5)
-table.insert(KART.EditBoxes, KART.InviteEditBox)
-KART.InviteEditBox:SetScript("OnTextChanged", function(self)
-    KART_Settings.inviteKeywords = self:GetText()
-    KART.UpdateCache()
-end)
-KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
+-- 6. Automation Panel Inhalt (Auto-Promote + Auto-Invite per Whisper + Auto-Raid-Convert)
 local promLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 promLabel:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -20)
 promLabel:SetText(L.LABEL_PROMOTE_NAMES)
@@ -228,39 +202,25 @@ KART.PromoteEditBox:SetScript("OnTextChanged", function(self)
 end) -- KART_Settings ist eine SavedVariable
 KART.PromoteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
--- Bulk Invite
-local bulkLabel = KART.InvitePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-bulkLabel:SetPoint("TOPLEFT", KART.InviteEditBox, "BOTTOMLEFT", 0, -30)
-bulkLabel:SetText(L.LABEL_BULK_INVITE)
-table.insert(KART.DynamicLabels, bulkLabel)
+local invLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+invLabel:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -110)
+invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
+table.insert(KART.DynamicLabels, invLabel)
 
-local bulkScrollBG = CreateFrame("Frame", nil, KART.InvitePanel, "BackdropTemplate")
-bulkScrollBG:SetSize(260, 130)
-bulkScrollBG:SetPoint("TOPLEFT", bulkLabel, "BOTTOMLEFT", 0, -10)
-bulkScrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-bulkScrollBG:SetBackdropColor(0,0,0,0.5)
+KART.InviteEditBox = CreateFrame("EditBox", "KART_InviteEditBox", KART.PromotePanel, "BackdropTemplate")
+KART.InviteEditBox:SetSize(250, 30)
+KART.InviteEditBox:SetPoint("TOPLEFT", invLabel, "BOTTOMLEFT", 0, -10)
+KART.InviteEditBox:SetAutoFocus(false)
+KART.InviteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+KART.InviteEditBox:SetBackdropColor(0,0,0,0.5)
+table.insert(KART.EditBoxes, KART.InviteEditBox)
+KART.InviteEditBox:SetScript("OnTextChanged", function(self)
+    KART_Settings.inviteKeywords = self:GetText()
+    KART.UpdateCache()
+end)
+KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-local bulkScroll = CreateFrame("ScrollFrame", "KART_BulkInviteScrollFrame", bulkScrollBG, "UIPanelScrollFrameTemplate")
-bulkScroll:SetPoint("TOPLEFT", 5, -5)
-bulkScroll:SetPoint("BOTTOMRIGHT", -25, 5)
-
-KART.BulkScrollThumb = KART.StripScrollbarTextures(bulkScroll)
-if KART.BulkScrollThumb then KART.BulkScrollThumb:SetSize(8, 20) end
-
-KART.BulkInviteEditBox = CreateFrame("EditBox", "KART_BulkInviteEditBox", bulkScroll)
-KART.BulkInviteEditBox:SetWidth(230)
-KART.BulkInviteEditBox:SetMultiLine(true)
-KART.BulkInviteEditBox:SetAutoFocus(false)
-KART.BulkInviteEditBox:SetFontObject("GameFontHighlightSmall")
-KART.BulkInviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
-bulkScroll:SetScrollChild(KART.BulkInviteEditBox)
-table.insert(KART.EditBoxes, KART.BulkInviteEditBox)
-
-KART.BulkInviteProcessBtn = KART.CreateModernButton(KART.InvitePanel, L.BTN_INVITE_RAID)
-KART.BulkInviteProcessBtn:SetPoint("TOPLEFT", bulkScrollBG, "BOTTOMLEFT", 0, -10)
-KART.BulkInviteProcessBtn:SetWidth(260)
-KART.BulkInviteProcessBtn:SetScript("OnClick", function() KART.ProcessBulkInvite() end)
+KART.CbAutoRaid = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -190, nil, L.DESC_AUTO_RAID)
 
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -272,15 +232,13 @@ KART.CbMinimap = KART.CreateSettingsCheckbox(KART.SettingsPanel, "KART_MinimapCh
     KART.UpdateMinimapButton()
 end, L.DESC_MINIMAP)
 
-KART.CbAutoRaid = KART.CreateSettingsCheckbox(KART.SettingsPanel, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -90, nil, L.DESC_AUTO_RAID)
-
-KART.SldTitleSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_TITLE, 8, 20, "titleFontSize", -130, "KART_TitleSizeSlider", L.DESC_TITLE_SIZE)
-KART.SldMenuSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -170, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
-KART.SldContentSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -210, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
+KART.SldTitleSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_TITLE, 8, 20, "titleFontSize", -110, "KART_TitleSizeSlider", L.DESC_TITLE_SIZE)
+KART.SldMenuSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -150, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
+KART.SldContentSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -190, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
 
 -- Schriftart Button
 KART.BtnFont = KART.CreateModernButton(KART.SettingsPanel, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
-KART.BtnFont:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -250)
+KART.BtnFont:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -230)
 KART.BtnFont:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
         rootDescription:CreateTitle(L.BTN_SELECT_FONT)

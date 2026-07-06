@@ -66,35 +66,3 @@ function KART.HandleAutoPromote()
         end
     end
 end
-
--- Logik für Bulk-Invite Prozess
-function KART.ProcessBulkInvite()
-    local text = KART.BulkInviteEditBox:GetText()
-    if not text or text == "" then return end
-    
-    local lines = {}
-    for s in text:gmatch("[^\r\n]+") do table.insert(lines, s) end
-    if #lines < 3 then return end
-
-    if not IsInRaid() and KART.HasGroupPermissions() and GetNumGroupMembers() > 0 and not InCombatLockdown() then 
-        C_PartyInfo.ConvertToRaid() 
-    end
-
-    -- Zeilen 3-6: Einladungen
-    for i = 3, 6 do
-        local names = KART.GetNamesFromLine(lines[i])
-        for _, name in ipairs(names) do if name ~= "" then C_PartyInfo.InviteUnit(name) end end
-    end
-
-    -- Zeile 7: Bench entfernen
-    local benchNames = KART.GetNamesFromLine(lines[7])
-    if #benchNames > 0 and KART.HasGroupPermissions() and IsInGroup() then
-        local benchSet = {}
-        for _, n in ipairs(benchNames) do benchSet[n:lower()] = true end
-        for i = 1, GetNumGroupMembers() do
-            local unit = IsInRaid() and ("raid"..i) or (i == GetNumGroupMembers() and "player" or "party"..i)
-            local name = UnitName(unit)
-            if name and benchSet[name:lower()] then UninviteUnit(name) end
-        end
-    end
-end

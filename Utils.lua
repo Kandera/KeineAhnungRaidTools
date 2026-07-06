@@ -38,6 +38,8 @@ KART.Defaults = {
     wuImportText = "",
     lcVotePopupPos = false,
     lcCouncilPanelPos = false,
+    lcHistoryWindowPos = false,
+    lcMinQuality = 4,
 }
 
 function KART.TrimString(s)
@@ -51,15 +53,6 @@ function KART.SplitString(inputstr, sep)
         table.insert(t, str)
     end
     return t
-end
-
-function KART.GetNamesFromLine(line)
-    if not line then return {} end
-    local names = {}
-    for name in line:gmatch("[^%s,;]+") do
-        table.insert(names, name)
-    end
-    return names
 end
 
 function KART.HasGroupPermissions()
