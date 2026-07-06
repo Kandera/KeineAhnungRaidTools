@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build zip
+        run: |
+          mkdir -p dist/KeineAhnungRaidTools
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='dist' \
+            --exclude='*.jpg' \
+            --exclude='*.png' \
+            . dist/KeineAhnungRaidTools/
+          cd dist
+          zip -r "../KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip" KeineAhnungRaidTools/
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Pull the block between the current version header and the next one
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # GitHub requires the body in an env var to preserve newlines
+          {
+            echo "NOTES<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ steps.version.outputs.VERSION }}"
+          body: ${{ env.NOTES }}
+          files: "KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip"
+          draft: false
+          prerelease: false
