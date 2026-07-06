@@ -6,6 +6,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-07
+### Behoben
+- **Lua-Fehler beim Login:** `BuildSettingsPanel` in LootCouncil.lua griff beim Aufbau der Oberfläche direkt auf `KART_Settings.lcMinQuality` zu — zu diesem Zeitpunkt existiert die SavedVariable aber noch nicht (sie wird erst bei `ADDON_LOADED` initialisiert). Der Mindest-Qualitäts-Button verwendet jetzt einen Platzhaltertext beim Aufbau; der echte gespeicherte Wert wird wie vorgesehen unmittelbar danach nachgezogen.
+
 ## [1.9.0] - 2026-07-06
 ### Hinzugefügt
 - **Modul-Schalter für Loot Council, Buff-Checker und WoWUtils:** Jedes Modul lässt sich jetzt einzeln komplett deaktivieren — praktisch während der Testphase (z. B. bei Konflikten mit RCLootCouncil) oder um CPU zu sparen, wenn Raider bestimmte Funktionen nicht brauchen.
@@ -167,7 +171,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.5.0...v1.8.1
 [1.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.3.0...v1.5.0
