@@ -1366,7 +1366,9 @@ function LC.BuildSettingsPanel(parent)
     lblQuality:SetText(L.LC_SET_MIN_QUALITY)
     table.insert(KART.DynamicLabels, lblQuality)
 
-    KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(KART_Settings.lcMinQuality or 4), L.LC_DESC_MIN_QUALITY)
+    -- Placeholder text only — KART_Settings doesn't exist yet at file-load time.
+    -- Core.lua's ADDON_LOADED handler syncs the real value once settings are loaded.
+    KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
     KART.LC.BtnMinQuality:SetSize(250, 28)
     KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -270)
     KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
