@@ -154,3 +154,19 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Grundlegende Auto-Invite Funktionalität über Keywords.
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
+
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.5.0...v1.8.1
+[1.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.3.0...v1.5.0
+[1.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/releases/tag/v1.0.0
+
+<!--
+Hinweis: 1.4.0, 1.6.0, 1.7.0 und 1.8.0 haben keinen eigenen Git-Tag (in der Historie
+nicht als eigenständiger Commit-Stand nachweisbar) und sind daher hier nicht verlinkt.
+Ab v1.8.1 wird jede Version konsequent getaggt, sodass zukünftige Einträge vollständig
+verlinkt werden können.
+-->
