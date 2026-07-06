@@ -166,10 +166,14 @@ bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -20)
 bcTitle:SetText(L.LABEL_BUFFCHECK_SETTINGS)
 table.insert(KART.DynamicLabels, bcTitle)
 
-KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -50, nil, L.DESC_BC_READYCHECK)
+-- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
+-- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
+KART.CbBcModuleEnabled = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_BcModuleEnabled", L.SET_BC_MODULE_ENABLED, "bcModuleEnabled", -50, nil, L.DESC_BC_MODULE_ENABLED)
+
+KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -80, nil, L.DESC_BC_READYCHECK)
 
 KART.BtnBuffPreview = KART.CreateModernButton(KART.BuffCheckPanel, L.BTN_BUFF_PREVIEW)
-KART.BtnBuffPreview:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -90)
+KART.BtnBuffPreview:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -120)
 KART.BtnBuffPreview:SetScript("OnClick", function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()
@@ -179,9 +183,9 @@ KART.BtnBuffPreview:SetScript("OnClick", function()
     end
 end)
 
-KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -145, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
-KART.SldCombatDelay = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -190, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
-KART.CbGrayOffline = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -235, nil, L.DESC_GRAY_OFFLINE)
+KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -175, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
+KART.SldCombatDelay = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -220, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
+KART.CbGrayOffline = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -265, nil, L.DESC_GRAY_OFFLINE)
 
 -- 6. Automation Panel Inhalt (Auto-Promote + Auto-Invite per Whisper + Auto-Raid-Convert)
 local promLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")

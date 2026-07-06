@@ -43,6 +43,7 @@ end
 -- =====================================================================
 
 function WU.InviteBoss(idx)
+    if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
     if not KART.HasGroupPermissions() then
@@ -93,6 +94,7 @@ end
 
 -- Removes current group members who are NOT in the boss's player list.
 function WU.RemoveForBoss(idx)
+    if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
     if not UnitIsGroupLeader("player") then
@@ -223,14 +225,19 @@ function WU.BuildPanel(parent)
     title:SetText(L.WU_TITLE or "WoWUtils Import")
     table.insert(KART.DynamicLabels, title)
 
+    -- Master switch: fully disables the WoWUtils import/invite module.
+    KART.WU.CbModuleEnabled = KART.CreateSettingsCheckbox(
+        parent, "KART_WUModuleEnabled",
+        L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -45, nil, L.WU_DESC_MODULE_ENABLED)
+
     local pasteLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pasteLabel:SetPoint("TOPLEFT", 20, -55)
+    pasteLabel:SetPoint("TOPLEFT", 20, -85)
     pasteLabel:SetText(L.WU_LABEL_PASTE or "WoWUtils Export hier einfügen:")
     table.insert(KART.DynamicLabels, pasteLabel)
 
     local pasteBG = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     pasteBG:SetSize(265, 90)
-    pasteBG:SetPoint("TOPLEFT", 20, -72)
+    pasteBG:SetPoint("TOPLEFT", 20, -102)
     pasteBG:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -260,8 +267,9 @@ function WU.BuildPanel(parent)
 
     WU.BtnImport = KART.CreateModernButton(parent, L.WU_BTN_IMPORT or "Importieren")
     WU.BtnImport:SetSize(265, 26)
-    WU.BtnImport:SetPoint("TOPLEFT", 20, -170)
+    WU.BtnImport:SetPoint("TOPLEFT", 20, -200)
     WU.BtnImport:SetScript("OnClick", function()
+        if KART_Settings.wuModuleEnabled == false then return end
         local text = WU.ImportEditBox:GetText()
         local count = WU.ParseImport(text)
         if count > 0 then
@@ -275,7 +283,7 @@ function WU.BuildPanel(parent)
     end)
 
     WU.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    WU.statusLabel:SetPoint("TOPLEFT", 20, -205)
+    WU.statusLabel:SetPoint("TOPLEFT", 20, -235)
     WU.statusLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
     table.insert(KART.DynamicLabels, WU.statusLabel)
@@ -283,26 +291,26 @@ function WU.BuildPanel(parent)
     local sep = parent:CreateTexture(nil, "ARTWORK")
     sep:SetColorTexture(0.22, 0.22, 0.22, 1)
     sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT",  5, -218)
-    sep:SetPoint("TOPRIGHT", -5, -218)
+    sep:SetPoint("TOPLEFT",  5, -248)
+    sep:SetPoint("TOPRIGHT", -5, -248)
 
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hBoss:SetPoint("TOPLEFT", 8, -228)
+    hBoss:SetPoint("TOPLEFT", 8, -258)
     hBoss:SetText("|cffaaaaaa" .. (L.WU_COL_BOSS or "Boss") .. "|r")
     table.insert(KART.DynamicLabels, hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hInvite:SetPoint("TOPRIGHT", -110, -228)
+    hInvite:SetPoint("TOPRIGHT", -110, -258)
     hInvite:SetText("|cffaaaaaa" .. (L.WU_BTN_INVITE or "Einl.") .. "|r")
     table.insert(KART.DynamicLabels, hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hRemove:SetPoint("TOPRIGHT", -38, -228)
+    hRemove:SetPoint("TOPRIGHT", -38, -258)
     hRemove:SetText("|cffaaaaaa" .. (L.WU_BTN_REMOVE or "Entf.") .. "|r")
     table.insert(KART.DynamicLabels, hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
-    WU.bossListFrame:SetPoint("TOPLEFT",  5, -244)
+    WU.bossListFrame:SetPoint("TOPLEFT",  5, -274)
     WU.bossListFrame:SetPoint("RIGHT", parent, "RIGHT", -5, 0)
     WU.bossListFrame:SetHeight(24)
     WU.bossListFrame.rows = {}

@@ -7,8 +7,11 @@ LC.sessionActive        = false
 LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][playerShortName] = {idx, note}
 LC.rollItems            = {}  -- [rollID] = itemLink
-LC.CouncilNamesTable    = {}  -- shortName:lower() -> true
+LC.CouncilNamesTable    = {}  -- shortName:lower() -> true. Populated ONLY from the raid leader's
+                               -- broadcast (LC_CONFIG) — never from local settings — so a regular
+                               -- raider can't self-promote by editing their own council-member list.
 LC.currentWinnerShort   = nil -- short name of last announced winner
+LC.raidConfig           = {}  -- authoritative config received from the raid leader: minQuality, buttonLabels, councilMembers
 
 -- Preset accent colors per button position
 local BUTTON_COLORS = {
@@ -24,8 +27,17 @@ local BUTTON_COLORS = {
 --  Helpers
 -- =====================================================================
 
+-- Vote-button labels/colors are authoritative from the raid leader (LC.raidConfig), so every
+-- raider's vote index maps to the SAME label in everyone's UI. The leader always uses their own
+-- local setting directly (they ARE the source of truth); everyone else uses the synced value,
+-- falling back to their own local setting only when solo / not yet synced (e.g. testing).
 function LC.GetButtonConfig()
-    local raw = (KART_Settings and KART_Settings.lcButtonLabels) or "BIS;Upgrade;Offspec;Sonstiges;Pass"
+    local raw
+    if UnitIsGroupLeader("player") or not (LC.raidConfig and LC.raidConfig.buttonLabels) then
+        raw = (KART_Settings and KART_Settings.lcButtonLabels) or "BIS;Upgrade;Offspec;Sonstiges;Pass"
+    else
+        raw = LC.raidConfig.buttonLabels
+    end
     local parts = KART.SplitString(raw, ";")
     local result = {}
     for i, label in ipairs(parts) do
@@ -47,13 +59,10 @@ function LC.GetButtonConfig()
     return result
 end
 
+-- Only the leader's own edits are authoritative; this just re-broadcasts them to the raid.
+-- (Non-leaders calling this would have no effect, since BroadcastRaidConfig no-ops for them.)
 function LC.UpdateCouncilCache()
-    local raw = (KART_Settings and KART_Settings.lcCouncilMembers) or ""
-    LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(raw:lower(), ";")) do
-        local trimmed = KART.TrimString(name)
-        if trimmed ~= "" then LC.CouncilNamesTable[trimmed] = true end
-    end
+    LC.BroadcastRaidConfig()
 end
 
 local function IsCouncil()
@@ -69,6 +78,41 @@ end
 local function SendLC(msg)
     if IsInGroup() then
         C_ChatInfo.SendAddonMessage("KART", msg, GetChannel())
+    end
+end
+
+-- Minimum item quality is authoritative from the raid leader, same reasoning as GetButtonConfig.
+-- NOTE: this does NOT gate Auto-Pass (see OnStartLootRoll) — that stays a personal preference.
+function LC.GetRaidMinQuality()
+    if UnitIsGroupLeader("player") then
+        return KART_Settings.lcMinQuality or 4
+    end
+    return (LC.raidConfig and LC.raidConfig.minQuality) or 4
+end
+
+-- Sends the leader's authoritative settings (min quality, vote-button labels, council member list)
+-- to the raid so every client interprets votes/roles identically. No-ops for non-leaders.
+function LC.BroadcastRaidConfig()
+    if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
+    local minQ     = KART_Settings.lcMinQuality or 4
+    local buttons  = KART_Settings.lcButtonLabels or ""
+    local council  = KART_Settings.lcCouncilMembers or ""
+    SendLC("LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. council)
+end
+
+-- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON).
+function LC.HandleConfig(payload)
+    local minQ, buttons, council = payload:match("^(%d+):([^:]*):(.*)$")
+    if not minQ then return end
+
+    LC.raidConfig.minQuality    = tonumber(minQ) or 4
+    LC.raidConfig.buttonLabels  = buttons
+    LC.raidConfig.councilMembers = council or ""
+
+    LC.CouncilNamesTable = {}
+    for _, name in ipairs(KART.SplitString((council or ""):lower(), ";")) do
+        local trimmed = KART.TrimString(name)
+        if trimmed ~= "" then LC.CouncilNamesTable[trimmed] = true end
     end
 end
 
@@ -138,6 +182,7 @@ end
 function LC.SetSessionActive(active)
     LC.sessionActive = active
     SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
+    if active then LC.BroadcastRaidConfig() end
     print("|cff00ff00KART:|r " .. (active and KART.L.LC_SESSION_ON or KART.L.LC_SESSION_OFF))
 end
 
@@ -148,6 +193,7 @@ function LC.CheckRaidJoin()
         LC.historySyncRequested = false
         return
     end
+    if KART_Settings.lcModuleEnabled == false then return end
 
     -- Ask peers (once per raid join) for any loot-history entries logged while we weren't around.
     if not LC.historySyncRequested then
@@ -156,6 +202,10 @@ function LC.CheckRaidJoin()
     end
 
     if not UnitIsGroupLeader("player") then return end
+
+    -- Re-broadcast the authoritative config on every roster change so late joiners get it too.
+    if LC.sessionActive then LC.BroadcastRaidConfig() end
+
     if LC.promptedThisSession then return end
     LC.promptedThisSession = true
     -- Small delay so the roster is fully settled before showing the prompt
@@ -171,20 +221,23 @@ end
 -- =====================================================================
 
 function LC.OnStartLootRoll(rollID)
+    if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
 
-    -- Below the configured minimum rarity: let Blizzard's own roll UI handle it, untouched.
+    -- Auto-Pass is a personal preference and is intentionally independent of the raid's min-quality
+    -- setting (that setting only gates whether Council itself engages) — evaluated unconditionally
+    -- so a raider's own choice is never overridden by the raid leader's quality threshold.
+    if KART_Settings.lcAutoPass then
+        RollOnLoot(rollID, 0)
+    end
+
+    -- Below the raid-wide minimum rarity: let Blizzard's own roll UI handle it, untouched.
     local _, _, _, quality = GetLootRollItemInfo(rollID)
-    local minQuality = KART_Settings.lcMinQuality or 4
+    local minQuality = LC.GetRaidMinQuality()
     if quality and quality < minQuality then return end
 
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
     LC.votes[rollID]     = LC.votes[rollID] or {}
-
-    -- Pass immediately so the WoW roll popup cannot be accidentally clicked.
-    if KART_Settings.lcAutoPass then
-        RollOnLoot(rollID, 0)
-    end
 
     if UnitIsGroupLeader("player") then
         local secs = KART_Settings.lcVoteSeconds or 20
@@ -580,10 +633,28 @@ function LC.RefreshCouncilRows()
             local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
             local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
             local equippedLink, equippedIlvl = LC.GetEquippedForUnit(unit, rollItem)
+
+            -- Flag raiders who are missing KART, running an outdated version, or have disabled
+            -- their own Loot Council module locally (self excluded — we never receive our own
+            -- version broadcast, so PlayerVersions never has an entry for "player").
+            local kartStatus
+            if unit ~= "player" then
+                local ver = KART.PlayerVersions and KART.PlayerVersions[short]
+                local lcEnabled = KART.PlayerLCEnabled and KART.PlayerLCEnabled[short]
+                if not ver then
+                    kartStatus = KART.L.LC_STATUS_NO_KART
+                elseif ver ~= KART.Version then
+                    kartStatus = string.format(KART.L.LC_STATUS_OLD_VERSION, ver)
+                elseif lcEnabled == false then
+                    kartStatus = KART.L.LC_STATUS_MODULE_DISABLED
+                end
+            end
+
             table.insert(members, {
                 short = short, unit = unit,
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
+                kartStatus = kartStatus,
             })
         end
     end
@@ -635,6 +706,12 @@ function LC.RefreshCouncilRows()
             row.noteIcon:SetWidth(16)
             row.noteIcon:SetJustifyH("CENTER")
 
+            -- Warning shown when the raider is missing KART, outdated, or has LC disabled locally
+            row.warnIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.warnIcon:SetPoint("RIGHT", row.noteIcon, "LEFT", -2, 0)
+            row.warnIcon:SetWidth(14)
+            row.warnIcon:SetJustifyH("CENTER")
+
             panel.rows[i] = row
         end
 
@@ -646,6 +723,7 @@ function LC.RefreshCouncilRows()
         local capturedEquipLink   = m.equippedLink
         local capturedEquipIlvl   = m.equippedIlvl
         local capturedVoteDef     = m.voteDef
+        local capturedKartStatus  = m.kartStatus
 
         row:Show()
         row:ClearAllPoints()
@@ -703,6 +781,9 @@ function LC.RefreshCouncilRows()
         -- Note indicator dot
         row.noteIcon:SetText(capturedNote ~= "" and "|cff66aaff•|r" or "")
 
+        -- Warning indicator: missing/outdated KART or Loot Council disabled on their end
+        row.warnIcon:SetText(capturedKartStatus and "|cffff4444!|r" or "")
+
         -- Left-click has no function. Right-click opens the assign menu.
         -- The panel never closes on its own here — only the X / Close button does.
         row:SetScript("OnClick", function(self)
@@ -723,6 +804,9 @@ function LC.RefreshCouncilRows()
             GameTooltip:AddLine(self.memberShort or "?", nr, ng, nb)
             if capturedNote ~= "" then
                 GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
+            end
+            if capturedKartStatus then
+                GameTooltip:AddLine(capturedKartStatus, 1, 0.4, 0.4, true)
             end
             GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: assign this item", 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
@@ -1032,11 +1116,8 @@ function LC.HandleStart(payload)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = LC.rollItems[rollID] or GetLootRollItemLink(rollID) or "???"
-
-    -- Pass immediately so the WoW roll popup cannot be accidentally clicked.
-    if KART_Settings.lcAutoPass then
-        RollOnLoot(rollID, 0)
-    end
+    -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
+    -- so there's nothing left to do here for that.
 
     if IsCouncil() then
         if not (LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID) then
@@ -1160,6 +1241,20 @@ end
 --  Settings Panel  (fills KART.LootCouncilPanel created by MainFrame.lua)
 -- =====================================================================
 
+-- Updates the role-status line inside the raid-wide settings box. Called on build, and whenever
+-- the group roster changes (leadership can change without a UI interaction).
+function LC.UpdateRoleStatusLabel()
+    local lbl = KART.LC.RoleStatusLabel
+    if not lbl then return end
+    if UnitIsGroupLeader("player") then
+        lbl:SetText(KART.L.LC_ROLE_STATUS_LEADER)
+        lbl:SetTextColor(0.3, 0.9, 0.3)
+    else
+        lbl:SetText(KART.L.LC_ROLE_STATUS_MEMBER)
+        lbl:SetTextColor(0.9, 0.7, 0.2)
+    end
+end
+
 function LC.BuildSettingsPanel(parent)
     local L = KART.L
 
@@ -1168,48 +1263,85 @@ function LC.BuildSettingsPanel(parent)
     title:SetText(L.LC_SETTINGS_TITLE)
     table.insert(KART.DynamicLabels, title)
 
+    -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
+    -- another loot addon like RCLootCouncil). Nothing below still runs when this is off.
+    KART.LC.CbModuleEnabled = KART.CreateSettingsCheckbox(
+        parent, "KART_LCModuleEnabled",
+        L.LC_SET_MODULE_ENABLED, "lcModuleEnabled", -50, nil, L.LC_DESC_MODULE_ENABLED)
+
+    -- Personal preference — never overridden by the raid leader's settings.
     KART.LC.CbAutoPass = KART.CreateSettingsCheckbox(
         parent, "KART_LCAutoPass",
-        L.LC_SET_AUTOPASS, "lcAutoPass", -60, nil, L.LC_DESC_AUTOPASS)
+        L.LC_SET_AUTOPASS, "lcAutoPass", -80, nil, L.LC_DESC_AUTOPASS)
+
+    -- ================= Raid-wide settings box =================
+    -- Everything in here only takes effect for the raid when YOU are the raid leader; otherwise
+    -- the actual raid leader's values are used automatically. Visually set apart on purpose so
+    -- nobody mistakes their own tweaks here for something that affects the current raid.
+    local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -120)
+    raidBox:SetSize(280, 350)
+    raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
+    raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
+
+    local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    boxTitle:SetPoint("TOPLEFT", 10, -8)
+    boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
+    boxTitle:SetTextColor(0.9, 0.75, 0.3)
+    table.insert(KART.DynamicLabels, boxTitle)
+
+    KART.LC.RoleStatusLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    KART.LC.RoleStatusLabel:SetPoint("TOPRIGHT", -10, -9)
+    table.insert(KART.DynamicLabels, KART.LC.RoleStatusLabel)
+
+    local boxDivider = raidBox:CreateTexture(nil, "ARTWORK")
+    boxDivider:SetColorTexture(0.5, 0.4, 0.05, 0.5)
+    boxDivider:SetHeight(1)
+    boxDivider:SetPoint("TOPLEFT", 8, -26)
+    boxDivider:SetPoint("TOPRIGHT", -8, -26)
 
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
-        parent, L.LC_SET_VOTE_TIMER, 5, 60, "lcVoteSeconds",
-        -110, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
+        raidBox, L.LC_SET_VOTE_TIMER, 5, 60, "lcVoteSeconds",
+        -40, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
 
-    local lblButtons = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblButtons:SetPoint("TOPLEFT", 20, -158)
+    local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lblButtons:SetPoint("TOPLEFT", 20, -88)
     lblButtons:SetText(L.LC_SET_BUTTONS)
     table.insert(KART.DynamicLabels, lblButtons)
 
-    KART.LC.ButtonLabelEditBox = CreateFrame("EditBox", "KART_LCButtonLabels", parent, "BackdropTemplate")
+    KART.LC.ButtonLabelEditBox = CreateFrame("EditBox", "KART_LCButtonLabels", raidBox, "BackdropTemplate")
     local eb = KART.LC.ButtonLabelEditBox
-    eb:SetSize(255, 28)
-    eb:SetPoint("TOPLEFT", 20, -176)
+    eb:SetSize(250, 28)
+    eb:SetPoint("TOPLEFT", 20, -106)
     eb:SetAutoFocus(false)
     eb:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     eb:SetBackdropColor(0, 0, 0, 0.5)
     eb:SetTextInsets(5, 5, 0, 0)
     eb:SetMaxLetters(128)
     table.insert(KART.EditBoxes, eb)
-    eb:SetScript("OnTextChanged", function(self) KART_Settings.lcButtonLabels = self:GetText() end)
+    eb:SetScript("OnTextChanged", function(self)
+        KART_Settings.lcButtonLabels = self:GetText()
+        LC.BroadcastRaidConfig()
+    end)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("TOPLEFT", 20, -213)
+    local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hint:SetPoint("TOPLEFT", 20, -143)
     hint:SetText(L.LC_SET_BUTTONS_HINT)
     hint:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hint)
 
     -- Council member names
-    local lblCouncil = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblCouncil:SetPoint("TOPLEFT", 20, -240)
+    local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lblCouncil:SetPoint("TOPLEFT", 20, -170)
     lblCouncil:SetText(L.LC_SET_COUNCIL)
     table.insert(KART.DynamicLabels, lblCouncil)
 
-    KART.LC.CouncilMembersEditBox = CreateFrame("EditBox", "KART_LCCouncilMembers", parent, "BackdropTemplate")
+    KART.LC.CouncilMembersEditBox = CreateFrame("EditBox", "KART_LCCouncilMembers", raidBox, "BackdropTemplate")
     local ebC = KART.LC.CouncilMembersEditBox
-    ebC:SetSize(255, 28)
-    ebC:SetPoint("TOPLEFT", 20, -258)
+    ebC:SetSize(250, 28)
+    ebC:SetPoint("TOPLEFT", 20, -188)
     ebC:SetAutoFocus(false)
     ebC:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     ebC:SetBackdropColor(0, 0, 0, 0.5)
@@ -1222,16 +1354,39 @@ function LC.BuildSettingsPanel(parent)
     end)
     ebC:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    local hintCouncil = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hintCouncil:SetPoint("TOPLEFT", 20, -295)
+    local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hintCouncil:SetPoint("TOPLEFT", 20, -225)
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
 
-    -- Toggle session (full width)
-    KART.LC.BtnToggleSession = KART.CreateModernButton(parent, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
-    KART.LC.BtnToggleSession:SetSize(255, 28)
-    KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -325)
+    -- Minimum item quality that triggers the Loot Council flow (full width)
+    local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lblQuality:SetPoint("TOPLEFT", 20, -252)
+    lblQuality:SetText(L.LC_SET_MIN_QUALITY)
+    table.insert(KART.DynamicLabels, lblQuality)
+
+    KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(KART_Settings.lcMinQuality or 4), L.LC_DESC_MIN_QUALITY)
+    KART.LC.BtnMinQuality:SetSize(250, 28)
+    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -270)
+    KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+            rootDescription:CreateTitle(L.LC_SET_MIN_QUALITY)
+            for q = 0, 5 do
+                rootDescription:CreateButton(LC.QualityLabel(q), function()
+                    KART_Settings.lcMinQuality = q
+                    self.text:SetText(LC.QualityLabel(q))
+                    LC.BroadcastRaidConfig()
+                end)
+            end
+        end)
+    end)
+
+    -- Toggle session (full width) — functionally always leader-gated already; lives in the
+    -- raid-wide box too since it only ever does anything for the raid leader.
+    KART.LC.BtnToggleSession = KART.CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
+    KART.LC.BtnToggleSession:SetSize(250, 28)
+    KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -306)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         if IsInGroup() and UnitIsGroupLeader("player") then
             LC.SetSessionActive(not LC.sessionActive)
@@ -1239,11 +1394,14 @@ function LC.BuildSettingsPanel(parent)
             print("|cff00ff00KART:|r " .. KART.L.LC_NOT_LEADER)
         end
     end)
+    -- ================= /Raid-wide settings box =================
+
+    LC.UpdateRoleStatusLabel()
 
     -- Two test buttons side by side: Looter view / Lootmaster view
     KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
     KART.LC.BtnTestLooter:SetSize(122, 28)
-    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -361)
+    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -486)
     KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
 
     KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
@@ -1254,30 +1412,9 @@ function LC.BuildSettingsPanel(parent)
     -- Loot history (full width)
     KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
     KART.LC.BtnHistory:SetSize(255, 28)
-    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -397)
+    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -522)
     KART.LC.BtnHistory:SetScript("OnClick", function()
         if KART.LH then KART.LH.Toggle() end
-    end)
-
-    -- Minimum item quality that triggers the Loot Council flow (full width)
-    local lblQuality = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblQuality:SetPoint("TOPLEFT", 20, -433)
-    lblQuality:SetText(L.LC_SET_MIN_QUALITY)
-    table.insert(KART.DynamicLabels, lblQuality)
-
-    KART.LC.BtnMinQuality = KART.CreateModernButton(parent, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
-    KART.LC.BtnMinQuality:SetSize(255, 28)
-    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -451)
-    KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
-        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
-            rootDescription:CreateTitle(L.LC_SET_MIN_QUALITY)
-            for q = 0, 5 do
-                rootDescription:CreateButton(LC.QualityLabel(q), function()
-                    KART_Settings.lcMinQuality = q
-                    self.text:SetText(LC.QualityLabel(q))
-                end)
-            end
-        end)
     end)
 end
 

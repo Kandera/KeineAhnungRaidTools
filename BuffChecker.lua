@@ -335,9 +335,16 @@ function KART.CreateBuffCheckFrame()
     KART.UpdateStyles()
 end
 
+-- Master switch for the whole Buff-Checker window/UI (saves CPU for raiders who don't need it).
+-- Does NOT affect the KART Sync responder in Core.lua (REQ_OIL/REQ_ILVL/REQ_GEAR) — that keeps
+-- answering regardless, so the raid leader still gets accurate data about this player.
 function KART.ShowBuffCheck()
-    if not KART.BuffCheckFrame then 
-        KART.CreateBuffCheckFrame() 
+    if KART_Settings.bcModuleEnabled == false then
+        print("|cff00ff00KART:|r " .. (KART.L.BC_MODULE_DISABLED_MSG or "Buff-Checker is disabled in settings."))
+        return
+    end
+    if not KART.BuffCheckFrame then
+        KART.CreateBuffCheckFrame()
     end
     KART.BuffCheckFrame:Show()
     KART.UpdateBuffCheck()

@@ -6,6 +6,18 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-06
+### Hinzugefügt
+- **Modul-Schalter für Loot Council, Buff-Checker und WoWUtils:** Jedes Modul lässt sich jetzt einzeln komplett deaktivieren — praktisch während der Testphase (z. B. bei Konflikten mit RCLootCouncil) oder um CPU zu sparen, wenn Raider bestimmte Funktionen nicht brauchen.
+  - Beim Deaktivieren von Loot Council werden keinerlei Nachrichten anderer KART-Nutzer mehr verarbeitet, kein Auto-Pass, keine Popups.
+  - Beim Deaktivieren des Buff-Checkers bleibt der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bewusst aktiv — nur das eigene Fenster wird abgeschaltet, damit der Raidleiter weiterhin korrekte Daten über diesen Spieler sieht.
+- **Warnsymbol im Council-Panel:** Zeigt pro Raider ein rotes „!“ (mit Tooltip), wenn kein KART erkannt wurde, eine veraltete Version läuft oder der Spieler Loot Council lokal deaktiviert hat.
+
+### Geändert
+- **Raid-weite Autorität für Loot Council:** Abstimmungs-Timer, Vote-Buttons, zusätzliche Council-Mitglieder und Mindest-Itemqualität gelten jetzt immer gemäß den Einstellungen des Raidleiters — nicht mehr die lokalen Einstellungen jedes einzelnen Spielers. Verhindert, dass jemand z. B. die Abstimmungszeit lokal verkürzt oder sich selbst über die eigene Council-Liste unbefugt Zuweisungsrechte verschafft.
+  - **Auto-Pass bleibt davon unberührt** und ist weiterhin eine rein persönliche Einstellung.
+  - Die betroffenen Einstellungen sind im Options-Menü jetzt visuell in einer eigenen Box abgegrenzt, inklusive Live-Anzeige, ob die eigenen Einstellungen gerade wirksam sind („Du bist Raidleiter“ / „Einstellungen des Raidleiters gelten“).
+
 ## [1.8.1] - 2026-07-06
 ### Geändert
 - **Buff-Checker Design:** Ready-Check-Begründungen werden nicht mehr als Inline-Text angezeigt, sondern als kleines goldenes Info-Icon direkt nach dem Namen — der volle Text erscheint im Tooltip beim Hovern. Das Layout bleibt dadurch unabhängig von der Textlänge stabil, ganz ohne Fenster-Resize.
@@ -155,7 +167,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.5.0...v1.8.1
 [1.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.3.0...v1.5.0
 [1.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.2.0...v1.3.0

@@ -86,11 +86,14 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
         if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
         if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
+        if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
         if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
+        if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
         if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
         if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
         if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
         if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
+        if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
         if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
         if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
         if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
@@ -110,7 +113,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end
         -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
-        if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuImportText ~= "" then
+        if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= "" then
             local count = KART.WU.ParseImport(KART_Settings.wuImportText)
             if count > 0 and KART.WU.RefreshBossList then
                 KART.WU.RefreshBossList()
@@ -173,10 +176,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
+        if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
         KART.UpdateRaidleadBarVisibility()
-        
+
         if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version, IsInRaid() and "RAID" or "PARTY")
+            local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
+            C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, IsInRaid() and "RAID" or "PARTY")
             KART.VersionAnnouncedToGroup = true
         elseif not IsInGroup() then
             KART.VersionAnnouncedToGroup = false
@@ -223,7 +228,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(5, function()
             if IsInGuild() then
-                C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version, "GUILD")
+                local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
+                C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
             end
         end)
     elseif event == "CHAT_MSG_ADDON" and arg1 == "KART" then
@@ -277,17 +283,30 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                         end
                     end
                 elseif msg == "REQ_VERSION" then
-                    C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version, channel)
+                    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
+                    C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, channel)
                 elseif msg:sub(1, 8) == "VERSION:" or msg:sub(1, 17) == "ANNOUNCE_VERSION:" then
                     local isAnnounce = (msg:sub(1, 17) == "ANNOUNCE_VERSION:")
-                    local ver = isAnnounce and msg:sub(18) or msg:sub(9)
-                    
+                    local rest = isAnnounce and msg:sub(18) or msg:sub(9)
+                    local ver, lcFlag = rest:match("^([^:]+):?([01]?)$")
+                    ver = ver or rest
+
+                    KART.PlayerVersions = KART.PlayerVersions or {}
+                    KART.PlayerVersions[shortName] = ver
+                    if lcFlag == "1" or lcFlag == "0" then
+                        KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
+                        KART.PlayerLCEnabled[shortName] = (lcFlag == "1")
+                    end
+                    if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+                        KART.LC.RefreshCouncilRows()
+                    end
+
                     if not KART.UpdateWarned and ver ~= KART.Version then
                         local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
                         local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
                         nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
                         oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
-                        
+
                         if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
                             KART.UpdateWarned = true
                             print(string.format(KART.L.UPDATE_AVAILABLE or "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).", ver, KART.Version))
@@ -298,17 +317,19 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                         print(string.format(KART.L.VERSION_CHECK_RES or "KART Version von %s: %s", shortName, ver))
                     end
                 elseif msg:sub(1, 10) == "LC_ACTIVE:" then
-                    if KART.LC then KART.LC.HandleActive(msg:sub(11)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleActive(msg:sub(11)) end
                 elseif msg:sub(1, 9) == "LC_START:" then
-                    if KART.LC then KART.LC.HandleStart(msg:sub(10)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
-                    if KART.LC then KART.LC.HandleVote(msg:sub(9), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleVote(msg:sub(9), shortName) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
-                    if KART.LC then KART.LC.HandleResult(msg:sub(11)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11)) end
+                elseif msg:sub(1, 10) == "LC_CONFIG:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11)) end
                 elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
-                    if KART.LC then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
                 elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
-                    if KART.LC then KART.LC.HandleHistoryEntry(msg:sub(15)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryEntry(msg:sub(15)) end
                 elseif msg:sub(1, 10) == "RC_REASON:" then
                     local reason = msg:sub(11)
                     KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
