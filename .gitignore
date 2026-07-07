@@ -1,6 +1,9 @@
 # VSCode Ordner
 .vscode/
 
+# Claude Code Ordner (lokale Tool-Berechtigungen etc.)
+.claude/
+
 # Gepackte Addon-Archive
 *.zip
 
