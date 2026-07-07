@@ -6,6 +6,17 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-07-07
+### Behoben
+- **Überlappender Text im Loot-Council-Tab:** In der neuen "Raid-weite Einstellungen"-Box standen Titel und Rollen-Status (z. B. "Du bist Raidleiter") nebeneinander auf derselben Zeile in einer nur 280px breiten Box und kollidierten dadurch in der Mitte. Beide Texte stehen jetzt untereinander und wurden deutlich gekürzt; alle darunterliegenden Elemente wurden entsprechend neu positioniert.
+
+### Entfernt
+- **`Minimap.lua`:** Tote Datei, die seit Version 1.1.1 nicht mehr in der TOC geladen wurde (ersetzt durch LibDBIcon), aber nie tatsächlich aus dem Projekt gelöscht wurde. Enthielt u. a. eine zweite, nie ausgeführte Version von `KART.UpdateMinimapButton()`.
+- **Verwaiste Lokalisierungs-Strings:** `BC_REPORT_ENCHANTS`, `BC_REPORT_GEMS`, `BC_REPORT_OIL` (nie mit einem Report-Feld verknüpft), `LC_DESC_COUNCIL` (nie als Tooltip verdrahtet), `LC_NO_VOTE` (Code nutzt stattdessen einen hartcodierten Platzhalter) und `SET_TITLE_SIZE` (Duplikat von `LABEL_FONT_SIZE_TITLE`).
+
+### Sonstiges
+- **Fehlende deutsche Übersetzungen ergänzt:** `DESC_LANGUAGE`, `DESC_SELECT_FONT` und `RC_REASON_SEND` fielen bisher automatisch auf Englisch zurück und sind jetzt vollständig übersetzt.
+
 ## [1.9.1] - 2026-07-07
 ### Behoben
 - **Lua-Fehler beim Login:** `BuildSettingsPanel` in LootCouncil.lua griff beim Aufbau der Oberfläche direkt auf `KART_Settings.lcMinQuality` zu — zu diesem Zeitpunkt existiert die SavedVariable aber noch nicht (sie wird erst bei `ADDON_LOADED` initialisiert). Der Mindest-Qualitäts-Button verwendet jetzt einen Platzhaltertext beim Aufbau; der echte gespeicherte Wert wird wie vorgesehen unmittelbar danach nachgezogen.
@@ -171,7 +182,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...HEAD
+[1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.5.0...v1.8.1

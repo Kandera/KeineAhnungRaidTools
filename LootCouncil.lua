@@ -1280,11 +1280,13 @@ function LC.BuildSettingsPanel(parent)
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -120)
-    raidBox:SetSize(280, 350)
+    raidBox:SetSize(280, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
     raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
 
+    -- Title and role-status stacked on their own lines (not side-by-side) — the box is only
+    -- 280px wide, too narrow to fit both texts on one line without overlapping.
     local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     boxTitle:SetPoint("TOPLEFT", 10, -8)
     boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
@@ -1292,28 +1294,30 @@ function LC.BuildSettingsPanel(parent)
     table.insert(KART.DynamicLabels, boxTitle)
 
     KART.LC.RoleStatusLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    KART.LC.RoleStatusLabel:SetPoint("TOPRIGHT", -10, -9)
+    KART.LC.RoleStatusLabel:SetPoint("TOPLEFT", 10, -22)
+    KART.LC.RoleStatusLabel:SetWidth(260)
+    KART.LC.RoleStatusLabel:SetJustifyH("LEFT")
     table.insert(KART.DynamicLabels, KART.LC.RoleStatusLabel)
 
     local boxDivider = raidBox:CreateTexture(nil, "ARTWORK")
     boxDivider:SetColorTexture(0.5, 0.4, 0.05, 0.5)
     boxDivider:SetHeight(1)
-    boxDivider:SetPoint("TOPLEFT", 8, -26)
-    boxDivider:SetPoint("TOPRIGHT", -8, -26)
+    boxDivider:SetPoint("TOPLEFT", 8, -38)
+    boxDivider:SetPoint("TOPRIGHT", -8, -38)
 
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
         raidBox, L.LC_SET_VOTE_TIMER, 5, 60, "lcVoteSeconds",
-        -40, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
+        -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
 
     local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblButtons:SetPoint("TOPLEFT", 20, -88)
+    lblButtons:SetPoint("TOPLEFT", 20, -100)
     lblButtons:SetText(L.LC_SET_BUTTONS)
     table.insert(KART.DynamicLabels, lblButtons)
 
     KART.LC.ButtonLabelEditBox = CreateFrame("EditBox", "KART_LCButtonLabels", raidBox, "BackdropTemplate")
     local eb = KART.LC.ButtonLabelEditBox
     eb:SetSize(250, 28)
-    eb:SetPoint("TOPLEFT", 20, -106)
+    eb:SetPoint("TOPLEFT", 20, -118)
     eb:SetAutoFocus(false)
     eb:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     eb:SetBackdropColor(0, 0, 0, 0.5)
@@ -1327,21 +1331,21 @@ function LC.BuildSettingsPanel(parent)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("TOPLEFT", 20, -143)
+    hint:SetPoint("TOPLEFT", 20, -155)
     hint:SetText(L.LC_SET_BUTTONS_HINT)
     hint:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hint)
 
     -- Council member names
     local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblCouncil:SetPoint("TOPLEFT", 20, -170)
+    lblCouncil:SetPoint("TOPLEFT", 20, -182)
     lblCouncil:SetText(L.LC_SET_COUNCIL)
     table.insert(KART.DynamicLabels, lblCouncil)
 
     KART.LC.CouncilMembersEditBox = CreateFrame("EditBox", "KART_LCCouncilMembers", raidBox, "BackdropTemplate")
     local ebC = KART.LC.CouncilMembersEditBox
     ebC:SetSize(250, 28)
-    ebC:SetPoint("TOPLEFT", 20, -188)
+    ebC:SetPoint("TOPLEFT", 20, -200)
     ebC:SetAutoFocus(false)
     ebC:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     ebC:SetBackdropColor(0, 0, 0, 0.5)
@@ -1355,14 +1359,14 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hintCouncil:SetPoint("TOPLEFT", 20, -225)
+    hintCouncil:SetPoint("TOPLEFT", 20, -237)
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
 
     -- Minimum item quality that triggers the Loot Council flow (full width)
     local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblQuality:SetPoint("TOPLEFT", 20, -252)
+    lblQuality:SetPoint("TOPLEFT", 20, -264)
     lblQuality:SetText(L.LC_SET_MIN_QUALITY)
     table.insert(KART.DynamicLabels, lblQuality)
 
@@ -1370,7 +1374,7 @@ function LC.BuildSettingsPanel(parent)
     -- Core.lua's ADDON_LOADED handler syncs the real value once settings are loaded.
     KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
     KART.LC.BtnMinQuality:SetSize(250, 28)
-    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -270)
+    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -282)
     KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
             rootDescription:CreateTitle(L.LC_SET_MIN_QUALITY)
@@ -1388,7 +1392,7 @@ function LC.BuildSettingsPanel(parent)
     -- raid-wide box too since it only ever does anything for the raid leader.
     KART.LC.BtnToggleSession = KART.CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
     KART.LC.BtnToggleSession:SetSize(250, 28)
-    KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -306)
+    KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -318)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         if IsInGroup() and UnitIsGroupLeader("player") then
             LC.SetSessionActive(not LC.sessionActive)
@@ -1403,7 +1407,7 @@ function LC.BuildSettingsPanel(parent)
     -- Two test buttons side by side: Looter view / Lootmaster view
     KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
     KART.LC.BtnTestLooter:SetSize(122, 28)
-    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -486)
+    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -498)
     KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
 
     KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
@@ -1414,7 +1418,7 @@ function LC.BuildSettingsPanel(parent)
     -- Loot history (full width)
     KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
     KART.LC.BtnHistory:SetSize(255, 28)
-    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -522)
+    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -534)
     KART.LC.BtnHistory:SetScript("OnClick", function()
         if KART.LH then KART.LH.Toggle() end
     end)
