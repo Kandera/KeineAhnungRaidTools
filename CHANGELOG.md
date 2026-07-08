@@ -5,6 +5,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.10.0] - 2026-07-08
 ### Hinzugefügt
 - **Loot Council zeigt jetzt alle gleichzeitig gedroppten Items auf einmal statt nacheinander:**
   - **Looter-Ansicht:** Aus dem einzelnen Abstimmungs-Popup ist eine Liste geworden — jedes aktuell laufende Item bekommt seine eigene Zeile mit eigenen Vote-Buttons, eigener Notiz und eigenem Countdown. So sieht man alle Drops auf einen Blick und kann pro Item unabhängig entscheiden (z. B. BIS auf das eine, Pass auf das andere), statt ein Item erst abhaken zu müssen, bevor das nächste überhaupt sichtbar wird.
@@ -214,7 +216,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.8.1...v1.9.0
