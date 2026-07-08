@@ -103,7 +103,11 @@ scrollFrame:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 145, -5)
 scrollFrame:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMRIGHT", -25, 25)
 
 local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-scrollChild:SetSize(310, 600)
+-- Height has headroom beyond what the tallest tab (Loot Council's raid-wide settings box)
+-- needs at the default font, since that box's height depends on wrapped label text and can
+-- grow with the user's chosen font/size (see LC.RelayoutRaidBox) — better a bit of empty
+-- scroll space than content silently clipped below the scrollable area.
+scrollChild:SetSize(310, 750)
 scrollFrame:SetScrollChild(scrollChild)
 
 -- Panels erstellen

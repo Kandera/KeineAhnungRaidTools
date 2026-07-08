@@ -16,6 +16,7 @@ frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("START_LOOT_ROLL")
+frame:RegisterEvent("TRADE_SHOW")
 
 -- DataBroker Object für Minimap und Compartment
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
@@ -42,6 +43,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
         KART_Settings = KART_Settings or {}
         KART_LootHistory = KART_LootHistory or {}
+        KART_LCOfficerNotes = KART_LCOfficerNotes or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         for k, v in pairs(KART.Defaults) do
@@ -90,6 +92,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
         if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
         if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
+        if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
         if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
         if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
         if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
@@ -173,6 +176,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "START_LOOT_ROLL" then
         if KART.LC then KART.LC.OnStartLootRoll(arg1) end
+
+    elseif event == "TRADE_SHOW" then
+        if KART.LC then KART.LC.OnTradeShow() end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
@@ -322,6 +328,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleVote(msg:sub(9), shortName) end
+                elseif msg:sub(1, 8) == "LC_ROLL:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleRoll(msg:sub(9), shortName) end
+                elseif msg:sub(1, 9) == "LC_CVOTE:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), shortName) end
+                elseif msg:sub(1, 9) == "LC_ONOTE:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10)) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11)) end
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
@@ -382,6 +394,10 @@ function KART.UpdateStyles()
     for _, label in ipairs(KART.DynamicLabels) do
         label:SetFont(fontPath, contentSize, "")
     end
+
+    -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
+    -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
+    if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
 
     -- Slider-Thumbs und Checkboxen färben
     for _, thumb in ipairs(KART.SliderThumbs) do thumb:SetColorTexture(r, g, b, 1) end

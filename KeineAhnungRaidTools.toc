@@ -4,7 +4,7 @@
 ## Author: Kandera
 ## Version: 1.9.2
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.jpg
-## SavedVariables: KART_Settings, KART_LootHistory
+## SavedVariables: KART_Settings, KART_LootHistory, KART_LCOfficerNotes
 
 Locales\enUS.lua
 Locales\deDE.lua

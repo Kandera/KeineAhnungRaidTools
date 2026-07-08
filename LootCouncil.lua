@@ -6,12 +6,50 @@ local LC = KART.LC
 LC.sessionActive        = false
 LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][playerShortName] = {idx, note}
+LC.rolls                = {}  -- [rollID][playerShortName] = 1-100 random roll (opt-in, see lcRollsEnabled)
+LC.councilVotes         = {}  -- [rollID][councilMemberShortName] = candidateShortName they picked (tally only, not binding)
 LC.rollItems            = {}  -- [rollID] = itemLink
+LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
+LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
+LC.councilTabsNew       = {}  -- [rollID] = true while a tab hasn't been switched to yet (unseen-item marker)
+LC.rollDeadlines        = {}  -- [rollID] = GetTime() timestamp when voting closes, shared by both UIs
+LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerShort}
 LC.CouncilNamesTable    = {}  -- shortName:lower() -> true. Populated ONLY from the raid leader's
                                -- broadcast (LC_CONFIG) — never from local settings — so a regular
                                -- raider can't self-promote by editing their own council-member list.
-LC.currentWinnerShort   = nil -- short name of last announced winner
 LC.raidConfig           = {}  -- authoritative config received from the raid leader: minQuality, buttonLabels, councilMembers
+
+-- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel
+-- handling of multiple simultaneous rolls can actually be tested (multiple items dropping at
+-- once is the normal case in a real raid, not the exception). Real item links, not fake strings
+-- — so tabs show real icons and the armor-eligibility / equipped-item comparison features have
+-- real item data to work with in test mode too. The trinket is included specifically so the
+-- two-slot comparison logic in GetEquippedForUnit (rings/trinkets check both slots and show
+-- whichever is weaker) has something to actually exercise — the three weapons are all
+-- single-slot. Safe to use for testing regardless: everything that matters (no broadcast, no
+-- chat announce, no loot history entry, no trade reminder) is gated on the rollID being a test
+-- roll (see IsTestRoll), not on whether the item link itself is real. "(TEST)" sits inside the
+-- hyperlink's own label so it shows up wherever the link is displayed as text, without breaking
+-- GameTooltip:SetHyperlink (which ignores the label and looks up the real item by ID) or
+-- IsRealItemLink.
+local TEST_ITEMS = {
+    "|cffff8000|Hitem:17182:0:0:0:0:0:0:0:0:0:0:0|h[Sulfuras, Hand von Ragnaros] (TEST)|h|r",
+    "|cffff8000|Hitem:19019:0:0:0:0:0:0:0:0:0:0:0|h[Thunderfury, Blessed Blade of the Windseeker] (TEST)|h|r",
+    "|cffff8000|Hitem:22691:0:0:0:0:0:0:0:0:0:0:0|h[Corrupted Ashbringer] (TEST)|h|r",
+    "|cffa335ee|Hitem:12938:0:0:0:0:0:0:0:0:0:0:0|h[Hand of Justice] (TEST)|h|r",
+}
+
+-- Fixed rollID range used by the Test buttons: TEST_ROLL_ID .. TEST_ROLL_ID + TEST_ITEM_COUNT -
+-- 1, one per simulated item (see TEST_ITEMS). Kept separate from real, server-issued rollIDs so
+-- test votes/assignments never collide with a live roll, and so the vote/assign/announce logic
+-- below can special-case them: no addon-channel broadcast, no raid-chat spam, no permanent
+-- loot-history entry — testing must stay entirely local to the tester's client.
+local TEST_ROLL_ID    = 99999
+local TEST_ITEM_COUNT = #TEST_ITEMS
+
+local function IsTestRoll(rollID)
+    return rollID ~= nil and rollID >= TEST_ROLL_ID and rollID < TEST_ROLL_ID + TEST_ITEM_COUNT
+end
 
 -- Preset accent colors per button position
 local BUTTON_COLORS = {
@@ -90,23 +128,40 @@ function LC.GetRaidMinQuality()
     return (LC.raidConfig and LC.raidConfig.minQuality) or 4
 end
 
--- Sends the leader's authoritative settings (min quality, vote-button labels, council member list)
--- to the raid so every client interprets votes/roles identically. No-ops for non-leaders.
+-- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
+-- same authority reasoning as GetButtonConfig/GetRaidMinQuality.
+function LC.GetRollsEnabled()
+    -- Same fallback shape as GetButtonConfig: trust our own local setting when solo/not yet
+    -- synced too, not just when we're actually the leader — otherwise UnitIsGroupLeader("player")
+    -- being false while ungrouped (e.g. solo testing) would always read as "rolls off", no
+    -- matter what the checkbox says, since LC.raidConfig.rollsEnabled never gets synced there.
+    if UnitIsGroupLeader("player") or not (LC.raidConfig and LC.raidConfig.rollsEnabled ~= nil) then
+        return KART_Settings.lcRollsEnabled == true
+    end
+    return LC.raidConfig.rollsEnabled == true
+end
+
+-- Sends the leader's authoritative settings (min quality, vote-button labels, rolls toggle,
+-- council member list) to the raid so every client interprets votes/roles identically. No-ops
+-- for non-leaders. Council members stays last in the payload since it's free text (raider names
+-- separated by semicolons, not colons) — everything after the rolls flag is captured greedily.
 function LC.BroadcastRaidConfig()
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
+    local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
     local council  = KART_Settings.lcCouncilMembers or ""
-    SendLC("LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. council)
+    SendLC("LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. council)
 end
 
 -- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON).
 function LC.HandleConfig(payload)
-    local minQ, buttons, council = payload:match("^(%d+):([^:]*):(.*)$")
+    local minQ, buttons, rolls, council = payload:match("^(%d+):([^:]*):([01]):(.*)$")
     if not minQ then return end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
+    LC.raidConfig.rollsEnabled  = (rolls == "1")
     LC.raidConfig.councilMembers = council or ""
 
     LC.CouncilNamesTable = {}
@@ -119,6 +174,24 @@ end
 -- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
 local function IsRealItemLink(link)
     return type(link) == "string" and link:find("|Hitem:") ~= nil
+end
+
+-- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
+-- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's
+-- fake coloured-string items, so tab swatches never need to special-case which kind it is.
+local function ParseItemColor(link)
+    local hex = type(link) == "string" and link:match("|c(%x%x%x%x%x%x%x%x)")
+    if not hex then return 0.5, 0.5, 0.5 end
+    return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+end
+
+-- Counts how many people have voted on rollID so far, and a rough denominator (current group
+-- size, at least 1) for a "voted/total" badge. The denominator is approximate — not everyone in
+-- the group necessarily has KART or is eligible — but good enough for an at-a-glance indicator.
+function LC.CountVotes(rollID)
+    local voted = 0
+    for _ in pairs(LC.votes[rollID] or {}) do voted = voted + 1 end
+    return voted, math.max(GetNumGroupMembers(), 1)
 end
 
 -- Colored label for an item quality index (0=Poor .. 5=Legendary), used by the min-quality filter UI.
@@ -239,6 +312,17 @@ function LC.OnStartLootRoll(rollID)
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
+    -- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational. Every
+    -- eligible raider's client independently receives this same START_LOOT_ROLL event, so this
+    -- is the one place that reliably runs once per roll for everyone, council members included.
+    if LC.GetRollsEnabled() then
+        local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+        local myRoll  = math.random(1, 100)
+        LC.rolls[rollID] = LC.rolls[rollID] or {}
+        LC.rolls[rollID][myShort] = myRoll
+        SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
+    end
+
     if UnitIsGroupLeader("player") then
         local secs = KART_Settings.lcVoteSeconds or 20
         SendLC("LC_START:" .. rollID .. ":" .. secs)
@@ -247,158 +331,330 @@ function LC.OnStartLootRoll(rollID)
 end
 
 -- =====================================================================
---  Vote Popup  (shown to non-council raiders via LC_START message)
+--  Vote List  (shown to non-council raiders via LC_START message)
 -- =====================================================================
+-- Every currently active roll gets its own row, all visible at once, so a raider can compare
+-- everything that's dropped before deciding how to vote on each individually (e.g. BIS on one
+-- item and Pass on another because they only actually want the one) — items are never hidden
+-- behind each other, and voting on one never affects the others.
 
-function LC.ShowVotePopup(rollID, itemLink, seconds)
-    local popup = LC.votePopup
-    if not popup then
-        local f = CreateFrame("Frame", "KART_LCVotePopup", UIParent, "BackdropTemplate")
-        f:SetSize(290, 160)
-        f:SetPoint("CENTER", 0, -80)
-        f:SetFrameStrata("HIGH")
-        f:SetMovable(true)
-        f:EnableMouse(true)
-        f:RegisterForDrag("LeftButton")
-        f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-        f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
-        f:SetBackdropBorderColor(0, 0, 0, 1)
-        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        f:SetScript("OnDragStop",  function(self)
-            self:StopMovingOrSizing()
-            if KART_Settings then
-                KART_Settings.lcVotePopupPos = {x = self:GetLeft(), y = self:GetTop()}
+LC.votedByMe = LC.votedByMe or {} -- [rollID] = true once WE cast a vote for it (tracked by rollID,
+                                   -- not by row, since rows get recycled/reindexed as items expire)
+
+function LC.CreateVoteList()
+    local f = CreateFrame("Frame", "KART_LCVoteList", UIParent, "BackdropTemplate")
+    f:SetSize(380, 200)
+    f:SetPoint("CENTER", 0, -80)
+    f:SetFrameStrata("HIGH")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
+    f:SetBackdropBorderColor(0, 0, 0, 1)
+    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcVotePopupPos = {x = self:GetLeft(), y = self:GetTop()}
+        end
+    end)
+    table.insert(UISpecialFrames, f:GetName())
+
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.title:SetPoint("TOPLEFT", 10, -10)
+    f.title:SetText(KART.L.LC_VOTE_TITLE)
+
+    -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
+    -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
+    local closeBtn = CreateFrame("Button", nil, f)
+    closeBtn:SetSize(20, 20)
+    closeBtn:SetPoint("TOPRIGHT", -6, -6)
+    closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
+    closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    closeBtn.text:SetPoint("CENTER", 0, 1)
+    closeBtn.text:SetText("×")
+    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
+    closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
+    closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+    local scrollFrame = CreateFrame("ScrollFrame", "KART_LCVoteListScroll", f, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 5, -32)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -25, 8)
+
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(345, 1)
+    scrollFrame:SetScrollChild(scrollChild)
+
+    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    if thumb then thumb:SetSize(8, 20) end
+
+    f.scrollChild = scrollChild
+    f.rows = {}
+
+    -- Restore saved position (reuses the old single-popup setting name)
+    local pos = KART_Settings and KART_Settings.lcVotePopupPos
+    if pos and type(pos) == "table" and pos.x and pos.y then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    end
+
+    -- One shared ticker drives every row's countdown; a row is dropped once its own voting
+    -- window closes. Only touches timer text on a normal tick — a full rebuild (which would
+    -- reset in-progress note text) only happens when a row actually gets added or removed.
+    f.ticker = C_Timer.NewTicker(1, function()
+        if not f:IsShown() then return end
+        local now = GetTime()
+        local changed = false
+        for i = #LC.voteListRolls, 1, -1 do
+            local rid = LC.voteListRolls[i]
+            local deadline = LC.rollDeadlines[rid]
+            if deadline and now >= deadline then
+                table.remove(LC.voteListRolls, i)
+                changed = true
             end
-        end)
-        table.insert(UISpecialFrames, f:GetName())
+        end
+        if changed then
+            LC.RefreshVoteListRows()
+        else
+            for i, rid in ipairs(LC.voteListRolls) do
+                local row = f.rows[i]
+                if row and row:IsShown() then
+                    local deadline  = LC.rollDeadlines[rid]
+                    local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
+                    row.timerText:SetText(remaining .. "s")
+                end
+            end
+        end
+    end)
 
-        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        f.title:SetPoint("TOPLEFT", 10, -10)
+    LC.voteListFrame = f
+    return f
+end
 
-        f.itemText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        f.itemText:SetPoint("TOPLEFT", 10, -28)
-        f.itemText:SetWidth(240)
-        f.itemText:SetJustifyH("LEFT")
-        f.itemText:SetWordWrap(false)
+-- Registers rollID as an active roll and (re)builds the list. itemLink/seconds only matter the
+-- first time a rollID is seen — LC.rollItems/LC.rollDeadlines are the source of truth afterwards.
+function LC.ShowVotePopup(rollID, itemLink, seconds)
+    LC.rollItems[rollID]     = LC.rollItems[rollID] or itemLink
+    LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
 
-        -- FontStrings can't take mouse scripts directly; overlay a hover frame for the tooltip.
-        -- SetHyperlink on an equippable item triggers Blizzard's own compare-to-equipped tooltip automatically.
-        f.itemHover = CreateFrame("Frame", nil, f)
-        f.itemHover:SetAllPoints(f.itemText)
-        f.itemHover:EnableMouse(true)
-        f.itemHover:SetScript("OnEnter", function(self)
-            local link = LC.rollItems[f.rollID]
+    local alreadyListed = false
+    for _, rid in ipairs(LC.voteListRolls) do
+        if rid == rollID then alreadyListed = true break end
+    end
+    if not alreadyListed then
+        table.insert(LC.voteListRolls, rollID)
+    end
+
+    LC.RefreshVoteListRows()
+end
+
+-- Removes rollID from the list (e.g. a result came in for it from elsewhere) and rebuilds.
+function LC.RemoveVoteListItem(rollID)
+    for i = #LC.voteListRolls, 1, -1 do
+        if LC.voteListRolls[i] == rollID then table.remove(LC.voteListRolls, i) end
+    end
+    LC.RefreshVoteListRows()
+end
+
+function LC.RefreshVoteListRows()
+    if #LC.voteListRolls == 0 then
+        if LC.voteListFrame then LC.voteListFrame:Hide() end
+        return
+    end
+    if not LC.voteListFrame then LC.CreateVoteList() end
+    local f = LC.voteListFrame
+
+    -- Sized with generous padding on purpose — the first version packed everything edge-to-edge
+    -- with almost no breathing room between items, which read as a cramped wall of boxes.
+    local buttons   = LC.GetButtonConfig()
+    local cols      = math.min(#buttons, 3)
+    local btnRows   = math.ceil(#buttons / cols)
+    local MARGIN    = 8  -- left/right inner padding of each item block
+    local BTN_GAP   = 8  -- horizontal gap between vote buttons
+    local btnW      = math.floor((345 - MARGIN * 2 - (cols - 1) * BTN_GAP) / cols)
+    local btnH      = 26
+    local BTN_ROW_GAP = 6 -- vertical gap between rows of vote buttons
+    local btnAreaH  = btnRows * btnH + (btnRows - 1) * BTN_ROW_GAP
+    local BTN_TOP   = 30 -- title line + gap, i.e. how far down the button area starts
+    local GAP_BTN_NOTE = 10
+    local noteH     = 22
+    local BOTTOM_PAD = 10
+    local rowH      = BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD
+    local ROW_GAP   = 12 -- gap between item blocks — was 5, the main source of the cramped look
+
+    for i, rollID in ipairs(LC.voteListRolls) do
+        local row = f.rows[i]
+        if not row then
+            row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
+            row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
+            row:SetBackdropBorderColor(0, 0, 0, 1)
+
+            row.itemIcon = row:CreateTexture(nil, "ARTWORK")
+            row.itemIcon:SetSize(18, 18)
+            row.itemIcon:SetPoint("TOPLEFT", MARGIN, -6)
+            row.itemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            row.itemText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.itemText:SetPoint("TOPLEFT", row.itemIcon, "TOPRIGHT", 6, 2)
+            row.itemText:SetWidth(226)
+            row.itemText:SetJustifyH("LEFT")
+            row.itemText:SetWordWrap(false)
+
+            -- FontStrings can't take mouse scripts directly; overlay a hover frame for the
+            -- tooltip, spanning both the icon and the name so hovering either shows it.
+            row.itemHover = CreateFrame("Frame", nil, row)
+            row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
+            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:EnableMouse(true)
+
+            row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.timerText:SetPoint("TOPRIGHT", -MARGIN, -8)
+
+            row.btnArea = CreateFrame("Frame", nil, row)
+            row.btnArea:SetPoint("TOPLEFT", MARGIN, -BTN_TOP)
+            row.voteButtons = {}
+
+            row.votedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.votedText:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", 2, -4)
+
+            row.noteLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            row.noteLabel:SetText(KART.L.LC_NOTE_LABEL_SHORT)
+            row.noteLabel:SetTextColor(0.6, 0.6, 0.6)
+            table.insert(KART.DynamicLabels, row.noteLabel)
+
+            row.noteBox = CreateFrame("EditBox", nil, row, "BackdropTemplate")
+            row.noteBox:SetAutoFocus(false)
+            row.noteBox:SetMaxLetters(80)
+            row.noteBox:SetFontObject("GameFontHighlightSmall")
+            row.noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            row.noteBox:SetBackdropColor(0, 0, 0, 0.5)
+            row.noteBox:SetTextInsets(6, 6, 0, 0)
+            row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+            table.insert(KART.EditBoxes, row.noteBox)
+
+            f.rows[i] = row
+        end
+
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -(i - 1) * (rowH + ROW_GAP))
+        row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
+        row:SetHeight(rowH)
+        row.btnArea:SetPoint("RIGHT", -MARGIN, 0)
+        row.btnArea:SetHeight(btnAreaH)
+        row.noteLabel:ClearAllPoints()
+        row.noteLabel:SetPoint("BOTTOMLEFT", MARGIN, BOTTOM_PAD)
+        row.noteBox:ClearAllPoints()
+        row.noteBox:SetHeight(noteH)
+        row.noteBox:SetPoint("LEFT", row.noteLabel, "RIGHT", 6, 0)
+        row.noteBox:SetPoint("RIGHT", -MARGIN, 0)
+        row.noteBox:SetPoint("BOTTOM", 0, BOTTOM_PAD)
+        row:Show()
+
+        -- A new rollID landed on this recycled row (items above it expired and shifted the
+        -- list) — reset anything that belongs to the previous item so nothing carries over.
+        if row.currentRollID ~= rollID then
+            row.currentRollID = rollID
+            if row.noteBox then row.noteBox:SetText("") end
+        end
+
+        local rollLink = LC.rollItems[rollID]
+        row.itemText:SetText(rollLink or "???")
+
+        -- Real icon when we have one; otherwise the same tinted placeholder used by the council
+        -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
+        local iconTexture = IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
+        if iconTexture then
+            row.itemIcon:SetTexture(iconTexture)
+            row.itemIcon:SetVertexColor(1, 1, 1)
+        else
+            local ir, ig, ib = ParseItemColor(rollLink)
+            row.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+            row.itemIcon:SetVertexColor(ir, ig, ib)
+        end
+
+        local deadline  = LC.rollDeadlines[rollID]
+        local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
+        row.timerText:SetText(remaining .. "s")
+
+        row.itemHover:SetScript("OnEnter", function(self)
+            local link = LC.rollItems[rollID]
             if not IsRealItemLink(link) then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink(link)
             GameTooltip:Show()
         end)
-        f.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        f.timerText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        f.timerText:SetPoint("TOPRIGHT", -10, -10)
+        local voted    = LC.votedByMe[rollID]
+        local votedDef = voted and buttons[tonumber(voted)]
+        row.btnArea:SetShown(not voted)
+        row.noteLabel:SetShown(not voted)
+        row.noteBox:SetShown(not voted)
+        row.votedText:SetShown(voted ~= nil)
+        if votedDef then
+            row.votedText:SetText(string.format(KART.L.LC_VOTED_ROW, votedDef.label))
+        end
 
-        -- Button area sits above the note field
-        f.btnArea = CreateFrame("Frame", nil, f)
-        f.btnArea:SetPoint("TOPLEFT", 10, -52)
-        f.btnArea:SetPoint("BOTTOMRIGHT", -10, 62)
+        for bi = #buttons + 1, #row.voteButtons do
+            if row.voteButtons[bi] then row.voteButtons[bi]:Hide() end
+        end
 
-        -- Note label
-        local noteLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        noteLabel:SetPoint("BOTTOMLEFT", 10, 42)
-        noteLabel:SetText(KART.L.LC_NOTE_LABEL or "Anmerkung (optional):")
-        noteLabel:SetTextColor(0.65, 0.65, 0.65)
-        table.insert(KART.DynamicLabels, noteLabel)
+        if not voted then
+            for bi, def in ipairs(buttons) do
+                local col = (bi - 1) % cols
+                local brow = math.floor((bi - 1) / cols)
 
-        -- Note editbox
-        local noteBox = CreateFrame("EditBox", "KART_LCNoteBox", f, "BackdropTemplate")
-        noteBox:SetSize(270, 24)
-        noteBox:SetPoint("BOTTOMLEFT", 10, 12)
-        noteBox:SetAutoFocus(false)
-        noteBox:SetMaxLetters(80)
-        noteBox:SetFontObject("GameFontHighlightSmall")
-        noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-        noteBox:SetBackdropColor(0, 0, 0, 0.5)
-        noteBox:SetTextInsets(5, 5, 0, 0)
-        noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        table.insert(KART.EditBoxes, noteBox)
-        f.noteBox = noteBox
+                local btn = row.voteButtons[bi]
+                if not btn then
+                    btn = KART.CreateModernButton(row.btnArea, def.label)
+                    row.voteButtons[bi] = btn
+                else
+                    btn:Show()
+                    btn.text:SetText(def.label)
+                end
+                btn:SetSize(btnW, btnH)
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", col * (btnW + BTN_GAP), -brow * (btnH + BTN_ROW_GAP))
+                -- Softer border than a plain popup button (0.55 vs the usual 0.9) — still enough
+                -- to colour-code each option, without every row reading as a wall of bright boxes.
+                btn:SetBackdropBorderColor(def.r, def.g, def.b, 0.55)
 
-        f.voteButtons = {}
-        LC.votePopup  = f
-        popup         = f
-
-        -- Restore saved position
-        local pos = KART_Settings and KART_Settings.lcVotePopupPos
-        if pos and type(pos) == "table" and pos.x and pos.y then
-            f:ClearAllPoints()
-            f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+                local capturedIdx    = bi
+                local capturedRollID = rollID
+                btn:SetScript("OnClick", function()
+                    if LC.votedByMe[capturedRollID] then return end
+                    LC.votedByMe[capturedRollID] = capturedIdx
+                    local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
+                    if IsTestRoll(capturedRollID) then
+                        -- Test rolls have no real raid to broadcast to (and testing solo may
+                        -- mean no group at all), so record the vote locally and push it
+                        -- straight into the Test-Master council panel if it's open, instead of
+                        -- relying on a round-trip through the addon channel that would never
+                        -- come back to this same client.
+                        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+                        LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
+                        LC.votes[capturedRollID][myShort] = {idx = capturedIdx, note = note}
+                        if LC.councilPanel and LC.councilPanel:IsShown() then
+                            if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
+                            LC.RefreshCouncilTabs()
+                        end
+                    else
+                        SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
+                    end
+                    LC.RefreshVoteListRows()
+                end)
+            end
         end
     end
 
-    popup.rollID = rollID
-    popup.voted  = false
-    popup.title:SetText(KART.L.LC_VOTE_TITLE)
-    popup.itemText:SetText(itemLink or "???")
-    if popup.noteBox then popup.noteBox:SetText("") end
-
-    local buttons = LC.GetButtonConfig()
-    local cols    = math.min(#buttons, 3)
-    local rows    = math.ceil(#buttons / cols)
-    local btnW    = math.floor((270 - (cols - 1) * 6) / cols)
-    local btnH    = 28
-    -- 52px header + button rows + 62px note area
-    popup:SetHeight(52 + rows * (btnH + 6) + 62)
-
-    for i = #buttons + 1, #popup.voteButtons do
-        if popup.voteButtons[i] then popup.voteButtons[i]:Hide() end
+    for i = #LC.voteListRolls + 1, #f.rows do
+        if f.rows[i] then f.rows[i]:Hide() end
     end
 
-    for i, def in ipairs(buttons) do
-        local col = (i - 1) % cols
-        local row = math.floor((i - 1) / cols)
-
-        local btn = popup.voteButtons[i]
-        if not btn then
-            btn = KART.CreateModernButton(popup.btnArea, def.label)
-            popup.voteButtons[i] = btn
-        else
-            btn:Show()
-            btn.text:SetText(def.label)
-        end
-        btn:SetSize(btnW, btnH)
-        btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", popup.btnArea, "TOPLEFT", col * (btnW + 6), -row * (btnH + 6))
-        btn:SetBackdropBorderColor(def.r, def.g, def.b, 0.9)
-
-        local capturedIdx    = i
-        local capturedRollID = rollID
-        btn:SetScript("OnClick", function()
-            if popup.voted or popup.rollID ~= capturedRollID then return end
-            popup.voted = true
-            local note = KART.TrimString(popup.noteBox and popup.noteBox:GetText() or "")
-            SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
-            popup.title:SetText(KART.L.LC_VOTED)
-            C_Timer.After(2.5, function()
-                if popup.rollID == capturedRollID then popup:Hide() end
-            end)
-        end)
-    end
-
-    local remaining = seconds
-    popup.timerText:SetText(remaining .. "s")
-    if popup.timerTicker then popup.timerTicker:Cancel() end
-    popup.timerTicker = C_Timer.NewTicker(1, function()
-        remaining = remaining - 1
-        if remaining <= 0 then
-            popup.timerTicker:Cancel()
-            if not popup.voted then popup:Hide() end
-        else
-            popup.timerText:SetText(remaining .. "s")
-        end
-    end, seconds)
-
-    popup:Show()
+    f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
+    f:Show()
 end
 
 -- =====================================================================
@@ -433,17 +689,20 @@ local EQUIP_LOC_TO_SLOT = {
 -- For two-slot items (rings, trinkets) returns the lower-ilvl piece (most likely to be replaced).
 function LC.GetEquippedForUnit(unit, rollItemLink)
     if not unit or not rollItemLink then return nil, nil end
-    local rollInfo = C_Item.GetItemInfo(rollItemLink)
-    if not rollInfo then return nil, nil end
-    local slots = EQUIP_LOC_TO_SLOT[rollInfo["equipLoc"]]
+    -- C_Item.GetItemInfo returns a list of separate values, not a table — grabbing only the
+    -- first one (itemName, a string) and then indexing it with ["equipLoc"]/["itemLevel"]
+    -- silently returned nil every time (string indexing just falls through to nil), so this
+    -- comparison never found a matching slot for ANY item, test or real.
+    local itemName, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
+    if not itemName then return nil, nil end
+    local slots = EQUIP_LOC_TO_SLOT[itemEquipLoc]
     if not slots then return nil, nil end
 
     local bestLink, bestIlvl
     for _, slot in ipairs(slots) do
         local link = GetInventoryItemLink(unit, slot)
         if link then
-            local info = C_Item.GetItemInfo(link)
-            local ilvl = info and info["itemLevel"]
+            local _, _, _, ilvl = C_Item.GetItemInfo(link)
             if ilvl and (not bestIlvl or ilvl < bestIlvl) then
                 bestLink  = link
                 bestIlvl  = ilvl
@@ -454,37 +713,234 @@ function LC.GetEquippedForUnit(unit, rollItemLink)
 end
 
 -- =====================================================================
+--  Armor-type eligibility  (soft visual hint only — never blocks assignment)
+-- =====================================================================
+-- WoW's armor proficiency is cumulative (a plate class can also wear mail/leather/cloth), so
+-- eligibility for an item of a given type only needs proficiency >= that type's rank.
+local ARMOR_RANK = {CLOTH = 1, LEATHER = 2, MAIL = 3, PLATE = 4}
+local CLASS_MAX_ARMOR = {
+    MAGE = "CLOTH", PRIEST = "CLOTH", WARLOCK = "CLOTH",
+    DRUID = "LEATHER", ROGUE = "LEATHER", MONK = "LEATHER", DEMONHUNTER = "LEATHER",
+    HUNTER = "MAIL", SHAMAN = "MAIL", EVOKER = "MAIL",
+    WARRIOR = "PLATE", PALADIN = "PLATE", DEATHKNIGHT = "PLATE",
+}
+-- Blizzard's armor-subclass IDs already run Cloth=1..Plate=4; kept as an explicit lookup rather
+-- than relied upon directly so a future API change can't silently break this. Anything not
+-- listed (0=Miscellaneous — rings/necks/cloaks/trinkets, or 6=Shield) has no weight restriction.
+local ARMOR_SUBCLASS_RANK = {[1] = 1, [2] = 2, [3] = 3, [4] = 4}
+
+-- Returns the item's armor rank (1-4) if it's a cloth/leather/mail/plate piece, else nil (no
+-- restriction — jewelry, weapons, shields etc. are never flagged as "ineligible").
+function LC.GetItemArmorRank(itemLink)
+    if not IsRealItemLink(itemLink) then return nil end
+    local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = C_Item.GetItemInfo(itemLink)
+    if classID ~= 4 then return nil end -- 4 = Armor
+    return ARMOR_SUBCLASS_RANK[subclassID]
+end
+
+-- Returns false (ineligible) only when we're SURE the class can't equip this armor type; true
+-- for everything else, including when either side of the check is unknown — this is a visual
+-- hint, not a hard filter, so it must never hide someone who might actually be eligible.
+function LC.IsArmorEligible(classFile, itemRank)
+    if not itemRank or not classFile then return true end
+    local maxType = CLASS_MAX_ARMOR[classFile]
+    if not maxType then return true end
+    return ARMOR_RANK[maxType] >= itemRank
+end
+
+-- =====================================================================
 --  Council Panel  (shown to leader & assistants)
 -- =====================================================================
+-- Every currently active roll gets its own tab on the left edge of the panel instead of hiding
+-- behind whichever roll happened to start last — clicking a tab switches the row list to that
+-- item, so the council can freely compare and decide across everything currently on the table
+-- (e.g. someone might prefer a different item once they see what else dropped).
 
+-- Registers rollID as an active roll and (re)shows the panel. If nothing is currently being
+-- reviewed, switches straight to it; otherwise just adds its tab without yanking the panel away
+-- from whatever the council is currently looking at (the new tab gets a "new" marker instead).
 function LC.ShowCouncilPanel(rollID, seconds)
     if not LC.councilPanel then LC.CreateCouncilPanel() end
-    LC.activeRollID = rollID
     local panel = LC.councilPanel
 
-    panel.itemText:SetText(LC.rollItems[rollID] or "???")
-    panel.title:SetText(KART.L.LC_PANEL_TITLE)
-    LC.RefreshCouncilRows()
+    LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
 
-    local remaining = seconds
-    panel.timerText:SetText(remaining .. "s")
-    if panel.timerTicker then panel.timerTicker:Cancel() end
-    panel.timerTicker = C_Timer.NewTicker(1, function()
-        remaining = remaining - 1
-        if remaining <= 0 then
-            panel.timerTicker:Cancel()
-            panel.timerText:SetText(KART.L.LC_VOTING_DONE)
-        else
-            panel.timerText:SetText(remaining .. "s")
+    local alreadyTabbed = false
+    for _, rid in ipairs(LC.councilTabs) do
+        if rid == rollID then alreadyTabbed = true break end
+    end
+    if not alreadyTabbed then
+        table.insert(LC.councilTabs, rollID)
+        if LC.activeRollID and LC.activeRollID ~= rollID then
+            LC.councilTabsNew[rollID] = true
         end
-    end, seconds)
+    end
+
+    if not LC.activeRollID then
+        LC.SwitchCouncilTab(rollID)
+    else
+        LC.RefreshCouncilTabs()
+    end
 
     panel:Show()
 end
 
+-- Switches the panel's row list over to rollID and clears its "new" marker.
+function LC.SwitchCouncilTab(rollID)
+    local panel = LC.councilPanel
+    if not panel then return end
+
+    LC.activeRollID = rollID
+    LC.councilTabsNew[rollID] = nil
+    panel.itemText:SetText(LC.rollItems[rollID] or "???")
+    panel.title:SetText(KART.L.LC_PANEL_TITLE)
+    LC.RefreshCouncilRows()
+    LC.RefreshCouncilTabs()
+end
+
+-- Removes rollID's tab (e.g. "No Winner", or manually dismissed via the tab's own "x"). Switches
+-- to another remaining tab if there is one, otherwise hides the whole panel.
+function LC.CloseCouncilTab(rollID)
+    for i = #LC.councilTabs, 1, -1 do
+        if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
+    end
+    LC.councilTabsNew[rollID] = nil
+
+    if LC.activeRollID == rollID then
+        if LC.councilTabs[1] then
+            LC.SwitchCouncilTab(LC.councilTabs[1])
+        else
+            LC.activeRollID = nil
+            if LC.councilPanel then LC.councilPanel:Hide() end
+        end
+    else
+        LC.RefreshCouncilTabs()
+    end
+end
+
+-- Rebuilds the vertical tab strip on the left edge of the panel from LC.councilTabs. Each tab
+-- shows the item's actual icon (real items) or a colour-tinted placeholder (test items), plus a
+-- voted/total badge; hovering one previews the full per-player vote breakdown without switching
+-- to it. Its "x" only appears on hover — it used to sit flush in the corner at all times, which
+-- made it very easy to close a tab by accident while just trying to click it to switch.
+function LC.RefreshCouncilTabs()
+    local panel = LC.councilPanel
+    if not panel then return end
+
+    for i, rollID in ipairs(LC.councilTabs) do
+        local tab = panel.tabs[i]
+        if not tab then
+            tab = CreateFrame("Button", nil, panel.tabStrip, "BackdropTemplate")
+            tab:SetSize(40, 40)
+            tab:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2})
+            tab:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
+
+            tab.icon = tab:CreateTexture(nil, "ARTWORK")
+            tab.icon:SetPoint("TOPLEFT", 3, -3)
+            tab.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+            tab.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            tab.countBG = tab:CreateTexture(nil, "OVERLAY")
+            tab.countBG:SetColorTexture(0, 0, 0, 0.6)
+            tab.countBG:SetPoint("BOTTOMLEFT", 3, 3)
+            tab.countBG:SetPoint("BOTTOMRIGHT", -3, 3)
+            tab.countBG:SetHeight(12)
+
+            tab.countText = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            tab.countText:SetPoint("CENTER", tab.countBG, "CENTER", 0, 0)
+
+            tab.newDot = tab:CreateTexture(nil, "OVERLAY")
+            tab.newDot:SetSize(8, 8)
+            tab.newDot:SetPoint("TOPRIGHT", -2, -2)
+            tab.newDot:SetColorTexture(1, 0.2, 0.2, 1)
+
+            -- Hidden until the tab itself is hovered (see OnEnter/OnLeave below) so a normal
+            -- click anywhere on the tab can never land on it by accident.
+            tab.closeBtn = CreateFrame("Button", nil, tab)
+            tab.closeBtn:SetSize(14, 14)
+            tab.closeBtn:SetPoint("TOPRIGHT", -1, -1)
+            tab.closeBtn:Hide()
+            tab.closeBtn.bg = tab.closeBtn:CreateTexture(nil, "BACKGROUND")
+            tab.closeBtn.bg:SetAllPoints()
+            tab.closeBtn.bg:SetColorTexture(0, 0, 0, 0.7)
+            tab.closeBtn.text = tab.closeBtn:CreateFontString(nil, "OVERLAY")
+            tab.closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+            tab.closeBtn.text:SetPoint("CENTER")
+            tab.closeBtn.text:SetText("|cffff6666×|r")
+
+            panel.tabs[i] = tab
+        end
+
+        tab:ClearAllPoints()
+        tab:SetPoint("TOP", panel.tabStrip, "TOP", 0, -(i - 1) * 44)
+
+        local link = LC.rollItems[rollID]
+        local r, g, b = ParseItemColor(link)
+        if rollID == LC.activeRollID then
+            tab:SetBackdropBorderColor(1, 0.85, 0.2, 1)
+        else
+            tab:SetBackdropBorderColor(r, g, b, 0.9)
+        end
+
+        -- Real items show their actual icon; test mode has no real item to fetch an icon for,
+        -- so it gets a generic placeholder tinted with the item's own colour instead.
+        local iconTexture = IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+        if iconTexture then
+            tab.icon:SetTexture(iconTexture)
+            tab.icon:SetVertexColor(1, 1, 1)
+        else
+            tab.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+            tab.icon:SetVertexColor(r, g, b)
+        end
+
+        local voted, total = LC.CountVotes(rollID)
+        tab.countText:SetText(voted .. "/" .. total)
+        tab.newDot:SetShown(LC.councilTabsNew[rollID] == true)
+
+        local capturedRollID = rollID
+        tab:SetScript("OnClick", function() LC.SwitchCouncilTab(capturedRollID) end)
+        tab.closeBtn:SetScript("OnClick", function() LC.CloseCouncilTab(capturedRollID) end)
+        tab:SetScript("OnEnter", function(self)
+            tab.closeBtn:Show()
+
+            local hoverLink = LC.rollItems[capturedRollID]
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if IsRealItemLink(hoverLink) then
+                GameTooltip:SetHyperlink(hoverLink)
+                GameTooltip:AddLine(" ")
+            else
+                GameTooltip:SetText(hoverLink or "???", 1, 1, 1)
+            end
+            -- Full vote breakdown so the council can compare items without switching tabs.
+            local buttons  = LC.GetButtonConfig()
+            local anyVotes = false
+            for short, voteData in pairs(LC.votes[capturedRollID] or {}) do
+                anyVotes = true
+                local idx = type(voteData) == "table" and voteData.idx or voteData
+                local def = idx and buttons[tonumber(idx)]
+                GameTooltip:AddDoubleLine(short, def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
+            end
+            if not anyVotes then
+                GameTooltip:AddLine(KART.L.LC_TAB_NO_VOTES_YET, 0.6, 0.6, 0.6)
+            end
+            GameTooltip:Show()
+        end)
+        tab:SetScript("OnLeave", function()
+            tab.closeBtn:Hide()
+            GameTooltip:Hide()
+        end)
+        tab:Show()
+    end
+
+    for i = #LC.councilTabs + 1, #panel.tabs do
+        if panel.tabs[i] then panel.tabs[i]:Hide() end
+    end
+    panel.tabStrip:SetShown(#LC.councilTabs > 0)
+end
+
 function LC.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
-    f:SetSize(330, 440)
+    f:SetSize(430, 440)
     f:SetPoint("CENTER", 220, 0)
     f:SetFrameStrata("HIGH")
     f:SetMovable(true)
@@ -501,6 +957,15 @@ function LC.CreateCouncilPanel()
         end
     end)
     table.insert(UISpecialFrames, f:GetName())
+
+    -- Vertical tab strip protruding from the left edge — one tab per active roll (see
+    -- RefreshCouncilTabs). Lives outside f's own backdrop/width on purpose, like a browser's
+    -- side tabs, so it doesn't eat into the row list's already-tight column layout.
+    f.tabStrip = CreateFrame("Frame", nil, f)
+    f.tabStrip:SetPoint("TOPRIGHT", f, "TOPLEFT", -4, -30)
+    f.tabStrip:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", -4, 40)
+    f.tabStrip:SetWidth(40)
+    f.tabs = {}
 
     -- Header
     local hdr = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -525,12 +990,16 @@ function LC.CreateCouncilPanel()
     closeBtn.text:SetText("×")
     closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
     closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
+    -- Only minimizes the window — the active roll's tab (and all others) stay tracked and
+    -- reappear next time the panel is shown (a new roll arriving, or reopened via a tab click
+    -- elsewhere isn't possible once fully hidden, so this is a deliberate "get it out of my way
+    -- for now", not a "discard" action; use a tab's own "x" to actually dismiss an item).
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
     -- Item display
     f.itemText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.itemText:SetPoint("TOPLEFT", 10, -36)
-    f.itemText:SetWidth(310)
+    f.itemText:SetWidth(410)
     f.itemText:SetJustifyH("LEFT")
     f.itemText:SetWordWrap(false)
 
@@ -549,17 +1018,41 @@ function LC.CreateCouncilPanel()
 
     -- Column headers
     local hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hName:SetPoint("TOPLEFT", 10, -56)
+    -- Every header below is positioned/sized/justified to exactly match its column's row widget
+    -- (see the row.* creation block in RefreshCouncilRows) — row content sits 5px further right
+    -- than f's own left edge (the scroll area's own inset), so headers carry the same +5 here.
+    hName:SetPoint("TOPLEFT", 11, -56)
+    hName:SetWidth(80)
+    hName:SetJustifyH("LEFT")
     hName:SetText(KART.L.LC_COL_NAME)
 
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hIlvl:SetPoint("TOPLEFT", 100, -56)
+    hIlvl:SetPoint("TOPLEFT", 93, -56)
+    hIlvl:SetWidth(50) -- spans the equip icon + ilvl number together
+    hIlvl:SetJustifyH("CENTER")
     hIlvl:SetText("iLvl")
     hIlvl:SetTextColor(0.5, 0.5, 0.5)
 
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hVote:SetPoint("TOPLEFT", 160, -56)
+    hVote:SetPoint("TOPLEFT", 151, -56)
+    hVote:SetWidth(80)
+    hVote:SetJustifyH("LEFT")
     hVote:SetText(KART.L.LC_COL_VOTE)
+
+    local hRoll = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hRoll:SetPoint("TOPLEFT", 235, -56)
+    hRoll:SetWidth(34)
+    hRoll:SetJustifyH("CENTER")
+    hRoll:SetText(KART.L.LC_COL_ROLL)
+    hRoll:SetTextColor(0.5, 0.5, 0.5)
+    f.hRoll = hRoll -- hidden/shown with the rolls-enabled setting, see RefreshCouncilRows
+
+    local hCouncilVotes = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hCouncilVotes:SetPoint("TOPLEFT", 273, -56)
+    hCouncilVotes:SetWidth(40)
+    hCouncilVotes:SetJustifyH("CENTER")
+    hCouncilVotes:SetText("CV") -- "Council Votes" — plain ASCII, see the note in RefreshCouncilRows
+    hCouncilVotes:SetTextColor(0.5, 0.5, 0.5)
 
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.22, 0.22, 0.22, 1)
@@ -576,7 +1069,7 @@ function LC.CreateCouncilPanel()
     scrollFrame:SetPoint("TOPLEFT"); scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(285, 800)
+    scrollChild:SetSize(385, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
     local thumb = KART.StripScrollbarTextures(scrollFrame)
@@ -590,8 +1083,10 @@ function LC.CreateCouncilPanel()
     btnNoWinner:SetSize(150, 28)
     btnNoWinner:SetPoint("BOTTOMLEFT", 10, 10)
     btnNoWinner:SetScript("OnClick", function()
-        if LC.activeRollID then LC.AnnounceResult(LC.activeRollID, "NONE") end
-        f:Hide()
+        if LC.activeRollID then
+            LC.AnnounceResult(LC.activeRollID, "NONE")
+            LC.CloseCouncilTab(LC.activeRollID)
+        end
     end)
 
     local btnClose = KART.CreateModernButton(f, KART.L.LC_BTN_CANCEL)
@@ -607,6 +1102,16 @@ function LC.CreateCouncilPanel()
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
+
+    -- Single shared ticker drives the header countdown for whichever roll is currently active —
+    -- avoids juggling a per-call ticker across tab switches.
+    f.timerTicker = C_Timer.NewTicker(1, function()
+        if not f:IsShown() or not LC.activeRollID then return end
+        local deadline = LC.rollDeadlines[LC.activeRollID]
+        if not deadline then f.timerText:SetText("") return end
+        local remaining = math.ceil(deadline - GetTime())
+        f.timerText:SetText(remaining > 0 and (remaining .. "s") or KART.L.LC_VOTING_DONE)
+    end)
 end
 
 function LC.RefreshCouncilRows()
@@ -620,6 +1125,7 @@ function LC.RefreshCouncilRows()
     local numMem  = GetNumGroupMembers()
 
     local rollItem = LC.rollItems[rollID]
+    local itemArmorRank = LC.GetItemArmorRank(rollItem)
 
     local members = {}
     for i = 1, numMem do
@@ -655,6 +1161,32 @@ function LC.RefreshCouncilRows()
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
+                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][short],
+            })
+        end
+    end
+
+    -- Test rolls must work with zero group members too (testing fully solo, no party at all),
+    -- where the loop above never runs. Add ourselves manually so there's always at least one
+    -- row to vote on and assign to.
+    if IsTestRoll(rollID) then
+        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+        local alreadyListed = false
+        for _, m in ipairs(members) do
+            if m.short == myShort then alreadyListed = true break end
+        end
+        if not alreadyListed and myShort ~= "" then
+            local voteData = votes[myShort]
+            local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
+            local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
+            local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
+            local equippedLink, equippedIlvl = LC.GetEquippedForUnit("player", rollItem)
+            table.insert(members, {
+                short = myShort, unit = "player",
+                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
+                equippedLink = equippedLink, equippedIlvl = equippedIlvl,
+                kartStatus = nil,
+                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myShort],
             })
         end
     end
@@ -680,25 +1212,44 @@ function LC.RefreshCouncilRows()
 
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.nameText:SetPoint("LEFT", 6, 0)
-            row.nameText:SetWidth(88)
+            row.nameText:SetWidth(80)
             row.nameText:SetJustifyH("LEFT")
 
             -- Icon of the item currently equipped in the matching slot
             row.equipIcon = row:CreateTexture(nil, "ARTWORK")
             row.equipIcon:SetSize(18, 18)
-            row.equipIcon:SetPoint("LEFT", 96, 0)
+            row.equipIcon:SetPoint("LEFT", 88, 0)
             row.equipIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
             -- Equipped item level in the matching slot
             row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.equippedText:SetPoint("LEFT", 118, 0)
-            row.equippedText:SetWidth(34)
+            row.equippedText:SetPoint("LEFT", 108, 0)
+            row.equippedText:SetWidth(30)
             row.equippedText:SetJustifyH("CENTER")
 
             row.voteText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.voteText:SetPoint("LEFT", 156, 0)
-            row.voteText:SetWidth(100)
+            row.voteText:SetPoint("LEFT", 146, 0)
+            row.voteText:SetWidth(80)
             row.voteText:SetJustifyH("LEFT")
+
+            -- Opt-in 1-100 roll (see lcRollsEnabled); hidden entirely when the raid has it off.
+            row.rollText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.rollText:SetPoint("LEFT", 230, 0)
+            row.rollText:SetWidth(34)
+            row.rollText:SetJustifyH("CENTER")
+
+            -- Council straw-poll: click to vote for this candidate (toggles), shows a running
+            -- tally of how many council members picked them. Purely informational — see
+            -- LC.ToggleCouncilVote. Every viewer of this panel is themselves a council member
+            -- (the panel is only ever shown to council — see IsCouncil in HandleStart), so the
+            -- button is always available, not gated behind any extra role check.
+            row.councilVoteBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
+            row.councilVoteBtn:SetSize(40, 18)
+            row.councilVoteBtn:SetPoint("LEFT", 268, 0)
+            row.councilVoteBtn:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            row.councilVoteBtn:SetBackdropColor(0, 0, 0, 0.4)
+            row.councilVoteBtn.text = row.councilVoteBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.councilVoteBtn.text:SetPoint("CENTER")
 
             -- Small dot shown when raider left a note
             row.noteIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -712,11 +1263,21 @@ function LC.RefreshCouncilRows()
             row.warnIcon:SetWidth(14)
             row.warnIcon:SetJustifyH("CENTER")
 
+            -- Persistent officer note about this player (see LC.SetOfficerNote) — a different
+            -- colour from the per-vote note dot so the two aren't mistaken for one another.
+            row.officerNoteIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.officerNoteIcon:SetPoint("RIGHT", row.warnIcon, "LEFT", -2, 0)
+            row.officerNoteIcon:SetWidth(14)
+            row.officerNoteIcon:SetJustifyH("CENTER")
+
             panel.rows[i] = row
         end
 
         local rowIdx              = i
-        local isWinner            = (m.short == LC.currentWinnerShort)
+        -- Scoped per-roll (not a single global "last winner") — otherwise assigning item A to a
+        -- player and then switching to item B's tab would keep that player highlighted green
+        -- there too, even though they never won item B.
+        local isWinner            = (rollID ~= nil and m.short == LC.assignedWinners[rollID])
         local capturedShort       = m.short
         local capturedRoll        = rollID
         local capturedNote        = m.voteNote or ""
@@ -724,6 +1285,7 @@ function LC.RefreshCouncilRows()
         local capturedEquipIlvl   = m.equippedIlvl
         local capturedVoteDef     = m.voteDef
         local capturedKartStatus  = m.kartStatus
+        local capturedOfficerNote = m.short and KART_LCOfficerNotes[m.short]
 
         row:Show()
         row:ClearAllPoints()
@@ -742,14 +1304,26 @@ function LC.RefreshCouncilRows()
 
         -- Class colour for name
         local nr, ng, nb = 0.8, 0.8, 0.8
+        local classFile
         if m.unit then
-            local _, classFile = UnitClass(m.unit)
+            local _, cf = UnitClass(m.unit)
+            classFile = cf
             if classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
                 nr = RAID_CLASS_COLORS[classFile].r
                 ng = RAID_CLASS_COLORS[classFile].g
                 nb = RAID_CLASS_COLORS[classFile].b
             end
         end
+
+        -- Armor-type eligibility is a soft visual hint, never a hard block (right-click assign
+        -- still works either way) — dims the row and greys the name so obviously-wrong
+        -- candidates (e.g. a plate item on a cloth wearer) stand out less among real contenders.
+        local armorIneligible = not LC.IsArmorEligible(classFile, itemArmorRank)
+        local capturedArmorIneligible = armorIneligible
+        if armorIneligible then
+            nr, ng, nb = nr * 0.5, ng * 0.5, nb * 0.5
+        end
+
         row.nameText:SetText(m.short or "?")
         row.nameText:SetTextColor(nr, ng, nb)
 
@@ -778,11 +1352,53 @@ function LC.RefreshCouncilRows()
             row.voteText:SetText("|cff666666-|r")
         end
 
+        -- Opt-in 1-100 roll column — entirely hidden (not just blank) when the raid leader has
+        -- rolls turned off, both to save space and to avoid implying a feature that isn't active.
+        local rollsEnabled = LC.GetRollsEnabled()
+        row.rollText:SetShown(rollsEnabled)
+        if rollsEnabled then
+            row.rollText:SetText(m.rollValue and ("|cffffd200" .. m.rollValue .. "|r") or "|cff444444—|r")
+        end
+        if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
+
+        -- Council straw-poll button: tally of how many council members (including possibly
+        -- yourself) picked this candidate, and a toggle for your own pick.
+        local myShort     = (UnitName("player") or ""):match("([^%-]+)") or ""
+        local pollVotes    = (capturedRoll and LC.councilVotes[capturedRoll]) or {}
+        local myPick       = pollVotes[myShort]
+        local votedByMe    = (myPick == capturedShort)
+        local pollCount    = 0
+        for _, pick in pairs(pollVotes) do
+            if pick == capturedShort then pollCount = pollCount + 1 end
+        end
+        -- Plain ASCII only (no ★/☆) — WoW's default game fonts don't have glyphs for most
+        -- symbol/dingbat Unicode ranges and silently render them as an empty box ("tofu").
+        row.councilVoteBtn.text:SetText((votedByMe and "|cffffd200+" or "|cff888888") .. pollCount .. "|r")
+        if votedByMe then
+            row.councilVoteBtn:SetBackdropBorderColor(1, 0.85, 0.2, 1)
+        else
+            row.councilVoteBtn:SetBackdropBorderColor(0, 0, 0, 1)
+        end
+        row.councilVoteBtn:SetScript("OnClick", function()
+            if not capturedRoll or not capturedShort then return end
+            LC.ToggleCouncilVote(capturedRoll, capturedShort)
+        end)
+        row.councilVoteBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(KART.L.LC_COUNCIL_VOTE_TOOLTIP, 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        row.councilVoteBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
         -- Note indicator dot
         row.noteIcon:SetText(capturedNote ~= "" and "|cff66aaff•|r" or "")
 
         -- Warning indicator: missing/outdated KART or Loot Council disabled on their end
         row.warnIcon:SetText(capturedKartStatus and "|cffff4444!|r" or "")
+
+        -- Persistent officer-note indicator — same bullet glyph as the per-vote note dot above
+        -- (proven to render fine), just a different colour so the two aren't confused.
+        row.officerNoteIcon:SetText(capturedOfficerNote and "|cffffaa00•|r" or "")
 
         -- Left-click has no function. Right-click opens the assign menu.
         -- The panel never closes on its own here — only the X / Close button does.
@@ -805,6 +1421,12 @@ function LC.RefreshCouncilRows()
             if capturedNote ~= "" then
                 GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
             end
+            if capturedOfficerNote then
+                GameTooltip:AddLine(capturedOfficerNote, 1, 0.7, 0.2, true)
+            end
+            if capturedArmorIneligible then
+                GameTooltip:AddLine(KART.L.LC_ARMOR_INELIGIBLE, 0.6, 0.6, 0.6, true)
+            end
             if capturedKartStatus then
                 GameTooltip:AddLine(capturedKartStatus, 1, 0.4, 0.4, true)
             end
@@ -819,7 +1441,7 @@ function LC.RefreshCouncilRows()
             end
         end)
         row:SetScript("OnLeave", function(self)
-            if self.memberShort == LC.currentWinnerShort then
+            if self.memberShort == LC.assignedWinners[capturedRoll] then
                 self:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
                 self:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
             else
@@ -843,20 +1465,23 @@ end
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
 function LC.AnnounceResult(rollID, winnerName, reason)
-    LC.currentWinnerShort = (winnerName ~= "NONE") and winnerName or nil
+    -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
+    -- raid member's client log a fake history entry / pop a fake "you win" for whoever's short
+    -- name the tester happened to click) and no raid-chat spam.
+    if not IsTestRoll(rollID) then
+        SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName .. ":" .. (reason or ""))
 
-    SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName .. ":" .. (reason or ""))
-
-    if winnerName ~= "NONE" then
-        local link = LC.rollItems[rollID] or ""
-        local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
-        if reason and reason ~= "" then
-            msg = msg .. " (" .. reason .. ")"
-        end
-        if IsInRaid() then
-            SendChatMessage(msg, "RAID")   ---@diagnostic disable-line: deprecated
-        elseif IsInGroup() then
-            SendChatMessage(msg, "PARTY") ---@diagnostic disable-line: deprecated
+        if winnerName ~= "NONE" then
+            local link = LC.rollItems[rollID] or ""
+            local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
+            if reason and reason ~= "" then
+                msg = msg .. " (" .. reason .. ")"
+            end
+            if IsInRaid() then
+                SendChatMessage(msg, "RAID")   ---@diagnostic disable-line: deprecated
+            elseif IsInGroup() then
+                SendChatMessage(msg, "PARTY") ---@diagnostic disable-line: deprecated
+            end
         end
     end
 
@@ -1014,7 +1639,19 @@ local function DoAssignWinner(rollID, playerShort, reason, colorDef)
         classFile = cf
     end
     LC.AnnounceResult(rollID, playerShort, reason)
-    LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef)
+
+    if IsTestRoll(rollID) then
+        -- Test rolls never round-trip through the network (see AnnounceResult), so if the
+        -- tester assigned the win to themselves, trigger the "you win" popup locally instead —
+        -- and skip writing a fake entry into the real, persistent loot history.
+        local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+        if playerShort == myShort then
+            LC.ShowWinnerNotification(LC.rollItems[rollID])
+        end
+    else
+        LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef)
+        LC.AddPendingTrade(rollID, playerShort)
+    end
     LC.assignedWinners[rollID] = playerShort
 end
 
@@ -1033,6 +1670,307 @@ function LC.AssignWinner(rollID, playerShort, reason, colorDef)
     end
 end
 
+-- =====================================================================
+--  Trade Reminder & Auto-Trade
+-- =====================================================================
+-- The loot council only decides WHO should get an item — Blizzard's master-loot mechanic still
+-- hands the physical item to whoever looted it, so it has to be traded over manually afterwards.
+-- This keeps a small reminder list of "who still needs to be traded what", and best-effort
+-- auto-places the right item into the trade window once you actually open a trade with them.
+
+-- Adds itemLink for rollID to the pending-trade list for playerShort, unless it's a test roll or
+-- the winner is ourselves (nothing to hand over in either case). Replaces any existing pending
+-- entry for the same rollID first, so reassigning an item doesn't leave a stale trade reminder
+-- pointing at the previous winner.
+function LC.AddPendingTrade(rollID, playerShort)
+    if IsTestRoll(rollID) then return end
+    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+    LC.RemovePendingTrade(rollID)
+    if playerShort == myShort then return end
+
+    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerShort = playerShort})
+    LC.RefreshTradeReminder()
+end
+
+-- Removes the pending-trade entry for rollID, if any (reassignment, manual dismiss, or after the
+-- item was successfully placed into an open trade window).
+function LC.RemovePendingTrade(rollID)
+    for i = #LC.pendingTrades, 1, -1 do
+        if LC.pendingTrades[i].rollID == rollID then
+            table.remove(LC.pendingTrades, i)
+        end
+    end
+    LC.RefreshTradeReminder()
+end
+
+function LC.CreateTradeReminderFrame()
+    local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
+    f:SetSize(260, 40)
+    f:SetPoint("CENTER", -220, 0)
+    f:SetFrameStrata("HIGH")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
+    f:SetBackdropBorderColor(0, 0, 0, 1)
+    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcTradeReminderPos = {x = self:GetLeft(), y = self:GetTop()}
+        end
+    end)
+    table.insert(UISpecialFrames, f:GetName())
+
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.title:SetPoint("TOPLEFT", 10, -8)
+    f.title:SetText(KART.L.LC_TRADE_REMINDER_TITLE)
+
+    f.rows = {}
+
+    local pos = KART_Settings and KART_Settings.lcTradeReminderPos
+    if pos and type(pos) == "table" and pos.x and pos.y then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    end
+
+    LC.tradeReminderFrame = f
+end
+
+-- Rebuilds the reminder list from LC.pendingTrades; hides the frame entirely once it's empty.
+function LC.RefreshTradeReminder()
+    if #LC.pendingTrades == 0 then
+        if LC.tradeReminderFrame then LC.tradeReminderFrame:Hide() end
+        return
+    end
+
+    if not LC.tradeReminderFrame then LC.CreateTradeReminderFrame() end
+    local f = LC.tradeReminderFrame
+
+    for i, entry in ipairs(LC.pendingTrades) do
+        local row = f.rows[i]
+        if not row then
+            row = CreateFrame("Frame", nil, f)
+            row:SetHeight(20)
+            row:SetPoint("LEFT", 10, 0)
+            row:SetPoint("RIGHT", -28, 0)
+
+            row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.text:SetPoint("LEFT")
+            row.text:SetPoint("RIGHT")
+            row.text:SetJustifyH("LEFT")
+            row.text:SetWordWrap(false)
+
+            row.doneBtn = CreateFrame("Button", nil, f)
+            row.doneBtn:SetSize(16, 16)
+            row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
+            -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
+            -- symbol/dingbat Unicode ranges and silently render them as an empty box.
+            row.doneBtn.icon = row.doneBtn:CreateTexture(nil, "ARTWORK")
+            row.doneBtn.icon:SetAllPoints()
+            row.doneBtn.icon:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+            row.doneBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:SetText(KART.L.LC_TRADE_REMINDER_DONE, 1, 1, 1) GameTooltip:Show() end)
+            row.doneBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            f.rows[i] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 10, -8 - 20 - (i - 1) * 20)
+        row:SetPoint("RIGHT", -28, 0)
+        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", entry.winnerShort or "?"))
+        local capturedRollID = entry.rollID
+        row.doneBtn:SetScript("OnClick", function() LC.RemovePendingTrade(capturedRollID) end)
+        row:Show()
+    end
+    for i = #LC.pendingTrades + 1, #f.rows do
+        if f.rows[i] then f.rows[i]:Hide() end
+    end
+
+    f:SetHeight(8 + 20 + #LC.pendingTrades * 20 + 8)
+    f:Show()
+end
+
+-- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
+-- traded, mailed, or on a different character).
+local function FindItemInBags(itemLink)
+    local itemID = itemLink and C_Item.GetItemInfoInstant(itemLink)
+    if not itemID then return nil end
+    for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            if C_Container.GetContainerItemID(bag, slot) == itemID then
+                return bag, slot
+            end
+        end
+    end
+    return nil
+end
+
+-- Best-effort auto-trade: called on TRADE_SHOW. If the person we just opened a trade window with
+-- has pending item(s) assigned to them, place the first one we can still find in our bags into an
+-- empty trade slot. Only PLACES the item — the trade itself still has to be confirmed manually,
+-- so a misclick or a slot mismatch is always caught by the normal trade-confirmation UI.
+function LC.OnTradeShow()
+    if KART_Settings.lcModuleEnabled == false then return end
+    if #LC.pendingTrades == 0 then return end
+
+    local partnerName = UnitName("npc") -- the trade-partner unit token, a historical quirk of the trade API
+    if not partnerName and TradeFrameRecipientNameText then ---@diagnostic disable-line: undefined-global
+        partnerName = TradeFrameRecipientNameText:GetText() ---@diagnostic disable-line: undefined-global
+    end
+    if not partnerName then return end
+    local partnerShort = partnerName:match("([^%-]+)") or partnerName
+
+    for _, entry in ipairs(LC.pendingTrades) do
+        -- Bail if the cursor is already carrying something (e.g. the player was mid-drag of an
+        -- unrelated item) — picking up our item now would swap it into whatever slot that is.
+        if entry.winnerShort == partnerShort and not GetCursorInfo() then ---@diagnostic disable-line: undefined-global
+            local bag, slot = FindItemInBags(entry.itemLink)
+            if bag then
+                local freeSlot
+                for i = 1, 6 do -- MAX_TRADE_ITEMS, fixed by the trade UI
+                    if not GetTradePlayerItemLink(i) then ---@diagnostic disable-line: undefined-global
+                        freeSlot = i
+                        break
+                    end
+                end
+                if freeSlot then
+                    C_Container.PickupContainerItem(bag, slot)
+                    ClickTradeButton(freeSlot) ---@diagnostic disable-line: undefined-global
+                    LC.RemovePendingTrade(entry.rollID)
+                end
+            end
+        end
+    end
+end
+
+--- Manually sets (overrides) a player's vote in the council panel — e.g. they voted verbally or
+--- via whisper instead of clicking the vote popup. Purely a local display correction: unlike
+--- AssignWinner, this never announces anything, never touches loot history, and never triggers
+--- the reassignment-confirmation dialog. Any note the player already attached is kept as-is.
+function LC.SetPlayerVote(rollID, playerShort, buttonIdx)
+    LC.votes[rollID] = LC.votes[rollID] or {}
+    local prev = LC.votes[rollID][playerShort]
+    local note = (type(prev) == "table" and prev.note) or ""
+    LC.votes[rollID][playerShort] = {idx = buttonIdx, note = note}
+
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        if LC.activeRollID == rollID then LC.RefreshCouncilRows() end
+        LC.RefreshCouncilTabs()
+    end
+end
+
+-- Toggles this council member's own (non-binding) pick for who should get rollID — clicking the
+-- same candidate again retracts it, clicking a different one replaces it (one pick per item per
+-- council member). Test rolls stay local like everywhere else; real rolls broadcast so every
+-- council member's tally stays in sync.
+function LC.ToggleCouncilVote(rollID, candidateShort)
+    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+    LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
+    local retracting = (LC.councilVotes[rollID][myShort] == candidateShort)
+    LC.councilVotes[rollID][myShort] = (not retracting) and candidateShort or nil
+
+    if not IsTestRoll(rollID) then
+        SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateShort))
+    end
+
+    LC.RefreshCouncilRows()
+end
+
+-- =====================================================================
+--  Officer Notes  (persistent, per-player — not tied to any one item/roll)
+-- =====================================================================
+-- Distinct from the per-vote note a raider attaches to their own vote: this is a standing
+-- council note about a PERSON (e.g. "already has BIS trinket", "missed the last two items"),
+-- visible on every item they show up on. Saved locally (KART_LCOfficerNotes, survives reload)
+-- and broadcast on edit so every currently-online council member's client converges — there's
+-- no catch-up sync on raid join the way loot history has, so someone who was offline when a
+-- note was written won't see it until it's edited again while they're online.
+function LC.SetOfficerNote(shortName, noteText)
+    noteText = KART.TrimString(noteText or "")
+    KART_LCOfficerNotes[shortName] = (noteText ~= "") and noteText or nil
+    SendLC("LC_ONOTE:" .. shortName .. ":" .. noteText)
+    LC.RefreshCouncilRows()
+end
+
+function LC.HandleOfficerNote(payload)
+    local shortName, noteText = payload:match("^([^:]+):(.*)$")
+    if not shortName then return end
+    KART_LCOfficerNotes[shortName] = (noteText ~= "") and noteText or nil
+
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        LC.RefreshCouncilRows()
+    end
+end
+
+-- A hand-rolled little dialog instead of StaticPopupDialogs — retail's StaticPopup system was
+-- reworked (routes through Blizzard_StaticPopup_Game/GameDialog.lua now) and no longer reliably
+-- exposes the edit box as `self.editBox` inside OnAccept (errored with "attempt to index field
+-- 'editBox' (a nil value)" there, even though OnShow's `self.editBox` worked fine — the popup
+-- frame passed to the two callbacks isn't consistently the same shape). Owning the whole frame
+-- ourselves means the edit box reference is always exactly what we created it as.
+function LC.ShowOfficerNoteDialog(shortName)
+    if not LC.officerNoteDialog then
+        local f = CreateFrame("Frame", "KART_LCOfficerNoteDialog", UIParent, "BackdropTemplate")
+        f:SetSize(300, 120)
+        f:SetPoint("CENTER")
+        f:SetFrameStrata("DIALOG")
+        f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        f:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
+        f:SetBackdropBorderColor(0, 0, 0, 1)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        table.insert(UISpecialFrames, f:GetName())
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        f.title:SetPoint("TOP", 0, -14)
+        f.title:SetWidth(270)
+        f.title:SetWordWrap(true)
+
+        f.editBox = CreateFrame("EditBox", "KART_LCOfficerNoteEditBox", f, "BackdropTemplate")
+        f.editBox:SetSize(260, 24)
+        f.editBox:SetPoint("TOP", 0, -46)
+        f.editBox:SetAutoFocus(false)
+        f.editBox:SetMaxLetters(120)
+        f.editBox:SetFontObject("GameFontHighlightSmall")
+        f.editBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        f.editBox:SetBackdropColor(0, 0, 0, 0.5)
+        f.editBox:SetTextInsets(5, 5, 0, 0)
+        table.insert(KART.EditBoxes, f.editBox)
+
+        local function accept()
+            if f.short then LC.SetOfficerNote(f.short, f.editBox:GetText()) end
+            f:Hide()
+        end
+
+        local btnOK = KART.CreateModernButton(f, OKAY) ---@diagnostic disable-line: undefined-global
+        btnOK:SetSize(120, 26)
+        btnOK:SetPoint("BOTTOMLEFT", 15, 12)
+        btnOK:SetScript("OnClick", accept)
+
+        local btnCancel = KART.CreateModernButton(f, CANCEL) ---@diagnostic disable-line: undefined-global
+        btnCancel:SetSize(120, 26)
+        btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
+        btnCancel:SetScript("OnClick", function() f:Hide() end)
+
+        f.editBox:SetScript("OnEnterPressed", accept)
+        f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
+
+        LC.officerNoteDialog = f
+    end
+
+    local f = LC.officerNoteDialog
+    f.short = shortName
+    f.title:SetText(string.format(KART.L.LC_OFFICER_NOTE_PROMPT, shortName))
+    f.editBox:SetText(KART_LCOfficerNotes[shortName] or "")
+    f:Show()
+    f.editBox:SetFocus()
+    f.editBox:HighlightText()
+end
+
 -- Resolves a raid/party unit token for a given short (unrealmed) player name.
 function LC.FindUnitForShortName(shortName)
     local isRaid = IsInRaid()
@@ -1047,7 +1985,11 @@ function LC.FindUnitForShortName(shortName)
     return nil
 end
 
--- Right-click menu on a council row: quick-assign, change reason, or assign without a reason.
+--- Right-click menu on a council row: quick-assign, manually correct this player's vote, or
+--- assign without a reason. Assign / Assign-without-reason are the only two actions that go
+--- through AssignWinner (which announces the result and asks for reassignment confirmation if
+--- the item was already assigned to someone else) — "Change vote" only edits which vote is shown
+--- for this player (e.g. they voted verbally/via whisper) and must never assign anything itself.
 function LC.ShowAssignMenu(anchor, rollID, playerShort, voteDef)
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         rootDescription:CreateTitle(playerShort)
@@ -1057,15 +1999,19 @@ function LC.ShowAssignMenu(anchor, rollID, playerShort, voteDef)
         end)
 
         -- No callback here on purpose: this makes CreateButton return a submenu descriptor.
-        local changeMenu = rootDescription:CreateButton(KART.L.LC_MENU_CHANGE_ASSIGN) ---@diagnostic disable-line: missing-parameter
-        for _, def in ipairs(LC.GetButtonConfig()) do
+        local changeMenu = rootDescription:CreateButton(KART.L.LC_MENU_CHANGE_VOTE) ---@diagnostic disable-line: missing-parameter
+        for i, def in ipairs(LC.GetButtonConfig()) do
             changeMenu:CreateButton(def.label, function()
-                LC.AssignWinner(rollID, playerShort, def.label, def)
+                LC.SetPlayerVote(rollID, playerShort, i)
             end)
         end
 
         rootDescription:CreateButton(KART.L.LC_MENU_ASSIGN_NO_REASON, function()
             LC.AssignWinner(rollID, playerShort, "", nil)
+        end)
+
+        rootDescription:CreateButton(KART.L.LC_MENU_EDIT_NOTE, function()
+            LC.ShowOfficerNoteDialog(playerShort)
         end)
     end)
 end
@@ -1120,9 +2066,7 @@ function LC.HandleStart(payload)
     -- so there's nothing left to do here for that.
 
     if IsCouncil() then
-        if not (LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID) then
-            LC.ShowCouncilPanel(rollID, secs or 20)
-        end
+        LC.ShowCouncilPanel(rollID, secs or 20)
     else
         LC.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
     end
@@ -1139,6 +2083,47 @@ function LC.HandleVote(payload, senderShort)
 
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][senderShort] = {idx = idx, note = note}
+
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        -- Row list only matters for whichever roll is the active tab; the vote-count badge on
+        -- every tab (including inactive ones) should stay live regardless.
+        if LC.activeRollID == rollID then LC.RefreshCouncilRows() end
+        LC.RefreshCouncilTabs()
+    end
+end
+
+-- Receives another raider's automatic 1-100 roll (see LC.OnStartLootRoll) — opt-in, analogous to
+-- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
+-- anything automatically.
+function LC.HandleRoll(payload, senderShort)
+    local rollID, value = payload:match("^(%d+):(%d+)$")
+    rollID = tonumber(rollID)
+    value  = tonumber(value)
+    if not rollID or not value then return end
+
+    LC.rolls[rollID] = LC.rolls[rollID] or {}
+    LC.rolls[rollID][senderShort] = value
+
+    if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
+        LC.RefreshCouncilRows()
+    end
+end
+
+-- Receives a council member's (non-binding) pick for who should get rollID — a straw-poll tally
+-- only, never an assignment by itself. Like LC_VOTE, this trusts the sender rather than
+-- re-verifying council membership over the wire (the panel that sends it is only ever shown to
+-- council members in the first place — see IsCouncil in HandleStart/OnStartLootRoll).
+function LC.HandleCouncilVote(payload, senderShort)
+    local rollID, candidate = payload:match("^(%d+):(.*)$")
+    rollID = tonumber(rollID)
+    if not rollID then return end
+
+    LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
+    if candidate == "" then
+        LC.councilVotes[rollID][senderShort] = nil -- retracted their pick
+    else
+        LC.councilVotes[rollID][senderShort] = candidate
+    end
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
         LC.RefreshCouncilRows()
@@ -1162,10 +2147,8 @@ function LC.HandleResult(payload)
     if not rollID or not winner then return end
     local reason = payload:match("^%d+:[^:]+:(.*)$") or ""
 
-    -- Hide vote popup if open for this roll
-    if LC.votePopup and LC.votePopup:IsShown() and LC.votePopup.rollID == rollID then
-        LC.votePopup:Hide()
-    end
+    -- A result came in for this roll — remove it from our vote list, if it's still there.
+    LC.RemoveVoteListItem(rollID)
 
     if winner == "NONE" then return end
 
@@ -1192,31 +2175,7 @@ end
 
 -- mode: "looter" = always show vote popup; "master" = always show council panel; nil = auto-detect
 function LC.StartTest(mode)
-    local testRollID = 99999
-    local testItem   = "|cffff8000[Sulfuras, Hand von Ragnaros] (TEST)|r"
-    local buttons    = LC.GetButtonConfig()
-
-    LC.rollItems[testRollID] = testItem
-    LC.votes[testRollID]     = {}
-
-    -- Pre-fill votes from current group members so the council panel looks populated
-    if IsInGroup() then
-        local isRaid  = IsInRaid()
-        local numMem  = GetNumGroupMembers()
-        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
-        local voteIdx = 1
-        for i = 1, numMem do
-            local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
-            local name = UnitName(unit)
-            if name then
-                local short = name:match("([^%-]+)")
-                if short and short ~= myShort then
-                    LC.votes[testRollID][short] = {idx = voteIdx, note = ""}
-                    voteIdx = (voteIdx % #buttons) + 1
-                end
-            end
-        end
-    end
+    local buttons = LC.GetButtonConfig()
 
     local showCouncil
     if mode == "looter" then
@@ -1228,13 +2187,77 @@ function LC.StartTest(mode)
         showCouncil = IsCouncil() and IsInGroup()
     end
 
-    if showCouncil then
-        LC.ShowCouncilPanel(testRollID, KART_Settings.lcVoteSeconds or 20)
-    else
-        LC.ShowVotePopup(testRollID, testItem, KART_Settings.lcVoteSeconds or 20)
+    -- A test session is "active" if EITHER window still has test rolls tracked. If so, this
+    -- click just adds/refreshes the OTHER window on top of it — it must never reset the shared
+    -- item/vote data, since that data is exactly what the already-open window is displaying.
+    -- Clicking "Test Looter" while "Test Master" is still showing its tabs (or vice versa) used
+    -- to wipe LC.councilTabs/LC.voteListRolls out from under the other, already-visible window
+    -- without ever telling it to re-render — the stale tabs would then only get cleaned up (i.e.
+    -- appear to "vanish") whenever something else happened to trigger a refresh later, such as a
+    -- vote coming in, which made it look like voting itself was breaking the council panel.
+    local sessionActive = false
+    for _, rid in ipairs(LC.voteListRolls) do
+        if IsTestRoll(rid) then sessionActive = true break end
+    end
+    if not sessionActive then
+        for _, rid in ipairs(LC.councilTabs) do
+            if IsTestRoll(rid) then sessionActive = true break end
+        end
     end
 
-    print("|cff00ff00KART:|r " .. KART.L.LC_TEST_STARTED)
+    if not sessionActive then
+        for itemIdx, testItem in ipairs(TEST_ITEMS) do
+            local testRollID = TEST_ROLL_ID + (itemIdx - 1)
+
+            LC.rollItems[testRollID]       = testItem
+            LC.votes[testRollID]           = {}
+            LC.rolls[testRollID]           = {}
+            LC.councilVotes[testRollID]    = {}
+            LC.assignedWinners[testRollID] = nil -- fresh test run, forget any winner assigned in a previous one
+            LC.votedByMe[testRollID]       = nil -- forget our own vote from a previous test run too
+            LC.councilTabsNew[testRollID]  = nil
+
+            local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+            local rollsOn = LC.GetRollsEnabled()
+            if rollsOn and myShort ~= "" then
+                LC.rolls[testRollID][myShort] = math.random(1, 100)
+            end
+
+            -- Pre-fill votes (and, if enabled, rolls) from current group members so the council
+            -- panel looks populated
+            if IsInGroup() then
+                local isRaid  = IsInRaid()
+                local numMem  = GetNumGroupMembers()
+                local voteIdx = itemIdx -- offset per item so the fake votes aren't identical across items
+                for i = 1, numMem do
+                    local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+                    local name = UnitName(unit)
+                    if name then
+                        local short = name:match("([^%-]+)")
+                        if short and short ~= myShort then
+                            LC.votes[testRollID][short] = {idx = voteIdx, note = ""}
+                            voteIdx = (voteIdx % #buttons) + 1
+                            if rollsOn then LC.rolls[testRollID][short] = math.random(1, 100) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Kick off all test items at once: the vote list shows every one as its own row, and the
+    -- council panel gets a tab per item — exactly like multiple real items dropping from a boss
+    -- at nearly the same time.
+    for itemIdx = 1, TEST_ITEM_COUNT do
+        local testRollID = TEST_ROLL_ID + (itemIdx - 1)
+        if showCouncil then
+            LC.ShowCouncilPanel(testRollID, KART_Settings.lcVoteSeconds or 20)
+        else
+            LC.ShowVotePopup(testRollID, LC.rollItems[testRollID], KART_Settings.lcVoteSeconds or 20)
+        end
+    end
+
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_TEST_STARTED, TEST_ITEM_COUNT))
 end
 
 -- =====================================================================
@@ -1253,6 +2276,9 @@ function LC.UpdateRoleStatusLabel()
         lbl:SetText(KART.L.LC_ROLE_STATUS_MEMBER)
         lbl:SetTextColor(0.9, 0.7, 0.2)
     end
+    -- The leader/member texts wrap to a different number of lines, so the box below needs to
+    -- re-flow too (no-op on the very first call, before layoutRaidBox() has run yet).
+    if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
 end
 
 function LC.BuildSettingsPanel(parent)
@@ -1280,44 +2306,58 @@ function LC.BuildSettingsPanel(parent)
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -120)
-    raidBox:SetSize(280, 362)
+    raidBox:SetSize(295, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
     raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
 
     -- Title and role-status stacked on their own lines (not side-by-side) — the box is only
-    -- 280px wide, too narrow to fit both texts on one line without overlapping.
+    -- 295px wide, too narrow to fit both texts on one line without overlapping. Positions for
+    -- all of this are set by layoutRaidBox() further down, not here.
     local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    boxTitle:SetPoint("TOPLEFT", 10, -8)
     boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
     boxTitle:SetTextColor(0.9, 0.75, 0.3)
     table.insert(KART.DynamicLabels, boxTitle)
 
     KART.LC.RoleStatusLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    KART.LC.RoleStatusLabel:SetPoint("TOPLEFT", 10, -22)
     KART.LC.RoleStatusLabel:SetWidth(260)
     KART.LC.RoleStatusLabel:SetJustifyH("LEFT")
     table.insert(KART.DynamicLabels, KART.LC.RoleStatusLabel)
+    LC.UpdateRoleStatusLabel() -- sets the text before layoutRaidBox() first measures it
 
     local boxDivider = raidBox:CreateTexture(nil, "ARTWORK")
     boxDivider:SetColorTexture(0.5, 0.4, 0.05, 0.5)
     boxDivider:SetHeight(1)
-    boxDivider:SetPoint("TOPLEFT", 8, -38)
-    boxDivider:SetPoint("TOPRIGHT", -8, -38)
+    boxDivider:SetPoint("TOPRIGHT", -8, -38) -- Y overridden by layoutRaidBox(); X stays fixed
 
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
         raidBox, L.LC_SET_VOTE_TIMER, 5, 60, "lcVoteSeconds",
         -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
 
+    -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
+    -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.HandleRoll).
+    KART.LC.CbRollsEnabled = KART.CreateSettingsCheckbox(
+        raidBox, "KART_LCRollsEnabled",
+        L.LC_SET_ROLLS_ENABLED, "lcRollsEnabled", -140, LC.BroadcastRaidConfig, L.LC_DESC_ROLLS_ENABLED)
+
+    -- From here on, labels can be longer than one line depending on locale (German text
+    -- tends to run longer than English) AND depending on the user's chosen font/size in
+    -- Settings, so every label gets a fixed width + word wrap. Positions are computed by
+    -- layoutRaidBox() below from the actual measured height of each element instead of a
+    -- hardcoded guess. Creation/static setup happens once here; layoutRaidBox() is re-run
+    -- from KART.UpdateStyles() too, because that function swaps in the user's font *after*
+    -- this panel is built, which can change how many lines a label wraps to.
+    local CONTENT_WIDTH = 265
+
     local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblButtons:SetPoint("TOPLEFT", 20, -100)
+    lblButtons:SetWidth(CONTENT_WIDTH)
+    lblButtons:SetJustifyH("LEFT")
     lblButtons:SetText(L.LC_SET_BUTTONS)
     table.insert(KART.DynamicLabels, lblButtons)
 
     KART.LC.ButtonLabelEditBox = CreateFrame("EditBox", "KART_LCButtonLabels", raidBox, "BackdropTemplate")
     local eb = KART.LC.ButtonLabelEditBox
-    eb:SetSize(250, 28)
-    eb:SetPoint("TOPLEFT", 20, -118)
+    eb:SetSize(CONTENT_WIDTH, 28)
     eb:SetAutoFocus(false)
     eb:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     eb:SetBackdropColor(0, 0, 0, 0.5)
@@ -1331,21 +2371,22 @@ function LC.BuildSettingsPanel(parent)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("TOPLEFT", 20, -155)
+    hint:SetWidth(CONTENT_WIDTH)
+    hint:SetJustifyH("LEFT")
     hint:SetText(L.LC_SET_BUTTONS_HINT)
     hint:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hint)
 
     -- Council member names
     local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblCouncil:SetPoint("TOPLEFT", 20, -182)
+    lblCouncil:SetWidth(CONTENT_WIDTH)
+    lblCouncil:SetJustifyH("LEFT")
     lblCouncil:SetText(L.LC_SET_COUNCIL)
     table.insert(KART.DynamicLabels, lblCouncil)
 
     KART.LC.CouncilMembersEditBox = CreateFrame("EditBox", "KART_LCCouncilMembers", raidBox, "BackdropTemplate")
     local ebC = KART.LC.CouncilMembersEditBox
-    ebC:SetSize(250, 28)
-    ebC:SetPoint("TOPLEFT", 20, -200)
+    ebC:SetSize(CONTENT_WIDTH, 28)
     ebC:SetAutoFocus(false)
     ebC:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     ebC:SetBackdropColor(0, 0, 0, 0.5)
@@ -1359,22 +2400,23 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hintCouncil:SetPoint("TOPLEFT", 20, -237)
+    hintCouncil:SetWidth(CONTENT_WIDTH)
+    hintCouncil:SetJustifyH("LEFT")
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
 
     -- Minimum item quality that triggers the Loot Council flow (full width)
     local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lblQuality:SetPoint("TOPLEFT", 20, -264)
+    lblQuality:SetWidth(CONTENT_WIDTH)
+    lblQuality:SetJustifyH("LEFT")
     lblQuality:SetText(L.LC_SET_MIN_QUALITY)
     table.insert(KART.DynamicLabels, lblQuality)
 
     -- Placeholder text only — KART_Settings doesn't exist yet at file-load time.
     -- Core.lua's ADDON_LOADED handler syncs the real value once settings are loaded.
     KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
-    KART.LC.BtnMinQuality:SetSize(250, 28)
-    KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, -282)
+    KART.LC.BtnMinQuality:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
             rootDescription:CreateTitle(L.LC_SET_MIN_QUALITY)
@@ -1391,8 +2433,7 @@ function LC.BuildSettingsPanel(parent)
     -- Toggle session (full width) — functionally always leader-gated already; lives in the
     -- raid-wide box too since it only ever does anything for the raid leader.
     KART.LC.BtnToggleSession = KART.CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
-    KART.LC.BtnToggleSession:SetSize(250, 28)
-    KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, -318)
+    KART.LC.BtnToggleSession:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         if IsInGroup() and UnitIsGroupLeader("player") then
             LC.SetSessionActive(not LC.sessionActive)
@@ -1400,14 +2441,66 @@ function LC.BuildSettingsPanel(parent)
             print("|cff00ff00KART:|r " .. KART.L.LC_NOT_LEADER)
         end
     end)
+
+    local function layoutRaidBox()
+        local y = -8
+
+        boxTitle:SetPoint("TOPLEFT", 10, y)
+        y = y - boxTitle:GetStringHeight() - 6
+
+        KART.LC.RoleStatusLabel:SetPoint("TOPLEFT", 10, y)
+        y = y - KART.LC.RoleStatusLabel:GetStringHeight() - 8
+
+        boxDivider:SetPoint("TOPLEFT", 8, y)
+        y = y - 1 - 14
+
+        KART.LC.SldVoteTimer:SetPoint("TOPLEFT", 20, y - 16) -- -16: slider's own title sits above it
+        y = y - 16 - 14 - 18
+
+        KART.LC.CbRollsEnabled:SetPoint("TOPLEFT", 20, y)
+        y = y - 20 - 14
+
+        lblButtons:SetPoint("TOPLEFT", 20, y)
+        y = y - lblButtons:GetStringHeight() - 8
+
+        eb:SetPoint("TOPLEFT", 20, y)
+        y = y - eb:GetHeight() - 9
+
+        hint:SetPoint("TOPLEFT", 20, y)
+        y = y - hint:GetStringHeight() - 18
+
+        lblCouncil:SetPoint("TOPLEFT", 20, y)
+        y = y - lblCouncil:GetStringHeight() - 8
+
+        ebC:SetPoint("TOPLEFT", 20, y)
+        y = y - ebC:GetHeight() - 9
+
+        hintCouncil:SetPoint("TOPLEFT", 20, y)
+        y = y - hintCouncil:GetStringHeight() - 18
+
+        lblQuality:SetPoint("TOPLEFT", 20, y)
+        y = y - lblQuality:GetStringHeight() - 8
+
+        KART.LC.BtnMinQuality:SetPoint("TOPLEFT", 20, y)
+        y = y - 28 - 10
+
+        KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, y)
+        y = y - 28 - 16
+
+        raidBox:SetHeight(-y)
+    end
+
+    layoutRaidBox()
+    LC.RelayoutRaidBox = layoutRaidBox
     -- ================= /Raid-wide settings box =================
 
-    LC.UpdateRoleStatusLabel()
-
-    -- Two test buttons side by side: Looter view / Lootmaster view
+    -- Two test buttons side by side: Looter view / Lootmaster view.
+    -- Anchored to raidBox's own BOTTOMLEFT (not a fixed offset from parent) so they always sit
+    -- right below the box regardless of how tall it ends up being — the box's height depends on
+    -- wrapped label text, which can vary by locale and by the user's chosen font/size.
     KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
     KART.LC.BtnTestLooter:SetSize(122, 28)
-    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", 20, -498)
+    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", raidBox, "BOTTOMLEFT", 10, -16)
     KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
 
     KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
@@ -1415,10 +2508,10 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 8, 0)
     KART.LC.BtnTestMaster:SetScript("OnClick", function() LC.StartTest("master") end)
 
-    -- Loot history (full width)
+    -- Loot history (full width) — anchored below the test buttons for the same reason.
     KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
     KART.LC.BtnHistory:SetSize(255, 28)
-    KART.LC.BtnHistory:SetPoint("TOPLEFT", 20, -534)
+    KART.LC.BtnHistory:SetPoint("TOPLEFT", KART.LC.BtnTestLooter, "BOTTOMLEFT", 0, -8)
     KART.LC.BtnHistory:SetScript("OnClick", function()
         if KART.LH then KART.LH.Toggle() end
     end)

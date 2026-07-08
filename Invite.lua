@@ -9,16 +9,24 @@ WU.bosses = {}  -- { encounterID, difficulty, name, players[] }
 --  Parser
 -- =====================================================================
 
+-- Parses a WoWUtils export and adds the result to WU.bosses. Imports are never
+-- wiped or overwritten by a later import: pasting Normal and then Heroic
+-- keeps both difficulties, and pasting a second roster for the same boss +
+-- difficulty (e.g. Split-Team B) keeps both rosters side by side instead of
+-- replacing the first one. When more than one entry shares the same boss +
+-- difficulty, they're labeled "Boss Name A", "Boss Name B", ... in import
+-- order so they stay distinguishable. Use WU.ResetBosses() to clear everything.
 function WU.ParseImport(rawText)
-    WU.bosses = {}
     if not rawText or KART.TrimString(rawText) == "" then return 0 end
 
+    local parsedCount = 0
     for encounterID, difficulty, bossName, playerStr in rawText:gmatch(
             "EncounterID:(%d+);Difficulty:([^;]+);Name:([^\n\r]+)%s+invitelist:([^;]+)") do
 
         bossName   = KART.TrimString(bossName)
         difficulty = KART.TrimString(difficulty)
         playerStr  = KART.TrimString(playerStr)
+        encounterID = tonumber(encounterID)
 
         local players = {}
         for p in playerStr:gmatch("%S+") do
@@ -26,16 +34,47 @@ function WU.ParseImport(rawText)
         end
 
         if #players > 0 then
+            parsedCount = parsedCount + 1
+
+            local groupCount = 0
+            for _, boss in ipairs(WU.bosses) do
+                if boss.encounterID == encounterID and boss.difficulty == difficulty then
+                    groupCount = groupCount + 1
+                end
+            end
+
+            if groupCount == 1 then
+                -- A second entry for this boss+difficulty just showed up;
+                -- retroactively label the first one "A" too.
+                for _, boss in ipairs(WU.bosses) do
+                    if boss.encounterID == encounterID and boss.difficulty == difficulty then
+                        boss.name = boss.baseName .. " A"
+                        break
+                    end
+                end
+            end
+
+            local name = bossName
+            if groupCount > 0 then
+                name = bossName .. " " .. string.char(65 + groupCount) -- B, C, D, ...
+            end
+
             table.insert(WU.bosses, {
-                encounterID = tonumber(encounterID),
+                encounterID = encounterID,
                 difficulty  = difficulty,
-                name        = bossName,
+                name        = name,
+                baseName    = bossName,
                 players     = players,
             })
         end
     end
 
-    return #WU.bosses
+    return parsedCount
+end
+
+function WU.ResetBosses()
+    WU.bosses = {}
+    WU.RefreshBossList()
 end
 
 -- =====================================================================
@@ -131,6 +170,23 @@ function WU.RemoveForBoss(idx)
     end
     print(string.format("|cff00ff00KART:|r " .. (KART.L.WU_MSG_REMOVED or "%d players removed for %s."), removed, boss.name))
 end
+
+StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
+    text = "Boss-Liste wirklich zurücksetzen?",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function()
+        WU.ResetBosses()
+        if WU.statusLabel then
+            WU.statusLabel:SetText(KART.L.WU_STATUS_EMPTY or "Noch kein Import.")
+            WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
 
 -- =====================================================================
 --  Boss List UI
@@ -266,7 +322,7 @@ function WU.BuildPanel(parent)
     table.insert(KART.EditBoxes, WU.ImportEditBox)
 
     WU.BtnImport = KART.CreateModernButton(parent, L.WU_BTN_IMPORT or "Importieren")
-    WU.BtnImport:SetSize(265, 26)
+    WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -200)
     WU.BtnImport:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
@@ -280,6 +336,16 @@ function WU.BuildPanel(parent)
             WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR or "Kein gültiges WoWUtils-Format gefunden.")
             WU.statusLabel:SetTextColor(0.9, 0.3, 0.3)
         end
+    end)
+
+    WU.BtnReset = KART.CreateModernButton(parent, L.WU_BTN_RESET or "Zurücksetzen")
+    WU.BtnReset:SetSize(77, 26)
+    WU.BtnReset:SetPoint("TOPLEFT", 208, -200)
+    WU.BtnReset:SetScript("OnClick", function()
+        if KART_Settings.wuModuleEnabled == false then return end
+        if #WU.bosses == 0 then return end
+        StaticPopupDialogs["KART_WU_RESET_CONFIRM"].text = L.WU_RESET_CONFIRM_TEXT or "Boss-Liste wirklich zurücksetzen?"
+        StaticPopup_Show("KART_WU_RESET_CONFIRM")
     end)
 
     WU.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
