@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-09
+### Fixed
+- **Addon icon missing from the release zip:** The GitHub release workflow excluded `*.jpg`/`*.png` files from the packaged zip, which also stripped `KAimg.jpg` — the file referenced by `IconTexture` in the TOC. Anyone installing from a GitHub/CurseForge release (as opposed to a git checkout) saw a blank icon in the AddOn list. The exclusion is gone; image files are now included again.
+
 ## [1.10.0] - 2026-07-08
 ### Added
 - **Loot Council now shows all simultaneously dropped items at once instead of one after another:**
