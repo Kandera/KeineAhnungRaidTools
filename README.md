@@ -8,7 +8,7 @@ A lightweight, modular World of Warcraft addon built specifically for raid and g
 
 ### 1. Automation
 All automatic group functions bundled into a single tab:
-*   **Keyword Invite:** Reacts to configurable keywords (e.g. "inv", "+") in whispers, guild chat, or Battle.net messages.
+*   **Keyword Invite:** Reacts to configurable keywords (e.g. "inv", "+") in whispers, guild chat, or Battle.net messages. The guild-chat trigger is a separate toggle (disabled by default) to avoid accidental invites from casual guild chat.
 *   **Auto-Promote:** Automatically promotes predefined players to assistant as soon as they join the group. Ideal for co-leads and fixed raid roles.
 *   **Auto-Raid:** Automatically converts the group into a raid once more than 5 members join.
 

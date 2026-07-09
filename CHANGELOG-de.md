@@ -8,6 +8,13 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-09
+### Hinzugefügt
+- **Auto-Invite über Gildenchat kann jetzt separat abgeschaltet werden:** Die Keyword-Invite-Funktion (z.B. "inv" oder "+" tippen) funktionierte sowohl in Flüster-Nachrichten als auch im Gildenchat, was zu versehentlichen Invites durch normale Gildenchat-Gespräche führen konnte. Eine neue Checkbox ("Auto-Invite über Gildenchat erlauben") in den Automation-Einstellungen erlaubt es, den Gildenchat-Trigger abzuschalten, während Invites per Flüstern weiterhin funktionieren.
+
+### Geändert
+- **Mehrere Standardwerte für Neuinstallationen wurden angepasst:** Auto-Invite über Gildenchat, das Buff-Checker-Modul, Loot Council, der WoWUtils Import, Auto-Raid-Convert und das automatische Ausblenden der Raidlead-Leiste im Solo-Modus sind jetzt standardmäßig **deaktiviert**; Auto-Pass bei Loot Council ist jetzt standardmäßig **aktiviert**. Dies betrifft nur Neuinstallationen und "Standardwerte zurücksetzen" — bestehende Konfigurationen bleiben unverändert.
+
 ## [1.10.2] - 2026-07-09
 ### Behoben
 - **CurseForge-Upload lief nie tatsächlich:** Der Release-Workflow übergab den API-Key an den BigWigsMods-Packager als `CF_API_TOKEN`, der Packager erkennt aber nur `CF_API_KEY`. Dadurch meldete jeder automatisierte Release-Job (auch 1.10.1) Erfolg, während der CurseForge-Upload lautlos übersprungen wurde — es kam nie eine Datei bei CurseForge an. Der Workflow übergibt den Key jetzt unter dem vom Packager erwarteten Namen.

@@ -103,6 +103,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
         if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
         if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
+        if KART.CbInviteViaGuildChat then settingsMap[KART.CbInviteViaGuildChat] = "inviteViaGuildChat" end
         if KART.SldTitleSize then settingsMap[KART.SldTitleSize] = "titleFontSize" end
         if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
         if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
@@ -172,7 +173,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UpdateStyles()
 
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
-        KART.HandleChatInvite(arg1, arg2, event, ...)
+        if event ~= "CHAT_MSG_GUILD" or KART_Settings.inviteViaGuildChat then
+            KART.HandleChatInvite(arg1, arg2, event, ...)
+        end
 
     elseif event == "START_LOOT_ROLL" then
         if KART.LC then KART.LC.OnStartLootRoll(arg1) end

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-09
+### Added
+- **Guild-chat auto-invite can now be turned off separately:** The keyword-invite feature (e.g. typing "inv" or "+") worked in both whispers and guild chat, which could lead to accidental invites from casual guild chat conversation. A new checkbox ("Allow auto-invite via Guild chat") in Automation settings lets you disable the guild-chat trigger while keeping whisper-based invites active.
+
+### Changed
+- **Several defaults for fresh installations have been adjusted:** Guild-chat auto-invite, the Buff-Checker module, Loot Council, WoWUtils Import, Auto-Raid-Convert, and the Raidlead Bar's auto-hide-when-solo now default to **off**; Loot Council's Auto-Pass now defaults to **on**. This only affects new installs and "Reset Defaults" — existing configurations are not changed.
+
 ## [1.10.2] - 2026-07-09
 ### Fixed
 - **CurseForge upload never actually ran:** The release workflow passed the API key to the BigWigsMods packager as `CF_API_TOKEN`, but the packager only recognizes `CF_API_KEY`. Every automated release job (including 1.10.1) therefore reported success while silently skipping the CurseForge upload — no file ever reached CurseForge. The workflow now passes the key under the name the packager expects.

@@ -38,6 +38,7 @@ KART.L_deDE = {
     -- Settings / Checkboxes
     SET_MINIMAP = "Minimap-Icon anzeigen",
     SET_AUTO_RAID = "Automatisch in Raid umwandeln",
+    SET_INVITE_VIA_GUILD_CHAT = "Auto-Invite über Gildenchat erlauben",
     SET_BG_ALPHA = "Hintergrund-Deckkraft",
     SET_BC_ALPHA = "Fenster-Deckkraft",
     SET_GRAY_OFFLINE = "Offline-Spieler ausgrauen",
@@ -111,6 +112,7 @@ KART.L_deDE = {
     DESC_GRAY_OFFLINE = "Spieler, die nicht eingeloggt sind, werden in der Buff-Liste ausgegraut dargestellt.",
     DESC_MINIMAP = "Zeigt oder blendet das KART-Symbol an der Minimap aus.",
     DESC_AUTO_RAID = "Wandelt eine Gruppe automatisch in einen Schlachtzug um, sobald das 6. Mitglied beitritt.",
+    DESC_INVITE_VIA_GUILD_CHAT = "Wenn deaktiviert, lösen die Invite-Begriffe nur bei Flüstern aus, nicht bei Nachrichten im Gildenchat. Nützlich, um versehentliche Invites durch normale Gildenchat-Gespräche zu vermeiden.",
     DESC_TITLE_SIZE = "Anpassung der Schriftgröße für die Fenstertitel.",
     DESC_MENU_SIZE = "Anpassung der Schriftgröße für die Schaltflächen im Seitenmenü.",
     DESC_CONTENT_SIZE = "Anpassung der Schriftgröße für Texte innerhalb der Inhaltsbereiche.",

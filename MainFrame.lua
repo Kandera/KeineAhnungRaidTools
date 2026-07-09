@@ -229,6 +229,7 @@ end)
 KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
 KART.CbAutoRaid = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -190, nil, L.DESC_AUTO_RAID)
+KART.CbInviteViaGuildChat = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_InviteViaGuildChatCheck", L.SET_INVITE_VIA_GUILD_CHAT, "inviteViaGuildChat", -225, nil, L.DESC_INVITE_VIA_GUILD_CHAT)
 
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

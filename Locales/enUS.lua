@@ -38,6 +38,7 @@ KART.L_enUS = {
     -- Settings / Checkboxes
     SET_MINIMAP = "Show Minimap Icon",
     SET_AUTO_RAID = "Auto convert to Raid",
+    SET_INVITE_VIA_GUILD_CHAT = "Allow auto-invite via Guild chat",
     SET_BG_ALPHA = "Background Opacity",
     SET_BC_ALPHA = "Window Opacity",
     SET_GRAY_OFFLINE = "Gray out offline players",
@@ -111,6 +112,7 @@ KART.L_enUS = {
     DESC_GRAY_OFFLINE = "Players who are logged out will be grayed out in the buff list.",
     DESC_MINIMAP = "Shows or hides the KART icon on the minimap.",
     DESC_AUTO_RAID = "Automatically converts a party into a raid when the 6th member joins.",
+    DESC_INVITE_VIA_GUILD_CHAT = "If disabled, the invite keywords only trigger on whispers, not on messages in guild chat. Useful to avoid accidental invites from casual guild chat.",
     DESC_TITLE_SIZE = "Adjusts the font size for the window titles.",
     DESC_MENU_SIZE = "Adjusts the font size for the sidebar menu buttons.",
     DESC_CONTENT_SIZE = "Adjusts the font size for text within the content areas.",
