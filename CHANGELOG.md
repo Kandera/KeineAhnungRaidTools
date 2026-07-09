@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-07-09
+### Fixed
+- **CurseForge upload never actually ran:** The release workflow passed the API key to the BigWigsMods packager as `CF_API_TOKEN`, but the packager only recognizes `CF_API_KEY`. Every automated release job (including 1.10.1) therefore reported success while silently skipping the CurseForge upload — no file ever reached CurseForge. The workflow now passes the key under the name the packager expects.
+
 ## [1.10.1] - 2026-07-09
 ### Fixed
 - **Addon icon missing from the release zip:** The GitHub release workflow excluded `*.jpg`/`*.png` files from the packaged zip, which also stripped `KAimg.jpg` — the file referenced by `IconTexture` in the TOC. Anyone installing from a GitHub/CurseForge release (as opposed to a git checkout) saw a blank icon in the AddOn list. The exclusion is gone; image files are now included again.
