@@ -1,220 +1,222 @@
+**English** | [Deutsch](CHANGELOG-de.md)
+
 # Changelog
 
-Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
-Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
-und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to this project are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ## [1.10.0] - 2026-07-08
-### Hinzugefügt
-- **Loot Council zeigt jetzt alle gleichzeitig gedroppten Items auf einmal statt nacheinander:**
-  - **Looter-Ansicht:** Aus dem einzelnen Abstimmungs-Popup ist eine Liste geworden — jedes aktuell laufende Item bekommt seine eigene Zeile mit eigenen Vote-Buttons, eigener Notiz und eigenem Countdown. So sieht man alle Drops auf einen Blick und kann pro Item unabhängig entscheiden (z. B. BIS auf das eine, Pass auf das andere), statt ein Item erst abhaken zu müssen, bevor das nächste überhaupt sichtbar wird.
-  - **Council-/Lootmaster-Ansicht:** Das Panel hat jetzt einen vertikalen Tab-Streifen am linken Rand — ein Tab pro aktuell laufendem Item, mit dem echten Itemsymbol und einer "Stimmen/Gesamt"-Anzeige. Ein Rechtsklick-Vergeben schließt den Tab nicht automatisch, man kann also in Ruhe zwischen den Items hin- und herwechseln und sich ggf. umentscheiden. Hovern über einen Tab zeigt sofort die komplette Stimmverteilung aller Spieler für dieses Item, ganz ohne umzuschalten. Ein neuer Tab reißt dabei nie den aktuell betrachteten weg — er bekommt nur einen kleinen roten "neu"-Punkt und wartet. Das „×" zum Schließen eines einzelnen Tabs erscheint erst beim Hovern (statt permanent in der Ecke zu sitzen), damit ein normaler Klick zum Umschalten nicht aus Versehen den Tab wegklickt. Die grüne Gewinner-Markierung einer Zeile ist jetzt außerdem pro Item statt global — vorher blieb ein bereits zugewiesener Spieler beim Wechsel auf ein anderes Item fälschlich weiter grün markiert.
-  - Beide Test-Buttons ("Test Looter" / "Test Master") verteilen jetzt testweise 4 simulierte Items gleichzeitig, damit sich genau dieses Verhalten auch ohne echten Raid durchspielen lässt. Die Test-Items sind jetzt echte (aber folgenlose) Item-Links (Sulfuras, Thunderfury, Corrupted Ashbringer, Hand of Justice) statt Fantasie-Strings — dadurch zeigen die Tabs echte Itemsymbole, Tooltips funktionieren, und auch der Rüstungsklassen-Hinweis sowie der Ausrüstungsvergleich lassen sich im Test-Modus durchspielen. Das Trinket deckt dabei gezielt den Zwei-Slot-Vergleich ab (Ringe/Trinkets prüfen beide Slots und zeigen das schwächere Stück) — die drei Waffen sind alle einslotig. Ein Klick auf den jeweils anderen Test-Button setzt dabei nicht mehr die bereits laufende Testrunde zurück — vorher konnte das Öffnen von "Test Looter" bei bereits offenem "Test Master" (oder umgekehrt) die Tabs des anderen Fensters im Hintergrund unbemerkt aus der Datengrundlage reißen; sichtbar wurde das erst beim nächsten Vote, der dann fälschlich so aussah, als würde eine Stimmabgabe die Tabs zum Verschwinden bringen und den eigenen Vote verschlucken.
-- **Test-Buttons im Loot-Council-Tab spielen jetzt zusammen:** Ein im Looter-Testfenster abgegebener Vote trägt sich sofort ins Master-Testpanel ein, auch komplett solo ganz ohne Gruppe — so lässt sich die komplette Lootvergabe alleine durchspielen, inklusive Zuweisung und lokalem "Du hast gewonnen"-Popup. Testrolls bleiben dabei strikt lokal: kein Broadcast an die Gruppe, keine Raidchat-Ankündigung und kein Eintrag in der echten (persistenten) Loot-History — vorher konnte ein Testlauf während eines laufenden Raids versehentlich eine echte Gewinner-Ankündigung im Raidchat auslösen und einen Fake-Eintrag in der Loot-History aller Mitspieler hinterlassen.
-- **1-100 Zufalls-Rolls im Loot Council (analog zu RCLootCouncil):** Neue Option in den Raid-weiten Einstellungen ("1-100 Zufalls-Rolls anzeigen", nur wirksam als Raidleiter). Ist sie aktiv, würfelt jeder berechtigte Raider automatisch einen Wert von 1-100, sobald ein Item zur Abstimmung ansteht — ganz ohne eigenes Zutun, wie RCLootCouncils Need-Roll. Der Wert erscheint als eigene Spalte im Council-Panel und ist rein informativ, er beeinflusst keine Zuweisung automatisch.
-- **Council-Stimmen-Zähler im Council-Panel:** Jede Zeile hat jetzt einen "CV"-Button (Council Votes), mit dem jedes Council-Mitglied für den favorisierten Kandidaten stimmen kann (ein Klick auf den gleichen Kandidaten macht die Stimme wieder rückgängig, ein Klick auf einen anderen ersetzt sie). Die Zahl daneben zeigt, wie viele Council-Mitglieder aktuell für diesen Spieler gestimmt haben — rein zur Orientierung, die tatsächliche Zuweisung läuft weiterhin ausschließlich über Rechtsklick → Zuweisen.
-- **Persistente Spieler-Notizen im Council-Panel:** Rechtsklick auf eine Zeile → "Notiz bearbeiten" öffnet ein Textfeld für eine dauerhafte Notiz zu diesem Spieler (z. B. "hat schon BIS-Trinket", "ging die letzten zwei Items leer aus") — anders als die Vote-Notiz eines Raiders ist diese nicht an ein einzelnes Item gebunden, sondern taucht bei jedem Item auf, bei dem der Spieler in der Liste steht. Wird an alle gerade online befindlichen Council-Mitglieder verteilt und bleibt über Reloads erhalten (eigene SavedVariable); ein Abgleich für Council-Mitglieder, die beim Schreiben der Notiz offline waren, findet aktuell nicht statt. Das Eingabefenster ist ein eigenes kleines Fenster statt eines Blizzard-StaticPopups — Retails überarbeitetes StaticPopup-System (läuft mittlerweile über `Blizzard_StaticPopup_Game/GameDialog.lua`) stellte das Eingabefeld in `OnAccept` nicht mehr zuverlässig als `self.editBox` bereit und warf beim Bestätigen einen Lua-Fehler.
-- **Rüstungsklassen-Hinweis im Council-Panel:** Zeilen von Spielern, die die Rüstungsart des aktuellen Items gar nicht tragen können (z. B. Platte auf einem Magier), werden abgedunkelt dargestellt, mit Tooltip-Hinweis. Rein visuell — Zuweisen per Rechtsklick funktioniert für jede Zeile unverändert, für den Fall, dass die Erkennung mal danebenliegt.
-- **Trade-Erinnerung mit Auto-Trade für Loot Council:** Nach einer Zuweisung an einen anderen Spieler merkt sich KART, wer noch was getradet bekommen muss, und zeigt dafür ein kleines, verschiebbares Erinnerungsfenster ("Noch zu tradende Items") mit einer Liste aller offenen Trades (Häkchen-Button zum manuellen Abhaken). Öffnet man daraufhin ein Handelsfenster mit genau dem richtigen Spieler, wird das passende Item automatisch aus den eigenen Taschen ins Handelsfenster gelegt — bestätigt werden muss der Handel weiterhin manuell. Bricht automatisch ab (Item bleibt in der Erinnerung stehen), wenn das Item nicht mehr in den eigenen Taschen gefunden wird oder gerade etwas anderes am Mauszeiger hängt.
-- **Reset-Button im WoWUtils-Tab:** Setzt die importierte Boss-Liste komplett zurück (mit Bestätigungsdialog).
+### Added
+- **Loot Council now shows all simultaneously dropped items at once instead of one after another:**
+  - **Looter view:** The single voting popup has become a list — every currently running item gets its own row with its own vote buttons, its own note field, and its own countdown. This shows all drops at a glance and lets you decide independently per item (e.g. BIS on one, Pass on another) instead of having to clear one item before the next even becomes visible.
+  - **Council/loot master view:** The panel now has a vertical tab strip on the left edge — one tab per currently running item, with the real item icon and a "votes/total" display. Assigning via right-click no longer closes the tab automatically, so you can switch back and forth between items calmly and change your mind if needed. Hovering over a tab immediately shows the full vote breakdown for that item, without switching to it at all. A new tab never yanks away the one currently being viewed — it only gets a small red "new" dot and waits. The "×" to close a single tab now only appears on hover (instead of sitting there permanently) so a normal click to switch tabs doesn't accidentally close one. A row's green winner highlight is now also per-item instead of global — previously, a player who had already been assigned an item stayed incorrectly marked green when switching to a different item.
+  - Both test buttons ("Test Looter" / "Test Master") now distribute 4 simulated items at once for testing, so this exact behavior can be run through without a real raid. The test items are now real (but consequence-free) item links (Sulfuras, Thunderfury, Corrupted Ashbringer, Hand of Justice) instead of made-up strings — as a result, the tabs show real item icons, tooltips work, and the armor type hint as well as the gear comparison can also be tested in test mode. The trinket specifically covers the two-slot comparison (rings/trinkets check both slots and show the weaker piece) — the three weapons are all single-slot. Clicking the other test button no longer resets an already-running test round — previously, opening "Test Looter" while "Test Master" was already open (or vice versa) could silently rip the other window's tabs out from under it in the background; this only became visible on the next vote, which then incorrectly looked as if casting a vote made the tabs disappear and swallowed your own vote.
+- **Test buttons in the Loot Council tab now work together:** A vote cast in the looter test window is immediately entered into the master test panel, even fully solo without a group at all — allowing the entire loot distribution flow to be run through alone, including assignment and the local "You won" popup. Test rolls stay strictly local: no broadcast to the group, no raid chat announcement, and no entry in the real (persistent) loot history — previously, a test run during an active raid could accidentally trigger a real winner announcement in raid chat and leave a fake entry in every other player's loot history.
+- **1-100 random rolls in Loot Council (à la RCLootCouncil):** New option in the raid-wide settings ("Show 1-100 random rolls", only effective as raid lead). When enabled, every eligible raider automatically rolls a value from 1-100 as soon as an item comes up for vote — with no action needed, just like RCLootCouncil's need roll. The value appears as its own column in the council panel and is purely informational; it has no automatic effect on any assignment.
+- **Council vote counter in the council panel:** Every row now has a "CV" button (Council Votes) that lets each council member vote for their favored candidate (clicking the same candidate again undoes the vote, clicking a different one replaces it). The number next to it shows how many council members currently voted for that player — purely for guidance; the actual assignment still only happens via right-click → Assign.
+- **Persistent player notes in the council panel:** Right-click a row → "Edit Note" opens a text field for a permanent note about that player (e.g. "already has BIS trinket", "missed out on the last two items") — unlike a raider's per-vote note, this one isn't tied to a single item but appears for every item the player is listed under. It's distributed to all council members currently online and persists across reloads (its own SavedVariable); there is currently no reconciliation for council members who were offline while the note was written. The input window is its own small custom frame instead of a Blizzard StaticPopup — retail's reworked StaticPopup system (now routed through `Blizzard_StaticPopup_Game/GameDialog.lua`) no longer reliably exposed the input field as `self.editBox` in `OnAccept` and threw a Lua error on confirm.
+- **Armor type hint in the council panel:** Rows for players who can't wear the current item's armor type at all (e.g. plate on a mage) are shown dimmed, with a tooltip hint. Purely visual — assigning via right-click still works for any row, in case the detection is ever wrong.
+- **Trade reminder with auto-trade for Loot Council:** After an item is assigned to another player, KART remembers who still needs to be traded what, and shows a small, movable reminder window ("Items still to trade") with a list of all pending trades (a checkmark button to mark them off manually). If you then open a trade window with exactly the right player, the matching item is automatically placed from your bags into the trade window — the trade still has to be confirmed manually. Automatically cancels (the item stays in the reminder) if the item can no longer be found in your bags or something else is currently attached to your cursor.
+- **Reset button in the WoWUtils tab:** Fully resets the imported boss list (with a confirmation dialog).
 
-### Geändert
-- **Item-Icon in der Vote-Liste:** Vor dem Item-Namen steht jetzt auch im Looter-Fenster ein kleines Icon (echtes Itemsymbol bei echten Items, eingefärbter Platzhalter sonst) — analog zum Council-Panel.
-- **Vote-Liste im Looter-Fenster überarbeitet, weniger zusammengedrängt:** Fenster und Abstände vergrößert (mehr Innenabstand pro Item, größerer Abstand zwischen den einzelnen Item-Blöcken, mehr Luft um das Notizfeld), Vote-Buttons etwas größer mit dezenterer statt sehr kräftiger Rahmenfarbe — vorher saß alles nahezu ohne Abstand aneinander und wirkte wie eine Wand aus Kästchen, besonders bei mehreren gleichzeitig laufenden Items.
-- **Vote-Zeile schließt/markiert sich nach der Stimmabgabe sofort:** Statt eines "Stimme abgegeben!"-Zwischenzustands mit 2,5 Sekunden Verzögerung zeigt die Zeile sofort "✓ Gewählt: <Option>" an — bei mehreren gleichzeitig laufenden Items geht dadurch keine Zeit verloren.
-- **WoWUtils-Import über mehrere Difficulties hinweg:** Ein erneuter Import (z. B. erst die Normal-, dann die Heroic-Zusammenstellung einfügen) überschreibt nicht mehr die komplette Liste. Einträge werden jetzt anhand von EncounterID + Difficulty zusammengeführt, sodass mehrere Difficulties desselben Bosses gleichzeitig in der Liste stehen bleiben. Zum vollständigen Leeren dient der neue Reset-Button.
-- **Split-Raid-Unterstützung im WoWUtils-Import:** Wird für denselben Boss und dieselbe Difficulty ein zweiter Import mit anderem Roster eingefügt (z. B. Team A / Team B bei Splits), wird dieser nicht mehr überschrieben, sondern als eigener Eintrag ergänzt. Gleichnamige Einträge werden dabei automatisch als "Bossname A", "Bossname B", usw. unterscheidbar gemacht.
+### Changed
+- **Item icon in the vote list:** A small icon now also appears before the item name in the looter window (a real item icon for real items, a tinted placeholder otherwise) — matching the council panel.
+- **Vote list in the looter window reworked, less cramped:** Window and spacing enlarged (more inner padding per item, more space between item blocks, more room around the note field), vote buttons slightly larger with a more subdued border color instead of a very bold one — previously everything sat nearly edge-to-edge and looked like a wall of boxes, especially with several items running at once.
+- **A vote row closes/marks itself immediately after voting:** Instead of a "Vote cast!" intermediate state with a 2.5-second delay, the row now immediately shows "✓ Voted: <option>" — with several items running at once, this no longer wastes any time.
+- **WoWUtils import across multiple difficulties:** A repeated import (e.g. pasting the Normal composition first, then the Heroic one) no longer overwrites the entire list. Entries are now merged based on EncounterID + Difficulty, so multiple difficulties of the same boss can stay in the list at the same time. The new Reset button is used to clear it completely.
+- **Split-raid support in the WoWUtils import:** If a second import with a different roster is pasted for the same boss and difficulty (e.g. Team A / Team B for splits), it's no longer overwritten but added as its own entry. Entries with the same name are automatically made distinguishable as "Boss Name A", "Boss Name B", etc.
 
-### Behoben
-- **Leere Kästchen statt Symbolen im Council-Panel:** Die neuen Symbole (★ ☆ ● ✓) für den Council-Stimmen-Button, die Notiz-Markierung und die Trade-Erinnerung wurden von WoWs Standard-Spielschriftarten nicht unterstützt und dadurch als leeres Kästchen ("Tofu") dargestellt. Ersetzt durch reinen ASCII-Text (z. B. "CV" statt ★) bzw. durch eine echte Textur bei der Trade-Erinnerung.
-- **Spaltenüberschriften im Council-Panel nicht auf Höhe der Werte darunter:** Die Header (Player/iLvl/Vote/Roll/CV) waren ohne feste Breite und Ausrichtung positioniert, während die Werte darunter teils zentriert in fester Breite sitzen (z. B. Roll-Zahl, iLvl) — dadurch liefen Überschrift und Wert sichtbar auseinander. Jede Überschrift hat jetzt exakt dieselbe Breite, Ausrichtung und X-Position wie ihre Spalte.
-- **1-100 Rolls blieben unsichtbar, obwohl aktiviert:** `LC.GetRollsEnabled()` prüfte nur `UnitIsGroupLeader("player")`, was ohne Gruppe (z. B. beim Solo-Testen) `false` zurückgibt — dadurch griff immer der (nie synchronisierte) Raid-Wert statt der eigenen Einstellung, und die Rolls-Spalte blieb ausgeblendet. Nutzt jetzt denselben Fallback wie `GetButtonConfig`: die eigene Einstellung gilt auch, wenn (noch) keine Raid-Konfiguration vorliegt.
-- **Gleichzeitig gedroppte Items überschrieben sich gegenseitig im Loot Council:** Vote-Popup und Council-Panel konnten bisher immer nur genau einen Roll gleichzeitig anzeigen — droppte ein Boss mehrere Items auf einmal (der Normalfall, nicht die Ausnahme), riss jeder neue Roll das Fenster des vorherigen sofort weg, bevor überhaupt abgestimmt bzw. zugewiesen werden konnte. Siehe die neue Listen-/Tab-Ansicht oben, die dieses Problem grundlegend behebt statt nur zu kaschieren.
-- **Vergleich mit dem aktuell getragenen Item im Council-Panel funktionierte nie:** `C_Item.GetItemInfo()` liefert eine Liste einzelner Werte zurück, kein Table — der Code hat aber nur den ersten Rückgabewert (den Item-Namen, einen reinen String) in einer Variablen gespeichert und anschließend mit `["equipLoc"]` bzw. `["itemLevel"]` darauf zugegriffen. Ein String liefert bei so einem Zugriff still `nil` zurück, wodurch für kein einziges Item jemals ein passender Ausrüstungsslot gefunden wurde — betraf nicht nur den Test-Modus, sondern jede echte Lootvergabe. Icon und Itemstufe des aktuell getragenen Vergleichsitems werden jetzt korrekt angezeigt.
-- **"Zuweisung ändern" im Council-Panel löste fälschlich eine Neuzuweisung aus:** Das Untermenü fragte beim Rechtsklick (wenn das Item bereits vergeben war) mit dem "erneut zuweisen?"-Bestätigungsdialog nach, obwohl es eigentlich nur den angezeigten Vote eines Spielers korrigieren sollte (z. B. wenn jemand per Whisper statt per Klick abgestimmt hat). Der Menüpunkt heißt jetzt "Vote ändern" und ändert wirklich nur den Vote — ohne Zuweisung, Ankündigung oder Bestätigungsdialog. Tatsächliches Zuweisen (inkl. Neuzuweisung mit Bestätigung) läuft ausschließlich über "Zuweisen" bzw. "Ohne Grund zuweisen".
-- **Komplette Neuordnung der "Raid-weite Einstellungen"-Box (Loot Council):** Die Box (Titel, Rollen-Status, Trennlinie, Vote-Timer-Slider, alle Labels/Eingabefelder/Buttons) positioniert sich jetzt vollständig selbst: Jedes Element hängt am tatsächlich gemessenen unteren Rand des vorherigen Elements statt an hartkodierten Pixelwerten. Das behebt mehrere zusammenhängende Bugs auf einen Schlag:
-  - Labels mit längerem (v. a. deutschem) Text ragten über den rechten Rand der Box hinaus → jetzt feste Breite mit Wortumbruch.
-  - Nach einem Font-/Größenwechsel über `KART.UpdateStyles()` (läuft erst nach dem Bau des Panels) verschob sich der Zeilenumbruch nachträglich und überschnitt die Eingabefelder → Layout wird jetzt automatisch neu berechnet, sowohl nach `UpdateStyles()` als auch nach jedem Wechsel des Rollen-Status-Texts (Raidleiter/Mitglied).
-  - Die Test-Buttons und der Loot-History-Button darunter ragten in die Box hinein, weil sie an einer fixen Höhe hingen, die von der alten statischen Boxhöhe ausging → jetzt am tatsächlichen unteren Rand der Box verankert.
-  - Die Box ist außerdem etwas breiter (280→295px) und nutzt so vorhandenen Platz besser aus; der scrollbare Bereich im Hauptfenster wurde vorsorglich vergrößert (600→750px), damit bei größeren Schriftgrößen nichts unten aus dem sichtbaren/scrollbaren Bereich herausfällt.
+### Fixed
+- **Empty boxes instead of icons in the council panel:** The new symbols (★ ☆ ● ✓) for the council vote button, the note marker, and the trade reminder weren't supported by WoW's default game fonts and were rendered as empty boxes ("tofu"). Replaced with plain ASCII text (e.g. "CV" instead of ★) or, for the trade reminder, with a real texture.
+- **Column headers in the council panel didn't align with the values below them:** The headers (Player/iLvl/Vote/Roll/CV) had no fixed width or alignment, while the values below them sit centered at a fixed width in some cases (e.g. roll number, iLvl) — causing header and value to visibly drift apart. Every header now has exactly the same width, alignment, and X position as its column.
+- **1-100 rolls stayed invisible even when enabled:** `LC.GetRollsEnabled()` only checked `UnitIsGroupLeader("player")`, which returns `false` without a group (e.g. when solo testing) — this always fell back to the (never synced) raid value instead of the local setting, keeping the rolls column hidden. Now uses the same fallback as `GetButtonConfig`: the local setting also applies when there's (not yet) any raid configuration.
+- **Simultaneously dropped items overwrote each other in Loot Council:** The vote popup and council panel could previously only ever show exactly one roll at a time — if a boss dropped multiple items at once (the normal case, not the exception), each new roll immediately tore away the previous item's window before it could even be voted on or assigned. See the new list/tab view above, which fundamentally fixes this problem instead of just papering over it.
+- **Comparison with the currently equipped item in the council panel never worked:** `C_Item.GetItemInfo()` returns a list of individual values, not a table — but the code only stored the first return value (the item name, a plain string) in a variable and then accessed it with `["equipLoc"]` / `["itemLevel"]`. Such an access on a string silently returns `nil`, so no matching equipment slot was ever found for any item — this affected not just test mode but every real loot assignment. The icon and item level of the currently equipped comparison item are now shown correctly.
+- **"Change assignment" in the council panel incorrectly triggered a reassignment:** The submenu, when right-clicking an already-assigned item, showed a "reassign?" confirmation dialog even though it was only meant to correct a player's displayed vote (e.g. if someone voted via whisper instead of clicking). The menu entry is now called "Change Vote" and really only changes the vote — with no assignment, announcement, or confirmation dialog. Actual assignment (including reassignment with confirmation) now only happens via "Assign" or "Assign without reason".
+- **Complete rework of the "Raid-wide settings" box (Loot Council) layout:** The box (title, role status, divider, vote timer slider, all labels/inputs/buttons) now positions itself entirely on its own: every element anchors to the actually measured bottom edge of the previous element instead of hardcoded pixel values. This fixes several related bugs at once:
+  - Labels with longer text (especially German) stuck out past the right edge of the box → now have a fixed width with word wrap.
+  - After a font/size change via `KART.UpdateStyles()` (which runs only after the panel is built), the line wrap would shift afterward and overlap the input fields → the layout is now automatically recalculated, both after `UpdateStyles()` and after every change of the role status text (raid lead/member).
+  - The test buttons and the loot history button below stuck into the box because they were anchored at a fixed height based on the old static box height → now anchored to the box's actual bottom edge.
+  - The box is also somewhat wider (280→295px), making better use of the available space; the scrollable area in the main window was proactively enlarged (600→750px) so nothing falls out of the visible/scrollable area at larger font sizes.
 
 ## [1.9.2] - 2026-07-07
-### Behoben
-- **Überlappender Text im Loot-Council-Tab:** In der neuen "Raid-weite Einstellungen"-Box standen Titel und Rollen-Status (z. B. "Du bist Raidleiter") nebeneinander auf derselben Zeile in einer nur 280px breiten Box und kollidierten dadurch in der Mitte. Beide Texte stehen jetzt untereinander und wurden deutlich gekürzt; alle darunterliegenden Elemente wurden entsprechend neu positioniert.
+### Fixed
+- **Overlapping text in the Loot Council tab:** In the new "Raid-wide settings" box, the title and role status (e.g. "You are the raid lead") sat side by side on the same line in a box only 280px wide and collided in the middle. Both texts now sit stacked and were shortened significantly; all elements below were repositioned accordingly.
 
-### Entfernt
-- **`Minimap.lua`:** Tote Datei, die seit Version 1.1.1 nicht mehr in der TOC geladen wurde (ersetzt durch LibDBIcon), aber nie tatsächlich aus dem Projekt gelöscht wurde. Enthielt u. a. eine zweite, nie ausgeführte Version von `KART.UpdateMinimapButton()`.
-- **Verwaiste Lokalisierungs-Strings:** `BC_REPORT_ENCHANTS`, `BC_REPORT_GEMS`, `BC_REPORT_OIL` (nie mit einem Report-Feld verknüpft), `LC_DESC_COUNCIL` (nie als Tooltip verdrahtet), `LC_NO_VOTE` (Code nutzt stattdessen einen hartcodierten Platzhalter) und `SET_TITLE_SIZE` (Duplikat von `LABEL_FONT_SIZE_TITLE`).
+### Removed
+- **`Minimap.lua`:** Dead file that hadn't been loaded by the TOC since version 1.1.1 (replaced by LibDBIcon) but was never actually deleted from the project. Among other things, it contained a second, never-executed version of `KART.UpdateMinimapButton()`.
+- **Orphaned localization strings:** `BC_REPORT_ENCHANTS`, `BC_REPORT_GEMS`, `BC_REPORT_OIL` (never wired to a report field), `LC_DESC_COUNCIL` (never wired as a tooltip), `LC_NO_VOTE` (the code uses a hardcoded placeholder instead), and `SET_TITLE_SIZE` (duplicate of `LABEL_FONT_SIZE_TITLE`).
 
-### Sonstiges
-- **Fehlende deutsche Übersetzungen ergänzt:** `DESC_LANGUAGE`, `DESC_SELECT_FONT` und `RC_REASON_SEND` fielen bisher automatisch auf Englisch zurück und sind jetzt vollständig übersetzt.
+### Other
+- **Added missing German translations:** `DESC_LANGUAGE`, `DESC_SELECT_FONT`, and `RC_REASON_SEND` previously fell back to English automatically and are now fully translated.
 
 ## [1.9.1] - 2026-07-07
-### Behoben
-- **Lua-Fehler beim Login:** `BuildSettingsPanel` in LootCouncil.lua griff beim Aufbau der Oberfläche direkt auf `KART_Settings.lcMinQuality` zu — zu diesem Zeitpunkt existiert die SavedVariable aber noch nicht (sie wird erst bei `ADDON_LOADED` initialisiert). Der Mindest-Qualitäts-Button verwendet jetzt einen Platzhaltertext beim Aufbau; der echte gespeicherte Wert wird wie vorgesehen unmittelbar danach nachgezogen.
+### Fixed
+- **Lua error on login:** `BuildSettingsPanel` in LootCouncil.lua accessed `KART_Settings.lcMinQuality` directly while building the UI — but at that point the SavedVariable doesn't exist yet (it's only initialized on `ADDON_LOADED`). The minimum quality button now uses placeholder text while building; the real stored value is pulled in immediately afterward as intended.
 
 ## [1.9.0] - 2026-07-06
-### Hinzugefügt
-- **Modul-Schalter für Loot Council, Buff-Checker und WoWUtils:** Jedes Modul lässt sich jetzt einzeln komplett deaktivieren — praktisch während der Testphase (z. B. bei Konflikten mit RCLootCouncil) oder um CPU zu sparen, wenn Raider bestimmte Funktionen nicht brauchen.
-  - Beim Deaktivieren von Loot Council werden keinerlei Nachrichten anderer KART-Nutzer mehr verarbeitet, kein Auto-Pass, keine Popups.
-  - Beim Deaktivieren des Buff-Checkers bleibt der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bewusst aktiv — nur das eigene Fenster wird abgeschaltet, damit der Raidleiter weiterhin korrekte Daten über diesen Spieler sieht.
-- **Warnsymbol im Council-Panel:** Zeigt pro Raider ein rotes „!“ (mit Tooltip), wenn kein KART erkannt wurde, eine veraltete Version läuft oder der Spieler Loot Council lokal deaktiviert hat.
+### Added
+- **Module toggles for Loot Council, Buff Checker, and WoWUtils:** Each module can now be individually disabled entirely — handy during a testing phase (e.g. when conflicting with RCLootCouncil) or to save CPU when raiders don't need certain features.
+  - Disabling Loot Council stops processing any messages from other KART users entirely — no auto-pass, no popups.
+  - Disabling the Buff Checker deliberately keeps the background KART sync active (oil/ilvl/gear answers for others) — only your own window is turned off, so the raid lead still sees correct data about this player.
+- **Warning icon in the council panel:** Shows a red "!" per raider (with tooltip) if no KART was detected, an outdated version is running, or the player has disabled Loot Council locally.
 
-### Geändert
-- **Raid-weite Autorität für Loot Council:** Abstimmungs-Timer, Vote-Buttons, zusätzliche Council-Mitglieder und Mindest-Itemqualität gelten jetzt immer gemäß den Einstellungen des Raidleiters — nicht mehr die lokalen Einstellungen jedes einzelnen Spielers. Verhindert, dass jemand z. B. die Abstimmungszeit lokal verkürzt oder sich selbst über die eigene Council-Liste unbefugt Zuweisungsrechte verschafft.
-  - **Auto-Pass bleibt davon unberührt** und ist weiterhin eine rein persönliche Einstellung.
-  - Die betroffenen Einstellungen sind im Options-Menü jetzt visuell in einer eigenen Box abgegrenzt, inklusive Live-Anzeige, ob die eigenen Einstellungen gerade wirksam sind („Du bist Raidleiter“ / „Einstellungen des Raidleiters gelten“).
+### Changed
+- **Raid-wide authority for Loot Council:** Voting timer, vote buttons, additional council members, and minimum item quality now always follow the raid lead's settings — not each individual player's local settings anymore. Prevents someone from, say, locally shortening the voting time or granting themselves unauthorized assignment rights via their own council list.
+  - **Auto-pass is unaffected by this** and remains a purely personal setting.
+  - The affected settings are now visually set apart in their own box in the options menu, including a live display of whether your own settings currently apply ("You are the raid lead" / "The raid lead's settings apply").
 
 ## [1.8.1] - 2026-07-06
-### Geändert
-- **Buff-Checker Design:** Ready-Check-Begründungen werden nicht mehr als Inline-Text angezeigt, sondern als kleines goldenes Info-Icon direkt nach dem Namen — der volle Text erscheint im Tooltip beim Hovern. Das Layout bleibt dadurch unabhängig von der Textlänge stabil, ganz ohne Fenster-Resize.
+### Changed
+- **Buff Checker design:** Ready check reasons are no longer shown as inline text, but as a small golden info icon right after the name — the full text appears in the tooltip on hover. This keeps the layout stable regardless of text length, with no window resizing.
 
-### Behoben
-- **Addon-Symbol in der WoW-Addonliste:** Der TOC-Datei fehlte das `## IconTexture`-Feld, wodurch in der Blizzard-Addonliste (ESC → AddOns) statt des Icons ein Fragezeichen-Platzhalter angezeigt wurde. Das Minimap-Icon war davon nicht betroffen (eigener Mechanismus über LibDBIcon). Jetzt wird `KAimg.jpg` auch dort korrekt referenziert; sichtbar nach einem vollständigen Client-Neustart bzw. beim nächsten Login-Bildschirm.
-- **Buff-Checker: Ready-Check-Begründungen überlappten Buff-Icons:** Lange "Nicht bereit"-Texte (z. B. AFK-Gründe) wurden bisher direkt als Text hinter den Spielernamen gehängt, in einer Spalte mit fester Breite ohne Zeilenumbruch. Dadurch überlappten längere Texte sofort die Buff-Icons, bis man das Fenster manuell breiter zog.
+### Fixed
+- **Addon icon in the WoW addon list:** The TOC file was missing the `## IconTexture` field, causing a question-mark placeholder to be shown instead of the icon in the Blizzard addon list (ESC → AddOns). The minimap icon was unaffected (its own mechanism via LibDBIcon). `KAimg.jpg` is now correctly referenced there too; visible after a full client restart or at the next login screen.
+- **Buff Checker: ready check reasons overlapped buff icons:** Long "not ready" texts (e.g. AFK reasons) used to be appended directly as text after the player name, in a fixed-width column with no word wrap. As a result, longer texts immediately overlapped the buff icons until the window was manually widened.
 
 ## [1.8.0] - 2026-07-06
-### Geändert
-- **Tab „Auto-Invite" entfernt, Tab „Auto-Promote" → „Automation":** Da die Keyword-basierte Auto-Invite-Funktion (Whisper/Gildenchat/Battle.net) ihren einzigen verbleibenden Zweck erfüllt, wurde sie in den Auto-Promote-Tab verschoben. Da dieser Tab jetzt mehrere Automatisierungs-Funktionen bündelt (Auto-Invite per Keyword, Auto-Promote, Auto-Raid-Convert), wurde er in „Automation" umbenannt.
-- **„Automatisch in Raid umwandeln":** Die Einstellung ist aus dem Settings-Tab in den neuen Automation-Tab gewandert, direkt neben die anderen automatischen Gruppen-Funktionen.
+### Changed
+- **"Auto-Invite" tab removed, "Auto-Promote" tab → "Automation":** Since the keyword-based auto-invite feature (whisper/guild chat/Battle.net) served its one remaining purpose, it was moved into the Auto-Promote tab. Since this tab now bundles several automation features (keyword auto-invite, auto-promote, auto-raid-convert), it was renamed to "Automation".
+- **"Automatically convert to raid":** This setting moved from the Settings tab into the new Automation tab, right next to the other automatic group functions.
 
-### Entfernt
-- **Bulk-Invite ("Raid-Zusammenstellung einfügen"):** Die alte Copy-Paste-Funktion im Auto-Invite-Tab ist komplett entfernt worden — sie wurde vollständig durch den WoWUtils Import abgelöst, der dieselbe Aufgabe zuverlässiger und komfortabler löst.
+### Removed
+- **Bulk invite ("Paste raid composition"):** The old copy-paste feature in the Auto-Invite tab has been completely removed — it was fully replaced by WoWUtils Import, which solves the same task more reliably and conveniently.
 
 ## [1.7.0] - 2026-07-06
-### Hinzugefügt
-- **Mindest-Itemqualität für Loot Council:** Neue Einstellung (Standard: Episch) — Items unterhalb der gewählten Qualität lösen den Loot Council gar nicht erst aus; das normale WoW-Würfelfenster greift stattdessen. Verhindert unnötige Abstimmungs-Popups bei Trash-Loot.
-- **Sperre gegen Doppelzuweisung:** Wird ein Item über das Zuweisungs-Menü ein zweites Mal vergeben (z. B. aus Versehen), erscheint vor der eigentlichen Zuweisung ein Bestätigungsdialog mit dem bisherigen und neuen Empfänger.
-- **Vollständig synchronisierte Loot-Historie:** Jeder KART-Nutzer im Raid protokolliert nun automatisch dieselben Zuweisungen mit (Grund inklusive) — nicht mehr nur der Lootmaster. Dadurch hat jeder Spieler eine vollständige, gemeinsame Historie, unabhängig davon, wer gerade zuweist.
-  - **Difficulty-Spalte:** Jeder Historien-Eintrag speichert jetzt zusätzlich die Raid-Schwierigkeitsstufe (z. B. Heroic, Mythic) zum Zeitpunkt der Vergabe.
-  - **Automatischer Nachhol-Sync:** Betritt ein Spieler einen Raid erneut, nachdem er eine Session verpasst hat, fragt sein Client einmalig und still bei den anderen KART-Nutzern nach fehlenden Einträgen an. Antworten laufen ausschließlich über den unsichtbaren Addon-Kanal (kein Chat/Whisper sichtbar für den Spieler), sind auf die letzten 30 fehlenden Einträge bzw. 14 Tage begrenzt und werden leicht zeitversetzt beantwortet, um Traffic-Spitzen zu vermeiden.
+### Added
+- **Minimum item quality for Loot Council:** New setting (default: Epic) — items below the selected quality don't trigger Loot Council at all; the normal WoW roll window is used instead. Prevents unnecessary voting popups for trash loot.
+- **Lock against double assignment:** If an item is assigned a second time via the assignment menu (e.g. by accident), a confirmation dialog appears before the actual assignment, showing both the previous and the new recipient.
+- **Fully synchronized loot history:** Every KART user in the raid now automatically logs the same assignments (reason included) — not just the loot master anymore. This gives every player a complete, shared history regardless of who is currently assigning.
+  - **Difficulty column:** Every history entry now additionally stores the raid difficulty (e.g. Heroic, Mythic) at the time of the assignment.
+  - **Automatic catch-up sync:** If a player rejoins a raid after missing a session, their client silently queries the other KART users once for missing entries. Responses run exclusively over the invisible addon channel (no chat/whisper visible to the player), are capped at the last 30 missing entries or 14 days, and are answered with a slight delay to avoid traffic spikes.
 
 ## [1.6.0] - 2026-07-06
-### Hinzugefügt
-- **Loot-Historie:** Neues Modul (`LootHistory.lua`), das jede über den Loot Council vergebene Beute dauerhaft protokolliert (SavedVariable `KART_LootHistory`, max. 500 Einträge).
-  - Neues Fenster mit Datum, klassengefärbtem Spielernamen, Item (Icon + Hover-Tooltip) und Grund.
-  - **Filter:** Freitextsuche über den Item-Namen, Dropdown-Filter nach Spieler, Dropdown-Filter nach Grund (inkl. „Ohne Grund"), sowie ein Reset-Button.
-  - Fußzeile zeigt „X von Y Einträgen"; **„Verlauf leeren"**-Button mit Bestätigungsdialog.
-  - Fenster ist bewegbar, Position wird gespeichert; über einen neuen Button „Loot-Historie" im Loot-Council-Optionsmenü erreichbar.
-- **Zuweisungs-Menü im Council-Panel:** Rechtsklick auf eine Raider-Zeile öffnet jetzt ein Kontextmenü statt sofort zuzuweisen:
-  - **Zuweisen:** Vergibt das Item mit der aktuell abgegebenen Stimme des Spielers als Grund.
-  - **Zuweisung ändern:** Untermenü mit allen konfigurierten Vote-Buttons, um den Grund nachträglich zu korrigieren (z. B. von BIS auf Upgrade).
-  - **Ohne Grund zuweisen:** Vergibt das Item ohne Grundangabe — praktisch, wenn niemand das Item will, aber die Loot-Historie nicht verfälscht werden soll.
-  - Das Panel schließt sich dabei nie von selbst; nur der „Schließen"-Button oder das „×" schließen es.
+### Added
+- **Loot History:** New module (`LootHistory.lua`) that permanently logs every item assigned via Loot Council (SavedVariable `KART_LootHistory`, max. 500 entries).
+  - New window with date, class-colored player name, item (icon + hover tooltip), and reason.
+  - **Filters:** Free-text search over the item name, dropdown filter by player, dropdown filter by reason (including "No reason"), plus a reset button.
+  - Footer shows "X of Y entries"; **"Clear History"** button with a confirmation dialog.
+  - The window is movable, its position is saved; reachable via a new "Loot History" button in the Loot Council options menu.
+- **Assignment menu in the council panel:** Right-clicking a raider row now opens a context menu instead of assigning immediately:
+  - **Assign:** Awards the item using the player's currently cast vote as the reason.
+  - **Change assignment:** Submenu with all configured vote buttons to correct the reason afterward (e.g. from BIS to Upgrade).
+  - **Assign without reason:** Awards the item with no reason given — handy when nobody wants the item but the loot history shouldn't be skewed.
+  - The panel never closes on its own; only the "Close" button or the "×" close it.
 
-### Geändert
-- **Linksklick im Council-Panel:** Hat jetzt keine Funktion mehr (verhinderte versehentliche Zuweisungen); alle Aktionen laufen über das neue Rechtsklick-Menü.
-- **Item-Icon im Council-Panel:** Jede Raider-Zeile zeigt zusätzlich zur Item-Stufe das Icon des aktuell getragenen Vergleichs-Items im passenden Slot.
-- **Echte Item-Tooltips:** Der Item-Name im Vote-Popup und im Council-Panel ist jetzt hoverbar und zeigt den vollständigen Item-Tooltip; im Council-Panel wird zusätzlich das getragene Item des jeweiligen Raiders per nativem Vergleichs-Tooltip (`ShoppingTooltip`) gegenübergestellt.
-- **Lootmaster-Fenster schließt nicht mehr automatisch** beim Zuweisen — ermöglicht Korrekturen ohne erneutes Öffnen.
+### Changed
+- **Left-click in the council panel:** No longer does anything (prevented accidental assignments); all actions now run through the new right-click menu.
+- **Item icon in the council panel:** Every raider row now also shows the icon of the currently equipped comparison item in the matching slot, alongside the item level.
+- **Real item tooltips:** The item name in the vote popup and the council panel is now hoverable and shows the full item tooltip; the council panel additionally compares each raider's equipped item side by side using the native comparison tooltip (`ShoppingTooltip`).
+- **The loot master window no longer closes automatically** when assigning — allows corrections without reopening it.
 
 ## [1.5.0] - 2026-07-01
-### Hinzugefügt
-- **WoWUtils Import:** Neues Modul (`Invite.lua`) und neuer Tab „WoWUtils" in der Sidebar.
-  - Raid-Setups können direkt aus WoWUtils in das Addon eingefügt werden (Boss-für-Boss-Format mit `EncounterID`, `Difficulty`, `Name` und `invitelist`).
-  - Nach dem Importieren erscheint für jeden Boss eine eigene Zeile mit der Spieleranzahl.
-  - **[Einladen]:** Lädt alle Spieler der jeweiligen Boss-Liste in den Raid ein — Mitglieder die bereits im Raid sind werden übersprungen (Ausgabe: „X eingeladen. (Y bereits im Raid)").
-  - **[Entfernen]:** Kickt alle aktuellen Raid-Mitglieder, die NICHT in der Boss-Liste stehen — ideal zum schnellen Umbau zwischen Bosskompositionen.
-  - Der Import wird sitzungsübergreifend gespeichert; beim Login wird er automatisch geparst.
-  - Scrollbalken im Eingabefeld folgt dem Addon-Farbschema.
+### Added
+- **WoWUtils Import:** New module (`Invite.lua`) and new "WoWUtils" tab in the sidebar.
+  - Raid setups can be pasted directly from WoWUtils into the addon (boss-by-boss format with `EncounterID`, `Difficulty`, `Name`, and `invitelist`).
+  - After importing, each boss gets its own row with the player count.
+  - **[Invite]:** Invites all players from that boss's list into the raid — members already in the raid are skipped (output: "X invited. (Y already in the raid)").
+  - **[Remove]:** Kicks all current raid members who are NOT on the boss list — ideal for quickly switching between boss compositions.
+  - The import is saved across sessions; parsed automatically on login.
+  - The scrollbar in the input field now follows the addon's color scheme.
 
-### Geändert
-- **Auto-Pass:** Wird jetzt sofort beim Start einer Loot-Roll ausgelöst (`START_LOOT_ROLL`), nicht erst nach der Gewinner-Bekanntgabe — verhindert versehentliche Need/Gier/Transmog-Klicks des Raidleiters.
-- **Notizfeld im Vote-Popup:** Raider können ihrer Stimme einen optionalen Freitext-Kommentar hinzufügen (max. 80 Zeichen). Die Notiz ist für Council-Mitglieder im Hover-Tooltip der jeweiligen Zeile sichtbar.
-- **Bewegbare Fenster mit Positionsspeicherung:** Vote-Popup und Council-Panel sind jetzt per Drag verschiebbar; die Position wird in den SavedVariables gespeichert und beim nächsten Öffnen wiederhergestellt.
-- **Sortierung im Council-Panel:** Zeilen werden nach Button-Index aufsteigend sortiert (BIS zuerst, dann Upgrade usw.); Nicht-Abstimmer landen am Ende.
-- **Rechtsklick zum Neu-Vergeben:** Ein Rechtsklick auf eine Zeile im Council-Panel vergibt den Loot neu, ohne das Panel zu schließen — für schnelle Korrekturen ohne erneutes Öffnen.
-- **Gewinner-Hervorhebung:** Die zuletzt gewählte Gewinner-Zeile wird grün hinterlegt und bleibt markiert, bis das Panel geschlossen oder ein neuer Gewinner gewählt wird.
-- **Test-Modus getrennt:** Der einzelne „Test starten"-Button wurde durch zwei separate Buttons ersetzt:
-  - **Test: Looter** — zeigt das Vote-Popup inkl. Notizfeld, unabhängig von der eigenen Rolle.
-  - **Test: Lootmaster** — zeigt das Council-Panel inkl. vorbefüllter Votes (aus aktuellen Gruppenmitgliedern), unabhängig von der eigenen Rolle.
-- **Versionsnummer im Titel:** Die Anzeige „v1.3.0" im Hauptfenster-Titel wird jetzt immer aus den Addon-Metadaten gelesen und ist damit immer korrekt.
+### Changed
+- **Auto-Pass:** Now triggers immediately when a loot roll starts (`START_LOOT_ROLL`), instead of only after the winner is announced — prevents the raid lead from accidentally clicking Need/Greed/Transmog.
+- **Note field in the vote popup:** Raiders can add an optional free-text comment to their vote (max. 80 characters). The note is visible to council members in that row's hover tooltip.
+- **Movable windows with saved position:** The vote popup and council panel can now be dragged; the position is saved in the SavedVariables and restored the next time they're opened.
+- **Sorting in the council panel:** Rows are sorted ascending by button index (BIS first, then Upgrade, etc.); non-voters end up at the bottom.
+- **Right-click to reassign:** Right-clicking a row in the council panel reassigns the loot without closing the panel — for quick corrections without reopening it.
+- **Winner highlight:** The most recently chosen winner row is highlighted green and stays marked until the panel is closed or a new winner is chosen.
+- **Test mode split up:** The single "Start Test" button was replaced by two separate buttons:
+  - **Test: Looter** — shows the vote popup including the note field, regardless of your own role.
+  - **Test: Loot Master** — shows the council panel including pre-filled votes (from current group members), regardless of your own role.
+- **Version number in the title:** The "v1.3.0" display in the main window title is now always read from the addon metadata, so it's always correct.
 
 ## [1.4.0] - 2026-07-01
-### Hinzugefügt
-- **Loot Council:** Neues Modul (`LootCouncil.lua`) für die koordinierte Lootverteilung im Raid.
-  - Beim Betreten eines Raids wird der Raidleiter gefragt, ob der Loot Council für diese Session aktiviert werden soll – für Spaßruns einfach ablehnen.
-  - **Raider-Abstimmung:** Sobald ein Item zur Verteilung ansteht (`START_LOOT_ROLL`), erscheint bei allen KART-Nutzern gleichzeitig ein Popup mit konfigurierbaren Vote-Buttons (Standard: BIS / Upgrade / Offspec / Sonstiges / Pass). Die Abstimmungszeit ist einstellbar (Standard: 20 Sek).
-  - **Council-Panel:** Raidleiter und Assistenten sehen stattdessen ein scrollbares Panel mit allen Raidern und deren Votes (klassengefärbt). Ein Klick auf einen Spieler wählt ihn als Gewinner.
-  - **Gewinner-Benachrichtigung:** Der ausgewählte Spieler erhält ein grünes Hinweisfenster. Die Entscheidung wird automatisch im Raid- bzw. Gruppenchat angekündigt.
-  - **Auto-Pass:** Optionaler Haken – wenn aktiv, passen alle Nicht-Gewinner mit KART sofort und ohne Rückfrage.
-  - **Konfigurierbare Buttons:** Anzahl und Bezeichnung der Vote-Buttons frei einstellbar (Semikolon-getrennt, bis zu 6 Buttons).
-  - **Manueller Toggle:** Session lässt sich jederzeit über den neuen Tab „Loot Council" im Hauptfenster oder per Schaltfläche umschalten.
-  - **Erweiterte Council-Mitglieder:** Neben Raidleiter und Assistenten können beliebige Spieler per Namen in den Council berufen werden – sie sehen das Council-Panel, ohne Assistenten-Rang zu benötigen.
-  - **Test-Funktion:** „Test starten" simuliert den kompletten LC-Ablauf mit einem Classic-Dummy-Item. Im Raid werden vorhandene Gruppenmitglieder mit zufälligen Teststimmen vorbelegt; solo erscheint das Vote-Popup zur Überprüfung des Button-Layouts.
-- **Neuer Tab:** „Loot Council" in der Sidebar des Hauptfensters mit allen zugehörigen Einstellungen.
-- **Lokalisierung:** Alle neuen Texte auf Deutsch und Englisch übersetzt.
+### Added
+- **Loot Council:** New module (`LootCouncil.lua`) for coordinated loot distribution in the raid.
+  - When entering a raid, the raid lead is asked whether Loot Council should be enabled for this session – simply decline for fun runs.
+  - **Raider voting:** As soon as an item is up for distribution (`START_LOOT_ROLL`), a popup with configurable vote buttons (default: BIS / Upgrade / Offspec / Other / Pass) appears simultaneously for all KART users. The voting time is adjustable (default: 20 sec).
+  - **Council panel:** The raid lead and assistants instead see a scrollable panel with all raiders and their votes (class-colored). Clicking a player selects them as the winner.
+  - **Winner notification:** The chosen player gets a green notification window. The decision is automatically announced in raid/party chat.
+  - **Auto-Pass:** Optional checkbox – when enabled, all non-winners with KART pass immediately with no confirmation.
+  - **Configurable buttons:** The number and labels of the vote buttons are freely configurable (semicolon-separated, up to 6 buttons).
+  - **Manual toggle:** The session can be toggled at any time via the new "Loot Council" tab in the main window or a button.
+  - **Extended council members:** In addition to the raid lead and assistants, any player can be named to the council by name – they see the council panel without needing assistant rank.
+  - **Test function:** "Start Test" simulates the entire Loot Council flow with a classic dummy item. In a raid, existing group members are pre-filled with random test votes; solo, the vote popup appears to check the button layout.
+- **New tab:** "Loot Council" in the main window sidebar with all related settings.
+- **Localization:** All new text translated into German and English.
 
 ## [1.3.0] - 2026-06-12
-### Hinzugefügt
-- **Erweiterte Ansicht:** Der Buff-Checker besitzt nun einen Button, um zwischen "Ready Check" (Standard-Buffs) und "Erweitert" umzuschalten.
-- **Ausrüstungs-Check:** In der erweiterten Ansicht werden nun das exakte Item-Level, Waffenöl sowie fehlende Verzauberungen und Edelsteine über den KART-Sync angezeigt.
-- **Gear-Tooltips:** Wenn ein Spieler fehlende Verzauberungen oder Edelsteine hat, zeigt ein Tooltip im Buff-Checker beim Hovern exakt an, auf welchen Rüstungs-Slots diese fehlen.
-- **Scrollbares Textfeld:** Das Eingabefeld für den Bulk-Invite (Raid-Zusammenstellung) wurde vergrößert und mit einem dynamischen Scrollbalken versehen.
+### Added
+- **Extended view:** The Buff Checker now has a button to switch between "Ready Check" (standard buffs) and "Extended".
+- **Gear check:** The extended view now shows the exact item level, weapon oil, and missing enchants/gems via KART sync.
+- **Gear tooltips:** If a player is missing enchants or gems, a tooltip in the Buff Checker shows exactly which armor slots are missing them on hover.
+- **Scrollable text field:** The input field for bulk invite (raid composition) was enlarged and given a dynamic scrollbar.
 
-### Geändert
-- **Standardeinstellungen:** Die Raidlead-Leiste und der Buff-Checker sind bei Erstinstallation nun standardmäßig deaktiviert, um das Interface aufgeräumt zu halten.
-- **ESC-Taste:** Das Hauptfenster und alle Texteingabefelder lassen sich nun standardkonform mit der ESC-Taste abwählen bzw. schließen.
+### Changed
+- **Default settings:** The raid lead bar and Buff Checker are now disabled by default on first install, to keep the interface tidy.
+- **ESC key:** The main window and all text input fields can now be deselected/closed with the ESC key, as expected.
 
-### Behoben
-- **Netzwerk-Traffic:** Die Abfragen für die "Erweitert"-Ansicht (iLvl, Gear, Öl) werden nicht mehr im Hintergrund gespammt, sondern laden nur beim Wechseln der Ansicht oder beim Klick auf "Aktualisieren".
+### Fixed
+- **Network traffic:** Queries for the "Extended" view (iLvl, gear, oil) are no longer spammed in the background, but only load when switching views or clicking "Refresh".
 
 ## [1.2.0] - 2026-06-12
-### Hinzugefügt
-- **Erweiterter Ready-Check:** Wenn Spieler auf "Nicht bereit" klicken, öffnet sich nun ein kleines Fenster zur Angabe von Gründen (Bio, Trinken, 1 Min oder freier Text). Die Gründe werden dem Raidlead im Chat und direkt im Buff-Checker angezeigt.
-- **Addon-Synchronisation (KART Sync):** KART kommuniziert nun unsichtbar mit anderen KART-Nutzern im Raid. Dadurch wird u.A. aufgetragenes Waffenöl exakt ausgelesen, auch wenn Blizzard die API limitiert.
-- **Versions-Checker:** KART vergleicht Versionen innerhalb der Gilde/des Raids und gibt im Chat einen Hinweis aus, sobald eine neuere Version verfügbar ist. Über `/kart v` können die KART-Versionen der Mitspieler überprüft werden.
-- **Tooltips für Raidlead-Leiste:** Die Tasten auf der Raidlead-Leiste (Bereitschaftscheck, Weltmarker löschen, Pull-Timer) erklären nun ihre Funktion, wenn man mit der Maus darüberfährt.
-- **Addon Compartment Frame:** KART klinkt sich nun nahtlos in das moderne Minimap-Dropdown-Menü von WoW (Dragonflight/TWW) ein.
-- **Schriftart-Auswahl:** Dank LibSharedMedia-Integration kann die Schriftart des gesamten Addons nun in den Einstellungen geändert werden.
-- **Sprach-Auswahl:** Neues Dropdown-Menü in den Einstellungen, um die Addon-Sprache manuell zu überschreiben (Auto/Deutsch/Englisch).
-- **Buff-Checker Vorschau:** Ein neuer "Vorschau umschalten"-Button erlaubt es, das Layout und die Farben des Buff-Checkers anhand von Spieldaten zu testen, ohne in einem Raid zu sein.
+### Added
+- **Enhanced ready check:** When players click "Not Ready", a small window now opens to specify a reason (AFK, drink, 1 min, or free text). The reasons are shown to the raid lead in chat and directly in the Buff Checker.
+- **Addon sync (KART Sync):** KART now communicates invisibly with other KART users in the raid. Among other things, this reads out applied weapon oil exactly, even when Blizzard's API is limited.
+- **Version checker:** KART compares versions within the guild/raid and posts a chat hint as soon as a newer version is available. `/kart v` can be used to check the KART versions of other players.
+- **Tooltips for the raid lead bar:** The buttons on the raid lead bar (ready check, clear world markers, pull timer) now explain their function on hover.
+- **Addon Compartment frame:** KART now hooks seamlessly into WoW's modern minimap dropdown menu (Dragonflight/TWW).
+- **Font selection:** Thanks to LibSharedMedia integration, the addon's font can now be changed in the settings.
+- **Language selection:** New dropdown in the settings to manually override the addon language (Auto/German/English).
+- **Buff Checker preview:** A new "Toggle Preview" button allows testing the Buff Checker's layout and colors using sample data, without being in a raid.
 
-### Geändert
-- **Buff-Checker Layout:** Das Buff-Checker Fenster hat keine feste Breite mehr und kann horizontal skaliert werden. Die Namensspalte und Buff-Icons passen sich dynamisch der neuen Breite an, sodass auch lange Ready-Check-Gründe lesbar sind.
-- Die englischen Übersetzungen (enUS) wurden umfassend erweitert, um alle neuen Menüs und Gründe abzudecken.
+### Changed
+- **Buff Checker layout:** The Buff Checker window no longer has a fixed width and can be resized horizontally. The name column and buff icons now scale dynamically with the new width, so even long ready check reasons stay readable.
+- The English translations (enUS) were substantially expanded to cover all new menus and reasons.
 
-### Behoben
-- Layout-Fehler beim Ready-Check-Dialog behoben, der durch überlappende SetPoint-Befehle auftrat.
-- Fehler behoben, bei dem die Sprachdatei `enUS.lua` asynchron zur `deDE.lua` lief.
+### Fixed
+- Fixed a layout bug in the ready check dialog caused by overlapping SetPoint calls.
+- Fixed a bug where the `enUS.lua` language file was out of sync with `deDE.lua`.
 
 ## [1.1.1] - 2026-05-24
-### Geändert
-- Code-Bereinigung: Veraltete Datei `Minimap.lua` entfernt (Minimap-Logik wird nun sauberer über LibDBIcon gesteuert).
+### Changed
+- Code cleanup: removed the obsolete `Minimap.lua` file (minimap logic is now handled more cleanly via LibDBIcon).
 
-### Behoben
-- **Absturz beim Ändern der UI-Farben:** Die veraltete Farbauswahl-API wurde durch die moderne `ColorPickerFrame`-API ersetzt, die keine Abstürze mehr verursacht.
-- **Sicherheit (Taint):** Die automatische Schlachtzugs-Umwandlung bei Keyword- und Bulk-Invites blockiert nun korrekt während des Kampfes (`InCombatLockdown`), um Lua-Fehler zu vermeiden.
-- **Sicherheit (Taint):** Der Aktualisierungsprozess für den Pull-Timer-Button auf der Raidlead-Leiste wurde gegen Combat-Taints abgesichert (`GROUP_ROSTER_UPDATE`).
-- **Lokalisierung:** Fehlender Fallback für Spiel-Clients mit anderen Sprachen (z. B. Französisch, Russisch) korrigiert. Das Addon fällt nun in diesen Fällen immer fehlerfrei auf Englisch (enUS) zurück.
-- **Kritischer Fehler:** Die veraltete und in Retail WoW mittlerweile entfernte Funktion `table.wipe` im Buff-Checker wurde durch die moderne globale Funktion `wipe` ersetzt.
+### Fixed
+- **Crash when changing UI colors:** The deprecated color picker API was replaced with the modern `ColorPickerFrame` API, which no longer causes crashes.
+- **Taint safety:** Automatic raid conversion on keyword and bulk invites now correctly blocks during combat (`InCombatLockdown`) to avoid Lua errors.
+- **Taint safety:** The update process for the pull timer button on the raid lead bar was hardened against combat taints (`GROUP_ROSTER_UPDATE`).
+- **Localization:** Fixed a missing fallback for game clients using other languages (e.g. French, Russian). The addon now always falls back to English (enUS) cleanly in those cases.
+- **Critical bug:** The deprecated `table.wipe` function in the Buff Checker, since removed in retail WoW, was replaced with the modern global `wipe` function.
 
 ## [1.1.0] - 2026-05-21
-### Hinzugefügt
-- **Buff-Checker:** Neues Fenster zur Überprüfung von Raid-Buffs, Consumables und Haltbarkeit.
-- **Raidlead-Leiste:** Interaktive Leiste für Marker, Weltmarker, Ready-Checks und Pull-Timer.
-- **Lokalisierung:** Volle Unterstützung für Deutsch (deDE) und Englisch (enUS).
-- **Minimap-Management:** Integration von LibDBIcon für ein verschiebbares Icon.
-- **Moderner UI-Stil:** Komplett neue Slider und Checkboxen ohne Standard-WoW-Texturen.
-- **Tooltips:** Detaillierte Beschreibungen für alle Einstellungsoptionen.
+### Added
+- **Buff Checker:** New window for checking raid buffs, consumables, and durability.
+- **Raid Lead Bar:** Interactive bar for markers, world markers, ready checks, and pull timer.
+- **Localization:** Full support for German (deDE) and English (enUS).
+- **Minimap management:** Integration of LibDBIcon for a movable icon.
+- **Modern UI style:** Completely new sliders and checkboxes without default WoW textures.
+- **Tooltips:** Detailed descriptions for all settings options.
 
-### Geändert
-- Performance-Optimierungen durch Event-Throttling (Drosselung der Buff-Updates).
-- Architektur verbessert: Frames werden nun erst bei Bedarf geladen (Load-on-Demand).
-- Keyword-Suche auf Hash-Tabellen umgestellt für $O(1)$ Komplexität.
+### Changed
+- Performance optimizations via event throttling (throttled buff updates).
+- Improved architecture: frames are now only loaded on demand.
+- Keyword search switched to hash tables for $O(1)$ complexity.
 
-### Behoben
-- Fehler bei der String-Verknüpfung in der Sprachauswahl behoben.
-- "Table index is nil" Fehler in der Core-Initialisierung korrigiert.
-- Automatisches Umwandeln in Raid blockiert nun korrekt während des Kampfes (Taint-Vermeidung).
+### Fixed
+- Fixed a string concatenation bug in the language selector.
+- Fixed a "table index is nil" error in core initialization.
+- Automatic conversion to raid now correctly blocks during combat (taint avoidance).
 
 ## [1.0.0] - Initial Release
-### Hinzugefügt
-- Grundlegende Auto-Invite Funktionalität über Keywords.
-- Bulk-Invite System für Raid-Zusammenstellungen.
-- Auto-Promote System für Assistenten-Rollen.
+### Added
+- Basic auto-invite functionality via keywords.
+- Bulk invite system for raid compositions.
+- Auto-promote system for assistant roles.
 
 [Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.10.0...HEAD
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
@@ -230,8 +232,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 [1.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/releases/tag/v1.0.0
 
 <!--
-Hinweis: 1.4.0, 1.6.0, 1.7.0 und 1.8.0 haben keinen eigenen Git-Tag (in der Historie
-nicht als eigenständiger Commit-Stand nachweisbar) und sind daher hier nicht verlinkt.
-Ab v1.8.1 wird jede Version konsequent getaggt, sodass zukünftige Einträge vollständig
-verlinkt werden können.
+Note: 1.4.0, 1.6.0, 1.7.0, and 1.8.0 don't have their own git tag (not traceable as a
+standalone commit state in the history) and are therefore not linked here.
+From v1.8.1 onward, every version is consistently tagged, so future entries can be
+linked in full.
 -->
