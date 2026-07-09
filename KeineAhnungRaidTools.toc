@@ -5,6 +5,7 @@
 ## Version: 1.10.0
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.jpg
 ## SavedVariables: KART_Settings, KART_LootHistory, KART_LCOfficerNotes
+## X-Curse-Project-ID: 1603461
 
 Locales\enUS.lua
 Locales\deDE.lua

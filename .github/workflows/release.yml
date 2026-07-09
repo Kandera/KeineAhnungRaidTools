@@ -26,8 +26,6 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='dist' \
-            --exclude='*.jpg' \
-            --exclude='*.png' \
             . dist/KeineAhnungRaidTools/
           cd dist
           zip -r "../KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip" KeineAhnungRaidTools/
@@ -53,3 +51,15 @@ jobs:
           files: "KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip"
           draft: false
           prerelease: false
+
+  curseforge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package and upload to CurseForge
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

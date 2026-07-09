@@ -1,0 +1,12 @@
+package-as: KeineAhnungRaidTools
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .github
+  - .vscode
+  - .gitignore
+  - README.md
+  - LICENSE
