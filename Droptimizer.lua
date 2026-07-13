@@ -92,7 +92,9 @@ function DT.GetGainPercent(shortName, itemLink)
 end
 
 -- =====================================================================
---  Settings panel  (fills KART.DroptimizerPanel)
+--  Settings  (no dedicated tab — the toggle lives in Loot Council's settings,
+--  next to its other personal-preference checkboxes; sync status lives in
+--  General Settings, since it's about the companion app, not Loot Council itself)
 -- =====================================================================
 
 function DT.RefreshStatusLabel()
@@ -123,31 +125,35 @@ function DT.RefreshStatusLabel()
     DT.statusLabel:SetTextColor(0.6, 0.9, 0.6)
 end
 
-function DT.BuildPanel(parent)
+-- Fills the -110 slot reserved for this in LC.BuildSettingsPanel (LootCouncil.lua), right
+-- below CbAutoPass — a personal preference like that one, not raid-wide, so it doesn't belong
+-- in the raid-wide box.
+function DT.BuildLootCouncilToggle(parent)
     local L = KART.L
-
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 20, -20)
-    title:SetText(L.DT_TITLE or "Droptimizer Gains")
-    table.insert(KART.DynamicLabels, title)
 
     -- Master switch: fully disables the gain% column in Loot Council. The addon never holds a
     -- WoWUtils credential itself — all networking happens in the external KART Companion app,
     -- which only hands data to us via KART_WoWUtilsCache.
     DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
         parent, "KART_DTModuleEnabled",
-        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -45, function()
+        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -110, function()
             if KART.LC and KART.LC.RefreshCouncilRows then KART.LC.RefreshCouncilRows() end
         end, L.DT_DESC_MODULE_ENABLED)
+end
+
+-- Fills General Settings, anchored below the Reset button — sync status is about the companion
+-- app, not about Loot Council itself, so it lives here rather than next to the toggle above.
+function DT.BuildSyncStatus(parent)
+    local L = KART.L
 
     DT.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    DT.statusLabel:SetPoint("TOPLEFT", 20, -90)
+    DT.statusLabel:SetPoint("TOPLEFT", KART.BtnReset, "BOTTOMLEFT", 0, -20)
     DT.statusLabel:SetWidth(265)
     DT.statusLabel:SetJustifyH("LEFT")
     table.insert(KART.DynamicLabels, DT.statusLabel)
 
     local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOPLEFT", 20, -115)
+    hint:SetPoint("TOPLEFT", DT.statusLabel, "BOTTOMLEFT", 0, -6)
     hint:SetWidth(265)
     hint:SetJustifyH("LEFT")
     hint:SetTextColor(0.6, 0.6, 0.6)
@@ -157,7 +163,11 @@ function DT.BuildPanel(parent)
     DT.RefreshStatusLabel()
 end
 
--- Droptimizer.lua loads after MainFrame.lua, so the panel already exists here.
-if KART.DroptimizerPanel then
-    DT.BuildPanel(KART.DroptimizerPanel)
+-- Droptimizer.lua loads after MainFrame.lua and LootCouncil.lua, so both panels (and
+-- KART.BtnReset, built inline in MainFrame.lua) already exist here.
+if KART.LootCouncilPanel then
+    DT.BuildLootCouncilToggle(KART.LootCouncilPanel)
+end
+if KART.SettingsPanel then
+    DT.BuildSyncStatus(KART.SettingsPanel)
 end

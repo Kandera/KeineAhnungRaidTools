@@ -243,8 +243,6 @@ KART.L_deDE = {
     WU_MSG_REMOVED         = "%d Spieler für %s entfernt.",
 
     -- Droptimizer Gains (companion app sync)
-    TAB_DROPTIMIZER        = "Droptimizer",
-    DT_TITLE               = "Droptimizer-Gewinne",
     DT_SET_MODULE_ENABLED  = "Droptimizer-Gewinn % im Loot Council anzeigen",
     DT_DESC_MODULE_ENABLED = "Benötigt die KART Companion App, laufend und synchronisiert auf dem PC eines Officers. Zeigt je Spieler den simulierten %DPS/HPS-Gewinn durch das gerade gewürfelte Item.",
     DT_HINT_COMPANION      = "Benötigt die KART Companion App, laufend auf dem PC eines Officers.",

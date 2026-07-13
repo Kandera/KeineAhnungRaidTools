@@ -243,8 +243,6 @@ KART.L_enUS = {
     WU_MSG_REMOVED         = "%d players removed for %s.",
 
     -- Droptimizer Gains (companion app sync)
-    TAB_DROPTIMIZER        = "Droptimizer",
-    DT_TITLE               = "Droptimizer Gains",
     DT_SET_MODULE_ENABLED  = "Show droptimizer gain % in Loot Council",
     DT_DESC_MODULE_ENABLED = "Requires the KART Companion app running and synced on an officer's PC. Shows each player's simulated %DPS/HPS gain from the item being rolled.",
     DT_HINT_COMPANION      = "Requires the KART Companion app running on an officer's PC.",

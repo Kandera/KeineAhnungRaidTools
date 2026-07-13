@@ -70,7 +70,7 @@ Koordinierte Lootverteilung direkt im Addon, ohne externe Tools:
 *   Benötigt die separate **[KART Companion](https://github.com/Kandera/KART-Companion)**-App — ein kleines Tray-Tool in einem eigenen Repository, da WoW-Addons nicht selbst ins Internet können. Die meisten Raider brauchen es nicht: Nur eine Person, typischerweise der Lootmaster/Officer, muss es ausführen, da der WoWUtils-Group-Key bereits Zugriff auf die Sim-Daten des gesamten Rosters gewährt.
 *   Der Companion synct in einem Intervall (oder auf Knopfdruck) in eine eigene SavedVariable, die das Addon bei `/reload` einliest — deine normalen Einstellungen oder die Loot-Historie werden dabei nie berührt.
 *   Beim Hovern über das kleine Ausrüstungs-Icon eines Kandidaten werden das gewürfelte Item und dessen aktuell angelegtes Item nebeneinander angezeigt.
-*   **Modul-Schalter:** Standardmäßig aus; aktivierbar über "Droptimizer-Gewinn % im Loot Council anzeigen" im Droptimizer-Tab.
+*   **Modul-Schalter:** Standardmäßig aus; aktivierbar über "Droptimizer-Gewinn % im Loot Council anzeigen" in den Loot-Council-Einstellungen. Der Sync-Status (zuletzt synchronisiert, Spieleranzahl) wird in den Allgemeinen Einstellungen angezeigt.
 
 ### 8. Anpassung (Settings)
 *   Vollständig anpassbares Interface (Farben, Transparenz, Schriftarten).

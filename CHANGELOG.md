@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-07-13
+### Changed
+- **Droptimizer Gains no longer has its own settings tab:** The "Show droptimizer gain % in Loot Council" toggle moved into Loot Council's settings (next to Auto-Pass), and the sync status (last synced, player count) moved into General Settings — one less tab to hunt through for two settings that logically belong to the features they affect.
+
 ## [1.12.0] - 2026-07-13
 ### Added
 - **Loot History can now be exported as JSON:** A new "Export JSON" button in the Loot History window opens a copyable JSON dump of the currently filtered entries, using the same field set/order as RCLootCouncil's own "Standard JSON output" export, so it can be pasted into any tool built to read an RCLootCouncil export. KART doesn't track everything RCLootCouncil does (boss, instance name, vote counts, replaced-gear links, assigning loot master), so those fields are exported empty/zeroed rather than fabricated.

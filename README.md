@@ -70,7 +70,7 @@ Coordinated loot distribution directly inside the addon, no external tools requi
 *   Requires the separate **[KART Companion](https://github.com/Kandera/KART-Companion)** app — a small system-tray tool in its own repository, since WoW addons can't reach the internet on their own. Most raiders don't need it: only one person, typically the loot master/officer, has to run it, since the WoWUtils group key already grants access to the whole roster's sim data.
 *   The companion syncs on an interval (or on demand) into a dedicated SavedVariable the addon reads on `/reload` — it never touches your regular settings or loot history.
 *   Hover a candidate's small equipped-item icon to see the rolled item and their currently equipped item side by side.
-*   **Module Toggle:** Off by default; enable via "Show droptimizer gain % in Loot Council" in the Droptimizer tab.
+*   **Module Toggle:** Off by default; enable via "Show droptimizer gain % in Loot Council" in the Loot Council settings. Sync status (last synced, player count) is shown in General Settings.
 
 ### 8. Customization (Settings)
 *   Fully customizable interface (colors, transparency, fonts).

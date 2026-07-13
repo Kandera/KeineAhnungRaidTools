@@ -2387,12 +2387,17 @@ function LC.BuildSettingsPanel(parent)
         parent, "KART_LCAutoPass",
         L.LC_SET_AUTOPASS, "lcAutoPass", -80, nil, L.LC_DESC_AUTOPASS)
 
+    -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
+    -- Droptimizer.lua — see the reserved -110 slot there. Kept in its own file since it's a
+    -- different module, but it's a personal preference like CbAutoPass above, so it lives next
+    -- to it rather than getting its own settings tab.
+
     -- ================= Raid-wide settings box =================
     -- Everything in here only takes effect for the raid when YOU are the raid leader; otherwise
     -- the actual raid leader's values are used automatically. Visually set apart on purpose so
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -120)
+    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -150)
     raidBox:SetSize(295, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)

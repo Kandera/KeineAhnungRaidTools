@@ -11,7 +11,6 @@ function KART.ShowTab(tabIndex)
         KART.SettingsPanel,
         KART.LootCouncilPanel,
         KART.WoWUtilsPanel,
-        KART.DroptimizerPanel,
     }
     for i, panel in ipairs(panels) do
         if panel then panel:SetShown(i == tabIndex) end
@@ -91,10 +90,6 @@ KART.BtnWoWUtils = KART.CreateModernButton(mainFrame, L.TAB_WOWUTILS or "WoWUtil
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 
-KART.BtnDroptimizer = KART.CreateModernButton(mainFrame, L.TAB_DROPTIMIZER or "Droptimizer")
-KART.BtnDroptimizer:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
-KART.BtnDroptimizer:SetScript("OnClick", function() KART.ShowTab(7) end)
-
 -- Sichtbare Trennlinie (Vertical Divider)
 mainInset.divider = mainInset:CreateTexture(nil, "BACKGROUND")
 mainInset.divider:SetColorTexture(0.2, 0.2, 0.2, 1)
@@ -135,10 +130,6 @@ KART.LootCouncilPanel:Hide()
 KART.WoWUtilsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.WoWUtilsPanel:SetAllPoints()
 KART.WoWUtilsPanel:Hide()
-
-KART.DroptimizerPanel = CreateFrame("Frame", nil, scrollChild)
-KART.DroptimizerPanel:SetAllPoints()
-KART.DroptimizerPanel:Hide()
 
 -- Scrollbar Thumb für KART.UpdateStyles() registrieren
 KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
