@@ -1,8 +1,8 @@
-## Interface: 120005, 120007
+## Interface: 120005, 120007, 120100
 ## Title: Keine Ahnung Raid Tools
 ## Notes: Ein Tool für Invites, Auto-Promote und Buff-Checks.
 ## Author: Kandera
-## Version: 1.11.0
+## Version: 1.11.1
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.jpg
 ## SavedVariables: KART_Settings, KART_LootHistory, KART_LCOfficerNotes
 ## X-Curse-Project-ID: 1603461

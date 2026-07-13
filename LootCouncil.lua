@@ -926,8 +926,26 @@ function LC.RefreshCouncilTabs()
             GameTooltip:Show()
         end)
         tab:SetScript("OnLeave", function()
-            tab.closeBtn:Hide()
+            -- The close button sits on top of the tab, so moving the mouse onto it also fires
+            -- the tab's OnLeave (WoW's mouse-focus is topmost-frame-only, not parent-aware). If we
+            -- unconditionally hid closeBtn here, that hide would immediately re-trigger tab's
+            -- OnEnter next frame, which re-shows it, which re-triggers OnLeave — an infinite
+            -- show/hide flicker that also ate every click before it could register. Only hide it
+            -- once the mouse has actually left both the tab and the button itself.
+            if not tab.closeBtn:IsMouseOver() then
+                tab.closeBtn:Hide()
+            end
             GameTooltip:Hide()
+        end)
+        tab.closeBtn:SetScript("OnEnter", function()
+            -- Tooltip covers the item preview, not "you're about to close this" info, so hide it
+            -- while over the close button instead of letting it fight for space with the button.
+            GameTooltip:Hide()
+        end)
+        tab.closeBtn:SetScript("OnLeave", function()
+            if not tab:IsMouseOver() then
+                tab.closeBtn:Hide()
+            end
         end)
         tab:Show()
     end

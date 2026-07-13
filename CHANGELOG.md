@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-13
+### Changed
+- **Declared compatibility with retail patch 12.1:** Added Interface version `120100` to the TOC.
+
+### Fixed
+- **Loot Council tab close button ("×") was unclickable and flickered on hover:** The close button is a child frame stacked on top of the tab, so moving the mouse onto it also fired the tab's own `OnLeave` (WoW's mouse focus only tracks the topmost frame, not parent frames). That immediately hid the button, which put the mouse back over the tab, re-triggering `OnEnter` and re-showing it — an infinite show/hide loop that also swallowed every click before it could register. The button now stays visible as long as the mouse is over either the tab or the button itself, and the tooltip hides instead of fighting the button for space.
+- **Trade reminder rows showed a tofu box instead of an arrow:** `"%s → %s"` used a Unicode arrow character not covered by WoW's default game fonts, so it rendered as an empty box between the item and the winner's name — the same class of bug already worked around for the checkmark icon. Replaced with a plain ASCII `->`.
+
 ## [1.11.0] - 2026-07-09
 ### Added
 - **Guild-chat auto-invite can now be turned off separately:** The keyword-invite feature (e.g. typing "inv" or "+") worked in both whispers and guild chat, which could lead to accidental invites from casual guild chat conversation. A new checkbox ("Allow auto-invite via Guild chat") in Automation settings lets you disable the guild-chat trigger while keeping whisper-based invites active.

@@ -8,6 +8,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-13
+### Geändert
+- **Kompatibilität mit Retail-Patch 12.1 erklärt:** Interface-Version `120100` zur TOC hinzugefügt.
+
+### Behoben
+- **"×"-Button zum Schließen eines Loot-Council-Tabs war nicht klickbar und flackerte beim Hovern:** Der Schließen-Button liegt als Kindframe über dem Tab, wodurch das Bewegen der Maus auf den Button auch das `OnLeave` des Tabs auslöste (WoW verfolgt den Mausfokus nur für das oberste Frame, nicht für Elternframes). Das hat den Button sofort ausgeblendet, wodurch die Maus wieder über dem Tab lag, was erneut `OnEnter` und damit das Wiedereinblenden auslöste — eine Endlosschleife aus Ein-/Ausblenden, die dabei auch jeden Klick verschluckte, bevor er ankam. Der Button bleibt jetzt sichtbar, solange die Maus über dem Tab oder dem Button selbst ist, und der Tooltip blendet sich stattdessen aus, statt sich mit dem Button um den Platz zu streiten.
+- **Zeilen der Trade-Erinnerung zeigten ein leeres Kästchen statt eines Pfeils:** `"%s → %s"` verwendete ein Unicode-Pfeilzeichen, das von WoWs Standard-Spielschriftarten nicht abgedeckt wird, wodurch zwischen Item und Gewinner-Namen ein leeres Kästchen erschien — dieselbe Art von Fehler, die für das Häkchen-Symbol bereits umgangen wurde. Ersetzt durch ein einfaches ASCII `->`.
+
 ## [1.11.0] - 2026-07-09
 ### Hinzugefügt
 - **Auto-Invite über Gildenchat kann jetzt separat abgeschaltet werden:** Die Keyword-Invite-Funktion (z.B. "inv" oder "+" tippen) funktionierte sowohl in Flüster-Nachrichten als auch im Gildenchat, was zu versehentlichen Invites durch normale Gildenchat-Gespräche führen konnte. Eine neue Checkbox ("Auto-Invite über Gildenchat erlauben") in den Automation-Einstellungen erlaubt es, den Gildenchat-Trigger abzuschalten, während Invites per Flüstern weiterhin funktionieren.
