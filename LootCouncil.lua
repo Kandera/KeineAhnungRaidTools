@@ -958,7 +958,7 @@ end
 
 function LC.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
-    f:SetSize(430, 440)
+    f:SetSize(475, 440)
     f:SetPoint("CENTER", 220, 0)
     f:SetFrameStrata("HIGH")
     f:SetMovable(true)
@@ -1072,6 +1072,17 @@ function LC.CreateCouncilPanel()
     hCouncilVotes:SetText("CV") -- "Council Votes" — plain ASCII, see the note in RefreshCouncilRows
     hCouncilVotes:SetTextColor(0.5, 0.5, 0.5)
 
+    -- Droptimizer gain % — sourced from KART_WoWUtilsCache (written by the external KART
+    -- Companion app, see Droptimizer.lua), shown/hidden with dtModuleEnabled just like hRoll
+    -- is shown/hidden with lcRollsEnabled below.
+    local hGain = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hGain:SetPoint("TOPLEFT", 318, -56)
+    hGain:SetWidth(44)
+    hGain:SetJustifyH("CENTER")
+    hGain:SetText(KART.L.DT_COL_GAIN or "Gain")
+    hGain:SetTextColor(0.5, 0.5, 0.5)
+    f.hGain = hGain
+
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.22, 0.22, 0.22, 1)
     divider:SetHeight(1)
@@ -1087,7 +1098,7 @@ function LC.CreateCouncilPanel()
     scrollFrame:SetPoint("TOPLEFT"); scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(385, 800)
+    scrollChild:SetSize(430, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
     local thumb = KART.StripScrollbarTextures(scrollFrame)
@@ -1130,6 +1141,14 @@ function LC.CreateCouncilPanel()
         local remaining = math.ceil(deadline - GetTime())
         f.timerText:SetText(remaining > 0 and (remaining .. "s") or KART.L.LC_VOTING_DONE)
     end)
+
+    -- Dedicated tooltip for the equipped-item icon hover (see RefreshCouncilRows) — deliberately
+    -- NOT Blizzard's shared ShoppingTooltip1/2: those are also driven automatically by Blizzard's
+    -- own "compare to my own gear" tooltip hook whenever GameTooltip shows an equippable item
+    -- (i.e. on every row hover, comparing against the viewer's own gear), which fought with this
+    -- addon's actual goal here — comparing a specific raid candidate's equipped item to the
+    -- item being rolled. A fully separate frame sidesteps that collision entirely.
+    LC.equipCompareTooltip = CreateFrame("GameTooltip", "KART_LCEquipCompareTooltip", UIParent, "GameTooltipTemplate")
 end
 
 function LC.RefreshCouncilRows()
@@ -1239,6 +1258,14 @@ function LC.RefreshCouncilRows()
             row.equipIcon:SetPoint("LEFT", 88, 0)
             row.equipIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
+            -- Textures can't take OnEnter/OnLeave themselves, so this invisible frame sits over
+            -- the icon purely to scope the equipped-item comparison tooltip (ShoppingTooltip1,
+            -- see below) to just the icon — it used to show for the whole row, which made it
+            -- pop up on almost any mouse movement over a row.
+            row.equipHitbox = CreateFrame("Frame", nil, row)
+            row.equipHitbox:SetAllPoints(row.equipIcon)
+            row.equipHitbox:EnableMouse(true)
+
             -- Equipped item level in the matching slot
             row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.equippedText:SetPoint("LEFT", 108, 0)
@@ -1288,6 +1315,14 @@ function LC.RefreshCouncilRows()
             row.officerNoteIcon:SetWidth(14)
             row.officerNoteIcon:SetJustifyH("CENTER")
 
+            -- Droptimizer gain % for the item currently being rolled — see Droptimizer.lua
+            -- (KART.DT.GetGainPercent). Sits in the space opened up by the wider panel/scrollChild
+            -- between councilVoteBtn and the right-anchored note/warn/officerNote icons.
+            row.gainText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.gainText:SetPoint("LEFT", 318, 0)
+            row.gainText:SetWidth(44)
+            row.gainText:SetJustifyH("CENTER")
+
             panel.rows[i] = row
         end
 
@@ -1304,6 +1339,10 @@ function LC.RefreshCouncilRows()
         local capturedVoteDef     = m.voteDef
         local capturedKartStatus  = m.kartStatus
         local capturedOfficerNote = m.short and KART_LCOfficerNotes[m.short]
+        local capturedGainPct, capturedGainSource
+        if KART.DT and KART.DT.GetGainPercent and m.short then
+            capturedGainPct, capturedGainSource = KART.DT.GetGainPercent(m.short, rollItem)
+        end
 
         row:Show()
         row:ClearAllPoints()
@@ -1359,6 +1398,19 @@ function LC.RefreshCouncilRows()
             row.equippedText:SetText("|cff444444—|r")
         end
 
+        -- Droptimizer gain % column — entirely hidden when the module is off, matching the
+        -- rollText pattern below.
+        local dtEnabled = KART_Settings.dtModuleEnabled ~= false
+        row.gainText:SetShown(dtEnabled)
+        if dtEnabled then
+            if capturedGainPct then
+                local color = capturedGainPct >= 0 and "|cff40c040" or "|cffc04040"
+                row.gainText:SetText(string.format("%s%+.1f%%|r", color, capturedGainPct))
+            else
+                row.gainText:SetText("|cff444444—|r")
+            end
+        end
+
         -- Vote column
         if m.voteDef then
             row.voteText:SetText(string.format("|cff%02x%02x%02x%s|r",
@@ -1378,6 +1430,7 @@ function LC.RefreshCouncilRows()
             row.rollText:SetText(m.rollValue and ("|cffffd200" .. m.rollValue .. "|r") or "|cff444444—|r")
         end
         if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
+        if panel.hGain then panel.hGain:SetShown(dtEnabled) end
 
         -- Council straw-poll button: tally of how many council members (including possibly
         -- yourself) picked this candidate, and a toggle for your own pick.
@@ -1424,18 +1477,42 @@ function LC.RefreshCouncilRows()
             if not capturedRoll or not capturedShort then return end
             LC.ShowAssignMenu(self, capturedRoll, capturedShort, capturedVoteDef)
         end)
+        -- Hover highlight only — no tooltip on the row itself. All tooltip content lives on
+        -- the equip-icon hitbox below, so something is only shown while hovering that icon.
         row:SetScript("OnEnter", function(self)
             self:SetBackdropColor(0.2, 0.3, 0.15, 0.9)
             self:SetBackdropBorderColor(0.4, 0.7, 0.3, 1)
+        end)
+        row:SetScript("OnLeave", function(self)
+            if self.memberShort == LC.assignedWinners[capturedRoll] then
+                self:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
+                self:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
+            else
+                self:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
+                self:SetBackdropBorderColor(0, 0, 0, 1)
+            end
+        end)
 
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        -- Everything shows only while hovering the small equip icon: the rolled item (right
+        -- side, via GameTooltip) side-by-side with this raider's currently equipped item in
+        -- the matching slot (left side, via LC.equipCompareTooltip — a separate frame, not
+        -- Blizzard's shared ShoppingTooltip1/2, which auto-compares against the VIEWER's own
+        -- gear and would otherwise fight with this).
+        row.equipHitbox:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
             if IsRealItemLink(rollItem) then
                 GameTooltip:SetHyperlink(rollItem)
                 GameTooltip:AddLine(" ")
+                if ShoppingTooltip1 then ShoppingTooltip1:Hide() end ---@diagnostic disable-line: undefined-global
+                if ShoppingTooltip2 then ShoppingTooltip2:Hide() end ---@diagnostic disable-line: undefined-global
             else
                 GameTooltip:SetText(rollItem or "???", 1, 1, 1)
             end
-            GameTooltip:AddLine(self.memberShort or "?", nr, ng, nb)
+            GameTooltip:AddLine(capturedShort or "?", nr, ng, nb)
+            if dtEnabled and capturedGainPct then
+                GameTooltip:AddLine(string.format(KART.L.DT_TOOLTIP_GAIN or "Gain: %+.1f%% (%s)",
+                    capturedGainPct, capturedGainSource or "?"), 0.6, 0.9, 0.6, true)
+            end
             if capturedNote ~= "" then
                 GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
             end
@@ -1451,23 +1528,15 @@ function LC.RefreshCouncilRows()
             GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: assign this item", 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
 
-            -- Side-by-side comparison: this raider's currently equipped item in the matching slot
-            if capturedEquipLink then
-                ShoppingTooltip1:SetOwner(GameTooltip, "ANCHOR_LEFT")     ---@diagnostic disable-line: undefined-global
-                ShoppingTooltip1:SetHyperlink(capturedEquipLink)          ---@diagnostic disable-line: undefined-global
-                ShoppingTooltip1:Show()                                  ---@diagnostic disable-line: undefined-global
+            if capturedEquipLink and LC.equipCompareTooltip then
+                LC.equipCompareTooltip:SetOwner(row, "ANCHOR_LEFT")
+                LC.equipCompareTooltip:SetHyperlink(capturedEquipLink)
+                LC.equipCompareTooltip:Show()
             end
         end)
-        row:SetScript("OnLeave", function(self)
-            if self.memberShort == LC.assignedWinners[capturedRoll] then
-                self:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
-                self:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
-            else
-                self:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
-                self:SetBackdropBorderColor(0, 0, 0, 1)
-            end
+        row.equipHitbox:SetScript("OnLeave", function()
             GameTooltip:Hide()
-            ShoppingTooltip1:Hide() ---@diagnostic disable-line: undefined-global
+            if LC.equipCompareTooltip then LC.equipCompareTooltip:Hide() end
         end)
     end
 

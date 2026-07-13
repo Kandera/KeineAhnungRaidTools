@@ -44,6 +44,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_Settings = KART_Settings or {}
         KART_LootHistory = KART_LootHistory or {}
         KART_LCOfficerNotes = KART_LCOfficerNotes or {}
+        KART_WoWUtilsCache = KART_WoWUtilsCache or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         for k, v in pairs(KART.Defaults) do
@@ -64,6 +65,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
         KART.UpdateCache()
         if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
+        if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
         KART.UpdateStyles()
 
         -- Minimap Icon mit LibDBIcon registrieren
@@ -98,6 +100,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
         if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
         if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
+        if KART.DT and KART.DT.CbModuleEnabled then settingsMap[KART.DT.CbModuleEnabled] = "dtModuleEnabled" end
         if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
         if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
         if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
@@ -423,6 +426,7 @@ function KART.UpdateStyles()
     if KART.BuffScrollThumb then KART.BuffScrollThumb:SetColorTexture(r, g, b, 0.6) end
     if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetColorTexture(r, g, b, 0.6) end
     if KART.LHScrollThumb then KART.LHScrollThumb:SetColorTexture(r, g, b, 0.6) end
+    if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetColorTexture(r, g, b, 0.6) end
 
     if KART.LH and KART.LH.historyWindow then
         local w = KART.LH.historyWindow

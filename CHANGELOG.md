@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-13
+### Added
+- **Loot History can now be exported as JSON:** A new "Export JSON" button in the Loot History window opens a copyable JSON dump of the currently filtered entries, using the same field set/order as RCLootCouncil's own "Standard JSON output" export, so it can be pasted into any tool built to read an RCLootCouncil export. KART doesn't track everything RCLootCouncil does (boss, instance name, vote counts, replaced-gear links, assigning loot master), so those fields are exported empty/zeroed rather than fabricated.
+- **Droptimizer gain % in Loot Council:** A new "Gain" column in the Loot Council panel shows each candidate's simulated %DPS/HPS gain from the item currently being rolled, sourced from droptimizer sims they've already imported into WoWUtils (Raidbots or QE Live). This requires the new [**KART Companion**](https://github.com/Kandera/KART-Companion) app (a separate, standalone project — a system-tray tool most users won't need) running on an officer's PC, since the addon itself has no way to reach the internet; the companion syncs the data into a new SavedVariable the addon reads on `/reload`. New "Show droptimizer gain % in Loot Council" toggle (off by default) in the new Droptimizer settings tab.
+
+### Fixed
+- **Loot Council row hover showed an item-comparison tooltip everywhere, not just over the equipped-item icon:** Blizzard's own tooltip system also auto-compares any item shown in a `GameTooltip` against your own equipped gear, which fought with the addon's own (different) comparison against the raid candidate's gear and made it show up on almost any mouse movement over a row, obscuring the Roll/CV/Gain columns. Tooltips now only appear while hovering the small equipped-item icon, and show the rolled item and that candidate's equipped item side by side via a dedicated tooltip frame instead of Blizzard's shared one.
+
 ## [1.11.1] - 2026-07-13
 ### Changed
 - **Declared compatibility with retail patch 12.1:** Added Interface version `120100` to the TOC.

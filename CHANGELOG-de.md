@@ -8,6 +8,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-13
+### Hinzugefügt
+- **Loot-Historie kann jetzt als JSON exportiert werden:** Ein neuer "JSON exportieren"-Button im Loot-Historie-Fenster öffnet einen kopierbaren JSON-Dump der aktuell gefilterten Einträge, im selben Feldformat/-reihenfolge wie RCLootCouncils eigener "Standard JSON output"-Export, sodass er in jedes Tool eingefügt werden kann, das für einen RCLootCouncil-Export gebaut wurde. KART trackt nicht alles, was RCLootCouncil trackt (Boss, Instanzname, Stimmenzahl, ersetzte Gear-Links, vergebender Loot Master) — diese Felder werden daher leer/genullt statt erfunden exportiert.
+- **Droptimizer-Gewinn % im Loot Council:** Eine neue "Gewinn"-Spalte im Loot-Council-Panel zeigt je Kandidat den simulierten %DPS/HPS-Gewinn durch das gerade gewürfelte Item, basierend auf Droptimizer-Sims, die bereits in WoWUtils importiert wurden (Raidbots oder QE Live). Dafür wird die neue [**KART Companion**](https://github.com/Kandera/KART-Companion)-App benötigt (ein eigenständiges Projekt — ein Tray-Tool, das die meisten Nutzer nicht brauchen), die auf dem PC eines Officers läuft, da das Addon selbst keine Internetverbindung herstellen kann; der Companion synct die Daten in eine neue SavedVariable, die das Addon bei `/reload` einliest. Neuer Schalter "Droptimizer-Gewinn % im Loot Council anzeigen" (standardmäßig aus) im neuen Droptimizer-Einstellungstab.
+
+### Behoben
+- **Hovern über eine Loot-Council-Zeile zeigte überall einen Item-Vergleichstooltip, nicht nur über dem Ausrüstungs-Icon:** Blizzards eigenes Tooltip-System vergleicht automatisch jedes in einem `GameTooltip` angezeigte Item mit der eigenen angelegten Ausrüstung, was mit dem eigenen (anderen) Vergleich des Addons gegen die Ausrüstung des Raid-Kandidaten kollidierte und dazu führte, dass er bei fast jeder Mausbewegung über eine Zeile erschien und die Spalten Roll/CV/Gewinn verdeckte. Tooltips erscheinen jetzt nur noch beim Hovern über das kleine Ausrüstungs-Icon und zeigen das gewürfelte Item und die Ausrüstung des Kandidaten nebeneinander über ein eigenes Tooltip-Frame statt über Blizzards gemeinsames.
+
 ## [1.11.1] - 2026-07-13
 ### Geändert
 - **Kompatibilität mit Retail-Patch 12.1 erklärt:** Interface-Version `120100` zur TOC hinzugefügt.

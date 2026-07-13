@@ -215,6 +215,10 @@ KART.L_deDE = {
     LH_COUNT_FORMAT        = "%d von %d Einträgen",
     LH_BTN_CLEAR           = "Verlauf leeren",
     LH_CLEAR_CONFIRM_TEXT  = "Gesamten Loot-Verlauf wirklich löschen? Dies kann nicht rückgängig gemacht werden.",
+    LH_BTN_EXPORT_JSON     = "JSON exportieren",
+    LH_BTN_EXPORT_JSON_TIP = "Exportiert die aktuell gefilterten Einträge als JSON, im selben Feldformat, das RCLootCouncil selbst verwendet (kompatibel mit Tools, die für dessen Export gebaut wurden).",
+    LH_EXPORT_TITLE        = "JSON-Export im RCLootCouncil-Format",
+    LH_EXPORT_HINT         = "Strg+A, Strg+C zum Kopieren:",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",
@@ -237,4 +241,15 @@ KART.L_deDE = {
     WU_MSG_INVITED         = "%d Spieler für %s eingeladen.",
     WU_MSG_ALREADY_IN      = "(%d bereits im Raid)",
     WU_MSG_REMOVED         = "%d Spieler für %s entfernt.",
+
+    -- Droptimizer Gains (companion app sync)
+    TAB_DROPTIMIZER        = "Droptimizer",
+    DT_TITLE               = "Droptimizer-Gewinne",
+    DT_SET_MODULE_ENABLED  = "Droptimizer-Gewinn % im Loot Council anzeigen",
+    DT_DESC_MODULE_ENABLED = "Benötigt die KART Companion App, laufend und synchronisiert auf dem PC eines Officers. Zeigt je Spieler den simulierten %DPS/HPS-Gewinn durch das gerade gewürfelte Item.",
+    DT_HINT_COMPANION      = "Benötigt die KART Companion App, laufend auf dem PC eines Officers.",
+    DT_COL_GAIN            = "Gewinn",
+    DT_STATUS_NEVER_SYNCED = "Noch nie synchronisiert - KART Companion App ausführen.",
+    DT_STATUS_SYNCED_FORMAT = "Vor %s synchronisiert (%d Spieler).",
+    DT_TOOLTIP_GAIN        = "Gewinn: %+.1f%% (%s)",
 }

@@ -215,6 +215,10 @@ KART.L_enUS = {
     LH_COUNT_FORMAT        = "%d of %d entries",
     LH_BTN_CLEAR           = "Clear History",
     LH_CLEAR_CONFIRM_TEXT  = "Really delete the entire loot history? This cannot be undone.",
+    LH_BTN_EXPORT_JSON     = "Export JSON",
+    LH_BTN_EXPORT_JSON_TIP = "Exports the currently filtered entries as JSON, in the same field format RCLootCouncil itself uses (compatible with tools built for its export).",
+    LH_EXPORT_TITLE        = "RCLootCouncil-format JSON export",
+    LH_EXPORT_HINT         = "Ctrl+A, Ctrl+C to copy:",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",
@@ -237,6 +241,17 @@ KART.L_enUS = {
     WU_MSG_INVITED         = "%d players invited for %s.",
     WU_MSG_ALREADY_IN      = "(%d already in raid)",
     WU_MSG_REMOVED         = "%d players removed for %s.",
+
+    -- Droptimizer Gains (companion app sync)
+    TAB_DROPTIMIZER        = "Droptimizer",
+    DT_TITLE               = "Droptimizer Gains",
+    DT_SET_MODULE_ENABLED  = "Show droptimizer gain % in Loot Council",
+    DT_DESC_MODULE_ENABLED = "Requires the KART Companion app running and synced on an officer's PC. Shows each player's simulated %DPS/HPS gain from the item being rolled.",
+    DT_HINT_COMPANION      = "Requires the KART Companion app running on an officer's PC.",
+    DT_COL_GAIN            = "Gain",
+    DT_STATUS_NEVER_SYNCED = "Never synced - run the KART Companion app.",
+    DT_STATUS_SYNCED_FORMAT = "Synced %s ago (%d players).",
+    DT_TOOLTIP_GAIN        = "Gain: %+.1f%% (%s)",
 }
 -- English is the master language.
 KART.L_enUS = KART.L_enUS or {}

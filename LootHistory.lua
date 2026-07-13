@@ -18,6 +18,167 @@ local function GetItemNameFromLink(link)
     return link:match("%[(.-)%]") or link
 end
 
+local function GetItemStringFromLink(link)
+    return IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or ""
+end
+
+local function JSONEscape(s)
+    s = tostring(s or "")
+    s = s:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", ""):gsub("\t", "\\t")
+    return s
+end
+
+local function JSONString(key, value)
+    return string.format("\"%s\":\"%s\"", key, JSONEscape(value))
+end
+
+local function JSONNumber(key, value)
+    return string.format("\"%s\":%d", key, value or 0)
+end
+
+-- =====================================================================
+--  RCLootCouncil-compatible JSON export
+-- =====================================================================
+-- Mirrors the field set/order RCLootCouncil itself produces via its "Standard JSON output"
+-- history export, so the result can be pasted into any tool built to read an RCLootCouncil
+-- export (e.g. wowaudit). KART doesn't track everything RCLootCouncil does though — boss,
+-- instance name, vote counts, replaced-gear links and the assigning loot master aren't logged
+-- by LC.LogHistory — so those fields are exported empty/zeroed rather than fabricated.
+-- Respects the history window's current player/reason/search filters, same as RCLootCouncil's
+-- own export (which only exports what's currently visible).
+function LH.BuildRCLootCouncilJSON()
+    local entries = {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        local matchPlayer = (not LH.filters.player) or (e.winner == LH.filters.player)
+        local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
+        local matchSearch = true
+        if LH.filters.search ~= "" then
+            matchSearch = GetItemNameFromLink(e.item):lower():find(LH.filters.search, 1, true) ~= nil
+        end
+        if matchPlayer and matchReason and matchSearch then
+            table.insert(entries, e)
+        end
+    end
+    table.sort(entries, function(a, b) return (a.time or 0) > (b.time or 0) end)
+
+    local objects = {}
+    for i, e in ipairs(entries) do
+        local itemID, subType, equipLocToken = 0, "", ""
+        if IsRealItemLink(e.item) then
+            local id, _, sType, eLoc = C_Item.GetItemInfoInstant(e.item)
+            itemID = id or 0
+            subType = sType or ""
+            equipLocToken = eLoc or ""
+        end
+
+        local fields = {
+            JSONString("player", e.winner),
+            JSONString("date", date("%Y/%m/%d", e.time or 0)),
+            JSONString("time", date("%H:%M:%S", e.time or 0)),
+            JSONString("id", (e.time or 0) .. "-" .. i),
+            JSONNumber("itemID", itemID),
+            JSONString("itemString", GetItemStringFromLink(e.item)),
+            JSONString("response", e.reason or ""),
+            JSONNumber("votes", 0),
+            JSONString("class", e.class or ""),
+            JSONString("instance", e.difficulty or ""),
+            JSONString("boss", ""),
+            JSONString("gear1", ""),
+            JSONString("gear2", ""),
+            JSONString("responseID", "0"),
+            JSONString("isAwardReason", "false"),
+            JSONString("rollType", "normal"),
+            JSONString("subType", subType),
+            JSONString("equipLoc", equipLocToken ~= "" and (_G[equipLocToken] or "") or ""),
+            JSONString("note", ""),
+            JSONString("owner", ""),
+            JSONString("itemName", GetItemNameFromLink(e.item)),
+            JSONString("servertime", tostring(e.time or 0)),
+        }
+        table.insert(objects, "{" .. table.concat(fields, ",") .. "}")
+    end
+
+    return "[" .. table.concat(objects, ",") .. "]"
+end
+
+-- Hand-rolled dialog (not a StaticPopup, same reasoning as LC.ShowOfficerNoteDialog in
+-- LootCouncil.lua) showing the export text in a read-only, pre-selected edit box so the user
+-- can Ctrl+C it out — WoW addons have no filesystem access to write a file directly.
+function LH.ShowExportDialog()
+    if not LH.exportDialog then
+        local f = CreateFrame("Frame", "KART_LHExportDialog", UIParent, "BackdropTemplate")
+        f:SetSize(480, 320)
+        f:SetPoint("CENTER")
+        f:SetFrameStrata("DIALOG")
+        f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        f:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
+        f:SetBackdropBorderColor(0, 0, 0, 1)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        table.insert(UISpecialFrames, f:GetName())
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        f.title:SetPoint("TOP", 0, -14)
+        f.title:SetText(KART.L.LH_EXPORT_TITLE)
+        table.insert(KART.DynamicLabels, f.title)
+
+        f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        f.hint:SetPoint("TOP", 0, -32)
+        f.hint:SetText(KART.L.LH_EXPORT_HINT)
+        f.hint:SetTextColor(0.6, 0.6, 0.6)
+        table.insert(KART.DynamicLabels, f.hint)
+
+        local scrollBG = CreateFrame("Frame", nil, f, "BackdropTemplate")
+        scrollBG:SetPoint("TOPLEFT", 15, -52)
+        scrollBG:SetPoint("BOTTOMRIGHT", -15, 44)
+        scrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+        scrollBG:SetBackdropColor(0, 0, 0, 0.5)
+        scrollBG:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+
+        local scroll = CreateFrame("ScrollFrame", "KART_LHExportScroll", scrollBG, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 4, -4)
+        scroll:SetPoint("BOTTOMRIGHT", -22, 4)
+
+        KART.LHExportScrollThumb = KART.StripScrollbarTextures(scroll)
+        if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetSize(6, 16) end
+
+        f.editBox = CreateFrame("EditBox", "KART_LHExportEditBox", scroll)
+        f.editBox:SetWidth(420)
+        f.editBox:SetMultiLine(true)
+        f.editBox:SetAutoFocus(false)
+        f.editBox:SetFontObject("GameFontHighlightSmall")
+        f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
+        -- Read-only: revert any edit attempt back to the export text instead of blocking input
+        -- (there's no native read-only flag on EditBox), so selecting/copying still works freely.
+        f.editBox:SetScript("OnTextChanged", function(self)
+            if self.text and self:GetText() ~= self.text then
+                self:SetText(self.text)
+                self:HighlightText()
+            end
+        end)
+        scroll:SetScrollChild(f.editBox)
+
+        local btnClose = KART.CreateModernButton(f, CLOSE) ---@diagnostic disable-line: undefined-global
+        btnClose:SetSize(120, 26)
+        btnClose:SetPoint("BOTTOM", 0, 12)
+        btnClose:SetScript("OnClick", function() f:Hide() end)
+
+        LH.exportDialog = f
+        if KART.UpdateStyles then KART.UpdateStyles() end
+    end
+
+    local f = LH.exportDialog
+    local json = LH.BuildRCLootCouncilJSON()
+    f.editBox.text = json
+    f.editBox:SetText(json)
+    f:Show()
+    f.editBox:SetFocus()
+    f.editBox:HighlightText()
+end
+
 function LH.GetUniquePlayers()
     local seen, list = {}, {}
     for _, e in ipairs(KART_LootHistory or {}) do
@@ -260,6 +421,11 @@ function LH.CreateWindow()
         StaticPopupDialogs["KART_LH_CLEAR_CONFIRM"].text = KART.L.LH_CLEAR_CONFIRM_TEXT
         StaticPopup_Show("KART_LH_CLEAR_CONFIRM")
     end)
+
+    local btnExport = KART.CreateModernButton(f, KART.L.LH_BTN_EXPORT_JSON, KART.L.LH_BTN_EXPORT_JSON_TIP)
+    btnExport:SetSize(150, 24)
+    btnExport:SetPoint("BOTTOMRIGHT", btnClear, "BOTTOMLEFT", -6, 0)
+    btnExport:SetScript("OnClick", function() LH.ShowExportDialog() end)
 
     LH.historyWindow = f
 

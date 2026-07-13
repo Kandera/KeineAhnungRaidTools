@@ -65,13 +65,20 @@ Coordinated loot distribution directly inside the addon, no external tools requi
 *   The import is saved across sessions and loaded automatically on login.
 *   **Module Toggle:** Can be fully disabled if not needed.
 
-### 7. Customization (Settings)
+### 7. Droptimizer Gains
+*   Shows a **Gain** column in the Loot Council panel with each candidate's simulated %DPS/HPS gain from the item currently being rolled, sourced from droptimizer sims already imported into WoWUtils (Raidbots or QE Live).
+*   Requires the separate **[KART Companion](https://github.com/Kandera/KART-Companion)** app — a small system-tray tool in its own repository, since WoW addons can't reach the internet on their own. Most raiders don't need it: only one person, typically the loot master/officer, has to run it, since the WoWUtils group key already grants access to the whole roster's sim data.
+*   The companion syncs on an interval (or on demand) into a dedicated SavedVariable the addon reads on `/reload` — it never touches your regular settings or loot history.
+*   Hover a candidate's small equipped-item icon to see the rolled item and their currently equipped item side by side.
+*   **Module Toggle:** Off by default; enable via "Show droptimizer gain % in Loot Council" in the Droptimizer tab.
+
+### 8. Customization (Settings)
 *   Fully customizable interface (colors, transparency, fonts).
 *   Standard-compliant controls: windows and text fields can be closed/deselected with ESC.
 *   English and German language support.
 *   Access via minimap icon or the Addon Compartment frame.
 *   Version checker: check whether all raiders are running the latest KART version (`/kart v`).
-*   **Modular Disabling:** Loot Council, Buff Checker, and WoWUtils can each be individually disabled — handy during testing phases or to save CPU for raiders who don't need certain features.
+*   **Modular Disabling:** Loot Council, Buff Checker, WoWUtils, and Droptimizer Gains can each be individually disabled — handy during testing phases or to save CPU for raiders who don't need certain features.
 
 ## Slash Commands
 

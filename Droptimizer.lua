@@ -1,0 +1,163 @@
+local addonName, KART = ...
+
+KART.DT = KART.DT or {}
+local DT = KART.DT
+
+-- Lookup built from KART_WoWUtilsCache (written by the external KART Companion app, never by
+-- this addon) — key is lowercase "name-realm", value is the array of gain candidates for that
+-- character. See KART_WoWUtilsCache's schema in the KART Companion project for the full contract.
+DT.index = {}
+
+local function NormalizeKey(name, realm)
+    if not name or name == "" then return nil end
+    realm = (realm and realm ~= "") and realm or GetRealmName()
+    if not realm or realm == "" then return nil end
+    return (name .. "-" .. realm):lower()
+end
+
+function DT.RebuildIndex()
+    DT.index = {}
+    local cache = KART_WoWUtilsCache
+    if type(cache) ~= "table" or cache.schemaVersion ~= 1 or type(cache.players) ~= "table" then
+        DT.RefreshStatusLabel()
+        return
+    end
+    for key, candidates in pairs(cache.players) do
+        if type(key) == "string" and type(candidates) == "table" then
+            DT.index[key:lower()] = candidates
+        end
+    end
+    DT.RefreshStatusLabel()
+end
+
+-- Finds the candidate list for a raid-roster short name. Tries the player's own realm first
+-- (the common case); falls back to a short-name-only match only if it's unambiguous, so two
+-- cross-realm namesakes in the cache never silently pick the wrong one.
+local function FindPlayerCandidates(shortName)
+    local ownRealmKey = NormalizeKey(shortName, GetRealmName())
+    if ownRealmKey and DT.index[ownRealmKey] then return DT.index[ownRealmKey] end
+
+    local shortLower = shortName:lower()
+    local match, matchCount = nil, 0
+    for key, candidates in pairs(DT.index) do
+        if key:match("^([^%-]+)") == shortLower then
+            matchCount = matchCount + 1
+            match = candidates
+        end
+    end
+    if matchCount == 1 then return match end
+    return nil
+end
+
+-- Returns gainPct, source for the given player/item, or nil if there's no sim data for it.
+-- Never errors on missing/malformed cache data — callers must treat nil as "no data".
+function DT.GetGainPercent(shortName, itemLink)
+    if not shortName or not itemLink then return nil end
+    if KART_Settings and KART_Settings.dtModuleEnabled == false then return nil end
+
+    local itemId = C_Item.GetItemInfoInstant(itemLink)
+    if not itemId then return nil end
+    local _, _, _, actualIlvl = C_Item.GetItemInfo(itemLink)
+
+    local candidates = FindPlayerCandidates(shortName)
+    if not candidates then return nil end
+
+    local matches = {}
+    for _, c in ipairs(candidates) do
+        if type(c) == "table" and c.itemId == itemId then
+            table.insert(matches, c)
+        end
+    end
+    if #matches == 0 then return nil end
+    if #matches == 1 then return matches[1].gainPct, matches[1].source end
+
+    -- Same item can appear more than once (different ilvl/upgrade track, or a trinket that
+    -- fits both trinket1/trinket2): prefer whichever candidate's ilvl is closest to the item
+    -- actually being rolled; if that's unknown, fall back to the largest gain among them.
+    if actualIlvl then
+        local best
+        for _, c in ipairs(matches) do
+            if c.ilvl and (not best or math.abs(c.ilvl - actualIlvl) < math.abs(best.ilvl - actualIlvl)) then
+                best = c
+            end
+        end
+        if best then return best.gainPct, best.source end
+    end
+
+    local best = matches[1]
+    for _, c in ipairs(matches) do
+        if (c.gainPct or -math.huge) > (best.gainPct or -math.huge) then best = c end
+    end
+    return best.gainPct, best.source
+end
+
+-- =====================================================================
+--  Settings panel  (fills KART.DroptimizerPanel)
+-- =====================================================================
+
+function DT.RefreshStatusLabel()
+    if not DT.statusLabel then return end
+    local L = KART.L
+    local cache = KART_WoWUtilsCache
+    local syncedAt = cache and cache.syncedAt
+
+    if not syncedAt then
+        DT.statusLabel:SetText(L.DT_STATUS_NEVER_SYNCED or "Never synced - run the KART Companion app.")
+        DT.statusLabel:SetTextColor(0.5, 0.5, 0.5)
+        return
+    end
+
+    local playerCount = 0
+    if type(cache.players) == "table" then
+        for _ in pairs(cache.players) do playerCount = playerCount + 1 end
+    end
+
+    local diffMin = math.floor((time() - syncedAt) / 60)
+    local relStr
+    if diffMin < 1 then relStr = "<1m"
+    elseif diffMin < 60 then relStr = diffMin .. "m"
+    elseif diffMin < 1440 then relStr = math.floor(diffMin / 60) .. "h"
+    else relStr = math.floor(diffMin / 1440) .. "d" end
+
+    DT.statusLabel:SetText(string.format(L.DT_STATUS_SYNCED_FORMAT or "Synced %s ago (%d players).", relStr, playerCount))
+    DT.statusLabel:SetTextColor(0.6, 0.9, 0.6)
+end
+
+function DT.BuildPanel(parent)
+    local L = KART.L
+
+    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 20, -20)
+    title:SetText(L.DT_TITLE or "Droptimizer Gains")
+    table.insert(KART.DynamicLabels, title)
+
+    -- Master switch: fully disables the gain% column in Loot Council. The addon never holds a
+    -- WoWUtils credential itself — all networking happens in the external KART Companion app,
+    -- which only hands data to us via KART_WoWUtilsCache.
+    DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
+        parent, "KART_DTModuleEnabled",
+        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -45, function()
+            if KART.LC and KART.LC.RefreshCouncilRows then KART.LC.RefreshCouncilRows() end
+        end, L.DT_DESC_MODULE_ENABLED)
+
+    DT.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    DT.statusLabel:SetPoint("TOPLEFT", 20, -90)
+    DT.statusLabel:SetWidth(265)
+    DT.statusLabel:SetJustifyH("LEFT")
+    table.insert(KART.DynamicLabels, DT.statusLabel)
+
+    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", 20, -115)
+    hint:SetWidth(265)
+    hint:SetJustifyH("LEFT")
+    hint:SetTextColor(0.6, 0.6, 0.6)
+    hint:SetText(L.DT_HINT_COMPANION or "Requires the KART Companion app running on an officer's PC.")
+    table.insert(KART.DynamicLabels, hint)
+
+    DT.RefreshStatusLabel()
+end
+
+-- Droptimizer.lua loads after MainFrame.lua, so the panel already exists here.
+if KART.DroptimizerPanel then
+    DT.BuildPanel(KART.DroptimizerPanel)
+end

@@ -40,6 +40,7 @@ KART.Defaults = {
     lcCouncilMembers = "",
     wuModuleEnabled = false,
     wuImportText = "",
+    dtModuleEnabled = false,
     lcVotePopupPos = false,
     lcCouncilPanelPos = false,
     lcHistoryWindowPos = false,

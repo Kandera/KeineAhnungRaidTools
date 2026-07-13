@@ -65,13 +65,20 @@ Koordinierte Lootverteilung direkt im Addon, ohne externe Tools:
 *   Der Import wird sitzungsübergreifend gespeichert und beim Login automatisch geladen.
 *   **Modul-Schalter:** Lässt sich komplett deaktivieren, falls nicht benötigt.
 
-### 7. Anpassung (Settings)
+### 7. Droptimizer-Gewinne
+*   Zeigt eine **Gewinn**-Spalte im Loot-Council-Panel mit dem simulierten %DPS/HPS-Gewinn jedes Kandidaten durch das gerade gewürfelte Item, basierend auf Droptimizer-Sims, die bereits in WoWUtils importiert wurden (Raidbots oder QE Live).
+*   Benötigt die separate **[KART Companion](https://github.com/Kandera/KART-Companion)**-App — ein kleines Tray-Tool in einem eigenen Repository, da WoW-Addons nicht selbst ins Internet können. Die meisten Raider brauchen es nicht: Nur eine Person, typischerweise der Lootmaster/Officer, muss es ausführen, da der WoWUtils-Group-Key bereits Zugriff auf die Sim-Daten des gesamten Rosters gewährt.
+*   Der Companion synct in einem Intervall (oder auf Knopfdruck) in eine eigene SavedVariable, die das Addon bei `/reload` einliest — deine normalen Einstellungen oder die Loot-Historie werden dabei nie berührt.
+*   Beim Hovern über das kleine Ausrüstungs-Icon eines Kandidaten werden das gewürfelte Item und dessen aktuell angelegtes Item nebeneinander angezeigt.
+*   **Modul-Schalter:** Standardmäßig aus; aktivierbar über "Droptimizer-Gewinn % im Loot Council anzeigen" im Droptimizer-Tab.
+
+### 8. Anpassung (Settings)
 *   Vollständig anpassbares Interface (Farben, Transparenz, Schriftarten).
 *   Standardkonforme Steuerung: Fenster und Textfelder lassen sich bequem mit der ESC-Taste schließen oder abwählen.
 *   Unterstützung für Deutsch und Englisch.
 *   Zugriff über Minimap-Icon oder das Addon Compartment Frame.
 *   Versions-Checker: Prüfe, ob alle Raider die neueste KART-Version nutzen (`/kart v`).
-*   **Modulare Deaktivierung:** Loot Council, Buff-Checker und WoWUtils lassen sich jeweils einzeln komplett abschalten — praktisch während Testphasen oder um CPU bei Raidern zu sparen, die einzelne Funktionen nicht benötigen.
+*   **Modulare Deaktivierung:** Loot Council, Buff-Checker, WoWUtils und Droptimizer-Gewinne lassen sich jeweils einzeln komplett abschalten — praktisch während Testphasen oder um CPU bei Raidern zu sparen, die einzelne Funktionen nicht benötigen.
 
 ## Slash-Befehle
 
