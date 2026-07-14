@@ -8,6 +8,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-07-14
+### Sicherheit
+- **Loot Council vertraut nicht mehr ungeprüften Absendern bei Konfiguration, Ergebnissen und Officer-Notizen:** Drei Addon-Message-Handler übernahmen ihre Nutzdaten von jedem Absender, ohne zu prüfen, wer sie wirklich geschickt hat — ein gefälschter `LC_CONFIG`-Broadcast konnte den eigenen Namen des Absenders auf jedem Client in die Council-Liste eintragen, ein gefälschtes Loot-Ergebnis konnte einen Fake-Eintrag in die Loot-Historie aller Spieler schreiben und ein falsches "Du hast gewonnen"-Popup auslösen, und eine gefälschte Officer-Notiz konnte die Notiz eines beliebigen Spielers ohne jede Berechtigungsprüfung überschreiben. Alle drei prüfen jetzt gegen den aktuellen Roster, ob der Absender wirklich der aktuelle Raid-/Gruppenleiter (Konfiguration) bzw. ein Council-Mitglied (Ergebnisse, Officer-Notizen) ist, bevor sie handeln — das schließt auch den Flüstern-Angriffsweg, da ein Absender, der nicht in der eigenen Gruppe steht, diese Prüfung nie bestehen kann.
+
 ## [1.12.1] - 2026-07-13
 ### Geändert
 - **Droptimizer-Gewinne haben keinen eigenen Einstellungs-Tab mehr:** Der Schalter "Droptimizer-Gewinn % im Loot Council anzeigen" ist jetzt in den Loot-Council-Einstellungen (neben Auto-Pass), und der Sync-Status (zuletzt synchronisiert, Spieleranzahl) ist jetzt in den Allgemeinen Einstellungen — ein Tab weniger, um zwei Einstellungen zu finden, die inhaltlich zu den Funktionen gehören, die sie betreffen.

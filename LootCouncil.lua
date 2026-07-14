@@ -109,6 +109,20 @@ local function IsCouncil()
     return LC.CouncilNamesTable[myShort] == true
 end
 
+-- Whether senderShort (as received off CHAT_MSG_ADDON, see Core.lua) currently holds council
+-- status — used to validate the sender of messages that grant real authority (LC_RESULT logs a
+-- permanent history entry and fires the "you win" popup; LC_ONOTE overwrites a persistent officer
+-- note) before acting on them. Resolving against the live raid/party roster first, rather than
+-- trusting the name string alone, matters because CHAT_MSG_ADDON also delivers whispers: a name
+-- that isn't currently in our group is never authorized, even if it happens to match an entry in
+-- CouncilNamesTable.
+local function IsSenderCouncil(senderShort)
+    local unit = senderShort and LC.FindUnitForShortName(senderShort)
+    if not unit then return false end
+    if UnitIsGroupLeader(unit) then return true end
+    return LC.CouncilNamesTable[senderShort:lower()] == true
+end
+
 local function GetChannel()
     return IsInRaid() and "RAID" or "PARTY"
 end
@@ -154,8 +168,13 @@ function LC.BroadcastRaidConfig()
     SendLC("LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. council)
 end
 
--- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON).
-function LC.HandleConfig(payload)
+-- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
+-- accepted from the actual current raid/party leader — otherwise a forged LC_CONFIG could add the
+-- sender's own name to CouncilNamesTable below and self-promote to council on every client.
+function LC.HandleConfig(payload, senderShort)
+    local unit = senderShort and LC.FindUnitForShortName(senderShort)
+    if not unit or not UnitIsGroupLeader(unit) then return end
+
     local minQ, buttons, rolls, council = payload:match("^(%d+):([^:]*):([01]):(.*)$")
     if not minQ then return end
 
@@ -1980,7 +1999,8 @@ function LC.SetOfficerNote(shortName, noteText)
     LC.RefreshCouncilRows()
 end
 
-function LC.HandleOfficerNote(payload)
+function LC.HandleOfficerNote(payload, senderShort)
+    if not IsSenderCouncil(senderShort) then return end
     local shortName, noteText = payload:match("^([^:]+):(.*)$")
     if not shortName then return end
     KART_LCOfficerNotes[shortName] = (noteText ~= "") and noteText or nil
@@ -2227,7 +2247,8 @@ function LC.ResolveColorForReason(reason)
     return nil
 end
 
-function LC.HandleResult(payload)
+function LC.HandleResult(payload, senderShort)
+    if not IsSenderCouncil(senderShort) then return end
     -- payload = "rollID:winnerName:reason"
     local rollID, winner = payload:match("^(%d+):([^:]+)")
     rollID = tonumber(rollID)

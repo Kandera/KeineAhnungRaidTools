@@ -339,11 +339,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 9) == "LC_CVOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), shortName) end
                 elseif msg:sub(1, 9) == "LC_ONOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10), shortName) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11), shortName) end
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), shortName) end
                 elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
                 elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
