@@ -84,6 +84,8 @@ function KART.CreateBuffCheckFrame()
     })
     f:SetBackdropBorderColor(0, 0, 0, 1)
     f:SetFrameStrata("HIGH")
+    f.gradientBg = KART.CreateGradientOverlay(f)
+    KART.AddShowFade(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.title:SetPoint("TOP", 0, -10)

@@ -381,7 +381,8 @@ function KART.UpdateStyles()
     local contentSize = KART_Settings.contentFontSize or 12
     
     KART.MainFrame:SetBackdropColor(br, bg, bb, KART_Settings.bgAlpha / 100)
-    if KART.MainFrame.title then 
+    KART.SetGradientOverlayColor(KART.MainFrame.gradientBg, br, bg, bb, KART_Settings.bgAlpha / 100)
+    if KART.MainFrame.title then
         KART.MainFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
         KART.MainFrame.title:SetTextColor(r, g, b)
     end
@@ -403,6 +404,12 @@ function KART.UpdateStyles()
     -- Alle registrierten Labels (Slider-Beschriftungen etc.) aktualisieren
     for _, label in ipairs(KART.DynamicLabels) do
         label:SetFont(fontPath, contentSize, "")
+    end
+
+    -- Close-button "×" glyphs not already covered by a per-frame update below (Loot History,
+    -- Loot Council's vote popup and council panel) — see KART.CloseButtonTexts in Utils.lua.
+    for _, t in ipairs(KART.CloseButtonTexts) do
+        t:SetFont(fontPath, 14, "OUTLINE")
     end
 
     -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
@@ -443,6 +450,7 @@ function KART.UpdateStyles()
 
     if KART.BuffCheckFrame then
         KART.BuffCheckFrame:SetBackdropColor(br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)
+        KART.SetGradientOverlayColor(KART.BuffCheckFrame.gradientBg, br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)
         if KART.BuffCheckFrame.title then
             KART.BuffCheckFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
             KART.BuffCheckFrame.title:SetTextColor(r, g, b)

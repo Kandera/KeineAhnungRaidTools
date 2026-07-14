@@ -7,6 +7,7 @@ KART.DynamicLabels = {}
 KART.SliderThumbs = {}
 KART.CheckVisuals = {}
 KART.ButtonTexts = {}
+KART.CloseButtonTexts = {} -- "×" FontStrings on close buttons that aren't already covered by a per-frame UpdateStyles font update
 
 -- Standardeinstellungen
 KART.Defaults = {
@@ -301,4 +302,44 @@ function KART.StripScrollbarTextures(scrollFrame)
     local thumb = sb:GetThumbTexture()
     if thumb then thumb:SetTexture("Interface\\Buttons\\WHITE8X8") end
     return thumb
+end
+
+-- Adds a short fade-in on every OnShow, so a window appearing feels less abrupt than an instant
+-- pop-in. HookScript rather than replacing OnShow so it never interferes with a frame's own show
+-- logic, and works no matter which of the frame's (possibly many) callers triggers the Show().
+function KART.AddShowFade(frame, duration)
+    local ag = frame:CreateAnimationGroup()
+    local alpha = ag:CreateAnimation("Alpha")
+    alpha:SetFromAlpha(0)
+    alpha:SetToAlpha(1)
+    alpha:SetDuration(duration or 0.15)
+    alpha:SetSmoothing("OUT")
+    frame:HookScript("OnShow", function()
+        ag:Stop()
+        ag:Play()
+    end)
+end
+
+-- Adds a subtle vertical gradient overlay on top of a frame's flat backdrop fill, so panels read
+-- as less flat without abandoning the existing color-picker-driven backdrop system: the backdrop
+-- itself stays the color/alpha source of truth (and remains a safe solid-color fallback everywhere
+-- else), this only layers a soft brightness falloff on top of whatever color that resolves to.
+-- Sits one sublevel above the backdrop's own BACKGROUND fill so it never covers the BORDER-layer
+-- edge texture. Returns the texture so the caller can update its color via SetGradientOverlayColor
+-- whenever KART.UpdateStyles() recomputes the frame's backdrop color.
+function KART.CreateGradientOverlay(frame)
+    local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
+    tex:SetPoint("TOPLEFT", 1, -1)
+    tex:SetPoint("BOTTOMRIGHT", -1, 1)
+    return tex
+end
+
+-- SetGradient's exact signature has changed across WoW API versions, and this can't be tested
+-- outside a live client — pcall so a mismatch just skips the visual flourish instead of breaking
+-- the rest of KART.UpdateStyles() (fonts, colors, etc.) for every other frame in the same call.
+function KART.SetGradientOverlayColor(tex, r, g, b, alpha)
+    if not tex then return end
+    local top    = CreateColor(math.min(r + 0.06, 1), math.min(g + 0.06, 1), math.min(b + 0.06, 1), alpha)
+    local bottom = CreateColor(math.max(r - 0.06, 0), math.max(g - 0.06, 0), math.max(b - 0.06, 0), alpha)
+    pcall(tex.SetGradient, tex, "VERTICAL", top, bottom)
 end

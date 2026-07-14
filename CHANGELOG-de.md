@@ -8,25 +8,22 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
-## [1.12.4] - 2026-07-14
-### Behoben
-- **Die Ausrüstungs-Itemlevel- und Rüstungseignungs-Spalten eines Loot-Council-Kandidaten konnten für eine ganze Rollrunde leer bleiben:** Frisch gedroppte Items sind oft noch nicht clientseitig gecacht, und nichts hat es erneut versucht, sobald die Daten tatsächlich geladen waren. Das Panel lädt fehlende Item-Daten jetzt im Hintergrund nach und aktualisiert sich automatisch, sobald sie verfügbar sind.
-- **Ein erneut zugestelltes Loot-Ergebnis konnte denselben Gewinn doppelt in die Loot-Historie eintragen:** Ein kurzes Dedup-Zeitfenster ergänzt, analog zur bereits vorhandenen Absicherung im Historie-Sync.
+## [1.12.5] - 2026-07-14
+### Sicherheit
+- **Loot Council vertraut nicht mehr ungeprüften Absendern bei Konfiguration, Ergebnissen und Officer-Notizen:** Drei Addon-Message-Handler übernahmen ihre Nutzdaten von jedem Absender, ohne zu prüfen, wer sie wirklich geschickt hat — ein gefälschter `LC_CONFIG`-Broadcast konnte den eigenen Namen des Absenders auf jedem Client in die Council-Liste eintragen, ein gefälschtes Loot-Ergebnis konnte einen Fake-Eintrag in die Loot-Historie aller Spieler schreiben und ein falsches "Du hast gewonnen"-Popup auslösen, und eine gefälschte Officer-Notiz konnte die Notiz eines beliebigen Spielers ohne jede Berechtigungsprüfung überschreiben. Alle drei prüfen jetzt gegen den aktuellen Roster, ob der Absender wirklich der aktuelle Raid-/Gruppenleiter (Konfiguration) bzw. ein Council-Mitglied (Ergebnisse, Officer-Notizen) ist, bevor sie handeln — das schließt auch den Flüstern-Angriffsweg, da ein Absender, der nicht in der eigenen Gruppe steht, diese Prüfung nie bestehen kann.
 
-### Geändert
-- **Die Loot-Council-Konfiguration eines Raidleiters mit sehr langer Council-Mitgliederliste wird jetzt gekürzt, statt eine stille Beschädigung zu riskieren:** Vote-Button-Beschriftungen plus eine lange Council-Liste konnten zusammen das Größenlimit für Addon-Nachrichten überschreiten, wodurch andere Clients die Konfiguration teils still gar nicht übernommen haben. Sie wird jetzt auf das Passende gekürzt, mit einer Warnung an den Leiter, damit er sie kürzt.
-
-## [1.12.3] - 2026-07-14
 ### Behoben
 - **Antworten auf Versionsabfragen per Whisper kamen nie an:** `SendAddonMessage` benötigt bei Whispers ein explizites Ziel, das der Antwort fehlte; eine per Whisper gestellte Versionsabfrage bekommt jetzt tatsächlich eine Antwort.
 - **Fehlende Sockel wurden nur auf englischen/deutschen Clients erkannt:** Die Leerer-Sockel-Erkennung des Gear-Checks hat Tooltip-Text in bestimmten Sprachen abgeglichen statt Item-Stats direkt zu lesen, wodurch fehlende Gems auf jeder anderen unterstützten Sprache still unterschätzt wurden. Jetzt sprachunabhängig.
 - **Ein fehlerhafter Droptimizer-Cache-Eintrag konnte die gesamte Loot-Council-Kandidatenliste zum Absturz bringen:** Gewinn-%/Itemlevel-Werte aus der externen KART-Companion-App wurden nicht auf tatsächliche Zahlen geprüft, bevor sie verwendet wurden; ein fehlerhafter Eintrag wird jetzt übersprungen, statt die ganze Zeilenliste abstürzen zu lassen.
 - **Ein Loot-Historie-Eintrag mit fehlendem Zeitstempel konnte die Aktualisierung der Historie-Liste stoppen:** Dasselbe Fallback ergänzt, das an anderer Stelle in der Datei bereits verwendet wird.
 - **Spielernamen im Buff-Checker konnten optisch in das Ready-Check-Begründungs-Icon hineinlaufen:** Die Namensspalte hatte eine feste Pixelbreite, die weder eine größere Content-Schriftgröße (in den Einstellungen anpassbar) noch lange Name-Realm-Strings berücksichtigte — WoW schneidet Text, der die gesetzte Breite eines FontStrings überschreitet, nicht automatisch ab. Zu lange Namen werden jetzt mit "…" gekürzt, um immer in die Spalte zu passen.
+- **Die Ausrüstungs-Itemlevel- und Rüstungseignungs-Spalten eines Loot-Council-Kandidaten konnten für eine ganze Rollrunde leer bleiben:** Frisch gedroppte Items sind oft noch nicht clientseitig gecacht, und nichts hat es erneut versucht, sobald die Daten tatsächlich geladen waren. Das Panel lädt fehlende Item-Daten jetzt im Hintergrund nach und aktualisiert sich automatisch, sobald sie verfügbar sind.
+- **Ein erneut zugestelltes Loot-Ergebnis konnte denselben Gewinn doppelt in die Loot-Historie eintragen:** Ein kurzes Dedup-Zeitfenster ergänzt, analog zur bereits vorhandenen Absicherung im Historie-Sync.
 
-## [1.12.2] - 2026-07-14
-### Sicherheit
-- **Loot Council vertraut nicht mehr ungeprüften Absendern bei Konfiguration, Ergebnissen und Officer-Notizen:** Drei Addon-Message-Handler übernahmen ihre Nutzdaten von jedem Absender, ohne zu prüfen, wer sie wirklich geschickt hat — ein gefälschter `LC_CONFIG`-Broadcast konnte den eigenen Namen des Absenders auf jedem Client in die Council-Liste eintragen, ein gefälschtes Loot-Ergebnis konnte einen Fake-Eintrag in die Loot-Historie aller Spieler schreiben und ein falsches "Du hast gewonnen"-Popup auslösen, und eine gefälschte Officer-Notiz konnte die Notiz eines beliebigen Spielers ohne jede Berechtigungsprüfung überschreiben. Alle drei prüfen jetzt gegen den aktuellen Roster, ob der Absender wirklich der aktuelle Raid-/Gruppenleiter (Konfiguration) bzw. ein Council-Mitglied (Ergebnisse, Officer-Notizen) ist, bevor sie handeln — das schließt auch den Flüstern-Angriffsweg, da ein Absender, der nicht in der eigenen Gruppe steht, diese Prüfung nie bestehen kann.
+### Geändert
+- **Die Loot-Council-Konfiguration eines Raidleiters mit sehr langer Council-Mitgliederliste wird jetzt gekürzt, statt eine stille Beschädigung zu riskieren:** Vote-Button-Beschriftungen plus eine lange Council-Liste konnten zusammen das Größenlimit für Addon-Nachrichten überschreiten, wodurch andere Clients die Konfiguration teils still gar nicht übernommen haben. Sie wird jetzt auf das Passende gekürzt, mit einer Warnung an den Leiter, damit er sie kürzt.
+- **Visueller Politur-Durchgang:** Hauptfenster und Buff-Checker faden jetzt sanft ein, statt sofort aufzupoppen; Panel-Hintergründe haben jetzt einen dezenten Farbverlauf statt komplett flach zu sein (abgeleitet von deiner bestehenden Hintergrundfarbe, eigene Themes bleiben also erhalten); die Schließen-Buttons in Loot-Historie/Loot-Council nutzen jetzt die gewählte UI-Schrift statt immer die Standard-Blizzard-Schrift.
 
 ## [1.12.1] - 2026-07-13
 ### Geändert
