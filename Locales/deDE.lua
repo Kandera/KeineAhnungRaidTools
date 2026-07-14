@@ -144,6 +144,7 @@ KART.L_deDE = {
     LC_SET_BUTTONS_HINT    = "Beispiel: BIS;Upgrade;Offspec;Pass",
     LC_SET_COUNCIL         = "Weitere Council-Mitglieder (Semikolon-getrennt):",
     LC_SET_COUNCIL_HINT    = "Raidleiter ist immer automatisch im Council. Assistenten nicht.",
+    LC_CONFIG_TRUNCATED    = "Die Liste der Council-Mitglieder ist zu lang, um vollständig übertragen zu werden, und wurde gekürzt — kürze sie in den Loot-Council-Einstellungen, damit alle synchron bleiben.",
     LC_BTN_TOGGLE          = "Session umschalten",
     LC_DESC_TOGGLE         = "Loot Council für die aktuelle Raid-Session manuell aktivieren oder deaktivieren. Funktioniert nur, wenn du Raidleiter bist.",
     LC_BTN_TEST_LOOTER     = "Test: Looter",

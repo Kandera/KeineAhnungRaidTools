@@ -205,7 +205,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART_Settings.autoConvertToRaid and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() > 5 and not IsInRaid() then
             C_PartyInfo.ConvertToRaid()
         end
-        KART.HandleAutoPromote()
+        KART.HandleAutoPromoteThrottled()
         
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})

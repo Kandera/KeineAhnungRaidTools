@@ -47,6 +47,19 @@ function KART.HandleChatInvite(msg, sender, event, ...)
     end
 end
 
+-- GROUP_ROSTER_UPDATE fires in bursts during mass-invite/raid formation, and a full roster scan on
+-- every single firing burns CPU for no benefit — the promote outcome only needs re-evaluating once
+-- the roster has settled. Same leading-edge throttle pattern as KART.UpdateBuffCheckThrottled.
+local isAutoPromoteThrottled = false
+function KART.HandleAutoPromoteThrottled()
+    if isAutoPromoteThrottled then return end
+    isAutoPromoteThrottled = true
+    C_Timer.After(1, function()
+        isAutoPromoteThrottled = false
+        KART.HandleAutoPromote()
+    end)
+end
+
 -- Logik für Auto-Promote
 function KART.HandleAutoPromote()
     if not UnitIsGroupLeader("player") or not (IsInGroup() or IsInRaid()) then return end

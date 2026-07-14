@@ -464,6 +464,13 @@ local function SetTruncatedName(fontString, text, maxWidth)
     fontString:SetText(best ~= "" and best or "...")
 end
 
+-- Comparing aura.spellId can throw if the aura carries "secret" (private-aura) values, which
+-- pcall safely catches. Hoisted out of the per-aura loop below (up to 40 players * 100 auras per
+-- update) instead of being recreated as a closure on every single call.
+local function IsAuraSafe(aura)
+    return aura.spellId == 0 and type(aura.name) == "string"
+end
+
 function KART.UpdateBuffCheck(isPreview)
     if not KART.BuffCheckFrame then return end
 
@@ -631,9 +638,7 @@ function KART.UpdateBuffCheck(isPreview)
             
             -- Überprüfen, ob die Aura "geheime" (secret) Werte enthält (Private Auras).
             -- Ein Vergleich (==) löst bei Secrets einen Fehler aus, den pcall sicher abfängt.
-            local isSafe = pcall(function() 
-                return aura.spellId == 0 and type(aura.name) == "string"
-            end)
+            local isSafe = pcall(IsAuraSafe, aura)
 
             if isSafe and aura.name then
                 for k = 1, buffDataCount do

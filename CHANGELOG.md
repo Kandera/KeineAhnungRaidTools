@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.4] - 2026-07-14
+### Fixed
+- **A Loot Council candidate's equipped-ilvl and armor-eligibility columns could stay blank for a whole roll:** Freshly-dropped items are often not yet cached client-side, and nothing retried once the data actually loaded. The panel now loads the missing item data in the background and refreshes automatically once it's available.
+- **A redelivered loot result could log the same win twice in Loot History:** Added a short dedup window, matching the safeguard the history catch-up sync already had.
+
+### Changed
+- **A raid leader's Loot Council config with a very long council member list is now truncated instead of risking silent corruption:** Vote-button labels plus a long council list could together exceed the addon-message size limit, which could make other clients silently fail to apply the config at all. It's now trimmed to whatever fits, with a warning printed to the leader so they know to shorten it.
+
 ## [1.12.3] - 2026-07-14
 ### Fixed
 - **Version-check replies sent via whisper never arrived:** `SendAddonMessage` requires an explicit whisper target that the reply wasn't passing; whispering a version request to someone now actually gets an answer back.

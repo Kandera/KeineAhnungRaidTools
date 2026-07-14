@@ -8,6 +8,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.12.4] - 2026-07-14
+### Behoben
+- **Die Ausrüstungs-Itemlevel- und Rüstungseignungs-Spalten eines Loot-Council-Kandidaten konnten für eine ganze Rollrunde leer bleiben:** Frisch gedroppte Items sind oft noch nicht clientseitig gecacht, und nichts hat es erneut versucht, sobald die Daten tatsächlich geladen waren. Das Panel lädt fehlende Item-Daten jetzt im Hintergrund nach und aktualisiert sich automatisch, sobald sie verfügbar sind.
+- **Ein erneut zugestelltes Loot-Ergebnis konnte denselben Gewinn doppelt in die Loot-Historie eintragen:** Ein kurzes Dedup-Zeitfenster ergänzt, analog zur bereits vorhandenen Absicherung im Historie-Sync.
+
+### Geändert
+- **Die Loot-Council-Konfiguration eines Raidleiters mit sehr langer Council-Mitgliederliste wird jetzt gekürzt, statt eine stille Beschädigung zu riskieren:** Vote-Button-Beschriftungen plus eine lange Council-Liste konnten zusammen das Größenlimit für Addon-Nachrichten überschreiten, wodurch andere Clients die Konfiguration teils still gar nicht übernommen haben. Sie wird jetzt auf das Passende gekürzt, mit einer Warnung an den Leiter, damit er sie kürzt.
+
 ## [1.12.3] - 2026-07-14
 ### Behoben
 - **Antworten auf Versionsabfragen per Whisper kamen nie an:** `SendAddonMessage` benötigt bei Whispers ein explizites Ziel, das der Antwort fehlte; eine per Whisper gestellte Versionsabfrage bekommt jetzt tatsächlich eine Antwort.

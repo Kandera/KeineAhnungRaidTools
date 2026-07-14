@@ -159,13 +159,28 @@ end
 -- council member list) to the raid so every client interprets votes/roles identically. No-ops
 -- for non-leaders. Council members stays last in the payload since it's free text (raider names
 -- separated by semicolons, not colons) — everything after the rolls flag is captured greedily.
+--
+-- SendAddonMessage payloads are capped at 255 bytes by the underlying chat protocol. Button
+-- labels (up to 128 chars) plus a large council list (up to 255 chars, per its editbox's
+-- SetMaxLetters) can together exceed that, and a transport-truncated message can make
+-- HandleConfig's anchored payload pattern fail to match on every other client, leaving them
+-- silently stuck on stale config. Trim the council list — the field most likely to grow large —
+-- to whatever whole entries fit instead, and tell the leader locally so they know to shorten it.
+local ADDON_MSG_MAX_BYTES = 255
 function LC.BroadcastRaidConfig()
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
     local council  = KART_Settings.lcCouncilMembers or ""
-    SendLC("LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. council)
+
+    local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":"
+    local budget = ADDON_MSG_MAX_BYTES - #prefix
+    if #council > math.max(budget, 0) then
+        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
+        print("|cffff0000KART:|r " .. (KART.L.LC_CONFIG_TRUNCATED or "Council member list too long, truncated for broadcast."))
+    end
+    SendLC(prefix .. council)
 end
 
 -- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
@@ -1170,6 +1185,13 @@ function LC.CreateCouncilPanel()
     LC.equipCompareTooltip = CreateFrame("GameTooltip", "KART_LCEquipCompareTooltip", UIParent, "GameTooltipTemplate")
 end
 
+-- Freshly-dropped items are frequently not yet cached client-side when the panel first renders,
+-- which makes C_Item.GetItemInfo return nil (see GetEquippedForUnit/GetItemArmorRank above) and
+-- leaves the equipped-ilvl/armor-eligibility columns blank or wrong for the rest of the roll
+-- unless some other event happens to trigger a refresh in the meantime. Kick off an async load
+-- once per rollID and re-render when it completes, instead of depending on luck.
+LC.pendingItemLoads = LC.pendingItemLoads or {}
+
 function LC.RefreshCouncilRows()
     local panel = LC.councilPanel
     if not panel then return end
@@ -1181,6 +1203,16 @@ function LC.RefreshCouncilRows()
     local numMem  = GetNumGroupMembers()
 
     local rollItem = LC.rollItems[rollID]
+    if rollID and rollItem and IsRealItemLink(rollItem) and not LC.pendingItemLoads[rollID]
+       and not C_Item.GetItemInfo(rollItem) then
+        LC.pendingItemLoads[rollID] = true
+        Item:CreateFromItemLink(rollItem):ContinueOnItemLoad(function()
+            LC.pendingItemLoads[rollID] = nil
+            if LC.activeRollID == rollID and LC.councilPanel and LC.councilPanel:IsShown() then
+                LC.RefreshCouncilRows()
+            end
+        end)
+    end
     local itemArmorRank = LC.GetItemArmorRank(rollItem)
 
     local members = {}
@@ -1609,9 +1641,24 @@ local MAX_HISTORY_ENTRIES = 500
 -- since every client in the same instance sees the same difficulty.
 function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef)
     KART_LootHistory = KART_LootHistory or {}
+    local now = time()
+
+    -- Guards against double-logging the same win if a redelivered/duplicate LC_RESULT addon
+    -- message ever reaches this client twice (HandleResult has no dedup of its own, unlike the
+    -- history catch-up sync path in HandleHistoryEntry below). Only checks the most recent entries
+    -- within the last few seconds — a genuine duplicate would land back-to-back, whereas a real
+    -- re-roll of the exact same item to the exact same winner minutes later is a separate event.
+    for i = #KART_LootHistory, math.max(1, #KART_LootHistory - 3), -1 do
+        local e = KART_LootHistory[i]
+        if e.item == (itemLink or "") and e.winner == (winnerShort or "") and e.reason == (reason or "")
+           and now - (e.time or 0) < 5 then
+            return
+        end
+    end
+
     local _, _, _, difficultyName = GetInstanceInfo()
     table.insert(KART_LootHistory, {
-        time       = time(),
+        time       = now,
         item       = itemLink or "",
         winner     = winnerShort or "",
         reason     = reason or "",

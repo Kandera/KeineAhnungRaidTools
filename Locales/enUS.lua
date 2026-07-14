@@ -144,6 +144,7 @@ KART.L_enUS = {
     LC_SET_BUTTONS_HINT    = "Example: BIS;Upgrade;Offspec;Pass",
     LC_SET_COUNCIL         = "Additional council members (semicolon-separated):",
     LC_SET_COUNCIL_HINT    = "The raid leader is always in the council. Assistants are not.",
+    LC_CONFIG_TRUNCATED    = "Council member list is too long to broadcast in full and was trimmed — shorten it in Loot Council settings so everyone stays in sync.",
     LC_BTN_TOGGLE          = "Toggle session",
     LC_DESC_TOGGLE         = "Manually enable or disable Loot Council for the current raid session. Only works when you are the raid leader.",
     LC_BTN_TEST_LOOTER     = "Test: Looter",
