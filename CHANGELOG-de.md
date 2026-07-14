@@ -8,6 +8,20 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-14
+### Neu
+- **Das Loot-Council-Fenster lässt sich jetzt minimieren:** Ein neuer "-"-Button neben dem Schließen-Button klappt das Fenster auf nur noch Titelleiste + Item-Name zusammen, damit es während des normalen Raidens auf dem Bildschirm bleiben kann, ohne mit der vollen Kandidatenliste im Weg zu stehen. Tabs, Stimmen und alles andere bleiben im Hintergrund erhalten, während minimiert ist, und das Fenster klappt sich automatisch wieder auf, sobald ein wirklich neues Item eine Abstimmung startet — damit nichts übersehen wird.
+- **Optischer Refresh für beide Loot-Council-Fenster:** Vote-Buttons und Council-Zeilen zeigen jetzt zusätzlich zur bestehenden Farbcodierung ein kleines Icon pro Vote-Kategorie (Blizzards eigene Standard-Loot-Icons, keine eigene Grafik); das Icon des gerade gerollten Items bekommt einen in der Item-Qualitätsfarbe getönten Akzentrahmen und einen nativen radialen Countdown-Wipe (dasselbe `Cooldown`-Widget, das schon jeder Fähigkeiten-Button nutzt); Council-Zeilen zeigen ein rundes Klassen-Icon, ein iLvl-+/--Delta gegenüber dem gerollten Item, und Rolls ≥85 leuchten golden; der Council-Stimmen-Zähler-Button füllt sich jetzt proportional statt nur eine nackte Zahl zu zeigen; der aktive Tab bekommt einen goldenen Akzent-Glow; und das Vote-Fenster zeigt einen laufenden "X/Y abgestimmt"-Zähler neben dem Timer.
+
+### Geändert
+- **Das Loot-Council-Fenster ist spürbar breiter:** Namens- und Vote-Spalte haben bei der alten festen Breite echte Spielernamen und Vote-Bezeichnungen abgeschnitten oder umgebrochen — das passiert jetzt nicht mehr, auch mit den neu hinzugekommenen Icon-Spalten.
+- **Die Zeile des Gewinners ist jetzt gold statt grün hervorgehoben:** Grün ist gleichzeitig die Farbe der "Upgrade"-Stimme, wodurch eine Zeile uneindeutig beides zugleich sein konnte; Gold kollidiert mit keiner Vote-Kategorie.
+- **Der eigene Kommentar eines Raiders bleibt jetzt auch nach dem Abstimmen sichtbar, nicht nur davor:** Das Vote-Fenster hat die Notiz bisher versteckt, sobald abgestimmt wurde; das "Du hast gewählt"-Badge zeigt sie jetzt zusammen mit der gewählten Kategorie an (bei langen Notizen gekürzt), statt sie aus der Ansicht zu verlieren.
+- **Tooltips in den Council-Zeilen sind jetzt gezielter:** Der Hover über das Ausrüstungs-Icon (Item-Vergleich) zeigt nicht mehr zusätzlich die Spieler- oder Offizier-Notiz an — die haben jetzt ihren eigenen Tooltip direkt an den Notiz-/Offi-Notiz-Symbolen, damit ein normaler Gear-Vergleich nicht jedes Mal jemandes Kommentar mit anzeigt. Der Hover über einen Tab in der linken Leiste löst außerdem nicht mehr Blizzards eigenen Gear-Vergleichs-Tooltip aus — der ist dort nicht hilfreich, es geht nur um "welches Item ist das".
+
+### Behoben
+- **Der Minimieren-Button im Council-Fenster überlappte den Timer/"Fertig"-Text im Titelbalken:** Der Timer war mit einem festen Pixel-Abstand vom Fensterrand verankert, der das neue Minimieren-Symbol nicht berücksichtigt hat; er hängt jetzt stattdessen direkt am Button selbst.
+
 ## [1.12.5] - 2026-07-14
 ### Sicherheit
 - **Loot Council vertraut nicht mehr ungeprüften Absendern bei Konfiguration, Ergebnissen und Officer-Notizen:** Drei Addon-Message-Handler übernahmen ihre Nutzdaten von jedem Absender, ohne zu prüfen, wer sie wirklich geschickt hat — ein gefälschter `LC_CONFIG`-Broadcast konnte den eigenen Namen des Absenders auf jedem Client in die Council-Liste eintragen, ein gefälschtes Loot-Ergebnis konnte einen Fake-Eintrag in die Loot-Historie aller Spieler schreiben und ein falsches "Du hast gewonnen"-Popup auslösen, und eine gefälschte Officer-Notiz konnte die Notiz eines beliebigen Spielers ohne jede Berechtigungsprüfung überschreiben. Alle drei prüfen jetzt gegen den aktuellen Roster, ob der Absender wirklich der aktuelle Raid-/Gruppenleiter (Konfiguration) bzw. ein Council-Mitglied (Ergebnisse, Officer-Notizen) ist, bevor sie handeln — das schließt auch den Flüstern-Angriffsweg, da ein Absender, der nicht in der eigenen Gruppe steht, diese Prüfung nie bestehen kann.

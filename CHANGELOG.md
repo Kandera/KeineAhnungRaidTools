@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-14
+### Added
+- **Loot Council panel can now be minimized:** a new "-" button next to the close button collapses the panel down to just its header and item name, so it can stay on screen during normal raiding without the full candidate list in the way. Tabs, votes, and everything else stay tracked while minimized, and the panel automatically expands again the moment a genuinely new item starts a roll, so nothing gets missed.
+- **Visual refresh for both Loot Council windows:** vote buttons and council rows now show a small icon per vote category (Blizzard's own default group-loot icons, not custom art) alongside their existing colour-coding; the currently-rolled item's icon gets a quality-tinted accent border and a native radial countdown wipe (the same `Cooldown` widget every ability button already uses); council rows show a round class icon, an ilvl +/- delta against the rolled item, and roll values ≥85 get a gold glow; the council-vote tally button now fills proportionally instead of showing a bare number; the active tab gets a gold accent glow; and the vote popup shows a running "X/Y voted" count next to its timer.
+
+### Changed
+- **Loot Council panel is noticeably wider:** name and vote columns were clipping or wrapping real player names and vote labels at the old fixed width — that no longer happens, even with the new icon columns added.
+- **The winning candidate's row is now highlighted gold instead of green:** green is also the "Upgrade" vote colour, so a row could end up ambiguously both at once; gold doesn't collide with any vote category.
+- **A raider's own note is now still visible after voting, not just before:** the vote popup used to hide the note the moment you voted; the "you voted" badge now shows it alongside the chosen category (truncated if long) instead of discarding it from view.
+- **Council row tooltips are more targeted:** hovering the equipped-item icon (item comparison) no longer also shows the raider's note or officer note — those now have their own dedicated tooltip on the note/officer-note icons themselves, so a routine gear comparison doesn't dump someone's comment into view every time. Hovering an item tab in the left-edge strip no longer triggers Blizzard's own gear-comparison tooltip either — not useful there, only "which item is this" is.
+
+### Fixed
+- **The council panel's minimize button overlapped the header timer/"Done" text:** the timer was anchored with a hardcoded offset from the window edge that didn't account for the new minimize button; it's now anchored to the button itself instead.
+
 ## [1.12.5] - 2026-07-14
 ### Security
 - **Loot Council no longer trusts unverified senders for config, results, and officer notes:** Three addon-message handlers accepted their payload from any sender without checking who actually sent it — a forged `LC_CONFIG` broadcast could add the sender's own name to the council list on every client, a forged loot result could write a fake entry into everyone's loot history and pop a false "You Win" popup, and a forged officer note could overwrite any player's note with no authorization at all. All three now verify the sender is the actual current raid/party leader (config) or a council member (results, officer notes) against the live roster before acting, which also closes the whisper vector since a sender who isn't in your group can never pass that check.

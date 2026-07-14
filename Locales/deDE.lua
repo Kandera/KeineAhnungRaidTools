@@ -161,6 +161,7 @@ KART.L_deDE = {
     LC_SESSION_OFF         = "Loot Council deaktiviert.",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",
+    LC_VOTES_PROGRESS      = "(%d/%d abgestimmt)",
     LC_PANEL_TITLE         = "Loot Council",
     LC_VOTING_DONE         = "Fertig",
     LC_COL_NAME            = "Spieler",

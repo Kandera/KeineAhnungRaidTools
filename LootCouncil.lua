@@ -13,6 +13,9 @@ LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
 LC.councilTabsNew       = {}  -- [rollID] = true while a tab hasn't been switched to yet (unseen-item marker)
 LC.rollDeadlines        = {}  -- [rollID] = GetTime() timestamp when voting closes, shared by both UIs
+LC.rollDurations        = {}  -- [rollID] = original vote-window length in seconds, used only to size
+                               -- the council header's time-bar fill (rollDeadlines alone gives a
+                               -- deadline but not the window's original length)
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerShort}
 LC.CouncilNamesTable    = {}  -- shortName:lower() -> true. Populated ONLY from the raid leader's
                                -- broadcast (LC_CONFIG) — never from local settings — so a regular
@@ -60,6 +63,35 @@ local BUTTON_COLORS = {
     {r=0.55, g=0.55, b=0.55},
     {r=0.7,  g=0.3,  b=0.9 },
 }
+
+-- Native icon textures used as small chips on vote buttons/pills, one per button *position* (not
+-- tied to label text, since labels are leader-configurable free text — see GetButtonConfig). All
+-- five are Blizzard's own default group-loot icons, reused purely because they already ship with
+-- the client and render correctly at small sizes — Unicode symbol glyphs (★ ▲ etc.) were
+-- considered and rejected: WoW's default game fonts render most of the Geometric Shapes/Dingbats
+-- blocks as an empty "tofu" box (the reason row.councilVoteBtn.text below is ASCII-only already).
+local VOTE_ICON_TEXTURES = {
+    "Interface\\Buttons\\UI-GroupLoot-Dice-Up",   -- 1: strongest want (BIS)
+    "Interface\\Buttons\\UI-GroupLoot-Coin-Up",   -- 2: secondary want (Upgrade)
+    "Interface\\Buttons\\UI-GroupLoot-DE-Up",     -- 3: alternate use (Offspec)
+    "Interface\\COMMON\\help-i",                  -- 4: catch-all (Sonstiges)
+    "Interface\\Buttons\\UI-GroupLoot-Pass-Up",   -- 5: Pass
+}
+local function GetVoteIconTexture(index)
+    return VOTE_ICON_TEXTURES[index] or VOTE_ICON_TEXTURES[#VOTE_ICON_TEXTURES]
+end
+
+-- Round class icon (the same atlas used by default raid/party frames) so a council-row candidate's
+-- class reads at a glance without parsing the class-coloured name text.
+local function SetClassIconTexture(tex, classFile)
+    if not (classFile and CLASS_ICON_TEXCOORDS and CLASS_ICON_TEXCOORDS[classFile]) then
+        tex:Hide()
+        return
+    end
+    tex:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circle")
+    tex:SetTexCoord(unpack(CLASS_ICON_TEXCOORDS[classFile]))
+    tex:Show()
+end
 
 -- =====================================================================
 --  Helpers
@@ -374,6 +406,10 @@ end
 
 LC.votedByMe = LC.votedByMe or {} -- [rollID] = true once WE cast a vote for it (tracked by rollID,
                                    -- not by row, since rows get recycled/reindexed as items expire)
+LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed before voting, kept
+                                   -- around purely so the "you voted" state can still show it —
+                                   -- otherwise it vanishes the moment the note box hides, even
+                                   -- though the raider clearly remembers writing it.
 
 function LC.CreateVoteList()
     local f = CreateFrame("Frame", "KART_LCVoteList", UIParent, "BackdropTemplate")
@@ -457,7 +493,8 @@ function LC.CreateVoteList()
                 if row and row:IsShown() then
                     local deadline  = LC.rollDeadlines[rid]
                     local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
-                    row.timerText:SetText(remaining .. "s")
+                    local votedCount, total = LC.CountVotes(rid)
+                    row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
                 end
             end
         end
@@ -526,10 +563,25 @@ function LC.RefreshVoteListRows()
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
             row:SetBackdropBorderColor(0, 0, 0, 1)
 
+            -- Accent frame behind the icon, tinted to the item's own quality colour — the cheap,
+            -- crisp equivalent of a soft glow (a true blurred glow needs a bundled additive-blend
+            -- texture WoW doesn't ship, see the earlier "what more effort actually costs" note).
+            row.itemIconBorder = row:CreateTexture(nil, "BACKGROUND")
+            row.itemIconBorder:SetColorTexture(1, 1, 1, 1)
+
             row.itemIcon = row:CreateTexture(nil, "ARTWORK")
             row.itemIcon:SetSize(18, 18)
             row.itemIcon:SetPoint("TOPLEFT", MARGIN, -6)
             row.itemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            row.itemIconBorder:SetPoint("TOPLEFT", row.itemIcon, -2, 2)
+            row.itemIconBorder:SetPoint("BOTTOMRIGHT", row.itemIcon, 2, -2)
+
+            -- Radial "time remaining" wipe — the same native Cooldown widget every spell/ability
+            -- button already uses, so it animates on its own once set, no per-frame Lua needed.
+            row.itemCD = CreateFrame("Cooldown", nil, row, "CooldownFrameTemplate")
+            row.itemCD:SetAllPoints(row.itemIcon)
+            row.itemCD:SetHideCountdownNumbers(true)
+            row.itemCD:SetDrawBling(false)
 
             row.itemText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.itemText:SetPoint("TOPLEFT", row.itemIcon, "TOPRIGHT", 6, 2)
@@ -551,8 +603,15 @@ function LC.RefreshVoteListRows()
             row.btnArea:SetPoint("TOPLEFT", MARGIN, -BTN_TOP)
             row.voteButtons = {}
 
-            row.votedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.votedText:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", 2, -4)
+            -- Small coloured chip instead of plain text, so "you already voted" reads as a status
+            -- badge (matching the vote buttons' own material) rather than a leftover label.
+            row.votedBadge = CreateFrame("Frame", nil, row, "BackdropTemplate")
+            row.votedBadge:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", 0, -2)
+            row.votedBadge:SetHeight(20)
+            row.votedBadge:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+
+            row.votedText = row.votedBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.votedText:SetPoint("CENTER")
 
             row.noteLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             row.noteLabel:SetText(KART.L.LC_NOTE_LABEL_SHORT)
@@ -599,19 +658,26 @@ function LC.RefreshVoteListRows()
 
         -- Real icon when we have one; otherwise the same tinted placeholder used by the council
         -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
+        local ir, ig, ib = ParseItemColor(rollLink)
         local iconTexture = IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
         if iconTexture then
             row.itemIcon:SetTexture(iconTexture)
             row.itemIcon:SetVertexColor(1, 1, 1)
         else
-            local ir, ig, ib = ParseItemColor(rollLink)
             row.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
             row.itemIcon:SetVertexColor(ir, ig, ib)
         end
+        row.itemIconBorder:SetVertexColor(ir, ig, ib)
 
         local deadline  = LC.rollDeadlines[rollID]
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
-        row.timerText:SetText(remaining .. "s")
+        do
+            local votedCount, total = LC.CountVotes(rollID)
+            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
+        end
+        if deadline then
+            row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
+        end
 
         row.itemHover:SetScript("OnEnter", function(self)
             local link = LC.rollItems[rollID]
@@ -628,8 +694,20 @@ function LC.RefreshVoteListRows()
         row.noteLabel:SetShown(not voted)
         row.noteBox:SetShown(not voted)
         row.votedText:SetShown(voted ~= nil)
+        row.votedBadge:SetShown(voted ~= nil)
         if votedDef then
-            row.votedText:SetText(string.format(KART.L.LC_VOTED_ROW, votedDef.label))
+            -- The note the raider typed before voting is otherwise gone the moment the note box
+            -- hides (see LC.votedNoteByMe) — show it alongside the vote so it's not just forgotten.
+            local label = votedDef.label
+            local noteText = LC.votedNoteByMe[rollID]
+            if noteText and noteText ~= "" then
+                if #noteText > 30 then noteText = noteText:sub(1, 30) .. "..." end
+                label = label .. " — \"" .. noteText .. "\""
+            end
+            row.votedText:SetText(string.format(KART.L.LC_VOTED_ROW, label))
+            row.votedBadge:SetBackdropColor(votedDef.r, votedDef.g, votedDef.b, 0.18)
+            row.votedBadge:SetBackdropBorderColor(votedDef.r, votedDef.g, votedDef.b, 0.7)
+            row.votedBadge:SetWidth(math.min(row.votedText:GetStringWidth() + 20, 329))
         end
 
         for bi = #buttons + 1, #row.voteButtons do
@@ -644,6 +722,12 @@ function LC.RefreshVoteListRows()
                 local btn = row.voteButtons[bi]
                 if not btn then
                     btn = KART.CreateModernButton(row.btnArea, def.label)
+                    btn.grad = KART.CreateGradientOverlay(btn)
+                    btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
+                    btn.iconTex:SetSize(13, 13)
+                    btn.iconTex:SetPoint("LEFT", 6, 0)
+                    btn.text:ClearAllPoints()
+                    btn.text:SetPoint("CENTER", 6, 0)
                     row.voteButtons[bi] = btn
                 else
                     btn:Show()
@@ -652,9 +736,11 @@ function LC.RefreshVoteListRows()
                 btn:SetSize(btnW, btnH)
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", col * (btnW + BTN_GAP), -brow * (btnH + BTN_ROW_GAP))
-                -- Softer border than a plain popup button (0.55 vs the usual 0.9) — still enough
-                -- to colour-code each option, without every row reading as a wall of bright boxes.
-                btn:SetBackdropBorderColor(def.r, def.g, def.b, 0.55)
+                -- Full-strength border (was 0.55) plus a tinted gradient fill behind the label, so
+                -- the category reads as the button's own material instead of just its outline.
+                btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
+                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                btn.iconTex:SetTexture(GetVoteIconTexture(bi))
 
                 local capturedIdx    = bi
                 local capturedRollID = rollID
@@ -662,6 +748,7 @@ function LC.RefreshVoteListRows()
                     if LC.votedByMe[capturedRollID] then return end
                     LC.votedByMe[capturedRollID] = capturedIdx
                     local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
+                    LC.votedNoteByMe[capturedRollID] = note
                     if IsTestRoll(capturedRollID) then
                         -- Test rolls have no real raid to broadcast to (and testing solo may
                         -- mean no group at all), so record the vote locally and push it
@@ -799,6 +886,7 @@ function LC.ShowCouncilPanel(rollID, seconds)
     local panel = LC.councilPanel
 
     LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
+    LC.rollDurations[rollID] = seconds or 20
 
     local alreadyTabbed = false
     for _, rid in ipairs(LC.councilTabs) do
@@ -808,6 +896,12 @@ function LC.ShowCouncilPanel(rollID, seconds)
         table.insert(LC.councilTabs, rollID)
         if LC.activeRollID and LC.activeRollID ~= rollID then
             LC.councilTabsNew[rollID] = true
+        end
+        -- A genuinely new item dropped while the panel was minimized — expand it back so it
+        -- can't be missed, rather than leaving council members to notice the tab count on their
+        -- own. Re-votes/re-shows of an already-tabbed roll never trigger this.
+        if panel.isMinimized then
+            LC.SetCouncilPanelMinimized(false)
         end
     end
 
@@ -829,6 +923,23 @@ function LC.SwitchCouncilTab(rollID)
     LC.councilTabsNew[rollID] = nil
     panel.itemText:SetText(LC.rollItems[rollID] or "???")
     panel.title:SetText(KART.L.LC_PANEL_TITLE)
+
+    local link = LC.rollItems[rollID]
+    local ir, ig, ib = ParseItemColor(link)
+    local iconTexture = IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+    if iconTexture then
+        panel.itemIcon:SetTexture(iconTexture)
+        panel.itemIcon:SetVertexColor(1, 1, 1)
+    else
+        panel.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        panel.itemIcon:SetVertexColor(ir, ig, ib)
+    end
+    panel.itemIconBorder:SetVertexColor(ir, ig, ib)
+    local deadline = LC.rollDeadlines[rollID]
+    if deadline then
+        panel.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
+    end
+
     LC.RefreshCouncilRows()
     LC.RefreshCouncilTabs()
 end
@@ -869,6 +980,14 @@ function LC.RefreshCouncilTabs()
             tab:SetSize(40, 40)
             tab:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2})
             tab:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
+
+            -- Accent frame behind the active tab only — same crisp-border-instead-of-blur
+            -- approximation used on the vote-popup item icon (see row.itemIconBorder).
+            tab.activeGlow = tab:CreateTexture(nil, "BACKGROUND")
+            tab.activeGlow:SetColorTexture(1, 0.85, 0.2, 0.55)
+            tab.activeGlow:SetPoint("TOPLEFT", -3, 3)
+            tab.activeGlow:SetPoint("BOTTOMRIGHT", 3, -3)
+            tab.activeGlow:Hide()
 
             tab.icon = tab:CreateTexture(nil, "ARTWORK")
             tab.icon:SetPoint("TOPLEFT", 3, -3)
@@ -913,8 +1032,10 @@ function LC.RefreshCouncilTabs()
         local r, g, b = ParseItemColor(link)
         if rollID == LC.activeRollID then
             tab:SetBackdropBorderColor(1, 0.85, 0.2, 1)
+            tab.activeGlow:Show()
         else
             tab:SetBackdropBorderColor(r, g, b, 0.9)
+            tab.activeGlow:Hide()
         end
 
         -- Real items show their actual icon; test mode has no real item to fetch an icon for,
@@ -943,6 +1064,11 @@ function LC.RefreshCouncilTabs()
             if IsRealItemLink(hoverLink) then
                 GameTooltip:SetHyperlink(hoverLink)
                 GameTooltip:AddLine(" ")
+                -- SetHyperlink auto-triggers Blizzard's own gear-comparison tooltip (comparing
+                -- against the *viewer's* equipped item) — not wanted on the tab strip, this is
+                -- just "which item is this tab", not a personal upgrade check.
+                if ShoppingTooltip1 then ShoppingTooltip1:Hide() end ---@diagnostic disable-line: undefined-global
+                if ShoppingTooltip2 then ShoppingTooltip2:Hide() end ---@diagnostic disable-line: undefined-global
             else
                 GameTooltip:SetText(hoverLink or "???", 1, 1, 1)
             end
@@ -991,9 +1117,16 @@ function LC.RefreshCouncilTabs()
     panel.tabStrip:SetShown(#LC.councilTabs > 0)
 end
 
+-- Panel width: wide enough that raider names and vote labels never truncate/wrap even with the
+-- class-icon and vote-icon columns added (see RefreshCouncilRows) — a fixed-width table with real
+-- names in it will always eventually clip someone, so this errs wide rather than clever-wrapping.
+local COUNCIL_PANEL_WIDTH   = 555
+local COUNCIL_PANEL_HEIGHT  = 462
+local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
+
 function LC.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
-    f:SetSize(475, 440)
+    f:SetSize(COUNCIL_PANEL_WIDTH, COUNCIL_PANEL_HEIGHT)
     f:SetPoint("CENTER", 220, 0)
     f:SetFrameStrata("HIGH")
     f:SetMovable(true)
@@ -1031,8 +1164,10 @@ function LC.CreateCouncilPanel()
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.title:SetPoint("LEFT", 10, 0)
 
+    -- Anchored to the minimize button once it exists (below) rather than a hardcoded offset from
+    -- hdr's right edge — a hardcoded number silently overlapped the "-"/"×" buttons the moment a
+    -- longer string (e.g. the "Done" text) or the button layout changed.
     f.timerText = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.timerText:SetPoint("RIGHT", -32, 0)
 
     local closeBtn = CreateFrame("Button", nil, hdr)
     closeBtn:SetSize(22, 22)
@@ -1044,18 +1179,70 @@ function LC.CreateCouncilPanel()
     table.insert(KART.CloseButtonTexts, closeBtn.text)
     closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
     closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
-    -- Only minimizes the window — the active roll's tab (and all others) stay tracked and
-    -- reappear next time the panel is shown (a new roll arriving, or reopened via a tab click
-    -- elsewhere isn't possible once fully hidden, so this is a deliberate "get it out of my way
-    -- for now", not a "discard" action; use a tab's own "x" to actually dismiss an item).
+    -- Only hides the window — the active roll's tab (and all others) stay tracked and reappear
+    -- next time the panel is shown; this is a deliberate "get it out of my way for now", not a
+    -- "discard" action. Use a tab's own "x" to actually dismiss an item, or the "-" button (below)
+    -- to shrink the panel down to just its header instead of hiding it outright.
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
-    -- Item display
+    -- Collapses the panel to just its title bar + item name, keeping it out of the way during
+    -- normal raiding without losing track of what's being voted on (tabs/rows are hidden, not
+    -- discarded — see LC.SetCouncilPanelMinimized). Sits left of the close button, same style.
+    local minimizeBtn = CreateFrame("Button", nil, hdr)
+    minimizeBtn:SetSize(22, 22)
+    minimizeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
+    minimizeBtn.text = minimizeBtn:CreateFontString(nil, "OVERLAY")
+    minimizeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    minimizeBtn.text:SetPoint("CENTER", 0, 1)
+    minimizeBtn.text:SetText("-")
+    table.insert(KART.CloseButtonTexts, minimizeBtn.text)
+    minimizeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0.85, 0.2) end)
+    minimizeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
+    minimizeBtn:SetScript("OnClick", function() LC.SetCouncilPanelMinimized(not f.isMinimized) end)
+    f.minimizeBtn = minimizeBtn
+    f.timerText:SetPoint("RIGHT", minimizeBtn, "LEFT", -6, 0)
+
+    -- Item display: icon (with quality-tinted accent border + native cooldown-style vote-timer
+    -- wipe, same technique as the vote-popup row icon) plus the item name beside it.
+    f.itemIconBorder = f:CreateTexture(nil, "BACKGROUND")
+    f.itemIconBorder:SetColorTexture(1, 1, 1, 1)
+
+    f.itemIcon = f:CreateTexture(nil, "ARTWORK")
+    f.itemIcon:SetSize(30, 30)
+    f.itemIcon:SetPoint("TOPLEFT", 10, -34)
+    f.itemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    f.itemIconBorder:SetPoint("TOPLEFT", f.itemIcon, -2, 2)
+    f.itemIconBorder:SetPoint("BOTTOMRIGHT", f.itemIcon, 2, -2)
+
+    f.itemCD = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
+    f.itemCD:SetAllPoints(f.itemIcon)
+    f.itemCD:SetHideCountdownNumbers(true)
+    f.itemCD:SetDrawBling(false)
+
     f.itemText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    f.itemText:SetPoint("TOPLEFT", 10, -36)
-    f.itemText:SetWidth(410)
+    f.itemText:SetPoint("LEFT", f.itemIcon, "RIGHT", 8, 8)
+    f.itemText:SetWidth(457)
     f.itemText:SetJustifyH("LEFT")
     f.itemText:SetWordWrap(false)
+
+    -- "iLvl" left unlocalized on purpose, same as the hIlvl column header below.
+    f.ilvlText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.ilvlText:SetPoint("TOPLEFT", f.itemText, "BOTTOMLEFT", 0, -2)
+    f.ilvlText:SetTextColor(0.6, 0.6, 0.55)
+
+    -- Slim fill bar showing the vote window's remaining time as a fraction (see LC.rollDurations),
+    -- updated alongside f.timerText by the same ticker below.
+    f.timeBar = CreateFrame("StatusBar", nil, f)
+    f.timeBar:SetPoint("TOPLEFT", 10, -70)
+    f.timeBar:SetPoint("TOPRIGHT", -10, -70)
+    f.timeBar:SetHeight(4)
+    f.timeBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+    f.timeBar:SetStatusBarColor(0.82, 0.65, 0.24, 1)
+    f.timeBar:SetMinMaxValues(0, 1)
+    f.timeBar:SetValue(1)
+    f.timeBarBG = f:CreateTexture(nil, "BACKGROUND")
+    f.timeBarBG:SetAllPoints(f.timeBar)
+    f.timeBarBG:SetColorTexture(0, 0, 0, 0.6)
 
     -- FontStrings can't take mouse scripts directly; overlay a hover frame for the tooltip.
     f.itemHover = CreateFrame("Frame", nil, f)
@@ -1075,26 +1262,26 @@ function LC.CreateCouncilPanel()
     -- Every header below is positioned/sized/justified to exactly match its column's row widget
     -- (see the row.* creation block in RefreshCouncilRows) — row content sits 5px further right
     -- than f's own left edge (the scroll area's own inset), so headers carry the same +5 here.
-    hName:SetPoint("TOPLEFT", 11, -56)
-    hName:SetWidth(80)
+    hName:SetPoint("TOPLEFT", 11, -80)
+    hName:SetWidth(100)
     hName:SetJustifyH("LEFT")
     hName:SetText(KART.L.LC_COL_NAME)
 
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hIlvl:SetPoint("TOPLEFT", 93, -56)
-    hIlvl:SetWidth(50) -- spans the equip icon + ilvl number together
+    hIlvl:SetPoint("TOPLEFT", 136, -80)
+    hIlvl:SetWidth(68) -- spans the equip icon + ilvl number (+/- delta) together
     hIlvl:SetJustifyH("CENTER")
     hIlvl:SetText("iLvl")
     hIlvl:SetTextColor(0.5, 0.5, 0.5)
 
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hVote:SetPoint("TOPLEFT", 151, -56)
-    hVote:SetWidth(80)
+    hVote:SetPoint("TOPLEFT", 212, -80)
+    hVote:SetWidth(100)
     hVote:SetJustifyH("LEFT")
     hVote:SetText(KART.L.LC_COL_VOTE)
 
     local hRoll = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hRoll:SetPoint("TOPLEFT", 235, -56)
+    hRoll:SetPoint("TOPLEFT", 330, -80)
     hRoll:SetWidth(34)
     hRoll:SetJustifyH("CENTER")
     hRoll:SetText(KART.L.LC_COL_ROLL)
@@ -1102,7 +1289,7 @@ function LC.CreateCouncilPanel()
     f.hRoll = hRoll -- hidden/shown with the rolls-enabled setting, see RefreshCouncilRows
 
     local hCouncilVotes = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hCouncilVotes:SetPoint("TOPLEFT", 273, -56)
+    hCouncilVotes:SetPoint("TOPLEFT", 368, -80)
     hCouncilVotes:SetWidth(40)
     hCouncilVotes:SetJustifyH("CENTER")
     hCouncilVotes:SetText("CV") -- "Council Votes" — plain ASCII, see the note in RefreshCouncilRows
@@ -1112,7 +1299,7 @@ function LC.CreateCouncilPanel()
     -- Companion app, see Droptimizer.lua), shown/hidden with dtModuleEnabled just like hRoll
     -- is shown/hidden with lcRollsEnabled below.
     local hGain = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hGain:SetPoint("TOPLEFT", 318, -56)
+    hGain:SetPoint("TOPLEFT", 411, -80)
     hGain:SetWidth(44)
     hGain:SetJustifyH("CENTER")
     hGain:SetText(KART.L.DT_COL_GAIN or "Gain")
@@ -1122,19 +1309,19 @@ function LC.CreateCouncilPanel()
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.22, 0.22, 0.22, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 5, -67)
-    divider:SetPoint("TOPRIGHT", -5, -67)
+    divider:SetPoint("TOPLEFT", 5, -91)
+    divider:SetPoint("TOPRIGHT", -5, -91)
 
     -- Scrollable row area
     local scrollBG = CreateFrame("Frame", nil, f)
-    scrollBG:SetPoint("TOPLEFT", 5, -70)
+    scrollBG:SetPoint("TOPLEFT", 5, -94)
     scrollBG:SetPoint("BOTTOMRIGHT", -5, 48)
 
     local scrollFrame = CreateFrame("ScrollFrame", "KART_LCCouncilScroll", scrollBG, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT"); scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(430, 800)
+    scrollChild:SetSize(520, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
     local thumb = KART.StripScrollbarTextures(scrollFrame)
@@ -1159,6 +1346,16 @@ function LC.CreateCouncilPanel()
     btnClose:SetPoint("BOTTOMRIGHT", -10, 10)
     btnClose:SetScript("OnClick", function() f:Hide() end)
 
+    -- Everything below the header + item name — hidden as a group when minimized (see
+    -- LC.SetCouncilPanelMinimized). Column headers, the divider, the whole scroll/row area, the
+    -- tab strip, and the bottom action buttons all go away; the header bar and item name stay put
+    -- so a minimized panel still tells you *something* is waiting on a decision.
+    f.collapsible = {
+        hName, hIlvl, hVote, hRoll, hCouncilVotes, hGain,
+        divider, scrollBG, btnNoWinner, btnClose, f.tabStrip,
+        f.timeBar, f.timeBarBG,
+    }
+
     LC.councilPanel = f
 
     -- Restore saved position
@@ -1176,6 +1373,10 @@ function LC.CreateCouncilPanel()
         if not deadline then f.timerText:SetText("") return end
         local remaining = math.ceil(deadline - GetTime())
         f.timerText:SetText(remaining > 0 and (remaining .. "s") or KART.L.LC_VOTING_DONE)
+
+        local duration = LC.rollDurations[LC.activeRollID] or 20
+        f.timeBar:SetMinMaxValues(0, duration)
+        f.timeBar:SetValue(math.max(remaining, 0))
     end)
 
     -- Dedicated tooltip for the equipped-item icon hover (see RefreshCouncilRows) — deliberately
@@ -1185,6 +1386,21 @@ function LC.CreateCouncilPanel()
     -- addon's actual goal here — comparing a specific raid candidate's equipped item to the
     -- item being rolled. A fully separate frame sidesteps that collision entirely.
     LC.equipCompareTooltip = CreateFrame("GameTooltip", "KART_LCEquipCompareTooltip", UIParent, "GameTooltipTemplate")
+end
+
+-- Collapses/restores the council panel to just its header + item name (see f.collapsible, set up
+-- in CreateCouncilPanel) — lets council members keep it on screen during normal raiding without
+-- the full row list permanently in the way, without losing the panel's position/tracked tabs the
+-- way fully hiding it (the "x" button) would feel like.
+function LC.SetCouncilPanelMinimized(minimized)
+    local f = LC.councilPanel
+    if not f then return end
+    f.isMinimized = minimized
+    for _, widget in ipairs(f.collapsible) do
+        widget:SetShown(not minimized)
+    end
+    f:SetHeight(minimized and COUNCIL_PANEL_MIN_H or COUNCIL_PANEL_HEIGHT)
+    if f.minimizeBtn then f.minimizeBtn.text:SetText(minimized and "+" or "-") end
 end
 
 -- Freshly-dropped items are frequently not yet cached client-side when the panel first renders,
@@ -1216,6 +1432,18 @@ function LC.RefreshCouncilRows()
         end)
     end
     local itemArmorRank = LC.GetItemArmorRank(rollItem)
+
+    -- Rolled item's own ilvl, purely to show a +/- delta next to each candidate's equipped ilvl
+    -- (see the equippedText update below) — nil until the item link is cached, same as everywhere
+    -- else in this function that reads C_Item.GetItemInfo.
+    local rollItemIlvl
+    if rollItem and IsRealItemLink(rollItem) then
+        local _, _, _, ilvl = C_Item.GetItemInfo(rollItem)
+        rollItemIlvl = ilvl
+    end
+    if panel.ilvlText then
+        panel.ilvlText:SetText(rollItemIlvl and ("Item Level " .. rollItemIlvl) or "")
+    end
 
     local members = {}
     for i = 1, numMem do
@@ -1300,15 +1528,21 @@ function LC.RefreshCouncilRows()
             row:RegisterForClicks("RightButtonUp")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
+            -- Round class icon (see SetClassIconTexture) so class reads at a glance without
+            -- parsing the class-coloured name text next to it.
+            row.classIcon = row:CreateTexture(nil, "ARTWORK")
+            row.classIcon:SetSize(14, 14)
+            row.classIcon:SetPoint("LEFT", 6, 0)
+
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.nameText:SetPoint("LEFT", 6, 0)
-            row.nameText:SetWidth(80)
+            row.nameText:SetPoint("LEFT", row.classIcon, "RIGHT", 3, 0)
+            row.nameText:SetWidth(100)
             row.nameText:SetJustifyH("LEFT")
 
             -- Icon of the item currently equipped in the matching slot
             row.equipIcon = row:CreateTexture(nil, "ARTWORK")
             row.equipIcon:SetSize(18, 18)
-            row.equipIcon:SetPoint("LEFT", 88, 0)
+            row.equipIcon:SetPoint("LEFT", 131, 0)
             row.equipIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
             -- Textures can't take OnEnter/OnLeave themselves, so this invisible frame sits over
@@ -1321,18 +1555,24 @@ function LC.RefreshCouncilRows()
 
             -- Equipped item level in the matching slot
             row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.equippedText:SetPoint("LEFT", 108, 0)
-            row.equippedText:SetWidth(30)
+            row.equippedText:SetPoint("LEFT", 153, 0)
+            row.equippedText:SetWidth(46)
             row.equippedText:SetJustifyH("CENTER")
 
+            -- Same vote-category icon used on the vote-popup buttons (see VOTE_ICON_TEXTURES),
+            -- so a vote reads as an icon+colour tag instead of colour-coded text alone.
+            row.voteIcon = row:CreateTexture(nil, "ARTWORK")
+            row.voteIcon:SetSize(12, 12)
+            row.voteIcon:SetPoint("LEFT", 207, 0)
+
             row.voteText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.voteText:SetPoint("LEFT", 146, 0)
-            row.voteText:SetWidth(80)
+            row.voteText:SetPoint("LEFT", row.voteIcon, "RIGHT", 3, 0)
+            row.voteText:SetWidth(95)
             row.voteText:SetJustifyH("LEFT")
 
             -- Opt-in 1-100 roll (see lcRollsEnabled); hidden entirely when the raid has it off.
             row.rollText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.rollText:SetPoint("LEFT", 230, 0)
+            row.rollText:SetPoint("LEFT", 325, 0)
             row.rollText:SetWidth(34)
             row.rollText:SetJustifyH("CENTER")
 
@@ -1343,9 +1583,17 @@ function LC.RefreshCouncilRows()
             -- button is always available, not gated behind any extra role check.
             row.councilVoteBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
             row.councilVoteBtn:SetSize(40, 18)
-            row.councilVoteBtn:SetPoint("LEFT", 268, 0)
+            row.councilVoteBtn:SetPoint("LEFT", 363, 0)
             row.councilVoteBtn:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.councilVoteBtn:SetBackdropColor(0, 0, 0, 0.4)
+
+            -- Fill proportional to pollCount/numMem, so the tally reads as a bar at a glance
+            -- instead of requiring the number to be read every time (see the update below).
+            row.councilVoteBtn.fill = row.councilVoteBtn:CreateTexture(nil, "ARTWORK")
+            row.councilVoteBtn.fill:SetColorTexture(1, 0.85, 0.2, 1)
+            row.councilVoteBtn.fill:SetPoint("TOPLEFT", 1, -1)
+            row.councilVoteBtn.fill:SetPoint("BOTTOMLEFT", 1, 1)
+
             row.councilVoteBtn.text = row.councilVoteBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.councilVoteBtn.text:SetPoint("CENTER")
 
@@ -1354,6 +1602,19 @@ function LC.RefreshCouncilRows()
             row.noteIcon:SetPoint("RIGHT", -4, 0)
             row.noteIcon:SetWidth(16)
             row.noteIcon:SetJustifyH("CENTER")
+
+            -- FontStrings can't take mouse scripts directly (see row.itemHover elsewhere) — this
+            -- is the note's own dedicated tooltip, separate from the equip-icon one, so the note
+            -- text only shows up when someone actually hovers the note dot itself.
+            -- Sized explicitly rather than SetAllPoints(row.noteIcon): the icon is a FontString
+            -- that shows nothing but "" when there's no note, and an unset/auto height on empty
+            -- text collapses towards 0 — which would leave no real hit target to hover even once
+            -- a note exists (SetAllPoints is a live constraint, so it inherits that collapse). A
+            -- fixed, generous size sidesteps that and is also just easier to actually hit.
+            row.noteHitbox = CreateFrame("Frame", nil, row)
+            row.noteHitbox:SetSize(18, 18)
+            row.noteHitbox:SetPoint("CENTER", row.noteIcon)
+            row.noteHitbox:EnableMouse(true)
 
             -- Warning shown when the raider is missing KART, outdated, or has LC disabled locally
             row.warnIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1368,11 +1629,15 @@ function LC.RefreshCouncilRows()
             row.officerNoteIcon:SetWidth(14)
             row.officerNoteIcon:SetJustifyH("CENTER")
 
+            row.officerNoteHitbox = CreateFrame("Frame", nil, row)
+            row.officerNoteHitbox:SetAllPoints(row.officerNoteIcon)
+            row.officerNoteHitbox:EnableMouse(true)
+
             -- Droptimizer gain % for the item currently being rolled — see Droptimizer.lua
             -- (KART.DT.GetGainPercent). Sits in the space opened up by the wider panel/scrollChild
             -- between councilVoteBtn and the right-anchored note/warn/officerNote icons.
             row.gainText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.gainText:SetPoint("LEFT", 318, 0)
+            row.gainText:SetPoint("LEFT", 411, 0)
             row.gainText:SetWidth(44)
             row.gainText:SetJustifyH("CENTER")
 
@@ -1403,10 +1668,12 @@ function LC.RefreshCouncilRows()
         row:SetPoint("RIGHT", panel.scrollChild, "RIGHT", 0, 0)
         row.memberShort = m.short
 
-        -- Winner gets green highlight; others get alternating grey
+        -- Winner gets a gold highlight (not green — green is already the "Upgrade" vote colour,
+        -- see BUTTON_COLORS/VOTE_ICON_TEXTURES, and a row could easily be both at once); others
+        -- get alternating grey.
         if isWinner then
-            row:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
-            row:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
+            row:SetBackdropColor(0.28, 0.21, 0.03, 0.85)
+            row:SetBackdropBorderColor(1, 0.85, 0.2, 1)
         else
             row:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
             row:SetBackdropBorderColor(0, 0, 0, 1)
@@ -1424,6 +1691,7 @@ function LC.RefreshCouncilRows()
                 nb = RAID_CLASS_COLORS[classFile].b
             end
         end
+        SetClassIconTexture(row.classIcon, classFile)
 
         -- Armor-type eligibility is a soft visual hint, never a hard block (right-click assign
         -- still works either way) — dims the row and greys the name so obviously-wrong
@@ -1446,7 +1714,18 @@ function LC.RefreshCouncilRows()
             row.equipIcon:Hide()
         end
         if capturedEquipIlvl then
-            row.equippedText:SetText("|cff888888" .. capturedEquipIlvl .. "|r")
+            -- +/- delta vs the rolled item's own ilvl, so an upgrade/downgrade reads at a glance
+            -- without mentally subtracting two numbers per row.
+            local deltaStr = ""
+            if rollItemIlvl then
+                local diff = rollItemIlvl - capturedEquipIlvl
+                if diff > 0 then
+                    deltaStr = " |cff40c040+" .. diff .. "|r"
+                elseif diff < 0 then
+                    deltaStr = " |cffc04040" .. diff .. "|r"
+                end
+            end
+            row.equippedText:SetText("|cff888888" .. capturedEquipIlvl .. "|r" .. deltaStr)
         else
             row.equippedText:SetText("|cff444444—|r")
         end
@@ -1471,8 +1750,11 @@ function LC.RefreshCouncilRows()
                 math.floor(m.voteDef.g * 255),
                 math.floor(m.voteDef.b * 255),
                 m.voteDef.label))
+            row.voteIcon:SetTexture(GetVoteIconTexture(tonumber(m.voteIdx)))
+            row.voteIcon:Show()
         else
             row.voteText:SetText("|cff666666-|r")
+            row.voteIcon:Hide()
         end
 
         -- Opt-in 1-100 roll column — entirely hidden (not just blank) when the raid leader has
@@ -1480,7 +1762,23 @@ function LC.RefreshCouncilRows()
         local rollsEnabled = LC.GetRollsEnabled()
         row.rollText:SetShown(rollsEnabled)
         if rollsEnabled then
-            row.rollText:SetText(m.rollValue and ("|cffffd200" .. m.rollValue .. "|r") or "|cff444444—|r")
+            if m.rollValue then
+                -- A hot roll (>=85) gets a brighter gold plus a native FontString glow (no CSS
+                -- box-shadow equivalent exists here, but SetShadowColor/SetShadowOffset is free).
+                if m.rollValue >= 85 then
+                    row.rollText:SetText("|cffffe066" .. m.rollValue .. "|r")
+                    row.rollText:SetShadowColor(1, 0.7, 0.1, 0.9)
+                    row.rollText:SetShadowOffset(0, 0)
+                else
+                    row.rollText:SetText("|cffffd200" .. m.rollValue .. "|r")
+                    row.rollText:SetShadowColor(0, 0, 0, 1)
+                    row.rollText:SetShadowOffset(1, -1)
+                end
+            else
+                row.rollText:SetText("|cff444444—|r")
+                row.rollText:SetShadowColor(0, 0, 0, 1)
+                row.rollText:SetShadowOffset(1, -1)
+            end
         end
         if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
         if panel.hGain then panel.hGain:SetShown(dtEnabled) end
@@ -1503,6 +1801,11 @@ function LC.RefreshCouncilRows()
         else
             row.councilVoteBtn:SetBackdropBorderColor(0, 0, 0, 1)
         end
+        row.councilVoteBtn.fill:SetShown(pollCount > 0)
+        if pollCount > 0 then
+            row.councilVoteBtn.fill:SetWidth(38 * math.min(pollCount / math.max(numMem, 1), 1))
+            row.councilVoteBtn.fill:SetAlpha(votedByMe and 0.4 or 0.22)
+        end
         row.councilVoteBtn:SetScript("OnClick", function()
             if not capturedRoll or not capturedShort then return end
             LC.ToggleCouncilVote(capturedRoll, capturedShort)
@@ -1514,8 +1817,17 @@ function LC.RefreshCouncilRows()
         end)
         row.councilVoteBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        -- Note indicator dot
+        -- Note indicator dot — the note text itself only shows on its own dedicated tooltip here,
+        -- not on the equip-icon hover (see row.equipHitbox above), so it doesn't show up every
+        -- time someone just wants to compare gear.
         row.noteIcon:SetText(capturedNote ~= "" and "|cff66aaff•|r" or "")
+        row.noteHitbox:SetScript("OnEnter", function(self)
+            if capturedNote == "" then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("\"" .. capturedNote .. "\"", 0.9, 0.9, 0.9, 1, true)
+            GameTooltip:Show()
+        end)
+        row.noteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Warning indicator: missing/outdated KART or Loot Council disabled on their end
         row.warnIcon:SetText(capturedKartStatus and "|cffff4444!|r" or "")
@@ -1523,6 +1835,13 @@ function LC.RefreshCouncilRows()
         -- Persistent officer-note indicator — same bullet glyph as the per-vote note dot above
         -- (proven to render fine), just a different colour so the two aren't confused.
         row.officerNoteIcon:SetText(capturedOfficerNote and "|cffffaa00•|r" or "")
+        row.officerNoteHitbox:SetScript("OnEnter", function(self)
+            if not capturedOfficerNote then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(capturedOfficerNote, 1, 0.7, 0.2, 1, true)
+            GameTooltip:Show()
+        end)
+        row.officerNoteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Left-click has no function. Right-click opens the assign menu.
         -- The panel never closes on its own here — only the X / Close button does.
@@ -1538,8 +1857,8 @@ function LC.RefreshCouncilRows()
         end)
         row:SetScript("OnLeave", function(self)
             if self.memberShort == LC.assignedWinners[capturedRoll] then
-                self:SetBackdropColor(0.05, 0.25, 0.05, 0.85)
-                self:SetBackdropBorderColor(0.1, 0.8, 0.1, 1)
+                self:SetBackdropColor(0.28, 0.21, 0.03, 0.85)
+                self:SetBackdropBorderColor(1, 0.85, 0.2, 1)
             else
                 self:SetBackdropColor(0.1, 0.1, 0.1, rowIdx % 2 == 0 and 0.35 or 0.1)
                 self:SetBackdropBorderColor(0, 0, 0, 1)
@@ -1566,12 +1885,10 @@ function LC.RefreshCouncilRows()
                 GameTooltip:AddLine(string.format(KART.L.DT_TOOLTIP_GAIN or "Gain: %+.1f%% (%s)",
                     capturedGainPct, capturedGainSource or "?"), 0.6, 0.9, 0.6, true)
             end
-            if capturedNote ~= "" then
-                GameTooltip:AddLine("\"" .. capturedNote .. "\"", 0.7, 0.7, 0.7, true)
-            end
-            if capturedOfficerNote then
-                GameTooltip:AddLine(capturedOfficerNote, 1, 0.7, 0.2, true)
-            end
+            -- Raider note / officer note deliberately NOT shown here anymore — they have their
+            -- own dedicated tooltip on row.noteIcon/row.officerNoteIcon below, so hovering the
+            -- equip icon (which people do constantly, just to compare gear) doesn't also dump
+            -- someone's comment into the tooltip every time.
             if capturedArmorIneligible then
                 GameTooltip:AddLine(KART.L.LC_ARMOR_INELIGIBLE, 0.6, 0.6, 0.6, true)
             end
