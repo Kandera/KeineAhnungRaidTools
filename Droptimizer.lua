@@ -64,7 +64,7 @@ function DT.GetGainPercent(shortName, itemLink)
 
     local matches = {}
     for _, c in ipairs(candidates) do
-        if type(c) == "table" and c.itemId == itemId then
+        if type(c) == "table" and c.itemId == itemId and type(c.gainPct) == "number" then
             table.insert(matches, c)
         end
     end
@@ -77,7 +77,7 @@ function DT.GetGainPercent(shortName, itemLink)
     if actualIlvl then
         local best
         for _, c in ipairs(matches) do
-            if c.ilvl and (not best or math.abs(c.ilvl - actualIlvl) < math.abs(best.ilvl - actualIlvl)) then
+            if type(c.ilvl) == "number" and (not best or math.abs(c.ilvl - actualIlvl) < math.abs(best.ilvl - actualIlvl)) then
                 best = c
             end
         end

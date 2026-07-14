@@ -442,6 +442,28 @@ function KART.ReportMissingBuffs()
     end
 end
 
+-- WoW FontStrings don't clip or ellipsize automatically when SetWordWrap(false) — text wider than
+-- the string's SetWidth just overflows past it into whatever's anchored next (here, the reason
+-- icon). Truncates to the widest prefix that fits maxWidth, so the name column never runs into the
+-- next column regardless of the user's chosen content font size or how long the name-realm string is.
+local function SetTruncatedName(fontString, text, maxWidth)
+    fontString:SetText(text)
+    if fontString:GetStringWidth() <= maxWidth then return end
+    local lo, hi, best = 1, #text, ""
+    while lo <= hi do
+        local mid = math.floor((lo + hi) / 2)
+        local candidate = text:sub(1, mid) .. "..."
+        fontString:SetText(candidate)
+        if fontString:GetStringWidth() <= maxWidth then
+            best = candidate
+            lo = mid + 1
+        else
+            hi = mid - 1
+        end
+    end
+    fontString:SetText(best ~= "" and best or "...")
+end
+
 function KART.UpdateBuffCheck(isPreview)
     if not KART.BuffCheckFrame then return end
 
@@ -759,7 +781,7 @@ function KART.UpdateBuffCheck(isPreview)
 
         -- Row Update
         local shortName = nameStr:match("([^%-]+)")
-        row.name:SetText(nameStr)
+        SetTruncatedName(row.name, nameStr, row.name:GetWidth())
         local c = RAID_CLASS_COLORS[class] or {r=1, g=1, b=1}
         row.name:SetTextColor(c.r, c.g, c.b)
 

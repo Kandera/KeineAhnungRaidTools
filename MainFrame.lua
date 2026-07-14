@@ -53,7 +53,7 @@ mainFrame.header:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing(
 
 mainFrame.title = mainFrame.header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 mainFrame.title:SetPoint("LEFT", mainFrame.header, "LEFT", 10, 0)
-mainFrame.title:SetText(L.ADDON_TITLE .. " v" .. (KART.Version or "1.3.0")) -- Titeltext inkl. Version
+mainFrame.title:SetText(L.ADDON_TITLE .. " v" .. (KART.Version or "1.12.2")) -- Titeltext inkl. Version
 KART.MainFrame = mainFrame -- Hauptframe in KART speichern
 
 -- 3. Sidebar Menü

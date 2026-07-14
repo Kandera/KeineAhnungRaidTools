@@ -1728,7 +1728,7 @@ end
 LC.assignedWinners = LC.assignedWinners or {}
 
 StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] = { ---@diagnostic disable-line: undefined-global
-    text = "Bereits zugewiesen.",
+    text = "Already assigned.", -- unconditionally overwritten with KART.L.LC_REASSIGN_CONFIRM_TEXT in LC.AssignWinner below
     button1 = YES, ---@diagnostic disable-line: undefined-global
     button2 = NO,  ---@diagnostic disable-line: undefined-global
     timeout = 0,

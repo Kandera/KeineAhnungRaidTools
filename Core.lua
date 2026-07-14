@@ -1,6 +1,6 @@
 local addonName, KART = ...
 
-KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.3.0"
+KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.12.2"
 local frame = CreateFrame("Frame")
 
 frame:RegisterEvent("ADDON_LOADED")
@@ -296,7 +296,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     end
                 elseif msg == "REQ_VERSION" then
                     local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-                    C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, channel)
+                    if channel == "WHISPER" then
+                        C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, "WHISPER", sender)
+                    else
+                        C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, channel)
+                    end
                 elseif msg:sub(1, 8) == "VERSION:" or msg:sub(1, 17) == "ANNOUNCE_VERSION:" then
                     local isAnnounce = (msg:sub(1, 17) == "ANNOUNCE_VERSION:")
                     local rest = isAnnounce and msg:sub(18) or msg:sub(9)

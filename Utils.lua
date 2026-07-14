@@ -259,11 +259,15 @@ function KART.CountMissingGear()
     end
     
     for slot = 1, 17 do
-        local tooltipData = C_TooltipInfo and C_TooltipInfo.GetInventoryItem("player", slot)
-        if tooltipData and tooltipData.lines then
-            for _, line in ipairs(tooltipData.lines) do
-                if line.leftText and (line.leftText:find("UI%-EmptySocket") or line.leftText:find("Leerer Sockel") or line.leftText:find("Empty Socket")) then 
-                    table.insert(missingGems, tostring(slot)) 
+        local link = GetInventoryItemLink("player", slot)
+        if link then
+            local stats = C_Item.GetItemStats(link)
+            if stats then
+                for statKey in pairs(stats) do
+                    if statKey:match("^EMPTY_SOCKET_") then
+                        table.insert(missingGems, tostring(slot))
+                        break
+                    end
                 end
             end
         end

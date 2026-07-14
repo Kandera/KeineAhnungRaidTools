@@ -172,7 +172,7 @@ function WU.RemoveForBoss(idx)
 end
 
 StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
-    text = "Boss-Liste wirklich zurücksetzen?",
+    text = "Really reset the boss list?", -- overwritten with KART.L.WU_RESET_CONFIRM_TEXT before every StaticPopup_Show call below
     button1 = YES,
     button2 = NO,
     OnAccept = function()

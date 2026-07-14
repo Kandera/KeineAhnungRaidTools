@@ -205,7 +205,7 @@ function LH.GetUniqueReasons()
 end
 
 StaticPopupDialogs["KART_LH_CLEAR_CONFIRM"] = {
-    text = "Loot-Verlauf wirklich löschen?",
+    text = "Really clear loot history?", -- unconditionally overwritten with KART.L.LH_CLEAR_CONFIRM_TEXT below
     button1 = YES,
     button2 = NO,
     OnAccept = function()
@@ -527,7 +527,7 @@ function LH.Refresh()
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
         row.bg:SetColorTexture(0.1, 0.1, 0.1, i % 2 == 0 and 0.35 or 0.1)
 
-        row.dateText:SetText(date("%d.%m %H:%M", e.time))
+        row.dateText:SetText(date("%d.%m %H:%M", e.time or 0))
 
         local nr, ng, nb = 0.8, 0.8, 0.8
         if e.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[e.class] then

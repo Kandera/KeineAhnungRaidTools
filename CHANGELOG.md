@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.3] - 2026-07-14
+### Fixed
+- **Version-check replies sent via whisper never arrived:** `SendAddonMessage` requires an explicit whisper target that the reply wasn't passing; whispering a version request to someone now actually gets an answer back.
+- **Missing gem sockets were only detected on English/German clients:** The gear-check's empty-socket detection matched tooltip text in specific languages instead of reading item stats directly, so it silently under-reported missing gems on every other supported locale. Now locale-independent.
+- **A malformed Droptimizer cache entry could break the entire Loot Council candidate list:** Gain %/item level values synced from the external KART Companion app weren't checked to actually be numbers before use; a bad entry now gets skipped instead of erroring out the whole row list.
+- **A loot history entry with a missing timestamp could stop the history list from refreshing:** Added the same fallback already used elsewhere in the file for this case.
+- **Buff-Checker player names could visually run into the ready-check reason icon:** The name column had a fixed pixel width that didn't account for a larger content font size (adjustable in Settings) or long name-realm strings — WoW doesn't clip text that overflows a FontString's set width on its own. Overly long names are now truncated with "…" to always fit the column.
+
 ## [1.12.2] - 2026-07-14
 ### Security
 - **Loot Council no longer trusts unverified senders for config, results, and officer notes:** Three addon-message handlers accepted their payload from any sender without checking who actually sent it — a forged `LC_CONFIG` broadcast could add the sender's own name to the council list on every client, a forged loot result could write a fake entry into everyone's loot history and pop a false "You Win" popup, and a forged officer note could overwrite any player's note with no authorization at all. All three now verify the sender is the actual current raid/party leader (config) or a council member (results, officer notes) against the live roster before acting, which also closes the whisper vector since a sender who isn't in your group can never pass that check.
