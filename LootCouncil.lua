@@ -835,6 +835,246 @@ function LC.RefreshVoteListRows_Spacious(f)
     f:Show()
 end
 
+-- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
+-- Alternative for players who'd rather keep the window small than have large touch targets — see
+-- docs/superpowers/specs/2026-07-15-vote-window-layouts-design.md.
+function LC.RefreshVoteListRows_Compact(f)
+    local WINDOW_W  = 430
+    local CONTENT_W = WINDOW_W - 30
+    f:SetWidth(WINDOW_W)
+    f.scrollChild:SetWidth(CONTENT_W)
+
+    local buttons  = LC.GetButtonConfig()
+    local MARGIN   = 10
+    local ICON_SIZE = 26
+    local CHIP     = 24
+    local CHIP_GAP = 5
+    local HEADER_H = ICON_SIZE + MARGIN -- icon row height + top padding
+    local ACTION_H = CHIP + 8           -- chip row height + its own top gap
+    local rowH     = HEADER_H + ACTION_H + MARGIN -- + bottom padding
+    local ROW_GAP  = 8
+
+    f.compactRows = f.compactRows or {}
+
+    for i, rollID in ipairs(LC.voteListRolls) do
+        local row = f.compactRows[i]
+        if not row then
+            row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
+            row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
+            row:SetBackdropBorderColor(0, 0, 0, 1)
+
+            row.itemIconBorder = row:CreateTexture(nil, "BACKGROUND")
+            row.itemIconBorder:SetColorTexture(1, 1, 1, 1)
+
+            row.itemIcon = row:CreateTexture(nil, "ARTWORK")
+            row.itemIcon:SetSize(ICON_SIZE, ICON_SIZE)
+            row.itemIcon:SetPoint("TOPLEFT", MARGIN, -MARGIN)
+            row.itemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            row.itemIconBorder:SetPoint("TOPLEFT", row.itemIcon, -2, 2)
+            row.itemIconBorder:SetPoint("BOTTOMRIGHT", row.itemIcon, 2, -2)
+
+            row.itemCD = CreateFrame("Cooldown", nil, row, "CooldownFrameTemplate")
+            row.itemCD:SetAllPoints(row.itemIcon)
+            row.itemCD:SetHideCountdownNumbers(true)
+            row.itemCD:SetDrawBling(false)
+
+            row.itemText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.itemText:SetPoint("TOPLEFT", row.itemIcon, "TOPRIGHT", 8, -2)
+            row.itemText:SetJustifyH("LEFT")
+            row.itemText:SetWordWrap(false)
+
+            row.itemHover = CreateFrame("Frame", nil, row)
+            row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
+            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:EnableMouse(true)
+
+            row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.timerText:SetPoint("TOPRIGHT", -MARGIN, -MARGIN)
+
+            row.chipArea = CreateFrame("Frame", nil, row)
+            row.chipArea:SetPoint("TOPLEFT", row.itemIcon, "BOTTOMLEFT", 0, -8)
+            row.chipButtons = {}
+
+            row.votedBadge = CreateFrame("Frame", nil, row, "BackdropTemplate")
+            row.votedBadge:SetPoint("LEFT", row.chipArea, "LEFT")
+            row.votedBadge:SetHeight(CHIP)
+            row.votedBadge:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+
+            row.votedText = row.votedBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.votedText:SetPoint("CENTER")
+
+            -- Note is a floating overlay, not part of the row's own layout flow — this keeps
+            -- every compact row a fixed, predictable height regardless of whether its note is
+            -- open, so the vertical stacking math below never has to account for variable heights.
+            row.notePencil = CreateFrame("Button", nil, row.chipArea)
+            row.notePencil:SetSize(CHIP, CHIP)
+            row.notePencil.text = row.notePencil:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.notePencil.text:SetPoint("CENTER")
+            row.notePencil.text:SetText("\226\156\142") -- "✎"
+            row.notePencil.text:SetTextColor(0.6, 0.6, 0.6)
+
+            row.noteBox = CreateFrame("EditBox", nil, row, "BackdropTemplate")
+            row.noteBox:SetFrameStrata("FULLSCREEN_DIALOG")
+            row.noteBox:SetSize(200, 22)
+            row.noteBox:SetAutoFocus(false)
+            row.noteBox:SetMaxLetters(80)
+            row.noteBox:SetFontObject("GameFontHighlightSmall")
+            row.noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            row.noteBox:SetBackdropColor(0, 0, 0, 0.85)
+            row.noteBox:SetTextInsets(6, 6, 0, 0)
+            row.noteBox:SetPoint("TOPLEFT", row.notePencil, "BOTTOMLEFT", 0, -2)
+            row.noteBox:Hide()
+            row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() self:Hide() end)
+            table.insert(KART.EditBoxes, row.noteBox)
+
+            row.notePencil:SetScript("OnClick", function()
+                if row.noteBox:IsShown() then
+                    row.noteBox:Hide()
+                else
+                    row.noteBox:Show()
+                    row.noteBox:SetFocus()
+                end
+            end)
+
+            f.compactRows[i] = row
+        end
+
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -(i - 1) * (rowH + ROW_GAP))
+        row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
+        row:SetHeight(rowH)
+        row:Show()
+
+        if row.currentRollID ~= rollID then
+            row.currentRollID = rollID
+            if row.noteBox then row.noteBox:SetText("") row.noteBox:Hide() end
+        end
+
+        local rollLink = LC.rollItems[rollID]
+        row.itemText:SetText(rollLink or "???")
+        row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 8 - 60)
+
+        local ir, ig, ib = ParseItemColor(rollLink)
+        local iconTexture = IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
+        if iconTexture then
+            row.itemIcon:SetTexture(iconTexture)
+            row.itemIcon:SetVertexColor(1, 1, 1)
+        else
+            row.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+            row.itemIcon:SetVertexColor(ir, ig, ib)
+        end
+        row.itemIconBorder:SetVertexColor(ir, ig, ib)
+        row.itemText:SetTextColor(ir, ig, ib)
+
+        local deadline  = LC.rollDeadlines[rollID]
+        local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
+        do
+            local votedCount, total = LC.CountVotes(rollID)
+            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
+        end
+        if deadline then
+            row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
+        end
+
+        row.itemHover:SetScript("OnEnter", function(self)
+            local link = LC.rollItems[rollID]
+            if not IsRealItemLink(link) then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(link)
+            GameTooltip:Show()
+        end)
+        row.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        local voted    = LC.votedByMe[rollID]
+        local votedDef = voted and buttons[tonumber(voted)]
+        row.chipArea:SetShown(not voted)
+        row.votedText:SetShown(voted ~= nil)
+        row.votedBadge:SetShown(voted ~= nil)
+        if voted then row.noteBox:Hide() end
+        if votedDef then
+            local label = votedDef.label
+            local noteText = LC.votedNoteByMe[rollID]
+            if noteText and noteText ~= "" then
+                if #noteText > 30 then noteText = noteText:sub(1, 30) .. "..." end
+                label = label .. " — \"" .. noteText .. "\""
+            end
+            row.votedText:SetText(string.format(KART.L.LC_VOTED_ROW, label))
+            row.votedBadge:SetBackdropColor(votedDef.r, votedDef.g, votedDef.b, 0.18)
+            row.votedBadge:SetBackdropBorderColor(votedDef.r, votedDef.g, votedDef.b, 0.7)
+            row.votedBadge:SetWidth(math.min(row.votedText:GetStringWidth() + 20, CONTENT_W - MARGIN * 2))
+        end
+
+        for bi = #buttons + 1, #row.chipButtons do
+            if row.chipButtons[bi] then row.chipButtons[bi]:Hide() end
+        end
+
+        if not voted then
+            for bi, def in ipairs(buttons) do
+                local btn = row.chipButtons[bi]
+                if not btn then
+                    btn = CreateFrame("Button", nil, row.chipArea, "BackdropTemplate")
+                    btn:SetSize(CHIP, CHIP)
+                    btn:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+                    btn.grad = KART.CreateGradientOverlay(btn)
+                    btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
+                    btn.iconTex:SetPoint("TOPLEFT", 4, -4)
+                    btn.iconTex:SetPoint("BOTTOMRIGHT", -4, 4)
+                    row.chipButtons[bi] = btn
+                else
+                    btn:Show()
+                end
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
+                btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
+                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                btn.iconTex:SetTexture(GetVoteIconTexture(bi))
+
+                btn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                    GameTooltip:SetText(def.label, def.r, def.g, def.b)
+                    GameTooltip:Show()
+                end)
+                btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+                local capturedIdx    = bi
+                local capturedRollID = rollID
+                btn:SetScript("OnClick", function()
+                    if LC.votedByMe[capturedRollID] then return end
+                    LC.votedByMe[capturedRollID] = capturedIdx
+                    local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
+                    LC.votedNoteByMe[capturedRollID] = note
+                    if IsTestRoll(capturedRollID) then
+                        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+                        LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
+                        LC.votes[capturedRollID][myShort] = {idx = capturedIdx, note = note}
+                        if LC.councilPanel and LC.councilPanel:IsShown() then
+                            if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
+                            LC.RefreshCouncilTabs()
+                        end
+                    else
+                        SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
+                    end
+                    LC.RefreshVoteListRows()
+                end)
+
+                -- Chip position doubles as the pencil icon's anchor point once all 5 default
+                -- categories are laid out, so the note toggle sits right after the last chip.
+                if bi == #buttons then
+                    row.notePencil:ClearAllPoints()
+                    row.notePencil:SetPoint("LEFT", btn, "RIGHT", 6, 0)
+                end
+            end
+        end
+    end
+
+    for i = #LC.voteListRolls + 1, #f.compactRows do
+        if f.compactRows[i] then f.compactRows[i]:Hide() end
+    end
+
+    f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
+end
+
 -- =====================================================================
 --  Equipped-item helper for council panel
 -- =====================================================================
