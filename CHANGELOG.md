@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.15.0] - 2026-07-15
 ### Added
 - **Loot Council vote window layout options:** Choose between two layouts with a new settings checkbox: "Spacious" (new default) shows a wider window with larger vote cards and a colored quality-tinted accent strip per item; "Compact" uses single-line rows with icon-only vote-chip buttons for a smaller footprint. Your preference is saved per character.
 
