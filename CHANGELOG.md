@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-07-15
+### Fixed
+- **Advanced-tab gem check no longer reports false positives:** it relied on `C_Item.GetItemStats`, which can keep reporting an `EMPTY_SOCKET_*` stat for an item that was already gemmed earlier in the session (its cached item link predates the gem). The check now reads the socket state from a hidden tooltip scan instead, matching exactly what you see when hovering the item, so already-gemmed pieces are no longer counted as missing.
+
 ## [1.16.0] - 2026-07-15
 ### Added
 - **Northern Sky Raid Tools nickname support:** the Lootmaster field, the additional council members list, and the Auto-Promote name list now all accept an NSRT nickname in addition to a character short name. Naming a nickname (e.g. "Kandera") applies to every character sharing that nickname, so it keeps working automatically when that person switches alts — no manual re-typing needed. Falls back to plain character-name matching for anyone without NSRT installed or without a nickname set. Requires Northern Sky Raid Tools to be installed; KART never bundles its own nickname system.

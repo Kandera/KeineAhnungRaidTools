@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-07-15
+### Behoben
+- **Der Gem-Check im Advanced-Tab meldet keine Fehlalarme mehr:** Er verließ sich auf `C_Item.GetItemStats`, das für ein bereits im laufenden Spielsession bestücktes Item weiterhin einen `EMPTY_SOCKET_*`-Stat melden kann (der gecachte Item-Link stammt noch von vor dem Sockeln). Die Prüfung liest den Sockel-Status jetzt stattdessen aus einem versteckten Tooltip-Scan aus — das entspricht exakt dem, was beim Drüberhovern im Tooltip zu sehen ist, sodass bereits bestückte Teile nicht mehr als fehlend gezählt werden.
+
 ## [1.16.0] - 2026-07-15
 ### Neu
 - **Northern Sky Raid Tools Nickname-Unterstützung:** Das Lootmaster-Feld, die Liste der weiteren Council-Mitglieder und die Auto-Promote-Namensliste akzeptieren jetzt zusätzlich zum Charakter-Kurznamen auch einen NSRT-Nickname. Ein eingetragener Nickname (z.B. "Kandera") gilt für alle Charaktere mit diesem Nickname — funktioniert also automatisch weiter, wenn diese Person den Charakter wechselt, ganz ohne manuelles Nachtragen. Fällt automatisch auf den klassischen Charakternamen-Abgleich zurück, wenn NSRT nicht installiert ist oder kein Nickname gesetzt wurde. Setzt ein installiertes Northern Sky Raid Tools voraus; KART bringt kein eigenes Nickname-System mit.

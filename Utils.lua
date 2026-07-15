@@ -266,6 +266,39 @@ function KART.OpenColorPicker(rKey, gKey, bKey)
     end
 end
 
+-- Hidden scanning tooltip for KART.CountMissingGear's gem check below. C_Item.GetItemStats can
+-- report a stale EMPTY_SOCKET_* stat for an item that was already gemmed this session (its cached
+-- link predates the gem), so we read the socket state straight from the tooltip instead - that's
+-- rendered fresh every time and matches exactly what the player sees on hover.
+local KART_GearScanTooltip = CreateFrame("GameTooltip", "KART_GearScanTooltip", UIParent, "GameTooltipTemplate")
+KART_GearScanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+
+-- Collects the display strings of every "EMPTY_SOCKET_*" global (Prismatic, Red, Cogwheel, ...)
+-- instead of hardcoding them, so new socket types added in future patches are picked up automatically.
+local emptySocketTexts
+local function GetEmptySocketTexts()
+    if emptySocketTexts then return emptySocketTexts end
+    emptySocketTexts = {}
+    for k, v in pairs(_G) do
+        if type(k) == "string" and type(v) == "string" and k:match("^EMPTY_SOCKET_") then
+            emptySocketTexts[v] = true
+        end
+    end
+    return emptySocketTexts
+end
+
+local function SlotHasEmptySocket(slot)
+    KART_GearScanTooltip:ClearLines()
+    KART_GearScanTooltip:SetInventoryItem("player", slot)
+    local texts = GetEmptySocketTexts()
+    for i = 1, KART_GearScanTooltip:NumLines() do
+        local fs = _G["KART_GearScanTooltipTextLeft" .. i]
+        local text = fs and fs:GetText()
+        if text and texts[text] then return true end
+    end
+    return false
+end
+
 -- Funktion zum Zählen fehlender Verzauberungen und leerer Sockelplätze (Retail)
 function KART.CountMissingGear()
     local missingEnchants = {}
@@ -277,27 +310,19 @@ function KART.CountMissingGear()
         local link = GetInventoryItemLink("player", slot)
         if link then
             local enchant = link:match("item:%d+:(%d*):")
-            if not enchant or enchant == "" or enchant == "0" then 
-                table.insert(missingEnchants, tostring(slot)) 
+            if not enchant or enchant == "" or enchant == "0" then
+                table.insert(missingEnchants, tostring(slot))
             end
         end
     end
-    
+
     for slot = 1, 17 do
         local link = GetInventoryItemLink("player", slot)
-        if link then
-            local stats = C_Item.GetItemStats(link)
-            if stats then
-                for statKey in pairs(stats) do
-                    if statKey:match("^EMPTY_SOCKET_") then
-                        table.insert(missingGems, tostring(slot))
-                        break
-                    end
-                end
-            end
+        if link and SlotHasEmptySocket(slot) then
+            table.insert(missingGems, tostring(slot))
         end
     end
-    
+
     local eStr = table.concat(missingEnchants, ",")
     local gStr = table.concat(missingGems, ",")
     if eStr == "" then eStr = "0" end
