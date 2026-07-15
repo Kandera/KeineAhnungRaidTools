@@ -936,6 +936,7 @@ function LC.RefreshVoteListRows_Compact(f)
 
             row.chipArea = CreateFrame("Frame", nil, row)
             row.chipArea:SetPoint("TOPLEFT", row.itemIcon, "BOTTOMLEFT", 0, -8)
+            row.chipArea:SetSize(CONTENT_W - MARGIN * 2, CHIP)
             row.chipButtons = {}
 
             row.votedBadge = CreateFrame("Frame", nil, row, "BackdropTemplate")
@@ -946,26 +947,29 @@ function LC.RefreshVoteListRows_Compact(f)
             row.votedText = row.votedBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.votedText:SetPoint("CENTER")
 
-            -- Note is a floating overlay, not part of the row's own layout flow — this keeps
-            -- every compact row a fixed, predictable height regardless of whether its note is
-            -- open, so the vertical stacking math below never has to account for variable heights.
+            -- Note toggle sits inline after the last chip, same row — chipArea is wide enough
+            -- (see the SetSize above) that there's room without wrapping to a second line.
+            -- Native icon texture, not a Unicode glyph: WoW's default game fonts render most
+            -- Dingbats/Geometric-Shapes glyphs (including the pencil "✎" this used before) as an
+            -- empty "tofu" box — see the identical caveat already documented above
+            -- VOTE_ICON_TEXTURES, which exists for exactly this reason. Reusing Blizzard's own
+            -- guild-roster "edit public note" icon here since it's thematically exact.
             row.notePencil = CreateFrame("Button", nil, row.chipArea)
             row.notePencil:SetSize(CHIP, CHIP)
-            row.notePencil.text = row.notePencil:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.notePencil.text:SetPoint("CENTER")
-            row.notePencil.text:SetText("\226\156\142") -- "✎"
-            row.notePencil.text:SetTextColor(0.6, 0.6, 0.6)
+            row.notePencil.icon = row.notePencil:CreateTexture(nil, "ARTWORK")
+            row.notePencil.icon:SetAllPoints()
+            row.notePencil.icon:SetTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
 
             row.noteBox = CreateFrame("EditBox", nil, row, "BackdropTemplate")
-            row.noteBox:SetFrameStrata("FULLSCREEN_DIALOG")
-            row.noteBox:SetSize(200, 22)
+            row.noteBox:SetHeight(CHIP)
             row.noteBox:SetAutoFocus(false)
             row.noteBox:SetMaxLetters(80)
             row.noteBox:SetFontObject("GameFontHighlightSmall")
             row.noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.noteBox:SetBackdropColor(0, 0, 0, 0.85)
             row.noteBox:SetTextInsets(6, 6, 0, 0)
-            row.noteBox:SetPoint("TOPLEFT", row.notePencil, "BOTTOMLEFT", 0, -2)
+            row.noteBox:SetPoint("LEFT", row.notePencil, "RIGHT", 6, 0)
+            row.noteBox:SetPoint("RIGHT", row.chipArea, "RIGHT", 0, 0)
             row.noteBox:Hide()
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() self:Hide() end)
             table.insert(KART.EditBoxes, row.noteBox)
@@ -1058,6 +1062,11 @@ function LC.RefreshVoteListRows_Compact(f)
                     btn = CreateFrame("Button", nil, row.chipArea, "BackdropTemplate")
                     btn:SetSize(CHIP, CHIP)
                     btn:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+                    -- Base fill, same as every other backdrop frame in this file (e.g. the row
+                    -- backdrops above, or KART.CreateModernButton's own vote buttons) — without
+                    -- this the chip has no set background color, only the category-tinted border
+                    -- set below, which at 24px is easy to mistake for "no button here at all".
+                    btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
                     btn.grad = KART.CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
                     btn.iconTex:SetPoint("TOPLEFT", 4, -4)
