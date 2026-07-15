@@ -568,31 +568,36 @@ function LC.RemoveVoteListItem(rollID)
     LC.RefreshVoteListRows()
 end
 
-function LC.RefreshVoteListRows()
-    if #LC.voteListRolls == 0 then
-        if LC.voteListFrame then LC.voteListFrame:Hide() end
-        return
-    end
-    if not LC.voteListFrame then LC.CreateVoteList() end
-    local f = LC.voteListFrame
+-- "Spacious" style: one card per item, full window width each, large touch targets. The default
+-- and recommended style — see docs/superpowers/specs/2026-07-15-vote-window-layouts-design.md.
+function LC.RefreshVoteListRows_Spacious(f)
+    local WINDOW_W  = 540
+    local CONTENT_W = WINDOW_W - 30 -- mirrors the scrollbar/padding reservation CreateVoteList already uses
+    f:SetWidth(WINDOW_W)
+    f.scrollChild:SetWidth(CONTENT_W)
 
-    -- Sized with generous padding on purpose — the first version packed everything edge-to-edge
-    -- with almost no breathing room between items, which read as a cramped wall of boxes.
+    -- v2 sizing: each card is now the full window width (was a fraction of a narrower window),
+    -- so every element scales up — this is what actually reads as "premium" rather than just
+    -- "spaced out". cols capped at 5 (not the previous 3) so the default 5-category button set
+    -- fits in a single row; a leader-configured 6th category still wraps to a second row instead
+    -- of overflowing.
     local buttons   = LC.GetButtonConfig()
-    local cols      = math.min(#buttons, 3)
+    local ICON_SIZE = 46
+    local ACCENT_H  = 4  -- quality-color strip along the top edge of each card
+    local MARGIN    = 16 -- left/right inner padding of each item block
+    local cols      = math.min(#buttons, 5)
     local btnRows   = math.ceil(#buttons / cols)
-    local MARGIN    = 8  -- left/right inner padding of each item block
-    local BTN_GAP   = 8  -- horizontal gap between vote buttons
-    local btnW      = math.floor((345 - MARGIN * 2 - (cols - 1) * BTN_GAP) / cols)
-    local btnH      = 26
-    local BTN_ROW_GAP = 6 -- vertical gap between rows of vote buttons
+    local BTN_GAP   = 10 -- horizontal gap between vote buttons
+    local btnW      = math.floor((CONTENT_W - MARGIN * 2 - (cols - 1) * BTN_GAP) / cols)
+    local btnH      = 34
+    local BTN_ROW_GAP = 8 -- vertical gap between rows of vote buttons
     local btnAreaH  = btnRows * btnH + (btnRows - 1) * BTN_ROW_GAP
-    local BTN_TOP   = 30 -- title line + gap, i.e. how far down the button area starts
-    local GAP_BTN_NOTE = 10
-    local noteH     = 22
-    local BOTTOM_PAD = 10
-    local rowH      = BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD
-    local ROW_GAP   = 12 -- gap between item blocks — was 5, the main source of the cramped look
+    local BTN_TOP   = MARGIN + ICON_SIZE + 15 -- header row (icon+name+timer) height, then a gap
+    local GAP_BTN_NOTE = 13
+    local noteH     = 24
+    local BOTTOM_PAD = 16
+    local rowH      = ACCENT_H + BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD
+    local ROW_GAP   = 22 -- gap between item blocks — was 12, still too tight for 2+ simultaneous rolls
 
     for i, rollID in ipairs(LC.voteListRolls) do
         local row = f.rows[i]
@@ -602,6 +607,13 @@ function LC.RefreshVoteListRows()
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
             row:SetBackdropBorderColor(0, 0, 0, 1)
 
+            -- Quality-color strip along the card's top edge — the main visual cue that separates
+            -- one card from the next, on top of the ROW_GAP spacing itself.
+            row.accentStrip = row:CreateTexture(nil, "ARTWORK")
+            row.accentStrip:SetPoint("TOPLEFT", 0, 0)
+            row.accentStrip:SetPoint("TOPRIGHT", 0, 0)
+            row.accentStrip:SetHeight(ACCENT_H)
+
             -- Accent frame behind the icon, tinted to the item's own quality colour — the cheap,
             -- crisp equivalent of a soft glow (a true blurred glow needs a bundled additive-blend
             -- texture WoW doesn't ship, see the earlier "what more effort actually costs" note).
@@ -609,8 +621,8 @@ function LC.RefreshVoteListRows()
             row.itemIconBorder:SetColorTexture(1, 1, 1, 1)
 
             row.itemIcon = row:CreateTexture(nil, "ARTWORK")
-            row.itemIcon:SetSize(18, 18)
-            row.itemIcon:SetPoint("TOPLEFT", MARGIN, -6)
+            row.itemIcon:SetSize(ICON_SIZE, ICON_SIZE)
+            row.itemIcon:SetPoint("TOPLEFT", MARGIN, -(ACCENT_H + MARGIN))
             row.itemIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
             row.itemIconBorder:SetPoint("TOPLEFT", row.itemIcon, -2, 2)
             row.itemIconBorder:SetPoint("BOTTOMRIGHT", row.itemIcon, 2, -2)
@@ -623,10 +635,12 @@ function LC.RefreshVoteListRows()
             row.itemCD:SetDrawBling(false)
 
             row.itemText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.itemText:SetPoint("TOPLEFT", row.itemIcon, "TOPRIGHT", 6, 2)
-            row.itemText:SetWidth(226)
+            row.itemText:SetFont("Fonts\\FRIZQT__.TTF", 14, "")
+            row.itemText:SetPoint("TOPLEFT", row.itemIcon, "TOPRIGHT", 10, -4)
+            row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 10 - 60) -- leaves room for the timer chip on the right
             row.itemText:SetJustifyH("LEFT")
-            row.itemText:SetWordWrap(false)
+            row.itemText:SetWordWrap(true)
+            row.itemText:SetMaxLines(2)
 
             -- FontStrings can't take mouse scripts directly; overlay a hover frame for the
             -- tooltip, spanning both the icon and the name so hovering either shows it.
@@ -636,7 +650,8 @@ function LC.RefreshVoteListRows()
             row.itemHover:EnableMouse(true)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.timerText:SetPoint("TOPRIGHT", -MARGIN, -8)
+            row.timerText:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+            row.timerText:SetPoint("TOPRIGHT", -MARGIN, -(ACCENT_H + MARGIN + 2))
 
             row.btnArea = CreateFrame("Frame", nil, row)
             row.btnArea:SetPoint("TOPLEFT", MARGIN, -BTN_TOP)
@@ -707,6 +722,7 @@ function LC.RefreshVoteListRows()
             row.itemIcon:SetVertexColor(ir, ig, ib)
         end
         row.itemIconBorder:SetVertexColor(ir, ig, ib)
+        row.accentStrip:SetColorTexture(ir, ig, ib)
 
         local deadline  = LC.rollDeadlines[rollID]
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
@@ -766,7 +782,8 @@ function LC.RefreshVoteListRows()
                     btn.iconTex:SetSize(13, 13)
                     btn.iconTex:SetPoint("LEFT", 6, 0)
                     btn.text:ClearAllPoints()
-                    btn.text:SetPoint("CENTER", 6, 0)
+                    btn.text:SetPoint("CENTER", 8, 0)
+                    btn.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
                     row.voteButtons[bi] = btn
                 else
                     btn:Show()
