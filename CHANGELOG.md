@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-07-15
+### Added
+- **Northern Sky Raid Tools nickname support:** the Lootmaster field, the additional council members list, and the Auto-Promote name list now all accept an NSRT nickname in addition to a character short name. Naming a nickname (e.g. "Kandera") applies to every character sharing that nickname, so it keeps working automatically when that person switches alts — no manual re-typing needed. Falls back to plain character-name matching for anyone without NSRT installed or without a nickname set. Requires Northern Sky Raid Tools to be installed; KART never bundles its own nickname system.
+- **Show NSRT nicknames in the Loot Council panel:** a new personal settings checkbox displays each candidate's NSRT nickname instead of their character name in the council/lootmaster panel. Off by default; falls back to the character name automatically wherever no nickname is available.
+- **Guild Rank column in the Loot Council panel:** a new column right after the player name shows each candidate's guild rank, making it easier to spot which raiders are alts of the same player.
+
 ## [1.15.0] - 2026-07-15
 ### Added
 - **Loot Council vote window layout options:** Choose between two layouts with a new settings checkbox: "Spacious" (new default) shows a wider window with larger vote cards and a colored quality-tinted accent strip per item; "Compact" uses single-line rows with icon-only vote-chip buttons for a smaller footprint. Your preference is saved per character.

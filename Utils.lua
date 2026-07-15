@@ -40,6 +40,7 @@ KART.Defaults = {
     lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass",
     lcCouncilMembers = "",
     lcLootmaster = "",
+    lcShowNickNames = false,
     wuModuleEnabled = false,
     wuImportText = "",
     dtModuleEnabled = false,
@@ -64,6 +65,28 @@ end
 
 function KART.HasGroupPermissions()
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
+end
+
+-- Resolves unit's Northern Sky Raid Tools nickname, or nil if NSRT isn't installed, has no
+-- nickname stored for that character, or its "Global Nicknames" master toggle is off. NSAPI is
+-- NSRT's own public API global (see its NickNames.lua) — calling GetName with no AddonName
+-- argument makes it honor only that master toggle instead of a per-addon toggle KART was never
+-- registered for (which would otherwise always read as disabled, see NSAPI:GetName's own "if no
+-- AddonName is given we assume it's from an old WeakAura" comment). Wrapped in pcall since this
+-- reaches into another addon's code, which KART never requires to be installed.
+--
+-- Returns two values: the lowercased nickname (for case-insensitive matching against configured
+-- name lists — Auto-Promote, Loot Council members/lootmaster) and the nickname in its original
+-- casing (for display, e.g. the council panel's name column). Extra return values are silently
+-- dropped wherever a caller only wants the first one, so existing single-value call sites don't
+-- need to change.
+function KART.GetNickname(unit)
+    if not (unit and NSAPI and NSAPI.GetName and UnitExists(unit)) then return nil end
+    local ok, nick = pcall(NSAPI.GetName, NSAPI, unit)
+    if not ok or not nick or nick == "" then return nil end
+    local realName = UnitName(unit)
+    if nick == realName then return nil end -- no nickname set, NSAPI just echoed the real name back
+    return nick:lower(), nick
 end
 
 function KART.GetFontPath(name)

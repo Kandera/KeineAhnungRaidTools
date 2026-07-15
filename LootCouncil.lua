@@ -144,7 +144,11 @@ end
 local function IsCouncil()
     if UnitIsGroupLeader("player") then return true end
     local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
-    return LC.CouncilNamesTable[myShort] == true
+    if LC.CouncilNamesTable[myShort] == true then return true end
+    -- Also match by Northern Sky Raid Tools nickname (see KART.GetNickname), so the council list
+    -- can name a *person* once instead of every one of their alts individually.
+    local nick = KART.GetNickname("player")
+    return nick ~= nil and LC.CouncilNamesTable[nick] == true
 end
 
 -- Whether senderShort (as received off CHAT_MSG_ADDON, see Core.lua) currently holds council
@@ -158,7 +162,10 @@ local function IsSenderCouncil(senderShort)
     local unit = senderShort and LC.FindUnitForShortName(senderShort)
     if not unit then return false end
     if UnitIsGroupLeader(unit) then return true end
-    return LC.CouncilNamesTable[senderShort:lower()] == true
+    if LC.CouncilNamesTable[senderShort:lower()] == true then return true end
+    -- Also match by Northern Sky Raid Tools nickname, same reasoning as IsCouncil above.
+    local nick = KART.GetNickname(unit)
+    return nick ~= nil and LC.CouncilNamesTable[nick] == true
 end
 
 local function GetChannel()
@@ -180,18 +187,34 @@ function LC.GetRaidMinQuality()
     return (LC.raidConfig and LC.raidConfig.minQuality) or 4
 end
 
--- The designated lootmaster (short name, lowercase, "" = none) — same authority reasoning as
+-- The designated lootmaster (trimmed, lowercase, "" = none) — same authority reasoning as
 -- GetButtonConfig/GetRaidMinQuality: only the raid leader's own local setting is authoritative,
 -- everyone else (including the designated lootmaster themselves) goes by the synced value. This
 -- is deliberately NOT a personal toggle like lcAutoPass — see LC.OnStartLootRoll, which overrides
 -- a raider's own Auto-Pass preference when they are this person, precisely so it can't be turned
 -- off by anyone except the raid leader reassigning it.
+--
+-- The stored value can be either a character short name OR a Northern Sky Raid Tools nickname —
+-- LC.IsMe (below) is what actually resolves it against the local player, trying both.
 function LC.GetLootmaster()
     if UnitIsGroupLeader("player") then
         local short = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
         return short:lower()
     end
     return (LC.raidConfig and LC.raidConfig.lootmaster) or ""
+end
+
+-- Whether configuredName (trimmed+lowercased text from the lootmaster field, see LC.GetLootmaster)
+-- identifies the local player — by character short name, same as always, or by Northern Sky Raid
+-- Tools nickname (see KART.GetNickname in Utils.lua), so a raid leader can name a *person* once
+-- ("kandera") instead of re-typing the field whenever that person switches characters. Every alt
+-- just needs the same NSRT nickname set, which raiders already do for the addon's other
+-- nickname-aware features.
+function LC.IsMe(configuredName)
+    if not configuredName or configuredName == "" then return false end
+    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
+    if myShort == configuredName then return true end
+    return KART.GetNickname("player") == configuredName
 end
 
 -- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
@@ -399,10 +422,9 @@ function LC.OnStartLootRoll(rollID)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
 
-    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
     local lootmaster = LC.GetLootmaster()
 
-    if lootmaster ~= "" and myShort == lootmaster then
+    if LC.IsMe(lootmaster) then
         -- The lootmaster is the one exception to Auto-Pass: they must physically win every item
         -- (regardless of their own local Auto-Pass setting) so they can trade it out afterwards —
         -- see LC.GetLootmaster for why this is raid-leader-controlled, not a personal toggle.
@@ -1467,7 +1489,10 @@ end
 -- Panel width: wide enough that raider names and vote labels never truncate/wrap even with the
 -- class-icon and vote-icon columns added (see RefreshCouncilRows) — a fixed-width table with real
 -- names in it will always eventually clip someone, so this errs wide rather than clever-wrapping.
-local COUNCIL_PANEL_WIDTH   = 555
+-- +70 over the original 555/520 (panel/scrollChild) for the guild-rank column inserted right
+-- after Name (see hRank/row.rankText below) — every column from iLvl rightward is shifted by
+-- this same DELTA so all existing gaps between columns stay exactly as they were.
+local COUNCIL_PANEL_WIDTH   = 625
 local COUNCIL_PANEL_HEIGHT  = 462
 local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
 
@@ -1568,7 +1593,7 @@ function LC.CreateCouncilPanel()
 
     f.itemText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.itemText:SetPoint("LEFT", f.itemIcon, "RIGHT", 8, 8)
-    f.itemText:SetWidth(457)
+    f.itemText:SetWidth(527)
     f.itemText:SetJustifyH("LEFT")
     f.itemText:SetWordWrap(false)
 
@@ -1614,21 +1639,30 @@ function LC.CreateCouncilPanel()
     hName:SetJustifyH("LEFT")
     hName:SetText(KART.L.LC_COL_NAME)
 
+    -- Guild rank, right after Name (see row.rankText) — purely so alts are easier to spot at a
+    -- glance among a roster of otherwise-unfamiliar names; blank/"-" for anyone not in a guild.
+    local hRank = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hRank:SetPoint("TOPLEFT", 136, -80)
+    hRank:SetWidth(60)
+    hRank:SetJustifyH("CENTER")
+    hRank:SetText(KART.L.LC_COL_RANK)
+    hRank:SetTextColor(0.5, 0.5, 0.5)
+
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hIlvl:SetPoint("TOPLEFT", 136, -80)
+    hIlvl:SetPoint("TOPLEFT", 206, -80)
     hIlvl:SetWidth(68) -- spans the equip icon + ilvl number (+/- delta) together
     hIlvl:SetJustifyH("CENTER")
     hIlvl:SetText("iLvl")
     hIlvl:SetTextColor(0.5, 0.5, 0.5)
 
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hVote:SetPoint("TOPLEFT", 212, -80)
+    hVote:SetPoint("TOPLEFT", 282, -80)
     hVote:SetWidth(100)
     hVote:SetJustifyH("LEFT")
     hVote:SetText(KART.L.LC_COL_VOTE)
 
     local hRoll = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hRoll:SetPoint("TOPLEFT", 330, -80)
+    hRoll:SetPoint("TOPLEFT", 400, -80)
     hRoll:SetWidth(34)
     hRoll:SetJustifyH("CENTER")
     hRoll:SetText(KART.L.LC_COL_ROLL)
@@ -1636,7 +1670,7 @@ function LC.CreateCouncilPanel()
     f.hRoll = hRoll -- hidden/shown with the rolls-enabled setting, see RefreshCouncilRows
 
     local hCouncilVotes = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hCouncilVotes:SetPoint("TOPLEFT", 368, -80)
+    hCouncilVotes:SetPoint("TOPLEFT", 438, -80)
     hCouncilVotes:SetWidth(40)
     hCouncilVotes:SetJustifyH("CENTER")
     hCouncilVotes:SetText("CV") -- "Council Votes" — plain ASCII, see the note in RefreshCouncilRows
@@ -1646,7 +1680,7 @@ function LC.CreateCouncilPanel()
     -- Companion app, see Droptimizer.lua), shown/hidden with dtModuleEnabled just like hRoll
     -- is shown/hidden with lcRollsEnabled below.
     local hGain = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hGain:SetPoint("TOPLEFT", 411, -80)
+    hGain:SetPoint("TOPLEFT", 481, -80)
     hGain:SetWidth(44)
     hGain:SetJustifyH("CENTER")
     hGain:SetText(KART.L.DT_COL_GAIN or "Gain")
@@ -1668,7 +1702,7 @@ function LC.CreateCouncilPanel()
     scrollFrame:SetPoint("TOPLEFT"); scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetSize(520, 800)
+    scrollChild:SetSize(590, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
     local thumb = KART.StripScrollbarTextures(scrollFrame)
@@ -1827,6 +1861,12 @@ function LC.RefreshCouncilRows()
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][short],
+                -- Nickname (see KART.GetNickname/lcShowNickNames) and guild rank are both purely
+                -- display concerns, resolved once per refresh here rather than per-row-render.
+                -- Second return value is the nickname in its original casing — the first
+                -- (lowercased) is only for matching, never what should show up on screen.
+                nickname = select(2, KART.GetNickname(unit)),
+                guildRank = select(2, GetGuildInfo(unit)),
             })
         end
     end
@@ -1852,6 +1892,8 @@ function LC.RefreshCouncilRows()
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = nil,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myShort],
+                nickname = select(2, KART.GetNickname("player")),
+                guildRank = select(2, GetGuildInfo("player")),
             })
         end
     end
@@ -1886,10 +1928,17 @@ function LC.RefreshCouncilRows()
             row.nameText:SetWidth(100)
             row.nameText:SetJustifyH("LEFT")
 
+            -- Guild rank (see hRank/m.guildRank) — dim like the other secondary-info columns,
+            -- "-" when the candidate isn't in a guild at all.
+            row.rankText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.rankText:SetPoint("LEFT", 136, 0)
+            row.rankText:SetWidth(60)
+            row.rankText:SetJustifyH("CENTER")
+
             -- Icon of the item currently equipped in the matching slot
             row.equipIcon = row:CreateTexture(nil, "ARTWORK")
             row.equipIcon:SetSize(18, 18)
-            row.equipIcon:SetPoint("LEFT", 131, 0)
+            row.equipIcon:SetPoint("LEFT", 201, 0)
             row.equipIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
             -- Textures can't take OnEnter/OnLeave themselves, so this invisible frame sits over
@@ -1902,7 +1951,7 @@ function LC.RefreshCouncilRows()
 
             -- Equipped item level in the matching slot
             row.equippedText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.equippedText:SetPoint("LEFT", 153, 0)
+            row.equippedText:SetPoint("LEFT", 223, 0)
             row.equippedText:SetWidth(46)
             row.equippedText:SetJustifyH("CENTER")
 
@@ -1910,7 +1959,7 @@ function LC.RefreshCouncilRows()
             -- so a vote reads as an icon+colour tag instead of colour-coded text alone.
             row.voteIcon = row:CreateTexture(nil, "ARTWORK")
             row.voteIcon:SetSize(12, 12)
-            row.voteIcon:SetPoint("LEFT", 207, 0)
+            row.voteIcon:SetPoint("LEFT", 277, 0)
 
             row.voteText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.voteText:SetPoint("LEFT", row.voteIcon, "RIGHT", 3, 0)
@@ -1919,7 +1968,7 @@ function LC.RefreshCouncilRows()
 
             -- Opt-in 1-100 roll (see lcRollsEnabled); hidden entirely when the raid has it off.
             row.rollText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.rollText:SetPoint("LEFT", 325, 0)
+            row.rollText:SetPoint("LEFT", 395, 0)
             row.rollText:SetWidth(34)
             row.rollText:SetJustifyH("CENTER")
 
@@ -1930,7 +1979,7 @@ function LC.RefreshCouncilRows()
             -- button is always available, not gated behind any extra role check.
             row.councilVoteBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
             row.councilVoteBtn:SetSize(40, 18)
-            row.councilVoteBtn:SetPoint("LEFT", 363, 0)
+            row.councilVoteBtn:SetPoint("LEFT", 433, 0)
             row.councilVoteBtn:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.councilVoteBtn:SetBackdropColor(0, 0, 0, 0.4)
 
@@ -1984,7 +2033,7 @@ function LC.RefreshCouncilRows()
             -- (KART.DT.GetGainPercent). Sits in the space opened up by the wider panel/scrollChild
             -- between councilVoteBtn and the right-anchored note/warn/officerNote icons.
             row.gainText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.gainText:SetPoint("LEFT", 411, 0)
+            row.gainText:SetPoint("LEFT", 481, 0)
             row.gainText:SetWidth(44)
             row.gainText:SetJustifyH("CENTER")
 
@@ -2049,8 +2098,15 @@ function LC.RefreshCouncilRows()
             nr, ng, nb = nr * 0.5, ng * 0.5, nb * 0.5
         end
 
-        row.nameText:SetText(m.short or "?")
+        -- lcShowNickNames is a personal display preference (see CbShowNickNames) — falls back to
+        -- the character short name whenever no nickname is available, so the toggle is always
+        -- safe to leave on even for raiders without NSRT or without a nickname set.
+        local displayName = (KART_Settings.lcShowNickNames and m.nickname) or m.short or "?"
+        row.nameText:SetText(displayName)
         row.nameText:SetTextColor(nr, ng, nb)
+
+        row.rankText:SetText(m.guildRank or "-")
+        row.rankText:SetTextColor(0.55, 0.55, 0.55)
 
         -- Equipped item icon + ilvl column
         if capturedEquipLink then
@@ -3141,6 +3197,18 @@ function LC.BuildSettingsPanel(parent)
         L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -140,
         LC.RefreshVoteListRowsIfShown, L.LC_DESC_COMPACT_VOTE_LAYOUT)
 
+    -- Personal preference, same reasoning as CbCompactVoteLayout above — purely how names render
+    -- on YOUR OWN council panel, never synced. Needs Northern Sky Raid Tools installed with a
+    -- nickname set per character to have any visible effect (see KART.GetNickname); falls back to
+    -- the character short name automatically otherwise. Slot -170: next free step below
+    -- CbCompactVoteLayout; raidBox shifted from -180 to -210 to make room for this.
+    KART.LC.CbShowNickNames = KART.CreateSettingsCheckbox(
+        parent, "KART_LCShowNickNames",
+        L.LC_SET_SHOW_NICKNAMES, "lcShowNickNames", -170,
+        function()
+            if LC.councilPanel and LC.councilPanel:IsShown() then LC.RefreshCouncilRows() end
+        end, L.LC_DESC_SHOW_NICKNAMES)
+
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -110 slot there. Kept in its own file since it's a
     -- different module, but it's a personal preference like CbAutoPass above, so it lives next
@@ -3151,7 +3219,7 @@ function LC.BuildSettingsPanel(parent)
     -- the actual raid leader's values are used automatically. Visually set apart on purpose so
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -180)
+    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -210)
     raidBox:SetSize(295, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)

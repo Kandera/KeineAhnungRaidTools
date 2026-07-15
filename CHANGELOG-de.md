@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-07-15
+### Neu
+- **Northern Sky Raid Tools Nickname-Unterstützung:** Das Lootmaster-Feld, die Liste der weiteren Council-Mitglieder und die Auto-Promote-Namensliste akzeptieren jetzt zusätzlich zum Charakter-Kurznamen auch einen NSRT-Nickname. Ein eingetragener Nickname (z.B. "Kandera") gilt für alle Charaktere mit diesem Nickname — funktioniert also automatisch weiter, wenn diese Person den Charakter wechselt, ganz ohne manuelles Nachtragen. Fällt automatisch auf den klassischen Charakternamen-Abgleich zurück, wenn NSRT nicht installiert ist oder kein Nickname gesetzt wurde. Setzt ein installiertes Northern Sky Raid Tools voraus; KART bringt kein eigenes Nickname-System mit.
+- **NSRT-Nicknames im Loot-Council-Fenster anzeigen:** Ein neuer persönlicher Schalter zeigt im Council-/Lootmaster-Panel den NSRT-Nickname statt des Charakternamens an. Standardmäßig aus; fällt automatisch auf den Charakternamen zurück, wo kein Nickname verfügbar ist.
+- **Gilden-Rang-Spalte im Loot-Council-Fenster:** Eine neue Spalte direkt hinter dem Spielernamen zeigt den Gilden-Rang jedes Kandidaten an, damit Alts leichter zu erkennen sind.
+
 ## [1.15.0] - 2026-07-15
 ### Neu
 - **Einstellbare Layouts für das Loot-Council-Vote-Fenster:** Ein neuer Schalter bietet zwei unterschiedliche Layouts: "Geräumig" (neue Voreinstellung) zeigt ein breites Fenster mit größeren Vote-Karten und einem in der Item-Qualitätsfarbe getönten Akzentbalken pro Item; "Kompakt" nutzt einzeilige Zeilen mit Icon-only-Vote-Chip-Buttons für kleinere Fläche. Die Wahl wird pro Charakter gespeichert.

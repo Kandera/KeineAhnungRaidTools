@@ -65,13 +65,21 @@ function KART.HandleAutoPromote()
     if not UnitIsGroupLeader("player") or not (IsInGroup() or IsInRaid()) then return end
     local numMembers = GetNumGroupMembers()
     local isRaid = IsInRaid()
-    
+
     for i = 1, numMembers do
         local unit = isRaid and ("raid"..i) or (i == numMembers and "player" or "party"..i)
         local name = UnitName(unit)
         if name then
             local shortName = name:match("([^%-]+)")
-            if shortName and KART.PromoteNamesTable[shortName:lower()] then
+            -- Matches either the character's own short name (as always) or its Northern Sky Raid
+            -- Tools nickname (see KART.GetNickname), so a name in the promote list applies to
+            -- every character sharing that nickname, not just one specific alt.
+            local matches = shortName and KART.PromoteNamesTable[shortName:lower()]
+            if not matches then
+                local nick = KART.GetNickname(unit)
+                matches = nick ~= nil and KART.PromoteNamesTable[nick]
+            end
+            if matches then
                 if not UnitIsGroupAssistant(unit) and not UnitIsGroupLeader(unit) then
                     PromoteToAssistant(name)
                 end
