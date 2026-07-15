@@ -2813,6 +2813,15 @@ function LC.BuildSettingsPanel(parent)
         parent, "KART_LCAutoPass",
         L.LC_SET_AUTOPASS, "lcAutoPass", -80, nil, L.LC_DESC_AUTOPASS)
 
+    -- Personal preference, same reasoning as CbAutoPass above — the vote window's layout style
+    -- is purely a display choice, so it's never synced from the raid leader. Slot -140: the next
+    -- free step below the reserved Droptimizer slot at -110 (see Droptimizer.lua:128) and above
+    -- raidBox, which was shifted from -150 to -180 to make room for this.
+    KART.LC.CbCompactVoteLayout = KART.CreateSettingsCheckbox(
+        parent, "KART_LCCompactVoteLayout",
+        L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -140,
+        LC.RefreshVoteListRows, L.LC_DESC_COMPACT_VOTE_LAYOUT)
+
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -110 slot there. Kept in its own file since it's a
     -- different module, but it's a personal preference like CbAutoPass above, so it lives next
@@ -2823,7 +2832,7 @@ function LC.BuildSettingsPanel(parent)
     -- the actual raid leader's values are used automatically. Visually set apart on purpose so
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -150)
+    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -180)
     raidBox:SetSize(295, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
