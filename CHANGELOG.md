@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-14
+### Added
+- **Raid-leader-assigned Lootmaster:** a new field in Loot Council settings lets the raid leader designate one player who must win every roll (Need, or Greed/Disenchant if Need isn't available) instead of passing, so they can physically receive each item and trade it out to whoever the council actually picked. This overrides that player's own Auto-Pass setting — it's synced from the raid leader like the council member list, not a personal toggle anyone can turn off for themselves.
+
 ## [1.13.0] - 2026-07-14
 ### Added
 - **Loot Council panel can now be minimized:** a new "-" button next to the close button collapses the panel down to just its header and item name, so it can stay on screen during normal raiding without the full candidate list in the way. Tabs, votes, and everything else stay tracked while minimized, and the panel automatically expands again the moment a genuinely new item starts a roll, so nothing gets missed.

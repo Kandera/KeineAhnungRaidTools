@@ -8,6 +8,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-14
+### Neu
+- **Vom Raidleiter festgelegter Lootmaster:** Ein neues Feld in den Loot-Council-Einstellungen erlaubt es dem Raidleiter, einen Spieler festzulegen, der jede Roll gewinnen muss (Need, oder Gier/Entzaubern falls Need nicht verfügbar ist), statt zu passen — damit er jedes Item physisch erhält und an denjenigen weitergibt, den das Council tatsächlich ausgewählt hat. Das überschreibt die eigene Auto-Pass-Einstellung dieses Spielers — es wird wie die Council-Mitgliederliste vom Raidleiter synchronisiert, kein persönlicher Schalter, den man sich selbst ausschalten kann.
+
 ## [1.13.0] - 2026-07-14
 ### Neu
 - **Das Loot-Council-Fenster lässt sich jetzt minimieren:** Ein neuer "-"-Button neben dem Schließen-Button klappt das Fenster auf nur noch Titelleiste + Item-Name zusammen, damit es während des normalen Raidens auf dem Bildschirm bleiben kann, ohne mit der vollen Kandidatenliste im Weg zu stehen. Tabs, Stimmen und alles andere bleiben im Hintergrund erhalten, während minimiert ist, und das Fenster klappt sich automatisch wieder auf, sobald ein wirklich neues Item eine Abstimmung startet — damit nichts übersehen wird.

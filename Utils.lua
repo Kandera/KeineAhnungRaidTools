@@ -39,6 +39,7 @@ KART.Defaults = {
     lcVoteSeconds = 20,
     lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass",
     lcCouncilMembers = "",
+    lcLootmaster = "",
     wuModuleEnabled = false,
     wuImportText = "",
     dtModuleEnabled = false,

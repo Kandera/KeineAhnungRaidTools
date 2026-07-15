@@ -98,6 +98,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
         if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
         if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
+        if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
         if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
         if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
         if KART.DT and KART.DT.CbModuleEnabled then settingsMap[KART.DT.CbModuleEnabled] = "dtModuleEnabled" end

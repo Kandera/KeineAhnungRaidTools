@@ -174,6 +174,20 @@ function LC.GetRaidMinQuality()
     return (LC.raidConfig and LC.raidConfig.minQuality) or 4
 end
 
+-- The designated lootmaster (short name, lowercase, "" = none) — same authority reasoning as
+-- GetButtonConfig/GetRaidMinQuality: only the raid leader's own local setting is authoritative,
+-- everyone else (including the designated lootmaster themselves) goes by the synced value. This
+-- is deliberately NOT a personal toggle like lcAutoPass — see LC.OnStartLootRoll, which overrides
+-- a raider's own Auto-Pass preference when they are this person, precisely so it can't be turned
+-- off by anyone except the raid leader reassigning it.
+function LC.GetLootmaster()
+    if UnitIsGroupLeader("player") then
+        local short = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
+        return short:lower()
+    end
+    return (LC.raidConfig and LC.raidConfig.lootmaster) or ""
+end
+
 -- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
 -- same authority reasoning as GetButtonConfig/GetRaidMinQuality.
 function LC.GetRollsEnabled()
@@ -204,9 +218,10 @@ function LC.BroadcastRaidConfig()
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
+    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
     local council  = KART_Settings.lcCouncilMembers or ""
 
-    local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":"
+    local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
     local budget = ADDON_MSG_MAX_BYTES - #prefix
     if #council > math.max(budget, 0) then
         council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
@@ -222,12 +237,13 @@ function LC.HandleConfig(payload, senderShort)
     local unit = senderShort and LC.FindUnitForShortName(senderShort)
     if not unit or not UnitIsGroupLeader(unit) then return end
 
-    local minQ, buttons, rolls, council = payload:match("^(%d+):([^:]*):([01]):(.*)$")
+    local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
+    LC.raidConfig.lootmaster    = (lootmaster or ""):lower()
     LC.raidConfig.councilMembers = council or ""
 
     LC.CouncilNamesTable = {}
@@ -359,14 +375,37 @@ end
 --  START_LOOT_ROLL handler  (called from Core.lua)
 -- =====================================================================
 
+-- Claims rollID by whatever roll type is actually available, strongest first — used only for the
+-- designated lootmaster (see LC.GetLootmaster), who must win every item so they can hand it to
+-- whoever the council actually decided on via trade (see LC.pendingTrades). Never passes.
+local function ForceWinRoll(rollID)
+    local _, _, _, _, _, canNeed, canGreed, canDisenchant = GetLootRollItemInfo(rollID)
+    if canNeed then
+        RollOnLoot(rollID, 1)
+    elseif canGreed then
+        RollOnLoot(rollID, 2)
+    elseif canDisenchant then
+        RollOnLoot(rollID, 3)
+    end
+end
+
 function LC.OnStartLootRoll(rollID)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
 
-    -- Auto-Pass is a personal preference and is intentionally independent of the raid's min-quality
-    -- setting (that setting only gates whether Council itself engages) — evaluated unconditionally
-    -- so a raider's own choice is never overridden by the raid leader's quality threshold.
-    if KART_Settings.lcAutoPass then
+    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
+    local lootmaster = LC.GetLootmaster()
+
+    if lootmaster ~= "" and myShort == lootmaster then
+        -- The lootmaster is the one exception to Auto-Pass: they must physically win every item
+        -- (regardless of their own local Auto-Pass setting) so they can trade it out afterwards —
+        -- see LC.GetLootmaster for why this is raid-leader-controlled, not a personal toggle.
+        ForceWinRoll(rollID)
+    elseif KART_Settings.lcAutoPass then
+        -- Auto-Pass is a personal preference and is intentionally independent of the raid's
+        -- min-quality setting (that setting only gates whether Council itself engages) —
+        -- evaluated unconditionally so a raider's own choice is never overridden by the raid
+        -- leader's quality threshold.
         RollOnLoot(rollID, 0)
     end
 
@@ -2885,6 +2924,38 @@ function LC.BuildSettingsPanel(parent)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
 
+    -- Lootmaster: the one player who must physically win every roll (Need/Greed/Disenchant,
+    -- never Pass — see ForceWinRoll in LC.OnStartLootRoll) so they can trade each item to whoever
+    -- the council actually decided on. Deliberately a raid-leader-synced field, not a personal
+    -- checkbox like CbAutoPass above — see LC.GetLootmaster.
+    local lblLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lblLootmaster:SetWidth(CONTENT_WIDTH)
+    lblLootmaster:SetJustifyH("LEFT")
+    lblLootmaster:SetText(L.LC_SET_LOOTMASTER)
+    table.insert(KART.DynamicLabels, lblLootmaster)
+
+    KART.LC.LootmasterEditBox = CreateFrame("EditBox", "KART_LCLootmaster", raidBox, "BackdropTemplate")
+    local ebL = KART.LC.LootmasterEditBox
+    ebL:SetSize(CONTENT_WIDTH, 28)
+    ebL:SetAutoFocus(false)
+    ebL:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    ebL:SetBackdropColor(0, 0, 0, 0.5)
+    ebL:SetTextInsets(5, 5, 0, 0)
+    ebL:SetMaxLetters(48)
+    table.insert(KART.EditBoxes, ebL)
+    ebL:SetScript("OnTextChanged", function(self)
+        KART_Settings.lcLootmaster = self:GetText()
+        LC.BroadcastRaidConfig()
+    end)
+    ebL:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    local hintLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hintLootmaster:SetWidth(CONTENT_WIDTH)
+    hintLootmaster:SetJustifyH("LEFT")
+    hintLootmaster:SetText(L.LC_SET_LOOTMASTER_HINT)
+    hintLootmaster:SetTextColor(0.55, 0.55, 0.55)
+    table.insert(KART.DynamicLabels, hintLootmaster)
+
     -- Minimum item quality that triggers the Loot Council flow (full width)
     local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     lblQuality:SetWidth(CONTENT_WIDTH)
@@ -2956,6 +3027,15 @@ function LC.BuildSettingsPanel(parent)
 
         hintCouncil:SetPoint("TOPLEFT", 20, y)
         y = y - hintCouncil:GetStringHeight() - 18
+
+        lblLootmaster:SetPoint("TOPLEFT", 20, y)
+        y = y - lblLootmaster:GetStringHeight() - 8
+
+        ebL:SetPoint("TOPLEFT", 20, y)
+        y = y - ebL:GetHeight() - 9
+
+        hintLootmaster:SetPoint("TOPLEFT", 20, y)
+        y = y - hintLootmaster:GetStringHeight() - 18
 
         lblQuality:SetPoint("TOPLEFT", 20, y)
         y = y - lblQuality:GetStringHeight() - 8
