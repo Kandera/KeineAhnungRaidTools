@@ -50,6 +50,12 @@ local TEST_ITEMS = {
 local TEST_ROLL_ID    = 99999
 local TEST_ITEM_COUNT = #TEST_ITEMS
 
+-- Which mode (true = council/master, false = looter) last actually (re)populated the test data
+-- in LC.StartTest — nil until the first test run. Lets StartTest tell "the OTHER test window is
+-- still open, don't wipe its data out from under it" apart from "the SAME window got re-clicked,
+-- treat that as an explicit restart" (see the sessionActive/suppressReset comment in StartTest).
+LC.testSessionShowCouncil = nil
+
 local function IsTestRoll(rollID)
     return rollID ~= nil and rollID >= TEST_ROLL_ID and rollID < TEST_ROLL_ID + TEST_ITEM_COUNT
 end
@@ -2997,7 +3003,18 @@ function LC.StartTest(mode)
         end
     end
 
-    if not sessionActive then
+    -- sessionActive alone isn't enough to decide whether to keep old test data: every click (see
+    -- the ShowVotePopup/ShowCouncilPanel loop below) refreshes each test item's deadline to
+    -- now+seconds regardless of sessionActive, so a test roll never actually expires as long as
+    -- someone keeps clicking a Test button — sessionActive would stay true forever, permanently
+    -- skipping the reset below and making every vote "stick" across restarts of the SAME window.
+    -- Only suppress the reset when a DIFFERENT window's mode is what's actually keeping the
+    -- session alive (the looter+master-open-simultaneously scenario this check exists for, per
+    -- the comment above) — re-clicking the SAME mode is always an explicit "start a fresh test".
+    local suppressReset = sessionActive and LC.testSessionShowCouncil ~= nil and LC.testSessionShowCouncil ~= showCouncil
+    LC.testSessionShowCouncil = showCouncil
+
+    if not suppressReset then
         for itemIdx, testItem in ipairs(TEST_ITEMS) do
             local testRollID = TEST_ROLL_ID + (itemIdx - 1)
 
