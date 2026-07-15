@@ -597,6 +597,20 @@ function LC.RefreshVoteListRows()
     f:Show()
 end
 
+-- LC.RefreshVoteListRows() always calls f:Show() when there's still a pending roll — deliberate
+-- for real loot rolls (see the vote window's close-button comment: it "comes back on its own" so
+-- a raider can't just dismiss an active vote), but wrong for a callback that merely changes how
+-- the window LOOKS, like the compact-layout checkbox: toggling it while an old, not-yet-expired
+-- test roll happens to still be tracked would otherwise pop the window back open and re-show
+-- stale votes, reading as "a new test just started" even though nothing new was triggered. Only
+-- re-render if the window is already visible; otherwise leave it hidden until something that
+-- actually means "show this" (a new roll, a Test click) calls the dispatcher directly.
+function LC.RefreshVoteListRowsIfShown()
+    if LC.voteListFrame and LC.voteListFrame:IsShown() then
+        LC.RefreshVoteListRows()
+    end
+end
+
 -- "Spacious" style: one card per item, full window width each, large touch targets. The default
 -- and recommended style — see docs/superpowers/specs/2026-07-15-vote-window-layouts-design.md.
 function LC.RefreshVoteListRows_Spacious(f)
@@ -3116,7 +3130,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.CbCompactVoteLayout = KART.CreateSettingsCheckbox(
         parent, "KART_LCCompactVoteLayout",
         L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -140,
-        LC.RefreshVoteListRows, L.LC_DESC_COMPACT_VOTE_LAYOUT)
+        LC.RefreshVoteListRowsIfShown, L.LC_DESC_COMPACT_VOTE_LAYOUT)
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -110 slot there. Kept in its own file since it's a
