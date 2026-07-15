@@ -527,8 +527,9 @@ function LC.CreateVoteList()
         if changed then
             LC.RefreshVoteListRows()
         else
+            local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
             for i, rid in ipairs(LC.voteListRolls) do
-                local row = f.rows[i]
+                local row = pool and pool[i]
                 if row and row:IsShown() then
                     local deadline  = LC.rollDeadlines[rid]
                     local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
@@ -566,6 +567,28 @@ function LC.RemoveVoteListItem(rollID)
         if LC.voteListRolls[i] == rollID then table.remove(LC.voteListRolls, i) end
     end
     LC.RefreshVoteListRows()
+end
+
+-- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
+-- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
+-- after a `/reload`) never leaves a stale row from the other layout visible underneath.
+function LC.RefreshVoteListRows()
+    if #LC.voteListRolls == 0 then
+        if LC.voteListFrame then LC.voteListFrame:Hide() end
+        return
+    end
+    if not LC.voteListFrame then LC.CreateVoteList() end
+    local f = LC.voteListFrame
+
+    local compact = KART_Settings and KART_Settings.lcVoteLayoutCompact
+    if compact then
+        for _, row in ipairs(f.rows or {}) do row:Hide() end
+        LC.RefreshVoteListRows_Compact(f)
+    else
+        for _, row in ipairs(f.compactRows or {}) do row:Hide() end
+        LC.RefreshVoteListRows_Spacious(f)
+    end
+    f:Show()
 end
 
 -- "Spacious" style: one card per item, full window width each, large touch targets. The default
@@ -832,7 +855,6 @@ function LC.RefreshVoteListRows_Spacious(f)
     end
 
     f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
-    f:Show()
 end
 
 -- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
