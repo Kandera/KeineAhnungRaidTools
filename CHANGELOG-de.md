@@ -8,7 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Neu
-- **Einstellbare Layouts für das Loot-Council-Vote-Fenster:** Ein neuer Schalter bietet zwei unterschiedliche Layouts: "Geräumig" (neue Voreinstellung) zeigt ein breites Fenster mit größeren Vote-Karten und einem in der Item-Qualitätsfarbe getönten Akzentbalken pro Item; "Kompakt" nutzt einseitige Zeilen mit Icon-only-Vote-Chip-Buttons für kleinere Fläche. Die Wahl wird pro Charakter gespeichert.
+- **Einstellbare Layouts für das Loot-Council-Vote-Fenster:** Ein neuer Schalter bietet zwei unterschiedliche Layouts: "Geräumig" (neue Voreinstellung) zeigt ein breites Fenster mit größeren Vote-Karten und einem in der Item-Qualitätsfarbe getönten Akzentbalken pro Item; "Kompakt" nutzt einzeilige Zeilen mit Icon-only-Vote-Chip-Buttons für kleinere Fläche. Die Wahl wird pro Charakter gespeichert.
 
 ## [1.14.0] - 2026-07-14
 ### Neu
