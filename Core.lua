@@ -420,7 +420,17 @@ function KART.UpdateStyles()
     -- Slider-Thumbs und Checkboxen färben
     for _, thumb in ipairs(KART.SliderThumbs) do thumb:SetColorTexture(r, g, b, 1) end
     for _, check in ipairs(KART.CheckVisuals) do check:SetColorTexture(r, g, b, 1) end
-    
+
+    -- Re-apply the active tab's background tint and each checked toggle's track color, since
+    -- those aren't simple SetColorTexture calls (they depend on Darken() with different amounts
+    -- and on current checked/active state) and so can't be folded into the loops above.
+    for _, btn in ipairs(KART.TabButtons or {}) do
+        if btn.RefreshActiveColor then btn:RefreshActiveColor() end
+    end
+    for _, cb in ipairs(KART.ToggleCheckboxes or {}) do
+        if cb.RefreshVisual then cb:RefreshVisual() end
+    end
+
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
     if KART.BgColorPreview then KART.BgColorPreview:SetColorTexture(br, bg, bb, 1) end

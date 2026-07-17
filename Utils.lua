@@ -6,6 +6,8 @@ KART.EditBoxes = {}
 KART.DynamicLabels = {}
 KART.SliderThumbs = {}
 KART.CheckVisuals = {}
+KART.TabButtons = {}
+KART.ToggleCheckboxes = {}
 KART.ButtonTexts = {}
 KART.CloseButtonTexts = {} -- "×" FontStrings on close buttons that aren't already covered by a per-frame UpdateStyles font update
 
@@ -120,6 +122,17 @@ function KART.Theme.Darken(r, g, b, amount)
     return math.max(r - amount, 0), math.max(g - amount, 0), math.max(b - amount, 0)
 end
 
+-- Fetches the user's accent color as a 0-1 RGB triple, falling back to the default accent
+-- (0, 60, 100 out of 100) when KART_Settings isn't loaded yet. Centralizes the fetch-and-scale
+-- pattern that was previously duplicated across CreateModernButton, CreateTabButton, and
+-- CreateSettingsCheckbox.
+function KART.Theme.AccentColor()
+    local r = (KART_Settings and KART_Settings.accentR or 0) / 100
+    local g = (KART_Settings and KART_Settings.accentG or 60) / 100
+    local b = (KART_Settings and KART_Settings.accentB or 100) / 100
+    return r, g, b
+end
+
 -- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
 -- overlay, if any — see KART.CreateGradientOverlay). Uses four quarter-circle masks (one per corner)
 -- instead of one full-region circle mask, producing proper rounded rectangles. Wrapped in pcall:
@@ -212,9 +225,7 @@ function KART.CreateModernButton(parent, text, tooltipText)
     -- KART.Theme.Darken instead of a hard-coded gray, so custom accent colors are respected in
     -- the hover state too.
     local function hoverColor()
-        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
-        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
-        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        local r, g, bl = KART.Theme.AccentColor()
         return KART.Theme.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
     end
 
@@ -263,9 +274,7 @@ function KART.CreateTabButton(parent, text)
     -- explicitly here, matching every other SetBackdropColor call site in this file instead of
     -- relying on an implicit default.
     local function activeColor()
-        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
-        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
-        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        local r, g, bl = KART.Theme.AccentColor()
         local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.6)
         return dr, dg, db, 0.9
     end
@@ -282,14 +291,24 @@ function KART.CreateTabButton(parent, text)
     function b:SetActive(active)
         isActive = active
         accentBar:SetShown(active)
+        b:RefreshActiveColor()
+    end
+
+    -- Re-applies the current active/inactive color using the latest accent color, without
+    -- changing which state is active. Lets KART.UpdateStyles() keep an active tab's background
+    -- (and an inactive tab's resting color) in sync when the user changes their accent color,
+    -- instead of only updating on the next click/show.
+    function b:RefreshActiveColor()
         if not b:IsMouseOver() then
-            if active then
+            if isActive then
                 b:SetBackdropColor(activeColor())
             else
                 b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
             end
         end
     end
+
+    table.insert(KART.TabButtons, b)
     b:SetActive(false)
     return b
 end
@@ -344,9 +363,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
         else
             dot:SetPoint("LEFT", self, "LEFT", 2, 0)
         end
-        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
-        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
-        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        local r, g, bl = KART.Theme.AccentColor()
         if checked then
             -- Explicit alpha (matching the unchecked branch's 0.5) rather than relying on Darken's
             -- 3 return values expanding into SetBackdropColor's 4-arg call: that would leave alpha
@@ -368,6 +385,12 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     -- dot in the correct position — CheckButton's own SetChecked (called elsewhere when settings
     -- load) doesn't fire OnClick, so hook OnShow as a catch-all.
     cb:HookScript("OnShow", function(self) refreshVisual(self) end)
+
+    -- Exposes refreshVisual so KART.UpdateStyles() can re-sync this checkbox's track color to a
+    -- freshly-changed accent color, the same way it already does for the dot (via
+    -- KART.CheckVisuals) and slider thumbs/glows (via KART.SliderThumbs).
+    cb.RefreshVisual = function() refreshVisual(cb) end
+    table.insert(KART.ToggleCheckboxes, cb)
 
     if tooltipText then
         cb:SetScript("OnEnter", function(self)
