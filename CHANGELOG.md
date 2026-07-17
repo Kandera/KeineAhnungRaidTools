@@ -7,9 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.18.0] - 2026-07-18
 ### Added
 - **Guild logo in the title bar:** the KA logo now appears next to the main window's title. The logo was also converted from JPG to PNG, fixing the addon icon in the game's AddOns list (WoW can't load JPG textures).
 - **Configurable window layer:** a new "Window Layer" slider in Settings controls which UI layer (frame strata) all KART windows are drawn on — raise it above other UI or keep the addon in the background. Confirmation popups always sit one layer above so they can't get buried.
+
+### Changed
+- **Design-Updates:** modernized look across every window — rounded corners, refreshed buttons, checkboxes, and sliders.
 
 ## [1.17.0] - 2026-07-17
 ### Added

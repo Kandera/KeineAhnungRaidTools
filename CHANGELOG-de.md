@@ -7,9 +7,14 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.18.0] - 2026-07-18
 ### Neu
 - **Gilden-Logo in der Titelleiste:** Das KA-Logo wird jetzt neben dem Titel des Hauptfensters angezeigt. Das Logo wurde außerdem von JPG zu PNG konvertiert — das repariert auch das Addon-Icon in der AddOns-Liste des Spiels (WoW kann keine JPG-Texturen laden).
 - **Einstellbare Fenster-Ebene:** Ein neuer "Fenster-Ebene"-Regler in den Einstellungen steuert, auf welcher UI-Ebene (Frame-Strata) alle KART-Fenster gezeichnet werden — höher stellen, damit andere UI das Addon nicht verdeckt, oder niedriger, damit es im Hintergrund bleibt. Bestätigungs-Popups liegen immer eine Ebene darüber, damit sie nicht verschwinden.
+
+### Geändert
+- **Design-Updates:** modernisierter Look in allen Fenstern — abgerundete Ecken, überarbeitete Buttons, Checkboxen und Slider.
 
 ## [1.17.0] - 2026-07-17
 ### Neu
