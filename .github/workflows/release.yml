@@ -52,6 +52,52 @@ jobs:
           draft: false
           prerelease: false
 
+  discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Post German changelog to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          # Pull the block between the current version header and the next one,
+          # then downgrade "### Foo" headers to bold (embeds don't render # headers)
+          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG-de.md \
+            | sed 's/^### \(.*\)/**\1**/')
+
+          if [ -z "$NOTES" ]; then
+            echo "No changelog section found for $VERSION in CHANGELOG-de.md" >&2
+            exit 1
+          fi
+
+          RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}"
+
+          post() {
+            jq -n --arg title "$1" --arg desc "$2" --arg url "$RELEASE_URL" \
+              '{embeds: [{title: $title, url: (if $title == "" then null else $url end), description: $desc, color: 15844367}]}' \
+              | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"
+          }
+
+          # Discord embed descriptions cap at 4096 chars; split on line boundaries,
+          # only the first chunk carries the title + release link
+          TITLE="KeineAhnungRaidTools v${VERSION}"
+          CHUNK=""
+          while IFS= read -r line; do
+            if [ $(( ${#CHUNK} + ${#line} + 1 )) -gt 4000 ]; then
+              post "$TITLE" "$CHUNK"
+              TITLE=""
+              CHUNK=""
+            fi
+            CHUNK+="$line"$'\n'
+          done <<< "$NOTES"
+          if [ -n "$CHUNK" ]; then post "$TITLE" "$CHUNK"; fi
+
   curseforge:
     runs-on: ubuntu-latest
 
