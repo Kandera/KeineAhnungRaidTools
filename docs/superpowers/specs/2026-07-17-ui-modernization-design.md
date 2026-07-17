@@ -110,12 +110,15 @@ Reihenfolge so gewählt, dass nach jedem Schritt ein lauffähiger Zustand existi
    Card-Gruppierung für zusammengehörige Einstellungsblöcke.
 3. `BuffChecker.lua` — Fenster-Rahmen + Zeilen-Layout auf Card/Rundung, Status-Icons auf feste
    Statusfarben.
-4. `LootCouncil.lua` (größter Block, 41 Ad-hoc-Stellen) — Council-Panel, Vote-Listen-Karten
-   (Stil "Geräumig"/"Kompakt" aus dem vorherigen Redesign bleiben erhalten, nur Rundung/Farben
-   angeglichen), Tab-Leiste links, Raid-Wide-Settings-Box.
-5. `LootHistory.lua` — Tabellen-Header/-Zeilen, Filter-Controls.
-6. `RaidleadBar.lua`, `Invite.lua`, `Core.lua` (Ready-Check-Popup), `Droptimizer.lua` — kleinere
+4. `LootHistory.lua` — Tabellen-Header/-Zeilen, Filter-Controls.
+5. `RaidleadBar.lua`, `Invite.lua`, `Core.lua` (Ready-Check-Popup), `Droptimizer.lua` — kleinere
    Fenster/Controls, gleiche Primitive.
+6. `LootCouncil.lua` (größter Block, 41 Ad-hoc-Stellen; Vote-Fenster und Council-Panel wurden erst
+   kürzlich in einem eigenen Redesign überarbeitet — siehe
+   `docs/superpowers/plans/2026-07-15-vote-window-layouts.md` — deshalb bewusst ans Ende gestellt,
+   damit dieses Redesign nicht sofort wieder angefasst wird) — Council-Panel, Vote-Listen-Karten
+   (Stil "Geräumig"/"Kompakt" bleiben erhalten, nur Rundung/Farben angeglichen), Tab-Leiste links,
+   Raid-Wide-Settings-Box.
 
 Jede Datei wird einzeln umgestellt und die bestehenden Test-Mode-Buttons (Loot Council hat
 bereits welche) genutzt, um ohne echten Raid zu verifizieren, dass nichts kaputt geht.
