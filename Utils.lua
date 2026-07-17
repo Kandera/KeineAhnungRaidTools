@@ -276,6 +276,8 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     dot:Show()
 
     local function refreshVisual(self)
+        dot:Show() -- override native CheckButton show/hide-on-check behavior; the dot must always
+                   -- be visible, only its position communicates checked/unchecked state
         local checked = self:GetChecked()
         dot:ClearAllPoints()
         if checked then
