@@ -120,30 +120,53 @@ function KART.Theme.Darken(r, g, b, amount)
     return math.max(r - amount, 0), math.max(g - amount, 0), math.max(b - amount, 0)
 end
 
--- Applies a rounded-corner mask to a BackdropTemplate frame's backdrop artwork (and its gradient
--- overlay, if any — see KART.CreateGradientOverlay). Uses WoW's built-in scalable circle mask
--- texture cropped per-corner rather than a custom asset, since no image-generation tool is
--- available for this project (see docs/superpowers/specs/2026-07-17-ui-modernization-design.md).
--- Wrapped in pcall: SetMask's exact behavior has shifted across client versions, and a failure
--- here must never break the frame's layout or visibility, only skip the rounding.
+-- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
+-- overlay, if any — see KART.CreateGradientOverlay). Uses four quarter-circle masks (one per corner)
+-- instead of one full-region circle mask, producing proper rounded rectangles. Wrapped in pcall:
+-- SetMask behavior varies across client versions, and a failure here must never break the frame's
+-- layout or visibility, only skip the rounding.
 function KART.ApplyRoundedMask(frame, radius)
     if not frame then return end
     local w, h = frame:GetWidth(), frame:GetHeight()
     if w < KART.Theme.CORNER_RADIUS_MIN_SIZE or h < KART.Theme.CORNER_RADIUS_MIN_SIZE then
         return -- too small to round without looking broken
     end
+    radius = radius or KART.Theme.CORNER_RADIUS_SM
+
+    -- One quarter-circle mask per corner, sized radius x radius and anchored to that corner, so
+    -- only the corners get cropped — pixels outside all four mask footprints (the flat edges and
+    -- interior) are untouched, since a region's masks only affect the pixels they geometrically
+    -- cover. Texture coordinates select one quadrant of the shared circle mask texture per corner.
+    local CORNERS = {
+        { point = "TOPLEFT",     coords = {0, 0.5, 0, 0.5} },
+        { point = "TOPRIGHT",    coords = {0.5, 1, 0, 0.5} },
+        { point = "BOTTOMLEFT",  coords = {0, 0.5, 0.5, 1} },
+        { point = "BOTTOMRIGHT", coords = {0.5, 1, 0.5, 1} },
+    }
 
     local function maskRegion(region)
         if not region then return end
-        local ok, mask = pcall(function()
-            local m = frame:CreateMaskTexture(nil, "OVERLAY")
-            m:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-            m:SetAllPoints(region)
-            region:AddMaskTexture(m)
-            return m
+        -- Idempotent: drop any masks this helper previously added to this region before adding
+        -- new ones, so repeated calls (e.g. after a resize) don't stack masks indefinitely.
+        if region.kartRoundedMasks then
+            for _, old in ipairs(region.kartRoundedMasks) do
+                region:RemoveMaskTexture(old)
+            end
+        end
+        region.kartRoundedMasks = {}
+
+        local ok = pcall(function()
+            for _, corner in ipairs(CORNERS) do
+                local m = frame:CreateMaskTexture(nil, "OVERLAY")
+                m:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+                m:SetTexCoord(unpack(corner.coords))
+                m:SetSize(radius, radius)
+                m:SetPoint(corner.point, region, corner.point)
+                region:AddMaskTexture(m)
+                table.insert(region.kartRoundedMasks, m)
+            end
         end)
-        if not ok then return end
-        return mask
+        if not ok then region.kartRoundedMasks = nil end
     end
 
     if frame.backdropTexture then maskRegion(frame.backdropTexture) end
