@@ -158,21 +158,27 @@ rlTitle:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -20)
 rlTitle:SetText(L.LABEL_RAIDLEAD_TOOLS)
 table.insert(KART.DynamicLabels, rlTitle)
 
+-- Card groups all Raidlead Bar settings into one visually distinct panel instead of leaving
+-- checkboxes/slider floating directly on the tab background.
+local rlCard = KART.CreateCard(KART.RaidleadPanel)
+rlCard:SetPoint("TOPLEFT", rlTitle, "BOTTOMLEFT", 0, -10)
+rlCard:SetSize(290, 180)
+
 -- Checkbox zur Aktivierung
-KART.CbActivate = KART.CreateSettingsCheckbox(KART.RaidleadPanel, "KART_RaidleadBarCheck", L.SET_RL_ACTIVATE, "showRaidleadBar", -50, function()
+KART.CbActivate = KART.CreateSettingsCheckbox(rlCard, "KART_RaidleadBarCheck", L.SET_RL_ACTIVATE, "showRaidleadBar", -20, function()
     KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
 end, L.DESC_RL_ACTIVATE)
 
 -- Checkbox zum Sperren
-KART.CbLock = KART.CreateSettingsCheckbox(KART.RaidleadPanel, "KART_RaidleadBarLockCheck", L.SET_RL_LOCK, "lockRaidleadBar", -80, nil, L.DESC_RL_LOCK)
+KART.CbLock = KART.CreateSettingsCheckbox(rlCard, "KART_RaidleadBarLockCheck", L.SET_RL_LOCK, "lockRaidleadBar", -50, nil, L.DESC_RL_LOCK)
 
 -- Checkbox für Auto-Hide
-KART.CbAutoHide = KART.CreateSettingsCheckbox(KART.RaidleadPanel, "KART_RaidleadBarAutoHideCheck", L.SET_RL_AUTOHIDE, "autoHideRaidleadBar", -110, function()
+KART.CbAutoHide = KART.CreateSettingsCheckbox(rlCard, "KART_RaidleadBarAutoHideCheck", L.SET_RL_AUTOHIDE, "autoHideRaidleadBar", -80, function()
     KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
 end, L.DESC_RL_AUTOHIDE)
 
 -- Pull-Timer Slider (Verknüpfung mit KART_PullBtn aus RaidleadBar.lua)
-KART.PullSlider = KART.CreateSettingsSlider(KART.RaidleadPanel, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -160, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
+KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
 KART.PullSlider:HookScript("OnValueChanged", function(self, value)
     if KART.PullBtn then -- Objekt aus RaidleadBar.lua
         if not InCombatLockdown() then
@@ -187,14 +193,18 @@ bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -20)
 bcTitle:SetText(L.LABEL_BUFFCHECK_SETTINGS)
 table.insert(KART.DynamicLabels, bcTitle)
 
+local bcCard = KART.CreateCard(KART.BuffCheckPanel)
+bcCard:SetPoint("TOPLEFT", bcTitle, "BOTTOMLEFT", 0, -10)
+bcCard:SetSize(290, 290)
+
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
 -- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
-KART.CbBcModuleEnabled = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_BcModuleEnabled", L.SET_BC_MODULE_ENABLED, "bcModuleEnabled", -50, nil, L.DESC_BC_MODULE_ENABLED)
+KART.CbBcModuleEnabled = KART.CreateSettingsCheckbox(bcCard, "KART_BcModuleEnabled", L.SET_BC_MODULE_ENABLED, "bcModuleEnabled", -20, nil, L.DESC_BC_MODULE_ENABLED)
 
-KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -80, nil, L.DESC_BC_READYCHECK)
+KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(bcCard, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -50, nil, L.DESC_BC_READYCHECK)
 
-KART.BtnBuffPreview = KART.CreateModernButton(KART.BuffCheckPanel, L.BTN_BUFF_PREVIEW)
-KART.BtnBuffPreview:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -120)
+KART.BtnBuffPreview = KART.CreateModernButton(bcCard, L.BTN_BUFF_PREVIEW)
+KART.BtnBuffPreview:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -90)
 KART.BtnBuffPreview:SetScript("OnClick", function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()
@@ -204,9 +214,9 @@ KART.BtnBuffPreview:SetScript("OnClick", function()
     end
 end)
 
-KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -175, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
-KART.SldCombatDelay = KART.CreateSettingsSlider(KART.BuffCheckPanel, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -220, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
-KART.CbGrayOffline = KART.CreateSettingsCheckbox(KART.BuffCheckPanel, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -265, nil, L.DESC_GRAY_OFFLINE)
+KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(bcCard, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -145, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
+KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -190, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
+KART.CbGrayOffline = KART.CreateSettingsCheckbox(bcCard, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -235, nil, L.DESC_GRAY_OFFLINE)
 
 -- 6. Automation Panel Inhalt (Auto-Promote + Auto-Invite per Whisper + Auto-Raid-Convert)
 local promLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
