@@ -96,6 +96,30 @@ function KART.GetFontPath(name)
     return "Fonts\\FRIZQT__.TTF"
 end
 
+-- Central theme tokens: corner radii, fixed status colors, and color-derivation helpers used by
+-- every UI factory function below. Kept as plain data + pure functions (no frame references) so
+-- KART.UpdateStyles() can call these fresh on every settings change without caching stale colors.
+KART.Theme = {
+    CORNER_RADIUS_LG = 6,       -- panels, cards, main window
+    CORNER_RADIUS_SM = 3,       -- buttons, checkboxes, slider thumb
+    CORNER_RADIUS_MIN_SIZE = 16, -- elements smaller than this (either dimension) stay unrounded
+
+    SUCCESS = {0.35, 0.75, 0.35},
+    WARNING = {0.90, 0.70, 0.20},
+    DANGER  = {0.85, 0.30, 0.30},
+}
+
+-- Lightens/darkens an RGB triple by `amount` (0-1), clamped to [0,1]. Used to derive hover/
+-- pressed/disabled states from the user's chosen accent or background color instead of hard-
+-- coding separate state colors that would drift out of sync with a custom accent.
+function KART.Theme.Lighten(r, g, b, amount)
+    return math.min(r + amount, 1), math.min(g + amount, 1), math.min(b + amount, 1)
+end
+
+function KART.Theme.Darken(r, g, b, amount)
+    return math.max(r - amount, 0), math.max(g - amount, 0), math.max(b - amount, 0)
+end
+
 -- UI Factory: Modern Button
 function KART.CreateModernButton(parent, text, tooltipText)
     local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
