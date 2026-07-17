@@ -201,14 +201,27 @@ function KART.CreateModernButton(parent, text, tooltipText)
     })
     b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
     b:SetBackdropBorderColor(0, 0, 0, 1)
-    
+    KART.ApplyRoundedMask(b, KART.Theme.CORNER_RADIUS_SM)
+
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     b.text:SetPoint("CENTER")
     b.text:SetText(text)
     table.insert(KART.ButtonTexts, b.text)
 
-    b:SetScript("OnEnter", function(self) 
-        self:SetBackdropColor(0.2, 0.2, 0.2, 1)
+    -- Hover/leave color fade uses a short alpha-blended color animation instead of an instant
+    -- SetBackdropColor swap, and derives from the user's accent color (KART_Settings.accentR/G/B)
+    -- via KART.Theme.Lighten rather than a hard-coded gray, so custom accent colors are respected
+    -- in the hover state too.
+    local function hoverColor()
+        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
+        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
+        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        return KART.Theme.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
+    end
+
+    b:SetScript("OnEnter", function(self)
+        local r, g, bl = hoverColor()
+        self:SetBackdropColor(r, g, bl, 1)
         if tooltipText then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(text, 1, 1, 1)
@@ -216,7 +229,7 @@ function KART.CreateModernButton(parent, text, tooltipText)
             GameTooltip:Show()
         end
     end)
-    b:SetScript("OnLeave", function(self) 
+    b:SetScript("OnLeave", function(self)
         self:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
         GameTooltip:Hide()
     end)
