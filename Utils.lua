@@ -398,6 +398,65 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     return s
 end
 
+-- UI Factory: Card panel — a rounded, slightly recessed container used to visually group related
+-- settings (e.g. all Raidlead Bar options) instead of leaving controls floating directly on the
+-- tab background. Draws a second, 2px-larger, darker backdrop behind the card as a cheap "shadow"
+-- (WoW has no real blur/drop-shadow primitive), then the card's own backdrop on top.
+function KART.CreateCard(parent, title)
+    local shadow = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    shadow:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    shadow:SetBackdropColor(0, 0, 0, 0.35)
+
+    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    card.shadow = shadow
+    -- Anchor the shadow 2px outside the card's edges, one-way (shadow follows card, never the
+    -- reverse). WoW resolves SetPoint anchors live against the target frame's current position/
+    -- size, so this single pair of calls keeps the shadow tracking the card through every future
+    -- SetSize/SetPoint the caller makes on `card` — no OnSizeChanged plumbing needed for
+    -- positioning, and no risk of card and shadow ending up anchored to each other (which WoW
+    -- rejects as a dependency loop). `card` itself is intentionally left unanchored/unsized here:
+    -- per this function's contract, the caller sizes and positions the returned frame.
+    shadow:SetPoint("TOPLEFT", card, "TOPLEFT", -2, 2)
+    shadow:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", 2, -2)
+
+    card:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    card:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+    card:SetBackdropBorderColor(0, 0, 0, 1)
+
+    -- `card` has no size yet at this point (the caller sizes it after CreateCard returns), so
+    -- calling KART.ApplyRoundedMask here immediately would hit its min-size guard and silently
+    -- no-op, leaving the card permanently square. Re-apply on every OnSizeChanged instead —
+    -- ApplyRoundedMask is documented as idempotent for exactly this reuse pattern — so the mask
+    -- is (re)established once the caller gives the card real dimensions, and stays correct if
+    -- it's resized again later. Shadow's size is derived from card's via the anchors above, so
+    -- its own OnSizeChanged fires in lockstep; re-mask it alongside card here rather than adding
+    -- a second identical hook on shadow.
+    card:HookScript("OnSizeChanged", function()
+        KART.ApplyRoundedMask(card, KART.Theme.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(shadow, KART.Theme.CORNER_RADIUS_LG)
+    end)
+
+    -- shadow is a sibling of card (not its child, so it stays visually behind card without
+    -- needing an explicit frame level), so it doesn't automatically follow card's Show/Hide.
+    -- Keep it in sync explicitly so callers that hide the card don't leave a detached shadow
+    -- floating on screen.
+    card:HookScript("OnShow", function() shadow:Show() end)
+    card:HookScript("OnHide", function() shadow:Hide() end)
+
+    if title then
+        card.titleText = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        card.titleText:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
+        card.titleText:SetText(title)
+        table.insert(KART.DynamicLabels, card.titleText)
+    end
+
+    return card
+end
+
 function KART.UpdateMinimapButton()
     local dbIcon = LibStub("LibDBIcon-1.0", true)
     if dbIcon then
