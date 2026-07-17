@@ -236,11 +236,14 @@ function KART.CreateModernButton(parent, text, tooltipText)
 end
 
 -- Weitere UI-Hilfsfunktionen (Slider/Checkbox) hier implementieren...
+-- Toggle-switch style: a pill-shaped track (34x16) with a round dot that slides between left
+-- (off) and right (on). Still a real CheckButton under the hood so GetChecked/SetChecked and the
+-- existing OnClick wiring below are unchanged for every call site.
 function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffset, callback, tooltipText)
     local cb = CreateFrame("CheckButton", name, parent, "BackdropTemplate")
-    cb:SetSize(20, 20)
+    cb:SetSize(34, 16)
     cb:SetPoint("TOPLEFT", 20, yOffset)
-    
+
     cb:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -248,23 +251,62 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     })
     cb:SetBackdropColor(0, 0, 0, 0.5)
     cb:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    -- Pill track is fully rounded: half its own height, which is below CORNER_RADIUS_MIN_SIZE, so
+    -- it needs its own mask call with a radius large enough to round the full end-caps rather than
+    -- going through the generic small-corner path.
+    KART.ApplyRoundedMask(cb, 8)
 
     cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     cb.text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
     cb.text:SetText(labelText)
     table.insert(KART.DynamicLabels, cb.text)
 
-    local check = cb:CreateTexture(nil, "OVERLAY")
-    check:SetTexture("Interface\\Buttons\\WHITE8X8")
-    check:SetSize(12, 12)
-    check:SetPoint("CENTER")
-    cb:SetCheckedTexture(check)
-    table.insert(KART.CheckVisuals, check)
+    -- Sliding dot: positioned left when unchecked, right when checked. Reused as the "checked
+    -- texture" so WoW's own CheckButton show/hide-on-check logic still drives visibility, but its
+    -- position (not just visibility) is updated in the click handler below.
+    local dot = cb:CreateTexture(nil, "OVERLAY")
+    dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+    dot:SetSize(12, 12)
+    dot:SetPoint("LEFT", cb, "LEFT", 2, 0)
+    cb:SetCheckedTexture(dot)
+    table.insert(KART.CheckVisuals, dot)
+
+    -- Checked texture only shows/hides by default; here it must always render (the dot represents
+    -- "off" position too) — track color communicates on/off state.
+    dot:Show()
+
+    local function refreshVisual(self)
+        local checked = self:GetChecked()
+        dot:ClearAllPoints()
+        if checked then
+            dot:SetPoint("RIGHT", self, "RIGHT", -2, 0)
+        else
+            dot:SetPoint("LEFT", self, "LEFT", 2, 0)
+        end
+        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
+        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
+        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        if checked then
+            -- Explicit alpha (matching the unchecked branch's 0.5) rather than relying on Darken's
+            -- 3 return values expanding into SetBackdropColor's 4-arg call: that would leave alpha
+            -- unset, and every other SetBackdropColor call site in this file passes alpha
+            -- explicitly, so an implicit default here would be an inconsistent one-off.
+            local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.35)
+            self:SetBackdropColor(dr, dg, db, 0.5)
+        else
+            self:SetBackdropColor(0, 0, 0, 0.5)
+        end
+    end
 
     cb:SetScript("OnClick", function(self)
         KART_Settings[settingKey] = self:GetChecked()
+        refreshVisual(self)
         if callback then callback() end
     end)
+    -- Initial state (e.g. when the panel is first built, before any user click) still needs the
+    -- dot in the correct position — CheckButton's own SetChecked (called elsewhere when settings
+    -- load) doesn't fire OnClick, so hook OnShow as a catch-all.
+    cb:HookScript("OnShow", function(self) refreshVisual(self) end)
 
     if tooltipText then
         cb:SetScript("OnEnter", function(self)
