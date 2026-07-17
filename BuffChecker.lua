@@ -151,7 +151,15 @@ function KART.CreateBuffCheckFrame()
         local row = CreateFrame("Frame", nil, content)
         row:SetSize(660, 26)
         row:SetPoint("TOPLEFT", 0, -(i-1)*26)
-        
+
+        -- Subtle alternating background so a dense 40-row player grid is easier to scan
+        -- horizontally. Colored per-row in KART.UpdateBuffCheck (parity depends on the row's
+        -- position in the currently-visible list, not its pool index, since rows are reused/
+        -- reordered as group membership changes).
+        row.stripeBg = row:CreateTexture(nil, "BACKGROUND")
+        row.stripeBg:SetAllPoints(row)
+        row.stripeBg:SetColorTexture(1, 1, 1, 1) -- color set per-frame below; alpha applied via SetVertexColor alpha channel
+
         row.rcIcon = row:CreateTexture(nil, "OVERLAY")
         row.rcIcon:SetSize(14, 14)
         row.rcIcon:SetPoint("LEFT", row, "LEFT", 12, 0)
@@ -514,6 +522,16 @@ function KART.UpdateBuffCheck(isPreview)
         local rcReasonsPreview = {nil, "Katze brennt", "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil}
         for i = 1, 5 do
             local row = KART.BuffCheckFrame.rows[i]
+            if row.stripeBg then
+                if i % 2 == 0 then
+                    local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+                    local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                    row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
+                    row.stripeBg:Show()
+                else
+                    row.stripeBg:Hide()
+                end
+            end
 
             row.name:SetText(L.BC_EXAMPLE_PLAYER .. i)
             row.name:SetTextColor(0.5, 0.5, 1)
@@ -611,6 +629,16 @@ function KART.UpdateBuffCheck(isPreview)
         local unit = (num == 0) and "player" or (isRaid and ("raid"..i) or (i == num and "player" or "party"..i))
         
         local row = KART.BuffCheckFrame.rows[i]
+        if row.stripeBg then
+            if i % 2 == 0 then
+                local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+                local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
+                row.stripeBg:Show()
+            else
+                row.stripeBg:Hide()
+            end
+        end
         local nameStr = UnitName(unit)
         local _, class = UnitClass(unit)
 
