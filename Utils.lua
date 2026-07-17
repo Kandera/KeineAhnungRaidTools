@@ -153,8 +153,9 @@ function KART.ApplyRoundedMask(frame, radius)
                 region:RemoveMaskTexture(old)
             end
         end
-        region.kartRoundedMasks = {}
+        region.kartRoundedMasks = nil
 
+        local applied = {}
         local ok = pcall(function()
             for _, corner in ipairs(CORNERS) do
                 local m = frame:CreateMaskTexture(nil, "OVERLAY")
@@ -163,10 +164,18 @@ function KART.ApplyRoundedMask(frame, radius)
                 m:SetSize(radius, radius)
                 m:SetPoint(corner.point, region, corner.point)
                 region:AddMaskTexture(m)
-                table.insert(region.kartRoundedMasks, m)
+                table.insert(applied, m)
             end
         end)
-        if not ok then region.kartRoundedMasks = nil end
+        if ok then
+            region.kartRoundedMasks = applied
+        else
+            -- Partial failure: remove whatever masks this call did manage to add, so the frame
+            -- ends up fully unrounded rather than half-rounded.
+            for _, m in ipairs(applied) do
+                region:RemoveMaskTexture(m)
+            end
+        end
     end
 
     if frame.backdropTexture then maskRegion(frame.backdropTexture) end
