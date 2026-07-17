@@ -158,7 +158,7 @@ function KART.CreateBuffCheckFrame()
         -- reordered as group membership changes).
         row.stripeBg = row:CreateTexture(nil, "BACKGROUND")
         row.stripeBg:SetAllPoints(row)
-        row.stripeBg:SetColorTexture(1, 1, 1, 1) -- color set per-frame below; alpha applied via SetVertexColor alpha channel
+        row.stripeBg:SetColorTexture(1, 1, 1, 1) -- placeholder; recolored via SetColorTexture (incl. alpha) per-frame below
 
         row.rcIcon = row:CreateTexture(nil, "OVERLAY")
         row.rcIcon:SetSize(14, 14)
@@ -592,7 +592,7 @@ function KART.UpdateBuffCheck(isPreview)
                         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für Preview
                     elseif data.isOil then
                         ind:SetAlpha(1.0)
-                        ind:SetVertexColor(0.2, 1, 0.2) -- Grün für besten Rang
+                        ind:SetVertexColor(unpack(KART.Theme.SUCCESS)) -- best rank, matches setInd's "best" branch
                     else
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(1, 1, 1) -- Vorhanden
