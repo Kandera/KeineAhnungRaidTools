@@ -508,6 +508,7 @@ function KART.ShowReadyCheckReasonDialog()
         })
         f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
         f:SetBackdropBorderColor(0, 0, 0, 1)
+        KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
@@ -555,6 +556,7 @@ function KART.ShowReadyCheckReasonDialog()
         customInput:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
         customInput:SetTextInsets(5, 5, 0, 0)
         customInput:SetMaxLetters(30) -- Verhindert, dass Leute ganze Romane schreiben
+        KART.ApplyRoundedMask(customInput, KART.Theme.CORNER_RADIUS_SM)
         table.insert(KART.EditBoxes, customInput)
         
         local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND or "Senden")
