@@ -324,7 +324,7 @@ end
 
 function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yOffset, name, tooltipText)
     local s = CreateFrame("Slider", name, parent, "BackdropTemplate")
-    s:SetSize(180, 14)
+    s:SetSize(180, 4) -- thin track instead of the old 14px-tall bar
     s:SetPoint("TOPLEFT", 20, yOffset - 16) -- 16px Platz für das Label oben
     s:SetOrientation("HORIZONTAL")
     s:SetMinMaxValues(minV, maxV)
@@ -338,6 +338,7 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     })
     s:SetBackdropColor(0, 0, 0, 0.5)
     s:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    KART.ApplyRoundedMask(s, 2) -- track is only 4px tall; skips rounding via the min-size guard, kept for future-proofing if track height changes
 
     s.title = s:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     s.title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 4)
@@ -346,28 +347,53 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
 
     s.valueText = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     s.valueText:SetPoint("BOTTOMRIGHT", s, "TOPRIGHT", 0, 4)
-    
+
+    -- Soft glow behind the thumb, hidden by default, faded in on hover/drag via alpha rather
+    -- than Show/Hide so it never fights another script over the frame's visibility.
+    local glow = s:CreateTexture(nil, "BACKGROUND")
+    glow:SetSize(20, 20)
+    glow:SetTexture("Interface\\Buttons\\WHITE8X8")
+    glow:SetAlpha(0)
+    table.insert(KART.SliderThumbs, glow) -- colored alongside the thumb in KART.UpdateStyles
+
     local thumb = s:CreateTexture(nil, "ARTWORK")
-    thumb:SetSize(12, 14)
+    thumb:SetSize(12, 12)
     thumb:SetTexture("Interface\\Buttons\\WHITE8X8")
     s:SetThumbTexture(thumb)
     table.insert(KART.SliderThumbs, thumb)
+    local thumbMask = s:CreateMaskTexture(nil, "OVERLAY")
+    local maskOk = pcall(function()
+        thumbMask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        thumbMask:SetAllPoints(thumb)
+        thumb:AddMaskTexture(thumbMask)
+    end)
+    if not maskOk then thumbMask:Hide() end
+
+    local function positionGlow()
+        glow:ClearAllPoints()
+        glow:SetPoint("CENTER", thumb, "CENTER")
+    end
 
     s:SetScript("OnValueChanged", function(self, value)
         local val = math.floor(value)
         KART_Settings[settingKey] = val
         self.valueText:SetText(val)
+        positionGlow()
         if KART.UpdateStyles then KART.UpdateStyles() end
     end)
+    s:SetScript("OnEnter", function() glow:SetAlpha(0.35) end)
+    s:SetScript("OnLeave", function() if not s.isDragging then glow:SetAlpha(0) end end)
+    s:HookScript("OnMouseDown", function() s.isDragging = true; glow:SetAlpha(0.5) end)
+    s:HookScript("OnMouseUp", function() s.isDragging = false; glow:SetAlpha(0) end)
 
     if tooltipText then
-        s:SetScript("OnEnter", function(self)
+        s:HookScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(labelText, 1, 1, 1)
             GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
             GameTooltip:Show()
         end)
-        s:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        s:HookScript("OnLeave", function() GameTooltip:Hide() end)
     end
     return s
 end
