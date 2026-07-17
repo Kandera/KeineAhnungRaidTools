@@ -47,6 +47,7 @@ mainFrame:SetBackdrop({
 })
 mainFrame:SetBackdropBorderColor(0, 0, 0, 1)
 mainFrame.gradientBg = KART.CreateGradientOverlay(mainFrame)
+KART.RegisterStrataFrame(mainFrame)
 mainFrame:Hide()
 KART.AddShowFade(mainFrame)
 
@@ -314,6 +315,19 @@ KART.BtnLang:SetScript("OnClick", function(self)
 end)
 
 KART.SldBgAlpha = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_BG_ALPHA, 0, 100, "bgAlpha", -300, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
+
+-- Window layer slider: value is an index into KART.StrataLevels, shown as the strata name
+-- instead of the raw number (the factory's own handler writes the number first, this hook
+-- overwrites it right after; OnShow covers the case where the initial SetValue doesn't fire
+-- because the saved value equals the slider's current one).
+KART.SldFrameStrata = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_FRAME_STRATA, 1, #KART.StrataLevels, "frameStrata", -300, "KART_FrameStrataSlider", L.DESC_FRAME_STRATA)
+KART.SldFrameStrata:ClearAllPoints()
+KART.SldFrameStrata:SetPoint("LEFT", KART.SldBgAlpha, "RIGHT", 40, 0)
+local function UpdateStrataSliderText(self)
+    self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+end
+KART.SldFrameStrata:HookScript("OnValueChanged", UpdateStrataSliderText)
+KART.SldFrameStrata:HookScript("OnShow", UpdateStrataSliderText)
 
 -- Color Buttons
 KART.BtnAccentColor = KART.CreateModernButton(KART.SettingsPanel, L.BTN_ACCENT_COLOR, L.DESC_ACCENT_COLOR)

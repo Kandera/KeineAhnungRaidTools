@@ -85,7 +85,7 @@ rlBar:SetMovable(true)
 rlBar:EnableMouse(true)
 rlBar:RegisterForDrag("LeftButton")
 KART.RaidleadBar = rlBar
-rlBar:SetFrameStrata("HIGH")
+KART.RegisterStrataFrame(rlBar)
 
 rlBar:SetScript("OnDragStart", function(self)
     if not KART_Settings.lockRaidleadBar then self:StartMoving() end

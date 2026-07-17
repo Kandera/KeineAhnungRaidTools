@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- **Configurable window layer:** a new "Window Layer" slider in Settings controls which UI layer (frame strata) all KART windows are drawn on. All windows now share one layer — raise it so other UI can't cover the addon, or lower it so the addon stays out of the way; both preferences are common and now both possible. Confirmation popups (session prompt, winner announcement, export dialog, etc.) always sit one layer above the windows so they can't get buried.
+
 ## [1.17.0] - 2026-07-17
 ### Added
 - **Droptimizer gain% now shown in the Vote window too:** each item card in your personal vote popup shows your own synced Droptimizer gain% for that item (colour-coded, same as the Loot Council panel's Gain column) whenever sim data exists for it — no more switching to the council panel just to check if an item is actually an upgrade for you before voting.

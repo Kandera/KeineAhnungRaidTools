@@ -83,7 +83,7 @@ function KART.CreateBuffCheckFrame()
         edgeSize = 1,
     })
     f:SetBackdropBorderColor(0, 0, 0, 1)
-    f:SetFrameStrata("HIGH")
+    KART.RegisterStrataFrame(f)
     f.gradientBg = KART.CreateGradientOverlay(f)
     KART.AddShowFade(f)
 

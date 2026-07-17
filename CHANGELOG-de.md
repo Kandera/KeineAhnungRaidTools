@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Neu
+- **Einstellbare Fenster-Ebene:** Ein neuer "Fenster-Ebene"-Regler in den Einstellungen steuert, auf welcher UI-Ebene (Frame-Strata) alle KART-Fenster gezeichnet werden. Alle Fenster teilen sich jetzt eine Ebene — höher stellen, damit andere UI das Addon nicht verdecken kann, oder niedriger, damit das Addon im Hintergrund bleibt; beide Vorlieben sind verbreitet und jetzt beide möglich. Bestätigungs-Popups (Session-Anfrage, Gewinner-Anzeige, Export-Dialog usw.) liegen immer eine Ebene über den Fenstern, damit sie nicht darunter verschwinden können.
+
 ## [1.17.0] - 2026-07-17
 ### Neu
 - **Droptimizer-Gewinn% jetzt auch im Vote-Fenster:** Jede Item-Karte im persönlichen Vote-Popup zeigt jetzt den eigenen gesyncten Droptimizer-Gewinn% für dieses Item an (farbcodiert, wie in der Gewinn-Spalte des Loot-Council-Fensters), sofern Sim-Daten dafür vorliegen — kein Wechsel mehr ins Council-Fenster nötig, nur um vor dem Voten zu checken, ob ein Item überhaupt ein Upgrade ist.

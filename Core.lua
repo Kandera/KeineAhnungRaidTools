@@ -112,6 +112,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
         if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
         if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
+        if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
 
         for widget, key in pairs(settingsMap) do
             if widget then
@@ -374,6 +375,7 @@ end)
 -- Styles Update (Muss global zugänglich sein)
 function KART.UpdateStyles()
     if not KART_Settings or not KART.MainFrame then return end -- KART.MainFrame aus MainFrame.lua
+    KART.ApplyFrameStrata()
     local fontPath = KART.GetFontPath(KART_Settings.fontName)
     local r, g, b = KART_Settings.accentR/100, KART_Settings.accentG/100, KART_Settings.accentB/100
     local br, bg, bb = KART_Settings.bgR/100, KART_Settings.bgG/100, KART_Settings.bgB/100
@@ -498,7 +500,7 @@ function KART.ShowReadyCheckReasonDialog()
         local f = CreateFrame("Frame", "KART_RCReasonFrame", UIParent, "BackdropTemplate")
         f:SetSize(260, 115)
         f:SetPoint("CENTER", 0, 150)
-        f:SetFrameStrata("DIALOG")
+        KART.RegisterStrataFrame(f, true)
         f:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Buttons\\WHITE8X8",

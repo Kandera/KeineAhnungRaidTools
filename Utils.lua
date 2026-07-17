@@ -50,7 +50,51 @@ KART.Defaults = {
     lcCouncilPanelPos = false,
     lcHistoryWindowPos = false,
     lcMinQuality = 4,
+    frameStrata = 4, -- index into KART.StrataLevels (4 = HIGH)
 }
+
+-- Ordered list of WoW frame strata a KART window may sit on. All main windows share one
+-- configurable stratum (KART_Settings.frameStrata, stored as an index into this list) so users
+-- can decide whether other UI may cover the addon or not. Transient popups (confirm dialogs
+-- etc.) always sit one stratum above the windows so they can't get buried under them.
+KART.StrataLevels = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
+KART.StrataFrames = {}       -- main windows
+KART.StrataDialogFrames = {} -- popups shown above the windows
+
+local function StrataIndex()
+    local idx = KART_Settings and KART_Settings.frameStrata or KART.Defaults.frameStrata
+    if type(idx) ~= "number" or idx < 1 or idx > #KART.StrataLevels then idx = KART.Defaults.frameStrata end
+    return idx
+end
+
+function KART.GetWindowStrata()
+    return KART.StrataLevels[StrataIndex()]
+end
+
+function KART.GetDialogStrata()
+    local idx = StrataIndex()
+    -- TOOLTIP is deliberately not offered for windows, but serves as the "one above" stratum
+    -- when the windows themselves are maxed out at FULLSCREEN_DIALOG.
+    return KART.StrataLevels[idx + 1] or "TOOLTIP"
+end
+
+-- Registers a top-level frame for the shared strata setting and applies the current value.
+-- Called once per frame at creation time; KART.ApplyFrameStrata() re-applies on change.
+function KART.RegisterStrataFrame(frame, isDialog)
+    if isDialog then
+        table.insert(KART.StrataDialogFrames, frame)
+        frame:SetFrameStrata(KART.GetDialogStrata())
+    else
+        table.insert(KART.StrataFrames, frame)
+        frame:SetFrameStrata(KART.GetWindowStrata())
+    end
+end
+
+function KART.ApplyFrameStrata()
+    local windowStrata, dialogStrata = KART.GetWindowStrata(), KART.GetDialogStrata()
+    for _, f in ipairs(KART.StrataFrames) do f:SetFrameStrata(windowStrata) end
+    for _, f in ipairs(KART.StrataDialogFrames) do f:SetFrameStrata(dialogStrata) end
+end
 
 function KART.TrimString(s)
     return s:match("^%s*(.-)%s*$")
