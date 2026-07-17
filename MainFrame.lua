@@ -15,6 +15,21 @@ function KART.ShowTab(tabIndex)
     for i, panel in ipairs(panels) do
         if panel then panel:SetShown(i == tabIndex) end
     end
+
+    -- Buttons are created further down in this file (after this function is defined), so guard
+    -- against calling ShowTab before they exist (not expected in practice, but SetActive would
+    -- error on a nil button otherwise).
+    local buttons = {
+        KART.BtnPromote,
+        KART.BtnRaidlead,
+        KART.BtnBuffCheck,
+        KART.BtnSettings,
+        KART.BtnLootCouncil,
+        KART.BtnWoWUtils,
+    }
+    for i, btn in ipairs(buttons) do
+        if btn then btn:SetActive(i == tabIndex) end
+    end
 end
 
 -- 2. Hauptfenster Erstellung
@@ -68,27 +83,27 @@ mainInset.sidebarBG:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 0, 0)
 mainInset.sidebarBG:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMLEFT", 140, 0)
 mainInset.sidebarBG:SetColorTexture(0.05, 0.05, 0.05, 0.8)
 
-KART.BtnPromote = KART.CreateModernButton(mainFrame, L.TAB_PROMOTE)
+KART.BtnPromote = KART.CreateTabButton(mainFrame, L.TAB_PROMOTE)
 KART.BtnPromote:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 5, -10)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
-KART.BtnRaidlead = KART.CreateModernButton(mainFrame, L.TAB_RAIDLEAD)
+KART.BtnRaidlead = KART.CreateTabButton(mainFrame, L.TAB_RAIDLEAD)
 KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
 KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
-KART.BtnBuffCheck = KART.CreateModernButton(mainFrame, L.TAB_BUFFCHECK)
+KART.BtnBuffCheck = KART.CreateTabButton(mainFrame, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnSettings = KART.CreateModernButton(mainFrame, L.TAB_SETTINGS)
+KART.BtnSettings = KART.CreateTabButton(mainFrame, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
-KART.BtnLootCouncil = KART.CreateModernButton(mainFrame, L.TAB_LOOTCOUNCIL or "Loot Council")
+KART.BtnLootCouncil = KART.CreateTabButton(mainFrame, L.TAB_LOOTCOUNCIL or "Loot Council")
 KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnSettings, "BOTTOMLEFT", 0, -5)
 KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
-KART.BtnWoWUtils = KART.CreateModernButton(mainFrame, L.TAB_WOWUTILS or "WoWUtils")
+KART.BtnWoWUtils = KART.CreateTabButton(mainFrame, L.TAB_WOWUTILS or "WoWUtils")
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 

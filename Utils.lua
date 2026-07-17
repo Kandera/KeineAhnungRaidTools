@@ -235,6 +235,65 @@ function KART.CreateModernButton(parent, text, tooltipText)
     return b
 end
 
+-- UI Factory: Sidebar tab button. Like CreateModernButton but adds a left-edge accent bar and a
+-- lighter background when marked active via :SetActive(true), so the current tab reads clearly
+-- against the rest of the sidebar instead of only differing by text color.
+--
+-- CreateModernButton's own OnLeave handler unconditionally resets the backdrop to a hard-coded
+-- gray, which would silently undo SetActive(true)'s tint the moment the mouse leaves an active
+-- tab. To keep the hover behavior from Task 3 while still respecting the active tint, OnLeave is
+-- re-pointed here to fall back to the active color (instead of the hard-coded gray) when the tab
+-- is active. OnEnter is left as-is: hovering an active tab still shows the hover color, matching
+-- normal button feedback, and leaving restores the correct base color either way.
+function KART.CreateTabButton(parent, text)
+    local b = KART.CreateModernButton(parent, text)
+    b:SetSize(130, 25)
+
+    local accentBar = b:CreateTexture(nil, "OVERLAY")
+    accentBar:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+    accentBar:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
+    accentBar:SetWidth(3)
+    accentBar:Hide()
+    table.insert(KART.SliderThumbs, accentBar) -- reuse the accent-coloring loop in KART.UpdateStyles
+
+    local isActive = false
+
+    -- Returns four explicit values (r, g, b, alpha) rather than spreading the two-value
+    -- KART.Theme.Darken(...) call directly into SetBackdropColor, so alpha is always passed
+    -- explicitly here, matching every other SetBackdropColor call site in this file instead of
+    -- relying on an implicit default.
+    local function activeColor()
+        local r = (KART_Settings and KART_Settings.accentR or 0) / 100
+        local g = (KART_Settings and KART_Settings.accentG or 60) / 100
+        local bl = (KART_Settings and KART_Settings.accentB or 100) / 100
+        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.6)
+        return dr, dg, db, 0.9
+    end
+
+    b:SetScript("OnLeave", function(self)
+        if isActive then
+            self:SetBackdropColor(activeColor())
+        else
+            self:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+        end
+        GameTooltip:Hide()
+    end)
+
+    function b:SetActive(active)
+        isActive = active
+        accentBar:SetShown(active)
+        if not b:IsMouseOver() then
+            if active then
+                b:SetBackdropColor(activeColor())
+            else
+                b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+            end
+        end
+    end
+    b:SetActive(false)
+    return b
+end
+
 -- Weitere UI-Hilfsfunktionen (Slider/Checkbox) hier implementieren...
 -- Toggle-switch style: a pill-shaped track (34x16) with a round dot that slides between left
 -- (off) and right (on). Still a real CheckButton under the hood so GetChecked/SetChecked and the
