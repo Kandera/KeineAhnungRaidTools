@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-07-17
+### Neu
+- **Droptimizer-Gewinn% jetzt auch im Vote-Fenster:** Jede Item-Karte im persönlichen Vote-Popup zeigt jetzt den eigenen gesyncten Droptimizer-Gewinn% für dieses Item an (farbcodiert, wie in der Gewinn-Spalte des Loot-Council-Fensters), sofern Sim-Daten dafür vorliegen — kein Wechsel mehr ins Council-Fenster nötig, nur um vor dem Voten zu checken, ob ein Item überhaupt ein Upgrade ist.
+
 ## [1.16.1] - 2026-07-15
 ### Behoben
 - **Der Gem-Check im Advanced-Tab meldet keine Fehlalarme mehr:** Er verließ sich auf `C_Item.GetItemStats`, das für ein bereits im laufenden Spielsession bestücktes Item weiterhin einen `EMPTY_SOCKET_*`-Stat melden kann (der gecachte Item-Link stammt noch von vor dem Sockeln). Die Prüfung liest den Sockel-Status jetzt stattdessen aus einem versteckten Tooltip-Scan aus — das entspricht exakt dem, was beim Drüberhovern im Tooltip zu sehen ist, sodass bereits bestückte Teile nicht mehr als fehlend gezählt werden.

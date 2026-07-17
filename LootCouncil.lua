@@ -664,6 +664,12 @@ function LC.RefreshVoteListRows_Spacious(f)
     local rowH      = ACCENT_H + BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD
     local ROW_GAP   = 22 -- gap between item blocks — was 12, still too tight for 2+ simultaneous rolls
 
+    -- Same short-name extraction the test-roll vote branch further below already uses — this is
+    -- the local player's own Droptimizer gain% for the item, not a per-candidate column (a
+    -- vote-list row represents one item, not one candidate, so "the player" here is whoever is
+    -- looking at their own vote window).
+    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+
     for i, rollID in ipairs(LC.voteListRolls) do
         local row = f.rows[i]
         if not row then
@@ -717,6 +723,13 @@ function LC.RefreshVoteListRows_Spacious(f)
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.timerText:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
             row.timerText:SetPoint("TOPRIGHT", -MARGIN, -(ACCENT_H + MARGIN + 2))
+
+            -- Own Droptimizer gain% for this item — mirrors the council panel's row.gainText
+            -- (see LC.RefreshCouncilRows / KART.DT.GetGainPercent), just anchored under the
+            -- timer chip instead of in its own column since a vote-list card has no columns.
+            row.gainText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.gainText:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+            row.gainText:SetPoint("TOPRIGHT", row.timerText, "BOTTOMRIGHT", 0, -4)
 
             row.btnArea = CreateFrame("Frame", nil, row)
             row.btnArea:SetPoint("TOPLEFT", MARGIN, -BTN_TOP)
@@ -797,6 +810,20 @@ function LC.RefreshVoteListRows_Spacious(f)
         end
         if deadline then
             row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
+        end
+
+        -- Only shown when the module is on AND sim data actually exists for this item — unlike
+        -- the council panel's column (always visible with a "—" placeholder), a bare-column look
+        -- doesn't fit these compact cards, so no data means no line at all.
+        local dtEnabled = KART_Settings.dtModuleEnabled ~= false
+        local gainPct = dtEnabled and KART.DT and KART.DT.GetGainPercent and LC.rollItems[rollID]
+            and KART.DT.GetGainPercent(myShort, LC.rollItems[rollID]) or nil
+        if gainPct then
+            local color = gainPct >= 0 and "|cff40c040" or "|cffc04040"
+            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN or "Gain", color, gainPct))
+            row.gainText:Show()
+        else
+            row.gainText:Hide()
         end
 
         row.itemHover:SetScript("OnEnter", function(self)
@@ -918,6 +945,10 @@ function LC.RefreshVoteListRows_Compact(f)
     local rowH     = HEADER_H + ACTION_H + MARGIN -- + bottom padding
     local ROW_GAP  = 8
 
+    -- Same rationale as the Spacious renderer above: a vote-list row is one item, not one
+    -- candidate, so the only "player" gain% that makes sense here is the local player's own.
+    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+
     f.compactRows = f.compactRows or {}
 
     for i, rollID in ipairs(LC.voteListRolls) do
@@ -955,6 +986,12 @@ function LC.RefreshVoteListRows_Compact(f)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.timerText:SetPoint("TOPRIGHT", -MARGIN, -MARGIN)
+
+            -- Own Droptimizer gain% for this item — compact counterpart of the Spacious card's
+            -- row.gainText above; smaller font to fit the tighter header row.
+            row.gainText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.gainText:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+            row.gainText:SetPoint("TOPRIGHT", row.timerText, "BOTTOMRIGHT", 0, -2)
 
             row.chipArea = CreateFrame("Frame", nil, row)
             row.chipArea:SetPoint("TOPLEFT", row.itemIcon, "BOTTOMLEFT", 0, -8)
@@ -1043,6 +1080,17 @@ function LC.RefreshVoteListRows_Compact(f)
         end
         if deadline then
             row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
+        end
+
+        local dtEnabled = KART_Settings.dtModuleEnabled ~= false
+        local gainPct = dtEnabled and KART.DT and KART.DT.GetGainPercent and LC.rollItems[rollID]
+            and KART.DT.GetGainPercent(myShort, LC.rollItems[rollID]) or nil
+        if gainPct then
+            local color = gainPct >= 0 and "|cff40c040" or "|cffc04040"
+            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN or "Gain", color, gainPct))
+            row.gainText:Show()
+        else
+            row.gainText:Hide()
         end
 
         row.itemHover:SetScript("OnEnter", function(self)

@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-07-17
+### Added
+- **Droptimizer gain% now shown in the Vote window too:** each item card in your personal vote popup shows your own synced Droptimizer gain% for that item (colour-coded, same as the Loot Council panel's Gain column) whenever sim data exists for it — no more switching to the council panel just to check if an item is actually an upgrade for you before voting.
+
 ## [1.16.1] - 2026-07-15
 ### Fixed
 - **Advanced-tab gem check no longer reports false positives:** it relied on `C_Item.GetItemStats`, which can keep reporting an `EMPTY_SOCKET_*` stat for an item that was already gemmed earlier in the session (its cached item link predates the gem). The check now reads the socket state from a hidden tooltip scan instead, matching exactly what you see when hovering the item, so already-gemmed pieces are no longer counted as missing.
