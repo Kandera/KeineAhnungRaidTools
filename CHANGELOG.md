@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Guild logo in the title bar:** the KA logo now appears next to the window title in the main frame's title bar. The logo was also converted from JPG to PNG, which fixes the addon icon in the game's AddOns list — WoW cannot load JPG textures, so the icon defined in the TOC never actually showed up before.
 - **Configurable window layer:** a new "Window Layer" slider in Settings controls which UI layer (frame strata) all KART windows are drawn on. All windows now share one layer — raise it so other UI can't cover the addon, or lower it so the addon stays out of the way; both preferences are common and now both possible. Confirmation popups (session prompt, winner announcement, export dialog, etc.) always sit one layer above the windows so they can't get buried.
 
 ## [1.17.0] - 2026-07-17

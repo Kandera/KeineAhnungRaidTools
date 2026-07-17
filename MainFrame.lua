@@ -69,8 +69,13 @@ mainFrame.header:EnableMouse(true)
 mainFrame.header:SetScript("OnMouseDown", function() mainFrame:StartMoving() end)
 mainFrame.header:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing() end)
 
+mainFrame.logo = mainFrame.header:CreateTexture(nil, "ARTWORK")
+mainFrame.logo:SetSize(18, 18)
+mainFrame.logo:SetPoint("LEFT", mainFrame.header, "LEFT", 6, 0)
+mainFrame.logo:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.png")
+
 mainFrame.title = mainFrame.header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-mainFrame.title:SetPoint("LEFT", mainFrame.header, "LEFT", 10, 0)
+mainFrame.title:SetPoint("LEFT", mainFrame.logo, "RIGHT", 6, 0)
 mainFrame.title:SetText(L.ADDON_TITLE .. " v" .. (KART.Version or "1.12.2")) -- Titeltext inkl. Version
 KART.MainFrame = mainFrame -- Hauptframe in KART speichern
 
