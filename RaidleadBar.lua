@@ -41,7 +41,8 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     })
     b:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
     b:SetBackdropBorderColor(0, 0, 0, 1)
-    
+    KART.ApplyRoundedMask(b, KART.Theme.CORNER_RADIUS_SM)
+
     if texture then
         b.icon = b:CreateTexture(nil, "OVERLAY")
         b.icon:SetTexture(texture)
@@ -62,8 +63,14 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     else
         b:SetScript("OnClick", func)
     end
-    b:SetScript("OnEnter", function(self) 
-        self:SetBackdropColor(0, 0.5, 0.8, 1) 
+    -- Hover color now derives from the user's accent color (same KART.Theme.AccentColor +
+    -- Darken pattern as KART.CreateModernButton) instead of a hard-coded blue, so this toolbar
+    -- matches the rest of the modernized UI's hover feedback. Darken() returns only r, g, b (no
+    -- alpha), so capture into locals and pass an explicit alpha to SetBackdropColor.
+    b:SetScript("OnEnter", function(self)
+        local r, g, bl = KART.Theme.AccentColor()
+        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.35)
+        self:SetBackdropColor(dr, dg, db, 1)
         if tooltipText then
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
             GameTooltip:SetText(tooltipText, 1, 1, 1)
@@ -106,6 +113,7 @@ rlBar:SetBackdrop({
 })
 rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
+KART.ApplyRoundedMask(rlBar, KART.Theme.CORNER_RADIUS_LG)
 
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()
