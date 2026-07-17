@@ -377,9 +377,9 @@ local function setInd(row, idx, has, buffData, classes)
     if buffData.isRepair then
         local textObj = ind.text or ind
         textObj:SetText(math.floor(has) .. "%")
-        if has < 20 then textObj:SetTextColor(1, 0.2, 0.2)
-        elseif has < 50 then textObj:SetTextColor(1, 0.6, 0)
-        else textObj:SetTextColor(0.2, 1, 0.2) end
+        if has < 20 then textObj:SetTextColor(unpack(KART.Theme.DANGER))
+        elseif has < 50 then textObj:SetTextColor(unpack(KART.Theme.WARNING))
+        else textObj:SetTextColor(unpack(KART.Theme.SUCCESS)) end
         ind.tooltipTitle = nil
         ind.missingSlots = nil
         return
@@ -393,12 +393,12 @@ local function setInd(row, idx, has, buffData, classes)
             ind.missingSlots = nil
         elseif has == "0" then
             textObj:SetText("OK")
-            textObj:SetTextColor(0.2, 1, 0.2)
+            textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
             ind.missingSlots = nil
         else
             local count = select(2, has:gsub(",", "")) + 1
             textObj:SetText("-" .. count)
-            textObj:SetTextColor(1, 0.2, 0.2)
+            textObj:SetTextColor(unpack(KART.Theme.DANGER))
             ind.missingSlots = has
             ind.tooltipTitle = buffData.reportLabel or buffData.label
         end
@@ -411,7 +411,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(1, 0.8, 0)
                 elseif has == "best" then
                     ind:SetAlpha(1.0)
-                    ind:SetVertexColor(0.2, 1, 0.2) -- Grün für besten Rang
+                    ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
                 elseif has == "wrong" then
                     ind:SetAlpha(1.0)
                     ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
@@ -426,7 +426,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(0.5, 0.5, 0.5)
     else
         ind:SetAlpha(0.6)
-        ind:SetVertexColor(1, 0.2, 0.2)
+        ind:SetVertexColor(unpack(KART.Theme.DANGER))
     end
 end
 
@@ -559,8 +559,8 @@ function KART.UpdateBuffCheck(isPreview)
                 
                 if data.isGearCheck then
                     local textObj = ind.text or ind
-                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(1, 0.2, 0.2); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
-                    else textObj:SetText("OK"); textObj:SetTextColor(0.2, 1, 0.2); ind.missingSlots = nil end
+                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.Theme.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
+                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.Theme.SUCCESS)); ind.missingSlots = nil end
                 elseif not data.isRepair then
                     ind:SetDesaturated(false)
                     if i == 1 and j == 7 then -- Beispiel für auslaufendes Food
@@ -568,7 +568,7 @@ function KART.UpdateBuffCheck(isPreview)
                         ind:SetVertexColor(1, 0.8, 0) -- Gelb
                     elseif (i + j) % 3 == 0 then
                         ind:SetAlpha(0.6)
-                        ind:SetVertexColor(1, 0.2, 0.2) -- Fehlend (Rot)
+                        ind:SetVertexColor(unpack(KART.Theme.DANGER)) -- Fehlend (Rot)
                     elseif data.isOil and i == 2 then
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für Preview
@@ -582,7 +582,7 @@ function KART.UpdateBuffCheck(isPreview)
                 else
                     local textObj = ind.text or ind
                     textObj:SetText("85%")
-                    textObj:SetTextColor(0.2, 1, 0.2)
+                    textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
                 end
             end
             row:Show()
