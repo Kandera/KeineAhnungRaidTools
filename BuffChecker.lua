@@ -87,6 +87,12 @@ function KART.CreateBuffCheckFrame()
     f.gradientBg = KART.CreateGradientOverlay(f)
     KART.AddShowFade(f)
 
+    -- Round the window's outer corners to match the modernized MainFrame. The frame is created
+    -- with an explicit SetSize above (never 0x0), so ApplyRoundedMask's min-size guard never
+    -- blocks this — safe to call once here rather than hooking OnSizeChanged like KART.CreateCard
+    -- does (that frame starts unsized; this one doesn't).
+    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.title:SetPoint("TOP", 0, -10)
     f.title:SetText(L.BC_TITLE)
