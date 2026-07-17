@@ -8,8 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Neu
-- **Gilden-Logo in der Titelleiste:** Das KA-Logo wird jetzt neben dem Fenstertitel in der Titelleiste des Hauptfensters angezeigt. Das Logo wurde außerdem von JPG zu PNG konvertiert — das repariert auch das Addon-Icon in der AddOns-Liste des Spiels, denn WoW kann keine JPG-Texturen laden, das in der TOC eingetragene Icon wurde also vorher nie angezeigt.
-- **Einstellbare Fenster-Ebene:** Ein neuer "Fenster-Ebene"-Regler in den Einstellungen steuert, auf welcher UI-Ebene (Frame-Strata) alle KART-Fenster gezeichnet werden. Alle Fenster teilen sich jetzt eine Ebene — höher stellen, damit andere UI das Addon nicht verdecken kann, oder niedriger, damit das Addon im Hintergrund bleibt; beide Vorlieben sind verbreitet und jetzt beide möglich. Bestätigungs-Popups (Session-Anfrage, Gewinner-Anzeige, Export-Dialog usw.) liegen immer eine Ebene über den Fenstern, damit sie nicht darunter verschwinden können.
+- **Gilden-Logo in der Titelleiste:** Das KA-Logo wird jetzt neben dem Titel des Hauptfensters angezeigt. Das Logo wurde außerdem von JPG zu PNG konvertiert — das repariert auch das Addon-Icon in der AddOns-Liste des Spiels (WoW kann keine JPG-Texturen laden).
+- **Einstellbare Fenster-Ebene:** Ein neuer "Fenster-Ebene"-Regler in den Einstellungen steuert, auf welcher UI-Ebene (Frame-Strata) alle KART-Fenster gezeichnet werden — höher stellen, damit andere UI das Addon nicht verdeckt, oder niedriger, damit es im Hintergrund bleibt. Bestätigungs-Popups liegen immer eine Ebene darüber, damit sie nicht verschwinden.
 
 ## [1.17.0] - 2026-07-17
 ### Neu
