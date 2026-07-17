@@ -243,7 +243,9 @@ function WU.RefreshBossList()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i-1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT",   panel, "RIGHT",   0, 0)
-        row:SetBackdropColor(0.1, 0.1, 0.1, i % 2 == 0 and 0.4 or 0.15)
+        local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+        local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+        row:SetBackdropColor(lr, lg, lb, i % 2 == 0 and 0.4 or 0.15)
         row:SetBackdropBorderColor(0.18, 0.18, 0.18, 1)
 
         row.nameText:SetText(boss.name .. " |cff888888(" .. #boss.players .. ")|r")
@@ -301,6 +303,7 @@ function WU.BuildPanel(parent)
     })
     pasteBG:SetBackdropColor(0, 0, 0, 0.5)
     pasteBG:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+    KART.ApplyRoundedMask(pasteBG, KART.Theme.CORNER_RADIUS_LG)
 
     local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
     pasteScroll:SetPoint("TOPLEFT", 4, -4)
