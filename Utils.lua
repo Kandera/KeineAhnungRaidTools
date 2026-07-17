@@ -208,10 +208,9 @@ function KART.CreateModernButton(parent, text, tooltipText)
     b.text:SetText(text)
     table.insert(KART.ButtonTexts, b.text)
 
-    -- Hover/leave color fade uses a short alpha-blended color animation instead of an instant
-    -- SetBackdropColor swap, and derives from the user's accent color (KART_Settings.accentR/G/B)
-    -- via KART.Theme.Lighten rather than a hard-coded gray, so custom accent colors are respected
-    -- in the hover state too.
+    -- Hover/leave color is derived from the user's accent color (KART_Settings.accentR/G/B) via
+    -- KART.Theme.Darken instead of a hard-coded gray, so custom accent colors are respected in
+    -- the hover state too.
     local function hoverColor()
         local r = (KART_Settings and KART_Settings.accentR or 0) / 100
         local g = (KART_Settings and KART_Settings.accentG or 60) / 100
