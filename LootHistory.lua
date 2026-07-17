@@ -113,6 +113,10 @@ function LH.ShowExportDialog()
         f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         f:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
         f:SetBackdropBorderColor(0, 0, 0, 1)
+        -- Matches the rounded window look introduced across the rest of the addon in the UI
+        -- modernization pass. Frame is given an explicit SetSize above, so the mask's min-size
+        -- guard never blocks this (same reasoning as the Buff-Checker window's identical call).
+        KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
@@ -233,6 +237,10 @@ function LH.CreateWindow()
     f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
     f:SetBackdropBorderColor(0, 0, 0, 1)
+    -- Outer window rounding only — the header bar (created below) stays a flat rectangle
+    -- overlapping the window's top edge, same convention as MainFrame's own header in the
+    -- Phase 1 modernization, so it isn't independently rounded here.
+    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -284,6 +292,7 @@ function LH.CreateWindow()
     searchBox:SetBackdropColor(0, 0, 0, 0.5)
     searchBox:SetTextInsets(5, 5, 0, 0)
     searchBox:SetMaxLetters(40)
+    KART.ApplyRoundedMask(searchBox, KART.Theme.CORNER_RADIUS_SM)
     table.insert(KART.EditBoxes, searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
@@ -526,7 +535,9 @@ function LH.Refresh()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
-        row.bg:SetColorTexture(0.1, 0.1, 0.1, i % 2 == 0 and 0.35 or 0.1)
+        local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+        local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+        row.bg:SetColorTexture(lr, lg, lb, i % 2 == 0 and 0.35 or 0.1)
 
         row.dateText:SetText(date("%d.%m %H:%M", e.time or 0))
 
