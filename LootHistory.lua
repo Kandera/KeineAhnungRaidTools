@@ -113,6 +113,10 @@ function LH.ShowExportDialog()
         f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         f:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
         f:SetBackdropBorderColor(0, 0, 0, 1)
+        -- Matches the rounded window look introduced across the rest of the addon in the UI
+        -- modernization pass. Frame is given an explicit SetSize above, so the mask's min-size
+        -- guard never blocks this (same reasoning as the Buff-Checker window's identical call).
+        KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
@@ -233,6 +237,10 @@ function LH.CreateWindow()
     f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
     f:SetBackdropBorderColor(0, 0, 0, 1)
+    -- Outer window rounding only — the header bar (created below) stays a flat rectangle
+    -- overlapping the window's top edge, same convention as MainFrame's own header in the
+    -- Phase 1 modernization, so it isn't independently rounded here.
+    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
