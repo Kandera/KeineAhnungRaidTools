@@ -288,7 +288,7 @@ git commit -m "Route Buff-Checker status colors through KART.Theme"
   is eventually called)
 
 **Interfaces:**
-- Consumes: `KART.Theme.Darken` (Phase 1, `Utils.lua`)
+- Consumes: `KART.Theme.Lighten` (Phase 1, `Utils.lua`)
 - Produces: `row.stripeBg` (a `Texture` on each pooled row), shown/colored based on the row's
   index parity so the 40-row pool reads as alternating light/dark bands.
 
