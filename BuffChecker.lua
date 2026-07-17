@@ -87,6 +87,12 @@ function KART.CreateBuffCheckFrame()
     f.gradientBg = KART.CreateGradientOverlay(f)
     KART.AddShowFade(f)
 
+    -- Round the window's outer corners to match the modernized MainFrame. The frame is created
+    -- with an explicit SetSize above (never 0x0), so ApplyRoundedMask's min-size guard never
+    -- blocks this — safe to call once here rather than hooking OnSizeChanged like KART.CreateCard
+    -- does (that frame starts unsized; this one doesn't).
+    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.title:SetPoint("TOP", 0, -10)
     f.title:SetText(L.BC_TITLE)
@@ -145,7 +151,15 @@ function KART.CreateBuffCheckFrame()
         local row = CreateFrame("Frame", nil, content)
         row:SetSize(660, 26)
         row:SetPoint("TOPLEFT", 0, -(i-1)*26)
-        
+
+        -- Subtle alternating background so a dense 40-row player grid is easier to scan
+        -- horizontally. Colored per-row in KART.UpdateBuffCheck (parity depends on the row's
+        -- position in the currently-visible list, not its pool index, since rows are reused/
+        -- reordered as group membership changes).
+        row.stripeBg = row:CreateTexture(nil, "BACKGROUND")
+        row.stripeBg:SetAllPoints(row)
+        row.stripeBg:SetColorTexture(1, 1, 1, 1) -- placeholder; recolored via SetColorTexture (incl. alpha) per-frame below
+
         row.rcIcon = row:CreateTexture(nil, "OVERLAY")
         row.rcIcon:SetSize(14, 14)
         row.rcIcon:SetPoint("LEFT", row, "LEFT", 12, 0)
@@ -371,9 +385,9 @@ local function setInd(row, idx, has, buffData, classes)
     if buffData.isRepair then
         local textObj = ind.text or ind
         textObj:SetText(math.floor(has) .. "%")
-        if has < 20 then textObj:SetTextColor(1, 0.2, 0.2)
-        elseif has < 50 then textObj:SetTextColor(1, 0.6, 0)
-        else textObj:SetTextColor(0.2, 1, 0.2) end
+        if has < 20 then textObj:SetTextColor(unpack(KART.Theme.DANGER))
+        elseif has < 50 then textObj:SetTextColor(unpack(KART.Theme.WARNING))
+        else textObj:SetTextColor(unpack(KART.Theme.SUCCESS)) end
         ind.tooltipTitle = nil
         ind.missingSlots = nil
         return
@@ -387,12 +401,12 @@ local function setInd(row, idx, has, buffData, classes)
             ind.missingSlots = nil
         elseif has == "0" then
             textObj:SetText("OK")
-            textObj:SetTextColor(0.2, 1, 0.2)
+            textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
             ind.missingSlots = nil
         else
             local count = select(2, has:gsub(",", "")) + 1
             textObj:SetText("-" .. count)
-            textObj:SetTextColor(1, 0.2, 0.2)
+            textObj:SetTextColor(unpack(KART.Theme.DANGER))
             ind.missingSlots = has
             ind.tooltipTitle = buffData.reportLabel or buffData.label
         end
@@ -405,7 +419,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(1, 0.8, 0)
                 elseif has == "best" then
                     ind:SetAlpha(1.0)
-                    ind:SetVertexColor(0.2, 1, 0.2) -- Grün für besten Rang
+                    ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
                 elseif has == "wrong" then
                     ind:SetAlpha(1.0)
                     ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
@@ -420,7 +434,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(0.5, 0.5, 0.5)
     else
         ind:SetAlpha(0.6)
-        ind:SetVertexColor(1, 0.2, 0.2)
+        ind:SetVertexColor(unpack(KART.Theme.DANGER))
     end
 end
 
@@ -508,6 +522,16 @@ function KART.UpdateBuffCheck(isPreview)
         local rcReasonsPreview = {nil, "Katze brennt", "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil}
         for i = 1, 5 do
             local row = KART.BuffCheckFrame.rows[i]
+            if row.stripeBg then
+                if i % 2 == 0 then
+                    local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+                    local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                    row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
+                    row.stripeBg:Show()
+                else
+                    row.stripeBg:Hide()
+                end
+            end
 
             row.name:SetText(L.BC_EXAMPLE_PLAYER .. i)
             row.name:SetTextColor(0.5, 0.5, 1)
@@ -553,8 +577,8 @@ function KART.UpdateBuffCheck(isPreview)
                 
                 if data.isGearCheck then
                     local textObj = ind.text or ind
-                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(1, 0.2, 0.2); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
-                    else textObj:SetText("OK"); textObj:SetTextColor(0.2, 1, 0.2); ind.missingSlots = nil end
+                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.Theme.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
+                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.Theme.SUCCESS)); ind.missingSlots = nil end
                 elseif not data.isRepair then
                     ind:SetDesaturated(false)
                     if i == 1 and j == 7 then -- Beispiel für auslaufendes Food
@@ -562,13 +586,13 @@ function KART.UpdateBuffCheck(isPreview)
                         ind:SetVertexColor(1, 0.8, 0) -- Gelb
                     elseif (i + j) % 3 == 0 then
                         ind:SetAlpha(0.6)
-                        ind:SetVertexColor(1, 0.2, 0.2) -- Fehlend (Rot)
+                        ind:SetVertexColor(unpack(KART.Theme.DANGER)) -- Fehlend (Rot)
                     elseif data.isOil and i == 2 then
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für Preview
                     elseif data.isOil then
                         ind:SetAlpha(1.0)
-                        ind:SetVertexColor(0.2, 1, 0.2) -- Grün für besten Rang
+                        ind:SetVertexColor(unpack(KART.Theme.SUCCESS)) -- best rank, matches setInd's "best" branch
                     else
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(1, 1, 1) -- Vorhanden
@@ -576,7 +600,7 @@ function KART.UpdateBuffCheck(isPreview)
                 else
                     local textObj = ind.text or ind
                     textObj:SetText("85%")
-                    textObj:SetTextColor(0.2, 1, 0.2)
+                    textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
                 end
             end
             row:Show()
@@ -605,6 +629,16 @@ function KART.UpdateBuffCheck(isPreview)
         local unit = (num == 0) and "player" or (isRaid and ("raid"..i) or (i == num and "player" or "party"..i))
         
         local row = KART.BuffCheckFrame.rows[i]
+        if row.stripeBg then
+            if i % 2 == 0 then
+                local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
+                local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
+                row.stripeBg:Show()
+            else
+                row.stripeBg:Hide()
+            end
+        end
         local nameStr = UnitName(unit)
         local _, class = UnitClass(unit)
 
