@@ -120,6 +120,44 @@ function KART.Theme.Darken(r, g, b, amount)
     return math.max(r - amount, 0), math.max(g - amount, 0), math.max(b - amount, 0)
 end
 
+-- Applies a rounded-corner mask to a BackdropTemplate frame's backdrop artwork (and its gradient
+-- overlay, if any — see KART.CreateGradientOverlay). Uses WoW's built-in scalable circle mask
+-- texture cropped per-corner rather than a custom asset, since no image-generation tool is
+-- available for this project (see docs/superpowers/specs/2026-07-17-ui-modernization-design.md).
+-- Wrapped in pcall: SetMask's exact behavior has shifted across client versions, and a failure
+-- here must never break the frame's layout or visibility, only skip the rounding.
+function KART.ApplyRoundedMask(frame, radius)
+    if not frame then return end
+    local w, h = frame:GetWidth(), frame:GetHeight()
+    if w < KART.Theme.CORNER_RADIUS_MIN_SIZE or h < KART.Theme.CORNER_RADIUS_MIN_SIZE then
+        return -- too small to round without looking broken
+    end
+
+    local function maskRegion(region)
+        if not region then return end
+        local ok, mask = pcall(function()
+            local m = frame:CreateMaskTexture(nil, "OVERLAY")
+            m:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            m:SetAllPoints(region)
+            region:AddMaskTexture(m)
+            return m
+        end)
+        if not ok then return end
+        return mask
+    end
+
+    if frame.backdropTexture then maskRegion(frame.backdropTexture) end
+    -- BackdropTemplate doesn't expose its background texture by name; fall back to scanning
+    -- regions for the backdrop's own artwork layer.
+    for i = 1, frame:GetNumRegions() do
+        local region = select(i, frame:GetRegions())
+        if region and region:IsObjectType("Texture") and region:GetDrawLayer() == "BACKGROUND" then
+            maskRegion(region)
+        end
+    end
+    if frame.gradientBg then maskRegion(frame.gradientBg) end
+end
+
 -- UI Factory: Modern Button
 function KART.CreateModernButton(parent, text, tooltipText)
     local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
