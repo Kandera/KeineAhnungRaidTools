@@ -83,8 +83,8 @@ take effect immediately. New widgets registered in the `settingsMap` init block 
 `Core.lua` (login state restore); defaults added to `KART.Defaults` so the existing
 reset-to-defaults path covers them.
 
-Defaults: master off; when enabled, sensible presets: Heroic + Mythic raid on, M+ on with
-min key 2, LFR/Normal/Dungeons/Delves off.
+Defaults: every toggle off (master and all content toggles). `autoLogMinKey` defaults to 2
+(lowest possible key) so the slider has a sane starting value once M+ is enabled.
 
 ## Files touched
 
