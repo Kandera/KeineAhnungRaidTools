@@ -476,11 +476,17 @@ function KART.UpdateStyles()
     end
 
     if KART.BuffCheckFrame then
-        KART.BuffCheckFrame:SetBackdropColor(br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)
-        KART.SetGradientOverlayColor(KART.BuffCheckFrame.gradientBg, br, bg, bb, (KART_Settings.buffCheckAlpha or 95) / 100)
+        -- Artwork background: only the ground texture fades with buffCheckAlpha so rows,
+        -- buttons and text stay fully readable at low opacities.
+        if KART.BuffCheckFrame.bg then
+            KART.BuffCheckFrame.bg:SetAlpha((KART_Settings.buffCheckAlpha or 95) / 100)
+        end
+        if KART.BuffCheckFrame.headerLine then
+            KART.BuffCheckFrame.headerLine:SetColorTexture(r, g, b, 0.6)
+        end
         if KART.BuffCheckFrame.title then
             KART.BuffCheckFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
-            KART.BuffCheckFrame.title:SetTextColor(r, g, b)
+            KART.BuffCheckFrame.title:SetTextColor(1, 1, 1)
         end
         if KART.BuffCheckFrame.closeBtn then
             KART.BuffCheckFrame.closeBtn.text:SetFont(fontPath, 14, "OUTLINE")

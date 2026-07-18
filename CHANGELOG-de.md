@@ -13,6 +13,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Hauptfenster ist standardmäßig größer und jeder Tab gruppiert seine Einstellungen in Cards.**
 - **Einstellungs-Beschriftungen nutzen jetzt denselben weißen Textstil wie das Menü.**
 - **Eingabefelder an die Card-Optik angepasst** — abgerundet, mit Rand in Akzentfarbe während der Eingabe.
+- **Buff-Checker-Fenster mit eigenem Artwork-Hintergrund gestaltet** — Akzentlinie im Kopf, passende Schließen- und Resize-Ecken.
 
 ### Entfernt
 - **Einstellungen für Hintergrundfarbe und Titel-Schriftgröße.**

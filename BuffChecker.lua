@@ -77,25 +77,34 @@ function KART.CreateBuffCheckFrame()
         KART_Settings.bcX = xOfs
         KART_Settings.bcY = yOfs
     end)
-    f:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    f:SetBackdropBorderColor(0, 0, 0, 1)
+    -- PNG artwork background (kart-popup-bg-dark.png, 1024x768; opaque art box 1002x746 with a
+    -- transparent drop-shadow margin of L12/R10/T12/B10). The frame itself is the art area; the
+    -- texture extends past the frame edges by the margin ratios so the baked shadow stays
+    -- visible. This window resizes freely, so the offsets scale with the current size and are
+    -- recomputed from the OnSizeChanged handler below.
+    f.bg = f:CreateTexture(nil, "BACKGROUND")
+    f.bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-popup-bg-dark.png")
+    local function UpdateBgInsets()
+        local w, h = f:GetWidth(), f:GetHeight()
+        f.bg:ClearAllPoints()
+        f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", -w * 12 / 1002, h * 12 / 746)
+        f.bg:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", w * 10 / 1002, -h * 10 / 746)
+    end
+    UpdateBgInsets()
     KART.RegisterStrataFrame(f)
-    f.gradientBg = KART.CreateGradientOverlay(f)
     KART.AddShowFade(f)
 
-    -- Round the window's outer corners to match the modernized MainFrame. The frame is created
-    -- with an explicit SetSize above (never 0x0), so ApplyRoundedMask's min-size guard never
-    -- blocks this — safe to call once here rather than hooking OnSizeChanged like KART.CreateCard
-    -- does (that frame starts unsized; this one doesn't).
-    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
-
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("TOP", 0, -10)
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.title:SetPoint("TOPLEFT", 16, -12)
     f.title:SetText(L.BC_TITLE)
+
+    -- Code-drawn counterpart of the main window's baked header line (this window resizes
+    -- freely, so the line can't live in the artwork). Colored with the user's accent color
+    -- in KART.UpdateStyles.
+    f.headerLine = f:CreateTexture(nil, "ARTWORK")
+    f.headerLine:SetHeight(1)
+    f.headerLine:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -30)
+    f.headerLine:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -30)
 
     -- Header Labels
     local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590, 635}
@@ -244,7 +253,7 @@ function KART.CreateBuffCheckFrame()
     close.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     close.text:SetPoint("CENTER", 0, 1)
     close.text:SetText("×")
-    close:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 0, 0) end)
+    close:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
     close:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
     close:SetScript("OnClick", function() f:Hide() end)
     f.closeBtn = close
@@ -293,11 +302,14 @@ function KART.CreateBuffCheckFrame()
     f.reportBtn:SetSize(80, 22)
     f.reportBtn:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
 
+    -- Invisible hit area over the resize corner baked into the artwork (bottom right);
+    -- HIGHLIGHT-layer texture shows automatically on hover.
     f.resizeBtn = CreateFrame("Button", nil, f)
-    f.resizeBtn:SetSize(16, 16)
+    f.resizeBtn:SetSize(20, 20)
     f.resizeBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
-    f.resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    f.resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    local resizeHover = f.resizeBtn:CreateTexture(nil, "HIGHLIGHT")
+    resizeHover:SetAllPoints()
+    resizeHover:SetColorTexture(1, 1, 1, 0.08)
     f.resizeBtn:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
     f.resizeBtn:SetScript("OnMouseUp", function() 
         f:StopMovingOrSizing() 
@@ -307,6 +319,8 @@ function KART.CreateBuffCheckFrame()
 
     -- Dynamisches Verschieben der Spalten, wenn das Fenster breiter gezogen wird
     f:SetScript("OnSizeChanged", function(self, width, height)
+        UpdateBgInsets() -- keep the artwork's shadow margin proportional to the new size
+
         local extra = width - 710
         if extra < 0 then extra = 0 end
         
