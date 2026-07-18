@@ -150,13 +150,12 @@ for i = 1, 8 do
     b.marker:SetPoint("CENTER")
 end
 
--- Clear world markers via API instead of the "/cwm all" macro, which only works
--- on English clients because the "all" keyword is localized (e.g. "alle" on
--- German clients); ClearRaidMarker is locale-independent.
-CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, function(_, _, down)
-    if down then return end
-    for i = 1, 8 do ClearRaidMarker(i) end
-end, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, nil, L.RL_CLEAR_WM)
+-- Clear each world marker by number: "/cwm all" only works on English clients
+-- because the "all" keyword is localized (e.g. "alle" on German clients), and
+-- ClearRaidMarker() is protected, so it must stay a secure macro.
+local clearWmMacro = {}
+for i = 1, 8 do clearWmMacro[i] = "/cwm " .. i end
+CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, table.concat(clearWmMacro, "\n"), L.RL_CLEAR_WM)
 CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK)
 
 -- Buff-Checker Toggle Button
