@@ -20,4 +20,5 @@ LootCouncil.lua
 Droptimizer.lua
 LootHistory.lua
 Invite.lua
+AutoLog.lua
 Core.lua
