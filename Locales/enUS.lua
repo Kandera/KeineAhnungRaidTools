@@ -51,6 +51,8 @@ KART.L_enUS = {
     SET_UI_SCALE = "Window Scale",
 
     -- Auto Combat Log
+    LABEL_AUTOLOG = "Auto Combat Log",
+    SET_AL_ENABLED = "Enable auto combat logging",
     SET_AL_RAID_LFR = "Raid: LFR",
     SET_AL_RAID_NORMAL = "Raid: Normal",
     SET_AL_RAID_HEROIC = "Raid: Heroic",
