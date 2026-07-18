@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Auto Combat Log:** a new card in the Automation tab starts combat logging automatically when you enter selected content — raids per difficulty (LFR/Normal/Heroic/Mythic), Mythic+ with a minimum keystone level, dungeons, and Delves — and stops it when you leave. Advanced Combat Logging is enabled automatically; logging you start manually via /combatlog is never touched.
 
 ## [1.18.1] - 2026-07-18
 ### Fixed
