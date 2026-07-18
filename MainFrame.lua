@@ -158,6 +158,9 @@ if contentScrollBar then
     contentScrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, -38)
     contentScrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 6, 2)
 end
+-- Lets the template's own OnScrollRangeChanged hide the bar at range 0 instead of merely
+-- disabling it; KART.UpdateScrollRange below also toggles it explicitly for immediate effect.
+scrollFrame.scrollBarHideable = true
 
 -- Per-tab scroll range. With the old fixed 750px scroll child, every tab was scrollable even
 -- when its content fully fit into view (e.g. Raidlead). Static content heights for the fixed
@@ -190,6 +193,8 @@ function KART.UpdateScrollRange()
     if scrollFrame:GetVerticalScroll() > maxScroll then
         scrollFrame:SetVerticalScroll(maxScroll)
     end
+    -- No scrollbar when there is nothing to scroll.
+    if contentScrollBar then contentScrollBar:SetShown(maxScroll > 0) end
 end
 
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)
