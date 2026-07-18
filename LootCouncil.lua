@@ -3226,15 +3226,12 @@ end
 function LC.BuildSettingsPanel(parent)
     local L = KART.L
 
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    title:SetPoint("TOPLEFT", 20, -10) -- above the artwork's baked divider line (~-34)
-    title:SetText(L.LC_SETTINGS_TITLE)
-    table.insert(KART.DynamicLabels, title)
+    KART.CreateTabTitle(5, L.LC_SETTINGS_TITLE)
 
     -- Personal preferences card (module toggle, autopass, Droptimizer slot at -75,
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.CreateCard(parent)
-    prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -50)
+    prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
     prefsCard:SetSize(500, 165)
     KART.LC.SettingsCard = prefsCard
 

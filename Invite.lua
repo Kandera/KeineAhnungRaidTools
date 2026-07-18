@@ -207,6 +207,7 @@ function WU.RefreshBossList()
     if #WU.bosses == 0 then
         panel.emptyLabel:Show()
         panel:SetHeight(24)
+        if KART.UpdateScrollRange then KART.UpdateScrollRange() end
         return
     end
     panel.emptyLabel:Hide()
@@ -280,18 +281,15 @@ end
 function WU.BuildPanel(parent)
     local L = KART.L
 
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    title:SetPoint("TOPLEFT", 20, -10) -- above the artwork's baked divider line (~-34)
-    title:SetText(L.WU_TITLE or "WoWUtils Import")
-    table.insert(KART.DynamicLabels, title)
+    KART.CreateTabTitle(6, L.WU_TITLE or "WoWUtils Import")
 
     -- Master switch: fully disables the WoWUtils import/invite module.
     KART.WU.CbModuleEnabled = KART.CreateSettingsCheckbox(
         parent, "KART_WUModuleEnabled",
-        L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -45, nil, L.WU_DESC_MODULE_ENABLED)
+        L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -7, nil, L.WU_DESC_MODULE_ENABLED)
 
     local importCard = KART.CreateCard(parent)
-    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -85)
+    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -47)
     importCard:SetSize(500, 190)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -376,26 +374,26 @@ function WU.BuildPanel(parent)
     local sep = parent:CreateTexture(nil, "ARTWORK")
     sep:SetColorTexture(0.22, 0.22, 0.22, 1)
     sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT",  5, -290)
-    sep:SetPoint("TOPRIGHT", -5, -290)
+    sep:SetPoint("TOPLEFT",  5, -252)
+    sep:SetPoint("TOPRIGHT", -5, -252)
 
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hBoss:SetPoint("TOPLEFT", 8, -300)
+    hBoss:SetPoint("TOPLEFT", 8, -262)
     hBoss:SetText("|cffaaaaaa" .. (L.WU_COL_BOSS or "Boss") .. "|r")
     table.insert(KART.DynamicLabels, hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hInvite:SetPoint("TOPRIGHT", -110, -300)
+    hInvite:SetPoint("TOPRIGHT", -110, -262)
     hInvite:SetText("|cffaaaaaa" .. (L.WU_BTN_INVITE or "Einl.") .. "|r")
     table.insert(KART.DynamicLabels, hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hRemove:SetPoint("TOPRIGHT", -38, -300)
+    hRemove:SetPoint("TOPRIGHT", -38, -262)
     hRemove:SetText("|cffaaaaaa" .. (L.WU_BTN_REMOVE or "Entf.") .. "|r")
     table.insert(KART.DynamicLabels, hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
-    WU.bossListFrame:SetPoint("TOPLEFT",  5, -316)
+    WU.bossListFrame:SetPoint("TOPLEFT",  5, -278)
     WU.bossListFrame:SetPoint("RIGHT", parent, "RIGHT", -5, 0)
     WU.bossListFrame:SetHeight(24)
     WU.bossListFrame.rows = {}

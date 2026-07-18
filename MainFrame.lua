@@ -31,6 +31,11 @@ function KART.ShowTab(tabIndex)
         if btn then btn:SetActive(i == tabIndex) end
     end
 
+    -- Fixed header-zone title of the active tab (created via KART.CreateTabTitle).
+    for i, t in pairs(KART.TabTitles or {}) do
+        t:SetShown(i == tabIndex)
+    end
+
     -- Scroll range depends on the active tab's content height (KART.UpdateScrollRange is
     -- defined further down in this file, after the scroll frame exists).
     KART.CurrentTab = tabIndex
@@ -81,6 +86,21 @@ mainFrame.versionText = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisa
 mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 12)
 mainFrame.versionText:SetText("v" .. (KART.Version or ""))
 
+-- Per-tab header titles live OUTSIDE the scroll frame, fixed in the artwork's header zone
+-- (between the window top and the baked divider line at ~-48 from clickArea top). The scroll
+-- viewport starts below that line, so scrolled content can never slide up over the header.
+-- KART.ShowTab toggles which title is visible.
+KART.TabTitles = {}
+function KART.CreateTabTitle(tabIndex, text)
+    local fs = clickArea:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 228, -22)
+    fs:SetText(text)
+    fs:Hide() -- ShowTab reveals the active tab's title
+    table.insert(KART.DynamicLabels, fs)
+    KART.TabTitles[tabIndex] = fs
+    return fs
+end
+
 -- 3. Sidebar menu and tabs
 -- Tabs start below the baked logo/title/underline zone of the artwork.
 KART.BtnPromote = KART.CreateTabButton(clickArea, L.TAB_PROMOTE)
@@ -110,9 +130,11 @@ KART.BtnSettings = KART.CreateTabButton(clickArea, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
--- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px)
+-- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px).
+-- The viewport starts at -52, just below the artwork's baked divider line (~-48), so
+-- scrolled content is clipped there instead of sliding up over the header zone.
 local scrollFrame = CreateFrame("ScrollFrame", "KART_ContentScrollFrame", clickArea, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 208, -14)
+scrollFrame:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 208, -52)
 scrollFrame:SetPoint("BOTTOMRIGHT", clickArea, "BOTTOMRIGHT", -30, 24)
 
 local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -148,14 +170,12 @@ KART.WoWUtilsPanel:Hide()
 KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
 if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
 
--- The template anchors the scrollbar only 16px below the scroll frame's top, which still
--- reaches into the artwork's header zone above the baked divider line (line at ~-48 from
--- clickArea top, scroll frame top at -14). Re-anchor so the bar starts below the line and
--- runs to the bottom (the hidden arrow buttons no longer need their 16px reserve).
+-- Re-anchor the scrollbar to span the full viewport (which itself starts below the baked
+-- divider line now); the hidden arrow buttons don't need the template's 16px reserves.
 local contentScrollBar = _G["KART_ContentScrollFrameScrollBar"]
 if contentScrollBar then
     contentScrollBar:ClearAllPoints()
-    contentScrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, -38)
+    contentScrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, -2)
     contentScrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 6, 2)
 end
 -- Lets the template's own OnScrollRangeChanged hide the bar at range 0 instead of merely
@@ -169,23 +189,23 @@ scrollFrame.scrollBarHideable = true
 -- scroll range collapses to zero when everything fits. Heights include headroom for large
 -- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 520, -- Automation: promote/invite card + AutoLog title + card
-    [2] = 245, -- Raidlead: title + one 180 card
-    [3] = 225, -- BuffCheck: title + one 160 card
-    [4] = 450, -- Settings: two half cards + color card
+    [1] = 475, -- Automation: promote/invite card + AutoLog title + card
+    [2] = 210, -- Raidlead: one 180 card
+    [3] = 190, -- BuffCheck: one 160 card
+    [4] = 415, -- Settings: two half cards + color card
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
     if tab == 5 then
-        -- 330 = title/card block above the raid box + buttons below it + bottom padding
+        -- 292 = prefs card block above the raid box + buttons below it + bottom padding
         local rb = KART.LC and KART.LC.RaidBox
-        h = 330 + ((rb and rb:GetHeight()) or 420)
+        h = 292 + ((rb and rb:GetHeight()) or 420)
     elseif tab == 6 then
-        -- 331 = import card block + separator/headers above the boss list + bottom padding
+        -- 293 = import card block + separator/headers above the boss list + bottom padding
         local bl = KART.WU and KART.WU.bossListFrame
-        h = 331 + ((bl and bl:GetHeight()) or 24)
+        h = 293 + ((bl and bl:GetHeight()) or 24)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -198,18 +218,15 @@ function KART.UpdateScrollRange()
 end
 
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)
--- Tab titles sit at -10: the artwork bakes a divider line at ~-34 relative to the scroll
--- child's top, so titles must end above it (clears up to font size 20) and every tab's
--- first card starts uniformly at -50, just below the line.
-local rlTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-rlTitle:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -10)
-rlTitle:SetText(L.LABEL_RAIDLEAD_TOOLS)
-table.insert(KART.DynamicLabels, rlTitle)
+-- Tab titles are fixed header-zone FontStrings (KART.CreateTabTitle), outside the scroll
+-- region; every tab's first card starts uniformly at -12 inside the scroll child, which
+-- itself begins just below the artwork's baked divider line.
+KART.CreateTabTitle(2, L.LABEL_RAIDLEAD_TOOLS)
 
 -- Card groups all Raidlead Bar settings into one visually distinct panel instead of leaving
 -- checkboxes/slider floating directly on the tab background.
 local rlCard = KART.CreateCard(KART.RaidleadPanel)
-rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -50)
+rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -12)
 rlCard:SetSize(500, 180)
 
 -- Checkbox zur Aktivierung
@@ -230,13 +247,10 @@ end, L.DESC_RL_AUTOHIDE)
 KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
 
 -- 6. BuffChecker Panel Inhalt
-local bcTitle = KART.BuffCheckPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -10)
-bcTitle:SetText(L.LABEL_BUFFCHECK_SETTINGS)
-table.insert(KART.DynamicLabels, bcTitle)
+KART.CreateTabTitle(3, L.LABEL_BUFFCHECK_SETTINGS)
 
 local bcCard = KART.CreateCard(KART.BuffCheckPanel)
-bcCard:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -50)
+bcCard:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -12)
 bcCard:SetSize(500, 160)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
@@ -271,15 +285,10 @@ KART.SldCombatDelay:ClearAllPoints()
 KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
 
 -- 6. Automation panel: promote/invite settings grouped into a card.
--- Title added like on every other tab, so the first card starts at the uniform -50
--- below the artwork's baked divider line instead of drifting up.
-local autoTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-autoTitle:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -10)
-autoTitle:SetText(L.TAB_PROMOTE)
-table.insert(KART.DynamicLabels, autoTitle)
+KART.CreateTabTitle(1, L.TAB_PROMOTE)
 
 local autoCard = KART.CreateCard(KART.PromotePanel)
-autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -50)
+autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -12)
 autoCard:SetSize(500, 195)
 
 local promLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -359,14 +368,11 @@ KART.CbAlDelves.text:SetWidth(192)
 KART.CbAlDelves.text:SetJustifyH("LEFT")
 
 -- 7. Settings Panel Inhalt
-local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -10)
-settingsTitle:SetText(L.LABEL_GENERAL_SETTINGS)
-table.insert(KART.DynamicLabels, settingsTitle)
+KART.CreateTabTitle(4, L.LABEL_GENERAL_SETTINGS)
 
 -- Card: window-level interface options
 local ifCard = KART.CreateCard(KART.SettingsPanel)
-ifCard:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -50)
+ifCard:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -12)
 ifCard:SetSize(242, 215)
 
 KART.CbMinimap = KART.CreateSettingsCheckbox(ifCard, "KART_MinimapCheck", L.SET_MINIMAP, "showMinimapIcon", -20, function()
