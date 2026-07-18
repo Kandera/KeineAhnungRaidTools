@@ -279,7 +279,7 @@ function WU.BuildPanel(parent)
     local L = KART.L
 
     local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    title:SetPoint("TOPLEFT", 20, -20)
+    title:SetPoint("TOPLEFT", 20, -10) -- above the artwork's baked divider line (~-34)
     title:SetText(L.WU_TITLE or "WoWUtils Import")
     table.insert(KART.DynamicLabels, title)
 
@@ -305,8 +305,11 @@ function WU.BuildPanel(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    pasteBG:SetBackdropColor(0, 0, 0, 0.5)
-    pasteBG:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+    -- Same inset/border colors as KART.CreateStyledEditBox; the multi-line box can't use that
+    -- factory directly (the EditBox lives inside a ScrollFrame, the visual box is this frame),
+    -- so the focus accent is mirrored below via the inner EditBox's focus scripts.
+    pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
+    pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     KART.ApplyRoundedMask(pasteBG, KART.Theme.CORNER_RADIUS_LG)
 
     local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
@@ -325,6 +328,13 @@ function WU.BuildPanel(parent)
         if KART_Settings then KART_Settings.wuImportText = self:GetText() end
     end)
     WU.ImportEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    WU.ImportEditBox:SetScript("OnEditFocusGained", function()
+        local r, g, b = KART.Theme.AccentColor()
+        pasteBG:SetBackdropBorderColor(r, g, b, 1)
+    end)
+    WU.ImportEditBox:SetScript("OnEditFocusLost", function()
+        pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    end)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
     table.insert(KART.EditBoxes, WU.ImportEditBox)
 

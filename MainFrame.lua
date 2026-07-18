@@ -143,16 +143,30 @@ KART.WoWUtilsPanel:Hide()
 KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
 if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
 
+-- The template anchors the scrollbar only 16px below the scroll frame's top, which still
+-- reaches into the artwork's header zone above the baked divider line (line at ~-48 from
+-- clickArea top, scroll frame top at -14). Re-anchor so the bar starts below the line and
+-- runs to the bottom (the hidden arrow buttons no longer need their 16px reserve).
+local contentScrollBar = _G["KART_ContentScrollFrameScrollBar"]
+if contentScrollBar then
+    contentScrollBar:ClearAllPoints()
+    contentScrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, -38)
+    contentScrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 6, 2)
+end
+
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)
+-- Tab titles sit at -10: the artwork bakes a divider line at ~-34 relative to the scroll
+-- child's top, so titles must end above it (clears up to font size 20) and every tab's
+-- first card starts uniformly at -50, just below the line.
 local rlTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-rlTitle:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -20)
+rlTitle:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -10)
 rlTitle:SetText(L.LABEL_RAIDLEAD_TOOLS)
 table.insert(KART.DynamicLabels, rlTitle)
 
 -- Card groups all Raidlead Bar settings into one visually distinct panel instead of leaving
 -- checkboxes/slider floating directly on the tab background.
 local rlCard = KART.CreateCard(KART.RaidleadPanel)
-rlCard:SetPoint("TOPLEFT", rlTitle, "BOTTOMLEFT", 0, -10)
+rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -50)
 rlCard:SetSize(500, 180)
 
 -- Checkbox zur Aktivierung
@@ -174,12 +188,12 @@ KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pu
 
 -- 6. BuffChecker Panel Inhalt
 local bcTitle = KART.BuffCheckPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -20)
+bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -10)
 bcTitle:SetText(L.LABEL_BUFFCHECK_SETTINGS)
 table.insert(KART.DynamicLabels, bcTitle)
 
 local bcCard = KART.CreateCard(KART.BuffCheckPanel)
-bcCard:SetPoint("TOPLEFT", bcTitle, "BOTTOMLEFT", 0, -10)
+bcCard:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -50)
 bcCard:SetSize(500, 160)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
@@ -214,8 +228,15 @@ KART.SldCombatDelay:ClearAllPoints()
 KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
 
 -- 6. Automation panel: promote/invite settings grouped into a card.
+-- Title added like on every other tab, so the first card starts at the uniform -50
+-- below the artwork's baked divider line instead of drifting up.
+local autoTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+autoTitle:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -10)
+autoTitle:SetText(L.TAB_PROMOTE)
+table.insert(KART.DynamicLabels, autoTitle)
+
 local autoCard = KART.CreateCard(KART.PromotePanel)
-autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -20)
+autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -50)
 autoCard:SetSize(500, 195)
 
 local promLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -223,36 +244,26 @@ promLabel:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 20, -15)
 promLabel:SetText(L.LABEL_PROMOTE_NAMES)
 table.insert(KART.DynamicLabels, promLabel)
 
-KART.PromoteEditBox = CreateFrame("EditBox", "KART_PromoteEditBox", autoCard, "BackdropTemplate")
+KART.PromoteEditBox = KART.CreateStyledEditBox(autoCard, "KART_PromoteEditBox")
 KART.PromoteEditBox:SetSize(460, 28)
 KART.PromoteEditBox:SetPoint("TOPLEFT", promLabel, "BOTTOMLEFT", 0, -8)
-KART.PromoteEditBox:SetAutoFocus(false)
-KART.PromoteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-KART.PromoteEditBox:SetBackdropColor(0,0,0,0.5)
-table.insert(KART.EditBoxes, KART.PromoteEditBox)
 KART.PromoteEditBox:SetScript("OnTextChanged", function(self)
     KART_Settings.promoteNames = self:GetText()
     KART.UpdateCache()
 end) -- KART_Settings ist eine SavedVariable
-KART.PromoteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
 local invLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 invLabel:SetPoint("TOPLEFT", KART.PromoteEditBox, "BOTTOMLEFT", 0, -14)
 invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
 table.insert(KART.DynamicLabels, invLabel)
 
-KART.InviteEditBox = CreateFrame("EditBox", "KART_InviteEditBox", autoCard, "BackdropTemplate")
+KART.InviteEditBox = KART.CreateStyledEditBox(autoCard, "KART_InviteEditBox")
 KART.InviteEditBox:SetSize(460, 28)
 KART.InviteEditBox:SetPoint("TOPLEFT", invLabel, "BOTTOMLEFT", 0, -8)
-KART.InviteEditBox:SetAutoFocus(false)
-KART.InviteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-KART.InviteEditBox:SetBackdropColor(0,0,0,0.5)
-table.insert(KART.EditBoxes, KART.InviteEditBox)
 KART.InviteEditBox:SetScript("OnTextChanged", function(self)
     KART_Settings.inviteKeywords = self:GetText()
     KART.UpdateCache()
 end)
-KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
 KART.CbAutoRaid = KART.CreateSettingsCheckbox(autoCard, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -160, nil, L.DESC_AUTO_RAID)
 KART.CbAutoRaid.text:SetWidth(190)
@@ -306,7 +317,7 @@ KART.CbAlDelves.text:SetJustifyH("LEFT")
 
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -20)
+settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -10)
 settingsTitle:SetText(L.LABEL_GENERAL_SETTINGS)
 table.insert(KART.DynamicLabels, settingsTitle)
 
@@ -319,6 +330,11 @@ KART.CbMinimap = KART.CreateSettingsCheckbox(ifCard, "KART_MinimapCheck", L.SET_
     KART.UpdateMinimapButton()
 end, L.DESC_MINIMAP)
 KART.SldUiScale = KART.CreateSettingsSlider(ifCard, L.SET_UI_SCALE, 50, 150, "uiScale", -60, "KART_UiScaleSlider", L.DESC_UI_SCALE)
+-- Applying SetScale live while dragging rescales the window under the cursor, which shifts the
+-- cursor's position on the track and makes the thumb jump back and forth. UpdateStyles skips the
+-- scale during the drag (checks isDragging, set by the factory); apply the final value on release.
+-- This hook runs after the factory's own OnMouseUp hook, so isDragging is already false here.
+KART.SldUiScale:HookScript("OnMouseUp", function() KART.UpdateStyles() end)
 KART.SldBgAlpha = KART.CreateSettingsSlider(ifCard, L.SET_BG_ALPHA, 20, 100, "bgAlpha", -105, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
 
 -- Window layer slider: value is an index into KART.StrataLevels, shown as the strata name

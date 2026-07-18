@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Free window resizing replaced by a "Window Scale" slider in Settings.**
 - **Main window is larger by default and every tab groups its settings into cards.**
 - **Settings labels now use the same white text style as the menu.**
+- **Input fields restyled to match the card look** — rounded, with an accent-colored border while typing.
 
 ### Removed
 - **Background color and title font size settings.**

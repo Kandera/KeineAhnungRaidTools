@@ -402,7 +402,12 @@ function KART.UpdateStyles()
     -- bgAlpha now controls whole-window opacity; floor of 20 so the window
     -- can never become fully invisible while still blocking mouse input.
     KART.MainFrame:SetAlpha(math.max(20, KART_Settings.bgAlpha or 85) / 100)
-    KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
+    -- Deferred while the scale slider is being dragged: rescaling the window mid-drag moves the
+    -- slider under the cursor, which feeds back into new values and makes the thumb jump. The
+    -- slider's OnMouseUp hook (MainFrame.lua) re-runs UpdateStyles to apply the final value.
+    if not (KART.SldUiScale and KART.SldUiScale.isDragging) then
+        KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
+    end
 
     -- Sidebar Buttons
     for _, btnText in ipairs(KART.ButtonTexts) do

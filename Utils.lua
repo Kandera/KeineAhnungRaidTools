@@ -596,6 +596,38 @@ function KART.CreateCard(parent, title)
     return card
 end
 
+-- UI Factory: styled single-line EditBox matching the card look — dark inset fill, rounded
+-- corners, subtle resting border, accent-colored border while focused. Registers the box in
+-- KART.EditBoxes for font updates and wires the common OnEscapePressed=ClearFocus behavior.
+-- Caller sets size/point and its own OnTextChanged (and SetMaxLetters where needed). The
+-- rounded mask is (re)applied on OnSizeChanged like KART.CreateCard does, because the box has
+-- no size yet at creation time and ApplyRoundedMask would silently no-op on it here.
+function KART.CreateStyledEditBox(parent, name)
+    local eb = CreateFrame("EditBox", name, parent, "BackdropTemplate")
+    eb:SetAutoFocus(false)
+    eb:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    eb:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
+    eb:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    eb:SetTextInsets(10, 10, 0, 0)
+    eb:HookScript("OnSizeChanged", function()
+        KART.ApplyRoundedMask(eb, KART.Theme.CORNER_RADIUS_LG)
+    end)
+    eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    eb:SetScript("OnEditFocusGained", function(self)
+        local r, g, b = KART.Theme.AccentColor()
+        self:SetBackdropBorderColor(r, g, b, 1)
+    end)
+    eb:SetScript("OnEditFocusLost", function(self)
+        self:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    end)
+    table.insert(KART.EditBoxes, eb)
+    return eb
+end
+
 function KART.UpdateMinimapButton()
     local dbIcon = LibStub("LibDBIcon-1.0", true)
     if dbIcon then
