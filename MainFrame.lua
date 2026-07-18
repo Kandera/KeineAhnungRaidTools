@@ -258,6 +258,33 @@ KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus()
 KART.CbAutoRaid = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -190, nil, L.DESC_AUTO_RAID)
 KART.CbInviteViaGuildChat = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_InviteViaGuildChatCheck", L.SET_INVITE_VIA_GUILD_CHAT, "inviteViaGuildChat", -225, nil, L.DESC_INVITE_VIA_GUILD_CHAT)
 
+-- Auto Combat Log card: content filters for AutoLog.lua. Widget callbacks re-evaluate
+-- immediately so toggling a filter while already inside an instance takes effect without
+-- re-zoning (including stopping an addon-owned log when the master switch goes off).
+local alTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+alTitle:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -265)
+alTitle:SetText(L.LABEL_AUTOLOG)
+table.insert(KART.DynamicLabels, alTitle)
+
+local alCard = KART.CreateCard(KART.PromotePanel)
+alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
+alCard:SetSize(290, 310)
+
+local function AutoLogChanged()
+    if KART.AutoLog then KART.AutoLog.Evaluate() end
+end
+
+KART.CbAlEnabled = KART.CreateSettingsCheckbox(alCard, "KART_AlEnabled", L.SET_AL_ENABLED, "autoLogEnabled", -20, AutoLogChanged, L.DESC_AL_ENABLED)
+KART.CbAlRaidLFR = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidLFR", L.SET_AL_RAID_LFR, "autoLogRaidLFR", -50, AutoLogChanged)
+KART.CbAlRaidNormal = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidNormal", L.SET_AL_RAID_NORMAL, "autoLogRaidNormal", -80, AutoLogChanged)
+KART.CbAlRaidHeroic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidHeroic", L.SET_AL_RAID_HEROIC, "autoLogRaidHeroic", -110, AutoLogChanged)
+KART.CbAlRaidMythic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidMythic", L.SET_AL_RAID_MYTHIC, "autoLogRaidMythic", -140, AutoLogChanged)
+KART.CbAlMythicPlus = KART.CreateSettingsCheckbox(alCard, "KART_AlMythicPlus", L.SET_AL_MPLUS, "autoLogMythicPlus", -170, AutoLogChanged)
+KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -200, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
+KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
+KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET_AL_DUNGEONS, "autoLogDungeons", -250, AutoLogChanged)
+KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -280, AutoLogChanged)
+
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -20)
