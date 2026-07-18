@@ -6,7 +6,7 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-07-18
 ### Geändert
 - **Hauptfenster mit neuem Artwork-Hintergrund gestaltet** — Sidebar, Titel und Schließen-Button sind Teil des neuen Looks.
 - **Freies Fenster-Resizing ersetzt durch einen „Fenster-Skalierung"-Regler in den Einstellungen.**

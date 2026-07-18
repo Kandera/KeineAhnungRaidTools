@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-07-18
 ### Changed
 - **Main window redesigned with a full artwork background** — sidebar, title and close button are part of the new look.
 - **Free window resizing replaced by a "Window Scale" slider in Settings.**
