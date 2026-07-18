@@ -288,14 +288,18 @@ function WU.BuildPanel(parent)
         parent, "KART_WUModuleEnabled",
         L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -45, nil, L.WU_DESC_MODULE_ENABLED)
 
-    local pasteLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    pasteLabel:SetPoint("TOPLEFT", 20, -85)
+    local importCard = KART.CreateCard(parent)
+    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -85)
+    importCard:SetSize(500, 190)
+
+    local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    pasteLabel:SetPoint("TOPLEFT", 20, -15)
     pasteLabel:SetText(L.WU_LABEL_PASTE or "WoWUtils Export hier einfügen:")
     table.insert(KART.DynamicLabels, pasteLabel)
 
-    local pasteBG = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    pasteBG:SetSize(265, 90)
-    pasteBG:SetPoint("TOPLEFT", 20, -102)
+    local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
+    pasteBG:SetSize(460, 90)
+    pasteBG:SetPoint("TOPLEFT", 20, -35)
     pasteBG:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -313,7 +317,7 @@ function WU.BuildPanel(parent)
     if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetSize(6, 16) end
 
     WU.ImportEditBox = CreateFrame("EditBox", "KART_WUImportEditBox", pasteScroll)
-    WU.ImportEditBox:SetWidth(234)
+    WU.ImportEditBox:SetWidth(428)
     WU.ImportEditBox:SetMultiLine(true)
     WU.ImportEditBox:SetAutoFocus(false)
     WU.ImportEditBox:SetFontObject("GameFontHighlightSmall")
@@ -324,9 +328,9 @@ function WU.BuildPanel(parent)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
     table.insert(KART.EditBoxes, WU.ImportEditBox)
 
-    WU.BtnImport = KART.CreateModernButton(parent, L.WU_BTN_IMPORT or "Importieren")
+    WU.BtnImport = KART.CreateModernButton(importCard, L.WU_BTN_IMPORT or "Importieren")
     WU.BtnImport:SetSize(180, 26)
-    WU.BtnImport:SetPoint("TOPLEFT", 20, -200)
+    WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
         local text = WU.ImportEditBox:GetText()
@@ -341,9 +345,9 @@ function WU.BuildPanel(parent)
         end
     end)
 
-    WU.BtnReset = KART.CreateModernButton(parent, L.WU_BTN_RESET or "Zurücksetzen")
-    WU.BtnReset:SetSize(77, 26)
-    WU.BtnReset:SetPoint("TOPLEFT", 208, -200)
+    WU.BtnReset = KART.CreateModernButton(importCard, L.WU_BTN_RESET or "Zurücksetzen")
+    WU.BtnReset:SetSize(100, 26)
+    WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
         if #WU.bosses == 0 then return end
@@ -351,8 +355,8 @@ function WU.BuildPanel(parent)
         StaticPopup_Show("KART_WU_RESET_CONFIRM")
     end)
 
-    WU.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    WU.statusLabel:SetPoint("TOPLEFT", 20, -235)
+    WU.statusLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    WU.statusLabel:SetPoint("TOPLEFT", 20, -168)
     WU.statusLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
     table.insert(KART.DynamicLabels, WU.statusLabel)
@@ -360,26 +364,26 @@ function WU.BuildPanel(parent)
     local sep = parent:CreateTexture(nil, "ARTWORK")
     sep:SetColorTexture(0.22, 0.22, 0.22, 1)
     sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT",  5, -248)
-    sep:SetPoint("TOPRIGHT", -5, -248)
+    sep:SetPoint("TOPLEFT",  5, -290)
+    sep:SetPoint("TOPRIGHT", -5, -290)
 
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hBoss:SetPoint("TOPLEFT", 8, -258)
+    hBoss:SetPoint("TOPLEFT", 8, -300)
     hBoss:SetText("|cffaaaaaa" .. (L.WU_COL_BOSS or "Boss") .. "|r")
     table.insert(KART.DynamicLabels, hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hInvite:SetPoint("TOPRIGHT", -110, -258)
+    hInvite:SetPoint("TOPRIGHT", -110, -300)
     hInvite:SetText("|cffaaaaaa" .. (L.WU_BTN_INVITE or "Einl.") .. "|r")
     table.insert(KART.DynamicLabels, hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hRemove:SetPoint("TOPRIGHT", -38, -258)
+    hRemove:SetPoint("TOPRIGHT", -38, -300)
     hRemove:SetText("|cffaaaaaa" .. (L.WU_BTN_REMOVE or "Entf.") .. "|r")
     table.insert(KART.DynamicLabels, hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
-    WU.bossListFrame:SetPoint("TOPLEFT",  5, -274)
+    WU.bossListFrame:SetPoint("TOPLEFT",  5, -316)
     WU.bossListFrame:SetPoint("RIGHT", parent, "RIGHT", -5, 0)
     WU.bossListFrame:SetHeight(24)
     WU.bossListFrame.rows = {}
