@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Auto Combat Log:** a new card in the Automation tab starts combat logging automatically when you enter selected content — raids per difficulty (LFR/Normal/Heroic/Mythic), Mythic+ with a minimum keystone level, dungeons, and Delves — and stops it when you leave. Advanced Combat Logging is enabled automatically; logging you start manually via /combatlog is never touched.
 
+### Fixed
+- **"Show NSRT nicknames" and "Compact vote window" toggles no longer show as off after a reload:** both settings were saved correctly, but their switches weren't initialized on login and always displayed off — which could flip the real setting when toggled again.
+
 ## [1.18.1] - 2026-07-18
 ### Fixed
 - **Minimap button no longer black:** the minimap and AddOn-compartment icons still pointed to the old JPG file after the PNG switch (WoW can't load JPG textures). Both now use the PNG.

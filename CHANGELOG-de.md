@@ -10,6 +10,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Auto-Combat-Log:** Eine neue Karte im Automation-Tab startet das Combat-Logging automatisch beim Betreten des ausgewählten Contents — Raids pro Schwierigkeit (LFR/Normal/Heroisch/Mythisch), Mythisch+ mit Mindest-Keystufe, Dungeons und Tiefen — und stoppt es beim Verlassen. Advanced Combat Logging wird automatisch aktiviert; manuell per /combatlog gestartetes Logging wird nie angefasst.
 
+### Behoben
+- **"NSRT-Nicknames anzeigen"- und "Kompaktes Vote-Fenster"-Schalter stehen nach einem Reload nicht mehr auf aus:** Beide Einstellungen wurden korrekt gespeichert, aber ihre Schalter wurden beim Login nicht initialisiert und zeigten immer aus — was beim erneuten Umschalten die echte Einstellung kippen konnte.
+
 ## [1.18.1] - 2026-07-18
 ### Behoben
 - **Minimap-Button nicht mehr schwarz:** Das Minimap- und AddOn-Compartment-Icon zeigten nach der PNG-Umstellung noch auf die alte JPG-Datei (WoW kann keine JPG-Texturen laden). Beide nutzen jetzt das PNG.

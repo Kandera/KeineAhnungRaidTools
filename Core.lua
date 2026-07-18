@@ -95,6 +95,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
         if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
         if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
+        if KART.LC and KART.LC.CbCompactVoteLayout then settingsMap[KART.LC.CbCompactVoteLayout] = "lcVoteLayoutCompact" end
+        if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
         if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
         if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
         if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end

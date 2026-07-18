@@ -43,6 +43,7 @@ KART.Defaults = {
     lcCouncilMembers = "",
     lcLootmaster = "",
     lcShowNickNames = false,
+    lcVoteLayoutCompact = false,
     wuModuleEnabled = false,
     wuImportText = "",
     dtModuleEnabled = false,
