@@ -98,7 +98,9 @@ the current gradient style. Only the main menu window changes.
 - `media/backgrounds/kart-bg-dark.png` is currently untracked; it ships with
   the addon and must be added to git and referenced with the full
   `Interface\AddOns\KeineAhnungRaidTools\media\...` path.
-- Old saved variables (`bgR/bgG/bgB`, `titleFontSize`) become inert; leave
-  them in saved data (harmless) but drop them from `KART.Defaults` and the UI.
+- `bgR/bgG/bgB` and `titleFontSize` stay in `KART.Defaults`: other windows
+  (BuffChecker, Loot History) still read them in `KART.UpdateStyles()` and
+  would error on nil for fresh installs. Only their main-menu UI widgets are
+  removed.
 - Docs: CHANGELOG.md / CHANGELOG-de.md one-liner, README.md / README-de.md
   screenshot/feature text if it mentions resizing.
