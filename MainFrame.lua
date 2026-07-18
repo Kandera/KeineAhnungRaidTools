@@ -184,9 +184,14 @@ bcCard:SetSize(500, 160)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
 -- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
+-- Labels must not cross into the neighboring column / past the card edge (FontStrings don't clip).
 KART.CbBcModuleEnabled = KART.CreateSettingsCheckbox(bcCard, "KART_BcModuleEnabled", L.SET_BC_MODULE_ENABLED, "bcModuleEnabled", -20, nil, L.DESC_BC_MODULE_ENABLED)
+KART.CbBcModuleEnabled.text:SetWidth(190)
+KART.CbBcModuleEnabled.text:SetJustifyH("LEFT")
 
 KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(bcCard, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -50, nil, L.DESC_BC_READYCHECK)
+KART.CbShowBuffCheck.text:SetWidth(190)
+KART.CbShowBuffCheck.text:SetJustifyH("LEFT")
 
 KART.CbGrayOffline = KART.CreateSettingsCheckbox(bcCard, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -80, nil, L.DESC_GRAY_OFFLINE)
 
@@ -250,9 +255,13 @@ end)
 KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
 KART.CbAutoRaid = KART.CreateSettingsCheckbox(autoCard, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -160, nil, L.DESC_AUTO_RAID)
+KART.CbAutoRaid.text:SetWidth(190)
+KART.CbAutoRaid.text:SetJustifyH("LEFT")
 KART.CbInviteViaGuildChat = KART.CreateSettingsCheckbox(autoCard, "KART_InviteViaGuildChatCheck", L.SET_INVITE_VIA_GUILD_CHAT, "inviteViaGuildChat", -160, nil, L.DESC_INVITE_VIA_GUILD_CHAT)
 KART.CbInviteViaGuildChat:ClearAllPoints()
 KART.CbInviteViaGuildChat:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 260, -160)
+KART.CbInviteViaGuildChat.text:SetWidth(192)
+KART.CbInviteViaGuildChat.text:SetJustifyH("LEFT")
 
 -- Auto Combat Log card: content filters for AutoLog.lua. Widget callbacks re-evaluate
 -- immediately so toggling a filter while already inside an instance takes effect without
@@ -264,7 +273,7 @@ table.insert(KART.DynamicLabels, alTitle)
 
 local alCard = KART.CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
-alCard:SetSize(500, 185)
+alCard:SetSize(500, 200)
 
 local function AutoLogChanged()
     if KART.AutoLog then KART.AutoLog.Evaluate() end
@@ -275,19 +284,25 @@ KART.CbAlRaidLFR = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidLFR", L.SET_A
 KART.CbAlRaidNormal = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidNormal", L.SET_AL_RAID_NORMAL, "autoLogRaidNormal", -80, AutoLogChanged)
 KART.CbAlRaidHeroic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidHeroic", L.SET_AL_RAID_HEROIC, "autoLogRaidHeroic", -110, AutoLogChanged)
 KART.CbAlRaidMythic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidMythic", L.SET_AL_RAID_MYTHIC, "autoLogRaidMythic", -140, AutoLogChanged)
-KART.CbAlMythicPlus = KART.CreateSettingsCheckbox(alCard, "KART_AlMythicPlus", L.SET_AL_MPLUS, "autoLogMythicPlus", -20, AutoLogChanged)
+KART.CbAlMythicPlus = KART.CreateSettingsCheckbox(alCard, "KART_AlMythicPlus", L.SET_AL_MPLUS, "autoLogMythicPlus", -50, AutoLogChanged)
 KART.CbAlMythicPlus:ClearAllPoints()
-KART.CbAlMythicPlus:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -20)
-KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -50, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
+KART.CbAlMythicPlus:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -50)
+KART.CbAlMythicPlus.text:SetWidth(192)
+KART.CbAlMythicPlus.text:SetJustifyH("LEFT")
+KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -80, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
 KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
 KART.SldAlMinKey:ClearAllPoints()
-KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -66)
-KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET_AL_DUNGEONS, "autoLogDungeons", -110, AutoLogChanged)
+KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -96)
+KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET_AL_DUNGEONS, "autoLogDungeons", -140, AutoLogChanged)
 KART.CbAlDungeons:ClearAllPoints()
-KART.CbAlDungeons:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -110)
-KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -140, AutoLogChanged)
+KART.CbAlDungeons:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -140)
+KART.CbAlDungeons.text:SetWidth(192)
+KART.CbAlDungeons.text:SetJustifyH("LEFT")
+KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -170, AutoLogChanged)
 KART.CbAlDelves:ClearAllPoints()
-KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -140)
+KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -170)
+KART.CbAlDelves.text:SetWidth(192)
+KART.CbAlDelves.text:SetJustifyH("LEFT")
 
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")

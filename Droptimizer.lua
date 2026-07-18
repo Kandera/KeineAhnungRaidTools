@@ -146,15 +146,15 @@ end
 function DT.BuildSyncStatus(parent)
     local L = KART.L
 
-    DT.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    DT.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     DT.statusLabel:SetPoint("TOPLEFT", KART.BtnReset, "BOTTOMLEFT", 0, -20)
-    DT.statusLabel:SetWidth(265)
+    DT.statusLabel:SetWidth(460)
     DT.statusLabel:SetJustifyH("LEFT")
     table.insert(KART.DynamicLabels, DT.statusLabel)
 
     local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", DT.statusLabel, "BOTTOMLEFT", 0, -6)
-    hint:SetWidth(265)
+    hint:SetWidth(460)
     hint:SetJustifyH("LEFT")
     hint:SetTextColor(0.6, 0.6, 0.6)
     hint:SetText(L.DT_HINT_COMPANION or "Requires the KART Companion app running on an officer's PC.")
