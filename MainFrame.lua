@@ -32,65 +32,54 @@ function KART.ShowTab(tabIndex)
     end
 end
 
--- 2. Hauptfenster Erstellung
-local mainFrame = CreateFrame("Frame", "KART_MainFrame", UIParent, "BackdropTemplate")
-mainFrame:SetSize(500, 420)
+-- 2. Main window (PNG artwork, EllesmereUI-style)
+-- All geometry derives from the measured layout of kart-bg-dark.png:
+-- image 1500x1154, opaque art box x 105-1396 / y 104-1050 (1292x947),
+-- sidebar divider at art x 323, close-X center at art (1248, 39).
+-- Art width is fixed at 640 (scale factor 640/1292); the window is not
+-- freely resizable because the baked artwork would distort and the
+-- invisible hit areas (close X, sidebar) would drift off their graphics.
+-- Users scale the whole window via the Settings "Window Scale" slider.
+local mainFrame = CreateFrame("Frame", "KART_MainFrame", UIParent)
+mainFrame:SetSize(743, 572) -- full PNG footprint incl. transparent shadow margin
 mainFrame:SetPoint("CENTER", UIParent, "CENTER")
 mainFrame:SetMovable(true)
-mainFrame:SetResizable(true)
-mainFrame:SetResizeBounds(500, 300, 1000, 1000) -- Mindest- und Maximalgröße
-mainFrame:SetBackdrop({
-    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Buttons\\WHITE8X8",
-    tile = true, tileSize = 16, edgeSize = 1,
-    insets = { left = 0, right = 0, top = 0, bottom = 0 }
-})
-mainFrame:SetBackdropBorderColor(0, 0, 0, 1)
-mainFrame.gradientBg = KART.CreateGradientOverlay(mainFrame)
+
+mainFrame.bg = mainFrame:CreateTexture(nil, "BACKGROUND")
+mainFrame.bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-bg-dark.png")
+mainFrame.bg:SetAllPoints()
+
 KART.RegisterStrataFrame(mainFrame)
 mainFrame:Hide()
 KART.AddShowFade(mainFrame)
 
--- Ermöglicht das Schließen des gesamten KART-Fensters mit der ESC-Taste
+-- Allows closing the whole KART window with the ESC key
 table.insert(UISpecialFrames, mainFrame:GetName())
+KART.MainFrame = mainFrame
 
--- Header & Dragging
-mainFrame.header = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
-mainFrame.header:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 0, 0)
-mainFrame.header:SetPoint("BOTTOMRIGHT", mainFrame, "TOPRIGHT", 0, -25)
-mainFrame.header:SetBackdrop({
-    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Buttons\\WHITE8X8",
-    edgeSize = 1,
-})
-mainFrame.header:SetBackdropColor(0.15, 0.15, 0.15, 1)
-mainFrame.header:SetBackdropBorderColor(0, 0, 0, 1)
-mainFrame.header:EnableMouse(true)
-mainFrame.header:SetScript("OnMouseDown", function() mainFrame:StartMoving() end)
-mainFrame.header:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing() end)
+-- clickArea covers the opaque artwork region (shadow margin excluded).
+-- Every interactive child anchors to it; it also blocks clicks from
+-- falling through the window and handles whole-surface dragging (the
+-- old header bar is baked into the PNG now).
+local clickArea = CreateFrame("Frame", nil, mainFrame)
+clickArea:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 52, -52)
+clickArea:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -51, 51)
+clickArea:EnableMouse(true)
+clickArea:RegisterForDrag("LeftButton")
+clickArea:SetScript("OnDragStart", function() mainFrame:StartMoving() end)
+clickArea:SetScript("OnDragStop", function() mainFrame:StopMovingOrSizing() end)
+mainFrame.clickArea = clickArea
 
-mainFrame.logo = mainFrame.header:CreateTexture(nil, "ARTWORK")
-mainFrame.logo:SetSize(18, 18)
-mainFrame.logo:SetPoint("LEFT", mainFrame.header, "LEFT", 6, 0)
-mainFrame.logo:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.png")
+-- Version string, bottom-left of the baked sidebar. Core.lua overwrites
+-- the text once KART.Version is known (ADDON_LOADED).
+mainFrame.versionText = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 14, 10)
+mainFrame.versionText:SetText("v" .. (KART.Version or ""))
 
-mainFrame.title = mainFrame.header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-mainFrame.title:SetPoint("LEFT", mainFrame.logo, "RIGHT", 6, 0)
-mainFrame.title:SetText(L.ADDON_TITLE .. " v" .. (KART.Version or "1.12.2")) -- Titeltext inkl. Version
-KART.MainFrame = mainFrame -- Hauptframe in KART speichern
-
--- 3. Sidebar Menü
-local mainInset = CreateFrame("Frame", nil, mainFrame)
-mainInset:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 5, -30)
-mainInset:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -5, 5)
-
-mainInset.sidebarBG = mainInset:CreateTexture(nil, "BACKGROUND")
-mainInset.sidebarBG:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 0, 0)
-mainInset.sidebarBG:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMLEFT", 140, 0)
-mainInset.sidebarBG:SetColorTexture(0.05, 0.05, 0.05, 0.8)
-
+-- 3. Sidebar menu and tabs
+-- Tabs start below the baked logo/title/underline zone of the artwork.
 KART.BtnPromote = KART.CreateTabButton(mainFrame, L.TAB_PROMOTE)
-KART.BtnPromote:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 5, -10)
+KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 10, -60)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
 KART.BtnRaidlead = KART.CreateTabButton(mainFrame, L.TAB_RAIDLEAD)
@@ -116,24 +105,17 @@ KART.BtnSettings = KART.CreateTabButton(mainFrame, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
--- Sichtbare Trennlinie (Vertical Divider)
-mainInset.divider = mainInset:CreateTexture(nil, "BACKGROUND")
-mainInset.divider:SetColorTexture(0.2, 0.2, 0.2, 1)
-mainInset.divider:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 140, 0)
-mainInset.divider:SetPoint("BOTTOMLEFT", mainInset, "BOTTOMLEFT", 140, 0)
-mainInset.divider:SetWidth(1)
-
--- 4. Content Bereich (ScrollFrame)
-local scrollFrame = CreateFrame("ScrollFrame", "KART_ContentScrollFrame", mainInset, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", mainInset, "TOPLEFT", 145, -5)
-scrollFrame:SetPoint("BOTTOMRIGHT", mainInset, "BOTTOMRIGHT", -25, 25)
+-- 4. Content area (ScrollFrame), right of the baked sidebar divider (160px)
+local scrollFrame = CreateFrame("ScrollFrame", "KART_ContentScrollFrame", clickArea, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 166, -12)
+scrollFrame:SetPoint("BOTTOMRIGHT", clickArea, "BOTTOMRIGHT", -25, 20)
 
 local scrollChild = CreateFrame("Frame", nil, scrollFrame)
 -- Height has headroom beyond what the tallest tab (Loot Council's raid-wide settings box)
 -- needs at the default font, since that box's height depends on wrapped label text and can
 -- grow with the user's chosen font/size (see LC.RelayoutRaidBox) — better a bit of empty
 -- scroll space than content silently clipped below the scrollable area.
-scrollChild:SetSize(310, 750)
+scrollChild:SetSize(430, 750)
 scrollFrame:SetScrollChild(scrollChild)
 
 -- Panels erstellen
@@ -393,24 +375,13 @@ KART.BtnReset:SetScript("OnClick", function()
     ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
 end)
 
--- 8. Resize Handle (Unten Rechts)
-mainFrame.resizeBtn = CreateFrame("Button", nil, mainFrame)
-mainFrame.resizeBtn:SetSize(16, 16)
-mainFrame.resizeBtn:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -2, 2)
-mainFrame.resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-mainFrame.resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-mainFrame.resizeBtn:SetScript("OnMouseDown", function() mainFrame:StartSizing("BOTTOMRIGHT") end)
-mainFrame.resizeBtn:SetScript("OnMouseUp", function() mainFrame:StopMovingOrSizing() end)
-
--- 8. Schließen Button
-local closeBtn = CreateFrame("Button", nil, mainFrame.header, "BackdropTemplate")
-closeBtn:SetPoint("RIGHT", mainFrame.header, "RIGHT", -5, 0)
-closeBtn:SetSize(20, 20)
-closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
-closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-closeBtn.text:SetPoint("CENTER", 0, 1)
-closeBtn.text:SetText("×")
-closeBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 0, 0) end)
-closeBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
+-- 8. Close button: invisible hit area over the X baked into the artwork.
+-- HIGHLIGHT-layer texture shows automatically on hover, no scripts needed.
+local closeBtn = CreateFrame("Button", nil, clickArea)
+closeBtn:SetSize(30, 30)
+closeBtn:SetPoint("CENTER", clickArea, "TOPRIGHT", -21, -20)
+local closeHover = closeBtn:CreateTexture(nil, "HIGHLIGHT")
+closeHover:SetAllPoints()
+closeHover:SetColorTexture(1, 1, 1, 0.08)
 closeBtn:SetScript("OnClick", function() KART.MainFrame:Hide() end)
 mainFrame.closeBtn = closeBtn

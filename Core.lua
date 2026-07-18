@@ -181,9 +181,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end)
 
-        -- Korrekte Version in Titelleiste setzen (KART.Version ist erst hier verfügbar)
-        if KART.MainFrame and KART.MainFrame.title then
-            KART.MainFrame.title:SetText((KART.L.ADDON_TITLE or "Keine Ahnung Raid Tools") .. " v" .. KART.Version)
+        -- Set the real version (KART.Version only becomes available here)
+        if KART.MainFrame and KART.MainFrame.versionText then
+            KART.MainFrame.versionText:SetText("v" .. KART.Version)
         end
 
         -- Styles nach der Erstellung aller Frames final anwenden
@@ -398,16 +398,10 @@ function KART.UpdateStyles()
     local menuSize = KART_Settings.menuFontSize or 11
     local contentSize = KART_Settings.contentFontSize or 12
     
-    KART.MainFrame:SetBackdropColor(br, bg, bb, KART_Settings.bgAlpha / 100)
-    KART.SetGradientOverlayColor(KART.MainFrame.gradientBg, br, bg, bb, KART_Settings.bgAlpha / 100)
-    if KART.MainFrame.title then
-        KART.MainFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
-        KART.MainFrame.title:SetTextColor(r, g, b)
-    end
-
-    if KART.MainFrame.closeBtn then
-        KART.MainFrame.closeBtn.text:SetFont(fontPath, 14, "OUTLINE")
-    end
+    -- The main window is a baked PNG artwork: no backdrop/gradient to tint.
+    -- bgAlpha now controls whole-window opacity; floor of 20 so the window
+    -- can never become fully invisible while still blocking mouse input.
+    KART.MainFrame:SetAlpha(math.max(20, KART_Settings.bgAlpha or 85) / 100)
 
     -- Sidebar Buttons
     for _, btnText in ipairs(KART.ButtonTexts) do
