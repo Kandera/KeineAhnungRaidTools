@@ -78,30 +78,30 @@ mainFrame.versionText:SetText("v" .. (KART.Version or ""))
 
 -- 3. Sidebar menu and tabs
 -- Tabs start below the baked logo/title/underline zone of the artwork.
-KART.BtnPromote = KART.CreateTabButton(mainFrame, L.TAB_PROMOTE)
+KART.BtnPromote = KART.CreateTabButton(clickArea, L.TAB_PROMOTE)
 KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 10, -60)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
-KART.BtnRaidlead = KART.CreateTabButton(mainFrame, L.TAB_RAIDLEAD)
+KART.BtnRaidlead = KART.CreateTabButton(clickArea, L.TAB_RAIDLEAD)
 KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
 KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
-KART.BtnBuffCheck = KART.CreateTabButton(mainFrame, L.TAB_BUFFCHECK)
+KART.BtnBuffCheck = KART.CreateTabButton(clickArea, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnLootCouncil = KART.CreateTabButton(mainFrame, L.TAB_LOOTCOUNCIL or "Loot Council")
+KART.BtnLootCouncil = KART.CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL or "Loot Council")
 KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
-KART.BtnWoWUtils = KART.CreateTabButton(mainFrame, L.TAB_WOWUTILS or "WoWUtils")
+KART.BtnWoWUtils = KART.CreateTabButton(clickArea, L.TAB_WOWUTILS or "WoWUtils")
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 
 -- The Settings tab must always be the last entry in the sidebar. When adding a new tab
 -- button, anchor it above this one (i.e. insert it between the previous last tab and
 -- Settings, and re-anchor Settings to the new button).
-KART.BtnSettings = KART.CreateTabButton(mainFrame, L.TAB_SETTINGS)
+KART.BtnSettings = KART.CreateTabButton(clickArea, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 

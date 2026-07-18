@@ -354,7 +354,7 @@ function KART.CreateTabButton(parent, text)
     function b:SetActive(active)
         isActive = active
         accentBar:SetShown(active)
-        b:RefreshActiveColor()
+        restingColor(b)
     end
 
     -- Re-applies the current active/inactive color using the latest accent
