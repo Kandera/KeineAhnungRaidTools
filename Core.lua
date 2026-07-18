@@ -22,7 +22,7 @@ frame:RegisterEvent("TRADE_SHOW")
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
     type = "launcher",
     text = "KART",
-    icon = "Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.jpg",
+    icon = "Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.png",
     OnClick = function(_, button)
         if button == "LeftButton" then
             if KART.MainFrame:IsShown() then KART.MainFrame:Hide() else KART.MainFrame:Show() KART.ShowTab(1) end
@@ -151,7 +151,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
         AddonCompartmentFrame:RegisterAddon({
             text = "Keine Ahnung Raid Tools",
-            icon = "Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.jpg", -- Pfad zum Addon-Icon
+            icon = "Interface\\AddOns\\KeineAhnungRaidTools\\KAimg.png", -- addon icon path
             registerForAnyClick = true,
             func = function() 
                 if KART.MainFrame:IsShown() then KART.MainFrame:Hide() else KART.MainFrame:Show() KART.ShowTab(1) end
