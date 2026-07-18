@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- **Pull timer and Clear World Markers now work for everyone:** the Raidlead Bar buttons used the `/pull` command (only exists with BigWigs/DBM installed) and `/cwm all` (the "all" keyword is localized, so it failed on non-English clients). Both now use the native WoW API, so they work regardless of installed addons or client language.
 
 ## [1.18.0] - 2026-07-18
 ### Added

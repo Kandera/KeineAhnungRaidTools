@@ -19,7 +19,7 @@ A compact, movable bar for quick access to:
 *   **Raid Target Icons:** Set markers on targets.
 *   **World Markers:** Place colored pillars on the terrain.
 *   **Ready Check:** Instantly start a ready check.
-*   **Pull Timer:** Customizable countdown for pull start (default: `/pull 10`).
+*   **Pull Timer:** Customizable countdown for pull start (native WoW countdown, no BigWigs/DBM required; default: 10 seconds).
 
 ### 3. Enhanced Ready Check
 *   When players click "Not Ready", a modern window opens where they can select a quick reason (AFK, drink, 1 min) or enter custom free text. These reasons are posted to the raid lead in chat and shown in the Buff Checker via a small hint icon next to the player's name (full text in tooltip on hover) — regardless of text length, without breaking the layout.

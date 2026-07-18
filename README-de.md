@@ -19,7 +19,7 @@ Eine kompakte, verschiebbare Leiste für den schnellen Zugriff auf:
 *   **Schlachtzugs-Symbole:** Setzen von Markern auf Ziele.
 *   **Welt-Marker:** Platzieren von farbigen Säulen im Gelände.
 *   **Ready-Check:** Startet sofort eine Bereitschaftsabfrage.
-*   **Pull-Timer:** Anpassbarer Countdown für den Kampfbeginn (Standard: `/pull 10`).
+*   **Pull-Timer:** Anpassbarer Countdown für den Kampfbeginn (nativer WoW-Countdown, kein BigWigs/DBM nötig; Standard: 10 Sekunden).
 
 ### 3. Erweiterter Ready-Check
 *   Wenn Spieler auf "Nicht bereit" klicken, öffnet sich ein modernes Fenster, in dem sie schnelle Gründe (Bio, Trinken, 1 Min) oder einen eigenen Freitext angeben können. Diese Gründe werden dem Raidlead im Chat gepostet und im Buff-Checker über ein kleines Hinweis-Icon neben dem Namen angezeigt (voller Text im Tooltip beim Hovern) — unabhängig von der Textlänge, ohne dass das Layout überläuft.

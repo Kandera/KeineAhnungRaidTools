@@ -183,15 +183,9 @@ KART.CbAutoHide = KART.CreateSettingsCheckbox(rlCard, "KART_RaidleadBarAutoHideC
     KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
 end, L.DESC_RL_AUTOHIDE)
 
--- Pull-Timer Slider (Verknüpfung mit KART_PullBtn aus RaidleadBar.lua)
+-- Pull-Timer Slider: the pull button (RaidleadBar.lua) reads pullTimerDuration
+-- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
-KART.PullSlider:HookScript("OnValueChanged", function(self, value)
-    if KART.PullBtn then -- Objekt aus RaidleadBar.lua
-        if not InCombatLockdown() then
-            KART.PullBtn:SetAttribute("macrotext", "/pull " .. floor(value))
-        end
-    end
-end)
 
 -- 6. BuffChecker Panel Inhalt
 local bcTitle = KART.BuffCheckPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")

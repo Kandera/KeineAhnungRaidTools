@@ -125,10 +125,6 @@ function KART.UpdateRaidleadBarVisibility()
         else
             rlBar:ClearAllPoints()
             rlBar:SetPoint(KART_Settings.rlBarPoint or "TOP", UIParent, KART_Settings.rlBarRelativePoint or "TOP", KART_Settings.rlBarX or 0, KART_Settings.rlBarY or -50)
-            -- Pull Button Macro mit aktuellen Settings aktualisieren
-            if KART.PullBtn and KART_Settings.pullTimerDuration and not InCombatLockdown() then
-                KART.PullBtn:SetAttribute("macrotext", "/pull " .. KART_Settings.pullTimerDuration)
-            end
             rlBar:Show()
         end
     else
@@ -154,7 +150,13 @@ for i = 1, 8 do
     b.marker:SetPoint("CENTER")
 end
 
-CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, "/cwm all", L.RL_CLEAR_WM)
+-- Clear world markers via API instead of the "/cwm all" macro, which only works
+-- on English clients because the "all" keyword is localized (e.g. "alle" on
+-- German clients); ClearRaidMarker is locale-independent.
+CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, function(_, _, down)
+    if down then return end
+    for i = 1, 8 do ClearRaidMarker(i) end
+end, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, nil, L.RL_CLEAR_WM)
 CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK)
 
 -- Buff-Checker Toggle Button
@@ -167,9 +169,16 @@ CreateBarButton(rlBar, 249, -5, 22, 22, function(_, _, down)
     end
 end, 135932, nil, nil, nil, L.RL_BUFFCHECK) -- Icon: Arkane Brillanz (Buffs)
 
-local pullTime = (KART_Settings and KART_Settings.pullTimerDuration or 12) -- KART_Settings ist eine SavedVariable
-KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, nil, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, "/pull " .. pullTime, L.RL_PULL_TIMER)
-if KART.PullBtn then
-    KART.PullBtn:SetAttribute("type2", "macro")
-    KART.PullBtn:SetAttribute("macrotext2", "/pull 0")
-end
+-- Start the countdown via C_PartyInfo.DoCountdown instead of a "/pull" macro:
+-- "/pull" only exists when BigWigs/DBM is installed, while DoCountdown drives the
+-- native Blizzard countdown (which those addons display too). Reading the duration
+-- at click time also removes the need to rewrite a macrotext attribute on settings
+-- changes (which was blocked during combat lockdown). Right-click cancels.
+KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button, down)
+    if down then return end
+    if button == "RightButton" then
+        C_PartyInfo.DoCountdown(0)
+    else
+        C_PartyInfo.DoCountdown(KART_Settings and KART_Settings.pullTimerDuration or 10)
+    end
+end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER)

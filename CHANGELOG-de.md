@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Behoben
+- **Pull-Timer und Weltmarker-Löschen funktionieren jetzt für alle:** Die Raidlead-Bar-Buttons nutzten den `/pull`-Befehl (existiert nur mit installiertem BigWigs/DBM) und `/cwm all` (das "all"-Schlüsselwort ist lokalisiert und schlug daher auf nicht-englischen Clients fehl). Beide nutzen jetzt die native WoW-API und funktionieren damit unabhängig von installierten Addons und Client-Sprache.
 
 ## [1.18.0] - 2026-07-18
 ### Neu
