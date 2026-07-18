@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.18.1] - 2026-07-18
 ### Behoben
 - **Minimap-Button nicht mehr schwarz:** Das Minimap- und AddOn-Compartment-Icon zeigten nach der PNG-Umstellung noch auf die alte JPG-Datei (WoW kann keine JPG-Texturen laden). Beide nutzen jetzt das PNG.
 - **Pull-Timer und Weltmarker-Löschen funktionieren jetzt für alle:** Die Raidlead-Bar-Buttons nutzten den `/pull`-Befehl (existiert nur mit installiertem BigWigs/DBM) und `/cwm all` (das "all"-Schlüsselwort ist lokalisiert und schlug daher auf nicht-englischen Clients fehl). Der Pull-Button startet jetzt den nativen WoW-Countdown und der Lösch-Button entfernt jeden Marker einzeln per Nummer — beides funktioniert damit unabhängig von installierten Addons und Client-Sprache.

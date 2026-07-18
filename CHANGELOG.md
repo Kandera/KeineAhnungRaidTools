@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.18.1] - 2026-07-18
 ### Fixed
 - **Minimap button no longer black:** the minimap and AddOn-compartment icons still pointed to the old JPG file after the PNG switch (WoW can't load JPG textures). Both now use the PNG.
 - **Pull timer and Clear World Markers now work for everyone:** the Raidlead Bar buttons used the `/pull` command (only exists with BigWigs/DBM installed) and `/cwm all` (the "all" keyword is localized, so it failed on non-English clients). The pull button now starts the native WoW countdown and the clear button removes each marker by number, so both work regardless of installed addons or client language.
