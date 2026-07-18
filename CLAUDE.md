@@ -16,6 +16,6 @@ This project is maintained in **English**. Unless explicitly noted otherwise bel
 
 When updating `CHANGELOG.md`/`README.md` for a user-facing change, update `CHANGELOG-de.md`/`README-de.md` alongside it — see the more detailed doc-update workflow in project memory (`feedback_changelog_readme`).
 
-## Changelog style: keep entries compact
+## Changelog style: one line per entry
 
-Each changelog entry is **one bold lead-in plus 1–2 sentences** describing the user-visible effect. Include a technical cause only when it's one short parenthetical that helps users understand the fix (e.g. "WoW can't load JPG textures"). Leave out: implementation details, design rationale ("both preferences are common…"), exhaustive examples/enumerations, and background history. The commit message and code carry those — the changelog is for players skimming what changed.
+Each changelog entry is **one line, at most two lines for big changes**. Bold lead + short effect clause — often the bold lead alone is the whole entry (e.g. "**Settings tab moved to the bottom of the sidebar.**"). Never include: technical causes, "was X, now Y" explanations, design rationale, implementation details, examples. The commit message and code carry those — the changelog is for players skimming what changed.
