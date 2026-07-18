@@ -36,12 +36,12 @@ end
 -- All geometry derives from the measured layout of kart-bg-dark.png:
 -- image 1500x1154, opaque art box x 105-1396 / y 104-1050 (1292x947),
 -- sidebar divider at art x 323, close-X center at art (1248, 39).
--- Art width is fixed at 640 (scale factor 640/1292); the window is not
+-- Art width is fixed at 800 (scale factor 800/1292); the window is not
 -- freely resizable because the baked artwork would distort and the
 -- invisible hit areas (close X, sidebar) would drift off their graphics.
 -- Users scale the whole window via the Settings "Window Scale" slider.
 local mainFrame = CreateFrame("Frame", "KART_MainFrame", UIParent)
-mainFrame:SetSize(743, 572) -- full PNG footprint incl. transparent shadow margin
+mainFrame:SetSize(929, 715) -- full PNG footprint incl. transparent shadow margin
 mainFrame:SetPoint("CENTER", UIParent, "CENTER")
 mainFrame:SetMovable(true)
 
@@ -62,8 +62,8 @@ KART.MainFrame = mainFrame
 -- falling through the window and handles whole-surface dragging (the
 -- old header bar is baked into the PNG now).
 local clickArea = CreateFrame("Frame", nil, mainFrame)
-clickArea:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 52, -52)
-clickArea:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -51, 51)
+clickArea:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 65, -64)
+clickArea:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -64, 64)
 clickArea:EnableMouse(true)
 clickArea:RegisterForDrag("LeftButton")
 clickArea:SetScript("OnDragStart", function() mainFrame:StartMoving() end)
@@ -73,13 +73,13 @@ mainFrame.clickArea = clickArea
 -- Version string, bottom-left of the baked sidebar. Core.lua overwrites
 -- the text once KART.Version is known (ADDON_LOADED).
 mainFrame.versionText = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 14, 10)
+mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 12)
 mainFrame.versionText:SetText("v" .. (KART.Version or ""))
 
 -- 3. Sidebar menu and tabs
 -- Tabs start below the baked logo/title/underline zone of the artwork.
 KART.BtnPromote = KART.CreateTabButton(clickArea, L.TAB_PROMOTE)
-KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 10, -60)
+KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 12, -75)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
 KART.BtnRaidlead = KART.CreateTabButton(clickArea, L.TAB_RAIDLEAD)
@@ -105,17 +105,17 @@ KART.BtnSettings = KART.CreateTabButton(clickArea, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
--- 4. Content area (ScrollFrame), right of the baked sidebar divider (160px)
+-- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px)
 local scrollFrame = CreateFrame("ScrollFrame", "KART_ContentScrollFrame", clickArea, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 166, -12)
-scrollFrame:SetPoint("BOTTOMRIGHT", clickArea, "BOTTOMRIGHT", -25, 20)
+scrollFrame:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 208, -14)
+scrollFrame:SetPoint("BOTTOMRIGHT", clickArea, "BOTTOMRIGHT", -30, 24)
 
 local scrollChild = CreateFrame("Frame", nil, scrollFrame)
 -- Height has headroom beyond what the tallest tab (Loot Council's raid-wide settings box)
 -- needs at the default font, since that box's height depends on wrapped label text and can
 -- grow with the user's chosen font/size (see LC.RelayoutRaidBox) — better a bit of empty
 -- scroll space than content silently clipped below the scrollable area.
-scrollChild:SetSize(430, 750)
+scrollChild:SetSize(540, 750)
 scrollFrame:SetScrollChild(scrollChild)
 
 -- Panels erstellen
@@ -365,8 +365,8 @@ end)
 -- 8. Close button: invisible hit area over the X baked into the artwork.
 -- HIGHLIGHT-layer texture shows automatically on hover, no scripts needed.
 local closeBtn = CreateFrame("Button", nil, clickArea)
-closeBtn:SetSize(30, 30)
-closeBtn:SetPoint("CENTER", clickArea, "TOPRIGHT", -21, -20)
+closeBtn:SetSize(36, 36)
+closeBtn:SetPoint("CENTER", clickArea, "TOPRIGHT", -27, -24)
 local closeHover = closeBtn:CreateTexture(nil, "HIGHLIGHT")
 closeHover:SetAllPoints()
 closeHover:SetColorTexture(1, 1, 1, 0.08)

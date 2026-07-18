@@ -309,7 +309,7 @@ end
 -- factory's opaque backdrop and border would cover the artwork.
 function KART.CreateTabButton(parent, text)
     local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    b:SetSize(140, 25)
+    b:SetSize(176, 28)
     b:SetBackdrop({ bgFile = "Interface\\ChatFrame\\ChatFrameBackground" })
     b:SetBackdropColor(0, 0, 0, 0)
 
