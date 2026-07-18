@@ -487,10 +487,7 @@ function LC.CreateVoteList()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-    f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
-    f:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+    KART.ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -500,9 +497,10 @@ function LC.CreateVoteList()
     end)
     table.insert(UISpecialFrames, f:GetName())
 
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("TOPLEFT", 10, -10)
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.title:SetPoint("TOPLEFT", 16, -10)
     f.title:SetText(KART.L.LC_VOTE_TITLE)
+    KART.CreateHeaderLine(f, -28)
 
     -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
     -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
@@ -514,7 +512,7 @@ function LC.CreateVoteList()
     closeBtn.text:SetPoint("CENTER", 0, 1)
     closeBtn.text:SetText("×")
     table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
+    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
     closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
@@ -1554,10 +1552,7 @@ function LC.CreateCouncilPanel()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-    f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
-    f:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+    KART.ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop",  function(self)
         self:StopMovingOrSizing()
@@ -1576,16 +1571,16 @@ function LC.CreateCouncilPanel()
     f.tabStrip:SetWidth(40)
     f.tabs = {}
 
-    -- Header
-    local hdr = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    -- Header zone: title on the artwork with an accent line below, matching the main window
+    -- (no flat gray bar anymore; hdr survives as an invisible layout strip for title/buttons).
+    local hdr = CreateFrame("Frame", nil, f)
     hdr:SetHeight(26)
     hdr:SetPoint("TOPLEFT"); hdr:SetPoint("TOPRIGHT")
-    hdr:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-    hdr:SetBackdropColor(0.14, 0.14, 0.14, 1)
     hdr:EnableMouse(true)
+    KART.CreateHeaderLine(f, -28)
 
-    f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("LEFT", 10, 0)
+    f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.title:SetPoint("LEFT", 16, 0)
 
     -- Anchored to the minimize button once it exists (below) rather than a hardcoded offset from
     -- hdr's right edge — a hardcoded number silently overlapped the "-"/"×" buttons the moment a
@@ -1600,7 +1595,7 @@ function LC.CreateCouncilPanel()
     closeBtn.text:SetPoint("CENTER", 0, 1)
     closeBtn.text:SetText("×")
     table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
+    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
     closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     -- Only hides the window — the active roll's tab (and all others) stay tracked and reappear
     -- next time the panel is shown; this is a deliberate "get it out of my way for now", not a
@@ -1619,7 +1614,7 @@ function LC.CreateCouncilPanel()
     minimizeBtn.text:SetPoint("CENTER", 0, 1)
     minimizeBtn.text:SetText("-")
     table.insert(KART.CloseButtonTexts, minimizeBtn.text)
-    minimizeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0.85, 0.2) end)
+    minimizeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
     minimizeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     minimizeBtn:SetScript("OnClick", function() LC.SetCouncilPanelMinimized(not f.isMinimized) end)
     f.minimizeBtn = minimizeBtn

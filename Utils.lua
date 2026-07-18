@@ -10,6 +10,41 @@ KART.TabButtons = {}
 KART.ToggleCheckboxes = {}
 KART.ButtonTexts = {}
 KART.CloseButtonTexts = {} -- "×" FontStrings on close buttons that aren't already covered by a per-frame UpdateStyles font update
+KART.AccentLines = {} -- 1px header lines on popup windows, recolored to the accent color in KART.UpdateStyles
+
+-- Shared setup for the popup windows' artwork background (kart-popup-bg-dark.png, 1024x768;
+-- opaque art box 1002x746, transparent drop-shadow margin L12/R10/T12/B10). The frame is the
+-- art area; the texture extends past the frame edges by the margin ratios so the baked shadow
+-- stays visible, and the offsets re-scale whenever the frame's size changes (several of these
+-- windows resize dynamically). Sublevel -8 keeps the ground under every other BACKGROUND
+-- texture the window draws (row stripes, item borders).
+function KART.ApplyPopupArtwork(frame)
+    local bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-popup-bg-dark.png")
+    local function updateInsets()
+        local w, h = frame:GetWidth(), frame:GetHeight()
+        bg:ClearAllPoints()
+        bg:SetPoint("TOPLEFT", frame, "TOPLEFT", -w * 12 / 1002, h * 12 / 746)
+        bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", w * 10 / 1002, -h * 10 / 746)
+    end
+    updateInsets()
+    frame:HookScript("OnSizeChanged", updateInsets)
+    frame.bg = bg
+    return bg
+end
+
+-- Accent-colored 1px header line, the code-drawn counterpart of the main window's baked
+-- divider (popup windows resize, so it can't live in their artwork). Color applied by
+-- KART.UpdateStyles via KART.AccentLines.
+function KART.CreateHeaderLine(frame, y)
+    local line = frame:CreateTexture(nil, "ARTWORK")
+    line:SetHeight(1)
+    line:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, y)
+    line:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -12, y)
+    table.insert(KART.AccentLines, line)
+    frame.headerLine = line
+    return line
+end
 
 -- Standardeinstellungen
 KART.Defaults = {

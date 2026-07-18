@@ -234,13 +234,7 @@ function LH.CreateWindow()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-    f:SetBackdropColor(0.07, 0.07, 0.07, 0.97)
-    f:SetBackdropBorderColor(0, 0, 0, 1)
-    -- Outer window rounding only — the header bar (created below) stays a flat rectangle
-    -- overlapping the window's top edge, same convention as MainFrame's own header in the
-    -- Phase 1 modernization, so it isn't independently rounded here.
-    KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+    KART.ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -251,18 +245,19 @@ function LH.CreateWindow()
     table.insert(UISpecialFrames, f:GetName())
     f:Hide()
 
-    -- Header
-    local hdr = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    -- Header zone: title on the artwork with an accent line below, matching the main window
+    -- (the old flat gray header bar is gone; hdr survives as an invisible layout strip for
+    -- the title and close button).
+    local hdr = CreateFrame("Frame", nil, f)
     hdr:SetHeight(26)
     hdr:SetPoint("TOPLEFT"); hdr:SetPoint("TOPRIGHT")
-    hdr:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
-    hdr:SetBackdropColor(0.14, 0.14, 0.14, 1)
     hdr:EnableMouse(true)
 
-    f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("LEFT", 10, 0)
+    f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.title:SetPoint("LEFT", 16, 0)
     f.title:SetText(KART.L.LH_TITLE)
     table.insert(KART.DynamicLabels, f.title)
+    KART.CreateHeaderLine(f, -28)
 
     local closeBtn = CreateFrame("Button", nil, hdr)
     closeBtn:SetSize(22, 22)
@@ -272,7 +267,7 @@ function LH.CreateWindow()
     closeBtn.text:SetPoint("CENTER", 0, 1)
     closeBtn.text:SetText("×")
     table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(1, 0, 0) end)
+    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
     closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 

@@ -393,7 +393,6 @@ function KART.UpdateStyles()
     KART.ApplyFrameStrata()
     local fontPath = KART.GetFontPath(KART_Settings.fontName)
     local r, g, b = KART_Settings.accentR/100, KART_Settings.accentG/100, KART_Settings.accentB/100
-    local br, bg, bb = KART_Settings.bgR/100, KART_Settings.bgG/100, KART_Settings.bgB/100
     local titleSize = KART_Settings.titleFontSize or 11
     local menuSize = KART_Settings.menuFontSize or 11
     local contentSize = KART_Settings.contentFontSize or 12
@@ -437,6 +436,8 @@ function KART.UpdateStyles()
     -- Slider-Thumbs und Checkboxen färben
     for _, thumb in ipairs(KART.SliderThumbs) do thumb:SetColorTexture(r, g, b, 1) end
     for _, check in ipairs(KART.CheckVisuals) do check:SetColorTexture(r, g, b, 1) end
+    -- Header lines on popup windows (see KART.CreateHeaderLine)
+    for _, line in ipairs(KART.AccentLines or {}) do line:SetColorTexture(r, g, b, 0.6) end
 
     -- Re-apply the active tab's background tint and each checked toggle's track color, since
     -- those aren't simple SetColorTexture calls (they depend on Darken() with different amounts
@@ -468,10 +469,11 @@ function KART.UpdateStyles()
 
     if KART.LH and KART.LH.historyWindow then
         local w = KART.LH.historyWindow
-        w:SetBackdropColor(br, bg, bb, KART_Settings.bgAlpha / 100)
+        -- Artwork background: only the ground texture fades with bgAlpha, content stays solid.
+        if w.bg then w.bg:SetAlpha(math.max(20, KART_Settings.bgAlpha or 85) / 100) end
         if w.title then
             w.title:SetFont(fontPath, titleSize, "OUTLINE")
-            w.title:SetTextColor(r, g, b)
+            w.title:SetTextColor(1, 1, 1)
         end
     end
 
@@ -480,9 +482,6 @@ function KART.UpdateStyles()
         -- buttons and text stay fully readable at low opacities.
         if KART.BuffCheckFrame.bg then
             KART.BuffCheckFrame.bg:SetAlpha((KART_Settings.buffCheckAlpha or 95) / 100)
-        end
-        if KART.BuffCheckFrame.headerLine then
-            KART.BuffCheckFrame.headerLine:SetColorTexture(r, g, b, 0.6)
         end
         if KART.BuffCheckFrame.title then
             KART.BuffCheckFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
