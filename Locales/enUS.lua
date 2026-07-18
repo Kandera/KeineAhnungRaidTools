@@ -9,7 +9,7 @@ KART.L_enUS = {
 
     -- Labels
     LABEL_INVITE_KEYWORDS = "Guild keywords for auto-invite (separate with semicolon):",
-    LABEL_PROMOTE_NAMES = "Player names for auto-promote (semicolon-separated; character name or Northern Sky Raid Tools nickname):",
+    LABEL_PROMOTE_NAMES = "Player names for auto-promote (semicolon-separated; Nickname Support):",
     LABEL_RAIDLEAD_TOOLS = "Raidlead Tools:",
     LABEL_BUFFCHECK_SETTINGS = "Buff-Checker Settings:",
     LABEL_FONT_SIZE_MENU = "Font Size Menu",

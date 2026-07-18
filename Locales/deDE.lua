@@ -9,7 +9,7 @@ KART.L_deDE = {
 
     -- Labels
     LABEL_INVITE_KEYWORDS = "Gilden-Begriffe für Auto-Invite (mit Semikolon trennen):",
-    LABEL_PROMOTE_NAMES = "Spielernamen für Auto-Promote (Semikolon-getrennt; Charaktername oder Northern Sky Raid Tools Nickname):",
+    LABEL_PROMOTE_NAMES = "Spielernamen für Auto-Promote (Semikolon-getrennt; Nickname Support):",
     LABEL_RAIDLEAD_TOOLS = "Raidlead Tools:",
     LABEL_BUFFCHECK_SETTINGS = "Buff-Checker Einstellungen:",
     LABEL_FONT_SIZE_MENU = "Schriftgröße Menü",
