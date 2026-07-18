@@ -144,7 +144,7 @@ KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
 if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
 
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)
-local rlTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local rlTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 rlTitle:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -20)
 rlTitle:SetText(L.LABEL_RAIDLEAD_TOOLS)
 table.insert(KART.DynamicLabels, rlTitle)
@@ -173,7 +173,7 @@ end, L.DESC_RL_AUTOHIDE)
 KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
 
 -- 6. BuffChecker Panel Inhalt
-local bcTitle = KART.BuffCheckPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local bcTitle = KART.BuffCheckPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 bcTitle:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -20)
 bcTitle:SetText(L.LABEL_BUFFCHECK_SETTINGS)
 table.insert(KART.DynamicLabels, bcTitle)
@@ -271,7 +271,7 @@ KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET
 KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -280, AutoLogChanged)
 
 -- 7. Settings Panel Inhalt
-local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -20)
 settingsTitle:SetText(L.LABEL_GENERAL_SETTINGS)
 table.insert(KART.DynamicLabels, settingsTitle)

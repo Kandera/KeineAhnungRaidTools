@@ -391,7 +391,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     -- going through the generic small-corner path.
     KART.ApplyRoundedMask(cb, 8)
 
-    cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cb.text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
     cb.text:SetText(labelText)
     table.insert(KART.DynamicLabels, cb.text)
@@ -479,7 +479,7 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     s:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
     KART.ApplyRoundedMask(s, 2) -- track is only 4px tall; skips rounding via the min-size guard, kept for future-proofing if track height changes
 
-    s.title = s:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    s.title = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     s.title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 4)
     s.title:SetText(labelText)
     table.insert(KART.DynamicLabels, s.title)
@@ -587,7 +587,7 @@ function KART.CreateCard(parent, title)
     card:HookScript("OnHide", function() shadow:Hide() end)
 
     if title then
-        card.titleText = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        card.titleText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         card.titleText:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
         card.titleText:SetText(title)
         table.insert(KART.DynamicLabels, card.titleText)

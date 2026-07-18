@@ -3226,7 +3226,7 @@ end
 function LC.BuildSettingsPanel(parent)
     local L = KART.L
 
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     title:SetPoint("TOPLEFT", 20, -20)
     title:SetText(L.LC_SETTINGS_TITLE)
     table.insert(KART.DynamicLabels, title)
@@ -3282,7 +3282,7 @@ function LC.BuildSettingsPanel(parent)
     -- Title and role-status stacked on their own lines (not side-by-side) — the box is only
     -- 295px wide, too narrow to fit both texts on one line without overlapping. Positions for
     -- all of this are set by layoutRaidBox() further down, not here.
-    local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
     boxTitle:SetTextColor(0.9, 0.75, 0.3)
     table.insert(KART.DynamicLabels, boxTitle)
@@ -3317,7 +3317,7 @@ function LC.BuildSettingsPanel(parent)
     -- this panel is built, which can change how many lines a label wraps to.
     local CONTENT_WIDTH = 265
 
-    local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblButtons:SetWidth(CONTENT_WIDTH)
     lblButtons:SetJustifyH("LEFT")
     lblButtons:SetText(L.LC_SET_BUTTONS)
@@ -3338,7 +3338,7 @@ function LC.BuildSettingsPanel(parent)
     end)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetWidth(CONTENT_WIDTH)
     hint:SetJustifyH("LEFT")
     hint:SetText(L.LC_SET_BUTTONS_HINT)
@@ -3346,7 +3346,7 @@ function LC.BuildSettingsPanel(parent)
     table.insert(KART.DynamicLabels, hint)
 
     -- Council member names
-    local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblCouncil:SetWidth(CONTENT_WIDTH)
     lblCouncil:SetJustifyH("LEFT")
     lblCouncil:SetText(L.LC_SET_COUNCIL)
@@ -3367,7 +3367,7 @@ function LC.BuildSettingsPanel(parent)
     end)
     ebC:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hintCouncil:SetWidth(CONTENT_WIDTH)
     hintCouncil:SetJustifyH("LEFT")
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
@@ -3378,7 +3378,7 @@ function LC.BuildSettingsPanel(parent)
     -- never Pass — see ForceWinRoll in LC.OnStartLootRoll) so they can trade each item to whoever
     -- the council actually decided on. Deliberately a raid-leader-synced field, not a personal
     -- checkbox like CbAutoPass above — see LC.GetLootmaster.
-    local lblLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lblLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblLootmaster:SetWidth(CONTENT_WIDTH)
     lblLootmaster:SetJustifyH("LEFT")
     lblLootmaster:SetText(L.LC_SET_LOOTMASTER)
@@ -3399,7 +3399,7 @@ function LC.BuildSettingsPanel(parent)
     end)
     ebL:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    local hintLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hintLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hintLootmaster:SetWidth(CONTENT_WIDTH)
     hintLootmaster:SetJustifyH("LEFT")
     hintLootmaster:SetText(L.LC_SET_LOOTMASTER_HINT)
@@ -3407,7 +3407,7 @@ function LC.BuildSettingsPanel(parent)
     table.insert(KART.DynamicLabels, hintLootmaster)
 
     -- Minimum item quality that triggers the Loot Council flow (full width)
-    local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblQuality:SetWidth(CONTENT_WIDTH)
     lblQuality:SetJustifyH("LEFT")
     lblQuality:SetText(L.LC_SET_MIN_QUALITY)

@@ -278,7 +278,7 @@ end
 function WU.BuildPanel(parent)
     local L = KART.L
 
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     title:SetPoint("TOPLEFT", 20, -20)
     title:SetText(L.WU_TITLE or "WoWUtils Import")
     table.insert(KART.DynamicLabels, title)
@@ -288,7 +288,7 @@ function WU.BuildPanel(parent)
         parent, "KART_WUModuleEnabled",
         L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -45, nil, L.WU_DESC_MODULE_ENABLED)
 
-    local pasteLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local pasteLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     pasteLabel:SetPoint("TOPLEFT", 20, -85)
     pasteLabel:SetText(L.WU_LABEL_PASTE or "WoWUtils Export hier einfügen:")
     table.insert(KART.DynamicLabels, pasteLabel)
@@ -351,7 +351,7 @@ function WU.BuildPanel(parent)
         StaticPopup_Show("KART_WU_RESET_CONFIRM")
     end)
 
-    WU.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    WU.statusLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     WU.statusLabel:SetPoint("TOPLEFT", 20, -235)
     WU.statusLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
@@ -363,17 +363,17 @@ function WU.BuildPanel(parent)
     sep:SetPoint("TOPLEFT",  5, -248)
     sep:SetPoint("TOPRIGHT", -5, -248)
 
-    local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hBoss:SetPoint("TOPLEFT", 8, -258)
     hBoss:SetText("|cffaaaaaa" .. (L.WU_COL_BOSS or "Boss") .. "|r")
     table.insert(KART.DynamicLabels, hBoss)
 
-    local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hInvite:SetPoint("TOPRIGHT", -110, -258)
     hInvite:SetText("|cffaaaaaa" .. (L.WU_BTN_INVITE or "Einl.") .. "|r")
     table.insert(KART.DynamicLabels, hInvite)
 
-    local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hRemove:SetPoint("TOPRIGHT", -38, -258)
     hRemove:SetText("|cffaaaaaa" .. (L.WU_BTN_REMOVE or "Entf.") .. "|r")
     table.insert(KART.DynamicLabels, hRemove)
@@ -384,7 +384,7 @@ function WU.BuildPanel(parent)
     WU.bossListFrame:SetHeight(24)
     WU.bossListFrame.rows = {}
 
-    WU.bossListFrame.emptyLabel = WU.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    WU.bossListFrame.emptyLabel = WU.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 6, -6)
     WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
     WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
