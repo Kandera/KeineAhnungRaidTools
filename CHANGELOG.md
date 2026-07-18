@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Main window redesigned with a full artwork background** — sidebar, title and close button are part of the new look.
 - **Free window resizing replaced by a "Window Scale" slider in Settings.**
+- **Main window is larger by default and every tab groups its settings into cards.**
+- **Settings labels now use the same white text style as the menu.**
 
 ### Removed
 - **Background color and title font size settings.**

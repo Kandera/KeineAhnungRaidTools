@@ -10,6 +10,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Geändert
 - **Hauptfenster mit neuem Artwork-Hintergrund gestaltet** — Sidebar, Titel und Schließen-Button sind Teil des neuen Looks.
 - **Freies Fenster-Resizing ersetzt durch einen „Fenster-Skalierung"-Regler in den Einstellungen.**
+- **Hauptfenster ist standardmäßig größer und jeder Tab gruppiert seine Einstellungen in Cards.**
+- **Einstellungs-Beschriftungen nutzen jetzt denselben weißen Textstil wie das Menü.**
 
 ### Entfernt
 - **Einstellungen für Hintergrundfarbe und Titel-Schriftgröße.**
