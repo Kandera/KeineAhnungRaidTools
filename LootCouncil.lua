@@ -3491,6 +3491,7 @@ function LC.BuildSettingsPanel(parent)
     layoutRaidBox()
     KART.ApplyRoundedMask(raidBox, KART.Theme.CORNER_RADIUS_LG)
     LC.RelayoutRaidBox = layoutRaidBox
+    KART.LC.RaidBox = raidBox -- measured by KART.UpdateScrollRange (dynamic panel height)
     -- ================= /Raid-wide settings box =================
 
     -- Two test buttons side by side: Looter view / Lootmaster view.

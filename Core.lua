@@ -506,6 +506,10 @@ function KART.UpdateStyles()
             end
         end
     end
+
+    -- Font changes can re-flow the Loot Council raid box (RelayoutRaidBox above), which
+    -- changes the active tab's content height — keep the scroll range in sync.
+    if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
 
 -- UI für den erweiterten Ready-Check Grund

@@ -30,6 +30,11 @@ function KART.ShowTab(tabIndex)
     for i, btn in ipairs(buttons) do
         if btn then btn:SetActive(i == tabIndex) end
     end
+
+    -- Scroll range depends on the active tab's content height (KART.UpdateScrollRange is
+    -- defined further down in this file, after the scroll frame exists).
+    KART.CurrentTab = tabIndex
+    if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
 
 -- 2. Main window (PNG artwork, EllesmereUI-style)
@@ -152,6 +157,39 @@ if contentScrollBar then
     contentScrollBar:ClearAllPoints()
     contentScrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 6, -38)
     contentScrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 6, 2)
+end
+
+-- Per-tab scroll range. With the old fixed 750px scroll child, every tab was scrollable even
+-- when its content fully fit into view (e.g. Raidlead). Static content heights for the fixed
+-- tabs; Loot Council and WoWUtils are measured live because the amber raid box (wrapped text)
+-- and the boss list (row count) vary. The child height is floored to the visible height so the
+-- scroll range collapses to zero when everything fits. Heights include headroom for large
+-- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
+local PANEL_CONTENT_HEIGHTS = {
+    [1] = 520, -- Automation: promote/invite card + AutoLog title + card
+    [2] = 245, -- Raidlead: title + one 180 card
+    [3] = 225, -- BuffCheck: title + one 160 card
+    [4] = 450, -- Settings: two half cards + color card
+}
+function KART.UpdateScrollRange()
+    local tab = KART.CurrentTab
+    if not tab then return end
+    local h = PANEL_CONTENT_HEIGHTS[tab]
+    if tab == 5 then
+        -- 330 = title/card block above the raid box + buttons below it + bottom padding
+        local rb = KART.LC and KART.LC.RaidBox
+        h = 330 + ((rb and rb:GetHeight()) or 420)
+    elseif tab == 6 then
+        -- 331 = import card block + separator/headers above the boss list + bottom padding
+        local bl = KART.WU and KART.WU.bossListFrame
+        h = 331 + ((bl and bl:GetHeight()) or 24)
+    end
+    scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
+    -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
+    local maxScroll = math.max(0, scrollChild:GetHeight() - scrollFrame:GetHeight())
+    if scrollFrame:GetVerticalScroll() > maxScroll then
+        scrollFrame:SetVerticalScroll(maxScroll)
+    end
 end
 
 -- 5. Raidlead Panel Inhalt (Hier binden wir die RaidleadBar ein!)

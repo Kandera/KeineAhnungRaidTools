@@ -269,6 +269,8 @@ function WU.RefreshBossList()
     end
 
     panel:SetHeight(math.max(totalH, 24))
+    -- Boss list height feeds the WoWUtils tab's scroll range.
+    if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
 
 -- =====================================================================

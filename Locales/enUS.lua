@@ -10,8 +10,8 @@ KART.L_enUS = {
     -- Labels
     LABEL_INVITE_KEYWORDS = "Guild keywords for auto-invite (separate with semicolon):",
     LABEL_PROMOTE_NAMES = "Player names for auto-promote (semicolon-separated; Nickname Support):",
-    LABEL_RAIDLEAD_TOOLS = "Raidlead Tools:",
-    LABEL_BUFFCHECK_SETTINGS = "Buff-Checker Settings:",
+    LABEL_RAIDLEAD_TOOLS = "Raidlead Tools",
+    LABEL_BUFFCHECK_SETTINGS = "Buff-Checker Settings",
     LABEL_FONT_SIZE_MENU = "Font Size Menu",
     LABEL_FONT_SIZE_CONTENT = "Font Size Content",
     LABEL_GENERAL_SETTINGS = "General Settings",
