@@ -3231,40 +3231,47 @@ function LC.BuildSettingsPanel(parent)
     title:SetText(L.LC_SETTINGS_TITLE)
     table.insert(KART.DynamicLabels, title)
 
+    -- Personal preferences card (module toggle, autopass, Droptimizer slot at -75,
+    -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
+    local prefsCard = KART.CreateCard(parent)
+    prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -50)
+    prefsCard:SetSize(500, 165)
+    KART.LC.SettingsCard = prefsCard
+
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
     -- another loot addon like RCLootCouncil). Nothing below still runs when this is off.
     KART.LC.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        parent, "KART_LCModuleEnabled",
-        L.LC_SET_MODULE_ENABLED, "lcModuleEnabled", -50, nil, L.LC_DESC_MODULE_ENABLED)
+        prefsCard, "KART_LCModuleEnabled",
+        L.LC_SET_MODULE_ENABLED, "lcModuleEnabled", -15, nil, L.LC_DESC_MODULE_ENABLED)
 
     -- Personal preference — never overridden by the raid leader's settings.
     KART.LC.CbAutoPass = KART.CreateSettingsCheckbox(
-        parent, "KART_LCAutoPass",
-        L.LC_SET_AUTOPASS, "lcAutoPass", -80, nil, L.LC_DESC_AUTOPASS)
+        prefsCard, "KART_LCAutoPass",
+        L.LC_SET_AUTOPASS, "lcAutoPass", -45, nil, L.LC_DESC_AUTOPASS)
 
     -- Personal preference, same reasoning as CbAutoPass above — the vote window's layout style
-    -- is purely a display choice, so it's never synced from the raid leader. Slot -140: the next
-    -- free step below the reserved Droptimizer slot at -110 (see Droptimizer.lua:128) and above
-    -- raidBox, which was shifted from -150 to -180 to make room for this.
+    -- is purely a display choice, so it's never synced from the raid leader. Slot -105: the next
+    -- free step below the reserved Droptimizer slot at -75 (see Droptimizer.lua:128), inside
+    -- this card.
     KART.LC.CbCompactVoteLayout = KART.CreateSettingsCheckbox(
-        parent, "KART_LCCompactVoteLayout",
-        L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -140,
+        prefsCard, "KART_LCCompactVoteLayout",
+        L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -105,
         LC.RefreshVoteListRowsIfShown, L.LC_DESC_COMPACT_VOTE_LAYOUT)
 
     -- Personal preference, same reasoning as CbCompactVoteLayout above — purely how names render
     -- on YOUR OWN council panel, never synced. Needs Northern Sky Raid Tools installed with a
     -- nickname set per character to have any visible effect (see KART.GetNickname); falls back to
-    -- the character short name automatically otherwise. Slot -170: next free step below
-    -- CbCompactVoteLayout; raidBox shifted from -180 to -210 to make room for this.
+    -- the character short name automatically otherwise. Slot -135: next free step below
+    -- CbCompactVoteLayout, inside this card.
     KART.LC.CbShowNickNames = KART.CreateSettingsCheckbox(
-        parent, "KART_LCShowNickNames",
-        L.LC_SET_SHOW_NICKNAMES, "lcShowNickNames", -170,
+        prefsCard, "KART_LCShowNickNames",
+        L.LC_SET_SHOW_NICKNAMES, "lcShowNickNames", -135,
         function()
             if LC.councilPanel and LC.councilPanel:IsShown() then LC.RefreshCouncilRows() end
         end, L.LC_DESC_SHOW_NICKNAMES)
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
-    -- Droptimizer.lua — see the reserved -110 slot there. Kept in its own file since it's a
+    -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a
     -- different module, but it's a personal preference like CbAutoPass above, so it lives next
     -- to it rather than getting its own settings tab.
 
@@ -3273,22 +3280,22 @@ function LC.BuildSettingsPanel(parent)
     -- the actual raid leader's values are used automatically. Visually set apart on purpose so
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    raidBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, -210)
-    raidBox:SetSize(295, 362)
+    raidBox:SetPoint("TOPLEFT", prefsCard, "BOTTOMLEFT", 0, -20)
+    raidBox:SetSize(500, 362)
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
     raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
 
-    -- Title and role-status stacked on their own lines (not side-by-side) — the box is only
-    -- 295px wide, too narrow to fit both texts on one line without overlapping. Positions for
-    -- all of this are set by layoutRaidBox() further down, not here.
+    -- Title and role-status stacked on their own lines (not side-by-side) — kept simple even
+    -- now that the box is 500px wide, since role-status text length varies a lot by locale.
+    -- Positions for all of this are set by layoutRaidBox() further down, not here.
     local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
     boxTitle:SetTextColor(0.9, 0.75, 0.3)
     table.insert(KART.DynamicLabels, boxTitle)
 
     KART.LC.RoleStatusLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    KART.LC.RoleStatusLabel:SetWidth(260)
+    KART.LC.RoleStatusLabel:SetWidth(460)
     KART.LC.RoleStatusLabel:SetJustifyH("LEFT")
     table.insert(KART.DynamicLabels, KART.LC.RoleStatusLabel)
     LC.UpdateRoleStatusLabel() -- sets the text before layoutRaidBox() first measures it
@@ -3315,7 +3322,7 @@ function LC.BuildSettingsPanel(parent)
     -- hardcoded guess. Creation/static setup happens once here; layoutRaidBox() is re-run
     -- from KART.UpdateStyles() too, because that function swaps in the user's font *after*
     -- this panel is built, which can change how many lines a label wraps to.
-    local CONTENT_WIDTH = 265
+    local CONTENT_WIDTH = 460
 
     local lblButtons = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblButtons:SetWidth(CONTENT_WIDTH)
@@ -3500,6 +3507,7 @@ function LC.BuildSettingsPanel(parent)
     end
 
     layoutRaidBox()
+    KART.ApplyRoundedMask(raidBox, KART.Theme.CORNER_RADIUS_LG)
     LC.RelayoutRaidBox = layoutRaidBox
     -- ================= /Raid-wide settings box =================
 
@@ -3508,18 +3516,18 @@ function LC.BuildSettingsPanel(parent)
     -- right below the box regardless of how tall it ends up being — the box's height depends on
     -- wrapped label text, which can vary by locale and by the user's chosen font/size.
     KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
-    KART.LC.BtnTestLooter:SetSize(122, 28)
-    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", raidBox, "BOTTOMLEFT", 10, -16)
+    KART.LC.BtnTestLooter:SetSize(242, 28)
+    KART.LC.BtnTestLooter:SetPoint("TOPLEFT", raidBox, "BOTTOMLEFT", 0, -16)
     KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
 
     KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
-    KART.LC.BtnTestMaster:SetSize(122, 28)
-    KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 8, 0)
+    KART.LC.BtnTestMaster:SetSize(242, 28)
+    KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 16, 0)
     KART.LC.BtnTestMaster:SetScript("OnClick", function() LC.StartTest("master") end)
 
     -- Loot history (full width) — anchored below the test buttons for the same reason.
     KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
-    KART.LC.BtnHistory:SetSize(255, 28)
+    KART.LC.BtnHistory:SetSize(500, 28)
     KART.LC.BtnHistory:SetPoint("TOPLEFT", KART.LC.BtnTestLooter, "BOTTOMLEFT", 0, -8)
     KART.LC.BtnHistory:SetScript("OnClick", function()
         if KART.LH then KART.LH.Toggle() end

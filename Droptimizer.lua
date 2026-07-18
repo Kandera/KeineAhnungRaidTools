@@ -125,9 +125,9 @@ function DT.RefreshStatusLabel()
     DT.statusLabel:SetTextColor(0.6, 0.9, 0.6)
 end
 
--- Fills the -110 slot reserved for this in LC.BuildSettingsPanel (LootCouncil.lua), right
--- below CbAutoPass — a personal preference like that one, not raid-wide, so it doesn't belong
--- in the raid-wide box.
+-- Fills the -75 slot reserved for this in LC.BuildSettingsPanel (LootCouncil.lua), inside the
+-- personal-preferences card, right below CbAutoPass — a personal preference like that one, not
+-- raid-wide, so it doesn't belong in the raid-wide box.
 function DT.BuildLootCouncilToggle(parent)
     local L = KART.L
 
@@ -136,7 +136,7 @@ function DT.BuildLootCouncilToggle(parent)
     -- which only hands data to us via KART_WoWUtilsCache.
     DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
         parent, "KART_DTModuleEnabled",
-        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -110, function()
+        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -75, function()
             if KART.LC and KART.LC.RefreshCouncilRows then KART.LC.RefreshCouncilRows() end
         end, L.DT_DESC_MODULE_ENABLED)
 end
@@ -166,7 +166,7 @@ end
 -- Droptimizer.lua loads after MainFrame.lua and LootCouncil.lua, so both panels (and
 -- KART.BtnReset, built inline in MainFrame.lua) already exist here.
 if KART.LootCouncilPanel then
-    DT.BuildLootCouncilToggle(KART.LootCouncilPanel)
+    DT.BuildLootCouncilToggle(KART.LC.SettingsCard or KART.LootCouncilPanel)
 end
 if KART.SettingsPanel then
     -- Parent to the color/reset card (not the bare panel) so the sync status renders above
