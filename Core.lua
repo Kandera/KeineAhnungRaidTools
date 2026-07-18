@@ -15,6 +15,7 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("CHALLENGE_MODE_START")
 frame:RegisterEvent("START_LOOT_ROLL")
 frame:RegisterEvent("TRADE_SHOW")
 
@@ -108,6 +109,15 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
         if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
         if KART.CbInviteViaGuildChat then settingsMap[KART.CbInviteViaGuildChat] = "inviteViaGuildChat" end
+        if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
+        if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
+        if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
+        if KART.CbAlRaidHeroic then settingsMap[KART.CbAlRaidHeroic] = "autoLogRaidHeroic" end
+        if KART.CbAlRaidMythic then settingsMap[KART.CbAlRaidMythic] = "autoLogRaidMythic" end
+        if KART.CbAlMythicPlus then settingsMap[KART.CbAlMythicPlus] = "autoLogMythicPlus" end
+        if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
+        if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
+        if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
         if KART.SldTitleSize then settingsMap[KART.SldTitleSize] = "titleFontSize" end
         if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
         if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
@@ -246,6 +256,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
             end
         end)
+        if KART.AutoLog then KART.AutoLog.Evaluate() end
+    elseif event == "CHALLENGE_MODE_START" then
+        if KART.AutoLog then KART.AutoLog.Evaluate() end
     elseif event == "CHAT_MSG_ADDON" and arg1 == "KART" then
         local msg = arg2
         local channel = select(1, ...)
