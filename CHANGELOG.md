@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Auto Combat Log:** a new card in the Automation tab starts combat logging automatically when you enter selected content — raids per difficulty (LFR/Normal/Heroic/Mythic), Mythic+ with a minimum keystone level, dungeons, and Delves — and stops it when you leave. Advanced Combat Logging is enabled automatically; logging you start manually via /combatlog is never touched.
 
+### Changed
+- **Settings tab moved to the bottom of the sidebar:** the Settings entry now always sits last in the menu, below all tool tabs.
+
 ### Fixed
 - **"Show NSRT nicknames" and "Compact vote window" toggles no longer show as off after a reload:** both settings were saved correctly, but their switches weren't initialized on login and always displayed off — which could flip the real setting when toggled again.
 

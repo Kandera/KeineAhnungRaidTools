@@ -101,17 +101,20 @@ KART.BtnBuffCheck = KART.CreateTabButton(mainFrame, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnSettings = KART.CreateTabButton(mainFrame, L.TAB_SETTINGS)
-KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
-KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
-
 KART.BtnLootCouncil = KART.CreateTabButton(mainFrame, L.TAB_LOOTCOUNCIL or "Loot Council")
-KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnSettings, "BOTTOMLEFT", 0, -5)
+KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
 KART.BtnWoWUtils = KART.CreateTabButton(mainFrame, L.TAB_WOWUTILS or "WoWUtils")
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
+
+-- The Settings tab must always be the last entry in the sidebar. When adding a new tab
+-- button, anchor it above this one (i.e. insert it between the previous last tab and
+-- Settings, and re-anchor Settings to the new button).
+KART.BtnSettings = KART.CreateTabButton(mainFrame, L.TAB_SETTINGS)
+KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
+KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
 -- Sichtbare Trennlinie (Vertical Divider)
 mainInset.divider = mainInset:CreateTexture(nil, "BACKGROUND")

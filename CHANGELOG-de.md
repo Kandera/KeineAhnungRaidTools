@@ -10,6 +10,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Auto-Combat-Log:** Eine neue Karte im Automation-Tab startet das Combat-Logging automatisch beim Betreten des ausgewählten Contents — Raids pro Schwierigkeit (LFR/Normal/Heroisch/Mythisch), Mythisch+ mit Mindest-Keystufe, Dungeons und Tiefen — und stoppt es beim Verlassen. Advanced Combat Logging wird automatisch aktiviert; manuell per /combatlog gestartetes Logging wird nie angefasst.
 
+### Geändert
+- **Settings-Tab ans Ende der Sidebar verschoben:** Der Einstellungen-Eintrag steht jetzt immer ganz unten im Menü, unterhalb aller Tool-Tabs.
+
 ### Behoben
 - **"NSRT-Nicknames anzeigen"- und "Kompaktes Vote-Fenster"-Schalter stehen nach einem Reload nicht mehr auf aus:** Beide Einstellungen wurden korrekt gespeichert, aber ihre Schalter wurden beim Login nicht initialisiert und zeigten immer aus — was beim erneuten Umschalten die echte Einstellung kippen konnte.
 
