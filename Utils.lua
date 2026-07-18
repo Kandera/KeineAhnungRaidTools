@@ -301,19 +301,21 @@ function KART.CreateModernButton(parent, text, tooltipText)
     return b
 end
 
--- UI Factory: Sidebar tab button. Like CreateModernButton but adds a left-edge accent bar and a
--- lighter background when marked active via :SetActive(true), so the current tab reads clearly
--- against the rest of the sidebar instead of only differing by text color.
---
--- CreateModernButton's own OnLeave handler unconditionally resets the backdrop to a hard-coded
--- gray, which would silently undo SetActive(true)'s tint the moment the mouse leaves an active
--- tab. To keep the hover behavior from Task 3 while still respecting the active tint, OnLeave is
--- re-pointed here to fall back to the active color (instead of the hard-coded gray) when the tab
--- is active. OnEnter is left as-is: hovering an active tab still shows the hover color, matching
--- normal button feedback, and leaving restores the correct base color either way.
+-- UI Factory: Sidebar tab button, flat style for the PNG-artwork sidebar.
+-- Transparent at rest so the baked artwork shows through; subtle white tint
+-- on hover; active tab gets a translucent accent fill, a left accent bar and
+-- full-white text. Standalone (not built on CreateModernButton) because that
+-- factory's opaque backdrop and border would cover the artwork.
 function KART.CreateTabButton(parent, text)
-    local b = KART.CreateModernButton(parent, text)
-    b:SetSize(130, 25)
+    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(140, 25)
+    b:SetBackdrop({ bgFile = "Interface\\ChatFrame\\ChatFrameBackground" })
+    b:SetBackdropColor(0, 0, 0, 0)
+
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
+    b.text:SetText(text)
+    table.insert(KART.ButtonTexts, b.text)
 
     local accentBar = b:CreateTexture(nil, "OVERLAY")
     accentBar:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
@@ -324,23 +326,28 @@ function KART.CreateTabButton(parent, text)
 
     local isActive = false
 
-    -- Returns four explicit values (r, g, b, alpha) rather than spreading the two-value
-    -- KART.Theme.Darken(...) call directly into SetBackdropColor, so alpha is always passed
-    -- explicitly here, matching every other SetBackdropColor call site in this file instead of
-    -- relying on an implicit default.
+    -- Translucent so the artwork stays visible beneath the active fill.
     local function activeColor()
         local r, g, bl = KART.Theme.AccentColor()
-        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.6)
-        return dr, dg, db, 0.9
+        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.45)
+        return dr, dg, db, 0.35
     end
 
-    b:SetScript("OnLeave", function(self)
+    local function restingColor(self)
         if isActive then
             self:SetBackdropColor(activeColor())
         else
-            self:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+            self:SetBackdropColor(0, 0, 0, 0)
         end
-        GameTooltip:Hide()
+        b.text:SetTextColor(isActive and 1 or 0.75, isActive and 1 or 0.75, isActive and 1 or 0.75)
+    end
+
+    b:SetScript("OnEnter", function(self)
+        if not isActive then self:SetBackdropColor(1, 1, 1, 0.06) end
+        b.text:SetTextColor(1, 1, 1)
+    end)
+    b:SetScript("OnLeave", function(self)
+        restingColor(self)
     end)
 
     function b:SetActive(active)
@@ -349,17 +356,11 @@ function KART.CreateTabButton(parent, text)
         b:RefreshActiveColor()
     end
 
-    -- Re-applies the current active/inactive color using the latest accent color, without
-    -- changing which state is active. Lets KART.UpdateStyles() keep an active tab's background
-    -- (and an inactive tab's resting color) in sync when the user changes their accent color,
-    -- instead of only updating on the next click/show.
+    -- Re-applies the current active/inactive color using the latest accent
+    -- color; called from KART.UpdateStyles() when the accent changes.
     function b:RefreshActiveColor()
         if not b:IsMouseOver() then
-            if isActive then
-                b:SetBackdropColor(activeColor())
-            else
-                b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-            end
+            restingColor(b)
         end
     end
 
