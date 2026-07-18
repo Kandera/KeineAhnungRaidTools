@@ -14,7 +14,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Einstellungs-Beschriftungen nutzen jetzt denselben weißen Textstil wie das Menü.**
 - **Eingabefelder an die Card-Optik angepasst** — abgerundet, mit Rand in Akzentfarbe während der Eingabe.
 - **Buff-Checker-Fenster mit eigenem Artwork-Hintergrund gestaltet** — Akzentlinie im Kopf, passende Schließen- und Resize-Ecken.
-- **Loot-Verlauf, Vote-Fenster und Council-Panel im neuen Artwork-Look.**
+- **Loot-Verlauf, Vote-Fenster, Council-Panel und alle kleineren Dialoge im neuen Artwork-Look.**
 
 ### Entfernt
 - **Einstellungen für Hintergrundfarbe und Titel-Schriftgröße.**

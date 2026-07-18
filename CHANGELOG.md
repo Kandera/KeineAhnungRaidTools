@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings labels now use the same white text style as the menu.**
 - **Input fields restyled to match the card look** — rounded, with an accent-colored border while typing.
 - **Buff-Checker window redesigned with its own artwork background** — accent header line, matching close and resize corners.
-- **Loot History, vote window and council panel share the new artwork look.**
+- **Loot History, vote window, council panel and all smaller dialogs share the new artwork look.**
 
 ### Removed
 - **Background color and title font size settings.**
