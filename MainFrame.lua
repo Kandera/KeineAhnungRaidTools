@@ -153,7 +153,7 @@ table.insert(KART.DynamicLabels, rlTitle)
 -- checkboxes/slider floating directly on the tab background.
 local rlCard = KART.CreateCard(KART.RaidleadPanel)
 rlCard:SetPoint("TOPLEFT", rlTitle, "BOTTOMLEFT", 0, -10)
-rlCard:SetSize(290, 180)
+rlCard:SetSize(500, 180)
 
 -- Checkbox zur Aktivierung
 KART.CbActivate = KART.CreateSettingsCheckbox(rlCard, "KART_RaidleadBarCheck", L.SET_RL_ACTIVATE, "showRaidleadBar", -20, function()
@@ -180,7 +180,7 @@ table.insert(KART.DynamicLabels, bcTitle)
 
 local bcCard = KART.CreateCard(KART.BuffCheckPanel)
 bcCard:SetPoint("TOPLEFT", bcTitle, "BOTTOMLEFT", 0, -10)
-bcCard:SetSize(290, 290)
+bcCard:SetSize(500, 160)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
 -- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
@@ -188,8 +188,10 @@ KART.CbBcModuleEnabled = KART.CreateSettingsCheckbox(bcCard, "KART_BcModuleEnabl
 
 KART.CbShowBuffCheck = KART.CreateSettingsCheckbox(bcCard, "KART_ShowBuffCheck", L.SET_BC_READYCHECK, "showBuffCheck", -50, nil, L.DESC_BC_READYCHECK)
 
+KART.CbGrayOffline = KART.CreateSettingsCheckbox(bcCard, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -80, nil, L.DESC_GRAY_OFFLINE)
+
 KART.BtnBuffPreview = KART.CreateModernButton(bcCard, L.BTN_BUFF_PREVIEW)
-KART.BtnBuffPreview:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -90)
+KART.BtnBuffPreview:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -115)
 KART.BtnBuffPreview:SetScript("OnClick", function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()
@@ -199,19 +201,26 @@ KART.BtnBuffPreview:SetScript("OnClick", function()
     end
 end)
 
-KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(bcCard, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -145, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
-KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -190, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
-KART.CbGrayOffline = KART.CreateSettingsCheckbox(bcCard, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -235, nil, L.DESC_GRAY_OFFLINE)
+KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(bcCard, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -30, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
+KART.SldBuffCheckAlpha:ClearAllPoints()
+KART.SldBuffCheckAlpha:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -46)
+KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -90, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
+KART.SldCombatDelay:ClearAllPoints()
+KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
 
--- 6. Automation Panel Inhalt (Auto-Promote + Auto-Invite per Whisper + Auto-Raid-Convert)
-local promLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-promLabel:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -20)
+-- 6. Automation panel: promote/invite settings grouped into a card.
+local autoCard = KART.CreateCard(KART.PromotePanel)
+autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -20)
+autoCard:SetSize(500, 195)
+
+local promLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+promLabel:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 20, -15)
 promLabel:SetText(L.LABEL_PROMOTE_NAMES)
 table.insert(KART.DynamicLabels, promLabel)
 
-KART.PromoteEditBox = CreateFrame("EditBox", "KART_PromoteEditBox", KART.PromotePanel, "BackdropTemplate")
-KART.PromoteEditBox:SetSize(250, 30)
-KART.PromoteEditBox:SetPoint("TOPLEFT", promLabel, "BOTTOMLEFT", 0, -10)
+KART.PromoteEditBox = CreateFrame("EditBox", "KART_PromoteEditBox", autoCard, "BackdropTemplate")
+KART.PromoteEditBox:SetSize(460, 28)
+KART.PromoteEditBox:SetPoint("TOPLEFT", promLabel, "BOTTOMLEFT", 0, -8)
 KART.PromoteEditBox:SetAutoFocus(false)
 KART.PromoteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 KART.PromoteEditBox:SetBackdropColor(0,0,0,0.5)
@@ -222,14 +231,14 @@ KART.PromoteEditBox:SetScript("OnTextChanged", function(self)
 end) -- KART_Settings ist eine SavedVariable
 KART.PromoteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-local invLabel = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-invLabel:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -110)
+local invLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+invLabel:SetPoint("TOPLEFT", KART.PromoteEditBox, "BOTTOMLEFT", 0, -14)
 invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
 table.insert(KART.DynamicLabels, invLabel)
 
-KART.InviteEditBox = CreateFrame("EditBox", "KART_InviteEditBox", KART.PromotePanel, "BackdropTemplate")
-KART.InviteEditBox:SetSize(250, 30)
-KART.InviteEditBox:SetPoint("TOPLEFT", invLabel, "BOTTOMLEFT", 0, -10)
+KART.InviteEditBox = CreateFrame("EditBox", "KART_InviteEditBox", autoCard, "BackdropTemplate")
+KART.InviteEditBox:SetSize(460, 28)
+KART.InviteEditBox:SetPoint("TOPLEFT", invLabel, "BOTTOMLEFT", 0, -8)
 KART.InviteEditBox:SetAutoFocus(false)
 KART.InviteEditBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 KART.InviteEditBox:SetBackdropColor(0,0,0,0.5)
@@ -240,20 +249,22 @@ KART.InviteEditBox:SetScript("OnTextChanged", function(self)
 end)
 KART.InviteEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-KART.CbAutoRaid = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -190, nil, L.DESC_AUTO_RAID)
-KART.CbInviteViaGuildChat = KART.CreateSettingsCheckbox(KART.PromotePanel, "KART_InviteViaGuildChatCheck", L.SET_INVITE_VIA_GUILD_CHAT, "inviteViaGuildChat", -225, nil, L.DESC_INVITE_VIA_GUILD_CHAT)
+KART.CbAutoRaid = KART.CreateSettingsCheckbox(autoCard, "KART_AutoRaidCheck", L.SET_AUTO_RAID, "autoConvertToRaid", -160, nil, L.DESC_AUTO_RAID)
+KART.CbInviteViaGuildChat = KART.CreateSettingsCheckbox(autoCard, "KART_InviteViaGuildChatCheck", L.SET_INVITE_VIA_GUILD_CHAT, "inviteViaGuildChat", -160, nil, L.DESC_INVITE_VIA_GUILD_CHAT)
+KART.CbInviteViaGuildChat:ClearAllPoints()
+KART.CbInviteViaGuildChat:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 260, -160)
 
 -- Auto Combat Log card: content filters for AutoLog.lua. Widget callbacks re-evaluate
 -- immediately so toggling a filter while already inside an instance takes effect without
 -- re-zoning (including stopping an addon-owned log when the master switch goes off).
-local alTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-alTitle:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -265)
+local alTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+alTitle:SetPoint("TOPLEFT", autoCard, "BOTTOMLEFT", 0, -18)
 alTitle:SetText(L.LABEL_AUTOLOG)
 table.insert(KART.DynamicLabels, alTitle)
 
 local alCard = KART.CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
-alCard:SetSize(290, 310)
+alCard:SetSize(500, 185)
 
 local function AutoLogChanged()
     if KART.AutoLog then KART.AutoLog.Evaluate() end
@@ -264,11 +275,19 @@ KART.CbAlRaidLFR = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidLFR", L.SET_A
 KART.CbAlRaidNormal = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidNormal", L.SET_AL_RAID_NORMAL, "autoLogRaidNormal", -80, AutoLogChanged)
 KART.CbAlRaidHeroic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidHeroic", L.SET_AL_RAID_HEROIC, "autoLogRaidHeroic", -110, AutoLogChanged)
 KART.CbAlRaidMythic = KART.CreateSettingsCheckbox(alCard, "KART_AlRaidMythic", L.SET_AL_RAID_MYTHIC, "autoLogRaidMythic", -140, AutoLogChanged)
-KART.CbAlMythicPlus = KART.CreateSettingsCheckbox(alCard, "KART_AlMythicPlus", L.SET_AL_MPLUS, "autoLogMythicPlus", -170, AutoLogChanged)
-KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -200, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
+KART.CbAlMythicPlus = KART.CreateSettingsCheckbox(alCard, "KART_AlMythicPlus", L.SET_AL_MPLUS, "autoLogMythicPlus", -20, AutoLogChanged)
+KART.CbAlMythicPlus:ClearAllPoints()
+KART.CbAlMythicPlus:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -20)
+KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -50, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
 KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
-KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET_AL_DUNGEONS, "autoLogDungeons", -250, AutoLogChanged)
-KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -280, AutoLogChanged)
+KART.SldAlMinKey:ClearAllPoints()
+KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -66)
+KART.CbAlDungeons = KART.CreateSettingsCheckbox(alCard, "KART_AlDungeons", L.SET_AL_DUNGEONS, "autoLogDungeons", -110, AutoLogChanged)
+KART.CbAlDungeons:ClearAllPoints()
+KART.CbAlDungeons:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -110)
+KART.CbAlDelves = KART.CreateSettingsCheckbox(alCard, "KART_AlDelves", L.SET_AL_DELVES, "autoLogDelves", -140, AutoLogChanged)
+KART.CbAlDelves:ClearAllPoints()
+KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -140)
 
 -- 7. Settings Panel Inhalt
 local settingsTitle = KART.SettingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
@@ -276,24 +295,46 @@ settingsTitle:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -20)
 settingsTitle:SetText(L.LABEL_GENERAL_SETTINGS)
 table.insert(KART.DynamicLabels, settingsTitle)
 
-KART.CbMinimap = KART.CreateSettingsCheckbox(KART.SettingsPanel, "KART_MinimapCheck", L.SET_MINIMAP, "showMinimapIcon", -60, function()
+-- Card: window-level interface options
+local ifCard = KART.CreateCard(KART.SettingsPanel)
+ifCard:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -50)
+ifCard:SetSize(242, 215)
+
+KART.CbMinimap = KART.CreateSettingsCheckbox(ifCard, "KART_MinimapCheck", L.SET_MINIMAP, "showMinimapIcon", -20, function()
     KART.UpdateMinimapButton()
 end, L.DESC_MINIMAP)
+KART.SldUiScale = KART.CreateSettingsSlider(ifCard, L.SET_UI_SCALE, 50, 150, "uiScale", -60, "KART_UiScaleSlider", L.DESC_UI_SCALE)
+KART.SldBgAlpha = KART.CreateSettingsSlider(ifCard, L.SET_BG_ALPHA, 20, 100, "bgAlpha", -105, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
 
-KART.SldMenuSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -110, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
-KART.SldContentSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -150, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
-KART.SldUiScale = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_UI_SCALE, 50, 150, "uiScale", -190, "KART_UiScaleSlider", L.DESC_UI_SCALE)
+-- Window layer slider: value is an index into KART.StrataLevels, shown as the strata name
+-- instead of the raw number (the factory's own handler writes the number first, this hook
+-- overwrites it right after; OnShow covers the case where the initial SetValue doesn't fire
+-- because the saved value equals the slider's current one).
+KART.SldFrameStrata = KART.CreateSettingsSlider(ifCard, L.SET_FRAME_STRATA, 1, #KART.StrataLevels, "frameStrata", -150, "KART_FrameStrataSlider", L.DESC_FRAME_STRATA)
+local function UpdateStrataSliderText(self)
+    self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+end
+KART.SldFrameStrata:HookScript("OnValueChanged", UpdateStrataSliderText)
+KART.SldFrameStrata:HookScript("OnShow", UpdateStrataSliderText)
+
+-- Card: text rendering
+local txtCard = KART.CreateCard(KART.SettingsPanel)
+txtCard:SetPoint("TOPLEFT", ifCard, "TOPRIGHT", 16, 0)
+txtCard:SetSize(242, 215)
+
+KART.SldMenuSize = KART.CreateSettingsSlider(txtCard, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -20, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
+KART.SldContentSize = KART.CreateSettingsSlider(txtCard, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -65, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
 
 -- Schriftart Button
-KART.BtnFont = KART.CreateModernButton(KART.SettingsPanel, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
-KART.BtnFont:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -230)
+KART.BtnFont = KART.CreateModernButton(txtCard, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
+KART.BtnFont:SetPoint("TOPLEFT", txtCard, "TOPLEFT", 20, -125)
 KART.BtnFont:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
         rootDescription:CreateTitle(L.BTN_SELECT_FONT)
         if LSM then
             local fonts = LSM:List("font")
             for _, name in ipairs(fonts) do
-                rootDescription:CreateButton(name, function() 
+                rootDescription:CreateButton(name, function()
                     KART_Settings.fontName = name
                     KART.UpdateStyles()
                     self.text:SetText(L.BTN_FONT_PREFIX .. name)
@@ -306,8 +347,8 @@ KART.BtnFont:SetScript("OnClick", function(self)
 end)
 
 -- Sprache Button
-KART.BtnLang = KART.CreateModernButton(KART.SettingsPanel, (L.BTN_LANGUAGE_PREFIX or "Language: ") .. (L.LANG_AUTO or "Auto"), L.DESC_LANGUAGE)
-KART.BtnLang:SetPoint("TOPLEFT", KART.BtnFont, "TOPRIGHT", 10, 0)
+KART.BtnLang = KART.CreateModernButton(txtCard, (L.BTN_LANGUAGE_PREFIX or "Language: ") .. (L.LANG_AUTO or "Auto"), L.DESC_LANGUAGE)
+KART.BtnLang:SetPoint("TOPLEFT", KART.BtnFont, "BOTTOMLEFT", 0, -10)
 KART.BtnLang:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
         rootDescription:CreateTitle(L.LABEL_LANGUAGE)
@@ -317,7 +358,7 @@ KART.BtnLang:SetScript("OnClick", function(self)
             {name = L.LANG_DE, value = "deDE"}
         }
         for _, opt in ipairs(options) do
-            rootDescription:CreateButton(opt.name, function() 
+            rootDescription:CreateButton(opt.name, function()
                 KART_Settings.language = opt.value
                 ReloadUI()
             end)
@@ -325,38 +366,29 @@ KART.BtnLang:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.SldBgAlpha = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_BG_ALPHA, 20, 100, "bgAlpha", -300, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
-
--- Window layer slider: value is an index into KART.StrataLevels, shown as the strata name
--- instead of the raw number (the factory's own handler writes the number first, this hook
--- overwrites it right after; OnShow covers the case where the initial SetValue doesn't fire
--- because the saved value equals the slider's current one).
-KART.SldFrameStrata = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_FRAME_STRATA, 1, #KART.StrataLevels, "frameStrata", -300, "KART_FrameStrataSlider", L.DESC_FRAME_STRATA)
-KART.SldFrameStrata:ClearAllPoints()
-KART.SldFrameStrata:SetPoint("LEFT", KART.SldBgAlpha, "RIGHT", 40, 0)
-local function UpdateStrataSliderText(self)
-    self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
-end
-KART.SldFrameStrata:HookScript("OnValueChanged", UpdateStrataSliderText)
-KART.SldFrameStrata:HookScript("OnShow", UpdateStrataSliderText)
+-- Card: colors, reset, companion sync status (Droptimizer anchors into this card)
+local colCard = KART.CreateCard(KART.SettingsPanel)
+colCard:SetPoint("TOPLEFT", ifCard, "BOTTOMLEFT", 0, -20)
+colCard:SetSize(500, 150)
+KART.SettingsColorCard = colCard
 
 -- Color Buttons
-KART.BtnAccentColor = KART.CreateModernButton(KART.SettingsPanel, L.BTN_ACCENT_COLOR, L.DESC_ACCENT_COLOR)
-KART.BtnAccentColor:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -340)
+KART.BtnAccentColor = KART.CreateModernButton(colCard, L.BTN_ACCENT_COLOR, L.DESC_ACCENT_COLOR)
+KART.BtnAccentColor:SetPoint("TOPLEFT", colCard, "TOPLEFT", 20, -20)
 KART.BtnAccentColor:SetScript("OnClick", function() KART.OpenColorPicker("accentR", "accentG", "accentB") end)
 
 -- Vorschau für Akzentfarbe
-KART.ColorPreview = KART.SettingsPanel:CreateTexture(nil, "OVERLAY")
+KART.ColorPreview = colCard:CreateTexture(nil, "OVERLAY")
 KART.ColorPreview:SetSize(25, 25)
 KART.ColorPreview:SetPoint("LEFT", KART.BtnAccentColor, "RIGHT", 10, 0)
-KART.ColorPreview.bg = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
+KART.ColorPreview.bg = colCard:CreateTexture(nil, "BACKGROUND")
 KART.ColorPreview.bg:SetPoint("TOPLEFT", KART.ColorPreview, "TOPLEFT", -1, 1)
 KART.ColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.ColorPreview, "BOTTOMRIGHT", 1, -1)
 KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 
 -- Reset Button
-KART.BtnReset = KART.CreateModernButton(KART.SettingsPanel, L.BTN_RESET, L.DESC_RESET)
-KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -20)
+KART.BtnReset = KART.CreateModernButton(colCard, L.BTN_RESET, L.DESC_RESET)
+KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -16)
 KART.BtnReset:SetScript("OnClick", function()
     for k, v in pairs(KART.Defaults) do KART_Settings[k] = v end
     ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen

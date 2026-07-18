@@ -169,5 +169,7 @@ if KART.LootCouncilPanel then
     DT.BuildLootCouncilToggle(KART.LootCouncilPanel)
 end
 if KART.SettingsPanel then
-    DT.BuildSyncStatus(KART.SettingsPanel)
+    -- Parent to the color/reset card (not the bare panel) so the sync status renders above
+    -- the card's backdrop instead of underneath it.
+    DT.BuildSyncStatus(KART.SettingsColorCard or KART.SettingsPanel)
 end
