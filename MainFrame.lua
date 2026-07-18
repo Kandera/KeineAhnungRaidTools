@@ -280,9 +280,9 @@ KART.CbMinimap = KART.CreateSettingsCheckbox(KART.SettingsPanel, "KART_MinimapCh
     KART.UpdateMinimapButton()
 end, L.DESC_MINIMAP)
 
-KART.SldTitleSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_TITLE, 8, 20, "titleFontSize", -110, "KART_TitleSizeSlider", L.DESC_TITLE_SIZE)
-KART.SldMenuSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -150, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
-KART.SldContentSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -190, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
+KART.SldMenuSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_MENU, 8, 20, "menuFontSize", -110, "KART_MenuSizeSlider", L.DESC_MENU_SIZE)
+KART.SldContentSize = KART.CreateSettingsSlider(KART.SettingsPanel, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -150, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
+KART.SldUiScale = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_UI_SCALE, 50, 150, "uiScale", -190, "KART_UiScaleSlider", L.DESC_UI_SCALE)
 
 -- Schriftart Button
 KART.BtnFont = KART.CreateModernButton(KART.SettingsPanel, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
@@ -325,7 +325,7 @@ KART.BtnLang:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.SldBgAlpha = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_BG_ALPHA, 0, 100, "bgAlpha", -300, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
+KART.SldBgAlpha = KART.CreateSettingsSlider(KART.SettingsPanel, L.SET_BG_ALPHA, 20, 100, "bgAlpha", -300, "KART_BgAlphaSlider", L.DESC_BG_ALPHA)
 
 -- Window layer slider: value is an index into KART.StrataLevels, shown as the strata name
 -- instead of the raw number (the factory's own handler writes the number first, this hook
@@ -353,19 +353,6 @@ KART.ColorPreview.bg = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
 KART.ColorPreview.bg:SetPoint("TOPLEFT", KART.ColorPreview, "TOPLEFT", -1, 1)
 KART.ColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.ColorPreview, "BOTTOMRIGHT", 1, -1)
 KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
-
-KART.BtnBgColor = KART.CreateModernButton(KART.SettingsPanel, L.BTN_BG_COLOR, L.DESC_BG_COLOR)
-KART.BtnBgColor:SetPoint("TOPLEFT", KART.BtnAccentColor, "TOPRIGHT", 45, 0)
-KART.BtnBgColor:SetScript("OnClick", function() KART.OpenColorPicker("bgR", "bgG", "bgB") end)
-
--- Vorschau für Hintergrundfarbe
-KART.BgColorPreview = KART.SettingsPanel:CreateTexture(nil, "OVERLAY")
-KART.BgColorPreview:SetSize(25, 25)
-KART.BgColorPreview:SetPoint("LEFT", KART.BtnBgColor, "RIGHT", 10, 0)
-KART.BgColorPreview.bg = KART.SettingsPanel:CreateTexture(nil, "BACKGROUND")
-KART.BgColorPreview.bg:SetPoint("TOPLEFT", KART.BgColorPreview, "TOPLEFT", -1, 1)
-KART.BgColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.BgColorPreview, "BOTTOMRIGHT", 1, -1)
-KART.BgColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 
 -- Reset Button
 KART.BtnReset = KART.CreateModernButton(KART.SettingsPanel, L.BTN_RESET, L.DESC_RESET)

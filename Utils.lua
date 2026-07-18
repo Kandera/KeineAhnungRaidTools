@@ -32,6 +32,7 @@ KART.Defaults = {
     menuFontSize = 11,
     contentFontSize = 12,
     bgAlpha = 85,
+    uiScale = 100, -- whole-window scale in percent (PNG-artwork window is not freely resizable)
     fontName = "Friz Quadrata",
     accentR = 0, accentG = 60, accentB = 100,
     bgR = 10, bgG = 10, bgB = 10,

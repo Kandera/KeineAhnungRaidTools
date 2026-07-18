@@ -120,7 +120,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
         if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
         if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
-        if KART.SldTitleSize then settingsMap[KART.SldTitleSize] = "titleFontSize" end
+        if KART.SldUiScale then settingsMap[KART.SldUiScale] = "uiScale" end
         if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
         if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
         if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
@@ -402,6 +402,7 @@ function KART.UpdateStyles()
     -- bgAlpha now controls whole-window opacity; floor of 20 so the window
     -- can never become fully invisible while still blocking mouse input.
     KART.MainFrame:SetAlpha(math.max(20, KART_Settings.bgAlpha or 85) / 100)
+    KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
 
     -- Sidebar Buttons
     for _, btnText in ipairs(KART.ButtonTexts) do
@@ -444,7 +445,6 @@ function KART.UpdateStyles()
 
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
-    if KART.BgColorPreview then KART.BgColorPreview:SetColorTexture(br, bg, bb, 1) end
 
     -- Minimap Icon Farbe anpassen
     local dbIcon = LibStub("LibDBIcon-1.0", true)
