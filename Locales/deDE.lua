@@ -51,6 +51,20 @@ KART.L_deDE = {
     SET_RL_AUTOHIDE = "Auto-Hide (Solo)",
     SET_PULL_TIMER = "Dauer Pull-Timer (Sekunden)",
 
+    -- Auto Combat Log
+    LABEL_AUTOLOG = "Auto-Combat-Log",
+    SET_AL_ENABLED = "Automatisches Combat-Logging aktivieren",
+    SET_AL_RAID_LFR = "Raid: LFR",
+    SET_AL_RAID_NORMAL = "Raid: Normal",
+    SET_AL_RAID_HEROIC = "Raid: Heroisch",
+    SET_AL_RAID_MYTHIC = "Raid: Mythisch",
+    SET_AL_MPLUS = "Mythisch+ Schlüsselstein",
+    SET_AL_MIN_KEY = "Mindest-Keystufe",
+    SET_AL_DUNGEONS = "Dungeons (Normal/Heroisch/Mythisch 0)",
+    SET_AL_DELVES = "Tiefen",
+    MSG_AL_STARTED = "Combat-Logging gestartet (%s).",
+    MSG_AL_STOPPED = "Combat-Logging gestoppt.",
+
     -- BuffChecker
     BC_TITLE = "Raid Buff Check",
     BC_NAME = "Name",
@@ -114,6 +128,8 @@ KART.L_deDE = {
     DESC_MINIMAP = "Zeigt oder blendet das KART-Symbol an der Minimap aus.",
     DESC_AUTO_RAID = "Wandelt eine Gruppe automatisch in einen Schlachtzug um, sobald das 6. Mitglied beitritt.",
     DESC_INVITE_VIA_GUILD_CHAT = "Wenn deaktiviert, lösen die Invite-Begriffe nur bei Flüstern aus, nicht bei Nachrichten im Gildenchat. Nützlich, um versehentliche Invites durch normale Gildenchat-Gespräche zu vermeiden.",
+    DESC_AL_ENABLED = "Startet das Combat-Logging automatisch beim Betreten des unten ausgewählten Contents und stoppt es beim Verlassen. Aktiviert auch Advanced Combat Logging (nötig für Warcraft Logs). Manuell per /combatlog gestartetes Logging wird nie angefasst.",
+    DESC_AL_MIN_KEY = "Keys unterhalb dieser Stufe werden nicht geloggt.",
     DESC_TITLE_SIZE = "Anpassung der Schriftgröße für die Fenstertitel.",
     DESC_MENU_SIZE = "Anpassung der Schriftgröße für die Schaltflächen im Seitenmenü.",
     DESC_CONTENT_SIZE = "Anpassung der Schriftgröße für Texte innerhalb der Inhaltsbereiche.",

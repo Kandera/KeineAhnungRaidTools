@@ -51,6 +51,16 @@ KART.Defaults = {
     lcHistoryWindowPos = false,
     lcMinQuality = 4,
     frameStrata = 4, -- index into KART.StrataLevels (4 = HIGH)
+    autoLogEnabled = false,
+    autoLogRaidLFR = false,
+    autoLogRaidNormal = false,
+    autoLogRaidHeroic = false,
+    autoLogRaidMythic = false,
+    autoLogMythicPlus = false,
+    autoLogMinKey = 2,
+    autoLogDungeons = false,
+    autoLogDelves = false,
+    autoLogOwned = false, -- hidden: whether the addon (not the player) started the current combat log
 }
 
 -- Ordered list of WoW frame strata a KART window may sit on. All main windows share one

@@ -51,6 +51,20 @@ KART.L_enUS = {
     SET_RL_AUTOHIDE = "Auto-Hide (Solo)",
     SET_PULL_TIMER = "Pull Timer Duration (Seconds)",
 
+    -- Auto Combat Log
+    LABEL_AUTOLOG = "Auto Combat Log",
+    SET_AL_ENABLED = "Enable auto combat logging",
+    SET_AL_RAID_LFR = "Raid: LFR",
+    SET_AL_RAID_NORMAL = "Raid: Normal",
+    SET_AL_RAID_HEROIC = "Raid: Heroic",
+    SET_AL_RAID_MYTHIC = "Raid: Mythic",
+    SET_AL_MPLUS = "Mythic+ Keystone",
+    SET_AL_MIN_KEY = "Minimum keystone level",
+    SET_AL_DUNGEONS = "Dungeons (Normal/Heroic/Mythic 0)",
+    SET_AL_DELVES = "Delves",
+    MSG_AL_STARTED = "Combat logging started (%s).",
+    MSG_AL_STOPPED = "Combat logging stopped.",
+
     -- BuffChecker
     BC_TITLE = "Raid Buff Check",
     BC_NAME = "Name",
@@ -114,6 +128,8 @@ KART.L_enUS = {
     DESC_MINIMAP = "Shows or hides the KART icon on the minimap.",
     DESC_AUTO_RAID = "Automatically converts a party into a raid when the 6th member joins.",
     DESC_INVITE_VIA_GUILD_CHAT = "If disabled, the invite keywords only trigger on whispers, not on messages in guild chat. Useful to avoid accidental invites from casual guild chat.",
+    DESC_AL_ENABLED = "Automatically starts combat logging when you enter content selected below and stops it when you leave. Also enables Advanced Combat Logging (needed for Warcraft Logs). Logging you started manually via /combatlog is never touched.",
+    DESC_AL_MIN_KEY = "Keys below this level are not logged.",
     DESC_TITLE_SIZE = "Adjusts the font size for the window titles.",
     DESC_MENU_SIZE = "Adjusts the font size for the sidebar menu buttons.",
     DESC_CONTENT_SIZE = "Adjusts the font size for text within the content areas.",
