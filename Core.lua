@@ -154,6 +154,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
         end
 
+        if KART.KeybindButtons then
+            for key, btn in pairs(KART.KeybindButtons) do
+                local bound = KART_Settings.keybinds and KART_Settings.keybinds[key]
+                btn.text:SetText(bound and bound ~= "" and bound or KART.L.KB_NOT_BOUND)
+            end
+        end
+
         if KART.LC and KART.LC.BtnMinQuality and KART.LC.QualityLabel then
             KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
         end

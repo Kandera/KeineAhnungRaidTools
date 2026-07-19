@@ -190,7 +190,7 @@ scrollFrame.scrollBarHideable = true
 -- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
     [1] = 475, -- Automation: promote/invite card + AutoLog title + card
-    [2] = 210, -- Raidlead: one 180 card
+    [2] = 380, -- Raidlead: bar-settings card (180) + keybinds card (150) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 415, -- Settings: two half cards + color card
 }
@@ -245,6 +245,99 @@ end, L.DESC_RL_AUTOHIDE)
 -- Pull-Timer Slider: the pull button (RaidleadBar.lua) reads pullTimerDuration
 -- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
+
+-- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
+local kbCard = KART.CreateCard(KART.RaidleadPanel)
+kbCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
+kbCard:SetSize(500, 150)
+
+local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+kbTitle:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, -14)
+kbTitle:SetText(L.LABEL_RL_KEYBINDS)
+table.insert(KART.DynamicLabels, kbTitle)
+
+KART.KeybindButtons = {}
+local kbLabels = {
+    readyCheck = L.KB_READYCHECK,
+    clearWorldMarkers = L.KB_CLEARWM,
+    pullTimer = L.KB_PULLTIMER,
+    buffCheckToggle = L.KB_BUFFCHECK,
+}
+
+-- Invisible key-listener used only while a bind-button is in capture mode; created once and
+-- reused for whichever button is currently capturing (only one capture can be active at a time).
+local kbListener = CreateFrame("Frame", nil, kbCard)
+kbListener:Hide()
+kbListener:EnableKeyboard(true)
+kbListener:SetPropagateKeyboardInput(false)
+
+local function StopCapture(activeBtn)
+    kbListener:Hide()
+    kbListener:SetScript("OnKeyDown", nil)
+    if activeBtn then
+        local current = KART_Settings and KART_Settings.keybinds and KART_Settings.keybinds[activeBtn.actionKey]
+        activeBtn.text:SetText(current and current ~= "" and current or L.KB_NOT_BOUND)
+    end
+end
+
+local function StartCapture(btn)
+    btn.text:SetText(L.KB_PRESS_KEY)
+    kbListener:Show()
+    kbListener:SetScript("OnKeyDown", function(_, keyPressed)
+        if keyPressed == "ESCAPE" then
+            StopCapture(btn)
+            return
+        end
+        -- Ignore bare modifier presses — wait for the actual key that completes the chord.
+        if keyPressed == "LSHIFT" or keyPressed == "RSHIFT"
+            or keyPressed == "LCTRL" or keyPressed == "RCTRL"
+            or keyPressed == "LALT" or keyPressed == "RALT" then
+            return
+        end
+        local binding = keyPressed
+        if IsShiftKeyDown() then binding = "SHIFT-" .. binding end
+        if IsControlKeyDown() then binding = "CTRL-" .. binding end
+        if IsAltKeyDown() then binding = "ALT-" .. binding end
+        KART_Settings.keybinds[btn.actionKey] = binding
+        KART.ApplyKeybinds()
+        StopCapture(btn)
+    end)
+end
+
+for i, action in ipairs(KART.KeybindActions) do
+    local yOff = -20 - (i - 1) * 30
+
+    local label = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, yOff)
+    label:SetText(kbLabels[action.key])
+    table.insert(KART.DynamicLabels, label)
+
+    -- KART_Settings doesn't exist yet at this point in addon load (see load-order note above) —
+    -- use the static placeholder; Step 2 below syncs the real value once ADDON_LOADED fires.
+    local btn = KART.CreateModernButton(kbCard, L.KB_NOT_BOUND, L.DESC_KEYBINDS)
+    btn:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 260, yOff + 6)
+    btn:SetSize(150, 22)
+    btn.actionKey = action.key
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:SetScript("OnClick", function(self, button)
+        if InCombatLockdown() then
+            self.text:SetText(L.KB_NOT_IN_COMBAT)
+            C_Timer.After(1, function()
+                local current = KART_Settings.keybinds[self.actionKey]
+                self.text:SetText(current and current ~= "" and current or L.KB_NOT_BOUND)
+            end)
+            return
+        end
+        if button == "RightButton" then
+            KART_Settings.keybinds[self.actionKey] = nil
+            KART.ApplyKeybinds()
+            self.text:SetText(L.KB_NOT_BOUND)
+        else
+            StartCapture(self)
+        end
+    end)
+    KART.KeybindButtons[action.key] = btn
+end
 
 -- 6. BuffChecker Panel Inhalt
 KART.CreateTabTitle(3, L.LABEL_BUFFCHECK_SETTINGS)
