@@ -601,8 +601,7 @@ end)
 KART.BtnProfileSaveNew = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE_NEW, L.DESC_PROFILE_SAVE_NEW)
 KART.BtnProfileSaveNew:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -69)
 KART.BtnProfileSaveNew:SetScript("OnClick", function()
-    StaticPopupDialogs["KART_PROFILE_SAVE_NEW"].text = KART.L.PROFILE_SAVE_NEW_TEXT
-    StaticPopup_Show("KART_PROFILE_SAVE_NEW")
+    KART.ShowSaveProfileDialog()
 end)
 
 KART.BtnProfileSave = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE, L.DESC_PROFILE_SAVE)

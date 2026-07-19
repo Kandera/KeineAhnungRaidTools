@@ -303,36 +303,71 @@ function LC.SendSettingsSync(targetName)
     C_ChatInfo.SendAddonMessage("KART", prefix .. council, "WHISPER", targetName)
 end
 
-StaticPopupDialogs["KART_LC_SYNC_TARGET"] = {
-    text = "Enter the character name to sync settings to:", -- overwritten with KART.L.LC_SYNC_TARGET_PROMPT before every StaticPopup_Show call
-    button1 = ACCEPT,
-    button2 = CANCEL,
-    hasEditBox = true,
-    maxLetters = 48,
-    OnShow = function(self)
-        self.editBox:SetText("")
-        self.editBox:SetFocus()
-    end,
-    OnAccept = function(self)
-        local name = self.editBox:GetText()
-        name = name and name:match("^%s*(.-)%s*$") or ""
-        if name == "" then
-            UIErrorsFrame:AddMessage(KART.L.LC_SYNC_TARGET_EMPTY, 1, 0.1, 0.1, 1, 3)
-            StaticPopup_Show("KART_LC_SYNC_TARGET")
-            return
+-- Hand-rolled dialog instead of StaticPopupDialogs' hasEditBox: retail's StaticPopup system
+-- (routed through Blizzard_StaticPopup_Game/GameDialog.lua) doesn't reliably expose the edit box
+-- as self.editBox to its callbacks — same fix already applied to LC.ShowOfficerNoteDialog below
+-- (see its comment for the full "attempt to index field 'editBox' (a nil value)" story). Owning
+-- the frame ourselves means the edit box reference always exists.
+local syncTargetDialog
+
+function LC.ShowSyncTargetDialog()
+    if not syncTargetDialog then
+        local f = CreateFrame("Frame", "KART_LCSyncTargetDialog", UIParent, "BackdropTemplate")
+        f:SetSize(300, 120)
+        f:SetPoint("CENTER")
+        KART.RegisterStrataFrame(f, true)
+        KART.ApplyPopupArtwork(f)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        table.insert(UISpecialFrames, f:GetName())
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        f.title:SetPoint("TOP", 0, -14)
+        f.title:SetWidth(270)
+        f.title:SetWordWrap(true)
+
+        f.editBox = KART.CreateStyledEditBox(f, "KART_LCSyncTargetEditBox")
+        f.editBox:SetSize(260, 26)
+        f.editBox:SetPoint("TOP", 0, -46)
+        f.editBox:SetMaxLetters(48)
+        f.editBox:SetFontObject("GameFontHighlightSmall")
+
+        local function accept()
+            local name = f.editBox:GetText()
+            name = name and name:match("^%s*(.-)%s*$") or ""
+            if name == "" then
+                UIErrorsFrame:AddMessage(KART.L.LC_SYNC_TARGET_EMPTY, 1, 0.1, 0.1, 1, 3)
+                return
+            end
+            f:Hide()
+            LC.SendSettingsSync(name)
         end
-        LC.SendSettingsSync(name)
-    end,
-    EditBoxOnEnterPressed = function(self)
-        local dialog = self:GetParent()
-        StaticPopupDialogs["KART_LC_SYNC_TARGET"].OnAccept(dialog)
-        dialog:Hide()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+
+        local btnOK = KART.CreateModernButton(f, ACCEPT)
+        btnOK:SetSize(120, 26)
+        btnOK:SetPoint("BOTTOMLEFT", 15, 12)
+        btnOK:SetScript("OnClick", accept)
+
+        local btnCancel = KART.CreateModernButton(f, CANCEL)
+        btnCancel:SetSize(120, 26)
+        btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
+        btnCancel:SetScript("OnClick", function() f:Hide() end)
+
+        f.editBox:SetScript("OnEnterPressed", accept)
+        f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
+
+        syncTargetDialog = f
+    end
+
+    local f = syncTargetDialog
+    f.title:SetText(KART.L.LC_SYNC_TARGET_PROMPT)
+    f.editBox:SetText("")
+    f:Show()
+    f.editBox:SetFocus()
+end
 
 -- Runs when a sync-request whisper arrives (Core.lua CHAT_MSG_ADDON -> LC_SYNC_REQUEST:). Shows
 -- a confirm popup naming the sender; settings are only applied if the user explicitly accepts.
@@ -3521,8 +3556,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnSyncSettings = KART.CreateModernButton(raidBox, L.LC_BTN_SYNC_SETTINGS, L.LC_DESC_SYNC_SETTINGS)
     KART.LC.BtnSyncSettings:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnSyncSettings:SetScript("OnClick", function()
-        StaticPopupDialogs["KART_LC_SYNC_TARGET"].text = KART.L.LC_SYNC_TARGET_PROMPT
-        StaticPopup_Show("KART_LC_SYNC_TARGET")
+        LC.ShowSyncTargetDialog()
     end)
 
     local function layoutRaidBox()
