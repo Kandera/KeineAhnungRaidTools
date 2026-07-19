@@ -282,6 +282,58 @@ function LC.HandleConfig(payload, senderShort)
     end
 end
 
+-- Whispers the sender's current Loot Council raid-wide-authority settings to targetName as a
+-- sync request; the receiver decides via a confirm popup whether to apply them (Core.lua
+-- CHAT_MSG_ADDON -> LC.HandleSyncRequest). Same 255-byte payload budget and council-list
+-- truncation approach as LC.BroadcastRaidConfig above.
+function LC.SendSettingsSync(targetName)
+    local minQ = KART_Settings.lcMinQuality or 4
+    local buttons = KART_Settings.lcButtonLabels or ""
+    local rolls = KART_Settings.lcRollsEnabled and "1" or "0"
+    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
+    local voteSeconds = KART_Settings.lcVoteSeconds or 20
+    local council = KART_Settings.lcCouncilMembers or ""
+
+    local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
+    local budget = ADDON_MSG_MAX_BYTES - #prefix
+    if #council > math.max(budget, 0) then
+        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
+        print("|cffff0000KART:|r " .. (KART.L.LC_CONFIG_TRUNCATED or "Council member list too long, truncated for broadcast."))
+    end
+    C_ChatInfo.SendAddonMessage("KART", prefix .. council, "WHISPER", targetName)
+end
+
+StaticPopupDialogs["KART_LC_SYNC_TARGET"] = {
+    text = "Enter the character name to sync settings to:", -- overwritten with KART.L.LC_SYNC_TARGET_PROMPT before every StaticPopup_Show call
+    button1 = ACCEPT,
+    button2 = CANCEL,
+    hasEditBox = true,
+    maxLetters = 48,
+    OnShow = function(self)
+        self.editBox:SetText("")
+        self.editBox:SetFocus()
+    end,
+    OnAccept = function(self)
+        local name = self.editBox:GetText()
+        name = name and name:match("^%s*(.-)%s*$") or ""
+        if name == "" then
+            UIErrorsFrame:AddMessage(KART.L.LC_SYNC_TARGET_EMPTY, 1, 0.1, 0.1, 1, 3)
+            StaticPopup_Show("KART_LC_SYNC_TARGET")
+            return
+        end
+        LC.SendSettingsSync(name)
+    end,
+    EditBoxOnEnterPressed = function(self)
+        local dialog = self:GetParent()
+        StaticPopupDialogs["KART_LC_SYNC_TARGET"].OnAccept(dialog)
+        dialog:Hide()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 -- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
 local function IsRealItemLink(link)
     return type(link) == "string" and link:find("|Hitem:") ~= nil
@@ -3415,6 +3467,13 @@ function LC.BuildSettingsPanel(parent)
         end
     end)
 
+    KART.LC.BtnSyncSettings = KART.CreateModernButton(raidBox, L.LC_BTN_SYNC_SETTINGS, L.LC_DESC_SYNC_SETTINGS)
+    KART.LC.BtnSyncSettings:SetSize(CONTENT_WIDTH, 28)
+    KART.LC.BtnSyncSettings:SetScript("OnClick", function()
+        StaticPopupDialogs["KART_LC_SYNC_TARGET"].text = KART.L.LC_SYNC_TARGET_PROMPT
+        StaticPopup_Show("KART_LC_SYNC_TARGET")
+    end)
+
     local function layoutRaidBox()
         local y = -8
 
@@ -3467,6 +3526,9 @@ function LC.BuildSettingsPanel(parent)
         y = y - 28 - 10
 
         KART.LC.BtnToggleSession:SetPoint("TOPLEFT", 20, y)
+        y = y - 28 - 10
+
+        KART.LC.BtnSyncSettings:SetPoint("TOPLEFT", 20, y)
         y = y - 28 - 16
 
         raidBox:SetHeight(-y)
