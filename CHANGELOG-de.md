@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-07-19
+### Added
+- **Profile-Einstellungen:** aktuelle Einstellungen als benanntes Profil speichern, zwischen gespeicherten Profilen wechseln und sie löschen — über eine neue Card im Einstellungen-Tab.
+
 ## [2.1.0] - 2026-07-19
 ### Added
 - **Tastenbelegung für Bereitschaftscheck, Weltmarkierungen löschen, Pull-Timer und Buff-Checker ein/aus:** einstellbar in einer neuen Tastenbelegung-Card im Raidlead-Tab.
