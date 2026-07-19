@@ -38,6 +38,110 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
     end,
 })
 
+-- Re-applies every current KART_Settings value to its UI widget and refreshes every
+-- settings-dependent module cache. Called once from ADDON_LOADED, and again after a profile
+-- switch (KART.LoadProfile, Profiles.lua) — must stay free of one-time initialization
+-- (AddonCompartment registration, hooksecurefunc) since those must never run twice.
+function KART.SyncSettingsToUI()
+    KART.UpdateCache()
+    if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
+    if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
+    KART.UpdateStyles()
+
+    -- Initialisiere UI Werte
+    if KART.InviteEditBox then KART.InviteEditBox:SetText(KART_Settings.inviteKeywords) end -- KART.InviteEditBox aus MainFrame.lua
+    if KART.PromoteEditBox then KART.PromoteEditBox:SetText(KART_Settings.promoteNames) end -- KART.PromoteEditBox aus MainFrame.lua
+
+    -- Raidlead Panel Initialisierung
+    if KART.CbActivate then KART.CbActivate:SetChecked(KART_Settings.showRaidleadBar) end
+
+    -- Sammel-Initialisierung der UI Elemente
+    local settingsMap = {}
+    if KART.InviteEditBox then settingsMap[KART.InviteEditBox] = "inviteKeywords" end
+    if KART.PromoteEditBox then settingsMap[KART.PromoteEditBox] = "promoteNames" end
+    if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
+    if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
+    if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
+    if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
+    if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
+    if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
+    if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
+    if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
+    if KART.LC and KART.LC.CbCompactVoteLayout then settingsMap[KART.LC.CbCompactVoteLayout] = "lcVoteLayoutCompact" end
+    if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
+    if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
+    if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
+    if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
+    if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
+    if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
+    if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
+    if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
+    if KART.DT and KART.DT.CbModuleEnabled then settingsMap[KART.DT.CbModuleEnabled] = "dtModuleEnabled" end
+    if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
+    if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
+    if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
+    if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
+    if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
+    if KART.CbInviteViaGuildChat then settingsMap[KART.CbInviteViaGuildChat] = "inviteViaGuildChat" end
+    if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
+    if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
+    if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
+    if KART.CbAlRaidHeroic then settingsMap[KART.CbAlRaidHeroic] = "autoLogRaidHeroic" end
+    if KART.CbAlRaidMythic then settingsMap[KART.CbAlRaidMythic] = "autoLogRaidMythic" end
+    if KART.CbAlMythicPlus then settingsMap[KART.CbAlMythicPlus] = "autoLogMythicPlus" end
+    if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
+    if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
+    if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
+    if KART.SldUiScale then settingsMap[KART.SldUiScale] = "uiScale" end
+    if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
+    if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
+    if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
+    if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
+
+    for widget, key in pairs(settingsMap) do
+        if widget then
+            if widget.SetChecked then widget:SetChecked(KART_Settings[key])
+            elseif widget.SetValue then widget:SetValue(KART_Settings[key])
+            elseif widget.SetText then widget:SetText(KART_Settings[key]) end
+        end
+    end
+    -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
+    if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= "" then
+        local count = KART.WU.ParseImport(KART_Settings.wuImportText)
+        if count > 0 and KART.WU.RefreshBossList then
+            KART.WU.RefreshBossList()
+            if KART.WU.statusLabel then
+                KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED or "%d bosses loaded.", count))
+                KART.WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
+            end
+        end
+    end
+
+    if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
+
+    if KART.BtnLang then
+        local langText = KART.L.LANG_AUTO
+        if KART_Settings.language == "enUS" then langText = KART.L.LANG_EN
+        elseif KART_Settings.language == "deDE" then langText = KART.L.LANG_DE end
+        KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
+    end
+
+    if KART.KeybindButtons then
+        for key, btn in pairs(KART.KeybindButtons) do
+            local bound = KART_Settings.keybinds and KART_Settings.keybinds[key]
+            btn.text:SetText(bound and bound ~= "" and bound or KART.L.KB_NOT_BOUND)
+        end
+    end
+
+    if KART.LC and KART.LC.BtnMinQuality and KART.LC.QualityLabel then
+        KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
+    end
+
+    KART.UpdateMinimapButton()
+    KART.UpdateRaidleadBarVisibility()
+    KART.ApplyKeybinds()
+end
+
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     if event == "ADDON_LOADED" and arg1 == addonName then
         C_ChatInfo.RegisterAddonMessagePrefix("KART")
@@ -65,110 +169,14 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.L = KART.L_enUS
         end
 
-        KART.UpdateCache()
-        if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
-        if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
-        KART.UpdateStyles()
-
         -- Minimap Icon mit LibDBIcon registrieren
         KART_Settings.minimap = KART_Settings.minimap or {}
         local dbIcon = LibStub("LibDBIcon-1.0", true)
         if dbIcon then
             dbIcon:Register("KeineAhnungRaidTools", ldb, KART_Settings.minimap)
         end
-        
-        -- Initialisiere UI Werte
-        if KART.InviteEditBox then KART.InviteEditBox:SetText(KART_Settings.inviteKeywords) end -- KART.InviteEditBox aus MainFrame.lua
-        if KART.PromoteEditBox then KART.PromoteEditBox:SetText(KART_Settings.promoteNames) end -- KART.PromoteEditBox aus MainFrame.lua
-        
-        -- Raidlead Panel Initialisierung
-        if KART.CbActivate then KART.CbActivate:SetChecked(KART_Settings.showRaidleadBar) end
 
-        -- Sammel-Initialisierung der UI Elemente
-        local settingsMap = {}
-        if KART.InviteEditBox then settingsMap[KART.InviteEditBox] = "inviteKeywords" end
-        if KART.PromoteEditBox then settingsMap[KART.PromoteEditBox] = "promoteNames" end
-        if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
-        if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
-        if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
-        if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
-        if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
-        if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
-        if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
-        if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
-        if KART.LC and KART.LC.CbCompactVoteLayout then settingsMap[KART.LC.CbCompactVoteLayout] = "lcVoteLayoutCompact" end
-        if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
-        if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
-        if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
-        if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
-        if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
-        if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
-        if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
-        if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
-        if KART.DT and KART.DT.CbModuleEnabled then settingsMap[KART.DT.CbModuleEnabled] = "dtModuleEnabled" end
-        if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
-        if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
-        if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
-        if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
-        if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
-        if KART.CbInviteViaGuildChat then settingsMap[KART.CbInviteViaGuildChat] = "inviteViaGuildChat" end
-        if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
-        if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
-        if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
-        if KART.CbAlRaidHeroic then settingsMap[KART.CbAlRaidHeroic] = "autoLogRaidHeroic" end
-        if KART.CbAlRaidMythic then settingsMap[KART.CbAlRaidMythic] = "autoLogRaidMythic" end
-        if KART.CbAlMythicPlus then settingsMap[KART.CbAlMythicPlus] = "autoLogMythicPlus" end
-        if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
-        if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
-        if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
-        if KART.SldUiScale then settingsMap[KART.SldUiScale] = "uiScale" end
-        if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
-        if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
-        if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
-        if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
-
-        for widget, key in pairs(settingsMap) do
-            if widget then
-                if widget.SetChecked then widget:SetChecked(KART_Settings[key])
-                elseif widget.SetValue then widget:SetValue(KART_Settings[key])
-                elseif widget.SetText then widget:SetText(KART_Settings[key]) end
-            end
-        end
-        -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
-        if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= "" then
-            local count = KART.WU.ParseImport(KART_Settings.wuImportText)
-            if count > 0 and KART.WU.RefreshBossList then
-                KART.WU.RefreshBossList()
-                if KART.WU.statusLabel then
-                    KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED or "%d bosses loaded.", count))
-                    KART.WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
-                end
-            end
-        end
-
-        if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
-        
-        if KART.BtnLang then
-            local langText = KART.L.LANG_AUTO
-            if KART_Settings.language == "enUS" then langText = KART.L.LANG_EN
-            elseif KART_Settings.language == "deDE" then langText = KART.L.LANG_DE end
-            KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
-        end
-
-        if KART.KeybindButtons then
-            for key, btn in pairs(KART.KeybindButtons) do
-                local bound = KART_Settings.keybinds and KART_Settings.keybinds[key]
-                btn.text:SetText(bound and bound ~= "" and bound or KART.L.KB_NOT_BOUND)
-            end
-        end
-
-        if KART.LC and KART.LC.BtnMinQuality and KART.LC.QualityLabel then
-            KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
-        end
-
-        KART.UpdateMinimapButton()
-        KART.UpdateRaidleadBarVisibility()
-        KART.ApplyKeybinds()
+        KART.SyncSettingsToUI()
 
         AddonCompartmentFrame:RegisterAddon({
             text = "Keine Ahnung Raid Tools",
