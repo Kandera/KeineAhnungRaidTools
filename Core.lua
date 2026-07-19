@@ -388,6 +388,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
                 elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryEntry(msg:sub(15)) end
+                elseif msg:sub(1, 16) == "LC_SYNC_REQUEST:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleSyncRequest(msg:sub(17), sender, shortName) end
+                elseif msg == "LC_SYNC_ACCEPT" then
+                    if KART.LC then KART.LC.HandleSyncAccept(shortName) end
+                elseif msg == "LC_SYNC_DECLINE" then
+                    if KART.LC then KART.LC.HandleSyncDecline(shortName) end
                 elseif msg:sub(1, 10) == "RC_REASON:" then
                     local reason = msg:sub(11)
                     KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}

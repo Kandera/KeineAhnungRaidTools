@@ -334,6 +334,57 @@ StaticPopupDialogs["KART_LC_SYNC_TARGET"] = {
     preferredIndex = 3,
 }
 
+-- Runs when a sync-request whisper arrives (Core.lua CHAT_MSG_ADDON -> LC_SYNC_REQUEST:). Shows
+-- a confirm popup naming the sender; settings are only applied if the user explicitly accepts.
+-- sender is the raw, realm-qualified whisper-reply target; senderShort is for the popup text.
+function LC.HandleSyncRequest(payload, sender, senderShort)
+    local minQ, buttons, rolls, lootmaster, voteSeconds, council =
+        payload:match("^(%d+):([^:]*):([01]):([^:]*):(%d+):(.*)$")
+    if not minQ then return end
+
+    StaticPopupDialogs["KART_LC_SYNC_REQUEST"].text = KART.L.LC_SYNC_REQUEST_TEXT
+    StaticPopup_Show("KART_LC_SYNC_REQUEST", senderShort, nil, {
+        sender = sender,
+        minQuality = tonumber(minQ),
+        buttonLabels = buttons,
+        rollsEnabled = (rolls == "1"),
+        lootmaster = lootmaster,
+        voteSeconds = tonumber(voteSeconds),
+        councilMembers = council,
+    })
+end
+
+function LC.HandleSyncAccept(senderShort)
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_ACCEPTED_MSG, senderShort))
+end
+
+function LC.HandleSyncDecline(senderShort)
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_DECLINED_MSG, senderShort))
+end
+
+StaticPopupDialogs["KART_LC_SYNC_REQUEST"] = {
+    text = "Raidlead-Only Settings Sync from Player %s", -- overwritten with KART.L.LC_SYNC_REQUEST_TEXT before every StaticPopup_Show call
+    button1 = ACCEPT,
+    button2 = CANCEL,
+    OnAccept = function(self, data)
+        KART_Settings.lcMinQuality = data.minQuality
+        KART_Settings.lcButtonLabels = data.buttonLabels
+        KART_Settings.lcRollsEnabled = data.rollsEnabled
+        KART_Settings.lcLootmaster = data.lootmaster
+        KART_Settings.lcVoteSeconds = data.voteSeconds
+        KART_Settings.lcCouncilMembers = data.councilMembers
+        KART.SyncSettingsToUI()
+        C_ChatInfo.SendAddonMessage("KART", "LC_SYNC_ACCEPT", "WHISPER", data.sender)
+    end,
+    OnCancel = function(self, data)
+        C_ChatInfo.SendAddonMessage("KART", "LC_SYNC_DECLINE", "WHISPER", data.sender)
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 -- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
 local function IsRealItemLink(link)
     return type(link) == "string" and link:find("|Hitem:") ~= nil
