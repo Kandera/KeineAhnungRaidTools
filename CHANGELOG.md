@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-19
+### Added
+- **Keybinds for Ready Check, Clear World Markers, Pull Timer, and Buff-Checker Toggle:** set in a new Keybinds card on the Raidlead tab.
+
 ## [2.0.0] - 2026-07-18
 ### Changed
 - **Main window redesigned with a full artwork background** — sidebar, title and close button are part of the new look.
