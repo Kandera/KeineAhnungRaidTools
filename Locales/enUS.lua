@@ -17,6 +17,22 @@ KART.L_enUS = {
     LABEL_GENERAL_SETTINGS = "General Settings",
     LABEL_LANGUAGE = "Language",
 
+    -- Profiles
+    LABEL_PROFILES = "Profiles",
+    PROFILE_LABEL_PREFIX = "Profile: ",
+    PROFILE_NONE = "No Profile",
+    PROFILE_NONE_SAVED = "No profiles saved",
+    BTN_PROFILE_SAVE_NEW = "Save As New...",
+    BTN_PROFILE_SAVE = "Save",
+    BTN_PROFILE_DELETE = "Delete",
+    DESC_PROFILE_SAVE_NEW = "Save the current settings as a new named profile.",
+    DESC_PROFILE_SAVE = "Overwrite the active profile with the current settings.",
+    DESC_PROFILE_DELETE = "Delete the active profile. Your current settings are not affected.",
+    PROFILE_SAVE_NEW_TEXT = "Enter a name for the new profile:",
+    PROFILE_NAME_EMPTY = "Profile name cannot be empty.",
+    PROFILE_OVERWRITE_CONFIRM_TEXT = "A profile named '%s' already exists. Overwrite it?",
+    PROFILE_DELETE_CONFIRM_TEXT = "Really delete profile '%s'?",
+
     -- Buttons
     BTN_BUFF_PREVIEW = "Toggle Preview",
     BTN_REFRESH = "Refresh",

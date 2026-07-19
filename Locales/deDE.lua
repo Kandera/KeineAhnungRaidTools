@@ -17,6 +17,22 @@ KART.L_deDE = {
     LABEL_GENERAL_SETTINGS = "Allgemeine Einstellungen",
     LABEL_LANGUAGE = "Sprache",
 
+    -- Profiles
+    LABEL_PROFILES = "Profile",
+    PROFILE_LABEL_PREFIX = "Profil: ",
+    PROFILE_NONE = "Kein Profil",
+    PROFILE_NONE_SAVED = "Keine Profile gespeichert",
+    BTN_PROFILE_SAVE_NEW = "Neu speichern...",
+    BTN_PROFILE_SAVE = "Speichern",
+    BTN_PROFILE_DELETE = "Löschen",
+    DESC_PROFILE_SAVE_NEW = "Speichert die aktuellen Einstellungen als neues, benanntes Profil.",
+    DESC_PROFILE_SAVE = "Überschreibt das aktive Profil mit den aktuellen Einstellungen.",
+    DESC_PROFILE_DELETE = "Löscht das aktive Profil. Deine aktuellen Einstellungen bleiben unverändert.",
+    PROFILE_SAVE_NEW_TEXT = "Namen für das neue Profil eingeben:",
+    PROFILE_NAME_EMPTY = "Profilname darf nicht leer sein.",
+    PROFILE_OVERWRITE_CONFIRM_TEXT = "Ein Profil namens '%s' existiert bereits. Überschreiben?",
+    PROFILE_DELETE_CONFIRM_TEXT = "Profil '%s' wirklich löschen?",
+
     -- Buttons
     BTN_BUFF_PREVIEW = "Vorschau umschalten",
     BTN_REFRESH = "Aktualisieren",
