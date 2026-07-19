@@ -860,3 +860,44 @@ function KART.DeepCopy(t)
     end
     return copy
 end
+
+-- Maps each of the 6 main-window tab-content panels to its ShowTab index. Used by
+-- KART.BuildSearchIndex to figure out which tab a given label belongs to, by walking up the
+-- label's parent chain until one of these panels is found.
+local SEARCH_TAB_PANELS = {
+    { panel = "PromotePanel", tabIndex = 1 },
+    { panel = "RaidleadPanel", tabIndex = 2 },
+    { panel = "BuffCheckPanel", tabIndex = 3 },
+    { panel = "SettingsPanel", tabIndex = 4 },
+    { panel = "LootCouncilPanel", tabIndex = 5 },
+    { panel = "WoWUtilsPanel", tabIndex = 6 },
+}
+
+-- Builds the settings search index by walking KART.DynamicLabels — every settings label already
+-- gets inserted there by its creation site (checkboxes, sliders, card titles, hints, tab titles),
+-- so no per-widget registration is needed here. A label whose parent chain never reaches one of
+-- the 6 main tab panels (e.g. one that belongs to a popup window like Loot History) is silently
+-- skipped, which is how "only the 6 main tabs are searchable" enforces itself.
+function KART.BuildSearchIndex()
+    local index = {}
+    for _, fs in ipairs(KART.DynamicLabels) do
+        local text = fs:GetText()
+        if text and text ~= "" then
+            local ancestor = fs:GetParent()
+            local tabIndex
+            while ancestor and not tabIndex do
+                for _, entry in ipairs(SEARCH_TAB_PANELS) do
+                    if ancestor == KART[entry.panel] then
+                        tabIndex = entry.tabIndex
+                        break
+                    end
+                end
+                ancestor = ancestor:GetParent()
+            end
+            if tabIndex then
+                table.insert(index, { text = text, tabIndex = tabIndex, widget = fs })
+            end
+        end
+    end
+    return index
+end
