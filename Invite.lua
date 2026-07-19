@@ -321,6 +321,12 @@ function WU.BuildPanel(parent)
 
     WU.ImportEditBox = CreateFrame("EditBox", "KART_WUImportEditBox", pasteScroll)
     WU.ImportEditBox:SetWidth(428)
+    -- An EditBox with no explicit height auto-sizes to a single line, far shorter than the
+    -- visible paste box (pasteBG, 90px tall) — clicking anywhere below that first line then hits
+    -- empty scroll-frame space instead of the EditBox, so the cursor never activates there. Fix:
+    -- give it a fixed height comfortably taller than the viewport, so every click inside the
+    -- visible box lands on the EditBox, and pasted text beyond the viewport still scrolls.
+    WU.ImportEditBox:SetHeight(300)
     WU.ImportEditBox:SetMultiLine(true)
     WU.ImportEditBox:SetAutoFocus(false)
     WU.ImportEditBox:SetFontObject("GameFontHighlightSmall")
