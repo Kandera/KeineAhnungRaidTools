@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-07-19
+### Added
+- **Einstellungen-Suche:** ein neuer Suche-Button im Hauptfenster — Einstellungsnamen eintippen und direkt dorthin springen, mit passendem Tab und kurzem Highlight.
+
 ## [2.3.0] - 2026-07-19
 ### Added
 - **Raidleiter-Settings-Sync:** sende deine Loot-Council-Raid-Einstellungen an einen bestimmten Spieler per Namen im Loot-Council-Tab — er sieht ein Bestätigungsfenster und muss zustimmen, bevor sich etwas ändert.

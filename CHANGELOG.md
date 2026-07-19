@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-07-19
+### Added
+- **Settings search:** a new Search button on the main window lets you type a setting's name and jump straight to it — correct tab, scrolled into view, briefly highlighted.
+
 ## [2.3.0] - 2026-07-19
 ### Added
 - **Raidlead-Only Settings Sync:** send your Loot Council raid-wide settings to a specific player by name from the Loot Council tab — they see a confirmation popup and must accept before anything changes.
