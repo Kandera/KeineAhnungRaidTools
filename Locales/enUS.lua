@@ -15,6 +15,8 @@ KART.L_enUS = {
     LABEL_FONT_SIZE_MENU = "Font Size Menu",
     LABEL_FONT_SIZE_CONTENT = "Font Size Content",
     LABEL_GENERAL_SETTINGS = "General Settings",
+    BTN_SEARCH = "Search",
+    DESC_SEARCH = "Search for a setting by name and jump straight to it.",
     LABEL_LANGUAGE = "Language",
 
     -- Profiles

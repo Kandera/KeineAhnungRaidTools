@@ -633,3 +633,141 @@ closeHover:SetAllPoints()
 closeHover:SetColorTexture(1, 1, 1, 0.08)
 closeBtn:SetScript("OnClick", function() KART.MainFrame:Hide() end)
 mainFrame.closeBtn = closeBtn
+
+-- 9. Settings search: small always-visible button + popout (edit box + up to 8 result rows).
+-- Positioned left of the close button, in the same header row as the active tab's title, well
+-- clear of the close button's hit area (closeBtn spans roughly x -45..-9, y -42..-6 from
+-- clickArea's TOPRIGHT) and of the baked logo/title zone above y -22.
+local searchBtn = KART.CreateModernButton(clickArea, L.BTN_SEARCH, L.DESC_SEARCH)
+searchBtn:SetSize(70, 22)
+searchBtn:SetPoint("TOPRIGHT", clickArea, "TOPRIGHT", -70, -20)
+
+local searchPopout = CreateFrame("Frame", nil, clickArea, "BackdropTemplate")
+searchPopout:SetPoint("TOPRIGHT", searchBtn, "BOTTOMRIGHT", 0, -6)
+searchPopout:SetSize(260, 40)
+searchPopout:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    edgeSize = 1,
+})
+searchPopout:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
+searchPopout:SetBackdropBorderColor(0, 0, 0, 1)
+searchPopout:SetFrameStrata("DIALOG")
+searchPopout:Hide()
+KART.ApplyRoundedMask(searchPopout, KART.Theme.CORNER_RADIUS_SM)
+
+local searchBox = KART.CreateStyledEditBox(searchPopout, "KART_SearchBox")
+searchBox:SetSize(240, 26)
+searchBox:SetPoint("TOPLEFT", searchPopout, "TOPLEFT", 10, -8)
+searchBox:SetMaxLetters(64)
+
+-- 8 pooled, reusable result rows — created once, re-labeled and shown/hidden per search rather
+-- than creating/destroying frames on every keystroke.
+local RESULT_ROW_COUNT = 8
+local resultRows = {}
+for i = 1, RESULT_ROW_COUNT do
+    local row = CreateFrame("Button", nil, searchPopout, "BackdropTemplate")
+    row:SetSize(240, 20)
+    row:SetPoint("TOPLEFT", searchBox, "BOTTOMLEFT", 0, -4 - (i - 1) * 22)
+    row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    row:SetBackdropColor(0, 0, 0, 0)
+    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.text:SetPoint("LEFT", row, "LEFT", 6, 0)
+    row.text:SetJustifyH("LEFT")
+    row:SetScript("OnEnter", function(self)
+        local r, g, b = KART.Theme.AccentColor()
+        local dr, dg, db = KART.Theme.Darken(r, g, b, 0.45)
+        self:SetBackdropColor(dr, dg, db, 0.5)
+    end)
+    row:SetScript("OnLeave", function(self) self:SetBackdropColor(0, 0, 0, 0) end)
+    row:Hide()
+    resultRows[i] = row
+end
+
+local searchIndex = {}
+local function CloseSearchPopout()
+    searchPopout:Hide()
+    searchBox:SetText("")
+    searchBox:ClearFocus()
+end
+KART.HideSearchPopout = CloseSearchPopout
+
+local function FilterSearch(query)
+    query = query:lower()
+    local shown = 0
+    if query ~= "" then
+        for _, entry in ipairs(searchIndex) do
+            if shown >= RESULT_ROW_COUNT then break end
+            if entry.text:lower():find(query, 1, true) then
+                shown = shown + 1
+                local row = resultRows[shown]
+                row.text:SetText(entry.text)
+                row.entry = entry
+                row:Show()
+            end
+        end
+    end
+    for i = shown + 1, RESULT_ROW_COUNT do
+        resultRows[i]:Hide()
+    end
+    searchPopout:SetHeight(40 + shown * 22)
+end
+
+for _, row in ipairs(resultRows) do
+    row:SetScript("OnClick", function(self)
+        if self.entry then KART.JumpToSearchResult(self.entry) end
+    end)
+end
+
+searchBox:SetScript("OnTextChanged", function(self)
+    FilterSearch(self:GetText())
+end)
+searchBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+    CloseSearchPopout()
+end)
+
+searchBtn:SetScript("OnClick", function()
+    if searchPopout:IsShown() then
+        CloseSearchPopout()
+    else
+        searchIndex = KART.BuildSearchIndex()
+        FilterSearch("")
+        searchPopout:Show()
+        searchBox:SetFocus()
+    end
+end)
+
+-- Translucent highlight shown briefly over a search result's matched label. One shared frame,
+-- re-parented and re-anchored per jump rather than creating a new frame per search.
+local searchHighlight = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
+searchHighlight:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+searchHighlight:Hide()
+
+-- Switches to the result's tab, scrolls the shared content frame so the matched label sits
+-- ~40px below the viewport's top edge (not flush against it), and briefly highlights the label.
+function KART.JumpToSearchResult(entry)
+    KART.ShowTab(entry.tabIndex)
+
+    local widget = entry.widget
+    local top = widget:GetTop()
+    local scrollTop = scrollFrame:GetTop()
+    if top and scrollTop then
+        local delta = top - scrollTop + 40
+        local maxScroll = math.max(0, scrollChild:GetHeight() - scrollFrame:GetHeight())
+        local newScroll = math.max(0, math.min(scrollFrame:GetVerticalScroll() + delta, maxScroll))
+        scrollFrame:SetVerticalScroll(newScroll)
+    end
+
+    searchHighlight:SetParent(widget:GetParent())
+    searchHighlight:ClearAllPoints()
+    searchHighlight:SetPoint("TOPLEFT", widget, "TOPLEFT", -6, 6)
+    searchHighlight:SetPoint("BOTTOMRIGHT", widget, "BOTTOMRIGHT", 6, -6)
+    searchHighlight:SetFrameLevel(widget:GetParent():GetFrameLevel() + 10)
+    local r, g, b = KART.Theme.AccentColor()
+    searchHighlight:SetBackdropColor(r, g, b, 0.35)
+    searchHighlight:Show()
+    C_Timer.After(1.5, function() searchHighlight:Hide() end)
+
+    KART.HideSearchPopout()
+end

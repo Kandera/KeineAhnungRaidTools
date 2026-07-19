@@ -15,6 +15,8 @@ KART.L_deDE = {
     LABEL_FONT_SIZE_MENU = "Schriftgröße Menü",
     LABEL_FONT_SIZE_CONTENT = "Schriftgröße Inhalt",
     LABEL_GENERAL_SETTINGS = "Allgemeine Einstellungen",
+    BTN_SEARCH = "Suche",
+    DESC_SEARCH = "Nach einer Einstellung suchen und direkt dorthin springen.",
     LABEL_LANGUAGE = "Sprache",
 
     -- Profiles
