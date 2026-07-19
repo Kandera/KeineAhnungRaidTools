@@ -132,6 +132,33 @@ function KART.UpdateRaidleadBarVisibility()
     end
 end
 
+-- 4b. Keybind action list: shared between ApplyKeybinds and the settings-tab bind UI so both
+-- stay in sync with a single source of truth for which 4 actions are bindable.
+KART.KeybindActions = {
+    { key = "readyCheck", button = "KART_RL_ReadyCheckBtn" },
+    { key = "clearWorldMarkers", button = "KART_RL_ClearWorldMarkersBtn" },
+    { key = "pullTimer", button = "KART_RL_PullTimerBtn" },
+    { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
+}
+
+-- Applies every stored keybind as an override click-binding on its target button. Override
+-- bindings work for both secure (Ready Check, Clear World Markers) and plain OnClick buttons
+-- (Pull Timer, Buff-Checker Toggle) via the same call, and survive combat lockdown once set —
+-- only the act of calling SetOverrideBindingClick itself is restricted while in combat, so this
+-- must only run out of combat (mirrors KART.UpdateRaidleadBarVisibility's own guard).
+function KART.ApplyKeybinds()
+    if InCombatLockdown() then return end
+    ClearOverrideBindings(rlBar)
+    local binds = KART_Settings and KART_Settings.keybinds
+    if not binds then return end
+    for _, action in ipairs(KART.KeybindActions) do
+        local key = binds[action.key]
+        if key and key ~= "" then
+            SetOverrideBindingClick(rlBar, false, key, action.button, "LeftButton")
+        end
+    end
+end
+
 -- 5. Buttons initialisieren
 -- Zeile 1: Raid Target Marker
 for i = 1, 8 do

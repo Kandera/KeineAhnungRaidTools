@@ -160,6 +160,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
         KART.UpdateMinimapButton()
         KART.UpdateRaidleadBarVisibility()
+        KART.ApplyKeybinds()
 
         AddonCompartmentFrame:RegisterAddon({
             text = "Keine Ahnung Raid Tools",
