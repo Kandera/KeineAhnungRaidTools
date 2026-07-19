@@ -192,7 +192,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [1] = 475, -- Automation: promote/invite card + AutoLog title + card
     [2] = 380, -- Raidlead: bar-settings card (180) + keybinds card (150) + gaps
     [3] = 190, -- BuffCheck: one 160 card
-    [4] = 415, -- Settings: two half cards + color card
+    [4] = 555, -- Settings: two half cards + color card + profiles card
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -565,6 +565,62 @@ KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -16)
 KART.BtnReset:SetScript("OnClick", function()
     for k, v in pairs(KART.Defaults) do KART_Settings[k] = v end
     ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
+end)
+
+-- Card: settings profiles (save/switch/delete named KART_Settings snapshots)
+local profCard = KART.CreateCard(KART.SettingsPanel)
+profCard:SetPoint("TOPLEFT", colCard, "BOTTOMLEFT", 0, -20)
+profCard:SetSize(500, 100)
+
+local profTitle = profCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+profTitle:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -14)
+profTitle:SetText(L.LABEL_PROFILES)
+table.insert(KART.DynamicLabels, profTitle)
+
+KART.BtnProfile = KART.CreateModernButton(profCard, L.PROFILE_LABEL_PREFIX .. L.PROFILE_NONE)
+KART.BtnProfile:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -34)
+KART.BtnProfile:SetSize(200, 25)
+KART.BtnProfile:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.LABEL_PROFILES)
+        local names = {}
+        for name in pairs(KART_Profiles) do table.insert(names, name) end
+        table.sort(names)
+        if #names == 0 then
+            local noneItem = rootDescription:CreateButton(L.PROFILE_NONE_SAVED, function() end)
+            noneItem:SetEnabled(false)
+        end
+        for _, name in ipairs(names) do
+            rootDescription:CreateButton(name, function()
+                KART.LoadProfile(name)
+            end)
+        end
+    end)
+end)
+
+KART.BtnProfileSaveNew = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE_NEW, L.DESC_PROFILE_SAVE_NEW)
+KART.BtnProfileSaveNew:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -69)
+KART.BtnProfileSaveNew:SetScript("OnClick", function()
+    StaticPopupDialogs["KART_PROFILE_SAVE_NEW"].text = L.PROFILE_SAVE_NEW_TEXT
+    StaticPopup_Show("KART_PROFILE_SAVE_NEW")
+end)
+
+KART.BtnProfileSave = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE, L.DESC_PROFILE_SAVE)
+KART.BtnProfileSave:SetPoint("TOPLEFT", KART.BtnProfileSaveNew, "TOPRIGHT", 10, 0)
+KART.BtnProfileSave:SetScript("OnClick", function()
+    local name = KART_Settings.activeProfile
+    if not name then return end
+    KART.SaveProfile(name)
+    KART.RefreshProfileButton()
+end)
+
+KART.BtnProfileDelete = KART.CreateModernButton(profCard, L.BTN_PROFILE_DELETE, L.DESC_PROFILE_DELETE)
+KART.BtnProfileDelete:SetPoint("TOPLEFT", KART.BtnProfileSave, "TOPRIGHT", 10, 0)
+KART.BtnProfileDelete:SetScript("OnClick", function()
+    local name = KART_Settings.activeProfile
+    if not name then return end
+    StaticPopupDialogs["KART_PROFILE_DELETE_CONFIRM"].text = L.PROFILE_DELETE_CONFIRM_TEXT
+    StaticPopup_Show("KART_PROFILE_DELETE_CONFIRM", name, nil, { name = name })
 end)
 
 -- 8. Close button: invisible hit area over the X baked into the artwork.

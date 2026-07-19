@@ -137,6 +137,8 @@ function KART.SyncSettingsToUI()
         KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
     end
 
+    if KART.RefreshProfileButton then KART.RefreshProfileButton() end
+
     KART.UpdateMinimapButton()
     KART.UpdateRaidleadBarVisibility()
     KART.ApplyKeybinds()

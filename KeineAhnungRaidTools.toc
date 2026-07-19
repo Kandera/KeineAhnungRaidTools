@@ -15,6 +15,7 @@ Utils.lua
 MainFrame.lua
 GroupLogic.lua
 RaidleadBar.lua
+Profiles.lua
 BuffChecker.lua
 LootCouncil.lua
 Droptimizer.lua
