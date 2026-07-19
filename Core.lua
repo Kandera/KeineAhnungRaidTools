@@ -46,6 +46,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_LootHistory = KART_LootHistory or {}
         KART_LCOfficerNotes = KART_LCOfficerNotes or {}
         KART_WoWUtilsCache = KART_WoWUtilsCache or {}
+        KART_Profiles = KART_Profiles or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         for k, v in pairs(KART.Defaults) do

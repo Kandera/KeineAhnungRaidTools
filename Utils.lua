@@ -845,3 +845,18 @@ KART.KeybindActions = {
     { key = "pullTimer", button = "KART_RL_PullTimerBtn" },
     { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
 }
+
+-- Plain recursive table copy — KART_Settings only ever holds strings, numbers, booleans, and
+-- nested plain tables (e.g. the keybinds/minimap sub-tables), so no metatable/function handling
+-- is needed here.
+function KART.DeepCopy(t)
+    local copy = {}
+    for k, v in pairs(t) do
+        if type(v) == "table" then
+            copy[k] = KART.DeepCopy(v)
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
