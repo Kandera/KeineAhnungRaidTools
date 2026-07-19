@@ -48,6 +48,15 @@ KART.L_deDE = {
     SET_RL_LOCK = "Leiste sperren",
     SET_RL_AUTOHIDE = "Auto-Hide (Solo)",
     SET_PULL_TIMER = "Dauer Pull-Timer (Sekunden)",
+    LABEL_RL_KEYBINDS = "Tastenbelegung",
+    KB_READYCHECK = "Bereitschaftscheck",
+    KB_CLEARWM = "Weltmarkierungen löschen",
+    KB_PULLTIMER = "Pull-Timer",
+    KB_BUFFCHECK = "Buff-Checker ein/aus",
+    KB_NOT_BOUND = "Nicht belegt",
+    KB_PRESS_KEY = "Taste drücken...",
+    KB_NOT_IN_COMBAT = "Nicht im Kampf möglich",
+    DESC_KEYBINDS = "Linksklick zum Belegen, Rechtsklick zum Löschen. Im Kampf nicht verfügbar.",
     SET_UI_SCALE = "Fenster-Skalierung",
 
     -- Auto Combat Log

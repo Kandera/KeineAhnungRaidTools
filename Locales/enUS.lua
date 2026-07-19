@@ -48,6 +48,15 @@ KART.L_enUS = {
     SET_RL_LOCK = "Lock Bar",
     SET_RL_AUTOHIDE = "Auto-Hide (Solo)",
     SET_PULL_TIMER = "Pull Timer Duration (Seconds)",
+    LABEL_RL_KEYBINDS = "Keybinds",
+    KB_READYCHECK = "Ready Check",
+    KB_CLEARWM = "Clear World Markers",
+    KB_PULLTIMER = "Pull Timer",
+    KB_BUFFCHECK = "Buff-Checker Toggle",
+    KB_NOT_BOUND = "Not Bound",
+    KB_PRESS_KEY = "Press a key...",
+    KB_NOT_IN_COMBAT = "Not in combat",
+    DESC_KEYBINDS = "Left-click to bind a key, right-click to clear. Unavailable while in combat.",
     SET_UI_SCALE = "Window Scale",
 
     -- Auto Combat Log
