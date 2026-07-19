@@ -190,7 +190,7 @@ scrollFrame.scrollBarHideable = true
 -- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
     [1] = 475, -- Automation: promote/invite card + AutoLog title + card
-    [2] = 380, -- Raidlead: bar-settings card (180) + keybinds card (150) + gaps
+    [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
 }
@@ -249,7 +249,7 @@ KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pu
 -- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
 local kbCard = KART.CreateCard(KART.RaidleadPanel)
 kbCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
-kbCard:SetSize(500, 150)
+kbCard:SetSize(500, 168)
 
 local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 kbTitle:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, -14)
@@ -305,7 +305,7 @@ local function StartCapture(btn)
 end
 
 for i, action in ipairs(KART.KeybindActions) do
-    local yOff = -20 - (i - 1) * 30
+    local yOff = -38 - (i - 1) * 30
 
     local label = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, yOff)
