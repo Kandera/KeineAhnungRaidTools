@@ -323,7 +323,7 @@ for i, action in ipairs(KART.KeybindActions) do
         if InCombatLockdown() then
             self.text:SetText(L.KB_NOT_IN_COMBAT)
             C_Timer.After(1, function()
-                local current = KART_Settings.keybinds[self.actionKey]
+                local current = KART_Settings and KART_Settings.keybinds and KART_Settings.keybinds[self.actionKey]
                 self.text:SetText(current and current ~= "" and current or L.KB_NOT_BOUND)
             end)
             return

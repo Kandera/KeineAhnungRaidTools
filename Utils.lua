@@ -834,3 +834,14 @@ function KART.SetGradientOverlayColor(tex, r, g, b, alpha)
     local bottom = CreateColor(math.max(r - 0.06, 0), math.max(g - 0.06, 0), math.max(b - 0.06, 0), alpha)
     pcall(tex.SetGradient, tex, "VERTICAL", top, bottom)
 end
+
+-- Keybind action list: shared between ApplyKeybinds and the settings-tab bind UI so both
+-- stay in sync with a single source of truth for which 4 actions are bindable. Lives in
+-- Utils.lua (rather than RaidleadBar.lua where ApplyKeybinds is defined) because it loads
+-- before MainFrame.lua, which reads it at file-load time to build the keybind settings card.
+KART.KeybindActions = {
+    { key = "readyCheck", button = "KART_RL_ReadyCheckBtn" },
+    { key = "clearWorldMarkers", button = "KART_RL_ClearWorldMarkersBtn" },
+    { key = "pullTimer", button = "KART_RL_PullTimerBtn" },
+    { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
+}
