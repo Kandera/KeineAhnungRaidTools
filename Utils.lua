@@ -55,6 +55,7 @@ KART.Defaults = {
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
     pullTimerDuration = 10,
+    keybinds = { readyCheck = nil, clearWorldMarkers = nil, pullTimer = nil, buffCheckToggle = nil },
     bcModuleEnabled = false,
     showBuffCheck = false,
     buffCheckAlpha = 90,

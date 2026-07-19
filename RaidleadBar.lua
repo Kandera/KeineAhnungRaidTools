@@ -28,8 +28,8 @@ local markerColors = {
 }
 
 -- 2. Lokale Hilfsfunktion für die Bar-Buttons
-local function CreateBarButton(parent, x, y, width, height, func, texture, texCoords, text, macrotext, tooltipText)
-    local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, BackdropTemplate")
+local function CreateBarButton(parent, x, y, width, height, func, texture, texCoords, text, macrotext, tooltipText, name)
+    local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate, BackdropTemplate")
     b:SetSize(width or 22, height or 22)
     b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     b:RegisterForClicks("AnyUp", "AnyDown")
@@ -155,8 +155,8 @@ end
 -- ClearRaidMarker() is protected, so it must stay a secure macro.
 local clearWmMacro = {}
 for i = 1, 8 do clearWmMacro[i] = "/cwm " .. i end
-CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, table.concat(clearWmMacro, "\n"), L.RL_CLEAR_WM)
-CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK)
+CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, table.concat(clearWmMacro, "\n"), L.RL_CLEAR_WM, "KART_RL_ClearWorldMarkersBtn")
+CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK, "KART_RL_ReadyCheckBtn")
 
 -- Buff-Checker Toggle Button
 CreateBarButton(rlBar, 249, -5, 22, 22, function(_, _, down)
@@ -166,7 +166,7 @@ CreateBarButton(rlBar, 249, -5, 22, 22, function(_, _, down)
     else
         KART.ShowBuffCheck()
     end
-end, 135932, nil, nil, nil, L.RL_BUFFCHECK) -- Icon: Arkane Brillanz (Buffs)
+end, 135932, nil, nil, nil, L.RL_BUFFCHECK, "KART_RL_BuffCheckToggleBtn") -- Icon: Arkane Brillanz (Buffs)
 
 -- Start the countdown via C_PartyInfo.DoCountdown instead of a "/pull" macro:
 -- "/pull" only exists when BigWigs/DBM is installed, while DoCountdown drives the
@@ -180,4 +180,4 @@ KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button, down
     else
         C_PartyInfo.DoCountdown(KART_Settings and KART_Settings.pullTimerDuration or 10)
     end
-end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER)
+end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER, "KART_RL_PullTimerBtn")
