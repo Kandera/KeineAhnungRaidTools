@@ -1,5 +1,4 @@
 local addonName, KART = ...
-local L = KART.L
 
 -- Saves (or overwrites) a profile with the current KART_Settings and makes it the active one.
 function KART.SaveProfile(name)
@@ -35,7 +34,7 @@ end
 function KART.RefreshProfileButton()
     if not KART.BtnProfile then return end
     local name = KART_Settings and KART_Settings.activeProfile
-    KART.BtnProfile.text:SetText(L.PROFILE_LABEL_PREFIX .. (name or L.PROFILE_NONE))
+    KART.BtnProfile.text:SetText(KART.L.PROFILE_LABEL_PREFIX .. (name or KART.L.PROFILE_NONE))
 end
 
 StaticPopupDialogs["KART_PROFILE_SAVE_NEW"] = {
