@@ -1772,6 +1772,14 @@ function LC.CreateCouncilPanel()
     hdr:SetHeight(26)
     hdr:SetPoint("TOPLEFT"); hdr:SetPoint("TOPRIGHT")
     hdr:EnableMouse(true)
+    hdr:RegisterForDrag("LeftButton")
+    hdr:SetScript("OnDragStart", function() f:StartMoving() end)
+    hdr:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcCouncilPanelPos = {x = f:GetLeft(), y = f:GetTop()}
+        end
+    end)
     KART.CreateHeaderLine(f, -28)
 
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

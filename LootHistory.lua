@@ -256,6 +256,14 @@ function LH.CreateWindow()
     hdr:SetHeight(26)
     hdr:SetPoint("TOPLEFT"); hdr:SetPoint("TOPRIGHT")
     hdr:EnableMouse(true)
+    hdr:RegisterForDrag("LeftButton")
+    hdr:SetScript("OnDragStart", function() f:StartMoving() end)
+    hdr:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcHistoryWindowPos = {x = f:GetLeft(), y = f:GetTop()}
+        end
+    end)
 
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("LEFT", 16, 0)
