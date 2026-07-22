@@ -11,7 +11,7 @@ KART.BuffData = {
     { id = "shout",  label = L.BC_LABEL_SHOUT,  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabel = L.BC_REPORT_SHOUT },
     { id = "bronze", label = L.BC_LABEL_BRONZE, col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabel = L.BC_REPORT_BRONZE },
     { id = "sky",    label = L.BC_LABEL_SKY,    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = "Skyfury", report = "buff", reportLabel = L.BC_REPORT_SKY },
-    { id = "food",   label = L.BC_LABEL_FOOD,   col = 8, icon = 134062,  isFood = true, report = "item", reportLabel = L.BC_REPORT_FOOD },
+    { id = "food",   label = L.BC_LABEL_FOOD,   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabel = L.BC_REPORT_FOOD },
     { id = "flask",  label = L.BC_LABEL_FLASK,  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabel = L.BC_REPORT_FLASK },
     { id = "vantus", label = L.BC_LABEL_VANTUS, col = 10, icon = 5976918, nameMatch = "Vantus" },
     { id = "rune",   label = L.BC_LABEL_RUNE,   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
@@ -679,7 +679,7 @@ function KART.UpdateBuffCheck(isPreview)
                         end
                     end
                     if buff.nameMatch and aura.name:find(buff.nameMatch) then match = true end
-                    if buff.isFood and (aura.isFullFood or aura.name:find("Satt") or aura.name:find("Well Fed")) then match = true end
+                    if buff.isFood and not match and (aura.name:find("Satt") or aura.name:find("Well Fed")) then match = true end
                     if buff.isFlask and (aura.name:find("Fläschchen") or aura.name:find("Phial") or aura.name:find("Flask")) then match = true end
                     if buff.isRune and (aura.name:find("Augment") or aura.name:find("Verstärkungsrune")) then match = true end
                     if buff.isOil then
