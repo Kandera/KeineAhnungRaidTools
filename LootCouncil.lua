@@ -2850,10 +2850,13 @@ function LC.RemovePendingTrade(rollID)
     LC.RefreshTradeReminder()
 end
 
--- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner, any
--- pending trade) — called when a tab is dismissed or a session ends, so a later real roll that
--- happens to reuse the same small rollID integer never inherits stale data from a previous boss
+-- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
+-- — called when a tab is dismissed or a session ends, so a later real roll that happens to
+-- reuse the same small rollID integer never inherits stale data from a previous boss
 -- (see the "wrong item posted on right-click assign" and "stale tabs after next boss" reports).
+-- Note: pending trades are NOT cleared here; they are independent long-lived obligations that
+-- should only be removed when the trade actually completes, is manually marked done, or is
+-- reassigned to someone else.
 function LC.ClearRollState(rollID)
     LC.votes[rollID]           = nil
     LC.rolls[rollID]           = nil
@@ -2865,7 +2868,6 @@ function LC.ClearRollState(rollID)
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
     LC.councilTabsNew[rollID]  = nil
-    LC.RemovePendingTrade(rollID)
 end
 
 function LC.CreateTradeReminderFrame()
@@ -3025,7 +3027,12 @@ function LC.OnTradeClosed()
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        if entry.winnerShort == partnerShort and not FindItemInBags(entry.itemLink) then
+        -- Only treat "not found in bags" as "trade completed" for real, resolved item links.
+        -- A "???" placeholder entry (async item-link resolution still pending) would always
+        -- report "not found" since the placeholder is not a valid item ID to search bags for,
+        -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
+        -- "done" checkmark button remains available as the fallback for that edge case.
+        if entry.winnerShort == partnerShort and IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
             LC.RemovePendingTrade(entry.rollID)
         end
     end
