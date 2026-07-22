@@ -564,13 +564,15 @@ end
 -- designated lootmaster (see LC.GetLootmaster), who must win every item so they can hand it to
 -- whoever the council actually decided on via trade (see LC.pendingTrades). Never passes.
 local function ForceWinRoll(rollID)
-    local _, _, _, _, _, canNeed, canGreed, canDisenchant = GetLootRollItemInfo(rollID)
+    local _, _, _, _, _, canNeed, canGreed, canDisenchant, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
     if canNeed then
         RollOnLoot(rollID, 1)
     elseif canGreed then
         RollOnLoot(rollID, 2)
     elseif canDisenchant then
         RollOnLoot(rollID, 3)
+    elseif canTransmog then
+        RollOnLoot(rollID, 4) -- roll type 4 = Transmog; Blizzard doesn't expose a named constant for it
     end
 end
 
