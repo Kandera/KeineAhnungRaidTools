@@ -2602,7 +2602,7 @@ local MAX_HISTORY_ENTRIES = 500
 -- history keeps its original color even if button labels/colors are changed later.
 -- Difficulty is captured locally on whichever client logs the entry (assigner or synced receiver),
 -- since every client in the same instance sees the same difficulty.
-function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef)
+function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef, rollID)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
 
@@ -2619,6 +2619,18 @@ function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef)
         end
     end
 
+    -- A reassignment (LC.AssignWinner called again for a rollID that was already assigned) must
+    -- replace its previous history entry, not sit alongside it — otherwise the same physical item
+    -- shows up twice in history with two different winners.
+    if rollID then
+        for i = #KART_LootHistory, 1, -1 do
+            if KART_LootHistory[i].rollID == rollID then
+                table.remove(KART_LootHistory, i)
+                break
+            end
+        end
+    end
+
     local _, _, _, difficultyName = GetInstanceInfo()
     table.insert(KART_LootHistory, {
         time       = now,
@@ -2628,6 +2640,7 @@ function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef)
         class      = classFile,
         color      = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
         difficulty = difficultyName or "",
+        rollID     = rollID,
     })
     if #KART_LootHistory > MAX_HISTORY_ENTRIES then
         table.remove(KART_LootHistory, 1)
@@ -2765,7 +2778,7 @@ local function DoAssignWinner(rollID, playerShort, reason, colorDef)
             LC.ShowWinnerNotification(LC.rollItems[rollID])
         end
     else
-        LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef)
+        LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef, rollID)
         LC.AddPendingTrade(rollID, playerShort)
     end
     LC.assignedWinners[rollID] = playerShort
@@ -3301,7 +3314,7 @@ function LC.HandleResult(payload, senderShort)
         local _, cf = UnitClass(unit)
         classFile = cf
     end
-    LC.LogHistory(LC.rollItems[rollID], winner, reason, classFile, LC.ResolveColorForReason(reason))
+    LC.LogHistory(LC.rollItems[rollID], winner, reason, classFile, LC.ResolveColorForReason(reason), rollID)
 end
 
 -- =====================================================================
