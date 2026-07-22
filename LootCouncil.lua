@@ -576,6 +576,27 @@ end
 --  START_LOOT_ROLL handler  (called from Core.lua)
 -- =====================================================================
 
+-- GetLootRollItemLink(rollID) can return nil for a moment right when the roll starts (most common
+-- for a brand-new item whose data hasn't finished propagating client-side yet). Retries a handful
+-- of times with backoff instead of permanently giving up — bails early if rollID's entry was
+-- resolved by some other path in the meantime, or cleared entirely (tab closed/session ended, see
+-- LC.ClearRollState), so a long-since-irrelevant timer never resurrects a forgotten roll.
+local function ResolveRollItemLink(rollID, attempt)
+    if LC.rollItems[rollID] ~= "???" then return end
+    attempt = attempt or 1
+    local link = GetLootRollItemLink(rollID)
+    if link then
+        LC.rollItems[rollID] = link
+        LC.RefreshVoteListRows()
+        if LC.councilPanel and LC.councilPanel:IsShown() then
+            LC.RefreshCouncilRows()
+            LC.RefreshCouncilTabs()
+        end
+    elseif attempt < 8 then
+        C_Timer.After(0.25 * attempt, function() ResolveRollItemLink(rollID, attempt + 1) end)
+    end
+end
+
 -- Claims rollID by whatever roll type is actually available, strongest first — used only for the
 -- designated lootmaster (see LC.GetLootmaster), who must win every item so they can hand it to
 -- whoever the council actually decided on via trade (see LC.pendingTrades). Never passes.
@@ -617,6 +638,7 @@ function LC.OnStartLootRoll(rollID)
     if quality and quality < minQuality then return end
 
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
+    if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
     -- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational. Every
@@ -3173,6 +3195,7 @@ function LC.HandleStart(payload)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"
+    if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
     -- so there's nothing left to do here for that.
 
