@@ -282,6 +282,16 @@ function LC.HandleConfig(payload, senderShort)
     end
 end
 
+-- Answers an "LC_STATE_REQ" broadcast from a joining/reloading peer with the current session flag
+-- and, if a session is active, the full raid config — a one-shot pull instead of waiting for the
+-- leader's own roster-change handler to happen to fire (see LC.CheckRaidJoin). Only the actual
+-- leader replies, same authority rule as LC.BroadcastRaidConfig itself.
+function LC.HandleStateRequest()
+    if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
+    SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"))
+    if LC.sessionActive then LC.BroadcastRaidConfig() end
+end
+
 -- Whispers the sender's current Loot Council raid-wide-authority settings to targetName as a
 -- sync request; the receiver decides via a confirm popup whether to apply them (Core.lua
 -- CHAT_MSG_ADDON -> LC.HandleSyncRequest). Same 255-byte payload budget and council-list
@@ -511,6 +521,7 @@ function LC.CheckRaidJoin()
         LC.promptedThisSession = false
         LC.sessionActive = false
         LC.historySyncRequested = false
+        LC.stateSyncRequested = false
         return
     end
     if KART_Settings.lcModuleEnabled == false then return end
@@ -519,6 +530,15 @@ function LC.CheckRaidJoin()
     if not LC.historySyncRequested then
         LC.historySyncRequested = true
         LC.RequestHistorySync()
+    end
+
+    -- Ask the raid leader (once per raid join/reload) for the current session-active flag and
+    -- raid-wide config, so a late joiner or a /reload'd client is never stuck on stale defaults
+    -- until the leader happens to notice a roster change (see LC.HandleStateRequest below) — same
+    -- request/response shape as the loot-history catch-up above.
+    if not LC.stateSyncRequested then
+        LC.stateSyncRequested = true
+        SendLC("LC_STATE_REQ")
     end
 
     if not UnitIsGroupLeader("player") then return end

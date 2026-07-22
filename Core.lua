@@ -394,6 +394,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC then KART.LC.HandleSyncAccept(shortName) end
                 elseif msg == "LC_SYNC_DECLINE" then
                     if KART.LC then KART.LC.HandleSyncDecline(shortName) end
+                elseif msg == "LC_STATE_REQ" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStateRequest() end
                 elseif msg:sub(1, 10) == "RC_REASON:" then
                     local reason = msg:sub(11)
                     KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
