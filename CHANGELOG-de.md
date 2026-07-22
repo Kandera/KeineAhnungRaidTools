@@ -6,6 +6,20 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-07-23
+### Behoben
+- **Der Loot-Council-Sitzungsstatus (An/Aus, Mindestqualität, Stimm-Labels, Opt-in-Würfe) synchronisiert sich jetzt sofort beim Beitreten/`/reload`**, statt erst bei der nächsten Rosteränderung.
+- **Das automatische Need/Greed des Lootmasters beansprucht jetzt auch reine Transmog-Würfe**, statt nichts zu tun.
+- **Rechtsklick-Zuweisung und Loot-Historie verwechseln Items nicht mehr zwischen Bossen**, und eine Neuzuteilung ersetzt den alten Historieneintrag statt ihn zu duplizieren.
+- **Frisch gedroppte Beute bleibt nicht mehr dauerhaft bei "???" hängen** im Abstimmungsfenster oder Council-Panel.
+- **Die Auto-Trade-Erinnerung funktioniert jetzt korrekt, wenn Raidleiter und Lootmaster unterschiedliche Personen sind**, und löscht einen Eintrag erst, wenn der Trade wirklich abgeschlossen ist.
+- **Loot-Council- und Auto-Trade-Fenster lassen sich mit `/kart lc` und `/kart trade`** nach dem Schließen wieder öffnen.
+- **Council-Panel und Loot-Historie lassen sich jetzt an der Titelleiste ziehen**, nicht nur am Fensterkörper.
+- **Spielzeuge, Begleiter, Mounts und Wohnungsdeko werden nicht mehr von der Mindestqualitäts-Regel herausgefiltert.**
+- **Der Schließen-Button im Abstimmungsfenster ist größer und leichter zu treffen.**
+- **Der KART-Status eines Spielers zeigt nach dem Beitreten nicht mehr fälschlich "nicht installiert" an.**
+- **Die Essensbuff-Erkennung im BuffCheck funktioniert jetzt auch auf deutschen Clients korrekt.**
+
 ## [2.4.0] - 2026-07-19
 ### Added
 - **Einstellungen-Suche:** ein neuer Suche-Button im Hauptfenster — Einstellungsnamen eintippen und direkt dorthin springen, mit passendem Tab und kurzem Highlight.

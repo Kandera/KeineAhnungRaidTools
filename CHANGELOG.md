@@ -6,6 +6,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-07-23
+### Fixed
+- **Loot Council session state (session on/off, min-quality, vote labels, opt-in rolls) now syncs immediately when you join or `/reload`**, instead of only updating on the next roster change.
+- **The designated lootmaster's auto-Need/Greed now also claims Transmog-only rolls**, instead of doing nothing.
+- **Right-click assignment and the loot-history log no longer confuse items across bosses**, and a reassigned item replaces its old history entry instead of duplicating it.
+- **Freshly-dropped loot no longer gets stuck showing "???"** in the vote window or council panel.
+- **The Auto-Trade reminder now tracks correctly when the raid leader isn't the designated lootmaster**, and only clears an entry once the trade actually completes.
+- **The Loot Council and Auto-Trade windows can be reopened with `/kart lc` and `/kart trade`** after closing them.
+- **The Council Panel and Loot History windows can now be dragged by their title bar**, not just the body.
+- **Toys, pets, mounts, and housing decor are no longer filtered out by the minimum-quality rule.**
+- **The vote window's close button is bigger and easier to click.**
+- **A player's KART status no longer falsely shows "not installed" right after joining.**
+- **BuffCheck's food-buff detection now works correctly on German clients.**
+
 ## [2.4.0] - 2026-07-19
 ### Added
 - **Settings search:** a new Search button on the main window lets you type a setting's name and jump straight to it — correct tab, scrolled into view, briefly highlighted.
