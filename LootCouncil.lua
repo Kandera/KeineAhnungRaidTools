@@ -2962,7 +2962,6 @@ end
 -- so a misclick or a slot mismatch is always caught by the normal trade-confirmation UI.
 function LC.OnTradeShow()
     if KART_Settings.lcModuleEnabled == false then return end
-    if #LC.pendingTrades == 0 then return end
 
     local partnerName = UnitName("npc") -- the trade-partner unit token, a historical quirk of the trade API
     if not partnerName and TradeFrameRecipientNameText then ---@diagnostic disable-line: undefined-global
@@ -2970,6 +2969,13 @@ function LC.OnTradeShow()
     end
     if not partnerName then return end
     local partnerShort = partnerName:match("([^%-]+)") or partnerName
+    -- Remembered for LC.OnTradeClosed, which fires after the trade frame (and UnitName("npc"))
+    -- has already started tearing down, so the partner has to be captured here instead. Set
+    -- unconditionally (not gated on #LC.pendingTrades, which is specifically this client's own
+    -- "items I need to hand out" list) — a client can open this same trade with nothing of its
+    -- own pending and still need to know who the partner was, e.g. the separate "items I'm owed"
+    -- side the features plan adds, which checks this same field from the other direction.
+    LC.currentTradePartnerShort = partnerShort
 
     for _, entry in ipairs(LC.pendingTrades) do
         -- Bail if the cursor is already carrying something (e.g. the player was mid-drag of an
@@ -2987,9 +2993,27 @@ function LC.OnTradeShow()
                 if freeSlot then
                     C_Container.PickupContainerItem(bag, slot)
                     ClickTradeButton(freeSlot) ---@diagnostic disable-line: undefined-global
-                    LC.RemovePendingTrade(entry.rollID)
+                    -- Not removed here anymore — only once the trade actually completes (see
+                    -- LC.OnTradeClosed), so a cancelled trade doesn't silently drop the reminder.
                 end
             end
+        end
+    end
+end
+
+-- Runs when the trade window closes for any reason (completed, cancelled, partner walked away).
+-- The only reliable way to tell "did it actually go through" is to check whether the item is
+-- still in our bags: if it's gone, the trade succeeded and the reminder can be cleared; if it's
+-- still there, nothing happened and the entry stays pending so the next trade attempt retries it.
+function LC.OnTradeClosed()
+    local partnerShort = LC.currentTradePartnerShort
+    LC.currentTradePartnerShort = nil
+    if not partnerShort then return end
+
+    for i = #LC.pendingTrades, 1, -1 do
+        local entry = LC.pendingTrades[i]
+        if entry.winnerShort == partnerShort and not FindItemInBags(entry.itemLink) then
+            LC.RemovePendingTrade(entry.rollID)
         end
     end
 end
