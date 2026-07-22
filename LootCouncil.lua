@@ -2779,7 +2779,12 @@ local function DoAssignWinner(rollID, playerShort, reason, colorDef)
         end
     else
         LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef, rollID)
-        LC.AddPendingTrade(rollID, playerShort)
+        -- Only the client that actually holds the item (the designated lootmaster, see
+        -- LC.GetLootmaster/ForceWinRoll) needs a trade reminder — when the assigner (usually the
+        -- raid leader) isn't also the lootmaster, they never physically have the item to trade.
+        if LC.IsMe(LC.GetLootmaster()) then
+            LC.AddPendingTrade(rollID, playerShort)
+        end
     end
     LC.assignedWinners[rollID] = playerShort
 end
@@ -3315,6 +3320,12 @@ function LC.HandleResult(payload, senderShort)
         classFile = cf
     end
     LC.LogHistory(LC.rollItems[rollID], winner, reason, classFile, LC.ResolveColorForReason(reason), rollID)
+
+    -- Same reasoning as DoAssignWinner: only the client physically holding the item (the
+    -- designated lootmaster) needs a pending-trade reminder, regardless of who assigned it.
+    if LC.IsMe(LC.GetLootmaster()) then
+        LC.AddPendingTrade(rollID, winner)
+    end
 end
 
 -- =====================================================================
