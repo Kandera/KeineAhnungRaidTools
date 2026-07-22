@@ -648,6 +648,20 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
         C_ChatInfo.SendAddonMessage("KART", "REQ_VERSION", channel)
+    elseif cmd == "lc" then
+        -- Reopens whichever Loot Council window still has tracked, unfinished rolls — does
+        -- nothing (rather than error) if there's genuinely nothing being tracked right now.
+        if KART.LC then
+            if KART.LC.councilPanel and #KART.LC.councilTabs > 0 then
+                KART.LC.councilPanel:Show()
+            elseif KART.LC.voteListFrame and #KART.LC.voteListRolls > 0 then
+                KART.LC.voteListFrame:Show()
+            end
+        end
+    elseif cmd == "trade" then
+        if KART.LC and KART.LC.tradeReminderFrame and #KART.LC.pendingTrades > 0 then
+            KART.LC.tradeReminderFrame:Show()
+        end
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern
         if KART.MainFrame then
