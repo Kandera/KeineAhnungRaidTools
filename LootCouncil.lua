@@ -632,10 +632,15 @@ function LC.OnStartLootRoll(rollID)
         RollOnLoot(rollID, 0)
     end
 
-    -- Below the raid-wide minimum rarity: let Blizzard's own roll UI handle it, untouched.
+    -- Below the raid-wide minimum rarity: let Blizzard's own roll UI handle it, untouched — unless
+    -- it's a Miscellaneous-class item (classID 15: toys, pets, mounts, housing decor, and similar
+    -- non-equipment collectibles), which is never gated on rarity since it's virtually always
+    -- Common/Uncommon regardless of how desirable it is.
     local _, _, _, quality = GetLootRollItemInfo(rollID)
     local minQuality = LC.GetRaidMinQuality()
-    if quality and quality < minQuality then return end
+    local itemLink = GetLootRollItemLink(rollID)
+    local classID = IsRealItemLink(itemLink) and select(12, C_Item.GetItemInfo(itemLink))
+    if quality and quality < minQuality and classID ~= 15 then return end
 
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
