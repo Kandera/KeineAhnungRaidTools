@@ -232,6 +232,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
             C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, IsInRaid() and "RAID" or "PARTY")
             KART.VersionAnnouncedToGroup = true
+            -- Our own one-shot announce only tells the group about US — it does nothing for
+            -- players who already announced before we joined, so also pull everyone else's
+            -- current version the same way /kart v already does, instead of only finding out
+            -- about mismatches/missing-KART players whenever someone happens to run that manually.
+            C_ChatInfo.SendAddonMessage("KART", "REQ_VERSION", IsInRaid() and "RAID" or "PARTY")
         elseif not IsInGroup() then
             KART.VersionAnnouncedToGroup = false
         end
