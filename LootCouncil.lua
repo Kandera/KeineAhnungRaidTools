@@ -2624,7 +2624,7 @@ function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef, rollI
     -- shows up twice in history with two different winners.
     if rollID then
         for i = #KART_LootHistory, 1, -1 do
-            if KART_LootHistory[i].rollID == rollID then
+            if KART_LootHistory[i].rollID == rollID and KART_LootHistory[i].item == (itemLink or "") then
                 table.remove(KART_LootHistory, i)
                 break
             end
