@@ -512,7 +512,23 @@ end
 function LC.SetSessionActive(active)
     LC.sessionActive = active
     SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
-    if active then LC.BroadcastRaidConfig() end
+    if active then
+        LC.BroadcastRaidConfig()
+    else
+        -- Ending the session forgets every tracked roll so the next boss starts clean instead of
+        -- showing leftover tabs/votes from this one (see LC.ClearRollState).
+        for i = #LC.councilTabs, 1, -1 do
+            LC.ClearRollState(LC.councilTabs[i])
+        end
+        for i = #LC.voteListRolls, 1, -1 do
+            LC.ClearRollState(LC.voteListRolls[i])
+        end
+        wipe(LC.councilTabs)
+        wipe(LC.voteListRolls)
+        LC.activeRollID = nil
+        if LC.councilPanel then LC.councilPanel:Hide() end
+        if LC.voteListFrame then LC.voteListFrame:Hide() end
+    end
     print("|cff00ff00KART:|r " .. (active and KART.L.LC_SESSION_ON or KART.L.LC_SESSION_OFF))
 end
 
@@ -1524,7 +1540,7 @@ function LC.CloseCouncilTab(rollID)
     for i = #LC.councilTabs, 1, -1 do
         if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
     end
-    LC.councilTabsNew[rollID] = nil
+    LC.ClearRollState(rollID)
 
     if LC.activeRollID == rollID then
         if LC.councilTabs[1] then
@@ -2781,6 +2797,24 @@ function LC.RemovePendingTrade(rollID)
     LC.RefreshTradeReminder()
 end
 
+-- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner, any
+-- pending trade) — called when a tab is dismissed or a session ends, so a later real roll that
+-- happens to reuse the same small rollID integer never inherits stale data from a previous boss
+-- (see the "wrong item posted on right-click assign" and "stale tabs after next boss" reports).
+function LC.ClearRollState(rollID)
+    LC.votes[rollID]           = nil
+    LC.rolls[rollID]           = nil
+    LC.councilVotes[rollID]    = nil
+    LC.rollItems[rollID]       = nil
+    LC.rollDeadlines[rollID]   = nil
+    LC.rollDurations[rollID]   = nil
+    LC.assignedWinners[rollID] = nil
+    LC.votedByMe[rollID]       = nil
+    LC.votedNoteByMe[rollID]   = nil
+    LC.councilTabsNew[rollID]  = nil
+    LC.RemovePendingTrade(rollID)
+end
+
 function LC.CreateTradeReminderFrame()
     local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
     f:SetSize(260, 40)
@@ -3138,7 +3172,7 @@ function LC.HandleStart(payload)
     if not rollID then return end
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
-    LC.rollItems[rollID] = LC.rollItems[rollID] or GetLootRollItemLink(rollID) or "???"
+    LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"
     -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
     -- so there's nothing left to do here for that.
 
