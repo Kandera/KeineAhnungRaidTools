@@ -705,7 +705,7 @@ function LC.CreateVoteList()
     -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
     -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
     local closeBtn = CreateFrame("Button", nil, f)
-    closeBtn:SetSize(20, 20)
+    closeBtn:SetSize(22, 22)
     closeBtn:SetPoint("TOPRIGHT", -6, -6)
     closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
     closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
