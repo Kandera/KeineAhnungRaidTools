@@ -2530,7 +2530,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.CbCompactVoteLayout = KART.CreateSettingsCheckbox(
         prefsCard, "KART_LCCompactVoteLayout",
         L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -105,
-        LC.Vote.RefreshVoteListRowsIfShown, L.LC_DESC_COMPACT_VOTE_LAYOUT)
+        function() LC.Vote.RefreshVoteListRowsIfShown() end, L.LC_DESC_COMPACT_VOTE_LAYOUT)
 
     -- Personal preference, same reasoning as CbCompactVoteLayout above — purely how names render
     -- on YOUR OWN council panel, never synced. Needs Northern Sky Raid Tools installed with a
