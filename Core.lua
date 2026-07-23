@@ -383,17 +383,17 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 9) == "LC_START:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleVote(msg:sub(9), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 8) == "LC_ROLL:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleRoll(msg:sub(9), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleRoll(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 9) == "LC_CVOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 9) == "LC_ONOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), shortName) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
                 elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
