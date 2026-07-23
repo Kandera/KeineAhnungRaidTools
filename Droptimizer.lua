@@ -137,7 +137,7 @@ function DT.BuildLootCouncilToggle(parent)
     DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
         parent, "KART_DTModuleEnabled",
         L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -75, function()
-            if KART.LC and KART.LC.RefreshCouncilRows then KART.LC.RefreshCouncilRows() end
+            if KART.LC and KART.LC.Council and KART.LC.Council.RefreshCouncilRows then KART.LC.Council.RefreshCouncilRows() end
         end, L.DT_DESC_MODULE_ENABLED)
 end
 

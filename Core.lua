@@ -361,7 +361,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                         KART.PlayerLCEnabled[shortName] = (lcFlag == "1")
                     end
                     if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-                        KART.LC.RefreshCouncilRows()
+                        KART.LC.Council.RefreshCouncilRows()
                     end
 
                     if not KART.UpdateWarned and ver ~= KART.Version then

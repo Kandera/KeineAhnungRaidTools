@@ -17,7 +17,7 @@ function OfficerNotes.SetOfficerNote(playerKey, noteText)
     noteText = KART.TrimString(noteText or "")
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
     LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
-    LC.RefreshCouncilRows()
+    KART.LC.Council.RefreshCouncilRows()
 end
 
 function OfficerNotes.HandleOfficerNote(payload, senderKey)
@@ -27,7 +27,7 @@ function OfficerNotes.HandleOfficerNote(payload, senderKey)
     KART_LCOfficerNotes[subjectKey] = (noteText ~= "") and noteText or nil
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
-        LC.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilRows()
     end
 end
 

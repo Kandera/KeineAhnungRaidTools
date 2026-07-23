@@ -22,6 +22,7 @@ LootCouncil.lua
 LootCouncilOfficerNotes.lua
 LootCouncilVote.lua
 LootCouncilTrade.lua
+LootCouncilPanel.lua
 Droptimizer.lua
 LootHistory.lua
 Invite.lua

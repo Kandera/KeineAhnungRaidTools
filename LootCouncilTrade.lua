@@ -32,7 +32,7 @@ function Trade.AnnounceResult(rollID, winnerKey, reason)
     end
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
-        LC.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilRows()
     end
 end
 

@@ -440,8 +440,8 @@ function Vote.RefreshVoteListRows_Spacious(f)
                         LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
                         LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
                         if LC.councilPanel and LC.councilPanel:IsShown() then
-                            if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
-                            LC.RefreshCouncilTabs()
+                            if LC.activeRollID == capturedRollID then KART.LC.Council.RefreshCouncilRows() end
+                            KART.LC.Council.RefreshCouncilTabs()
                         end
                     else
                         LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
@@ -703,8 +703,8 @@ function Vote.RefreshVoteListRows_Compact(f)
                         LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
                         LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
                         if LC.councilPanel and LC.councilPanel:IsShown() then
-                            if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
-                            LC.RefreshCouncilTabs()
+                            if LC.activeRollID == capturedRollID then KART.LC.Council.RefreshCouncilRows() end
+                            KART.LC.Council.RefreshCouncilTabs()
                         end
                     else
                         LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
@@ -740,8 +740,8 @@ function Vote.SetPlayerVote(rollID, playerKey, buttonIdx)
     LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note}
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
-        if LC.activeRollID == rollID then LC.RefreshCouncilRows() end
-        LC.RefreshCouncilTabs()
+        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
+        KART.LC.Council.RefreshCouncilTabs()
     end
 end
 
@@ -759,7 +759,7 @@ function Vote.ToggleCouncilVote(rollID, candidateKey)
         LC.SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateKey))
     end
 
-    LC.RefreshCouncilRows()
+    KART.LC.Council.RefreshCouncilRows()
 end
 
 function Vote.HandleVote(payload, senderKey)
@@ -777,8 +777,8 @@ function Vote.HandleVote(payload, senderKey)
     if LC.councilPanel and LC.councilPanel:IsShown() then
         -- Row list only matters for whichever roll is the active tab; the vote-count badge on
         -- every tab (including inactive ones) should stay live regardless.
-        if LC.activeRollID == rollID then LC.RefreshCouncilRows() end
-        LC.RefreshCouncilTabs()
+        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
+        KART.LC.Council.RefreshCouncilTabs()
     end
 end
 
@@ -795,7 +795,7 @@ function Vote.HandleRoll(payload, senderKey)
     LC.rolls[rollID][senderKey] = value
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
-        LC.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilRows()
     end
 end
 
@@ -816,6 +816,6 @@ function Vote.HandleCouncilVote(payload, senderKey)
     end
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
-        LC.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilRows()
     end
 end
