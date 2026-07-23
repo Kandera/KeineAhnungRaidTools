@@ -6,6 +6,18 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-07-23
+### Hinzugefügt
+- **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
+- **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
+- **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.
+- **Der Abstimmungs-Timer kann jetzt auf bis zu 3 Minuten eingestellt werden**, vorher 1 Minute.
+- **Die Loot-Council-Fenster haben jetzt eine eigene Schriftgrößen-Einstellung**, die jetzt tatsächlich überall darin greift.
+- **Trade-Abschluss wird jetzt direkt bestätigt**, nicht mehr nur aus deinen Taschen geraten.
+- **Du wirst gewarnt, wenn du ein zugewiesenes Item an die falsche Person tradest.**
+- **Du wirst gewarnt, bevor das 2-Stunden-Handelsfenster eines ausstehenden Trades abläuft.**
+- **Wenn das gleiche Item doppelt gleichzeitig droppt, wird jedes jetzt mit "(1/2)"/"(2/2)" markiert**, damit du sie unterscheiden kannst.
+
 ## [2.7.0] - 2026-07-23
 ### Hinzugefügt
 - **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.

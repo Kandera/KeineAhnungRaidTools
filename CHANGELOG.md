@@ -6,6 +6,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-07-23
+### Added
+- **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
+- **Click a name in the trade reminder to target and open a trade with them** (range-checked).
+- **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.
+- **The vote timer can now be set up to 3 minutes**, up from 1.
+- **The Loot Council windows have their own font-size setting**, and it now actually applies to everything in them.
+- **Trade completion is now confirmed directly**, not just inferred from your bags.
+- **You'll be warned if you trade an assigned item to the wrong person.**
+- **You'll be warned before a pending trade's 2-hour tradeable window runs out.**
+- **When the same item drops twice at once, each one is now marked "(1/2)"/"(2/2)"** so you can tell them apart.
+
 ## [2.7.0] - 2026-07-23
 ### Added
 - **Choose what happens to an item in your vote window once you've voted on it**: stay full-size (default), shrink, or hide completely. New setting in Loot Council settings.
