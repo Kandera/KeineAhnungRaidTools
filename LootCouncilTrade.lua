@@ -471,17 +471,19 @@ function Trade.OnTradeClosed()
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
+        local itemString = GetItemString(entry.itemLink)
         if entry.winnerKey == partnerKey then
-            -- Primary signal: Blizzard confirmed a trade completed, and this exact item (bonus
-            -- IDs included) was one of the items we placed in it.
-            local itemString = GetItemString(entry.itemLink)
             local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
-            -- Fallback signal: the item is simply gone from our bags. Only trusted for a real,
-            -- resolved link — see the "???" placeholder note this replaces.
             local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
             if confirmedByTrade or confirmedByBags then
                 Trade.RemovePendingTrade(entry.rollID)
             end
+        elseif tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString] then
+            -- This item was assigned to someone else entirely, but it was just traded away in a
+            -- trade with partnerKey instead — the wrong recipient. Warn loudly; the pending
+            -- entry is left in place since the real winner still hasn't received their item.
+            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
+                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
         end
     end
 
