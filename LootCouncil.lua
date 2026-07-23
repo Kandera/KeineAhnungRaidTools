@@ -50,6 +50,16 @@ local TEST_ITEMS = {
 local TEST_ROLL_ID    = 99999
 local TEST_ITEM_COUNT = #TEST_ITEMS
 
+-- Manually-added items (see LC.StartManualRoll) get their own rollID range, well clear of both
+-- real server-issued rollIDs and the fixed TEST_ROLL_ID block above — each item /kart add starts
+-- increments past the last one used, since (unlike the 4 fixed test slots) any number of these
+-- can exist. Already comfortably outside IsTestRoll's range (99999..100002), so no separate
+-- IsManualRoll check is needed anywhere — AddPendingTrade's existing IsTestRoll guard already
+-- treats these as real rolls, which is exactly the wanted behavior (unlike test rolls, they
+-- should be tradeable).
+local MANUAL_ROLL_ID_BASE = 500000
+LC.nextManualRollID = LC.nextManualRollID or MANUAL_ROLL_ID_BASE
+
 -- Which mode (true = council/master, false = looter) last actually (re)populated the test data
 -- in LC.StartTest — nil until the first test run. Lets StartTest tell "the OTHER test window is
 -- still open, don't wipe its data out from under it" apart from "the SAME window got re-clicked,
@@ -799,6 +809,66 @@ function LC.HandleStart(payload)
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
     -- so there's nothing left to do here for that.
+
+    if LC.IsCouncil() then
+        KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
+    else
+        LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
+    end
+end
+
+-- Entry point for /kart add <item1> <item2> ... — lets the designated lootmaster hand item(s)
+-- they're currently holding back to Council for a (re)decision, without a real Blizzard loot
+-- roll behind them. Only the lootmaster may do this — same person ForceWinRoll makes physically
+-- win every real drop, so they're always the one actually holding whatever they manually add too.
+function LC.StartManualRoll(itemsText)
+    if not LC.IsMe(LC.GetLootmaster()) then
+        print("|cffff0000KART:|r " .. KART.L.LC_NOT_LOOTMASTER)
+        return
+    end
+
+    local seconds = KART_Settings.lcVoteSeconds or 20
+    local startedAny = false
+
+    -- Matches each complete item hyperlink (|cAARRGGBB|Hitem:...|h[Name]|h|r) regardless of how
+    -- many are pasted in one command or how much whitespace separates them — a plain word-split
+    -- would break apart item names that contain spaces (e.g. "[Sulfuras, Hand von Ragnaros]").
+    for itemLink in (itemsText or ""):gmatch("|c%x%x%x%x%x%x%x%x|Hitem:.-|h|r") do
+        startedAny = true
+        local rollID = LC.nextManualRollID
+        LC.nextManualRollID = LC.nextManualRollID + 1
+
+        LC.rollItems[rollID] = itemLink
+        LC.votes[rollID]     = {}
+
+        LC.SendLC("LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink)
+
+        -- SendAddonMessage never echoes back to its own sender, so the lootmaster has to open
+        -- their own window locally, same as HandleStart does for every other client.
+        if LC.IsCouncil() then
+            KART.LC.Council.ShowCouncilPanel(rollID, seconds)
+        else
+            LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
+        end
+    end
+
+    if not startedAny then
+        print("|cffff0000KART:|r " .. KART.L.LC_MANUAL_ADD_USAGE)
+    end
+end
+
+-- Peer side of LC.StartManualRoll — mirrors LC.HandleStart, minus the GetLootRollItemLink call
+-- (there's no real Blizzard roll behind a manually-added item, so the link always arrives intact
+-- in the payload itself). Fires once per item — the sender broadcasts one LC_MANUAL_START per
+-- link, not a single batched message.
+function LC.HandleManualStart(payload)
+    local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
+    rollID = tonumber(rollID)
+    secs   = tonumber(secs)
+    if not rollID or not itemLink or itemLink == "" then return end
+
+    LC.votes[rollID]     = LC.votes[rollID] or {}
+    LC.rollItems[rollID] = LC.rollItems[rollID] or itemLink
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

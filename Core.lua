@@ -387,6 +387,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleActive(msg:sub(11)) end
                 elseif msg:sub(1, 9) == "LC_START:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
+                elseif msg:sub(1, 15) == "LC_MANUAL_START:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleManualStart(msg:sub(16)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 8) == "LC_ROLL:" then
@@ -650,7 +652,11 @@ end
 
 SLASH_KART1 = "/kart"
 SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des Hauptfensters
-    local cmd = (msg or ""):match("^%s*(.-)%s*$"):lower()
+    -- rawMsg keeps original case (needed for the "add" subcommand's item-link arguments — item
+    -- hyperlinks use case-sensitive |H/|h control codes that :lower() would corrupt); cmd is the
+    -- lowercased form every other subcommand below already matches against.
+    local rawMsg = (msg or ""):match("^%s*(.-)%s*$")
+    local cmd = rawMsg:lower()
     if cmd == "version" or cmd == "v" then
         local channel = "GUILD"
         if IsInRaid() then channel = "RAID"
@@ -659,6 +665,9 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
         C_ChatInfo.SendAddonMessage("KART", "REQ_VERSION", channel)
+    elseif cmd == "add" or cmd:match("^add%s") then
+        local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
+        if KART.LC then KART.LC.StartManualRoll(itemsText) end
     elseif cmd == "lc" then
         -- Reopens whichever Loot Council window still has tracked, unfinished rolls — does
         -- nothing (rather than error) if there's genuinely nothing being tracked right now.
