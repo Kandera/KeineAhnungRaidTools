@@ -519,6 +519,13 @@ function LC.QualityLabel(q)
     return name
 end
 
+-- Localized label for the "voted item display" button (KART_Settings.lcVotedItemDisplay) —
+-- mirrors LC.QualityLabel's lookup pattern, just without quality-color coding (there's no
+-- natural color axis for full/shrink/hide the way there is for item quality).
+function LC.VotedItemDisplayLabel(mode)
+    return (KART.L and KART.L["LC_VOTED_DISPLAY_" .. (mode or "full"):upper()]) or mode or "full"
+end
+
 -- =====================================================================
 --  Session Prompt  (shown to RL when joining a raid)
 -- =====================================================================
@@ -934,7 +941,7 @@ function LC.BuildSettingsPanel(parent)
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    prefsCard:SetSize(500, 165)
+    prefsCard:SetSize(500, 215)
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
@@ -968,6 +975,30 @@ function LC.BuildSettingsPanel(parent)
         function()
             if LC.councilPanel and LC.councilPanel:IsShown() then KART.LC.Council.RefreshCouncilRows() end
         end, L.LC_DESC_SHOW_NICKNAMES)
+
+    -- Personal preference, same reasoning as CbCompactVoteLayout above — controls whether an
+    -- already-voted item stays full-size, shrinks, or disappears entirely from YOUR OWN vote
+    -- window (see Vote.GetVisibleRolls). Slot -175: next free step below CbShowNickNames, inside
+    -- this card (card height bumped 165 -> 215 above to fit a 28px-tall button here instead of
+    -- another checkbox row). Initial label is hardcoded to "full" — KART_Settings doesn't exist
+    -- yet at file-load time, same reasoning as BtnMinQuality's own placeholder-text comment below;
+    -- Core.lua's ADDON_LOADED handler syncs the real saved value once settings are loaded.
+    KART.LC.BtnVotedItemDisplay = KART.CreateModernButton(
+        prefsCard, LC.VotedItemDisplayLabel("full"), L.LC_DESC_VOTED_DISPLAY)
+    KART.LC.BtnVotedItemDisplay:SetPoint("TOPLEFT", 20, -175)
+    KART.LC.BtnVotedItemDisplay:SetSize(460, 28)
+    KART.LC.BtnVotedItemDisplay:SetScript("OnClick", function(self)
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+            rootDescription:CreateTitle(L.LC_SET_VOTED_DISPLAY)
+            for _, mode in ipairs({"full", "shrink", "hide"}) do
+                rootDescription:CreateButton(LC.VotedItemDisplayLabel(mode), function()
+                    KART_Settings.lcVotedItemDisplay = mode
+                    self.text:SetText(LC.VotedItemDisplayLabel(mode))
+                    LC.Vote.RefreshVoteListRowsIfShown()
+                end)
+            end
+        end)
+    end)
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a

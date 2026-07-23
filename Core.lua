@@ -138,6 +138,10 @@ function KART.SyncSettingsToUI()
         KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
     end
 
+    if KART.LC and KART.LC.BtnVotedItemDisplay and KART.LC.VotedItemDisplayLabel then
+        KART.LC.BtnVotedItemDisplay.text:SetText(KART.LC.VotedItemDisplayLabel(KART_Settings.lcVotedItemDisplay or "full"))
+    end
+
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
     KART.UpdateMinimapButton()
