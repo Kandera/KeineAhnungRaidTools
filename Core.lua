@@ -1,6 +1,6 @@
 local addonName, KART = ...
 
-KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "1.12.2"
+KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.0.0"
 local frame = CreateFrame("Frame")
 
 frame:RegisterEvent("ADDON_LOADED")
@@ -50,13 +50,6 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
     if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
     KART.UpdateStyles()
-
-    -- Initialisiere UI Werte
-    if KART.InviteEditBox then KART.InviteEditBox:SetText(KART_Settings.inviteKeywords) end -- KART.InviteEditBox aus MainFrame.lua
-    if KART.PromoteEditBox then KART.PromoteEditBox:SetText(KART_Settings.promoteNames) end -- KART.PromoteEditBox aus MainFrame.lua
-
-    -- Raidlead Panel Initialisierung
-    if KART.CbActivate then KART.CbActivate:SetChecked(KART_Settings.showRaidleadBar) end
 
     -- Sammel-Initialisierung der UI Elemente
     local settingsMap = {}
