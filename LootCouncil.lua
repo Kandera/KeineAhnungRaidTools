@@ -669,6 +669,32 @@ local function ForceWinRoll(rollID)
     end
 end
 
+-- Blizzard's rollID can be reused for a genuinely different item before the previous roll's
+-- state (votes, deadline, tab / vote-list entry) under that same ID has been cleared — most
+-- commonly several trash corpses looted within the same second. Called with the incoming roll's
+-- bare itemID whenever a roll starts (locally via OnStartLootRoll, or via a received LC_START);
+-- if a DIFFERENT real item is already tracked under this rollID, wipes its stale state first so
+-- the new roll starts clean instead of silently inheriting old votes or reusing an old tab/row
+-- for the wrong item. newItemID == "" means "not resolved yet" — never purge on unresolved data,
+-- only on a confirmed different item (see the LC_RESULT-side fix this complements, in
+-- Trade.HandleResult, for the other half of this same rollID-collision class of bug).
+local function PurgeStaleRoll(rollID, newItemID)
+    if not newItemID or newItemID == "" then return end
+    local oldLink = LC.rollItems[rollID]
+    if not LC.IsRealItemLink(oldLink) then return end
+    local oldItemID = oldLink:match("item:(%d+)")
+    if not oldItemID or oldItemID == newItemID then return end
+
+    for i = #LC.voteListRolls, 1, -1 do
+        if LC.voteListRolls[i] == rollID then table.remove(LC.voteListRolls, i) end
+    end
+    for i = #LC.councilTabs, 1, -1 do
+        if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
+    end
+    if LC.activeRollID == rollID then LC.activeRollID = nil end
+    LC.Trade.ClearRollState(rollID)
+end
+
 function LC.OnStartLootRoll(rollID)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
@@ -698,7 +724,10 @@ function LC.OnStartLootRoll(rollID)
     local classID = LC.IsRealItemLink(itemLink) and select(12, C_Item.GetItemInfo(itemLink))
     if quality and quality < minQuality and classID ~= 15 then return end
 
-    LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
+    local newItemID = LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or ""
+    PurgeStaleRoll(rollID, newItemID)
+
+    LC.rollItems[rollID] = itemLink or "???"
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
@@ -715,7 +744,7 @@ function LC.OnStartLootRoll(rollID)
 
     if UnitIsGroupLeader("player") then
         local secs = KART_Settings.lcVoteSeconds or 20
-        LC.SendLC("LC_START:" .. rollID .. ":" .. secs)
+        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
         KART.LC.Council.ShowCouncilPanel(rollID, secs)
     end
 end
@@ -750,11 +779,13 @@ function LC.HandleActive(value)
 end
 
 function LC.HandleStart(payload)
-    -- payload = "rollID:seconds"
-    local rollID, secs = payload:match("^(%d+):(%d+)$")
+    -- payload = "rollID:seconds:itemID"
+    local rollID, secs, itemID = payload:match("^(%d+):(%d+):?(%d*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
     if not rollID then return end
+
+    PurgeStaleRoll(rollID, itemID)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"

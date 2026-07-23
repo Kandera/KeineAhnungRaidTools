@@ -15,11 +15,17 @@ function Trade.AnnounceResult(rollID, winnerKey, reason)
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
     -- tester happened to click) and no raid-chat spam.
     if not LC.IsTestRoll(rollID) then
-        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. (reason or ""))
+        -- Blizzard's rollID isn't guaranteed unique across two real rolls that resolve close
+        -- together (e.g. several trash corpses looted within the same second) — it can get
+        -- reused for a genuinely different item before every client's window for the first one
+        -- has closed. Carrying the itemID lets Trade.HandleResult detect and ignore a result
+        -- that landed on a stale, already-reused rollID instead of wrongly acting on it.
+        local link = LC.rollItems[rollID] or ""
+        local itemID = LC.IsRealItemLink(link) and (link:match("item:(%d+)") or "") or ""
+        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
-            local link = LC.rollItems[rollID] or ""
-            local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, KART.Identity.ResolveDisplayName(winnerKey), link)
+            local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KART.Identity.ResolveDisplayName(winnerKey), link)
             if reason and reason ~= "" then
                 msg = msg .. " (" .. reason .. ")"
             end
@@ -363,11 +369,23 @@ end
 
 function Trade.HandleResult(payload, senderKey)
     if not LC.IsSenderCouncil(senderKey) then return end
-    -- payload = "rollID:winnerKey:reason"
-    local rollID, winnerKey = payload:match("^(%d+):([^:]+)")
+    -- payload = "rollID:winnerKey:itemID:reason"
+    local rollID, winnerKey, itemID = payload:match("^(%d+):([^:]+):(%d*):")
     rollID = tonumber(rollID)
     if not rollID or not winnerKey then return end
-    local reason = payload:match("^%d+:[^:]+:(.*)$") or ""
+    local reason = payload:match("^%d+:[^:]+:%d*:(.*)$") or ""
+
+    -- Blizzard's rollID can get reused for a genuinely different item before every client has
+    -- finished with the first one (see Trade.AnnounceResult) — if we're still tracking a real
+    -- item for this rollID and it doesn't match what this result is actually for, this result
+    -- belongs to a different, colliding roll. Ignore it entirely rather than closing/logging
+    -- the wrong item's roll (this is the "vote window flashes open then immediately closes"
+    -- bug during trash pulls with multiple simultaneous rolls).
+    local localLink = LC.rollItems[rollID]
+    if itemID ~= "" and LC.IsRealItemLink(localLink) then
+        local localItemID = localLink:match("item:(%d+)")
+        if localItemID and localItemID ~= itemID then return end
+    end
 
     -- A result came in for this roll — remove it from our vote list, if it's still there.
     LC.Vote.RemoveVoteListItem(rollID)
