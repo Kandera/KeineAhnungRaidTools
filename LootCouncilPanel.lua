@@ -146,7 +146,7 @@ function Council.SwitchCouncilTab(rollID)
 
     LC.activeRollID = rollID
     LC.councilTabsNew[rollID] = nil
-    panel.itemText:SetText(LC.rollItems[rollID] or "???")
+    panel.itemText:SetText((LC.rollItems[rollID] or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
     panel.title:SetText(KART.L.LC_PANEL_TITLE)
 
     local link = LC.rollItems[rollID]

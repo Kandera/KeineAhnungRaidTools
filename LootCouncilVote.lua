@@ -355,7 +355,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         end
 
         local rollLink = LC.rollItems[rollID]
-        row.itemText:SetText(rollLink or "???")
+        row.itemText:SetText((rollLink or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
 
         -- Real icon when we have one; otherwise the same tinted placeholder used by the council
         -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
@@ -629,7 +629,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         end
 
         local rollLink = LC.rollItems[rollID]
-        row.itemText:SetText(rollLink or "???")
+        row.itemText:SetText((rollLink or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
         row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 8 - 60)
 
         local ir, ig, ib = LC.ParseItemColor(rollLink)

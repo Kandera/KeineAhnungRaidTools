@@ -442,6 +442,27 @@ local function FindItemInBags(itemLink)
     return nil
 end
 
+-- "" normally, or " (i/N)" when N >= 2 currently-active rolls (LC.rollItems is only ever
+-- populated for active ones — see Trade.ClearRollState) share the exact same item, bonus IDs
+-- included. Ordered by ascending rollID so every client's ordinal for the same physical drop
+-- agrees, since all clients see the same rollItems keys via the same broadcasts.
+function Trade.GetDuplicateOrdinal(rollID)
+    local myString = GetItemString(LC.rollItems[rollID])
+    if not myString then return "" end
+    local matches = {}
+    for otherRollID, link in pairs(LC.rollItems) do
+        if GetItemString(link) == myString then
+            table.insert(matches, otherRollID)
+        end
+    end
+    if #matches < 2 then return "" end
+    table.sort(matches)
+    for i, id in ipairs(matches) do
+        if id == rollID then return string.format(" (%d/%d)", i, #matches) end
+    end
+    return ""
+end
+
 -- Best-effort auto-trade: called on TRADE_SHOW. If the person we just opened a trade window with
 -- has pending item(s) assigned to them, place the first one we can still find in our bags into an
 -- empty trade slot. Only PLACES the item — the trade itself still has to be confirmed manually,
