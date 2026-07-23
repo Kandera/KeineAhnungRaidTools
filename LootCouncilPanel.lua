@@ -340,6 +340,8 @@ function Council.RefreshCouncilTabs()
         if panel.tabs[i] then panel.tabs[i]:Hide() end
     end
     panel.tabStrip:SetShown(#LC.councilTabs > 0)
+
+    LC.ApplyFontSize()
 end
 
 -- Panel width: wide enough that raider names and vote labels never truncate/wrap even with the
@@ -500,6 +502,7 @@ function Council.CreateCouncilPanel()
     hName:SetWidth(100)
     hName:SetJustifyH("LEFT")
     hName:SetText(KART.L.LC_COL_NAME)
+    f.hName = hName
 
     -- Guild rank, right after Name (see row.rankText) — purely so alts are easier to spot at a
     -- glance among a roster of otherwise-unfamiliar names; blank/"-" for anyone not in a guild.
@@ -509,6 +512,7 @@ function Council.CreateCouncilPanel()
     hRank:SetJustifyH("CENTER")
     hRank:SetText(KART.L.LC_COL_RANK)
     hRank:SetTextColor(0.5, 0.5, 0.5)
+    f.hRank = hRank
 
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hIlvl:SetPoint("TOPLEFT", 206, -80)
@@ -516,12 +520,14 @@ function Council.CreateCouncilPanel()
     hIlvl:SetJustifyH("CENTER")
     hIlvl:SetText("iLvl")
     hIlvl:SetTextColor(0.5, 0.5, 0.5)
+    f.hIlvl = hIlvl
 
     local hVote = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hVote:SetPoint("TOPLEFT", 282, -80)
     hVote:SetWidth(100)
     hVote:SetJustifyH("LEFT")
     hVote:SetText(KART.L.LC_COL_VOTE)
+    f.hVote = hVote
 
     local hRoll = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hRoll:SetPoint("TOPLEFT", 400, -80)
@@ -537,6 +543,7 @@ function Council.CreateCouncilPanel()
     hCouncilVotes:SetJustifyH("CENTER")
     hCouncilVotes:SetText("CV") -- "Council Votes" — plain ASCII, see the note in RefreshCouncilRows
     hCouncilVotes:SetTextColor(0.5, 0.5, 0.5)
+    f.hCouncilVotes = hCouncilVotes
 
     -- Droptimizer gain % — sourced from KART_WoWUtilsCache (written by the external KART
     -- Companion app, see Droptimizer.lua), shown/hidden with dtModuleEnabled just like hRoll
@@ -1184,6 +1191,8 @@ function Council.RefreshCouncilRows()
     for i = #members + 1, #panel.rows do
         if panel.rows[i] then panel.rows[i]:Hide() end
     end
+
+    LC.ApplyFontSize()
 end
 
 --- Right-click menu on a council row: quick-assign, manually correct this player's vote, or

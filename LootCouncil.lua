@@ -189,6 +189,57 @@ function LC.GetRaidMinQuality()
     return (LC.raidConfig and LC.raidConfig.minQuality) or 4
 end
 
+-- Applies the LootCouncil-specific font size (KART_Settings.lcFontSize, independent from the main
+-- window's Content Font Size) to every text element in the vote-list window and the council panel
+-- — see the root-cause note on this task for why neither window currently tracks any font setting
+-- at all. Three tiers relative to the base size preserve the existing visual hierarchy (item name
+-- and window title bigger, column headers smaller) while making all of them move together.
+function LC.ApplyFontSize()
+    local fontPath = KART.GetFontPath(KART_Settings.fontName)
+    local base  = KART_Settings.lcFontSize or 12
+    local big   = base + 2   -- item name / window title
+    local small = math.max(8, base - 2) -- column headers
+
+    local function setAll(list, size)
+        for _, elem in ipairs(list) do
+            if elem then elem:SetFont(fontPath, size, "") end
+        end
+    end
+
+    local vf = LC.voteListFrame
+    if vf then
+        for _, row in ipairs(vf.rows or {}) do
+            setAll({row.itemText}, big)
+            setAll({row.timerText, row.gainText, row.votedText}, base)
+            for _, btn in ipairs(row.voteButtons or {}) do
+                if btn.text then btn.text:SetFont(fontPath, base, "") end
+            end
+        end
+        for _, row in ipairs(vf.compactRows or {}) do
+            setAll({row.itemText}, big)
+            setAll({row.timerText, row.gainText, row.votedText}, base)
+            -- Compact layout's vote "chips" are icon-only (see RefreshVoteListRows_Compact) —
+            -- no button text to size here.
+        end
+    end
+
+    local cp = LC.councilPanel
+    if cp then
+        setAll({cp.title, cp.itemText}, big)
+        setAll({cp.timerText, cp.ilvlText}, base)
+        setAll({cp.hName, cp.hRank, cp.hIlvl, cp.hVote, cp.hRoll, cp.hCouncilVotes, cp.hGain}, small)
+        for _, row in ipairs(cp.rows or {}) do
+            setAll({row.nameText, row.rankText, row.equippedText, row.voteText, row.rollText, row.gainText}, base)
+            if row.councilVoteBtn and row.councilVoteBtn.text then
+                row.councilVoteBtn.text:SetFont(fontPath, base, "")
+            end
+        end
+        for _, tab in ipairs(cp.tabs or {}) do
+            if tab.countText then tab.countText:SetFont(fontPath, small, "") end
+        end
+    end
+end
+
 -- The designated lootmaster (trimmed, lowercase, "" = none) — same authority reasoning as
 -- GetButtonConfig/GetRaidMinQuality: only the raid leader's own local setting is authoritative,
 -- everyone else (including the designated lootmaster themselves) goes by the synced value. This
@@ -1108,6 +1159,13 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
         raidBox, L.LC_SET_VOTE_TIMER, 5, 180, "lcVoteSeconds",
         -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
+
+    -- Independent from the main window's Content Font Size — the vote-list/council-panel grid
+    -- layouts don't necessarily want the same size as the rest of the addon (see LC.ApplyFontSize).
+    KART.LC.SldFontSize = KART.CreateSettingsSlider(
+        raidBox, L.LC_SET_FONT_SIZE, 8, 20, "lcFontSize",
+        -104, "KART_LCFontSizeSlider", L.LC_DESC_FONT_SIZE)
+    KART.LC.SldFontSize:HookScript("OnValueChanged", function() if LC.ApplyFontSize then LC.ApplyFontSize() end end)
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
     -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.Vote.HandleRoll).

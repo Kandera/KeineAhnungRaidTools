@@ -493,6 +493,8 @@ function Vote.RefreshVoteListRows_Spacious(f)
     end
 
     f:SetHeight(math.min(32 + y + 12, 600))
+
+    LC.ApplyFontSize()
 end
 
 -- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
@@ -764,6 +766,8 @@ function Vote.RefreshVoteListRows_Compact(f)
     end
 
     f:SetHeight(math.min(32 + #visibleRolls * (rowH + ROW_GAP) + 12, 600))
+
+    LC.ApplyFontSize()
 end
 
 --- Manually sets (overrides) a player's vote in the council panel — e.g. they voted verbally or

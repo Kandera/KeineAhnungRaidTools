@@ -72,6 +72,7 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
     if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
     if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
+    if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
     if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
     if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
     if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
@@ -555,6 +556,8 @@ function KART.UpdateStyles()
             end
         end
     end
+
+    if KART.LC and KART.LC.ApplyFontSize then KART.LC.ApplyFontSize() end
 
     -- Font changes can re-flow the Loot Council raid box (RelayoutRaidBox above), which
     -- changes the active tab's content height — keep the scroll range in sync.
