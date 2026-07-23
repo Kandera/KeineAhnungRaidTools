@@ -133,8 +133,30 @@ end
 -- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
 -- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
 -- after a `/reload`) never leaves a stale row from the other layout visible underneath.
+-- Personal display preference (KART_Settings.lcVotedItemDisplay, see the settings dropdown in
+-- Task 5 of this plan) — when set to "hide", a roll the local player has already voted on is left
+-- out of the rendered list entirely (card/row disappears, window shrinks) unless
+-- LC.showAllOverride is set (see /kart showall, Task 6). Returns LC.voteListRolls itself (no copy)
+-- whenever nothing is being filtered, so callers that don't need filtering pay no extra cost.
+function Vote.GetVisibleRolls()
+    if (KART_Settings and KART_Settings.lcVotedItemDisplay) ~= "hide" or LC.showAllOverride then
+        return LC.voteListRolls
+    end
+    local visible = {}
+    for _, rollID in ipairs(LC.voteListRolls) do
+        if not LC.votedByMe[rollID] then
+            table.insert(visible, rollID)
+        end
+    end
+    return visible
+end
+
 function Vote.RefreshVoteListRows()
     if #LC.voteListRolls == 0 then
+        -- Every roll this batch tracked has now expired or been removed — /kart showall's
+        -- override only ever meant "for the rolls currently on screen"; the next fresh batch
+        -- should start clean, respecting the display setting again from roll one.
+        LC.showAllOverride = nil
         if LC.voteListFrame then LC.voteListFrame:Hide() end
         return
     end
