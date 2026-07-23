@@ -3059,11 +3059,11 @@ end
 --- via whisper instead of clicking the vote popup. Purely a local display correction: unlike
 --- AssignWinner, this never announces anything, never touches loot history, and never triggers
 --- the reassignment-confirmation dialog. Any note the player already attached is kept as-is.
-function LC.SetPlayerVote(rollID, playerShort, buttonIdx)
+function LC.SetPlayerVote(rollID, playerKey, buttonIdx)
     LC.votes[rollID] = LC.votes[rollID] or {}
-    local prev = LC.votes[rollID][playerShort]
+    local prev = LC.votes[rollID][playerKey]
     local note = (type(prev) == "table" and prev.note) or ""
-    LC.votes[rollID][playerShort] = {idx = buttonIdx, note = note}
+    LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note}
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
         if LC.activeRollID == rollID then LC.RefreshCouncilRows() end
@@ -3075,14 +3075,14 @@ end
 -- same candidate again retracts it, clicking a different one replaces it (one pick per item per
 -- council member). Test rolls stay local like everywhere else; real rolls broadcast so every
 -- council member's tally stays in sync.
-function LC.ToggleCouncilVote(rollID, candidateShort)
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+function LC.ToggleCouncilVote(rollID, candidateKey)
+    local myKey = (KART.Identity.ResolvePlayer("player"))
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
-    local retracting = (LC.councilVotes[rollID][myShort] == candidateShort)
-    LC.councilVotes[rollID][myShort] = (not retracting) and candidateShort or nil
+    local retracting = (LC.councilVotes[rollID][myKey] == candidateKey)
+    LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
 
     if not IsTestRoll(rollID) then
-        SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateShort))
+        SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateKey))
     end
 
     LC.RefreshCouncilRows()
@@ -3312,16 +3312,16 @@ end
 -- only, never an assignment by itself. Like LC_VOTE, this trusts the sender rather than
 -- re-verifying council membership over the wire (the panel that sends it is only ever shown to
 -- council members in the first place — see IsCouncil in HandleStart/OnStartLootRoll).
-function LC.HandleCouncilVote(payload, senderShort)
-    local rollID, candidate = payload:match("^(%d+):(.*)$")
+function LC.HandleCouncilVote(payload, senderKey)
+    local rollID, candidateKey = payload:match("^(%d+):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
 
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
-    if candidate == "" then
-        LC.councilVotes[rollID][senderShort] = nil -- retracted their pick
+    if candidateKey == "" then
+        LC.councilVotes[rollID][senderKey] = nil -- retracted their pick
     else
-        LC.councilVotes[rollID][senderShort] = candidate
+        LC.councilVotes[rollID][senderKey] = candidateKey
     end
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
