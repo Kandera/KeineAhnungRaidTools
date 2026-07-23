@@ -563,7 +563,13 @@ KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 KART.BtnReset = KART.CreateModernButton(colCard, L.BTN_RESET, L.DESC_RESET)
 KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -16)
 KART.BtnReset:SetScript("OnClick", function()
-    for k, v in pairs(KART.Defaults) do KART_Settings[k] = v end
+    -- Full wipe, not a per-key overwrite: keys without a Defaults entry (window positions,
+    -- sizes) must reset too. Tables are deep-copied so KART.Defaults itself is never shared
+    -- into (and later mutated through) KART_Settings.
+    wipe(KART_Settings)
+    for k, v in pairs(KART.Defaults) do
+        KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
+    end
     ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
 end)
 

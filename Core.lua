@@ -157,8 +157,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_PlayerCache = KART_PlayerCache or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
+        -- Deep-copy table defaults (keybinds, minimap): assigning them by reference let the
+        -- live settings mutate KART.Defaults itself, which then made "Reset Defaults" a no-op
+        -- for those keys within the same session.
         for k, v in pairs(KART.Defaults) do
-            if KART_Settings[k] == nil then KART_Settings[k] = v end
+            if KART_Settings[k] == nil then
+                KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
+            end
         end
 
         -- Sprache anwenden
