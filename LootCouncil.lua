@@ -56,7 +56,7 @@ local TEST_ITEM_COUNT = #TEST_ITEMS
 -- treat that as an explicit restart" (see the sessionActive/suppressReset comment in StartTest).
 LC.testSessionShowCouncil = nil
 
-local function IsTestRoll(rollID)
+function LC.IsTestRoll(rollID)
     return rollID ~= nil and rollID >= TEST_ROLL_ID and rollID < TEST_ROLL_ID + TEST_ITEM_COUNT
 end
 
@@ -83,13 +83,13 @@ local VOTE_ICON_TEXTURES = {
     "Interface\\COMMON\\help-i",                  -- 4: catch-all (Sonstiges)
     "Interface\\Buttons\\UI-GroupLoot-Pass-Up",   -- 5: Pass
 }
-local function GetVoteIconTexture(index)
+function LC.GetVoteIconTexture(index)
     return VOTE_ICON_TEXTURES[index] or VOTE_ICON_TEXTURES[#VOTE_ICON_TEXTURES]
 end
 
 -- Round class icon (the same atlas used by default raid/party frames) so a council-row candidate's
 -- class reads at a glance without parsing the class-coloured name text.
-local function SetClassIconTexture(tex, classFile)
+function LC.SetClassIconTexture(tex, classFile)
     if not (classFile and CLASS_ICON_TEXCOORDS and CLASS_ICON_TEXCOORDS[classFile]) then
         tex:Hide()
         return
@@ -141,7 +141,7 @@ function LC.UpdateCouncilCache()
     LC.BroadcastRaidConfig()
 end
 
-local function IsCouncil()
+function LC.IsCouncil()
     if UnitIsGroupLeader("player") then return true end
     local myKey = (KART.Identity.ResolvePlayer("player"))
     return LC.CouncilNamesTable[myKey] == true
@@ -153,20 +153,20 @@ end
 -- officer note) before acting on them. Resolving to a live unit first, rather than trusting the
 -- key alone, matters because CHAT_MSG_ADDON also delivers whispers: someone not currently in our
 -- group is never authorized, even if their key happens to match an entry in CouncilNamesTable.
-local function IsSenderCouncil(senderKey)
+function LC.IsSenderCouncil(senderKey)
     local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     if UnitIsGroupLeader(unit) then return true end
     return LC.CouncilNamesTable[senderKey] == true
 end
 
-local function GetChannel()
+function LC.GetChannel()
     return IsInRaid() and "RAID" or "PARTY"
 end
 
-local function SendLC(msg)
+function LC.SendLC(msg)
     if IsInGroup() then
-        C_ChatInfo.SendAddonMessage("KART", msg, GetChannel())
+        C_ChatInfo.SendAddonMessage("KART", msg, LC.GetChannel())
     end
 end
 
@@ -257,7 +257,7 @@ function LC.BroadcastRaidConfig()
         council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
         print("|cffff0000KART:|r " .. (KART.L.LC_CONFIG_TRUNCATED or "Council member list too long, truncated for broadcast."))
     end
-    SendLC(prefix .. council)
+    LC.SendLC(prefix .. council)
 end
 
 -- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
@@ -344,7 +344,7 @@ end
 -- leader replies, same authority rule as LC.BroadcastRaidConfig itself.
 function LC.HandleStateRequest()
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
-    SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"))
+    LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"))
     if LC.sessionActive then LC.BroadcastRaidConfig() end
 end
 
@@ -487,14 +487,14 @@ StaticPopupDialogs["KART_LC_SYNC_REQUEST"] = {
 }
 
 -- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
-local function IsRealItemLink(link)
+function LC.IsRealItemLink(link)
     return type(link) == "string" and link:find("|Hitem:") ~= nil
 end
 
 -- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
 -- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's
 -- fake coloured-string items, so tab swatches never need to special-case which kind it is.
-local function ParseItemColor(link)
+function LC.ParseItemColor(link)
     local hex = type(link) == "string" and link:match("|c(%x%x%x%x%x%x%x%x)")
     if not hex then return 0.5, 0.5, 0.5 end
     return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
@@ -567,7 +567,7 @@ end
 
 function LC.SetSessionActive(active)
     LC.sessionActive = active
-    SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
+    LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
     if active then
         LC.BroadcastRaidConfig()
     else
@@ -610,7 +610,7 @@ function LC.CheckRaidJoin()
     -- request/response shape as the loot-history catch-up above.
     if not LC.stateSyncRequested then
         LC.stateSyncRequested = true
-        SendLC("LC_STATE_REQ")
+        LC.SendLC("LC_STATE_REQ")
     end
 
     if not UnitIsGroupLeader("player") then return end
@@ -695,7 +695,7 @@ function LC.OnStartLootRoll(rollID)
     local _, _, _, quality = GetLootRollItemInfo(rollID)
     local minQuality = LC.GetRaidMinQuality()
     local itemLink = GetLootRollItemLink(rollID)
-    local classID = IsRealItemLink(itemLink) and select(12, C_Item.GetItemInfo(itemLink))
+    local classID = LC.IsRealItemLink(itemLink) and select(12, C_Item.GetItemInfo(itemLink))
     if quality and quality < minQuality and classID ~= 15 then return end
 
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or "???"
@@ -710,12 +710,12 @@ function LC.OnStartLootRoll(rollID)
         local myRoll = math.random(1, 100)
         LC.rolls[rollID] = LC.rolls[rollID] or {}
         LC.rolls[rollID][myKey] = myRoll
-        SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
+        LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
     end
 
     if UnitIsGroupLeader("player") then
         local secs = KART_Settings.lcVoteSeconds or 20
-        SendLC("LC_START:" .. rollID .. ":" .. secs)
+        LC.SendLC("LC_START:" .. rollID .. ":" .. secs)
         LC.ShowCouncilPanel(rollID, secs)
     end
 end
@@ -1046,8 +1046,8 @@ function LC.RefreshVoteListRows_Spacious(f)
 
         -- Real icon when we have one; otherwise the same tinted placeholder used by the council
         -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
-        local ir, ig, ib = ParseItemColor(rollLink)
-        local iconTexture = IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
+        local ir, ig, ib = LC.ParseItemColor(rollLink)
+        local iconTexture = LC.IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
         if iconTexture then
             row.itemIcon:SetTexture(iconTexture)
             row.itemIcon:SetVertexColor(1, 1, 1)
@@ -1084,7 +1084,7 @@ function LC.RefreshVoteListRows_Spacious(f)
 
         row.itemHover:SetScript("OnEnter", function(self)
             local link = LC.rollItems[rollID]
-            if not IsRealItemLink(link) then return end
+            if not LC.IsRealItemLink(link) then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink(link)
             GameTooltip:Show()
@@ -1144,7 +1144,7 @@ function LC.RefreshVoteListRows_Spacious(f)
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
                 KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(GetVoteIconTexture(bi))
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 local capturedIdx    = bi
                 local capturedRollID = rollID
@@ -1153,7 +1153,7 @@ function LC.RefreshVoteListRows_Spacious(f)
                     LC.votedByMe[capturedRollID] = capturedIdx
                     local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
                     LC.votedNoteByMe[capturedRollID] = note
-                    if IsTestRoll(capturedRollID) then
+                    if LC.IsTestRoll(capturedRollID) then
                         -- Test rolls have no real raid to broadcast to (and testing solo may
                         -- mean no group at all), so record the vote locally and push it
                         -- straight into the Test-Master council panel if it's open, instead of
@@ -1167,7 +1167,7 @@ function LC.RefreshVoteListRows_Spacious(f)
                             LC.RefreshCouncilTabs()
                         end
                     else
-                        SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
+                        LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
                     end
                     LC.RefreshVoteListRows()
                 end)
@@ -1316,8 +1316,8 @@ function LC.RefreshVoteListRows_Compact(f)
         row.itemText:SetText(rollLink or "???")
         row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 8 - 60)
 
-        local ir, ig, ib = ParseItemColor(rollLink)
-        local iconTexture = IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
+        local ir, ig, ib = LC.ParseItemColor(rollLink)
+        local iconTexture = LC.IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
         if iconTexture then
             row.itemIcon:SetTexture(iconTexture)
             row.itemIcon:SetVertexColor(1, 1, 1)
@@ -1351,7 +1351,7 @@ function LC.RefreshVoteListRows_Compact(f)
 
         row.itemHover:SetScript("OnEnter", function(self)
             local link = LC.rollItems[rollID]
-            if not IsRealItemLink(link) then return end
+            if not LC.IsRealItemLink(link) then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink(link)
             GameTooltip:Show()
@@ -1405,7 +1405,7 @@ function LC.RefreshVoteListRows_Compact(f)
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
                 KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(GetVoteIconTexture(bi))
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -1421,7 +1421,7 @@ function LC.RefreshVoteListRows_Compact(f)
                     LC.votedByMe[capturedRollID] = capturedIdx
                     local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
                     LC.votedNoteByMe[capturedRollID] = note
-                    if IsTestRoll(capturedRollID) then
+                    if LC.IsTestRoll(capturedRollID) then
                         local myKey = (KART.Identity.ResolvePlayer("player"))
                         LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
                         LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
@@ -1430,7 +1430,7 @@ function LC.RefreshVoteListRows_Compact(f)
                             LC.RefreshCouncilTabs()
                         end
                     else
-                        SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
+                        LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
                     end
                     LC.RefreshVoteListRows()
                 end)
@@ -1527,7 +1527,7 @@ local ARMOR_SUBCLASS_RANK = {[1] = 1, [2] = 2, [3] = 3, [4] = 4}
 -- Returns the item's armor rank (1-4) if it's a cloth/leather/mail/plate piece, else nil (no
 -- restriction — jewelry, weapons, shields etc. are never flagged as "ineligible").
 function LC.GetItemArmorRank(itemLink)
-    if not IsRealItemLink(itemLink) then return nil end
+    if not LC.IsRealItemLink(itemLink) then return nil end
     local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = C_Item.GetItemInfo(itemLink)
     if classID ~= 4 then return nil end -- 4 = Armor
     return ARMOR_SUBCLASS_RANK[subclassID]
@@ -1598,8 +1598,8 @@ function LC.SwitchCouncilTab(rollID)
     panel.title:SetText(KART.L.LC_PANEL_TITLE)
 
     local link = LC.rollItems[rollID]
-    local ir, ig, ib = ParseItemColor(link)
-    local iconTexture = IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+    local ir, ig, ib = LC.ParseItemColor(link)
+    local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
     if iconTexture then
         panel.itemIcon:SetTexture(iconTexture)
         panel.itemIcon:SetVertexColor(1, 1, 1)
@@ -1702,7 +1702,7 @@ function LC.RefreshCouncilTabs()
         tab:SetPoint("TOP", panel.tabStrip, "TOP", 0, -(i - 1) * 44)
 
         local link = LC.rollItems[rollID]
-        local r, g, b = ParseItemColor(link)
+        local r, g, b = LC.ParseItemColor(link)
         if rollID == LC.activeRollID then
             tab:SetBackdropBorderColor(1, 0.85, 0.2, 1)
             tab.activeGlow:Show()
@@ -1713,7 +1713,7 @@ function LC.RefreshCouncilTabs()
 
         -- Real items show their actual icon; test mode has no real item to fetch an icon for,
         -- so it gets a generic placeholder tinted with the item's own colour instead.
-        local iconTexture = IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+        local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
         if iconTexture then
             tab.icon:SetTexture(iconTexture)
             tab.icon:SetVertexColor(1, 1, 1)
@@ -1734,7 +1734,7 @@ function LC.RefreshCouncilTabs()
 
             local hoverLink = LC.rollItems[capturedRollID]
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if IsRealItemLink(hoverLink) then
+            if LC.IsRealItemLink(hoverLink) then
                 GameTooltip:SetHyperlink(hoverLink)
                 GameTooltip:AddLine(" ")
                 -- SetHyperlink auto-triggers Blizzard's own gear-comparison tooltip (comparing
@@ -1932,7 +1932,7 @@ function LC.CreateCouncilPanel()
     f.itemHover:EnableMouse(true)
     f.itemHover:SetScript("OnEnter", function(self)
         local link = LC.rollItems[LC.activeRollID]
-        if not IsRealItemLink(link) then return end
+        if not LC.IsRealItemLink(link) then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetHyperlink(link)
         GameTooltip:Show()
@@ -2112,7 +2112,7 @@ function LC.RefreshCouncilRows()
     local numMem  = GetNumGroupMembers()
 
     local rollItem = LC.rollItems[rollID]
-    if rollID and rollItem and IsRealItemLink(rollItem) and not LC.pendingItemLoads[rollID]
+    if rollID and rollItem and LC.IsRealItemLink(rollItem) and not LC.pendingItemLoads[rollID]
        and not C_Item.GetItemInfo(rollItem) then
         LC.pendingItemLoads[rollID] = true
         Item:CreateFromItemLink(rollItem):ContinueOnItemLoad(function()
@@ -2128,7 +2128,7 @@ function LC.RefreshCouncilRows()
     -- (see the equippedText update below) — nil until the item link is cached, same as everywhere
     -- else in this function that reads C_Item.GetItemInfo.
     local rollItemIlvl
-    if rollItem and IsRealItemLink(rollItem) then
+    if rollItem and LC.IsRealItemLink(rollItem) then
         local _, _, _, ilvl = C_Item.GetItemInfo(rollItem)
         rollItemIlvl = ilvl
     end
@@ -2186,7 +2186,7 @@ function LC.RefreshCouncilRows()
     -- Test rolls must work with zero group members too (testing fully solo, no party at all),
     -- where the loop above never runs. Add ourselves manually so there's always at least one
     -- row to vote on and assign to.
-    if IsTestRoll(rollID) then
+    if LC.IsTestRoll(rollID) then
         local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
         local myKey    = (KART.Identity.ResolvePlayer("player"))
         local alreadyListed = false
@@ -2403,7 +2403,7 @@ function LC.RefreshCouncilRows()
                 nb = RAID_CLASS_COLORS[classFile].b
             end
         end
-        SetClassIconTexture(row.classIcon, classFile)
+        LC.SetClassIconTexture(row.classIcon, classFile)
 
         -- Armor-type eligibility is a soft visual hint, never a hard block (right-click assign
         -- still works either way) — dims the row and greys the name so obviously-wrong
@@ -2469,7 +2469,7 @@ function LC.RefreshCouncilRows()
                 math.floor(m.voteDef.g * 255),
                 math.floor(m.voteDef.b * 255),
                 m.voteDef.label))
-            row.voteIcon:SetTexture(GetVoteIconTexture(tonumber(m.voteIdx)))
+            row.voteIcon:SetTexture(LC.GetVoteIconTexture(tonumber(m.voteIdx)))
             row.voteIcon:Show()
         else
             row.voteText:SetText("|cff666666-|r")
@@ -2591,7 +2591,7 @@ function LC.RefreshCouncilRows()
         -- gear and would otherwise fight with this).
         row.equipHitbox:SetScript("OnEnter", function()
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-            if IsRealItemLink(rollItem) then
+            if LC.IsRealItemLink(rollItem) then
                 GameTooltip:SetHyperlink(rollItem)
                 GameTooltip:AddLine(" ")
                 if ShoppingTooltip1 then ShoppingTooltip1:Hide() end ---@diagnostic disable-line: undefined-global
@@ -2644,8 +2644,8 @@ function LC.AnnounceResult(rollID, winnerKey, reason)
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
     -- tester happened to click) and no raid-chat spam.
-    if not IsTestRoll(rollID) then
-        SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. (reason or ""))
+    if not LC.IsTestRoll(rollID) then
+        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
             local link = LC.rollItems[rollID] or ""
@@ -2742,7 +2742,7 @@ function LC.RequestHistorySync()
     for _, e in ipairs(KART_LootHistory or {}) do
         if e.time and e.time > latest then latest = e.time end
     end
-    SendLC("LC_HIST_REQ:" .. latest)
+    LC.SendLC("LC_HIST_REQ:" .. latest)
 end
 
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
@@ -2844,7 +2844,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
     end
     LC.AnnounceResult(rollID, playerKey, reason)
 
-    if IsTestRoll(rollID) then
+    if LC.IsTestRoll(rollID) then
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
         -- tester assigned the win to themselves, trigger the "you win" popup locally instead —
         -- and skip writing a fake entry into the real, persistent loot history.
@@ -2893,7 +2893,7 @@ end
 -- entry for the same rollID first, so reassigning an item doesn't leave a stale trade reminder
 -- pointing at the previous winner.
 function LC.AddPendingTrade(rollID, playerKey)
-    if IsTestRoll(rollID) then return end
+    if LC.IsTestRoll(rollID) then return end
     local myKey = (KART.Identity.ResolvePlayer("player"))
     LC.RemovePendingTrade(rollID)
     if playerKey == myKey then return end
@@ -3027,7 +3027,7 @@ end
 -- interchangeable, letting auto-trade grab whichever copy happens to sort first in bags instead of
 -- the exact one that was assigned. Same pattern LootHistory.lua's GetItemStringFromLink already uses.
 local function GetItemString(link)
-    return IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+    return LC.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
 end
 
 local function FindItemInBags(itemLink)
@@ -3110,7 +3110,7 @@ function LC.OnTradeClosed()
         -- report "not found" since the placeholder is not a valid item ID to search bags for,
         -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
         -- "done" checkmark button remains available as the fallback for that edge case.
-        if entry.winnerKey == partnerKey and IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
+        if entry.winnerKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
             LC.RemovePendingTrade(entry.rollID)
         end
     end
@@ -3142,8 +3142,8 @@ function LC.ToggleCouncilVote(rollID, candidateKey)
     local retracting = (LC.councilVotes[rollID][myKey] == candidateKey)
     LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
 
-    if not IsTestRoll(rollID) then
-        SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateKey))
+    if not LC.IsTestRoll(rollID) then
+        LC.SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateKey))
     end
 
     LC.RefreshCouncilRows()
@@ -3161,12 +3161,12 @@ end
 function LC.SetOfficerNote(playerKey, noteText)
     noteText = KART.TrimString(noteText or "")
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
-    SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
+    LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     LC.RefreshCouncilRows()
 end
 
 function LC.HandleOfficerNote(payload, senderKey)
-    if not IsSenderCouncil(senderKey) then return end
+    if not LC.IsSenderCouncil(senderKey) then return end
     local subjectKey, noteText = payload:match("^([^:]+):(.*)$")
     if not subjectKey then return end
     KART_LCOfficerNotes[subjectKey] = (noteText ~= "") and noteText or nil
@@ -3339,7 +3339,7 @@ function LC.HandleStart(payload)
     -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
     -- so there's nothing left to do here for that.
 
-    if IsCouncil() then
+    if LC.IsCouncil() then
         LC.ShowCouncilPanel(rollID, secs or 20)
     else
         LC.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
@@ -3415,7 +3415,7 @@ function LC.ResolveColorForReason(reason)
 end
 
 function LC.HandleResult(payload, senderKey)
-    if not IsSenderCouncil(senderKey) then return end
+    if not LC.IsSenderCouncil(senderKey) then return end
     -- payload = "rollID:winnerKey:reason"
     local rollID, winnerKey = payload:match("^(%d+):([^:]+)")
     rollID = tonumber(rollID)
@@ -3465,7 +3465,7 @@ function LC.StartTest(mode)
         showCouncil = true
     else
         -- Auto: follow actual role
-        showCouncil = IsCouncil() and IsInGroup()
+        showCouncil = LC.IsCouncil() and IsInGroup()
     end
 
     -- A test session is "active" if EITHER window still has test rolls tracked. If so, this
@@ -3478,11 +3478,11 @@ function LC.StartTest(mode)
     -- vote coming in, which made it look like voting itself was breaking the council panel.
     local sessionActive = false
     for _, rid in ipairs(LC.voteListRolls) do
-        if IsTestRoll(rid) then sessionActive = true break end
+        if LC.IsTestRoll(rid) then sessionActive = true break end
     end
     if not sessionActive then
         for _, rid in ipairs(LC.councilTabs) do
-            if IsTestRoll(rid) then sessionActive = true break end
+            if LC.IsTestRoll(rid) then sessionActive = true break end
         end
     end
 
