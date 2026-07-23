@@ -142,7 +142,7 @@ end
 
 function Trade.CreateTradeReminderFrame()
     local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
-    f:SetSize(260, 40)
+    f:SetSize(320, 40)
     f:SetPoint("CENTER", -220, 0)
     KART.RegisterStrataFrame(f)
     f:SetMovable(true)
@@ -187,15 +187,26 @@ function Trade.RefreshTradeReminder()
         local row = f.rows[i]
         if not row then
             row = CreateFrame("Frame", nil, f)
-            row:SetHeight(20)
+            row:SetHeight(26)
             row:SetPoint("LEFT", 10, 0)
             row:SetPoint("RIGHT", -28, 0)
 
             row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.text:SetPoint("LEFT")
-            row.text:SetPoint("RIGHT")
             row.text:SetJustifyH("LEFT")
             row.text:SetWordWrap(false)
+
+            -- Separate, clickable element for just the winner's name — the item text above stays
+            -- a plain FontString (no per-item action to take on it here).
+            row.nameBtn = CreateFrame("Button", nil, row)
+            row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
+            row.nameBtn:SetHeight(16)
+            row.nameBtn.text = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.nameBtn.text:SetPoint("LEFT")
+            row.nameBtn.text:SetPoint("RIGHT")
+            row.nameBtn.text:SetJustifyH("LEFT")
+            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
+            row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
             row.doneBtn = CreateFrame("Button", nil, f)
             row.doneBtn:SetSize(16, 16)
@@ -211,18 +222,33 @@ function Trade.RefreshTradeReminder()
             f.rows[i] = row
         end
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 10, -8 - 20 - (i - 1) * 20)
+        row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
         row:SetPoint("RIGHT", -28, 0)
-        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", KART.Identity.ResolveDisplayName(entry.winnerKey)))
+        row.text:SetText(entry.itemLink or "???")
+        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.winnerKey))
         local capturedRollID = entry.rollID
+        local capturedWinnerKey = entry.winnerKey
         row.doneBtn:SetScript("OnClick", function() Trade.RemovePendingTrade(capturedRollID) end)
+        row.nameBtn:SetScript("OnClick", function()
+            local unit = capturedWinnerKey and KART.Identity.FindUnitForKey(capturedWinnerKey)
+            if not unit then
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
+                return
+            end
+            if not CheckInteractDistance(unit, 2) then
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
+                return
+            end
+            TargetUnit(unit)
+            InitiateTrade(unit)
+        end)
         row:Show()
     end
     for i = #LC.pendingTrades + 1, #f.rows do
         if f.rows[i] then f.rows[i]:Hide() end
     end
 
-    f:SetHeight(8 + 20 + #LC.pendingTrades * 20 + 8)
+    f:SetHeight(8 + 26 + #LC.pendingTrades * 26 + 8)
     f:Show()
 end
 
