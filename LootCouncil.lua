@@ -2579,16 +2579,16 @@ end
 
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
-function LC.AnnounceResult(rollID, winnerName, reason)
+function LC.AnnounceResult(rollID, winnerKey, reason)
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
-    -- raid member's client log a fake history entry / pop a fake "you win" for whoever's short
-    -- name the tester happened to click) and no raid-chat spam.
+    -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
+    -- tester happened to click) and no raid-chat spam.
     if not IsTestRoll(rollID) then
-        SendLC("LC_RESULT:" .. rollID .. ":" .. winnerName .. ":" .. (reason or ""))
+        SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. (reason or ""))
 
-        if winnerName ~= "NONE" then
+        if winnerKey ~= "NONE" then
             local link = LC.rollItems[rollID] or ""
-            local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, winnerName, link)
+            local msg  = string.format(KART.L.LC_RESULT_ANNOUNCE, KART.Identity.ResolveDisplayName(winnerKey), link)
             if reason and reason ~= "" then
                 msg = msg .. " (" .. reason .. ")"
             end
@@ -2774,47 +2774,48 @@ StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] = { ---@diagnostic disable-line: 
     preferredIndex = 3,
 }
 
-local function DoAssignWinner(rollID, playerShort, reason, colorDef)
+local function DoAssignWinner(rollID, playerKey, reason, colorDef)
     local classFile
-    local unit = LC.FindUnitForShortName(playerShort)
+    local unit = KART.Identity.FindUnitForKey(playerKey)
     if unit then
         local _, cf = UnitClass(unit)
         classFile = cf
     end
-    LC.AnnounceResult(rollID, playerShort, reason)
+    LC.AnnounceResult(rollID, playerKey, reason)
 
     if IsTestRoll(rollID) then
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
         -- tester assigned the win to themselves, trigger the "you win" popup locally instead —
         -- and skip writing a fake entry into the real, persistent loot history.
-        local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-        if playerShort == myShort then
+        local myKey = (KART.Identity.ResolvePlayer("player"))
+        if playerKey == myKey then
             LC.ShowWinnerNotification(LC.rollItems[rollID])
         end
     else
-        LC.LogHistory(LC.rollItems[rollID], playerShort, reason, classFile, colorDef, rollID)
+        LC.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID)
         -- Only the client that actually holds the item (the designated lootmaster, see
         -- LC.GetLootmaster/ForceWinRoll) needs a trade reminder — when the assigner (usually the
         -- raid leader) isn't also the lootmaster, they never physically have the item to trade.
         if LC.IsMe(LC.GetLootmaster()) then
-            LC.AddPendingTrade(rollID, playerShort)
+            LC.AddPendingTrade(rollID, playerKey)
         end
     end
-    LC.assignedWinners[rollID] = playerShort
+    LC.assignedWinners[rollID] = playerKey
 end
 
--- Awards the item to playerShort with the given reason (may be "" for no reason) and logs it.
--- colorDef is the vote-button definition the reason was taken from (nil for "no reason").
--- If this rollID was already assigned, asks for confirmation first to avoid accidental double entries.
-function LC.AssignWinner(rollID, playerShort, reason, colorDef)
+-- Awards the item to playerKey (a resolved player identity, see KART.Identity.ResolvePlayer) with
+-- the given reason (may be "" for no reason) and logs it. colorDef is the vote-button definition
+-- the reason was taken from (nil for "no reason"). If this rollID was already assigned, asks for
+-- confirmation first to avoid accidental double entries.
+function LC.AssignWinner(rollID, playerKey, reason, colorDef)
     local prevWinner = LC.assignedWinners[rollID]
     if prevWinner then
         local dialog = StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] ---@diagnostic disable-line: undefined-global
-        dialog.text = string.format(KART.L.LC_REASSIGN_CONFIRM_TEXT, prevWinner, playerShort)
-        dialog.OnAccept = function() DoAssignWinner(rollID, playerShort, reason, colorDef) end
+        dialog.text = string.format(KART.L.LC_REASSIGN_CONFIRM_TEXT, KART.Identity.ResolveDisplayName(prevWinner), KART.Identity.ResolveDisplayName(playerKey))
+        dialog.OnAccept = function() DoAssignWinner(rollID, playerKey, reason, colorDef) end
         StaticPopup_Show("KART_LC_REASSIGN_CONFIRM") ---@diagnostic disable-line: undefined-global
     else
-        DoAssignWinner(rollID, playerShort, reason, colorDef)
+        DoAssignWinner(rollID, playerKey, reason, colorDef)
     end
 end
 
@@ -3177,20 +3178,6 @@ function LC.ShowOfficerNoteDialog(shortName)
     f.editBox:HighlightText()
 end
 
--- Resolves a raid/party unit token for a given short (unrealmed) player name.
-function LC.FindUnitForShortName(shortName)
-    local isRaid = IsInRaid()
-    local numMem = GetNumGroupMembers()
-    for i = 1, numMem do
-        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
-        local fullName = UnitName(unit)
-        if fullName and fullName:match("([^%-]+)") == shortName then
-            return unit
-        end
-    end
-    return nil
-end
-
 --- Right-click menu on a council row: quick-assign, manually correct this player's vote, or
 --- assign without a reason. Assign / Assign-without-reason are the only two actions that go
 --- through AssignWinner (which announces the result and asks for reassignment confirmation if
@@ -3352,21 +3339,21 @@ function LC.ResolveColorForReason(reason)
     return nil
 end
 
-function LC.HandleResult(payload, senderShort)
-    if not IsSenderCouncil(senderShort) then return end
-    -- payload = "rollID:winnerName:reason"
-    local rollID, winner = payload:match("^(%d+):([^:]+)")
+function LC.HandleResult(payload, senderKey)
+    if not IsSenderCouncil(senderKey) then return end
+    -- payload = "rollID:winnerKey:reason"
+    local rollID, winnerKey = payload:match("^(%d+):([^:]+)")
     rollID = tonumber(rollID)
-    if not rollID or not winner then return end
+    if not rollID or not winnerKey then return end
     local reason = payload:match("^%d+:[^:]+:(.*)$") or ""
 
     -- A result came in for this roll — remove it from our vote list, if it's still there.
     LC.RemoveVoteListItem(rollID)
 
-    if winner == "NONE" then return end
+    if winnerKey == "NONE" then return end
 
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-    if winner == myShort then
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    if winnerKey == myKey then
         LC.ShowWinnerNotification(LC.rollItems[rollID])
     end
 
@@ -3374,17 +3361,17 @@ function LC.HandleResult(payload, senderShort)
     -- without depending on the lootmaster being online later. The assigner already logged this
     -- locally (SendAddonMessage never echoes back to its own sender), so no duplicate here.
     local classFile
-    local unit = LC.FindUnitForShortName(winner)
+    local unit = KART.Identity.FindUnitForKey(winnerKey)
     if unit then
         local _, cf = UnitClass(unit)
         classFile = cf
     end
-    LC.LogHistory(LC.rollItems[rollID], winner, reason, classFile, LC.ResolveColorForReason(reason), rollID)
+    LC.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(winnerKey), reason, classFile, LC.ResolveColorForReason(reason), rollID)
 
     -- Same reasoning as DoAssignWinner: only the client physically holding the item (the
     -- designated lootmaster) needs a pending-trade reminder, regardless of who assigned it.
     if LC.IsMe(LC.GetLootmaster()) then
-        LC.AddPendingTrade(rollID, winner)
+        LC.AddPendingTrade(rollID, winnerKey)
     end
 end
 
