@@ -17,7 +17,7 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
-LC.CouncilNamesTable    = {}  -- shortName:lower() -> true. Populated ONLY from the raid leader's
+LC.CouncilNamesTable    = {}  -- resolved KART.Identity key -> true. Populated ONLY from the raid leader's
                                -- broadcast (LC_CONFIG) — never from local settings — so a regular
                                -- raider can't self-promote by editing their own council-member list.
 LC.raidConfig           = {}  -- authoritative config received from the raid leader: minQuality, buttonLabels, councilMembers
@@ -268,12 +268,12 @@ function LC.GetLootmaster()
     return (LC.raidConfig and LC.raidConfig.lootmaster) or ""
 end
 
--- Whether configuredName (trimmed+lowercased text from the lootmaster field, see LC.GetLootmaster)
--- identifies the local player — by character short name, same as always, or by Northern Sky Raid
--- Tools nickname (see KART.GetNickname in Utils.lua), so a raid leader can name a *person* once
--- ("kandera") instead of re-typing the field whenever that person switches characters. Every alt
--- just needs the same NSRT nickname set, which raiders already do for the addon's other
--- nickname-aware features.
+-- Whether configuredKey (a resolved KART.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
+-- identifies the local player. Resolution (character short name vs. Northern Sky Raid Tools
+-- nickname, see KART.GetNickname in Utils.lua) already happened upstream when the key was
+-- produced, so a raid leader can name a *person* once ("kandera") instead of re-typing the field
+-- whenever that person switches characters — every alt just needs the same NSRT nickname set,
+-- which raiders already do for the addon's other nickname-aware features.
 function LC.IsMe(configuredKey)
     if not configuredKey or configuredKey == "" then return false end
     return (KART.Identity.ResolvePlayer("player")) == configuredKey
@@ -432,9 +432,9 @@ end
 
 -- Hand-rolled dialog instead of StaticPopupDialogs' hasEditBox: retail's StaticPopup system
 -- (routed through Blizzard_StaticPopup_Game/GameDialog.lua) doesn't reliably expose the edit box
--- as self.editBox to its callbacks — same fix already applied to LC.ShowOfficerNoteDialog below
--- (see its comment for the full "attempt to index field 'editBox' (a nil value)" story). Owning
--- the frame ourselves means the edit box reference always exists.
+-- as self.editBox to its callbacks — same fix already applied to OfficerNotes.ShowOfficerNoteDialog
+-- in LootCouncilOfficerNotes.lua (see its comment for the full "attempt to index field 'editBox'
+-- (a nil value)" story). Owning the frame ourselves means the edit box reference always exists.
 local syncTargetDialog
 
 function LC.ShowSyncTargetDialog()

@@ -174,6 +174,7 @@ KART.L_deDE = {
     HELP_LC      = "Loot-Council-Fenster erneut öffnen, falls noch etwas aktiv ist",
     HELP_TRADE   = "Trade-Erinnerung erneut öffnen, falls noch etwas offen ist",
     HELP_SHOWALL = "bereits abgestimmte, ausgeblendete Items wieder anzeigen",
+    HELP_ADD     = "Item(s) zur Entscheidung an Loot Council zurückgeben (nur Lootmaster)",
     HELP_HELP    = "diese Hilfe anzeigen",
 
     -- Loot Council
@@ -260,7 +261,6 @@ KART.L_deDE = {
     LC_REASSIGN_CONFIRM_TEXT = "Dieses Item wurde bereits an %s vergeben. Stattdessen an %s zuweisen?",
     LC_TRADE_REMINDER_TITLE = "Noch zu tradende Items",
     LC_OWED_REMINDER_TITLE = "Items, die du noch abholen musst",
-    LC_TRADE_REMINDER_ROW  = "%s -> %s",
     LC_TRADE_REMINDER_DONE = "Als erledigt markieren",
     LC_TRADE_TARGET_NOT_FOUND = "%s ist nicht in deiner Gruppe.",
     LC_TRADE_OUT_OF_RANGE     = "Geh näher an %s heran, um zu traden.",

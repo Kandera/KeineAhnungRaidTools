@@ -706,6 +706,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print("  /kart - " .. (KART.L.HELP_TOGGLE or "open/close the main window"))
         print("  /kart version (v) - " .. (KART.L.HELP_VERSION or "request everyone's KART version"))
         print("  /kart lc - " .. (KART.L.HELP_LC or "reopen the Loot Council window if something's still active"))
+        print("  /kart add <item link> - " .. (KART.L.HELP_ADD or "hand item(s) back to Loot Council for a decision (lootmaster only)"))
         print("  /kart trade - " .. (KART.L.HELP_TRADE or "reopen the trade reminder if something's still pending"))
         print("  /kart showall - " .. (KART.L.HELP_SHOWALL or "reveal already-voted items hidden by your display setting"))
         print("  /kart help (h) - " .. (KART.L.HELP_HELP or "show this help"))

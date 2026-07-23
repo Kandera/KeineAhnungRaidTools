@@ -5,7 +5,8 @@ local Identity = KART.Identity
 
 -- Iterates every current raid/party unit token, including the player — the same isRaid/numMem
 -- loop already used in a few places in this addon (LC.FindUnitForShortName, which this module
--- replaces; KART.HandleAutoPromote in GroupLogic.lua; LC.RefreshCouncilRows in LootCouncil.lua).
+-- replaces; KART.HandleAutoPromote in GroupLogic.lua; Council.RefreshCouncilRows in
+-- LootCouncilPanel.lua).
 -- Kept as its own local copy here rather than extracting a shared helper, to avoid touching
 -- those unrelated call sites for this change.
 local function EachGroupUnit()

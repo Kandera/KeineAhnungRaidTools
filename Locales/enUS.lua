@@ -174,6 +174,7 @@ KART.L_enUS = {
     HELP_LC      = "reopen the Loot Council window if something's still active",
     HELP_TRADE   = "reopen the trade reminder if something's still pending",
     HELP_SHOWALL = "reveal already-voted items hidden by your display setting",
+    HELP_ADD     = "hand item(s) back to Loot Council for a decision (lootmaster only)",
     HELP_HELP    = "show this help",
 
     -- Loot Council
@@ -260,7 +261,6 @@ KART.L_enUS = {
     LC_REASSIGN_CONFIRM_TEXT = "This item was already assigned to %s. Assign it to %s instead?",
     LC_TRADE_REMINDER_TITLE = "Items still to trade",
     LC_OWED_REMINDER_TITLE = "Items you still need to collect",
-    LC_TRADE_REMINDER_ROW  = "%s -> %s",
     LC_TRADE_REMINDER_DONE = "Mark as done",
     LC_TRADE_TARGET_NOT_FOUND = "%s isn't in your group.",
     LC_TRADE_OUT_OF_RANGE     = "Get closer to %s to trade.",
