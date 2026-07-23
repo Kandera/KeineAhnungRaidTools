@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Behoben
+- **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.
+- **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
+- **"Spieler ist nicht bereit"-Chatmeldungen nutzen jetzt deine Sprache.**
+- **Standardwerte-Reset setzt jetzt alles zurück**, inklusive Fensterpositionen und Tastenbelegung.
+
 ## [2.8.0] - 2026-07-23
 ### Hinzugefügt
 - **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.

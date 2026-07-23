@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- **Fixed a login error** for characters that never touched the Loot Council font-size slider.
+- **Durability data now loads automatically on ready checks.**
+- **"Player is not ready" chat messages now use your language.**
+- **Reset Defaults now resets everything**, including window positions and keybinds.
+
 ## [2.8.0] - 2026-07-23
 ### Added
 - **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
