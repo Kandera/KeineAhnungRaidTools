@@ -269,8 +269,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.RCDialog then KART.RCDialog:Hide() end
         if KART_Settings.showBuffCheck and KART.ShowBuffCheck then
             KART.ShowBuffCheck()
-            if LibDurability and LibDurability.RequestDurability then
-                LibDurability:RequestDurability()
+            -- LibDurability is LibStub-only (no global) — a bare global lookup here was always
+            -- nil, so the durability request on ready check never fired.
+            local durabilityLib = LibStub and LibStub("LibDurability", true)
+            if durabilityLib and durabilityLib.RequestDurability then
+                durabilityLib:RequestDurability()
             end
         end
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
