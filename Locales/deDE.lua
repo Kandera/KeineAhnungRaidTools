@@ -257,6 +257,7 @@ KART.L_deDE = {
     LC_DESC_HISTORY        = "Öffnet eine durchsuchbare Liste aller über den Loot Council vergebenen Items, filterbar nach Spieler und Grund.",
     LC_REASSIGN_CONFIRM_TEXT = "Dieses Item wurde bereits an %s vergeben. Stattdessen an %s zuweisen?",
     LC_TRADE_REMINDER_TITLE = "Noch zu tradende Items",
+    LC_OWED_REMINDER_TITLE = "Items, die du noch abholen musst",
     LC_TRADE_REMINDER_ROW  = "%s -> %s",
     LC_TRADE_REMINDER_DONE = "Als erledigt markieren",
     LC_TRADE_TARGET_NOT_FOUND = "%s ist nicht in deiner Gruppe.",

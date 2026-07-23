@@ -257,6 +257,7 @@ KART.L_enUS = {
     LC_DESC_HISTORY        = "Opens a searchable log of every item assigned through Loot Council, with filters per player and reason.",
     LC_REASSIGN_CONFIRM_TEXT = "This item was already assigned to %s. Assign it to %s instead?",
     LC_TRADE_REMINDER_TITLE = "Items still to trade",
+    LC_OWED_REMINDER_TITLE = "Items you still need to collect",
     LC_TRADE_REMINDER_ROW  = "%s -> %s",
     LC_TRADE_REMINDER_DONE = "Mark as done",
     LC_TRADE_TARGET_NOT_FOUND = "%s isn't in your group.",

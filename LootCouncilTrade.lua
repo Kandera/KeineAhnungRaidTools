@@ -253,6 +253,112 @@ function Trade.RefreshTradeReminder()
     f:Show()
 end
 
+-- Removes rollID from LC.owedToMe, if present, and rebuilds the window.
+function Trade.RemoveOwedItem(rollID)
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        if LC.owedToMe[i].rollID == rollID then table.remove(LC.owedToMe, i) end
+    end
+    Trade.RefreshOwedReminder()
+end
+
+function Trade.CreateOwedReminderFrame()
+    local f = CreateFrame("Frame", "KART_LCOwedReminder", UIParent, "BackdropTemplate")
+    f:SetSize(320, 40)
+    f:SetPoint("CENTER", 220, 0)
+    KART.RegisterStrataFrame(f)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    KART.ApplyPopupArtwork(f)
+    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if KART_Settings then
+            KART_Settings.lcOwedReminderPos = {x = self:GetLeft(), y = self:GetTop()}
+        end
+    end)
+    table.insert(UISpecialFrames, f:GetName())
+
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.title:SetPoint("TOPLEFT", 10, -8)
+    f.title:SetText(KART.L.LC_OWED_REMINDER_TITLE)
+
+    f.rows = {}
+
+    local pos = KART_Settings and KART_Settings.lcOwedReminderPos
+    if pos and type(pos) == "table" and pos.x and pos.y then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    end
+
+    LC.owedReminderFrame = f
+end
+
+-- Rebuilds the reminder list from LC.owedToMe; hides the frame entirely once it's empty.
+function Trade.RefreshOwedReminder()
+    LC.owedToMe = LC.owedToMe or {}
+    if #LC.owedToMe == 0 then
+        if LC.owedReminderFrame then LC.owedReminderFrame:Hide() end
+        return
+    end
+
+    if not LC.owedReminderFrame then Trade.CreateOwedReminderFrame() end
+    local f = LC.owedReminderFrame
+
+    for i, entry in ipairs(LC.owedToMe) do
+        local row = f.rows[i]
+        if not row then
+            row = CreateFrame("Frame", nil, f)
+            row:SetHeight(26)
+            row:SetPoint("LEFT", 10, 0)
+            row:SetPoint("RIGHT", -10, 0)
+
+            row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.text:SetPoint("LEFT")
+            row.text:SetJustifyH("LEFT")
+            row.text:SetWordWrap(false)
+
+            row.nameBtn = CreateFrame("Button", nil, row)
+            row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
+            row.nameBtn:SetPoint("RIGHT")
+            row.nameBtn:SetHeight(16)
+            row.nameBtn.text = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.nameBtn.text:SetPoint("LEFT")
+            row.nameBtn.text:SetPoint("RIGHT")
+            row.nameBtn.text:SetJustifyH("LEFT")
+            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
+            row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
+
+            f.rows[i] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
+        row:SetPoint("RIGHT", -10, 0)
+        row.text:SetText(entry.itemLink or "???")
+        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.lootmasterKey))
+        row.nameBtn:SetScript("OnClick", function()
+            local unit = KART.Identity.FindUnitForKey(entry.lootmasterKey)
+            if not unit then
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
+                return
+            end
+            if not CheckInteractDistance(unit, 2) then
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
+                return
+            end
+            TargetUnit(unit)
+            InitiateTrade(unit)
+        end)
+        row:Show()
+    end
+    for i = #LC.owedToMe + 1, #f.rows do
+        if f.rows[i] then f.rows[i]:Hide() end
+    end
+
+    f:SetHeight(8 + 26 + #LC.owedToMe * 26 + 8)
+    f:Show()
+end
+
 -- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
 -- traded, mailed, or on a different character).
 -- Full item string (itemID + every bonus ID: enchant, gems, suffix, upgrade level, etc.), not just
@@ -348,6 +454,15 @@ function Trade.OnTradeClosed()
             Trade.RemovePendingTrade(entry.rollID)
         end
     end
+
+    -- Mirror check for the recipient side: if I just traded with the lootmaster and the item I
+    -- was owed is now in MY bags, the trade succeeded from my end too.
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        local entry = LC.owedToMe[i]
+        if entry.lootmasterKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and FindItemInBags(entry.itemLink) then
+            Trade.RemoveOwedItem(entry.rollID)
+        end
+    end
 end
 
 function Trade.ShowWinnerNotification(itemLink)
@@ -422,6 +537,12 @@ function Trade.HandleResult(payload, senderKey)
     local myKey = (KART.Identity.ResolvePlayer("player"))
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
+        -- If I'm also the lootmaster, I already have the item — nothing to trade myself for.
+        if not LC.IsMe(LC.GetLootmaster()) then
+            LC.owedToMe = LC.owedToMe or {}
+            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = LC.GetLootmaster()})
+            Trade.RefreshOwedReminder()
+        end
     end
 
     -- Every KART user logs the same entry locally, so everyone's loot history stays in sync
