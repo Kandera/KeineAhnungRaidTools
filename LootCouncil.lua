@@ -1422,6 +1422,36 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnHistory:SetScript("OnClick", function()
         if KART.LH then KART.LH.Toggle() end
     end)
+
+    KART.RegisterLocaleRefresher(function()
+        local Lx = KART.L
+        KART.TabTitles[5]:SetText(Lx.LC_SETTINGS_TITLE)
+        KART.LC.CbModuleEnabled.text:SetText(Lx.LC_SET_MODULE_ENABLED)        KART.LC.CbModuleEnabled.tooltipText = Lx.LC_DESC_MODULE_ENABLED
+        KART.LC.CbAutoPass.text:SetText(Lx.LC_SET_AUTOPASS)                   KART.LC.CbAutoPass.tooltipText = Lx.LC_DESC_AUTOPASS
+        KART.LC.CbCompactVoteLayout.text:SetText(Lx.LC_SET_COMPACT_VOTE_LAYOUT)
+        KART.LC.CbCompactVoteLayout.tooltipText = Lx.LC_DESC_COMPACT_VOTE_LAYOUT
+        KART.LC.CbShowNickNames.text:SetText(Lx.LC_SET_SHOW_NICKNAMES)        KART.LC.CbShowNickNames.tooltipText = Lx.LC_DESC_SHOW_NICKNAMES
+        KART.LC.BtnVotedItemDisplay.tooltipText = Lx.LC_DESC_VOTED_DISPLAY -- label synced by SyncSettingsToUI
+        boxTitle:SetText(Lx.LC_RAIDWIDE_TITLE)
+        KART.LC.SldVoteTimer.title:SetText(Lx.LC_SET_VOTE_TIMER)              KART.LC.SldVoteTimer.tooltipText = Lx.LC_DESC_VOTE_TIMER
+        KART.LC.SldFontSize.title:SetText(Lx.LC_SET_FONT_SIZE)                KART.LC.SldFontSize.tooltipText = Lx.LC_DESC_FONT_SIZE
+        KART.LC.CbRollsEnabled.text:SetText(Lx.LC_SET_ROLLS_ENABLED)          KART.LC.CbRollsEnabled.tooltipText = Lx.LC_DESC_ROLLS_ENABLED
+        lblButtons:SetText(Lx.LC_SET_BUTTONS)
+        hint:SetText(Lx.LC_SET_BUTTONS_HINT)
+        lblCouncil:SetText(Lx.LC_SET_COUNCIL)
+        hintCouncil:SetText(Lx.LC_SET_COUNCIL_HINT)
+        lblLootmaster:SetText(Lx.LC_SET_LOOTMASTER)
+        hintLootmaster:SetText(Lx.LC_SET_LOOTMASTER_HINT)
+        lblQuality:SetText(Lx.LC_SET_MIN_QUALITY)
+        KART.LC.BtnMinQuality.tooltipText = Lx.LC_DESC_MIN_QUALITY -- label synced by SyncSettingsToUI
+        KART.LC.BtnToggleSession.text:SetText(Lx.LC_BTN_TOGGLE)               KART.LC.BtnToggleSession.tooltipText = Lx.LC_DESC_TOGGLE
+        KART.LC.BtnSyncSettings.text:SetText(Lx.LC_BTN_SYNC_SETTINGS)         KART.LC.BtnSyncSettings.tooltipText = Lx.LC_DESC_SYNC_SETTINGS
+        KART.LC.BtnTestLooter.text:SetText(Lx.LC_BTN_TEST_LOOTER)             KART.LC.BtnTestLooter.tooltipText = Lx.LC_DESC_TEST_LOOTER
+        KART.LC.BtnTestMaster.text:SetText(Lx.LC_BTN_TEST_MASTER)             KART.LC.BtnTestMaster.tooltipText = Lx.LC_DESC_TEST_MASTER
+        KART.LC.BtnHistory.text:SetText(Lx.LC_BTN_HISTORY)                    KART.LC.BtnHistory.tooltipText = Lx.LC_DESC_HISTORY
+        LC.UpdateRoleStatusLabel() -- reads KART.L live and re-flows the box
+        layoutRaidBox() -- German/English label heights differ; re-measure everything
+    end)
 end
 
 -- Called at file load time; KART.LootCouncilPanel is created by MainFrame.lua
