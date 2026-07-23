@@ -431,7 +431,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     KART.ReadyCheckReasons[shortName] = reason
                     
                     if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
-                        print(string.format("|cff00ff00KART:|r %s ist nicht bereit: |cffffaa00%s|r", shortName, reason))
+                        print(string.format(KART.L.RC_REASON_RECEIVED, shortName, reason))
                     end
                     
                     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then

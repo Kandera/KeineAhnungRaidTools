@@ -135,6 +135,7 @@ KART.L_deDE = {
     RC_REASON_DRINK = "Trinken",
     RC_REASON_1MIN = "1 Min",
     RC_REASON_SEND = "Senden",
+    RC_REASON_RECEIVED = "|cff00ff00KART:|r %s ist nicht bereit: |cffffaa00%s|r",
     RL_PULL_LABEL = "P",
     RL_CLEAR_WM = "Alle Weltmarker löschen",
     RL_READYCHECK = "Bereitschaftscheck starten",
