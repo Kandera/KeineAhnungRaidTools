@@ -12,7 +12,7 @@ This design replaces short-name identity with a stable, collision-proof key (Bli
 ## Non-goals
 
 - **Buff-checker caches** (`KART.OilCache`, `KART.ILvlCache`, `KART.GearCache`, `KART.PlayerVersions` in `Core.lua`) share the same short-name weakness but are out of scope here — lower impact (no loot-award consequence), left for a separate future ticket.
-- **Wire protocol format** does not change. Sender identity already arrives for free via Blizzard's `CHAT_MSG_ADDON` event `sender` argument (a full, realm-qualified name) — no name is ever embedded in `LC_VOTE`/`LC_ROLL`/`LC_CVOTE`/`LC_RESULT` payloads today, and none needs to be added. This is a purely local resolution change: how each client keys its own tables from the sender it already receives.
+- **Sender-identity wire format does not change.** Sender identity already arrives for free via Blizzard's `CHAT_MSG_ADDON` event `sender` argument (a full, realm-qualified name) — no change needed to how a message's *sender* is identified. This does **not** cover messages whose payload names a *third party* chosen by the sender's own client — see "Third-party identity in wire payloads" below, where two payloads (`LC_RESULT`, `LC_CVOTE`) do change shape.
 - **No backward-compatibility shim.** Hard cutover — every raid member is expected to update together. A client that hasn't updated keeps the old (buggy) short-name behavior locally; this causes no crash or protocol break, since the wire format is unchanged. The existing `KART.PlayerVersions` mismatch notice covers alerting users to update, same as any other feature release.
 - **NSRT nickname feature is unaffected.** It's a separate, existing mechanism (config text matched against `KART.GetNickname(unit)` for visible raid members) that continues to work exactly as today — see "Nickname interaction" below for how it composes with the new resolver.
 
@@ -77,6 +77,25 @@ The `shortName` local itself, and every buff-checker branch that reads it, is un
 - `LC.IsCouncil(unit)` / `LC.IsMe(configuredName)` / `LC.GetLootmaster()` — compare `KART.Identity.ResolvePlayer(unit-or-input)` against the stored key rather than doing their own text comparison.
 - UI row-building (~2100-2360) keeps using `UnitName(unit)`/`KART.GetNickname(unit)` for on-screen display exactly as today — only the table keys used to look up vote/roll data for a given row change to the resolved key.
 
+### Third-party identity in wire payloads
+
+Two messages don't just carry a sender — their payload *names a specific other player*, chosen by the sender from their own (locally unambiguous) roster view: `LC_RESULT`'s winner field (`LC.AnnounceResult`) and `LC_CVOTE`'s candidate field (`LC.ToggleCouncilVote`). Today both send bare short-name text, forcing every *receiver* to reverse-resolve that text against their own roster (`LC.FindUnitForShortName`) — the identical collision hazard this design otherwise removes, just relocated into the payload instead of the sender field.
+
+Fix: at the point these values are captured — always from a UI action where a live `unit`/roster row is in hand (the assign-menu click, the council-vote-pick click) — capture `KART.Identity.ResolvePlayer(unit)` instead of (or alongside) the display short name, and send that resolved key in the payload:
+
+- `LC_RESULT:rollID:key:reason` — `key` replaces the bare winner name. `LC.AssignWinner`/`DoAssignWinner`/`LC.AnnounceResult`'s `winnerName` parameter carries the resolved key end-to-end; `LC.LogHistory` and any chat/UI announcement resolve it to a display name via `KART.Identity.ResolveDisplayName(key)` only at the point of rendering/logging text, same as everywhere else in this design.
+- `LC_CVOTE:rollID:key` — `key` replaces `candidateShort`. `LC.councilVotes[rollID][voterKey] = candidateKey`.
+- Downstream state that stores one of these values also switches to the resolved key: `LC.assignedWinners[rollID]`, `LC.pendingTrades[].winnerShort` (renamed in intent, not necessarily in field name, to hold a key), and `LC.SetPlayerVote`'s `LC.votes[rollID][key]`.
+- This is a wire-format change for exactly these two messages — consistent with the hard-cutover decision already made; no mixed-version compatibility is attempted, same as the rest of this design.
+
+### Officer notes (`KART_LCOfficerNotes`)
+
+A third persistent, short-name-keyed table, found during implementation planning and not in the original scope: `KART_LCOfficerNotes[shortName]` (a free-text council note about a person, set locally via `LC.ShowOfficerNoteDialog`/read at `LootCouncil.lua:3177`, and broadcast/received via `LC_ONOTE` → `LC.HandleOfficerNote`). Same collision bug as everything else here, and it's the one piece of per-player state that *is* persisted across sessions (unlike `LC.votes`/`LC.rolls`), so it needs an explicit migration step, not just a forward-only key-scheme switch:
+
+- `LC_ONOTE` payload's sender-derived key already changes for free (it goes through the same `Core.lua` dispatch fix as `LC_VOTE`/`LC_ROLL`/`LC_CVOTE`).
+- `KART_LCOfficerNotes` moves from `[shortName] = noteText` to `[key] = noteText`.
+- **One-time migration on first load after update:** iterate the existing `KART_LCOfficerNotes` table, attempt `KART.Identity.ResolvePlayer(oldShortNameKey)` for each entry (roster/cache lookup, same as any other resolution). Where it resolves, insert under the new key and remove the old entry. Where it doesn't resolve (person not seen since update), **leave the old text-keyed entry in place** rather than deleting it — it stays inert (not read by the new key-based lookups) until that person is next seen, at which point a follow-up pass (piggybacked on the same pending-resolution retry as the council list, see below) picks it up and migrates it then. No note is ever silently dropped.
+
 ### Settings & pending resolution
 
 `KART_Settings.lcCouncilMembers`/`lcLootmaster` **remain free-text fields** — the raid leader keeps typing comma-separated short names or nicknames, no UI change. Resolution happens where the text is turned into `LC.CouncilNamesTable`/`LC.raidConfig.lootmaster` (`LC.HandleConfig` and the raid-leader-side equivalent around line 250-285):
@@ -87,18 +106,20 @@ The `shortName` local itself, and every buff-checker branch that reads it, is un
 
 ### Existing saved data / upgrade path
 
-No migration script is needed:
+No migration script is needed for settings or runtime state:
 
 - `KART_Settings.lcCouncilMembers`/`lcLootmaster` are already plain text and stay plain text — only the in-memory interpretation changes, on next load.
-- `LC.votes`/`LC.rolls` never persist across sessions — new key scheme applies from the first roll cast after updating.
+- `LC.votes`/`LC.rolls`/`LC.councilVotes`/`LC.assignedWinners`/`LC.pendingTrades` never persist across sessions — new key scheme applies from the first roll cast after updating.
 - `KART_PlayerCache` starts empty and fills in as players are seen during normal play; until a given player is seen once post-update, their config-list entry is simply pending (see above) rather than incorrectly matched, which is a strict improvement over the current silent-collision behavior.
+
+`KART_LCOfficerNotes` is the one exception — it does persist, and does need the one-time best-effort migration described above ("Officer notes" section).
 
 ## Files touched
 
 - **New:** `Identity.lua` (resolver, cache read/write, pending-retry on roster update).
 - **New:** `KART_PlayerCache` entry in `KeineAhnungRaidTools.toc` `SavedVariables` line.
 - **Changed:** `Core.lua` — the ten `LC_*` dispatch lines (384-405) only.
-- **Changed:** `LootCouncil.lua` — vote/roll cast + receipt handlers, `LC.CouncilNamesTable` build/check, `LC.IsCouncil`/`LC.IsMe`/`LC.GetLootmaster`, dev test harness (~3446). UI display code changes only where it reads a table keyed by the old short name — rendering itself (`UnitName`/`GetNickname` calls) is untouched.
+- **Changed:** `LootCouncil.lua` — vote/roll cast + receipt handlers, `LC.CouncilNamesTable` build/check, `LC.IsCouncil`/`LC.IsMe`/`LC.GetLootmaster`, `LC.AssignWinner`/`DoAssignWinner`/`LC.AnnounceResult`/`LC.HandleResult` (winner key + `LC_RESULT` payload), `LC.ToggleCouncilVote`/`LC.HandleCouncilVote` (candidate key + `LC_CVOTE` payload), `LC.SetPlayerVote`, `LC.AddPendingTrade`/`LC.pendingTrades`, `KART_LCOfficerNotes` read/write/broadcast + one-time migration pass, dev test harness (~3446). UI display code changes only where it reads a table keyed by the old short name — rendering itself (`UnitName`/`GetNickname` calls) is untouched.
 
 Exact line numbers will shift by the time an implementation plan is written (per the bugfix/feature plans' own convention) — re-verify against the current file at that point.
 
