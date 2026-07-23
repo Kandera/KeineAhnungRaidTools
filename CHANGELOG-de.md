@@ -6,6 +6,11 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-07-23
+### Added
+- **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
+- **`/kart showall`** holt ausgeblendete Items zurück.
+
 ## [2.6.0] - 2026-07-23
 ### Behoben
 - **Der Loot Council verwechselt keine zwei Spieler mehr, die sich einen Charakternamen über verbundene Realms teilen.** Votes, Council-Mitgliedschaft, Item-Zuweisungen und Officer-Notizen werden jetzt pro Spieler verfolgt.
