@@ -513,7 +513,8 @@ function Vote.RefreshVoteListRows_Compact(f)
 
     f.compactRows = f.compactRows or {}
 
-    for i, rollID in ipairs(LC.voteListRolls) do
+    local visibleRolls = Vote.GetVisibleRolls()
+    for i, rollID in ipairs(visibleRolls) do
         local row = f.compactRows[i]
         if not row then
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
@@ -751,11 +752,11 @@ function Vote.RefreshVoteListRows_Compact(f)
         end
     end
 
-    for i = #LC.voteListRolls + 1, #f.compactRows do
+    for i = #visibleRolls + 1, #f.compactRows do
         if f.compactRows[i] then f.compactRows[i]:Hide() end
     end
 
-    f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
+    f:SetHeight(math.min(32 + #visibleRolls * (rowH + ROW_GAP) + 12, 600))
 end
 
 --- Manually sets (overrides) a player's vote in the council panel — e.g. they voted verbally or
