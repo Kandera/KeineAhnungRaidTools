@@ -277,7 +277,11 @@ function LC.HandleConfig(payload, senderShort)
 
     LC.CouncilNamesTable = {}
     for _, name in ipairs(KART.SplitString((council or ""):lower(), ";")) do
-        local trimmed = KART.TrimString(name)
+        -- Strip any "-Realm" suffix, same as the lootmaster field above — a self-check like
+        -- IsCouncil() compares against UnitName("player"), which never carries a realm suffix for
+        -- the local player, so a council-list entry typed as "Name-Realm" (e.g. copied from a
+        -- raid frame showing a cross-realm member that way) would otherwise never match.
+        local trimmed = KART.TrimString(name):match("([^%-]+)") or ""
         if trimmed ~= "" then LC.CouncilNamesTable[trimmed] = true end
     end
 end
@@ -2958,12 +2962,22 @@ end
 
 -- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
 -- traded, mailed, or on a different character).
+-- Full item string (itemID + every bonus ID: enchant, gems, suffix, upgrade level, etc.), not just
+-- the bare itemID — two drops can share an itemID while being different variants (e.g. one has a
+-- tertiary stat/bonus ID the other doesn't), and comparing only itemID would treat them as
+-- interchangeable, letting auto-trade grab whichever copy happens to sort first in bags instead of
+-- the exact one that was assigned. Same pattern LootHistory.lua's GetItemStringFromLink already uses.
+local function GetItemString(link)
+    return IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+end
+
 local function FindItemInBags(itemLink)
-    local itemID = itemLink and C_Item.GetItemInfoInstant(itemLink)
-    if not itemID then return nil end
+    local wantString = GetItemString(itemLink)
+    if not wantString then return nil end
     for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
-            if C_Container.GetContainerItemID(bag, slot) == itemID then
+            local bagLink = C_Container.GetContainerItemLink(bag, slot)
+            if bagLink and GetItemString(bagLink) == wantString then
                 return bag, slot
             end
         end
