@@ -89,7 +89,7 @@ function Vote.CreateVoteList()
             Vote.RefreshVoteListRows()
         else
             local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
-            for i, rid in ipairs(LC.voteListRolls) do
+            for i, rid in ipairs(Vote.GetVisibleRolls()) do
                 local row = pool and pool[i]
                 if row and row:IsShown() then
                     local deadline  = LC.rollDeadlines[rid]
