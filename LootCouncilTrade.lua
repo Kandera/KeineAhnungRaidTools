@@ -152,6 +152,13 @@ function Trade.RemovePendingTrade(rollID)
         end
     end
     Trade.RefreshTradeReminder()
+    -- Cancel the BoP-timeout ticker (see Trade.StartTradeTimeoutTicker) immediately once the last
+    -- pending trade clears, instead of waiting up to TRADE_TIMEOUT_CHECK_EVERY (5 minutes) for the
+    -- next periodic Trade.CheckTradeTimeouts to notice the list is empty.
+    if #LC.pendingTrades == 0 and LC.tradeTimeoutTicker then
+        LC.tradeTimeoutTicker:Cancel()
+        LC.tradeTimeoutTicker = nil
+    end
 end
 
 -- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
@@ -229,6 +236,13 @@ function Trade.RefreshTradeReminder()
             row.text:SetPoint("LEFT")
             row.text:SetJustifyH("LEFT")
             row.text:SetWordWrap(false)
+            -- Fixed max width (rather than leaving it unbounded) so row.nameBtn below, anchored to
+            -- this FontString's right edge, always keeps real, predictable clickable width — an
+            -- unusually long item name would otherwise be able to push nameBtn's own width back
+            -- toward zero, the same class of bug already fixed once for this button's anchoring.
+            -- A name longer than this just visually clips instead of growing the layout further —
+            -- SetWordWrap(false) already means it doesn't reflow, only how far it can push nameBtn.
+            row.text:SetWidth(160)
 
             -- Separate, clickable element for just the winner's name — the item text above stays
             -- a plain FontString (no per-item action to take on it here).
@@ -345,12 +359,15 @@ function Trade.RefreshOwedReminder()
             row = CreateFrame("Frame", nil, f)
             row:SetHeight(26)
             row:SetPoint("LEFT", 10, 0)
-            row:SetPoint("RIGHT", -10, 0)
+            row:SetPoint("RIGHT", -28, 0)
 
             row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.text:SetPoint("LEFT")
             row.text:SetJustifyH("LEFT")
             row.text:SetWordWrap(false)
+            -- Fixed max width — see the identical comment in Trade.CreateTradeReminderFrame's own
+            -- row.text for why (keeps row.nameBtn's clickable width real and predictable).
+            row.text:SetWidth(160)
 
             row.nameBtn = CreateFrame("Button", nil, row)
             row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
@@ -363,13 +380,26 @@ function Trade.RefreshOwedReminder()
             row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
+            row.doneBtn = CreateFrame("Button", nil, f)
+            row.doneBtn:SetSize(16, 16)
+            row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
+            -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
+            -- symbol/dingbat Unicode ranges and silently render them as an empty box.
+            row.doneBtn.icon = row.doneBtn:CreateTexture(nil, "ARTWORK")
+            row.doneBtn.icon:SetAllPoints()
+            row.doneBtn.icon:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+            row.doneBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:SetText(KART.L.LC_TRADE_REMINDER_DONE, 1, 1, 1) GameTooltip:Show() end)
+            row.doneBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
             f.rows[i] = row
         end
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
-        row:SetPoint("RIGHT", -10, 0)
+        row:SetPoint("RIGHT", -28, 0)
         row.text:SetText(entry.itemLink or "???")
         row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.lootmasterKey))
+        local capturedRollID = entry.rollID
+        row.doneBtn:SetScript("OnClick", function() Trade.RemoveOwedItem(capturedRollID) end)
         row.nameBtn:SetScript("OnClick", function()
             local unit = KART.Identity.FindUnitForKey(entry.lootmasterKey)
             if not unit then
@@ -556,12 +586,18 @@ function Trade.OnTradeClosed()
     -- different winners (A and B) would falsely accuse "traded to the wrong person" every time the
     -- lootmaster correctly trades A's copy, just because B's still-pending entry shares the same
     -- item string. See Trade.GetDuplicateOrdinal for the same duplicate-drop scenario.
+    -- warnedItemStrings caps this at one warning per item string per trade close: with 3+
+    -- identical duplicate drops assigned to 3+ different other winners (rare), there's no way to
+    -- tell which of them was the "real" intended recipient anyway, so warning once is more useful
+    -- than spamming one message per pending entry for what's really a single physical mistake.
+    local warnedItemStrings = {}
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         if entry.winnerKey ~= partnerKey then
             local itemString = GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
-            if tradeSucceeded and remaining and remaining > 0 then
+            if tradeSucceeded and remaining and remaining > 0 and not warnedItemStrings[itemString] then
+                warnedItemStrings[itemString] = true
                 print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
                     entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
             end

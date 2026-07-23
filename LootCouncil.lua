@@ -1169,7 +1169,10 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.SldFontSize = KART.CreateSettingsSlider(
         raidBox, L.LC_SET_FONT_SIZE, 8, 20, "lcFontSize",
         -104, "KART_LCFontSizeSlider", L.LC_DESC_FONT_SIZE)
-    KART.LC.SldFontSize:HookScript("OnValueChanged", function() if LC.ApplyFontSize then LC.ApplyFontSize() end end)
+    -- No separate OnValueChanged hook needed: KART.CreateSettingsSlider's own OnValueChanged
+    -- (Utils.lua) already calls KART.UpdateStyles() live during drag, which already calls
+    -- LC.ApplyFontSize() (see Core.lua) — a second call here would just reapply the same sizes
+    -- again on every drag tick for no extra effect.
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
     -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.Vote.HandleRoll).
