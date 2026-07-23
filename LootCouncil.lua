@@ -16,7 +16,7 @@ LC.rollDeadlines        = {}  -- [rollID] = GetTime() timestamp when voting clos
 LC.rollDurations        = {}  -- [rollID] = original vote-window length in seconds, used only to size
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
-LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerShort}
+LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
 LC.CouncilNamesTable    = {}  -- shortName:lower() -> true. Populated ONLY from the raid leader's
                                -- broadcast (LC_CONFIG) — never from local settings — so a regular
                                -- raider can't self-promote by editing their own council-member list.
@@ -2678,7 +2678,7 @@ local MAX_HISTORY_ENTRIES = 500
 -- history keeps its original color even if button labels/colors are changed later.
 -- Difficulty is captured locally on whichever client logs the entry (assigner or synced receiver),
 -- since every client in the same instance sees the same difficulty.
-function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef, rollID)
+function LC.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
 
@@ -2689,7 +2689,7 @@ function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef, rollI
     -- re-roll of the exact same item to the exact same winner minutes later is a separate event.
     for i = #KART_LootHistory, math.max(1, #KART_LootHistory - 3), -1 do
         local e = KART_LootHistory[i]
-        if e.item == (itemLink or "") and e.winner == (winnerShort or "") and e.reason == (reason or "")
+        if e.item == (itemLink or "") and e.winner == (winnerDisplayName or "") and e.reason == (reason or "")
            and now - (e.time or 0) < 5 then
             return
         end
@@ -2711,7 +2711,7 @@ function LC.LogHistory(itemLink, winnerShort, reason, classFile, colorDef, rollI
     table.insert(KART_LootHistory, {
         time       = now,
         item       = itemLink or "",
-        winner     = winnerShort or "",
+        winner     = winnerDisplayName or "",
         reason     = reason or "",
         class      = classFile,
         color      = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
@@ -2893,13 +2893,13 @@ end
 -- the winner is ourselves (nothing to hand over in either case). Replaces any existing pending
 -- entry for the same rollID first, so reassigning an item doesn't leave a stale trade reminder
 -- pointing at the previous winner.
-function LC.AddPendingTrade(rollID, playerShort)
+function LC.AddPendingTrade(rollID, playerKey)
     if IsTestRoll(rollID) then return end
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
+    local myKey = (KART.Identity.ResolvePlayer("player"))
     LC.RemovePendingTrade(rollID)
-    if playerShort == myShort then return end
+    if playerKey == myKey then return end
 
-    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerShort = playerShort})
+    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey})
     LC.RefreshTradeReminder()
 end
 
@@ -3007,7 +3007,7 @@ function LC.RefreshTradeReminder()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 10, -8 - 20 - (i - 1) * 20)
         row:SetPoint("RIGHT", -28, 0)
-        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", entry.winnerShort or "?"))
+        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", KART.Identity.ResolveDisplayName(entry.winnerKey)))
         local capturedRollID = entry.rollID
         row.doneBtn:SetScript("OnClick", function() LC.RemovePendingTrade(capturedRollID) end)
         row:Show()
@@ -3062,19 +3062,19 @@ function LC.OnTradeShow()
         end
     end
     if not partnerName then return end
-    local partnerShort = partnerName:match("([^%-]+)") or partnerName
+    local partnerKey = (KART.Identity.ResolvePlayer(partnerName))
     -- Remembered for LC.OnTradeClosed, which fires after the trade frame (and UnitName("npc"))
     -- has already started tearing down, so the partner has to be captured here instead. Set
     -- unconditionally (not gated on #LC.pendingTrades, which is specifically this client's own
     -- "items I need to hand out" list) — a client can open this same trade with nothing of its
     -- own pending and still need to know who the partner was, e.g. the separate "items I'm owed"
     -- side the features plan adds, which checks this same field from the other direction.
-    LC.currentTradePartnerShort = partnerShort
+    LC.currentTradePartnerKey = partnerKey
 
     for _, entry in ipairs(LC.pendingTrades) do
         -- Bail if the cursor is already carrying something (e.g. the player was mid-drag of an
         -- unrelated item) — picking up our item now would swap it into whatever slot that is.
-        if entry.winnerShort == partnerShort and not GetCursorInfo() then ---@diagnostic disable-line: undefined-global
+        if entry.winnerKey == partnerKey and not GetCursorInfo() then ---@diagnostic disable-line: undefined-global
             local bag, slot = FindItemInBags(entry.itemLink)
             if bag then
                 local freeSlot
@@ -3100,9 +3100,9 @@ end
 -- still in our bags: if it's gone, the trade succeeded and the reminder can be cleared; if it's
 -- still there, nothing happened and the entry stays pending so the next trade attempt retries it.
 function LC.OnTradeClosed()
-    local partnerShort = LC.currentTradePartnerShort
-    LC.currentTradePartnerShort = nil
-    if not partnerShort then return end
+    local partnerKey = LC.currentTradePartnerKey
+    LC.currentTradePartnerKey = nil
+    if not partnerKey then return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
@@ -3111,7 +3111,7 @@ function LC.OnTradeClosed()
         -- report "not found" since the placeholder is not a valid item ID to search bags for,
         -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
         -- "done" checkmark button remains available as the fallback for that edge case.
-        if entry.winnerShort == partnerShort and IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
+        if entry.winnerKey == partnerKey and IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
             LC.RemovePendingTrade(entry.rollID)
         end
     end
