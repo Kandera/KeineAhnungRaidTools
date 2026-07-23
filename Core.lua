@@ -157,6 +157,18 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_PlayerCache = KART_PlayerCache or {}
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
+        -- Apply language: copy the chosen locale's VALUES into KART.L instead of replacing
+        -- the reference — several files capture `local L = KART.L` at load time, and all
+        -- statically-built UI re-reads via locale refreshers below. enUS is the base; deDE
+        -- overlays it, so missing German keys fall back to English automatically.
+        local currentLang = KART_Settings.language
+        if currentLang == "Auto" then currentLang = GetLocale() end
+        wipe(KART.L)
+        for k, v in pairs(KART.L_enUS) do KART.L[k] = v end
+        if currentLang == "deDE" and KART.L_deDE then
+            for k, v in pairs(KART.L_deDE) do KART.L[k] = v end
+        end
+
         -- Deep-copy table defaults (keybinds, minimap): assigning them by reference let the
         -- live settings mutate KART.Defaults itself, which then made "Reset Defaults" a no-op
         -- for those keys within the same session.
@@ -166,24 +178,15 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end
 
-        -- Sprache anwenden
-        local currentLang = KART_Settings.language
-        if currentLang == "Auto" then currentLang = GetLocale() end
-        
-        if currentLang == "deDE" and KART.L_deDE then
-            setmetatable(KART.L_deDE, { __index = KART.L_enUS })
-            KART.L = KART.L_deDE
-        elseif KART.L_enUS then
-            -- Fallback auf Englisch (enUS) für alle anderen Clients (z.B. frFR, ruRU)
-            KART.L = KART.L_enUS
-        end
-
         -- Minimap Icon mit LibDBIcon registrieren
         KART_Settings.minimap = KART_Settings.minimap or {}
         local dbIcon = LibStub("LibDBIcon-1.0", true)
         if dbIcon then
             dbIcon:Register("KeineAhnungRaidTools", ldb, KART_Settings.minimap)
         end
+
+        -- Re-apply every statically-built UI text with the now-selected language.
+        KART.ApplyLocaleRefreshers()
 
         KART.SyncSettingsToUI()
 

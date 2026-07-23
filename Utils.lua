@@ -12,6 +12,19 @@ KART.ButtonTexts = {}
 KART.CloseButtonTexts = {} -- "×" FontStrings on close buttons that aren't already covered by a per-frame UpdateStyles font update
 KART.AccentLines = {} -- 1px header lines on popup windows, recolored to the accent color in KART.UpdateStyles
 
+-- Locale refreshers: files that build UI text at load time (before the saved language is
+-- known) register a function here that re-applies all their static texts from KART.L.
+-- Core.lua runs them once at ADDON_LOADED, right after the locale values are copied in.
+-- KART.L itself is a STABLE table — its reference must never be replaced, only its values
+-- swapped (files capture `local L = KART.L` at load time and keep that reference).
+KART.LocaleRefreshers = {}
+function KART.RegisterLocaleRefresher(fn)
+    table.insert(KART.LocaleRefreshers, fn)
+end
+function KART.ApplyLocaleRefreshers()
+    for _, fn in ipairs(KART.LocaleRefreshers) do fn() end
+end
+
 -- Shared setup for the popup windows' artwork background (kart-popup-bg-dark.png, 1024x768;
 -- opaque art box 1002x746, transparent drop-shadow margin L12/R10/T12/B10). The frame is the
 -- art area; the texture extends past the frame edges by the margin ratios so the baked shadow
