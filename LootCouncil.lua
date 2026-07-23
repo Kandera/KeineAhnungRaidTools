@@ -3723,6 +3723,10 @@ function LC.BuildSettingsPanel(parent)
         else
             KART.LC.CouncilPendingLabel:Hide()
         end
+        -- The label's shown/hidden state changes how much vertical space it occupies (see
+        -- layoutRaidBox()) — re-flow the box the same way LC.UpdateRoleStatusLabel already does
+        -- for its own height-dependent label, so everything below shifts to make/reclaim room.
+        if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
     end
     KART.LC.CouncilMembersEditBox:HookScript("OnShow", UpdateCouncilPendingLabel)
     hooksecurefunc(LC, "RetryPendingResolutions", UpdateCouncilPendingLabel)
@@ -3830,6 +3834,11 @@ function LC.BuildSettingsPanel(parent)
 
         hintCouncil:SetPoint("TOPLEFT", 20, y)
         y = y - hintCouncil:GetStringHeight() - 18
+
+        KART.LC.CouncilPendingLabel:SetPoint("TOPLEFT", 20, y)
+        if KART.LC.CouncilPendingLabel:IsShown() then
+            y = y - KART.LC.CouncilPendingLabel:GetStringHeight() - 18
+        end
 
         lblLootmaster:SetPoint("TOPLEFT", 20, y)
         y = y - lblLootmaster:GetStringHeight() - 8
