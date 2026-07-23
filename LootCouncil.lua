@@ -3511,9 +3511,10 @@ function LC.StartTest(mode)
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
-            local rollsOn = LC.GetRollsEnabled()
+            local myKey    = (KART.Identity.ResolvePlayer("player"))
+            local rollsOn  = LC.GetRollsEnabled()
             if rollsOn and myShort ~= "" then
-                LC.rolls[testRollID][myShort] = math.random(1, 100)
+                LC.rolls[testRollID][myKey] = math.random(1, 100)
             end
 
             -- Pre-fill votes (and, if enabled, rolls) from current group members so the council
@@ -3528,9 +3529,10 @@ function LC.StartTest(mode)
                     if name then
                         local short = name:match("([^%-]+)")
                         if short and short ~= myShort then
-                            LC.votes[testRollID][short] = {idx = voteIdx, note = ""}
+                            local key = (KART.Identity.ResolvePlayer(unit))
+                            LC.votes[testRollID][key] = {idx = voteIdx, note = ""}
                             voteIdx = (voteIdx % #buttons) + 1
-                            if rollsOn then LC.rolls[testRollID][short] = math.random(1, 100) end
+                            if rollsOn then LC.rolls[testRollID][key] = math.random(1, 100) end
                         end
                     end
                 end
