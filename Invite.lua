@@ -409,6 +409,23 @@ function WU.BuildPanel(parent)
     WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
     WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
     table.insert(KART.DynamicLabels, WU.bossListFrame.emptyLabel)
+
+    KART.RegisterLocaleRefresher(function()
+        local Lx = KART.L
+        KART.TabTitles[6]:SetText(Lx.WU_TITLE)
+        KART.WU.CbModuleEnabled.text:SetText(Lx.WU_SET_MODULE_ENABLED)
+        KART.WU.CbModuleEnabled.tooltipText = Lx.WU_DESC_MODULE_ENABLED
+        pasteLabel:SetText(Lx.WU_LABEL_PASTE)
+        WU.BtnImport.text:SetText(Lx.WU_BTN_IMPORT)
+        WU.BtnReset.text:SetText(Lx.WU_BTN_RESET)
+        -- Empty-state texts; SyncSettingsToUI overwrites the status right after these
+        -- refreshers run when a saved import auto-parses.
+        WU.statusLabel:SetText(Lx.WU_STATUS_EMPTY)
+        WU.bossListFrame.emptyLabel:SetText(Lx.WU_STATUS_EMPTY)
+        hBoss:SetText("|cffaaaaaa" .. Lx.WU_COL_BOSS .. "|r")
+        hInvite:SetText("|cffaaaaaa" .. Lx.WU_BTN_INVITE .. "|r")
+        hRemove:SetText("|cffaaaaaa" .. Lx.WU_BTN_REMOVE .. "|r")
+    end)
 end
 
 -- Invite.lua loads after MainFrame.lua, so the panel already exists here.

@@ -161,6 +161,16 @@ function DT.BuildSyncStatus(parent)
     table.insert(KART.DynamicLabels, hint)
 
     DT.RefreshStatusLabel()
+
+    KART.RegisterLocaleRefresher(function()
+        local Lx = KART.L
+        if DT.CbModuleEnabled then
+            DT.CbModuleEnabled.text:SetText(Lx.DT_SET_MODULE_ENABLED)
+            DT.CbModuleEnabled.tooltipText = Lx.DT_DESC_MODULE_ENABLED
+        end
+        hint:SetText(Lx.DT_HINT_COMPANION)
+        DT.RefreshStatusLabel()
+    end)
 end
 
 -- Droptimizer.lua loads after MainFrame.lua and LootCouncil.lua, so both panels (and
