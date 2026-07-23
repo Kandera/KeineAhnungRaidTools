@@ -337,13 +337,17 @@ function KART.CreateModernButton(parent, text, tooltipText)
         return KART.Theme.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
     end
 
+    -- Tooltip strings live on the button (not in this closure) so locale refreshers can
+    -- update them after the saved language is applied; the headline is the button's current
+    -- label so dynamic buttons (font/language pickers) always show their live text.
+    b.tooltipText = tooltipText
     b:SetScript("OnEnter", function(self)
         local r, g, bl = hoverColor()
         self:SetBackdropColor(r, g, bl, 1)
-        if tooltipText then
+        if self.tooltipText then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(text, 1, 1, 1)
-            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
+            GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
+            GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
             GameTooltip:Show()
         end
     end)
@@ -501,15 +505,15 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     cb.RefreshVisual = function() refreshVisual(cb) end
     table.insert(KART.ToggleCheckboxes, cb)
 
-    if tooltipText then
-        cb:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(labelText, 1, 1, 1)
-            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
-            GameTooltip:Show()
-        end)
-        cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    end
+    cb.tooltipText = tooltipText
+    cb:SetScript("OnEnter", function(self)
+        if not self.tooltipText then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
+        GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
     return cb
 end
 
@@ -577,15 +581,15 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     s:HookScript("OnMouseDown", function() s.isDragging = true; glow:SetAlpha(0.5) end)
     s:HookScript("OnMouseUp", function() s.isDragging = false; glow:SetAlpha(0) end)
 
-    if tooltipText then
-        s:HookScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(labelText, 1, 1, 1)
-            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
-            GameTooltip:Show()
-        end)
-        s:HookScript("OnLeave", function() GameTooltip:Hide() end)
-    end
+    s.tooltipText = tooltipText
+    s:HookScript("OnEnter", function(self)
+        if not self.tooltipText then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.title:GetText() or "", 1, 1, 1)
+        GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    s:HookScript("OnLeave", function() GameTooltip:Hide() end)
     return s
 end
 

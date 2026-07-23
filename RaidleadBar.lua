@@ -67,19 +67,20 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     -- Darken pattern as KART.CreateModernButton) instead of a hard-coded blue, so this toolbar
     -- matches the rest of the modernized UI's hover feedback. Darken() returns only r, g, b (no
     -- alpha), so capture into locals and pass an explicit alpha to SetBackdropColor.
+    b.tooltipText = tooltipText
     b:SetScript("OnEnter", function(self)
         local r, g, bl = KART.Theme.AccentColor()
         local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.35)
         self:SetBackdropColor(dr, dg, db, 1)
-        if tooltipText then
+        if self.tooltipText then
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
-            GameTooltip:SetText(tooltipText, 1, 1, 1)
+            GameTooltip:SetText(self.tooltipText, 1, 1, 1)
             GameTooltip:Show()
         end
     end)
-    b:SetScript("OnLeave", function(self) 
-        self:SetBackdropColor(0.1, 0.1, 0.1, 0.8) 
-        if tooltipText then GameTooltip:Hide() end
+    b:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        GameTooltip:Hide()
     end)
     return b
 end
