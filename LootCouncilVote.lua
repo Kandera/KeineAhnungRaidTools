@@ -216,7 +216,10 @@ function Vote.RefreshVoteListRows_Spacious(f)
     local GAP_BTN_NOTE = 13
     local noteH     = 24
     local BOTTOM_PAD = 16
-    local rowH      = ACCENT_H + BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD
+    local rowH      = ACCENT_H + BTN_TOP + btnAreaH + GAP_BTN_NOTE + noteH + BOTTOM_PAD -- unvoted height
+    local VOTED_BADGE_H = 20 -- matches row.votedBadge:SetHeight(20) below
+    local votedRowH = ACCENT_H + BTN_TOP + VOTED_BADGE_H + BOTTOM_PAD -- voted rows drop the button/note area entirely
+    local shrinkVoted = KART_Settings.lcVotedItemDisplay == "shrink"
     local ROW_GAP   = 22 -- gap between item blocks — was 12, still too tight for 2+ simultaneous rolls
 
     -- Same short-name extraction the test-roll vote branch further below already uses — this is
@@ -225,7 +228,9 @@ function Vote.RefreshVoteListRows_Spacious(f)
     -- looking at their own vote window).
     local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
 
-    for i, rollID in ipairs(LC.voteListRolls) do
+    local visibleRolls = Vote.GetVisibleRolls()
+    local y = 0 -- running offset, since voted rows may be shorter than unvoted ones (shrinkVoted)
+    for i, rollID in ipairs(visibleRolls) do
         local row = f.rows[i]
         if not row then
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
@@ -318,10 +323,12 @@ function Vote.RefreshVoteListRows_Spacious(f)
             f.rows[i] = row
         end
 
+        local thisRowH = (shrinkVoted and LC.votedByMe[rollID]) and votedRowH or rowH
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 0, -(i - 1) * (rowH + ROW_GAP))
+        row:SetPoint("TOPLEFT", 0, -y)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
-        row:SetHeight(rowH)
+        row:SetHeight(thisRowH)
+        y = y + thisRowH + ROW_GAP
         row.btnArea:SetPoint("RIGHT", -MARGIN, 0)
         row.btnArea:SetHeight(btnAreaH)
         row.noteLabel:ClearAllPoints()
@@ -474,11 +481,11 @@ function Vote.RefreshVoteListRows_Spacious(f)
         end
     end
 
-    for i = #LC.voteListRolls + 1, #f.rows do
+    for i = #visibleRolls + 1, #f.rows do
         if f.rows[i] then f.rows[i]:Hide() end
     end
 
-    f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
+    f:SetHeight(math.min(32 + y + 12, 600))
 end
 
 -- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
