@@ -191,6 +191,7 @@ KART.L_deDE = {
     LC_SET_BUTTONS_HINT    = "Beispiel: BIS;Upgrade;Offspec;Pass",
     LC_SET_COUNCIL         = "Weitere Council-Mitglieder (Semikolon-getrennt):",
     LC_SET_COUNCIL_HINT    = "Raidleiter ist immer automatisch im Council. Assistenten nicht. Charaktername ODER Northern Sky Raid Tools Nickname — bei Nickname zählt das für alle Charaktere mit diesem Nickname.",
+    LC_SET_COUNCIL_PENDING = "%d Name(n) noch nicht aufgelöst — werden erkannt, sobald die Person online gesehen wird.",
     LC_SET_LOOTMASTER      = "Lootmaster (würfelt immer Need/Gier/Entzaubern, passt nie):",
     LC_SET_LOOTMASTER_HINT = "Dieser Spieler gewinnt jede Roll und tauscht jedes Item mit demjenigen, den das Council auswählt. Überschreibt dessen eigene Auto-Pass-Einstellung. Charaktername ODER Northern Sky Raid Tools Nickname — bei Nickname zählt das für alle Charaktere mit diesem Nickname. Leer lassen, wenn niemand Loot auf diese Weise verteilt.",
     LC_CONFIG_TRUNCATED    = "Die Liste der Council-Mitglieder ist zu lang, um vollständig übertragen zu werden, und wurde gekürzt — kürze sie in den Loot-Council-Einstellungen, damit alle synchron bleiben.",

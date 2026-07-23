@@ -283,6 +283,47 @@ function LC.HandleConfig(payload, senderKey)
     end
 end
 
+-- GROUP_ROSTER_UPDATE fires in bursts during mass-invite/raid formation, and re-scanning every
+-- pending entry on every single firing burns CPU for no benefit — same leading-edge throttle
+-- pattern as KART.HandleAutoPromoteThrottled in GroupLogic.lua.
+local isPendingResolutionThrottled = false
+function LC.RetryPendingResolutionsThrottled()
+    if isPendingResolutionThrottled then return end
+    isPendingResolutionThrottled = true
+    C_Timer.After(1, function()
+        isPendingResolutionThrottled = false
+        LC.RetryPendingResolutions()
+    end)
+end
+
+-- Re-attempts resolution for every council-list/lootmaster entry still stuck on plain text (see
+-- KART.Identity.IsResolvedKey), and migrates any KART_LCOfficerNotes entry still under its legacy
+-- short-name key — both cases just mean "this person hadn't been seen yet" at the time they were
+-- first parsed. Promotes them to a real key in place; still-unresolvable entries are left alone
+-- and retried again next time the roster changes.
+function LC.RetryPendingResolutions()
+    for pendingText in pairs(LC.CouncilNamesTable) do
+        if not KART.Identity.IsResolvedKey(pendingText) then
+            local key = LC.ResolveConfigName(pendingText)
+            if key and KART.Identity.IsResolvedKey(key) then
+                LC.CouncilNamesTable[pendingText] = nil
+                LC.CouncilNamesTable[key] = true
+            end
+        end
+    end
+
+    if LC.raidConfig and LC.raidConfig.lootmaster and not KART.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
+        local key = LC.ResolveConfigName(LC.raidConfig.lootmaster)
+        if key and KART.Identity.IsResolvedKey(key) then
+            LC.raidConfig.lootmaster = key
+        end
+    end
+
+    for oldKey in pairs(KART_LCOfficerNotes) do
+        LC.MigrateOfficerNoteKey(oldKey)
+    end
+end
+
 -- Answers an "LC_STATE_REQ" broadcast from a joining/reloading peer with the current session flag
 -- and, if a session is active, the full raid config — a one-shot pull instead of waiting for the
 -- leader's own roster-change handler to happen to fire (see LC.CheckRaidJoin). Only the actual
@@ -3661,6 +3702,30 @@ function LC.BuildSettingsPanel(parent)
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
     table.insert(KART.DynamicLabels, hintCouncil)
+
+    -- Subdued indicator for council-list entries not yet matched to a live player (see
+    -- KART.Identity.IsResolvedKey/LC.RetryPendingResolutions) — hidden entirely once nothing is
+    -- pending, so it never clutters the common case.
+    KART.LC.CouncilPendingLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    KART.LC.CouncilPendingLabel:SetWidth(CONTENT_WIDTH)
+    KART.LC.CouncilPendingLabel:SetJustifyH("LEFT")
+    KART.LC.CouncilPendingLabel:SetTextColor(0.85, 0.65, 0.15)
+    table.insert(KART.DynamicLabels, KART.LC.CouncilPendingLabel)
+
+    local function UpdateCouncilPendingLabel()
+        local pendingCount = 0
+        for pendingText in pairs(LC.CouncilNamesTable) do
+            if not KART.Identity.IsResolvedKey(pendingText) then pendingCount = pendingCount + 1 end
+        end
+        if pendingCount > 0 then
+            KART.LC.CouncilPendingLabel:SetText(string.format(L.LC_SET_COUNCIL_PENDING, pendingCount))
+            KART.LC.CouncilPendingLabel:Show()
+        else
+            KART.LC.CouncilPendingLabel:Hide()
+        end
+    end
+    KART.LC.CouncilMembersEditBox:HookScript("OnShow", UpdateCouncilPendingLabel)
+    hooksecurefunc(LC, "RetryPendingResolutions", UpdateCouncilPendingLabel)
 
     -- Lootmaster: the one player who must physically win every roll (Need/Greed/Disenchant,
     -- never Pass — see ForceWinRoll in LC.OnStartLootRoll) so they can trade each item to whoever

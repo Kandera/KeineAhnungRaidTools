@@ -191,6 +191,7 @@ KART.L_enUS = {
     LC_SET_BUTTONS_HINT    = "Example: BIS;Upgrade;Offspec;Pass",
     LC_SET_COUNCIL         = "Additional council members (semicolon-separated):",
     LC_SET_COUNCIL_HINT    = "The raid leader is always in the council. Assistants are not. Character name OR Northern Sky Raid Tools nickname — with a nickname this applies to every character sharing it.",
+    LC_SET_COUNCIL_PENDING = "%d name(s) not resolved yet — they'll be matched once seen online.",
     LC_SET_LOOTMASTER      = "Lootmaster (always rolls Need/Greed/Disenchant, never passes):",
     LC_SET_LOOTMASTER_HINT = "This player wins every roll and trades each item to whoever the council picks. Overrides their own Auto-Pass setting. Character name OR Northern Sky Raid Tools nickname — with a nickname this applies to every character sharing it. Leave empty if nobody is handing out loot this way.",
     LC_CONFIG_TRUNCATED    = "Council member list is too long to broadcast in full and was trimmed — shorten it in Loot Council settings so everyone stays in sync.",
