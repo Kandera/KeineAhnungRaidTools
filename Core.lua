@@ -387,8 +387,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleActive(msg:sub(11)) end
                 elseif msg:sub(1, 9) == "LC_START:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
-                elseif msg:sub(1, 15) == "LC_MANUAL_START:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleManualStart(msg:sub(16)) end
+                elseif msg:sub(1, 16) == "LC_MANUAL_START:" then
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleManualStart(msg:sub(17)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 8) == "LC_ROLL:" then
