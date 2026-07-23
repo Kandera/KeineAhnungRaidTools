@@ -2087,7 +2087,8 @@ function LC.RefreshCouncilRows()
         local fullName = UnitName(unit)
         if fullName then
             local short    = fullName:match("([^%-]+)")
-            local voteData = votes[short]
+            local key      = (KART.Identity.ResolvePlayer(unit))
+            local voteData = votes[key]
             -- Support both legacy number and new {idx, note} table
             local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
             local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
@@ -2096,7 +2097,8 @@ function LC.RefreshCouncilRows()
 
             -- Flag raiders who are missing KART, running an outdated version, or have disabled
             -- their own Loot Council module locally (self excluded — we never receive our own
-            -- version broadcast, so PlayerVersions never has an entry for "player").
+            -- version broadcast, so PlayerVersions never has an entry for "player"). PlayerVersions
+            -- stays short-name keyed — out of scope for the identity rework, see the design doc.
             local kartStatus
             if unit ~= "player" then
                 local ver = KART.PlayerVersions and KART.PlayerVersions[short]
@@ -2111,11 +2113,11 @@ function LC.RefreshCouncilRows()
             end
 
             table.insert(members, {
-                short = short, unit = unit,
+                short = short, unit = unit, key = key,
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
-                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][short],
+                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][key],
                 -- Nickname (see KART.GetNickname/lcShowNickNames) and guild rank are both purely
                 -- display concerns, resolved once per refresh here rather than per-row-render.
                 -- Second return value is the nickname in its original casing — the first
@@ -2131,22 +2133,23 @@ function LC.RefreshCouncilRows()
     -- row to vote on and assign to.
     if IsTestRoll(rollID) then
         local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+        local myKey    = (KART.Identity.ResolvePlayer("player"))
         local alreadyListed = false
         for _, m in ipairs(members) do
             if m.short == myShort then alreadyListed = true break end
         end
         if not alreadyListed and myShort ~= "" then
-            local voteData = votes[myShort]
+            local voteData = votes[myKey]
             local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
             local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
             local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
             local equippedLink, equippedIlvl = LC.GetEquippedForUnit("player", rollItem)
             table.insert(members, {
-                short = myShort, unit = "player",
+                short = myShort, unit = "player", key = myKey,
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = nil,
-                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myShort],
+                rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myKey],
                 nickname = select(2, KART.GetNickname("player")),
                 guildRank = select(2, GetGuildInfo("player")),
             })
@@ -2299,17 +2302,20 @@ function LC.RefreshCouncilRows()
         -- Scoped per-roll (not a single global "last winner") — otherwise assigning item A to a
         -- player and then switching to item B's tab would keep that player highlighted green
         -- there too, even though they never won item B.
-        local isWinner            = (rollID ~= nil and m.short == LC.assignedWinners[rollID])
+        local isWinner            = (rollID ~= nil and m.key == LC.assignedWinners[rollID])
         local capturedShort       = m.short
+        local capturedKey         = m.key
         local capturedRoll        = rollID
         local capturedNote        = m.voteNote or ""
         local capturedEquipLink   = m.equippedLink
         local capturedEquipIlvl   = m.equippedIlvl
         local capturedVoteDef     = m.voteDef
         local capturedKartStatus  = m.kartStatus
-        local capturedOfficerNote = m.short and KART_LCOfficerNotes[m.short]
+        local capturedOfficerNote = m.key and KART_LCOfficerNotes[m.key]
         local capturedGainPct, capturedGainSource
         if KART.DT and KART.DT.GetGainPercent and m.short then
+            -- Droptimizer's own cache is short-name-text keyed (imported from an external report,
+            -- no GUID concept) — deliberately still m.short here, not m.key. See design doc.
             capturedGainPct, capturedGainSource = KART.DT.GetGainPercent(m.short, rollItem)
         end
 
@@ -2318,6 +2324,7 @@ function LC.RefreshCouncilRows()
         row:SetPoint("TOPLEFT", 0, -(rowIdx - 1) * 26)
         row:SetPoint("RIGHT", panel.scrollChild, "RIGHT", 0, 0)
         row.memberShort = m.short
+        row.memberKey = m.key
 
         -- Winner gets a gold highlight (not green — green is already the "Upgrade" vote colour,
         -- see BUTTON_COLORS/VOTE_ICON_TEXTURES, and a row could easily be both at once); others
@@ -2443,13 +2450,13 @@ function LC.RefreshCouncilRows()
 
         -- Council straw-poll button: tally of how many council members (including possibly
         -- yourself) picked this candidate, and a toggle for your own pick.
-        local myShort     = (UnitName("player") or ""):match("([^%-]+)") or ""
+        local myKey        = (KART.Identity.ResolvePlayer("player"))
         local pollVotes    = (capturedRoll and LC.councilVotes[capturedRoll]) or {}
-        local myPick       = pollVotes[myShort]
-        local votedByMe    = (myPick == capturedShort)
+        local myPick       = pollVotes[myKey]
+        local votedByMe    = (myPick == capturedKey)
         local pollCount    = 0
         for _, pick in pairs(pollVotes) do
-            if pick == capturedShort then pollCount = pollCount + 1 end
+            if pick == capturedKey then pollCount = pollCount + 1 end
         end
         -- Plain ASCII only (no ★/☆) — WoW's default game fonts don't have glyphs for most
         -- symbol/dingbat Unicode ranges and silently render them as an empty box ("tofu").
@@ -2465,8 +2472,8 @@ function LC.RefreshCouncilRows()
             row.councilVoteBtn.fill:SetAlpha(votedByMe and 0.4 or 0.22)
         end
         row.councilVoteBtn:SetScript("OnClick", function()
-            if not capturedRoll or not capturedShort then return end
-            LC.ToggleCouncilVote(capturedRoll, capturedShort)
+            if not capturedRoll or not capturedKey then return end
+            LC.ToggleCouncilVote(capturedRoll, capturedKey)
         end)
         row.councilVoteBtn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -2504,8 +2511,8 @@ function LC.RefreshCouncilRows()
         -- Left-click has no function. Right-click opens the assign menu.
         -- The panel never closes on its own here — only the X / Close button does.
         row:SetScript("OnClick", function(self)
-            if not capturedRoll or not capturedShort then return end
-            LC.ShowAssignMenu(self, capturedRoll, capturedShort, capturedVoteDef)
+            if not capturedRoll or not capturedKey then return end
+            LC.ShowAssignMenu(self, capturedRoll, capturedKey, capturedShort, capturedVoteDef)
         end)
         -- Hover highlight only — no tooltip on the row itself. All tooltip content lives on
         -- the equip-icon hitbox below, so something is only shown while hovering that icon.
@@ -2514,7 +2521,7 @@ function LC.RefreshCouncilRows()
             self:SetBackdropBorderColor(0.4, 0.7, 0.3, 1)
         end)
         row:SetScript("OnLeave", function(self)
-            if self.memberShort == LC.assignedWinners[capturedRoll] then
+            if self.memberKey == LC.assignedWinners[capturedRoll] then
                 self:SetBackdropColor(0.28, 0.21, 0.03, 0.85)
                 self:SetBackdropBorderColor(1, 0.85, 0.2, 1)
             else
@@ -3183,28 +3190,28 @@ end
 --- through AssignWinner (which announces the result and asks for reassignment confirmation if
 --- the item was already assigned to someone else) — "Change vote" only edits which vote is shown
 --- for this player (e.g. they voted verbally/via whisper) and must never assign anything itself.
-function LC.ShowAssignMenu(anchor, rollID, playerShort, voteDef)
+function LC.ShowAssignMenu(anchor, rollID, playerKey, playerDisplayName, voteDef)
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
-        rootDescription:CreateTitle(playerShort)
+        rootDescription:CreateTitle(playerDisplayName)
 
         rootDescription:CreateButton(KART.L.LC_MENU_ASSIGN, function()
-            LC.AssignWinner(rollID, playerShort, voteDef and voteDef.label or "", voteDef)
+            LC.AssignWinner(rollID, playerKey, voteDef and voteDef.label or "", voteDef)
         end)
 
         -- No callback here on purpose: this makes CreateButton return a submenu descriptor.
         local changeMenu = rootDescription:CreateButton(KART.L.LC_MENU_CHANGE_VOTE) ---@diagnostic disable-line: missing-parameter
         for i, def in ipairs(LC.GetButtonConfig()) do
             changeMenu:CreateButton(def.label, function()
-                LC.SetPlayerVote(rollID, playerShort, i)
+                LC.SetPlayerVote(rollID, playerKey, i)
             end)
         end
 
         rootDescription:CreateButton(KART.L.LC_MENU_ASSIGN_NO_REASON, function()
-            LC.AssignWinner(rollID, playerShort, "", nil)
+            LC.AssignWinner(rollID, playerKey, "", nil)
         end)
 
         rootDescription:CreateButton(KART.L.LC_MENU_EDIT_NOTE, function()
-            LC.ShowOfficerNoteDialog(playerShort)
+            LC.ShowOfficerNoteDialog(playerKey, playerDisplayName)
         end)
     end)
 end
