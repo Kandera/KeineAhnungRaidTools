@@ -3104,22 +3104,36 @@ end
 -- and broadcast on edit so every currently-online council member's client converges — there's
 -- no catch-up sync on raid join the way loot history has, so someone who was offline when a
 -- note was written won't see it until it's edited again while they're online.
-function LC.SetOfficerNote(shortName, noteText)
+function LC.SetOfficerNote(playerKey, noteText)
     noteText = KART.TrimString(noteText or "")
-    KART_LCOfficerNotes[shortName] = (noteText ~= "") and noteText or nil
-    SendLC("LC_ONOTE:" .. shortName .. ":" .. noteText)
+    KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
+    SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     LC.RefreshCouncilRows()
 end
 
-function LC.HandleOfficerNote(payload, senderShort)
-    if not IsSenderCouncil(senderShort) then return end
-    local shortName, noteText = payload:match("^([^:]+):(.*)$")
-    if not shortName then return end
-    KART_LCOfficerNotes[shortName] = (noteText ~= "") and noteText or nil
+function LC.HandleOfficerNote(payload, senderKey)
+    if not IsSenderCouncil(senderKey) then return end
+    local subjectKey, noteText = payload:match("^([^:]+):(.*)$")
+    if not subjectKey then return end
+    KART_LCOfficerNotes[subjectKey] = (noteText ~= "") and noteText or nil
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
         LC.RefreshCouncilRows()
     end
+end
+
+-- Re-resolves one legacy (short-name-text-keyed) KART_LCOfficerNotes entry to a GUID-based key,
+-- if the named player can currently be resolved (live in the group, or previously cached — see
+-- KART.Identity.ResolvePlayer). Returns true if it migrated the entry, false if it's still
+-- unresolvable (left untouched, never deleted, so no note is ever silently lost — retried again
+-- next time this runs, see the GROUP_ROSTER_UPDATE hook that calls this).
+function LC.MigrateOfficerNoteKey(oldKey)
+    if KART.Identity.IsResolvedKey(oldKey) then return false end -- already migrated
+    local newKey, isPending = KART.Identity.ResolvePlayer(oldKey)
+    if isPending then return false end
+    KART_LCOfficerNotes[newKey] = KART_LCOfficerNotes[oldKey]
+    KART_LCOfficerNotes[oldKey] = nil
+    return true
 end
 
 -- A hand-rolled little dialog instead of StaticPopupDialogs — retail's StaticPopup system was
@@ -3128,7 +3142,7 @@ end
 -- 'editBox' (a nil value)" there, even though OnShow's `self.editBox` worked fine — the popup
 -- frame passed to the two callbacks isn't consistently the same shape). Owning the whole frame
 -- ourselves means the edit box reference is always exactly what we created it as.
-function LC.ShowOfficerNoteDialog(shortName)
+function LC.ShowOfficerNoteDialog(playerKey, playerDisplayName)
     if not LC.officerNoteDialog then
         local f = CreateFrame("Frame", "KART_LCOfficerNoteDialog", UIParent, "BackdropTemplate")
         f:SetSize(300, 120)
@@ -3156,7 +3170,7 @@ function LC.ShowOfficerNoteDialog(shortName)
         f.editBox:SetFontObject("GameFontHighlightSmall")
 
         local function accept()
-            if f.short then LC.SetOfficerNote(f.short, f.editBox:GetText()) end
+            if f.key then LC.SetOfficerNote(f.key, f.editBox:GetText()) end
             f:Hide()
         end
 
@@ -3177,9 +3191,9 @@ function LC.ShowOfficerNoteDialog(shortName)
     end
 
     local f = LC.officerNoteDialog
-    f.short = shortName
-    f.title:SetText(string.format(KART.L.LC_OFFICER_NOTE_PROMPT, shortName))
-    f.editBox:SetText(KART_LCOfficerNotes[shortName] or "")
+    f.key = playerKey
+    f.title:SetText(string.format(KART.L.LC_OFFICER_NOTE_PROMPT, playerDisplayName))
+    f.editBox:SetText(KART_LCOfficerNotes[playerKey] or "")
     f:Show()
     f.editBox:SetFocus()
     f.editBox:HighlightText()
