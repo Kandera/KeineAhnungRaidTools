@@ -264,6 +264,7 @@ KART.L_enUS = {
     LC_TRADE_REMINDER_DONE = "Mark as done",
     LC_TRADE_TARGET_NOT_FOUND = "%s isn't in your group.",
     LC_TRADE_OUT_OF_RANGE     = "Get closer to %s to trade.",
+    LC_TRADE_TIMEOUT_WARNING = "%s (assigned to %s) has only %d minutes left before it can no longer be traded!",
     LC_TRADED_WRONG_PERSON = "You just traded %s to the wrong person! It was assigned to %s, not %s.",
     LC_SET_MIN_QUALITY     = "Minimum item quality for Loot Council:",
     LC_DESC_MIN_QUALITY    = "Items below this quality are ignored by Loot Council entirely — the normal WoW roll window applies instead. Prevents unnecessary vote popups for trash and low-value items. Only takes effect for the raid when you are the raid leader.",

@@ -774,6 +774,10 @@ function LC.OnStartLootRoll(rollID)
         -- (regardless of their own local Auto-Pass setting) so they can trade it out afterwards —
         -- see LC.GetLootmaster for why this is raid-leader-controlled, not a personal toggle.
         ForceWinRoll(rollID)
+        -- Blizzard's 2-hour Bind-on-Pickup trade window starts now, not whenever Council later
+        -- decides a winner — see LC.CheckTradeTimeouts, which measures from this timestamp.
+        LC.rollLootedAt = LC.rollLootedAt or {}
+        LC.rollLootedAt[rollID] = GetTime()
     elseif KART_Settings.lcAutoPass then
         -- Auto-Pass is a personal preference and is intentionally independent of the raid's
         -- min-quality setting (that setting only gates whether Council itself engages) —

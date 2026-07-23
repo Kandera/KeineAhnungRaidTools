@@ -264,6 +264,7 @@ KART.L_deDE = {
     LC_TRADE_REMINDER_DONE = "Als erledigt markieren",
     LC_TRADE_TARGET_NOT_FOUND = "%s ist nicht in deiner Gruppe.",
     LC_TRADE_OUT_OF_RANGE     = "Geh näher an %s heran, um zu traden.",
+    LC_TRADE_TIMEOUT_WARNING = "%s (zugewiesen an %s) kann nur noch %d Minuten getradet werden!",
     LC_TRADED_WRONG_PERSON = "Du hast %s an die falsche Person getradet! Es war %s zugewiesen, nicht %s.",
     LC_SET_MIN_QUALITY     = "Mindest-Itemqualität für Loot Council:",
     LC_DESC_MIN_QUALITY    = "Items unterhalb dieser Qualität werden vom Loot Council komplett ignoriert — es gilt das normale WoW-Würfelfenster. Verhindert unnötige Abstimmungs-Popups bei Trash und geringwertigen Items. Wirkt sich auf den Raid nur aus, wenn du Raidleiter bist.",

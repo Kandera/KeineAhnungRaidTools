@@ -105,8 +105,42 @@ function Trade.AddPendingTrade(rollID, playerKey)
     Trade.RemovePendingTrade(rollID)
     if playerKey == myKey then return end
 
-    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey})
+    local lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or GetTime()
+    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey, lootedAt = lootedAt})
     Trade.RefreshTradeReminder()
+    Trade.StartTradeTimeoutTicker()
+end
+
+local TRADE_TIMEOUT_SECONDS = 2 * 60 * 60      -- Blizzard's fixed BoP trade-eligibility window
+local TRADE_TIMEOUT_WARN_AT = 100 * 60         -- warn with 20 minutes left, same margin RCLootCouncil uses
+local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
+
+-- Warns once (per entry, via entry.timeoutWarned) as a pending trade's item approaches the end of
+-- its 2-hour Bind-on-Pickup trade-eligibility window. Never removes the entry itself — that still
+-- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
+-- removal path; this is purely a heads-up so the lootmaster doesn't lose the item to the timer.
+function Trade.CheckTradeTimeouts()
+    if #LC.pendingTrades == 0 then
+        if LC.tradeTimeoutTicker then LC.tradeTimeoutTicker:Cancel() LC.tradeTimeoutTicker = nil end
+        return
+    end
+    local now = GetTime()
+    for _, entry in ipairs(LC.pendingTrades) do
+        local elapsed = now - (entry.lootedAt or now)
+        if not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
+            entry.timeoutWarned = true
+            local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
+            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
+                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
+        end
+    end
+end
+
+-- Lazily started on the first pending trade (not at addon load) so a raid that never uses Loot
+-- Council never runs a background ticker at all. Safe to call repeatedly — no-ops if already running.
+function Trade.StartTradeTimeoutTicker()
+    if LC.tradeTimeoutTicker then return end
+    LC.tradeTimeoutTicker = C_Timer.NewTicker(TRADE_TIMEOUT_CHECK_EVERY, Trade.CheckTradeTimeouts)
 end
 
 -- Removes the pending-trade entry for rollID, if any (reassignment, manual dismiss, or after the
