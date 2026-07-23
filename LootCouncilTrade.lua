@@ -407,7 +407,9 @@ end
 -- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
 -- only reliable moment to read them, since the trade frame may already be tearing down by the
 -- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
--- (bonus-ID aware, see GetItemString) so this composes correctly with Trade.OnTradeClosed below.
+-- (bonus-ID aware, see GetItemString), with a count rather than a plain boolean, so this composes
+-- correctly with Trade.OnTradeClosed below even when a duplicate drop puts two copies of the exact
+-- same item string in the trade window at once.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
 
 function Trade.OnTradeAcceptUpdate()
@@ -415,7 +417,9 @@ function Trade.OnTradeAcceptUpdate()
     for i = 1, 6 do -- MAX_TRADE_ITEMS - 1, fixed by the trade UI (slot 6 is "will not be traded")
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
         local itemString = GetItemString(link)
-        if itemString then LC.tradeWindowItemStrings[itemString] = true end
+        if itemString then
+            LC.tradeWindowItemStrings[itemString] = (LC.tradeWindowItemStrings[itemString] or 0) + 1
+        end
     end
 end
 
@@ -514,9 +518,12 @@ function Trade.OnTradeShow()
 end
 
 -- Runs when the trade window closes for any reason (completed, cancelled, partner walked away).
--- The only reliable way to tell "did it actually go through" is to check whether the item is
--- still in our bags: if it's gone, the trade succeeded and the reminder can be cleared; if it's
--- still there, nothing happened and the entry stays pending so the next trade attempt retries it.
+-- Two signals decide whether an entry actually completed: Blizzard's own trade-succeeded message
+-- cross-referenced against LC.tradeWindowItemStrings (see Trade.OnTradeInfoMessage), and a bag
+-- scan as a fallback for cases the first signal can't cover. Two passes over LC.pendingTrades
+-- follow: Pass 1 confirms entries assigned to partnerKey, consuming the per-item-string count as
+-- it goes; Pass 2 warns about entries assigned to someone else, but only for item strings whose
+-- count Pass 1 didn't already exhaust — see the comments on each pass below.
 function Trade.OnTradeClosed()
     local partnerKey = LC.currentTradePartnerKey
     local tradeSucceeded = LC.tradeJustSucceeded
@@ -524,21 +531,40 @@ function Trade.OnTradeClosed()
     LC.tradeJustSucceeded = nil
     if not partnerKey then wipe(LC.tradeWindowItemStrings) return end
 
+    -- Pass 1: entries actually assigned to partnerKey. Consumes LC.tradeWindowItemStrings' per-
+    -- item-string COUNT (not just presence) as each is confirmed, so two pending entries that
+    -- happen to share the exact same item string (a duplicate drop — see Trade.GetDuplicateOrdinal)
+    -- can only be confirmed as many times as physical copies actually sat in the trade window.
+    -- Without this, trading away one copy of a duplicate assigned twice to the same winner would
+    -- silently mark BOTH entries complete, losing track of the second, still-owed item.
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        local itemString = GetItemString(entry.itemLink)
         if entry.winnerKey == partnerKey then
-            local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
+            local itemString = GetItemString(entry.itemLink)
+            local remaining = itemString and LC.tradeWindowItemStrings[itemString]
+            local confirmedByTrade = tradeSucceeded and remaining and remaining > 0
             local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
             if confirmedByTrade or confirmedByBags then
+                if confirmedByTrade then LC.tradeWindowItemStrings[itemString] = remaining - 1 end
                 Trade.RemovePendingTrade(entry.rollID)
             end
-        elseif tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString] then
-            -- This item was assigned to someone else entirely, but it was just traded away in a
-            -- trade with partnerKey instead — the wrong recipient. Warn loudly; the pending
-            -- entry is left in place since the real winner still hasn't received their item.
-            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
-                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
+        end
+    end
+
+    -- Pass 2: entries assigned to someone else. Only warn if this item string still has an
+    -- unconsumed count left after Pass 1 — otherwise a duplicate drop correctly assigned to two
+    -- different winners (A and B) would falsely accuse "traded to the wrong person" every time the
+    -- lootmaster correctly trades A's copy, just because B's still-pending entry shares the same
+    -- item string. See Trade.GetDuplicateOrdinal for the same duplicate-drop scenario.
+    for i = #LC.pendingTrades, 1, -1 do
+        local entry = LC.pendingTrades[i]
+        if entry.winnerKey ~= partnerKey then
+            local itemString = GetItemString(entry.itemLink)
+            local remaining = itemString and LC.tradeWindowItemStrings[itemString]
+            if tradeSucceeded and remaining and remaining > 0 then
+                print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
+                    entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
+            end
         end
     end
 
