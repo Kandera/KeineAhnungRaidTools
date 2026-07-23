@@ -188,10 +188,21 @@ end
 --
 -- The stored value can be either a character short name OR a Northern Sky Raid Tools nickname —
 -- LC.IsMe (below) is what actually resolves it against the local player, trying both.
+
+-- Resolves free-typed config text (a council-list entry, or the lootmaster field) to a stable
+-- key via KART.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
+-- LC.HandleConfig (a received LC_CONFIG broadcast) and LC.GetLootmaster's raid-leader branch
+-- below (the leader's own local settings, resolved fresh on every read rather than cached,
+-- since the leader never receives its own broadcast to trigger HandleConfig).
+function LC.ResolveConfigName(text)
+    local trimmed = KART.TrimString(text or "")
+    if trimmed == "" then return nil end
+    return (KART.Identity.ResolvePlayer(trimmed))
+end
+
 function LC.GetLootmaster()
     if UnitIsGroupLeader("player") then
-        local short = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
-        return short:lower()
+        return LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
     end
     return (LC.raidConfig and LC.raidConfig.lootmaster) or ""
 end
@@ -262,17 +273,13 @@ function LC.HandleConfig(payload, senderKey)
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = (lootmaster or ""):lower()
+    LC.raidConfig.lootmaster    = LC.ResolveConfigName(lootmaster) or ""
     LC.raidConfig.councilMembers = council or ""
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString((council or ""):lower(), ";")) do
-        -- Strip any "-Realm" suffix, same as the lootmaster field above — a self-check like
-        -- IsCouncil() compares against UnitName("player"), which never carries a realm suffix for
-        -- the local player, so a council-list entry typed as "Name-Realm" (e.g. copied from a
-        -- raid frame showing a cross-realm member that way) would otherwise never match.
-        local trimmed = KART.TrimString(name):match("([^%-]+)") or ""
-        if trimmed ~= "" then LC.CouncilNamesTable[trimmed] = true end
+    for _, name in ipairs(KART.SplitString(council or "", ";")) do
+        local key = LC.ResolveConfigName(name)
+        if key then LC.CouncilNamesTable[key] = true end
     end
 end
 
