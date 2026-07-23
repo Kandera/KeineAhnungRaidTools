@@ -2,7 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **The bugfix plan (`docs/superpowers/plans/2026-07-22-loot-council-bugfixes.md`) has shipped** — all 15 tasks plus its final-review fixes are merged to `main`. Three small, standalone fixes landed *after* that plan closed, found via live raid testing (not part of either plan's task list, but affecting code this plan builds on): a council-member-list realm-suffix strip in `LC.HandleConfig`, a bonus-ID-aware rewrite of `FindItemInBags` (now compares full item strings, not bare itemID — Tasks 9/10/12 below reuse this via `GetItemString`), and a cross-realm `"(*)"` trade-frame name-marker strip in `LC.OnTradeShow`. **Re-read every file against its current state before starting any task below** — line references throughout this plan were taken at different points across all of this churn and will have drifted; treat every "Locate" block as a search target to confirm, not a trusted line number.
+> **The bugfix plan (`docs/superpowers/plans/2026-07-22-loot-council-bugfixes.md`) has shipped** — all 15 tasks plus its final-review fixes are merged to `main`. Three small, standalone fixes landed *after* that plan closed, found via live raid testing (not part of either plan's task list, but affecting code this plan builds on): a council-member-list realm-suffix strip in `LC.HandleConfig`, a bonus-ID-aware rewrite of `FindItemInBags` (now compares full item strings, not bare itemID — Tasks 9/10/12 below reuse this via `GetItemString`), and a cross-realm `"(*)"` trade-frame name-marker strip in `LC.OnTradeShow`.
+>
+> **Two more things shipped after this plan was written, and every task below has been re-derived against them (2026-07-23):**
+> 1. **`LootCouncil.lua` was split into 6 files.** It was 3914 lines; it's now 1233 (state tables, config/session/settings-panel/test-harness code, core message handlers like `LC.HandleStart`/`LC.OnStartLootRoll`/`LC.GetLootmaster`/`LC.IsMe`). The rest moved into sub-namespaced files: `LootCouncilVote.lua` (`KART.LC.Vote` — vote-list rendering, voting), `LootCouncilPanel.lua` (`KART.LC.Council` — council panel, tabs, assign menu), `LootCouncilTrade.lua` (`KART.LC.Trade` — result announcement, pending-trade reminder, auto-trade, `GetItemString`/`FindItemInBags` as file-local functions), `LootCouncilOfficerNotes.lua` (`KART.LC.OfficerNotes`). Every task below now names the actual current file and, where a function moved to a sub-namespace, its namespaced name (`LC.Trade.AddPendingTrade` instead of the old bare `LC.AddPendingTrade`, etc.) — copy these exactly, the bare old names no longer exist.
+> 2. **GUID-based player identity (v2.6.0) shipped.** Every per-player identity comparison in this addon now goes through `KART.Identity` (`Identity.lua`) instead of comparing short-name strings. `ResolvePlayer(input)` resolves a unit token / full name / free-typed short name or nickname to a stable key (a `UnitGUID`, or a lowercased-text fallback for someone never seen); `FindUnitForKey(key)` is the reverse — finds the current unit token for a key, if the person is in the group. `LC.GetLootmaster()` now returns an already-resolved key, not raw config text, so `KART.Identity.FindUnitForKey(LC.GetLootmaster())` is a direct, one-line way to get "which unit is the lootmaster" — no bespoke nickname-resolution helper is needed for that anymore (Task 5 originally planned one; it's gone below, superseded). Every field this plan's original tasks called `*Short` (`winnerShort`, `playerShort`, `partnerShort`, `lootmasterShort`, `senderShort`) is now `*Key` (`winnerKey`, `playerKey`, `partnerKey`, `lootmasterKey`, `senderKey`) and holds a resolved identity key, not a short-name string — display text always goes through `KART.Identity.ResolveDisplayName(key)` instead of using the key directly. `LC.FindUnitForShortName` no longer exists at all; every task below that referenced it now uses `KART.Identity.FindUnitForKey`.
+>
+> **Re-read every file against its current state before starting any task below regardless** — even post-rewrite, line references drift with every commit; treat every "Locate" block as a search target to confirm, not a trusted line number.
 
 **Goal:** Implement the 11 feature requests/improvements gathered after the bugfix testing pass and a follow-up review of RCLootCouncil's approach to the same problems (Tasks 8-12).
 
@@ -16,7 +22,7 @@
 - `CHANGELOG.md` gets these as `### Added` bullets (one line each, bold lead); mirror into `CHANGELOG-de.md` (Task 13).
 - Bump `KeineAhnungRaidTools.toc`'s `## Version:` — confirm the actual current version at `KeineAhnungRaidTools.toc` before Task 13 (the bugfix plan and its post-close fixes may have already bumped it past what this note assumed when written).
 - This plan does not touch the "Known gaps" items from the bugfix plan (Bugs 14b/16/20) — those remain open.
-- Task 8 (GUID-based identity) is a scoping/architecture note, not an executable task — see its own text for why. Do not skip straight past it; it documents a real, confirmed 45-occurrence pattern that Tasks 9-12 deliberately do NOT fix (they keep using short-name matching, consistent with the rest of the file, since re-architecting identity is explicitly out of scope for this plan).
+- **Task 8 (GUID-based identity) is superseded — skip it entirely, see its own text.** It originally scoped a follow-up identity rewrite as explicitly out of scope for this plan; that rewrite has since shipped separately (v2.6.0). Every task below (1, 4, 5, 9, 10, 11) was rewritten in place to use the shipped `KART.Identity` API instead of short-name matching — this is a change from how this plan originally read, not an oversight.
 
 ---
 
@@ -25,8 +31,8 @@
 **Confirmed design (resolved from the earlier open question):** only the **designated lootmaster** (`LC.GetLootmaster()`/`LC.IsMe`, not the raid leader generically) may run this — "for other players this doesn't work" is a requirement, not just an observation. This also resolves the earlier "who becomes the pending-trade holder" question for free: since only the lootmaster can ever create one of these rolls, the bugfix plan's Task 6 gate (`if LC.IsMe(LC.GetLootmaster()) then LC.AddPendingTrade(...) end`) already does the right thing with **no changes needed there at all** — it was written for "whoever physically holds the item," and the lootmaster manually adding an item they're already holding is exactly that case. The command also takes **multiple item links in one call** (`/kart add <item1> <item2> ...`), each becoming its own independent roll/vote.
 
 **Files:**
-- Modify: `Core.lua:634-650` (`SlashCmdList["KART"]`)
-- Modify: `LootCouncil.lua` (new function near `LC.HandleStart`, new message handler, new `SendLC`-based broadcast)
+- Modify: `Core.lua:647-678` (`SlashCmdList["KART"]`)
+- Modify: `LootCouncil.lua` (new function near `LC.HandleStart` at line 752 — this stayed in the core file across the module split, along with `LC.OnStartLootRoll`, `LC.GetLootmaster`, `LC.IsMe`, `LC.IsCouncil`; new message handler, new `SendLC`-based broadcast)
 - Modify: `Locales/enUS.lua`, `Locales/deDE.lua` (new "not the lootmaster" / usage strings)
 
 **Interfaces:**
@@ -128,10 +134,10 @@ function LC.StartManualRoll(itemsText)
 
         -- SendAddonMessage never echoes back to its own sender, so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
-        if IsCouncil() then
-            LC.ShowCouncilPanel(rollID, seconds)
+        if LC.IsCouncil() then
+            KART.LC.Council.ShowCouncilPanel(rollID, seconds)
         else
-            LC.ShowVotePopup(rollID, itemLink, seconds)
+            LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
         end
     end
 
@@ -153,10 +159,10 @@ function LC.HandleManualStart(payload)
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = LC.rollItems[rollID] or itemLink
 
-    if IsCouncil() then
-        LC.ShowCouncilPanel(rollID, secs or 20)
+    if LC.IsCouncil() then
+        KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
     else
-        LC.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
+        LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
     end
 end
 ```
@@ -190,10 +196,15 @@ git commit -m "feat: add /kart add so the lootmaster can hand item(s) back to Lo
 
 ---
 
-### Task 2: Shrink a voted row in the Spacious vote-list layout
+### Task 2: Shrink a voted row in the Spacious vote-list layout — SUPERSEDED, skip this task entirely
+
+**Superseded — do not execute anything below in this section.** This task's shrink-on-vote behavior was unconditional (every player, no opt-out) and Spacious-only. Brainstorming for a related, bigger ask ("hide a voted item completely, in both layouts, opt-in") concluded this should become one mode of a new three-way personal setting instead — folding this task's own behavior in as the `shrink` mode, gated behind the setting rather than always-on. Shipped separately: spec at `docs/superpowers/specs/2026-07-23-vote-list-voted-item-display-design.md`, plan at `docs/superpowers/plans/2026-07-23-vote-list-voted-item-display.md` (see that plan's Task 2, which reuses this task's exact Locate/Replace code below, just gated on `KART_Settings.lcVotedItemDisplay == "shrink"`). The original text is kept below only as historical record — its code is still accurate against the current file (verified 2026-07-23), just no longer meant to be applied unconditionally from this document.
+
+<details>
+<summary>Original text (2026-07-22/23, pre-display-modes — historical only)</summary>
 
 **Files:**
-- Modify: `LootCouncil.lua:773-914` (`LC.RefreshVoteListRows_Spacious`)
+- Modify: `LootCouncilVote.lua:171-460` (`Vote.RefreshVoteListRows_Spacious` — moved here from the old monolithic `LootCouncil.lua` by the module split; the code below is otherwise unaffected, verified to still match verbatim)
 
 **Interfaces:** None.
 
@@ -264,9 +275,21 @@ Replace with:
         row.btnArea:SetPoint("RIGHT", -MARGIN, 0)
 ```
 
-- [ ] **Step 3: Size the scroll child to the accumulated height instead of the old uniform formula**
+- [ ] **Step 3: Size the outer frame to the accumulated height instead of the old uniform formula**
 
-Find where `f.scrollChild`'s height gets set at the end of this function (search for `scrollChild:SetHeight` within `LC.RefreshVoteListRows_Spacious` — it currently multiplies `rowH + ROW_GAP` by the row count) and change it to use the final `y` value from the loop above instead, the same way any accumulator-based list height is normally finalized. If no such explicit height-set line exists in this function (the scroll frame may size itself from `UIPanelScrollFrameTemplate` automatically off the children's anchors), skip this step — confirm by checking whether the vote list's scrollbar behaves correctly in Step 4 before assuming it's needed.
+Confirmed against the current code (this resolves the original plan's "if no such line exists, skip this step" hedge — it does exist, just on `f`, not `f.scrollChild`): the function's final line is
+
+```lua
+    f:SetHeight(math.min(32 + #LC.voteListRolls * (rowH + ROW_GAP) + 12, 600))
+```
+
+Replace with:
+
+```lua
+    f:SetHeight(math.min(32 + y + 12, 600))
+```
+
+(`y` is the running offset from Step 2's loop — after the loop, it already equals the accumulated height of every row plus its `ROW_GAP`, replacing the old `#LC.voteListRolls * (rowH + ROW_GAP)` uniform-grid estimate.)
 
 - [ ] **Step 4: Manual verification**
 
@@ -275,9 +298,11 @@ Find where `f.scrollChild`'s height gets set at the end of this function (search
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LootCouncil.lua
+git add LootCouncilVote.lua
 git commit -m "feat: shrink a vote-list card once you've voted on it, instead of leaving the button area empty"
 ```
+
+</details>
 
 ---
 
@@ -285,7 +310,7 @@ git commit -m "feat: shrink a vote-list card once you've voted on it, instead of
 
 **Files:** Likely none — see below.
 
-**Investigation note:** Static analysis found the vote-list window (`LC.voteListFrame`, what "Test: Looter" — `LC.StartTest("looter")` — populates and shows) already has a working per-second ticker (`LootCouncil.lua:678-704`) that removes each `rollID` from `LC.voteListRolls` once `GetTime() >= LC.rollDeadlines[rollID]`, and `LC.RefreshVoteListRows` already hides the frame once the list is empty. `LC.ShowVotePopup` (called for test items the same as real ones) sets `LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)` once per `StartTest` click, with nothing that continuously refreshes it. **This should already auto-close within `lcVoteSeconds` of clicking "Test: Looter".**
+**Investigation note:** Static analysis found the vote-list window (`LC.voteListFrame`, what "Test: Looter" — `LC.StartTest("looter")` — populates and shows) already has a working per-second ticker (moved by the module split to `LootCouncilVote.lua:76-102`, inside `Vote.CreateVoteList`) that removes each `rollID` from `LC.voteListRolls` once `GetTime() >= LC.rollDeadlines[rollID]`, and `Vote.RefreshVoteListRows` (`LootCouncilVote.lua:136`) already hides the frame once the list is empty. `Vote.ShowVotePopup` (`LootCouncilVote.lua:110`, called for test items the same as real ones) sets `LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)` once per `StartTest` click, with nothing that continuously refreshes it. **This should already auto-close within `lcVoteSeconds` of clicking "Test: Looter".**
 
 - [ ] **Step 1: Confirm actual current behavior before writing any fix**
 
@@ -298,9 +323,9 @@ Click "Test: Looter", start a stopwatch, and wait `lcVoteSeconds` (default 20s, 
 ### Task 4: Trade Reminder window — click a name to auto-trade, plus more room
 
 **Files:**
-- Modify: `LootCouncil.lua:2762-2846` (`LC.CreateTradeReminderFrame`, `LC.RefreshTradeReminder`)
+- Modify: `LootCouncilTrade.lua:137-221` (`Trade.CreateTradeReminderFrame`, `Trade.RefreshTradeReminder` — moved here from the old monolithic `LootCouncil.lua` by the module split; `Trade` is `KART.LC.Trade`)
 
-**Interfaces:** None new — reuses `LC.FindUnitForShortName` (existing).
+**Interfaces:** None new — reuses `KART.Identity.FindUnitForKey` (existing, from the GUID-identity rework; replaces the old `LC.FindUnitForShortName`, which no longer exists) and `KART.Identity.ResolveDisplayName` (existing, for the name shown on the button).
 
 **Root cause / gap (confirmed):** each row is one combined FontString (`"%s -> %s"`, item then winner name) with no click handling at all beyond the existing "mark as done" checkbox — there's no way to interact with the name specifically. `CheckInteractDistance(unit, 2)` (trade range) and `InitiateTrade(unit)` are standard, well-established WoW APIs for exactly this (verified against Warcraft Wiki) but aren't used anywhere in this codebase yet.
 
@@ -309,7 +334,7 @@ Click "Test: Looter", start a stopwatch, and wait `lcVoteSeconds` (default 20s, 
 Locate:
 
 ```lua
-function LC.CreateTradeReminderFrame()
+function Trade.CreateTradeReminderFrame()
     local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
     f:SetSize(260, 40)
     f:SetPoint("CENTER", -220, 0)
@@ -318,7 +343,7 @@ function LC.CreateTradeReminderFrame()
 Replace with:
 
 ```lua
-function LC.CreateTradeReminderFrame()
+function Trade.CreateTradeReminderFrame()
     local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
     f:SetSize(320, 40)
     f:SetPoint("CENTER", -220, 0)
@@ -377,9 +402,9 @@ Locate:
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 10, -8 - 20 - (i - 1) * 20)
         row:SetPoint("RIGHT", -28, 0)
-        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", entry.winnerShort or "?"))
+        row.text:SetText(string.format(KART.L.LC_TRADE_REMINDER_ROW, entry.itemLink or "???", KART.Identity.ResolveDisplayName(entry.winnerKey)))
         local capturedRollID = entry.rollID
-        row.doneBtn:SetScript("OnClick", function() LC.RemovePendingTrade(capturedRollID) end)
+        row.doneBtn:SetScript("OnClick", function() Trade.RemovePendingTrade(capturedRollID) end)
         row:Show()
     end
     for i = #LC.pendingTrades + 1, #f.rows do
@@ -396,18 +421,18 @@ Replace with:
         row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
         row:SetPoint("RIGHT", -28, 0)
         row.text:SetText(entry.itemLink or "???")
-        row.nameBtn.text:SetText(entry.winnerShort or "?")
+        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.winnerKey))
         local capturedRollID = entry.rollID
-        local capturedWinnerShort = entry.winnerShort
-        row.doneBtn:SetScript("OnClick", function() LC.RemovePendingTrade(capturedRollID) end)
+        local capturedWinnerKey = entry.winnerKey
+        row.doneBtn:SetScript("OnClick", function() Trade.RemovePendingTrade(capturedRollID) end)
         row.nameBtn:SetScript("OnClick", function()
-            local unit = capturedWinnerShort and LC.FindUnitForShortName(capturedWinnerShort)
+            local unit = capturedWinnerKey and KART.Identity.FindUnitForKey(capturedWinnerKey)
             if not unit then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, capturedWinnerShort or "?"))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
                 return
             end
             if not CheckInteractDistance(unit, 2) then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, capturedWinnerShort))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
                 return
             end
             TargetUnit(unit)
@@ -421,6 +446,8 @@ Replace with:
 
     f:SetHeight(8 + 26 + #LC.pendingTrades * 26 + 8)
 ```
+
+`entry.winnerKey` (a resolved `KART.Identity` key, not a short-name string) is what `LC.pendingTrades` entries already carry — see `Trade.AddPendingTrade` in `LootCouncilTrade.lua`.
 
 - [ ] **Step 3: Add the two new locale strings**
 
@@ -445,7 +472,7 @@ With a pending trade entry showing, click the winner's name while out of trade r
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LootCouncil.lua Locales/enUS.lua Locales/deDE.lua
+git add LootCouncilTrade.lua Locales/enUS.lua Locales/deDE.lua
 git commit -m "feat: click a name in the trade reminder to target and initiate the trade; enlarge the window"
 ```
 
@@ -454,84 +481,57 @@ git commit -m "feat: click a name in the trade reminder to target and initiate t
 ### Task 5: Player-side reminder to trade the lootmaster for an item you won
 
 **Files:**
-- Modify: `LootCouncil.lua:3198-3226` (`LC.HandleResult`, adds population), new function pair mirroring `LC.CreateTradeReminderFrame`/`LC.RefreshTradeReminder`, new function mirroring `LC.OnTradeClosed` (from the bugfix plan's Task 7)
-- Modify: `LootCouncil.lua` (`LC.ClearRollState`, extend to clear the new table)
+- Modify: `LootCouncilTrade.lua` (`Trade.HandleResult`, currently lines 364-398 — adds population; a near-mirror pair added directly after `Trade.CreateTradeReminderFrame`/`Trade.RefreshTradeReminder`, currently lines 137-221; `Trade.OnTradeClosed`, currently lines 302-318, gets a mirror check added)
 
 **Interfaces:**
-- Produces: `LC.owedToMe` — array of `{rollID, itemLink, lootmasterShort}`.
-- Produces: `LC.FindUnitForLootmaster()` — resolves `LC.GetLootmaster()`'s value (which, per its own doc comment, may be a real short name OR an NSRT nickname — **not** safe to pass straight into `LC.FindUnitForShortName`) to an actual raid unit token, the same way `LC.IsMe` resolves it against just "player".
-- Produces: `LC.CreateOwedReminderFrame()`, `LC.RefreshOwedReminder()` — near-exact mirrors of the lootmaster's own `LC.CreateTradeReminderFrame`/`LC.RefreshTradeReminder`, shown to the item's winner instead.
+- Produces: `LC.owedToMe` — array of `{rollID, itemLink, lootmasterKey}` (`lootmasterKey` is a resolved `KART.Identity` key, not a short-name string — see the identity-rework note at the top of this plan).
+- ~~Produces: `LC.FindUnitForLootmaster()`~~ — **dropped, superseded.** `LC.GetLootmaster()` now returns an already-resolved `KART.Identity` key (see `LootCouncil.lua:203`), so `KART.Identity.FindUnitForKey(LC.GetLootmaster())` is already exactly this resolver — no bespoke nickname-matching helper is needed anymore. Every place below that would have called `LC.FindUnitForLootmaster()` calls that instead.
+- Produces: `Trade.CreateOwedReminderFrame()`, `Trade.RefreshOwedReminder()` — near-exact mirrors of `Trade.CreateTradeReminderFrame`/`Trade.RefreshTradeReminder`, shown to the item's winner instead.
 
-**Root cause / gap (confirmed):** the winner of an item currently only gets an 8-second `LC.ShowWinnerNotification` popup (`LootCouncil.lua:3212-3214`) — nothing persists afterward telling them "you still need to go trade the lootmaster for this." Unlike `LC.FindUnitForShortName` (used correctly elsewhere for real short names), `LC.GetLootmaster()`'s value cannot be matched directly against `UnitName(unit)` — it's lowercased, and per its own doc comment may be an NSRT nickname instead of a character name at all.
+**Root cause / gap (confirmed):** the winner of an item currently only gets an 8-second `Trade.ShowWinnerNotification` popup — nothing persists afterward telling them "you still need to go trade the lootmaster for this."
 
-- [ ] **Step 1: Add the nickname-aware lootmaster unit resolver**
-
-In `LootCouncil.lua`, immediately after `LC.IsMe` (the function ending `return KART.GetNickname("player") == configuredName\nend`), add:
-
-```lua
--- Same resolution LC.IsMe does for "am I the lootmaster", generalized to "which raid unit is the
--- lootmaster" — needed because LC.GetLootmaster()'s value may be a real short name OR an NSRT
--- nickname (see its own doc comment), so it can't be matched directly against LC.FindUnitForShortName
--- (which only ever compares against real UnitName() short names).
-function LC.FindUnitForLootmaster()
-    local configuredName = LC.GetLootmaster()
-    if configuredName == "" then return nil end
-    local isRaid = IsInRaid()
-    local numMem = GetNumGroupMembers()
-    for i = 1, numMem do
-        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
-        local fullName = UnitName(unit)
-        if fullName then
-            local short = (fullName:match("([^%-]+)") or ""):lower()
-            if short == configuredName or KART.GetNickname(unit) == configuredName then
-                return unit
-            end
-        end
-    end
-    return nil
-end
-```
+- [ ] **Step 1 — dropped.** The original plan (written before the GUID-identity rework shipped) had this step add a nickname-aware lootmaster-to-unit resolver, because `LC.GetLootmaster()` used to return raw config text (a short name or NSRT nickname) that couldn't be matched against a unit directly. That problem no longer exists: `LC.GetLootmaster()` already returns a resolved identity key (see `LootCouncil.lua:203`, `LC.ResolveConfigName` → `KART.Identity.ResolvePlayer`), and `KART.Identity.FindUnitForKey(key)` (`Identity.lua:46`) already resolves any key to a live unit token. Skip straight to Step 2.
 
 - [ ] **Step 2: Populate `LC.owedToMe` when you win something**
 
-Locate (from the bugfix plan's Task 6, which already added an `LC.AddPendingTrade` call to `HandleResult`):
+Locate (in `Trade.HandleResult`, `LootCouncilTrade.lua`):
 
 ```lua
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-    if winner == myShort then
-        LC.ShowWinnerNotification(LC.rollItems[rollID])
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    if winnerKey == myKey then
+        Trade.ShowWinnerNotification(LC.rollItems[rollID])
     end
 ```
 
 Replace with:
 
 ```lua
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-    if winner == myShort then
-        LC.ShowWinnerNotification(LC.rollItems[rollID])
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    if winnerKey == myKey then
+        Trade.ShowWinnerNotification(LC.rollItems[rollID])
         -- If I'm also the lootmaster, I already have the item — nothing to trade myself for.
         if not LC.IsMe(LC.GetLootmaster()) then
             LC.owedToMe = LC.owedToMe or {}
-            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterShort = LC.GetLootmaster()})
-            LC.RefreshOwedReminder()
+            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = LC.GetLootmaster()})
+            Trade.RefreshOwedReminder()
         end
     end
 ```
 
-- [ ] **Step 3: Add the owed-reminder frame (near-mirror of `LC.CreateTradeReminderFrame`/`LC.RefreshTradeReminder`)**
+- [ ] **Step 3: Add the owed-reminder frame (near-mirror of `Trade.CreateTradeReminderFrame`/`Trade.RefreshTradeReminder`)**
 
-Add directly after `LC.RefreshTradeReminder` (the function from the bugfix plan ending `f:SetHeight(...)\nend`):
+Add directly after `Trade.RefreshTradeReminder` (ends `f:SetHeight(...)\n    f:Show()\nend`, `LootCouncilTrade.lua:221`):
 
 ```lua
 -- Removes rollID from LC.owedToMe, if present, and rebuilds the window.
-function LC.RemoveOwedItem(rollID)
+function Trade.RemoveOwedItem(rollID)
     for i = #(LC.owedToMe or {}), 1, -1 do
         if LC.owedToMe[i].rollID == rollID then table.remove(LC.owedToMe, i) end
     end
-    LC.RefreshOwedReminder()
+    Trade.RefreshOwedReminder()
 end
 
-function LC.CreateOwedReminderFrame()
+function Trade.CreateOwedReminderFrame()
     local f = CreateFrame("Frame", "KART_LCOwedReminder", UIParent, "BackdropTemplate")
     f:SetSize(320, 40)
     f:SetPoint("CENTER", 220, 0)
@@ -565,14 +565,14 @@ function LC.CreateOwedReminderFrame()
 end
 
 -- Rebuilds the reminder list from LC.owedToMe; hides the frame entirely once it's empty.
-function LC.RefreshOwedReminder()
+function Trade.RefreshOwedReminder()
     LC.owedToMe = LC.owedToMe or {}
     if #LC.owedToMe == 0 then
         if LC.owedReminderFrame then LC.owedReminderFrame:Hide() end
         return
     end
 
-    if not LC.owedReminderFrame then LC.CreateOwedReminderFrame() end
+    if not LC.owedReminderFrame then Trade.CreateOwedReminderFrame() end
     local f = LC.owedReminderFrame
 
     for i, entry in ipairs(LC.owedToMe) do
@@ -604,15 +604,15 @@ function LC.RefreshOwedReminder()
         row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
         row:SetPoint("RIGHT", -10, 0)
         row.text:SetText(entry.itemLink or "???")
-        row.nameBtn.text:SetText(entry.lootmasterShort or "?")
+        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.lootmasterKey))
         row.nameBtn:SetScript("OnClick", function()
-            local unit = LC.FindUnitForLootmaster()
+            local unit = KART.Identity.FindUnitForKey(entry.lootmasterKey)
             if not unit then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, entry.lootmasterShort or "?"))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
                 return
             end
             if not CheckInteractDistance(unit, 2) then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, entry.lootmasterShort or "?"))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
                 return
             end
             TargetUnit(unit)
@@ -629,20 +629,25 @@ function LC.RefreshOwedReminder()
 end
 ```
 
-- [ ] **Step 4: Clear it on `TRADE_CLOSED` (reusing the bugfix plan's Task 7 event) and on `LC.ClearRollState`**
+- [ ] **Step 4: Clear it on `TRADE_CLOSED`**
 
-Locate `LC.OnTradeClosed` (added by the bugfix plan):
+Locate `Trade.OnTradeClosed` (`LootCouncilTrade.lua:302-318` — already carries the `IsRealItemLink` "???"-placeholder guard from one of the 3 standalone post-bugfix-plan fixes; match the real current body, not an older version):
 
 ```lua
-function LC.OnTradeClosed()
-    local partnerShort = LC.currentTradePartnerShort
-    LC.currentTradePartnerShort = nil
-    if not partnerShort then return end
+function Trade.OnTradeClosed()
+    local partnerKey = LC.currentTradePartnerKey
+    LC.currentTradePartnerKey = nil
+    if not partnerKey then return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        if entry.winnerShort == partnerShort and not FindItemInBags(entry.itemLink) then
-            LC.RemovePendingTrade(entry.rollID)
+        -- Only treat "not found in bags" as "trade completed" for real, resolved item links.
+        -- A "???" placeholder entry (async item-link resolution still pending) would always
+        -- report "not found" since the placeholder is not a valid item ID to search bags for,
+        -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
+        -- "done" checkmark button remains available as the fallback for that edge case.
+        if entry.winnerKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
+            Trade.RemovePendingTrade(entry.rollID)
         end
     end
 end
@@ -651,15 +656,20 @@ end
 Replace with:
 
 ```lua
-function LC.OnTradeClosed()
-    local partnerShort = LC.currentTradePartnerShort
-    LC.currentTradePartnerShort = nil
-    if not partnerShort then return end
+function Trade.OnTradeClosed()
+    local partnerKey = LC.currentTradePartnerKey
+    LC.currentTradePartnerKey = nil
+    if not partnerKey then return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        if entry.winnerShort == partnerShort and not FindItemInBags(entry.itemLink) then
-            LC.RemovePendingTrade(entry.rollID)
+        -- Only treat "not found in bags" as "trade completed" for real, resolved item links.
+        -- A "???" placeholder entry (async item-link resolution still pending) would always
+        -- report "not found" since the placeholder is not a valid item ID to search bags for,
+        -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
+        -- "done" checkmark button remains available as the fallback for that edge case.
+        if entry.winnerKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
+            Trade.RemovePendingTrade(entry.rollID)
         end
     end
 
@@ -667,51 +677,16 @@ function LC.OnTradeClosed()
     -- was owed is now in MY bags, the trade succeeded from my end too.
     for i = #(LC.owedToMe or {}), 1, -1 do
         local entry = LC.owedToMe[i]
-        if entry.lootmasterShort == partnerShort and FindItemInBags(entry.itemLink) then
-            LC.RemoveOwedItem(entry.rollID)
+        if entry.lootmasterKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and FindItemInBags(entry.itemLink) then
+            Trade.RemoveOwedItem(entry.rollID)
         end
     end
 end
 ```
 
-This relies on `LC.currentTradePartnerShort` being set even when *you* have nothing pending to place yourself — the bugfix plan's Task 7 already sets it unconditionally, before its own `#LC.pendingTrades` handling, specifically so a winner with nothing of their own pending (the normal case) still gets it populated when they open a trade with the lootmaster. No further change needed here — just confirm this is still true against the actual shipped code before relying on it.
+This relies on `LC.currentTradePartnerKey` being set even when *you* have nothing pending to place yourself — `Trade.OnTradeShow` already sets it unconditionally, before its own `#LC.pendingTrades` handling, specifically so a winner with nothing of their own pending (the normal case) still gets it populated when they open a trade with the lootmaster.
 
-Locate `LC.ClearRollState` (added by the bugfix plan):
-
-```lua
-function LC.ClearRollState(rollID)
-    LC.votes[rollID]           = nil
-    LC.rolls[rollID]           = nil
-    LC.councilVotes[rollID]    = nil
-    LC.rollItems[rollID]       = nil
-    LC.rollDeadlines[rollID]   = nil
-    LC.rollDurations[rollID]   = nil
-    LC.assignedWinners[rollID] = nil
-    LC.votedByMe[rollID]       = nil
-    LC.votedNoteByMe[rollID]   = nil
-    LC.councilTabsNew[rollID]  = nil
-    LC.RemovePendingTrade(rollID)
-end
-```
-
-Replace with:
-
-```lua
-function LC.ClearRollState(rollID)
-    LC.votes[rollID]           = nil
-    LC.rolls[rollID]           = nil
-    LC.councilVotes[rollID]    = nil
-    LC.rollItems[rollID]       = nil
-    LC.rollDeadlines[rollID]   = nil
-    LC.rollDurations[rollID]   = nil
-    LC.assignedWinners[rollID] = nil
-    LC.votedByMe[rollID]       = nil
-    LC.votedNoteByMe[rollID]   = nil
-    LC.councilTabsNew[rollID]  = nil
-    LC.RemovePendingTrade(rollID)
-    LC.RemoveOwedItem(rollID)
-end
-```
+**`Trade.ClearRollState` deliberately does NOT get touched.** The original plan's Step 4 also added `LC.RemoveOwedItem(rollID)` there, mirroring a (since-superseded) assumption that `LC.ClearRollState` called `LC.RemovePendingTrade(rollID)`. The actual shipped `Trade.ClearRollState` (`LootCouncilTrade.lua:124-135`) does **not** call `Trade.RemovePendingTrade` — it has its own comment explaining why: *"pending trades are NOT cleared here; they are independent long-lived obligations that should only be removed when the trade actually completes, is manually marked done, or is reassigned to someone else."* `LC.owedToMe` is the same kind of independent obligation, so it follows the same rule and is left out of `ClearRollState` for the same reason — only `Trade.OnTradeClosed` (Step 4 above) and a manual dismiss remove an owed entry.
 
 - [ ] **Step 5: Add the locale string**
 
@@ -729,12 +704,12 @@ In `Locales/deDE.lua`, at the same relative position:
 
 - [ ] **Step 6: Manual verification (needs two clients)**
 
-Have Client A (not the lootmaster) win an item via Council. Confirm the winner-notification popup shows as before, and confirm a new "Items you still need to collect" window also appears on Client A listing the item and the lootmaster's name. Click the lootmaster's name while out of range — confirm the range message. Move into range, click again, confirm targeting + trade window opens, complete the trade, confirm the entry disappears from Client A's window (and the corresponding entry disappears from the lootmaster's own Trade Reminder window per the bugfix plan's Task 7).
+Have Client A (not the lootmaster) win an item via Council. Confirm the winner-notification popup shows as before, and confirm a new "Items you still need to collect" window also appears on Client A listing the item and the lootmaster's name. Click the lootmaster's name while out of range — confirm the range message. Move into range, click again, confirm targeting + trade window opens, complete the trade, confirm the entry disappears from Client A's window (and the corresponding entry disappears from the lootmaster's own Trade Reminder window, per the already-shipped pending-trade tracking).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add LootCouncil.lua Locales/enUS.lua Locales/deDE.lua
+git add LootCouncilTrade.lua Locales/enUS.lua Locales/deDE.lua
 git commit -m "feat: add a player-side reminder + one-click trade to collect an item you won from Council"
 ```
 
@@ -743,7 +718,7 @@ git commit -m "feat: add a player-side reminder + one-click trade to collect an 
 ### Task 6: Raise the vote timer's maximum from 60 to 180 seconds
 
 **Files:**
-- Modify: `LootCouncil.lua:3430-3432` (`KART.LC.SldVoteTimer`)
+- Modify: `LootCouncil.lua:976-978` (`KART.LC.SldVoteTimer` — unaffected by the module split, this stayed in the core file; verified still `5, 60` as of 2026-07-23)
 
 **Interfaces:** None — `KART.CreateSettingsSlider` (`Utils.lua:500`) is a generic, reusable helper already used by other settings sliders in the addon; only this one call site's arguments change.
 
@@ -780,22 +755,23 @@ git commit -m "feat: allow the vote timer to be set up to 3 minutes instead of 1
 
 ### Task 7: A dedicated, working font-size setting for the Loot Council windows
 
-**Files:**
-- Modify: `LootCouncil.lua:1711-1867` (`LC.CreateCouncilPanel`, exposes the column-header FontStrings as `f.` fields)
-- Modify: `LootCouncil.lua:773-914` / `1055-1210` (end of `RefreshVoteListRows_Spacious`/`_Compact`, adds a call)
-- Modify: `LootCouncil.lua:1968-2220` (end of `RefreshCouncilRows`), `LootCouncil.lua` (end of `RefreshCouncilTabs`)
-- Modify: `LootCouncil.lua:3430-3439` (raid-wide settings box, adds a new slider next to the vote-timer one)
-- Modify: `Core.lua:416-543` (`KART.UpdateStyles`, adds one call)
+**Files (all rewritten below — the module split moved every one of these off the old monolithic `LootCouncil.lua`):**
+- Modify: `LootCouncilPanel.lua:494-550` (`Council.CreateCouncilPanel`, exposes the column-header FontStrings as `f.` fields — 2 of the 7 needed, `hRoll` and `hGain`, are already exposed for unrelated reasons; only the other 5 need adding now)
+- Modify: `LootCouncil.lua` (unaffected by the split — `LC.ApplyFontSize()` is added here, near `LC.GetRaidMinQuality` at line 175, exactly as originally planned)
+- Modify: `LootCouncilVote.lua:171-460` / `:465-730` (end of `Vote.RefreshVoteListRows_Spacious`/`Vote.RefreshVoteListRows_Compact`, adds a call)
+- Modify: `LootCouncilPanel.lua:656-1187` (end of `Council.RefreshCouncilRows`), `LootCouncilPanel.lua:197-343` (end of `Council.RefreshCouncilTabs`)
+- Modify: `LootCouncil.lua:976-984` (raid-wide settings box, adds a new slider next to the vote-timer one — unaffected by the split, still the core file; assumes Task 6 already ran, so the vote-timer slider's max is already `180`)
+- Modify: `Core.lua:60-100` (`settingsMap` in the `ADDON_LOADED` handler — see the new sub-step below; found while re-deriving this task, not caused by the split), `Core.lua:549-556` (`KART.UpdateStyles`, adds one call)
 - Modify: `Locales/enUS.lua`, `Locales/deDE.lua` (new slider label/tooltip)
 
 **Interfaces:**
-- Produces: `LC.ApplyFontSize()` — re-applies `KART_Settings.lcFontSize` (a new, LootCouncil-specific setting, independent from the main window's `contentFontSize`) to every text element in the vote-list window and the council panel. Called from `KART.UpdateStyles()` (so it participates in the existing settings-change refresh) and from the end of each of the four refresh functions listed above (so newly-created rows/tabs get sized immediately, not just on the next settings change).
+- Produces: `LC.ApplyFontSize()` — re-applies `KART_Settings.lcFontSize` (a new, LootCouncil-specific setting, independent from the main window's `contentFontSize`) to every text element in the vote-list window and the council panel. Called from `KART.UpdateStyles()` (so it participates in the existing settings-change refresh) and from the end of each of the four refresh functions listed above (so newly-created rows/tabs get sized immediately, not just on the next settings change). **Unaffected by the module split**: it reads `LC.voteListFrame`/`LC.councilPanel` and their row pools directly — these stayed flat shared state on `KART.LC` (not moved into `Vote`/`Council`) specifically so cross-cutting code like this doesn't need to reach into another module's namespace. Lives in the core `LootCouncil.lua`, callable as plain `LC.ApplyFontSize()` from any file (`Vote.lua`/`Panel.lua` both already have `local LC = KART.LC`).
 
 **Root cause (confirmed):** both LootCouncil windows mix hardcoded literal point sizes (`SetFont("Fonts\\FRIZQT__.TTF", 14, "")` on item text, `12`/`11` on timer/gain text) with completely untouched Blizzard font templates (`GameFontHighlightSmall`/`GameFontNormalSmall`/`GameFontHighlight` on most row text, column headers, and the council panel's own title) — and *neither* path is wired into `KART.UpdateStyles()`, unlike the Main window, Loot History, and BuffCheck windows, which all explicitly re-apply `KART_Settings.contentFontSize`/`titleFontSize` on every settings change. This is exactly "some things scale, most don't" — the one element that *does* already track font-size settings correctly is `row.noteLabel` (registered in `KART.DynamicLabels`), which is the exception, not the rule. Per the request, this adds a **separate** `lcFontSize` setting rather than wiring these into the existing global `contentFontSize`, since these windows' dense grid/card layouts don't necessarily want the same size as the rest of the addon.
 
 - [ ] **Step 1: Expose the council panel's column-header FontStrings as `f.` fields**
 
-Locate (only `hRoll` is currently exposed, for an unrelated show/hide reason):
+Locate (in `Council.CreateCouncilPanel`, `LootCouncilPanel.lua`; `hRoll` and `hGain` already carry their `f.` exposure, from unrelated earlier work — only `hName`/`hRank`/`hIlvl`/`hVote`/`hCouncilVotes` are missing it):
 
 ```lua
     local hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -808,11 +784,11 @@ Change to:
     f.hName = hName
 ```
 
-Apply the identical one-line addition (`f.hRank = hRank`, `f.hIlvl = hIlvl`, `f.hVote = hVote`, `f.hCouncilVotes = hCouncilVotes`, `f.hGain = hGain`) immediately after each of the other five column-header `local h... = f:CreateFontString(...)` lines in this same block (`hRank`, `hIlvl`, `hVote`, `hCouncilVotes`, `hGain` — `hRoll` already has its `f.hRoll = hRoll` line, don't duplicate it).
+Apply the identical one-line addition (`f.hRank = hRank`, `f.hIlvl = hIlvl`, `f.hVote = hVote`, `f.hCouncilVotes = hCouncilVotes`) immediately after each of `hRank`'s/`hIlvl`'s/`hVote`'s/`hCouncilVotes`'s own `local h... = f:CreateFontString(...)` lines in this same block. Leave `hRoll` (already has `f.hRoll = hRoll`) and `hGain` (already has `f.hGain = hGain`) untouched — don't duplicate either.
 
 - [ ] **Step 2: Add `LC.ApplyFontSize()`**
 
-Add it near the top of `LootCouncil.lua`, after `LC.GetRaidMinQuality`/before the `GetButtonConfig`/`GetLootmaster` block (anywhere after `KART.GetFontPath` is known to exist, which it does — `Core.lua`'s `KART.UpdateStyles` already calls it, so it's a `KART.` global, not file-scoped):
+Add it near the top of `LootCouncil.lua`, after `LC.GetRaidMinQuality` (line 175)/before the `LC.ResolveConfigName`/`LC.GetLootmaster` block (anywhere after `KART.GetFontPath` is known to exist, which it does — `Core.lua`'s `KART.UpdateStyles` already calls it, so it's a `KART.` global, not file-scoped). This function's body is unaffected by both the module split and the identity rework — it never compares player identity, and every field/frame it touches stayed flat on `KART.LC`:
 
 ```lua
 -- Applies the LootCouncil-specific font size (KART_Settings.lcFontSize, independent from the main
@@ -869,18 +845,22 @@ end
 
 - [ ] **Step 3: Call it at the end of the row/tab refresh functions, so newly-created rows are sized immediately**
 
-At the end of `LC.RefreshVoteListRows_Spacious`, `LC.RefreshVoteListRows_Compact`, `LC.RefreshCouncilRows`, and `LC.RefreshCouncilTabs` — locate each function's final `end` and add a call directly before it:
+Four call sites, across two files now (the module split put vote-list rendering and council-panel rendering in separate files):
+- `LootCouncilVote.lua`: end of `Vote.RefreshVoteListRows_Spacious` (currently line 460) and `Vote.RefreshVoteListRows_Compact` (currently line 730)
+- `LootCouncilPanel.lua`: end of `Council.RefreshCouncilRows` (currently line 1187) and `Council.RefreshCouncilTabs` (currently line 343)
+
+At each, locate the function's final `end` and add a call directly before it (still bare `LC.ApplyFontSize()`, not `Vote.ApplyFontSize()`/`Council.ApplyFontSize()` — the function lives on shared `LC`, see the Interfaces note above):
 
 ```lua
     LC.ApplyFontSize()
 end
 ```
 
-(If a function's last statement is itself inside a conditional block whose closing `end` isn't the function's own final `end`, add the call right before the function's own closing `end`, not an inner one — check indentation to tell them apart.)
+(If a function's last statement is itself inside a conditional block whose closing `end` isn't the function's own final `end`, add the call right before the function's own closing `end`, not an inner one — check indentation to tell them apart. Confirmed for all four: none of the four currently end inside a conditional — each one's very last line before `end` is unconditional in the current code.)
 
 - [ ] **Step 4: Call it from `KART.UpdateStyles` too, so changing the setting updates already-open windows**
 
-In `Core.lua`, locate:
+Unaffected by the module split — `KART.UpdateStyles` stayed in `Core.lua` throughout. In `Core.lua`, locate (currently lines 553-556):
 
 ```lua
     -- Font changes can re-flow the Loot Council raid box (RelayoutRaidBox above), which
@@ -900,9 +880,9 @@ Replace with:
 end
 ```
 
-- [ ] **Step 5: Add the new slider next to the vote-timer one**
+- [ ] **Step 5a: Add the new slider next to the vote-timer one**
 
-Locate (this is the vote-timer slider, right before the rolls-enabled checkbox):
+Unaffected by the module split — this settings box stayed in `LootCouncil.lua`. Locate (this is the vote-timer slider, right before the rolls-enabled checkbox — currently lines 976-980, and already reads `5, 180` here since this task assumes Task 6 ran first):
 
 ```lua
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
@@ -931,7 +911,23 @@ Replace with:
 
 This adds a slider 52px below the vote-timer one (matching the `-52`/`-104` vertical rhythm already used for the settings in this box) and hooks its value change straight to `LC.ApplyFontSize` for live preview while dragging, in addition to the `KART.UpdateStyles()` call `KART.CreateSettingsSlider`'s own `OnValueChanged` already triggers (see `Utils.lua:557`).
 
-Locating this insertion point shifts everything below it in `layoutRaidBox` down — check whether any other slider/checkbox in this box is positioned with a hardcoded Y-offset relative to a *following* element rather than computed relative to the previous one (the raidlead-settings-sync plan's own note about `layoutRaidBox` computing a running `y` suggests it's dynamic, in which case no other position needs manual adjustment — confirm this against the actual code before assuming it).
+`layoutRaidBox` (same file, currently starting line 1136) computes every element's Y position from a running `y` variable — confirmed against the current code, not just inferred — so inserting this slider needs no manual position adjustment to anything below it in the box.
+
+- [ ] **Step 5b: Register the new slider in `Core.lua`'s `settingsMap`, so its saved value actually restores on login**
+
+Found while re-deriving this task, not caused by the split: `KART.CreateSettingsSlider` (`Utils.lua:500`) only *writes* `KART_Settings[settingKey]` when the slider is dragged — it never reads it back at creation. The existing vote-timer slider gets its saved value applied via a separate mechanism, `settingsMap` inside `KART.UpdateStyles`'s `ADDON_LOADED`-time setup (`Core.lua:74`: `if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end`). Without the equivalent line for the new slider, `KART_Settings.lcFontSize` would still save/load and `LC.ApplyFontSize()` would still apply it correctly to text — only the slider's own thumb would silently show the wrong position after `/reload`, until dragged once.
+
+In `Core.lua`, locate:
+
+```lua
+    if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
+```
+
+Add directly after it:
+
+```lua
+    if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
+```
 
 - [ ] **Step 6: Add the locale strings**
 
@@ -956,13 +952,18 @@ In `Locales/deDE.lua`, at the same relative position:
 - [ ] **Step 8: Commit**
 
 ```bash
-git add LootCouncil.lua Core.lua Locales/enUS.lua Locales/deDE.lua
+git add LootCouncil.lua LootCouncilVote.lua LootCouncilPanel.lua Core.lua Locales/enUS.lua Locales/deDE.lua
 git commit -m "feat: add a dedicated, working font-size setting for the Loot Council windows"
 ```
 
 ---
 
-### Task 8: GUID-based player identity — architecture note (needs its own dedicated plan, not implemented here)
+### Task 8: GUID-based player identity — SHIPPED (2026-07-23), skip this task entirely
+
+**Superseded — do not execute anything below in this section.** This task originally documented the short-name-collision root cause and pointed at a GUID-based fix, scoped as its own follow-up project. That follow-up already happened: spec at `docs/superpowers/specs/2026-07-23-loot-council-guid-identity-design.md`, plan at `docs/superpowers/plans/2026-07-23-loot-council-guid-identity.md` (13 tasks), executed via `superpowers:subagent-driven-development`, shipped as v2.6.0. `KART.Identity` (`Identity.lua`) now provides `ResolvePlayer`/`FindUnitForKey`/`ResolveDisplayName`/`IsResolvedKey`; every one of the ~45 short-name-comparison sites the original text below flagged has been re-keyed. This is exactly why every other task in this plan (1, 4, 5, 9, 10, 11) was rewritten in place above to use `KART.Identity` — see the identity-rework note at the top of this plan for the summary, or the shipped plan/spec above for the full detail. The original architecture-note text is kept below only as historical record of the investigation that motivated the shipped rewrite.
+
+<details>
+<summary>Original text (2026-07-22, pre-GUID-identity — historical only)</summary>
 
 **This task is intentionally not code-complete.** It documents a real, confirmed root cause and points at the right fix, but the fix touches too much of the file to respons­ibly spec line-by-line in this document — it needs its own `superpowers:brainstorming` + `superpowers:writing-plans` pass before any of it is implemented. Do not attempt to execute this task from the text below alone.
 
@@ -978,18 +979,21 @@ git commit -m "feat: add a dedicated, working font-size setting for the Loot Cou
 
 This is a multi-file, multi-week-scale rewrite touching the wire protocol, every vote/roll/council table, and the settings UI — not a bugfix-sized change. Flagging it here, with the concrete evidence and the reference implementation to copy from, so it can be scoped as its own project when there's appetite for it.
 
+</details>
+
 ---
 
 ### Task 9: Reliable trade-completion detection via `UI_INFO_MESSAGE`, not just a bag re-scan
 
 **Files:**
-- Modify: `Core.lua` (register `TRADE_ACCEPT_UPDATE` and `UI_INFO_MESSAGE`, two new dispatch arms)
-- Modify: `LootCouncil.lua` (`LC.OnTradeClosed`, two new functions, one new state table)
+- Modify: `Core.lua:16-22` (register `TRADE_ACCEPT_UPDATE` and `UI_INFO_MESSAGE`), `Core.lua:221-225` (dispatch — already namespaced to `KART.LC.Trade.OnTradeShow()`/`OnTradeClosed()` by the module split, two new dispatch arms added the same way)
+- Modify: `LootCouncilTrade.lua` (`Trade.OnTradeClosed`, currently lines 302-318; two new functions, one new state table — this whole file is `KART.LC.Trade`, moved here from the old monolithic `LootCouncil.lua` by the module split)
 
 **Interfaces:**
-- Produces: `LC.OnTradeAcceptUpdate()` — called from `Core.lua`'s `TRADE_ACCEPT_UPDATE` handler.
-- Produces: `LC.OnTradeInfoMessage(msgID)` — called from `Core.lua`'s `UI_INFO_MESSAGE` handler, passed Blizzard's `arg1`.
-- Produces: `LC.tradeWindowItemStrings` — a set (`[itemString] = true`) of exactly what's currently sitting in *our own* trade slots, rebuilt every time the trade offer changes. Consumed by this task's own `LC.OnTradeClosed` rewrite and by Task 10 (wrong-trade-partner warning), which reads the same table.
+- Produces: `Trade.OnTradeAcceptUpdate()` — called from `Core.lua`'s `TRADE_ACCEPT_UPDATE` handler.
+- Produces: `Trade.OnTradeInfoMessage(msgID)` — called from `Core.lua`'s `UI_INFO_MESSAGE` handler, passed Blizzard's `arg1`.
+- Produces: `LC.tradeWindowItemStrings` — a set (`[itemString] = true`) of exactly what's currently sitting in *our own* trade slots, rebuilt every time the trade offer changes. Stays flat on shared `LC` (not `Trade.tradeWindowItemStrings`), same pattern as `LC.pendingTrades`/`LC.owedToMe`. Consumed by this task's own `Trade.OnTradeClosed` rewrite and by Task 10 (wrong-trade-partner warning), which reads the same table.
+- **Note on ordering:** by the time this task runs, Task 5 has already added a second loop to `Trade.OnTradeClosed` (the `LC.owedToMe` mirror check, winner-side). This task's Locate/Replace blocks below are written against that post-Task-5 state and preserve the owed-side loop unchanged — this task's new signal only upgrades the lootmaster-side (`LC.pendingTrades`) loop, matching its original scope.
 
 **Root cause this improves on:** the bugfix plan's Task 7 (already shipped) treats "the item is no longer in my bags" as the only completion signal. That's a reasonable fallback, but it's indirect — it infers success from an absence, and (as the FindItemInBags fix above already had to account for) bag contents can change for unrelated reasons. RCLootCouncil's `TradeUI.lua` instead listens for Blizzard's own explicit trade-succeeded signal: `UI_INFO_MESSAGE` firing with `arg1 == LE_GAME_ERR_TRADE_COMPLETE` (confirmed present in RCLootCouncil's shipped, working `OnEvent_UI_INFO_MESSAGE`). Pairing that with a `TRADE_ACCEPT_UPDATE` snapshot of exactly which items were in the trade window (also copied from RCLootCouncil's pattern — it does not trust re-reading trade slots at `UI_INFO_MESSAGE` time, since the frame may already be tearing down by then) gives a precise, first-party "yes, specifically this item was just traded" signal, with the existing bag-scan kept as a fallback for the rare case the event doesn't fire.
 
@@ -1013,39 +1017,39 @@ frame:RegisterEvent("UI_INFO_MESSAGE")
 
 - [ ] **Step 2: Dispatch both events**
 
-Locate:
+Locate (`Core.lua`, already namespaced by the module split):
 
 ```lua
     elseif event == "TRADE_SHOW" then
-        if KART.LC then KART.LC.OnTradeShow() end
+        if KART.LC then KART.LC.Trade.OnTradeShow() end
 
     elseif event == "TRADE_CLOSED" then
-        if KART.LC then KART.LC.OnTradeClosed() end
+        if KART.LC then KART.LC.Trade.OnTradeClosed() end
 ```
 
 Replace with:
 
 ```lua
     elseif event == "TRADE_SHOW" then
-        if KART.LC then KART.LC.OnTradeShow() end
+        if KART.LC then KART.LC.Trade.OnTradeShow() end
 
     elseif event == "TRADE_CLOSED" then
-        if KART.LC then KART.LC.OnTradeClosed() end
+        if KART.LC then KART.LC.Trade.OnTradeClosed() end
 
     elseif event == "TRADE_ACCEPT_UPDATE" then
-        if KART.LC then KART.LC.OnTradeAcceptUpdate() end
+        if KART.LC then KART.LC.Trade.OnTradeAcceptUpdate() end
 
     elseif event == "UI_INFO_MESSAGE" then
-        if KART.LC then KART.LC.OnTradeInfoMessage(arg1) end
+        if KART.LC then KART.LC.Trade.OnTradeInfoMessage(arg1) end
 ```
 
 - [ ] **Step 3: Add the snapshot table and the two new handlers**
 
-In `LootCouncil.lua`, locate (this is `GetItemString`, added by the standalone bonus-ID-matching fix that already shipped):
+In `LootCouncilTrade.lua`, locate (this is `GetItemString`, a file-local function added by the standalone bonus-ID-matching fix that already shipped — note it's `LC.IsRealItemLink`, not a bare `IsRealItemLink`):
 
 ```lua
 local function GetItemString(link)
-    return IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+    return LC.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
 end
 ```
 
@@ -1054,11 +1058,11 @@ Add directly after it:
 ```lua
 -- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
 -- only reliable moment to read them, since the trade frame may already be tearing down by the
--- time UI_INFO_MESSAGE's trade-complete fires (see LC.OnTradeInfoMessage). Keyed by item string
--- (bonus-ID aware, see GetItemString) so this composes correctly with LC.OnTradeClosed below.
+-- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
+-- (bonus-ID aware, see GetItemString) so this composes correctly with Trade.OnTradeClosed below.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
 
-function LC.OnTradeAcceptUpdate()
+function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
     for i = 1, 6 do -- MAX_TRADE_ITEMS - 1, fixed by the trade UI (slot 6 is "will not be traded")
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
@@ -1069,23 +1073,23 @@ end
 
 -- Blizzard's own explicit trade-succeeded signal (LE_GAME_ERR_TRADE_COMPLETE) — a direct, first-
 -- party confirmation rather than inferring success from bag contents. Only records that *a* trade
--- completed; LC.OnTradeClosed cross-references LC.tradeWindowItemStrings to know *which* items.
-function LC.OnTradeInfoMessage(msgID)
+-- completed; Trade.OnTradeClosed cross-references LC.tradeWindowItemStrings to know *which* items.
+function Trade.OnTradeInfoMessage(msgID)
     if msgID == LE_GAME_ERR_TRADE_COMPLETE then ---@diagnostic disable-line: undefined-global
         LC.tradeJustSucceeded = true
     end
 end
 ```
 
-- [ ] **Step 4: Use both signals in `LC.OnTradeClosed`, keeping the bag-scan as a fallback**
+- [ ] **Step 4: Use both signals in `Trade.OnTradeClosed`, keeping the bag-scan as a fallback**
 
-Locate:
+Locate (this is the post-Task-5 body — includes the `LC.owedToMe` mirror loop Task 5 already added; match this, not the pre-Task-5 version):
 
 ```lua
-function LC.OnTradeClosed()
-    local partnerShort = LC.currentTradePartnerShort
-    LC.currentTradePartnerShort = nil
-    if not partnerShort then return end
+function Trade.OnTradeClosed()
+    local partnerKey = LC.currentTradePartnerKey
+    LC.currentTradePartnerKey = nil
+    if not partnerKey then return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
@@ -1094,8 +1098,17 @@ function LC.OnTradeClosed()
         -- report "not found" since the placeholder is not a valid item ID to search bags for,
         -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
         -- "done" checkmark button remains available as the fallback for that edge case.
-        if entry.winnerShort == partnerShort and IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
-            LC.RemovePendingTrade(entry.rollID)
+        if entry.winnerKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
+            Trade.RemovePendingTrade(entry.rollID)
+        end
+    end
+
+    -- Mirror check for the recipient side: if I just traded with the lootmaster and the item I
+    -- was owed is now in MY bags, the trade succeeded from my end too.
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        local entry = LC.owedToMe[i]
+        if entry.lootmasterKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and FindItemInBags(entry.itemLink) then
+            Trade.RemoveOwedItem(entry.rollID)
         end
     end
 end
@@ -1104,28 +1117,40 @@ end
 Replace with:
 
 ```lua
-function LC.OnTradeClosed()
-    local partnerShort = LC.currentTradePartnerShort
+function Trade.OnTradeClosed()
+    local partnerKey = LC.currentTradePartnerKey
     local tradeSucceeded = LC.tradeJustSucceeded
-    LC.currentTradePartnerShort = nil
+    LC.currentTradePartnerKey = nil
     LC.tradeJustSucceeded = nil
-    if not partnerShort then wipe(LC.tradeWindowItemStrings) return end
+    if not partnerKey then wipe(LC.tradeWindowItemStrings) return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        if entry.winnerShort == partnerShort then
+        if entry.winnerKey == partnerKey then
             -- Primary signal: Blizzard confirmed a trade completed, and this exact item (bonus
             -- IDs included) was one of the items we placed in it.
             local itemString = GetItemString(entry.itemLink)
             local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
-            -- Fallback signal (bugfix plan Task 7): the item is simply gone from our bags. Only
-            -- trusted for a real, resolved link — see the "???" placeholder note this replaces.
-            local confirmedByBags = IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
+            -- Fallback signal: the item is simply gone from our bags. Only trusted for a real,
+            -- resolved link — see the "???" placeholder note this replaces.
+            local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
             if confirmedByTrade or confirmedByBags then
-                LC.RemovePendingTrade(entry.rollID)
+                Trade.RemovePendingTrade(entry.rollID)
             end
         end
     end
+
+    -- Mirror check for the recipient side (Task 5's loop) — deliberately left as bag-scan-only.
+    -- This task's stated scope (see the Root cause section above) is only the lootmaster-side
+    -- signal; giving the recipient side the same UI_INFO_MESSAGE-based upgrade is a reasonable
+    -- follow-up but wasn't asked for here — flag it rather than silently expanding scope.
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        local entry = LC.owedToMe[i]
+        if entry.lootmasterKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and FindItemInBags(entry.itemLink) then
+            Trade.RemoveOwedItem(entry.rollID)
+        end
+    end
+
     wipe(LC.tradeWindowItemStrings)
 end
 ```
@@ -1137,7 +1162,7 @@ As the lootmaster, open a trade with the winner of a pending item, let auto-trad
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Core.lua LootCouncil.lua
+git add Core.lua LootCouncilTrade.lua
 git commit -m "feat: confirm trade completion via UI_INFO_MESSAGE instead of only a bag re-scan"
 ```
 
@@ -1146,7 +1171,7 @@ git commit -m "feat: confirm trade completion via UI_INFO_MESSAGE instead of onl
 ### Task 10: Warn the lootmaster if an item gets traded to the wrong person
 
 **Files:**
-- Modify: `LootCouncil.lua` (`LC.OnTradeClosed`, extended further — builds directly on Task 9's `LC.tradeWindowItemStrings`)
+- Modify: `LootCouncilTrade.lua` (`Trade.OnTradeClosed`, extended further — builds directly on Task 9's `LC.tradeWindowItemStrings`, and on Task 5's `LC.owedToMe` mirror loop already sitting between the pendingTrades loop and the final `wipe`)
 - Modify: `Locales/enUS.lua`, `Locales/deDE.lua`
 
 **Interfaces:** Consumes `LC.tradeWindowItemStrings` (Task 9). No new interfaces produced.
@@ -1155,25 +1180,24 @@ git commit -m "feat: confirm trade completion via UI_INFO_MESSAGE instead of onl
 
 - [ ] **Step 1: Detect it inside the same loop Task 9 added**
 
-Locate (this is Task 9's finished `LC.OnTradeClosed`, specifically its loop body):
+Locate (this is Task 9's finished `Trade.OnTradeClosed`, specifically its first loop — the `LC.pendingTrades` one; leave the `LC.owedToMe` loop that follows it, and the trailing `wipe`, untouched, they're not part of this Locate block):
 
 ```lua
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        if entry.winnerShort == partnerShort then
+        if entry.winnerKey == partnerKey then
             -- Primary signal: Blizzard confirmed a trade completed, and this exact item (bonus
             -- IDs included) was one of the items we placed in it.
             local itemString = GetItemString(entry.itemLink)
             local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
-            -- Fallback signal (bugfix plan Task 7): the item is simply gone from our bags. Only
-            -- trusted for a real, resolved link — see the "???" placeholder note this replaces.
-            local confirmedByBags = IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
+            -- Fallback signal: the item is simply gone from our bags. Only trusted for a real,
+            -- resolved link — see the "???" placeholder note this replaces.
+            local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
             if confirmedByTrade or confirmedByBags then
-                LC.RemovePendingTrade(entry.rollID)
+                Trade.RemovePendingTrade(entry.rollID)
             end
         end
     end
-    wipe(LC.tradeWindowItemStrings)
 ```
 
 Replace with:
@@ -1182,21 +1206,20 @@ Replace with:
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         local itemString = GetItemString(entry.itemLink)
-        if entry.winnerShort == partnerShort then
+        if entry.winnerKey == partnerKey then
             local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
-            local confirmedByBags = IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
+            local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
             if confirmedByTrade or confirmedByBags then
-                LC.RemovePendingTrade(entry.rollID)
+                Trade.RemovePendingTrade(entry.rollID)
             end
         elseif tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString] then
             -- This item was assigned to someone else entirely, but it was just traded away in a
-            -- trade with partnerShort instead — the wrong recipient. Warn loudly; the pending
+            -- trade with partnerKey instead — the wrong recipient. Warn loudly; the pending
             -- entry is left in place since the real winner still hasn't received their item.
             print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
-                entry.itemLink or "?", entry.winnerShort or "?", partnerShort))
+                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
         end
     end
-    wipe(LC.tradeWindowItemStrings)
 ```
 
 - [ ] **Step 2: Add the warning locale string**
@@ -1220,7 +1243,7 @@ Assign an item to Winner A. As the lootmaster, deliberately trade the item to a 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add LootCouncil.lua Locales/enUS.lua Locales/deDE.lua
+git add LootCouncilTrade.lua Locales/enUS.lua Locales/deDE.lua
 git commit -m "feat: warn the lootmaster if an assigned item gets traded to the wrong person"
 ```
 
@@ -1229,7 +1252,8 @@ git commit -m "feat: warn the lootmaster if an assigned item gets traded to the 
 ### Task 11: Warn before a pending trade's 2-hour Bind-on-Pickup trade window expires
 
 **Files:**
-- Modify: `LootCouncil.lua` (`LC.OnStartLootRoll`, `LC.AddPendingTrade`, one new ticker, one new function)
+- Modify: `LootCouncil.lua` (`LC.OnStartLootRoll`, currently line 672 — unaffected by the module split, stayed in the core file)
+- Modify: `LootCouncilTrade.lua` (`Trade.AddPendingTrade`, currently lines 96-104 — moved here by the split; one new ticker, one new function added alongside it)
 - Modify: `Locales/enUS.lua`, `Locales/deDE.lua`
 
 **Interfaces:**
@@ -1268,39 +1292,39 @@ Replace with:
 
 - [ ] **Step 2: Carry that timestamp onto the pending-trade entry**
 
-Locate:
+Locate (`LootCouncilTrade.lua`):
 
 ```lua
-function LC.AddPendingTrade(rollID, playerShort)
-    if IsTestRoll(rollID) then return end
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-    LC.RemovePendingTrade(rollID)
-    if playerShort == myShort then return end
+function Trade.AddPendingTrade(rollID, playerKey)
+    if LC.IsTestRoll(rollID) then return end
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    Trade.RemovePendingTrade(rollID)
+    if playerKey == myKey then return end
 
-    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerShort = playerShort})
-    LC.RefreshTradeReminder()
+    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey})
+    Trade.RefreshTradeReminder()
 end
 ```
 
 Replace with:
 
 ```lua
-function LC.AddPendingTrade(rollID, playerShort)
-    if IsTestRoll(rollID) then return end
-    local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-    LC.RemovePendingTrade(rollID)
-    if playerShort == myShort then return end
+function Trade.AddPendingTrade(rollID, playerKey)
+    if LC.IsTestRoll(rollID) then return end
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    Trade.RemovePendingTrade(rollID)
+    if playerKey == myKey then return end
 
     local lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or GetTime()
-    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerShort = playerShort, lootedAt = lootedAt})
-    LC.RefreshTradeReminder()
-    LC.StartTradeTimeoutTicker()
+    table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey, lootedAt = lootedAt})
+    Trade.RefreshTradeReminder()
+    Trade.StartTradeTimeoutTicker()
 end
 ```
 
 - [ ] **Step 3: Add the ticker and the check it runs**
 
-Add directly after `LC.AddPendingTrade` (same file):
+Add directly after `Trade.AddPendingTrade` (same file):
 
 ```lua
 local TRADE_TIMEOUT_SECONDS = 2 * 60 * 60      -- Blizzard's fixed BoP trade-eligibility window
@@ -1309,9 +1333,9 @@ local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
 
 -- Warns once (per entry, via entry.timeoutWarned) as a pending trade's item approaches the end of
 -- its 2-hour Bind-on-Pickup trade-eligibility window. Never removes the entry itself — that still
--- only happens via LC.OnTradeClosed/manual done/reassignment, same as every other pending-trade
+-- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
 -- removal path; this is purely a heads-up so the lootmaster doesn't lose the item to the timer.
-function LC.CheckTradeTimeouts()
+function Trade.CheckTradeTimeouts()
     if #LC.pendingTrades == 0 then
         if LC.tradeTimeoutTicker then LC.tradeTimeoutTicker:Cancel() LC.tradeTimeoutTicker = nil end
         return
@@ -1323,16 +1347,16 @@ function LC.CheckTradeTimeouts()
             entry.timeoutWarned = true
             local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
             print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
-                entry.itemLink or "?", entry.winnerShort or "?", minutesLeft))
+                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
         end
     end
 end
 
 -- Lazily started on the first pending trade (not at addon load) so a raid that never uses Loot
 -- Council never runs a background ticker at all. Safe to call repeatedly — no-ops if already running.
-function LC.StartTradeTimeoutTicker()
+function Trade.StartTradeTimeoutTicker()
     if LC.tradeTimeoutTicker then return end
-    LC.tradeTimeoutTicker = C_Timer.NewTicker(TRADE_TIMEOUT_CHECK_EVERY, LC.CheckTradeTimeouts)
+    LC.tradeTimeoutTicker = C_Timer.NewTicker(TRADE_TIMEOUT_CHECK_EVERY, Trade.CheckTradeTimeouts)
 end
 ```
 
@@ -1357,7 +1381,7 @@ This one is impractical to wait out for real (100 minutes) — instead, temporar
 - [ ] **Step 6: Commit**
 
 ```bash
-git add LootCouncil.lua Locales/enUS.lua Locales/deDE.lua
+git add LootCouncilTrade.lua Locales/enUS.lua Locales/deDE.lua
 git commit -m "feat: warn before a pending trade's 2-hour BoP trade window expires"
 ```
 
@@ -1366,29 +1390,44 @@ git commit -m "feat: warn before a pending trade's 2-hour BoP trade window expir
 ### Task 12: Show "(1/N)" when two or more currently-active rolls are the exact same item
 
 **Files:**
-- Modify: `LootCouncil.lua` (new function, three call sites: Spacious vote-list row, Compact vote-list row, council panel's selected-item header)
+- Modify: `LootCouncilTrade.lua` (new function — see the namespace note below for why it lands here, not in `LootCouncil.lua`)
+- Modify: `LootCouncilVote.lua` (two call sites: Spacious vote-list row, Compact vote-list row)
+- Modify: `LootCouncilPanel.lua` (one call site: council panel's selected-item header)
 
 **Interfaces:**
-- Produces: `LC.GetDuplicateOrdinal(rollID)` — returns `""` normally, or `" (i/N)"` when `N ≥ 2` currently-active rolls share the exact same item (bonus IDs included, via the same `GetItemString` the trade-matching fixes use), ordered by ascending rollID so the same physical drop always gets the same ordinal on every client.
+- Produces: `Trade.GetDuplicateOrdinal(rollID)` — returns `""` normally, or `" (i/N)"` when `N ≥ 2` currently-active rolls share the exact same item (bonus IDs included, via the same `GetItemString` the trade-matching fixes use), ordered by ascending rollID so the same physical drop always gets the same ordinal on every client.
+- **Namespace note:** the original plan put this on bare `LC.GetDuplicateOrdinal`, reasonable when everything lived in one file. Post-split, `GetItemString` (which this function needs) is a **file-local** function inside `LootCouncilTrade.lua` — not exposed on `LC` or `Trade` — so this function has to live in that same file to call it directly. Its three call sites are in two *other* files (`LootCouncilVote.lua`, `LootCouncilPanel.lua`), so it's exposed as `Trade.GetDuplicateOrdinal` (i.e. `KART.LC.Trade.GetDuplicateOrdinal`, consistent with every other cross-file `Trade.*` call already in those two files) rather than kept file-local itself.
 
-**Root cause / feature motivation:** when a boss drops the exact same item twice (same itemID, same bonus IDs — not the tertiary-stat-variant case, which the auto-trade fix already distinguishes), Blizzard issues two independent rolls, not one combined roll (confirmed — Blizzard's group-loot design only stops one person winning *both*, it doesn't merge the rolls). KART shows both as separate rows/tabs, but with identical icon, name, and item link, there's nothing distinguishing them — a voter can't tell which row is "theirs" if they're mentally tracking two, and the lootmaster sees two visually-identical tabs. This doesn't corrupt any data (each rollID's votes stay correctly separate under the hood, per `LC.RefreshCouncilRows`/`LC.HandleVote`), but it's a real source of confusion this task closes with a simple visual marker.
+**Root cause / feature motivation:** when a boss drops the exact same item twice (same itemID, same bonus IDs — not the tertiary-stat-variant case, which the auto-trade fix already distinguishes), Blizzard issues two independent rolls, not one combined roll (confirmed — Blizzard's group-loot design only stops one person winning *both*, it doesn't merge the rolls). KART shows both as separate rows/tabs, but with identical icon, name, and item link, there's nothing distinguishing them — a voter can't tell which row is "theirs" if they're mentally tracking two, and the lootmaster sees two visually-identical tabs. This doesn't corrupt any data (each rollID's votes stay correctly separate under the hood, per `Council.RefreshCouncilRows`/`Vote.HandleVote`), but it's a real source of confusion this task closes with a simple visual marker.
 
-- [ ] **Step 1: Add `LC.GetDuplicateOrdinal`**
+- [ ] **Step 1: Add `Trade.GetDuplicateOrdinal`**
 
-Locate (immediately after `FindItemInBags`, which this function's use of `GetItemString` depends on being already defined earlier in the file):
+Locate (in `LootCouncilTrade.lua`, immediately after `FindItemInBags` — its closing `end`, currently line 246):
 
 ```lua
 local function FindItemInBags(itemLink)
+    local wantString = GetItemString(itemLink)
+    if not wantString then return nil end
+    for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local bagLink = C_Container.GetContainerItemLink(bag, slot)
+            if bagLink and GetItemString(bagLink) == wantString then
+                return bag, slot
+            end
+        end
+    end
+    return nil
+end
 ```
 
-Add directly before it (same relative position as `GetItemString`, which already precedes `FindItemInBags` — insert this new function after `GetItemString`'s closing `end` and before `FindItemInBags`'s definition):
+Add directly after it (before the `-- Best-effort auto-trade...` comment that precedes `Trade.OnTradeShow`):
 
 ```lua
 -- "" normally, or " (i/N)" when N >= 2 currently-active rolls (LC.rollItems is only ever
--- populated for active ones — see LC.ClearRollState) share the exact same item, bonus IDs
+-- populated for active ones — see Trade.ClearRollState) share the exact same item, bonus IDs
 -- included. Ordered by ascending rollID so every client's ordinal for the same physical drop
 -- agrees, since all clients see the same rollItems keys via the same broadcasts.
-function LC.GetDuplicateOrdinal(rollID)
+function Trade.GetDuplicateOrdinal(rollID)
     local myString = GetItemString(LC.rollItems[rollID])
     if not myString then return "" end
     local matches = {}
@@ -1408,23 +1447,23 @@ end
 
 - [ ] **Step 2: Use it in the Spacious vote-list row**
 
-Locate:
+Locate (`LootCouncilVote.lua`):
 
 ```lua
         row.itemText:SetText(rollLink or "???")
 ```
 
-(This exact line appears twice — once in `LC.RefreshVoteListRows_Spacious`, once in `LC.RefreshVoteListRows_Compact`. Both need the identical change; do both.)
+(This exact line appears twice — once in `Vote.RefreshVoteListRows_Spacious` at line 322, once in `Vote.RefreshVoteListRows_Compact` at line 593. Both need the identical change; do both.)
 
 Replace each occurrence with:
 
 ```lua
-        row.itemText:SetText((rollLink or "???") .. LC.GetDuplicateOrdinal(rollID))
+        row.itemText:SetText((rollLink or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
 ```
 
 - [ ] **Step 3: Use it in the council panel's selected-item header**
 
-Locate (inside `LC.SwitchCouncilTab`):
+Locate (`LootCouncilPanel.lua`, inside `Council.SwitchCouncilTab`, currently line 149):
 
 ```lua
     panel.itemText:SetText(LC.rollItems[rollID] or "???")
@@ -1433,7 +1472,7 @@ Locate (inside `LC.SwitchCouncilTab`):
 Replace with:
 
 ```lua
-    panel.itemText:SetText((LC.rollItems[rollID] or "???") .. LC.GetDuplicateOrdinal(rollID))
+    panel.itemText:SetText((LC.rollItems[rollID] or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
 ```
 
 - [ ] **Step 4: Manual verification (needs a real or Test-mode duplicate drop)**
@@ -1443,7 +1482,7 @@ Using Test mode, start two test rolls for the exact same item (`LC.StartTest` wi
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LootCouncil.lua
+git add LootCouncilTrade.lua LootCouncilVote.lua LootCouncilPanel.lua
 git commit -m "feat: mark simultaneous identical-item rolls with a (1/N) ordinal so they're distinguishable"
 ```
 
@@ -1456,18 +1495,18 @@ git commit -m "feat: mark simultaneous identical-item rolls with a (1/N) ordinal
 - Modify: `CHANGELOG.md`
 - Modify: `CHANGELOG-de.md`
 
-Confirm the actual current version in `KeineAhnungRaidTools.toc` first (this plan assumes the bugfix plan already shipped `2.5.0`).
+**Version baseline corrected (2026-07-23):** the original plan assumed the bugfix plan would leave the version at `2.5.0`. It actually shipped `2.5.0`, but the GUID-identity rework and the module split *both* landed after this plan was written and already bumped/held the version at `2.6.0` (the identity rework bumped it there; the module split was a pure refactor and deliberately stayed at `2.6.0` with no changelog entry — see the identity-rework note at the top of this plan). **This task now targets `2.7.0`, not `2.6.0`.** Confirm the actual current version in `KeineAhnungRaidTools.toc` first regardless — don't trust this note if more has shipped since 2026-07-23.
 
 - [ ] **Step 1: Bump the addon version**
 
-In `KeineAhnungRaidTools.toc`, change the `## Version:` line to the next minor version after whatever the bugfix plan left it at (e.g. `2.5.0` → `2.6.0`).
+In `KeineAhnungRaidTools.toc`, change the `## Version:` line from `2.6.0` to `2.7.0` (confirm it's still `2.6.0` first, per the note above).
 
 - [ ] **Step 2: Add the English changelog entry**
 
 In `CHANGELOG.md`, insert a new section above the previous version's entry:
 
 ```markdown
-## [2.6.0] - <today's date>
+## [2.7.0] - <today's date>
 ### Added
 - **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
 - **A voted-on item's card shrinks** in the normal vote-list view instead of leaving empty space where the buttons were.
@@ -1486,7 +1525,7 @@ In `CHANGELOG.md`, insert a new section above the previous version's entry:
 In `CHANGELOG-de.md`, insert at the same relative position:
 
 ```markdown
-## [2.6.0] - <today's date>
+## [2.7.0] - <today's date>
 ### Added
 - **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
 - **Eine abgestimmte Item-Karte schrumpft** in der normalen Abstimmungsansicht, statt leeren Platz zu lassen, wo die Buttons waren.
