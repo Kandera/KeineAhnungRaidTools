@@ -302,13 +302,20 @@ end
 -- first parsed. Promotes them to a real key in place; still-unresolvable entries are left alone
 -- and retried again next time the roster changes.
 function LC.RetryPendingResolutions()
+    -- Collect first, mutate second — Lua's pairs()/next() traversal is undefined if a new key
+    -- (not already present) is added to the table mid-loop, which LC.CouncilNamesTable[key] = true
+    -- below would otherwise do for every newly-resolved entry.
+    local pendingCouncilEntries = {}
     for pendingText in pairs(LC.CouncilNamesTable) do
         if not KART.Identity.IsResolvedKey(pendingText) then
-            local key = LC.ResolveConfigName(pendingText)
-            if key and KART.Identity.IsResolvedKey(key) then
-                LC.CouncilNamesTable[pendingText] = nil
-                LC.CouncilNamesTable[key] = true
-            end
+            table.insert(pendingCouncilEntries, pendingText)
+        end
+    end
+    for _, pendingText in ipairs(pendingCouncilEntries) do
+        local key = LC.ResolveConfigName(pendingText)
+        if key and KART.Identity.IsResolvedKey(key) then
+            LC.CouncilNamesTable[pendingText] = nil
+            LC.CouncilNamesTable[key] = true
         end
     end
 
@@ -319,7 +326,14 @@ function LC.RetryPendingResolutions()
         end
     end
 
+    -- Same collect-first reasoning: LC.MigrateOfficerNoteKey adds a new key to KART_LCOfficerNotes
+    -- on a successful migration, which is unsafe to do while pairs() is still traversing that
+    -- same table.
+    local legacyOfficerNoteKeys = {}
     for oldKey in pairs(KART_LCOfficerNotes) do
+        table.insert(legacyOfficerNoteKeys, oldKey)
+    end
+    for _, oldKey in ipairs(legacyOfficerNoteKeys) do
         LC.MigrateOfficerNoteKey(oldKey)
     end
 end
