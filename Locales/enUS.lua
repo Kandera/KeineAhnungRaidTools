@@ -168,6 +168,12 @@ KART.L_enUS = {
     VERSION_CHECK_REQ = "KART: Requesting versions...",
     VERSION_CHECK_RES = "KART Version of %s: %s",
     UPDATE_AVAILABLE = "|cff00ff00KART:|r An update is available! Version %s is out (You have %s).",
+    HELP_HEADER  = "|cff00ff00KART|r slash commands:",
+    HELP_TOGGLE  = "open/close the main window",
+    HELP_VERSION = "request everyone's KART version",
+    HELP_LC      = "reopen the Loot Council window if something's still active",
+    HELP_TRADE   = "reopen the trade reminder if something's still pending",
+    HELP_HELP    = "show this help",
 
     -- Loot Council
     TAB_LOOTCOUNCIL        = "Loot Council",

@@ -168,6 +168,12 @@ KART.L_deDE = {
     VERSION_CHECK_REQ = "KART: Fordere Versionen an...",
     VERSION_CHECK_RES = "KART Version von %s: %s",
     UPDATE_AVAILABLE = "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).",
+    HELP_HEADER  = "|cff00ff00KART|r Slash-Befehle:",
+    HELP_TOGGLE  = "Hauptfenster öffnen/schließen",
+    HELP_VERSION = "Versionen aller Spieler abfragen",
+    HELP_LC      = "Loot-Council-Fenster erneut öffnen, falls noch etwas aktiv ist",
+    HELP_TRADE   = "Trade-Erinnerung erneut öffnen, falls noch etwas offen ist",
+    HELP_HELP    = "diese Hilfe anzeigen",
 
     -- Loot Council
     TAB_LOOTCOUNCIL        = "Loot Council",
