@@ -651,10 +651,10 @@ function LC.OnStartLootRoll(rollID)
     -- eligible raider's client independently receives this same START_LOOT_ROLL event, so this
     -- is the one place that reliably runs once per roll for everyone, council members included.
     if LC.GetRollsEnabled() then
-        local myShort = (UnitName("player") or ""):match("([^%-]+)") or ""
-        local myRoll  = math.random(1, 100)
+        local myKey  = (KART.Identity.ResolvePlayer("player"))
+        local myRoll = math.random(1, 100)
         LC.rolls[rollID] = LC.rolls[rollID] or {}
-        LC.rolls[rollID][myShort] = myRoll
+        LC.rolls[rollID][myKey] = myRoll
         SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
     end
 
@@ -1104,9 +1104,9 @@ function LC.RefreshVoteListRows_Spacious(f)
                         -- straight into the Test-Master council panel if it's open, instead of
                         -- relying on a round-trip through the addon channel that would never
                         -- come back to this same client.
-                        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+                        local myKey = (KART.Identity.ResolvePlayer("player"))
                         LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
-                        LC.votes[capturedRollID][myShort] = {idx = capturedIdx, note = note}
+                        LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
                         if LC.councilPanel and LC.councilPanel:IsShown() then
                             if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
                             LC.RefreshCouncilTabs()
@@ -1367,9 +1367,9 @@ function LC.RefreshVoteListRows_Compact(f)
                     local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
                     LC.votedNoteByMe[capturedRollID] = note
                     if IsTestRoll(capturedRollID) then
-                        local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
+                        local myKey = (KART.Identity.ResolvePlayer("player"))
                         LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
-                        LC.votes[capturedRollID][myShort] = {idx = capturedIdx, note = note}
+                        LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
                         if LC.councilPanel and LC.councilPanel:IsShown() then
                             if LC.activeRollID == capturedRollID then LC.RefreshCouncilRows() end
                             LC.RefreshCouncilTabs()
@@ -3284,7 +3284,7 @@ function LC.HandleStart(payload)
     end
 end
 
-function LC.HandleVote(payload, senderShort)
+function LC.HandleVote(payload, senderKey)
     -- payload = "rollID:buttonIndex:note"
     local rollID, idx = payload:match("^(%d+):(%d+)")
     rollID = tonumber(rollID)
@@ -3294,7 +3294,7 @@ function LC.HandleVote(payload, senderShort)
     local note = payload:match("^%d+:%d+:(.*)") or ""
 
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][senderShort] = {idx = idx, note = note}
+    LC.votes[rollID][senderKey] = {idx = idx, note = note}
 
     if LC.councilPanel and LC.councilPanel:IsShown() then
         -- Row list only matters for whichever roll is the active tab; the vote-count badge on
@@ -3307,14 +3307,14 @@ end
 -- Receives another raider's automatic 1-100 roll (see LC.OnStartLootRoll) — opt-in, analogous to
 -- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
 -- anything automatically.
-function LC.HandleRoll(payload, senderShort)
+function LC.HandleRoll(payload, senderKey)
     local rollID, value = payload:match("^(%d+):(%d+)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
     if not rollID or not value then return end
 
     LC.rolls[rollID] = LC.rolls[rollID] or {}
-    LC.rolls[rollID][senderShort] = value
+    LC.rolls[rollID][senderKey] = value
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
         LC.RefreshCouncilRows()
