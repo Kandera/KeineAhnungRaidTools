@@ -673,12 +673,21 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         if KART.LC and KART.LC.tradeReminderFrame and #KART.LC.pendingTrades > 0 then
             KART.LC.tradeReminderFrame:Show()
         end
+    elseif cmd == "showall" then
+        -- Reveals every currently active roll in the vote-list window, including ones already
+        -- voted on and hidden by KART_Settings.lcVotedItemDisplay == "hide" (see
+        -- Vote.GetVisibleRolls). No-op if nothing is currently tracked, same as /kart lc / /kart trade.
+        if KART.LC and KART.LC.Vote then
+            KART.LC.showAllOverride = true
+            KART.LC.Vote.RefreshVoteListRows()
+        end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER or "KART slash commands:")
         print("  /kart - " .. (KART.L.HELP_TOGGLE or "open/close the main window"))
         print("  /kart version (v) - " .. (KART.L.HELP_VERSION or "request everyone's KART version"))
         print("  /kart lc - " .. (KART.L.HELP_LC or "reopen the Loot Council window if something's still active"))
         print("  /kart trade - " .. (KART.L.HELP_TRADE or "reopen the trade reminder if something's still pending"))
+        print("  /kart showall - " .. (KART.L.HELP_SHOWALL or "reveal already-voted items hidden by your display setting"))
         print("  /kart help (h) - " .. (KART.L.HELP_HELP or "show this help"))
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern

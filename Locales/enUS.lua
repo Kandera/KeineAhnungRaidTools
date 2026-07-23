@@ -173,6 +173,7 @@ KART.L_enUS = {
     HELP_VERSION = "request everyone's KART version",
     HELP_LC      = "reopen the Loot Council window if something's still active",
     HELP_TRADE   = "reopen the trade reminder if something's still pending",
+    HELP_SHOWALL = "reveal already-voted items hidden by your display setting",
     HELP_HELP    = "show this help",
 
     -- Loot Council
