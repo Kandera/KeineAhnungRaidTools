@@ -7,7 +7,7 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.7.0] - 2026-07-23
-### Added
+### Hinzugefügt
 - **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
 - **`/kart showall`** holt ausgeblendete Items zurück.
 
