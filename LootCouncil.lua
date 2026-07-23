@@ -1748,11 +1748,11 @@ function LC.RefreshCouncilTabs()
             -- Full vote breakdown so the council can compare items without switching tabs.
             local buttons  = LC.GetButtonConfig()
             local anyVotes = false
-            for short, voteData in pairs(LC.votes[capturedRollID] or {}) do
+            for key, voteData in pairs(LC.votes[capturedRollID] or {}) do
                 anyVotes = true
                 local idx = type(voteData) == "table" and voteData.idx or voteData
                 local def = idx and buttons[tonumber(idx)]
-                GameTooltip:AddDoubleLine(short, def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
+                GameTooltip:AddDoubleLine(KART.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
             end
             if not anyVotes then
                 GameTooltip:AddLine(KART.L.LC_TAB_NO_VOTES_YET, 0.6, 0.6, 0.6)
@@ -2378,7 +2378,6 @@ function LC.RefreshCouncilRows()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(rowIdx - 1) * 26)
         row:SetPoint("RIGHT", panel.scrollChild, "RIGHT", 0, 0)
-        row.memberShort = m.short
         row.memberKey = m.key
 
         -- Winner gets a gold highlight (not green — green is already the "Upgrade" vote colour,
