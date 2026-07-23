@@ -390,7 +390,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 9) == "LC_CVOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 9) == "LC_ONOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.OfficerNotes.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
