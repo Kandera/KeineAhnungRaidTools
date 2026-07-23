@@ -200,6 +200,7 @@ function Trade.RefreshTradeReminder()
             -- a plain FontString (no per-item action to take on it here).
             row.nameBtn = CreateFrame("Button", nil, row)
             row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
+            row.nameBtn:SetPoint("RIGHT")
             row.nameBtn:SetHeight(16)
             row.nameBtn.text = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.nameBtn.text:SetPoint("LEFT")
