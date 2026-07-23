@@ -143,29 +143,21 @@ end
 
 local function IsCouncil()
     if UnitIsGroupLeader("player") then return true end
-    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
-    if LC.CouncilNamesTable[myShort] == true then return true end
-    -- Also match by Northern Sky Raid Tools nickname (see KART.GetNickname), so the council list
-    -- can name a *person* once instead of every one of their alts individually.
-    local nick = KART.GetNickname("player")
-    return nick ~= nil and LC.CouncilNamesTable[nick] == true
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    return LC.CouncilNamesTable[myKey] == true
 end
 
--- Whether senderShort (as received off CHAT_MSG_ADDON, see Core.lua) currently holds council
--- status — used to validate the sender of messages that grant real authority (LC_RESULT logs a
--- permanent history entry and fires the "you win" popup; LC_ONOTE overwrites a persistent officer
--- note) before acting on them. Resolving against the live raid/party roster first, rather than
--- trusting the name string alone, matters because CHAT_MSG_ADDON also delivers whispers: a name
--- that isn't currently in our group is never authorized, even if it happens to match an entry in
--- CouncilNamesTable.
-local function IsSenderCouncil(senderShort)
-    local unit = senderShort and LC.FindUnitForShortName(senderShort)
+-- Whether senderKey (already resolved off CHAT_MSG_ADDON's sender, see Core.lua) currently holds
+-- council status — used to validate the sender of messages that grant real authority (LC_RESULT
+-- logs a permanent history entry and fires the "you win" popup; LC_ONOTE overwrites a persistent
+-- officer note) before acting on them. Resolving to a live unit first, rather than trusting the
+-- key alone, matters because CHAT_MSG_ADDON also delivers whispers: someone not currently in our
+-- group is never authorized, even if their key happens to match an entry in CouncilNamesTable.
+local function IsSenderCouncil(senderKey)
+    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     if UnitIsGroupLeader(unit) then return true end
-    if LC.CouncilNamesTable[senderShort:lower()] == true then return true end
-    -- Also match by Northern Sky Raid Tools nickname, same reasoning as IsCouncil above.
-    local nick = KART.GetNickname(unit)
-    return nick ~= nil and LC.CouncilNamesTable[nick] == true
+    return LC.CouncilNamesTable[senderKey] == true
 end
 
 local function GetChannel()
@@ -210,11 +202,9 @@ end
 -- ("kandera") instead of re-typing the field whenever that person switches characters. Every alt
 -- just needs the same NSRT nickname set, which raiders already do for the addon's other
 -- nickname-aware features.
-function LC.IsMe(configuredName)
-    if not configuredName or configuredName == "" then return false end
-    local myShort = ((UnitName("player") or ""):match("([^%-]+)") or ""):lower()
-    if myShort == configuredName then return true end
-    return KART.GetNickname("player") == configuredName
+function LC.IsMe(configuredKey)
+    if not configuredKey or configuredKey == "" then return false end
+    return (KART.Identity.ResolvePlayer("player")) == configuredKey
 end
 
 -- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
@@ -262,8 +252,8 @@ end
 -- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
 -- accepted from the actual current raid/party leader — otherwise a forged LC_CONFIG could add the
 -- sender's own name to CouncilNamesTable below and self-promote to council on every client.
-function LC.HandleConfig(payload, senderShort)
-    local unit = senderShort and LC.FindUnitForShortName(senderShort)
+function LC.HandleConfig(payload, senderKey)
+    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit or not UnitIsGroupLeader(unit) then return end
 
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
