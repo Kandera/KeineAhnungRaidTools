@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-07-23
+### Fixed
+- **Loot Council no longer confuses two players who share a character name across connected realms.** Votes, council membership, item assignments, and officer notes are now tracked per player.
+
 ## [2.5.0] - 2026-07-23
 ### Fixed
 - **Loot Council session state (session on/off, min-quality, vote labels, opt-in rolls) now syncs immediately when you join or `/reload`**, instead of only updating on the next roster change.
