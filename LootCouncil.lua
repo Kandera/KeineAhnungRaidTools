@@ -1106,7 +1106,7 @@ function LC.BuildSettingsPanel(parent)
     boxDivider:SetPoint("TOPRIGHT", -8, -38) -- Y overridden by layoutRaidBox(); X stays fixed
 
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
-        raidBox, L.LC_SET_VOTE_TIMER, 5, 60, "lcVoteSeconds",
+        raidBox, L.LC_SET_VOTE_TIMER, 5, 180, "lcVoteSeconds",
         -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
