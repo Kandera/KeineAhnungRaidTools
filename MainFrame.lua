@@ -304,6 +304,7 @@ local function StartCapture(btn)
     end)
 end
 
+local kbRowLabels = {}
 for i, action in ipairs(KART.KeybindActions) do
     local yOff = -38 - (i - 1) * 30
 
@@ -311,6 +312,7 @@ for i, action in ipairs(KART.KeybindActions) do
     label:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, yOff)
     label:SetText(kbLabels[action.key])
     table.insert(KART.DynamicLabels, label)
+    kbRowLabels[action.key] = label
 
     -- KART_Settings doesn't exist yet at this point in addon load (see load-order note above) —
     -- use the static placeholder; Step 2 below syncs the real value once ADDON_LOADED fires.
@@ -776,3 +778,85 @@ function KART.JumpToSearchResult(entry)
 
     KART.HideSearchPopout()
 end
+
+-- Re-applies every static text in this file from KART.L once the saved language is known
+-- (see KART.RegisterLocaleRefresher in Utils.lua). Dynamic texts (BtnFont/BtnLang/BtnProfile
+-- labels, keybind button captions, strata slider value) are handled by KART.SyncSettingsToUI.
+KART.RegisterLocaleRefresher(function()
+    local L = KART.L
+
+    -- Sidebar tabs + fixed header titles
+    KART.BtnPromote.text:SetText(L.TAB_PROMOTE)
+    KART.BtnRaidlead.text:SetText(L.TAB_RAIDLEAD)
+    KART.BtnBuffCheck.text:SetText(L.TAB_BUFFCHECK)
+    KART.BtnLootCouncil.text:SetText(L.TAB_LOOTCOUNCIL)
+    KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
+    KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
+    KART.TabTitles[1]:SetText(L.TAB_PROMOTE)
+    KART.TabTitles[2]:SetText(L.LABEL_RAIDLEAD_TOOLS)
+    KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
+    KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
+    -- TabTitles[5]/[6] belong to LootCouncil.lua / Invite.lua and are refreshed there.
+
+    -- Raidlead tab
+    KART.CbActivate.text:SetText(L.SET_RL_ACTIVATE)   KART.CbActivate.tooltipText = L.DESC_RL_ACTIVATE
+    KART.CbLock.text:SetText(L.SET_RL_LOCK)           KART.CbLock.tooltipText = L.DESC_RL_LOCK
+    KART.CbAutoHide.text:SetText(L.SET_RL_AUTOHIDE)   KART.CbAutoHide.tooltipText = L.DESC_RL_AUTOHIDE
+    KART.PullSlider.title:SetText(L.SET_PULL_TIMER)   KART.PullSlider.tooltipText = L.DESC_PULL_TIMER
+    kbTitle:SetText(L.LABEL_RL_KEYBINDS)
+    local kbKeyByAction = {
+        readyCheck = "KB_READYCHECK", clearWorldMarkers = "KB_CLEARWM",
+        pullTimer = "KB_PULLTIMER", buffCheckToggle = "KB_BUFFCHECK",
+    }
+    for actionKey, label in pairs(kbRowLabels) do
+        label:SetText(L[kbKeyByAction[actionKey]])
+    end
+    for _, btn in pairs(KART.KeybindButtons) do
+        btn.tooltipText = L.DESC_KEYBINDS
+    end
+
+    -- BuffCheck tab
+    KART.CbBcModuleEnabled.text:SetText(L.SET_BC_MODULE_ENABLED)  KART.CbBcModuleEnabled.tooltipText = L.DESC_BC_MODULE_ENABLED
+    KART.CbShowBuffCheck.text:SetText(L.SET_BC_READYCHECK)        KART.CbShowBuffCheck.tooltipText = L.DESC_BC_READYCHECK
+    KART.CbGrayOffline.text:SetText(L.SET_GRAY_OFFLINE)           KART.CbGrayOffline.tooltipText = L.DESC_GRAY_OFFLINE
+    KART.BtnBuffPreview.text:SetText(L.BTN_BUFF_PREVIEW)
+    KART.SldBuffCheckAlpha.title:SetText(L.SET_BC_ALPHA)          KART.SldBuffCheckAlpha.tooltipText = L.DESC_BC_ALPHA
+    KART.SldCombatDelay.title:SetText(L.SET_BC_COMBAT_DELAY)      KART.SldCombatDelay.tooltipText = L.DESC_BC_COMBAT_DELAY
+
+    -- Automation tab
+    promLabel:SetText(L.LABEL_PROMOTE_NAMES)
+    invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
+    KART.CbAutoRaid.text:SetText(L.SET_AUTO_RAID)                 KART.CbAutoRaid.tooltipText = L.DESC_AUTO_RAID
+    KART.CbInviteViaGuildChat.text:SetText(L.SET_INVITE_VIA_GUILD_CHAT)
+    KART.CbInviteViaGuildChat.tooltipText = L.DESC_INVITE_VIA_GUILD_CHAT
+    alTitle:SetText(L.LABEL_AUTOLOG)
+    KART.CbAlEnabled.text:SetText(L.SET_AL_ENABLED)               KART.CbAlEnabled.tooltipText = L.DESC_AL_ENABLED
+    KART.CbAlRaidLFR.text:SetText(L.SET_AL_RAID_LFR)
+    KART.CbAlRaidNormal.text:SetText(L.SET_AL_RAID_NORMAL)
+    KART.CbAlRaidHeroic.text:SetText(L.SET_AL_RAID_HEROIC)
+    KART.CbAlRaidMythic.text:SetText(L.SET_AL_RAID_MYTHIC)
+    KART.CbAlMythicPlus.text:SetText(L.SET_AL_MPLUS)
+    KART.CbAlDungeons.text:SetText(L.SET_AL_DUNGEONS)
+    KART.CbAlDelves.text:SetText(L.SET_AL_DELVES)
+    KART.SldAlMinKey.title:SetText(L.SET_AL_MIN_KEY)              KART.SldAlMinKey.tooltipText = L.DESC_AL_MIN_KEY
+
+    -- Settings tab
+    KART.CbMinimap.text:SetText(L.SET_MINIMAP)                    KART.CbMinimap.tooltipText = L.DESC_MINIMAP
+    KART.SldUiScale.title:SetText(L.SET_UI_SCALE)                 KART.SldUiScale.tooltipText = L.DESC_UI_SCALE
+    KART.SldBgAlpha.title:SetText(L.SET_BG_ALPHA)                 KART.SldBgAlpha.tooltipText = L.DESC_BG_ALPHA
+    KART.SldFrameStrata.title:SetText(L.SET_FRAME_STRATA)         KART.SldFrameStrata.tooltipText = L.DESC_FRAME_STRATA
+    KART.SldMenuSize.title:SetText(L.LABEL_FONT_SIZE_MENU)        KART.SldMenuSize.tooltipText = L.DESC_MENU_SIZE
+    KART.SldContentSize.title:SetText(L.LABEL_FONT_SIZE_CONTENT)  KART.SldContentSize.tooltipText = L.DESC_CONTENT_SIZE
+    KART.BtnFont.tooltipText = L.DESC_SELECT_FONT
+    KART.BtnLang.tooltipText = L.DESC_LANGUAGE
+    KART.BtnAccentColor.text:SetText(L.BTN_ACCENT_COLOR)          KART.BtnAccentColor.tooltipText = L.DESC_ACCENT_COLOR
+    KART.BtnReset.text:SetText(L.BTN_RESET)                       KART.BtnReset.tooltipText = L.DESC_RESET
+    profTitle:SetText(L.LABEL_PROFILES)
+    KART.BtnProfileSaveNew.text:SetText(L.BTN_PROFILE_SAVE_NEW)   KART.BtnProfileSaveNew.tooltipText = L.DESC_PROFILE_SAVE_NEW
+    KART.BtnProfileSave.text:SetText(L.BTN_PROFILE_SAVE)          KART.BtnProfileSave.tooltipText = L.DESC_PROFILE_SAVE
+    KART.BtnProfileDelete.text:SetText(L.BTN_PROFILE_DELETE)      KART.BtnProfileDelete.tooltipText = L.DESC_PROFILE_DELETE
+
+    -- Header search
+    searchBtn.text:SetText(L.BTN_SEARCH)
+    searchBtn.tooltipText = L.DESC_SEARCH
+end)
