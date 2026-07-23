@@ -219,10 +219,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC then KART.LC.OnStartLootRoll(arg1) end
 
     elseif event == "TRADE_SHOW" then
-        if KART.LC then KART.LC.OnTradeShow() end
+        if KART.LC then KART.LC.Trade.OnTradeShow() end
 
     elseif event == "TRADE_CLOSED" then
-        if KART.LC then KART.LC.OnTradeClosed() end
+        if KART.LC then KART.LC.Trade.OnTradeClosed() end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
@@ -392,7 +392,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 9) == "LC_ONOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.OfficerNotes.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleResult(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Trade.HandleResult(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 12) == "LC_HIST_REQ:" then

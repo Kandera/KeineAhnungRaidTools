@@ -21,6 +21,7 @@ BuffChecker.lua
 LootCouncil.lua
 LootCouncilOfficerNotes.lua
 LootCouncilVote.lua
+LootCouncilTrade.lua
 Droptimizer.lua
 LootHistory.lua
 Invite.lua
