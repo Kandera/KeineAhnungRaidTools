@@ -160,6 +160,13 @@ function Vote.RefreshVoteListRows()
         if LC.voteListFrame then LC.voteListFrame:Hide() end
         return
     end
+    if #Vote.GetVisibleRolls() == 0 then
+        -- Every remaining roll is voted-and-hidden (lcVotedItemDisplay == "hide") — the batch
+        -- itself isn't done (LC.voteListRolls is still non-empty, so showAllOverride must NOT
+        -- reset here), there's just nothing left to show unless/until /kart showall runs.
+        if LC.voteListFrame then LC.voteListFrame:Hide() end
+        return
+    end
     if not LC.voteListFrame then Vote.CreateVoteList() end
     local f = LC.voteListFrame
 
