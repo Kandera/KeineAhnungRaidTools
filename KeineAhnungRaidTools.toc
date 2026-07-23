@@ -20,6 +20,7 @@ Profiles.lua
 BuffChecker.lua
 LootCouncil.lua
 LootCouncilOfficerNotes.lua
+LootCouncilVote.lua
 Droptimizer.lua
 LootHistory.lua
 Invite.lua

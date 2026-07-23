@@ -384,11 +384,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 9) == "LC_START:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10)) end
                 elseif msg:sub(1, 8) == "LC_VOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 8) == "LC_ROLL:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleRoll(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleRoll(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 9) == "LC_CVOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleCouncilVote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleCouncilVote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 9) == "LC_ONOTE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.OfficerNotes.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 10) == "LC_RESULT:" then
