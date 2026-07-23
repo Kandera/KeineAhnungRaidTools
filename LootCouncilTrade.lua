@@ -370,6 +370,30 @@ local function GetItemString(link)
     return LC.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
 end
 
+-- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
+-- only reliable moment to read them, since the trade frame may already be tearing down by the
+-- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
+-- (bonus-ID aware, see GetItemString) so this composes correctly with Trade.OnTradeClosed below.
+LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
+
+function Trade.OnTradeAcceptUpdate()
+    wipe(LC.tradeWindowItemStrings)
+    for i = 1, 6 do -- MAX_TRADE_ITEMS - 1, fixed by the trade UI (slot 6 is "will not be traded")
+        local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
+        local itemString = GetItemString(link)
+        if itemString then LC.tradeWindowItemStrings[itemString] = true end
+    end
+end
+
+-- Blizzard's own explicit trade-succeeded signal (LE_GAME_ERR_TRADE_COMPLETE) — a direct, first-
+-- party confirmation rather than inferring success from bag contents. Only records that *a* trade
+-- completed; Trade.OnTradeClosed cross-references LC.tradeWindowItemStrings to know *which* items.
+function Trade.OnTradeInfoMessage(msgID)
+    if msgID == LE_GAME_ERR_TRADE_COMPLETE then ---@diagnostic disable-line: undefined-global
+        LC.tradeJustSucceeded = true
+    end
+end
+
 local function FindItemInBags(itemLink)
     local wantString = GetItemString(itemLink)
     if not wantString then return nil end
@@ -440,29 +464,39 @@ end
 -- still there, nothing happened and the entry stays pending so the next trade attempt retries it.
 function Trade.OnTradeClosed()
     local partnerKey = LC.currentTradePartnerKey
+    local tradeSucceeded = LC.tradeJustSucceeded
     LC.currentTradePartnerKey = nil
-    if not partnerKey then return end
+    LC.tradeJustSucceeded = nil
+    if not partnerKey then wipe(LC.tradeWindowItemStrings) return end
 
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        -- Only treat "not found in bags" as "trade completed" for real, resolved item links.
-        -- A "???" placeholder entry (async item-link resolution still pending) would always
-        -- report "not found" since the placeholder is not a valid item ID to search bags for,
-        -- so we'd falsely mark it completed. Leave such entries alone; the user's manual
-        -- "done" checkmark button remains available as the fallback for that edge case.
-        if entry.winnerKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink) then
-            Trade.RemovePendingTrade(entry.rollID)
+        if entry.winnerKey == partnerKey then
+            -- Primary signal: Blizzard confirmed a trade completed, and this exact item (bonus
+            -- IDs included) was one of the items we placed in it.
+            local itemString = GetItemString(entry.itemLink)
+            local confirmedByTrade = tradeSucceeded and itemString and LC.tradeWindowItemStrings[itemString]
+            -- Fallback signal: the item is simply gone from our bags. Only trusted for a real,
+            -- resolved link — see the "???" placeholder note this replaces.
+            local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
+            if confirmedByTrade or confirmedByBags then
+                Trade.RemovePendingTrade(entry.rollID)
+            end
         end
     end
 
-    -- Mirror check for the recipient side: if I just traded with the lootmaster and the item I
-    -- was owed is now in MY bags, the trade succeeded from my end too.
+    -- Mirror check for the recipient side (Task 5's loop) — deliberately left as bag-scan-only.
+    -- This task's stated scope (see the Root cause section above) is only the lootmaster-side
+    -- signal; giving the recipient side the same UI_INFO_MESSAGE-based upgrade is a reasonable
+    -- follow-up but wasn't asked for here — flag it rather than silently expanding scope.
     for i = #(LC.owedToMe or {}), 1, -1 do
         local entry = LC.owedToMe[i]
         if entry.lootmasterKey == partnerKey and LC.IsRealItemLink(entry.itemLink) and FindItemInBags(entry.itemLink) then
             Trade.RemoveOwedItem(entry.rollID)
         end
     end
+
+    wipe(LC.tradeWindowItemStrings)
 end
 
 function Trade.ShowWinnerNotification(itemLink)

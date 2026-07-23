@@ -19,6 +19,8 @@ frame:RegisterEvent("CHALLENGE_MODE_START")
 frame:RegisterEvent("START_LOOT_ROLL")
 frame:RegisterEvent("TRADE_SHOW")
 frame:RegisterEvent("TRADE_CLOSED")
+frame:RegisterEvent("TRADE_ACCEPT_UPDATE")
+frame:RegisterEvent("UI_INFO_MESSAGE")
 
 -- DataBroker Object für Minimap und Compartment
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
@@ -228,6 +230,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "TRADE_CLOSED" then
         if KART.LC then KART.LC.Trade.OnTradeClosed() end
+
+    elseif event == "TRADE_ACCEPT_UPDATE" then
+        if KART.LC then KART.LC.Trade.OnTradeAcceptUpdate() end
+
+    elseif event == "UI_INFO_MESSAGE" then
+        if KART.LC then KART.LC.Trade.OnTradeInfoMessage(arg1) end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
