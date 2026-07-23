@@ -2,6 +2,7 @@ local addonName, KART = ...
 
 KART.LH = KART.LH or {}
 local LH = KART.LH
+local LC = KART.LC
 
 LH.filters = { player = nil, reason = nil, search = "" }
 
@@ -43,7 +44,7 @@ end
 -- history export, so the result can be pasted into any tool built to read an RCLootCouncil
 -- export (e.g. wowaudit). KART doesn't track everything RCLootCouncil does though — boss,
 -- instance name, vote counts, replaced-gear links and the assigning loot master aren't logged
--- by LC.LogHistory — so those fields are exported empty/zeroed rather than fabricated.
+-- by LH.LogHistory — so those fields are exported empty/zeroed rather than fabricated.
 -- Respects the history window's current player/reason/search filters, same as RCLootCouncil's
 -- own export (which only exports what's currently visible).
 function LH.BuildRCLootCouncilJSON()
@@ -597,5 +598,160 @@ function LH.Toggle()
     else
         LH.Refresh()
         LH.historyWindow:Show()
+    end
+end
+
+-- =====================================================================
+--  Loot History  (SavedVariable: KART_LootHistory)
+-- =====================================================================
+
+local MAX_HISTORY_ENTRIES = 500
+
+-- classFile is captured on a best-effort basis (only known while the raider is in range/group).
+-- colorDef (optional) is the button definition {r,g,b,...} the reason came from; stored so the
+-- history keeps its original color even if button labels/colors are changed later.
+-- Difficulty is captured locally on whichever client logs the entry (assigner or synced receiver),
+-- since every client in the same instance sees the same difficulty.
+function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID)
+    KART_LootHistory = KART_LootHistory or {}
+    local now = time()
+
+    -- Guards against double-logging the same win if a redelivered/duplicate LC_RESULT addon
+    -- message ever reaches this client twice (HandleResult has no dedup of its own, unlike the
+    -- history catch-up sync path in HandleHistoryEntry below). Only checks the most recent entries
+    -- within the last few seconds — a genuine duplicate would land back-to-back, whereas a real
+    -- re-roll of the exact same item to the exact same winner minutes later is a separate event.
+    for i = #KART_LootHistory, math.max(1, #KART_LootHistory - 3), -1 do
+        local e = KART_LootHistory[i]
+        if e.item == (itemLink or "") and e.winner == (winnerDisplayName or "") and e.reason == (reason or "")
+           and now - (e.time or 0) < 5 then
+            return
+        end
+    end
+
+    -- A reassignment (LC.AssignWinner called again for a rollID that was already assigned) must
+    -- replace its previous history entry, not sit alongside it — otherwise the same physical item
+    -- shows up twice in history with two different winners.
+    if rollID then
+        for i = #KART_LootHistory, 1, -1 do
+            if KART_LootHistory[i].rollID == rollID and KART_LootHistory[i].item == (itemLink or "") then
+                table.remove(KART_LootHistory, i)
+                break
+            end
+        end
+    end
+
+    local _, _, _, difficultyName = GetInstanceInfo()
+    table.insert(KART_LootHistory, {
+        time       = now,
+        item       = itemLink or "",
+        winner     = winnerDisplayName or "",
+        reason     = reason or "",
+        class      = classFile,
+        color      = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
+        difficulty = difficultyName or "",
+        rollID     = rollID,
+    })
+    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
+        table.remove(KART_LootHistory, 1)
+    end
+    if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+        KART.LH.Refresh()
+    end
+end
+
+-- =====================================================================
+--  Loot History catch-up sync (silent — never touches chat, addon-channel only)
+-- =====================================================================
+-- When someone rejoins a raid after missing a session, their KART_LootHistory is missing whatever
+-- was assigned while they were away. On join, they broadcast the timestamp of their newest known
+-- entry; any peer who has newer entries whispers just those back (addon channel, invisible to the
+-- player) after a small random delay so several peers answering at once don't all fire at exactly
+-- the same instant. Capped and time-scoped to keep this cheap even after long absences.
+
+local HISTORY_SYNC_MAX_ENTRIES = 30
+local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
+
+function LH.RequestHistorySync()
+    local latest = 0
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if e.time and e.time > latest then latest = e.time end
+    end
+    LC.SendLC("LC_HIST_REQ:" .. latest)
+end
+
+-- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
+-- never a visible chat message) if it actually has entries the requester is missing.
+function LH.HandleHistoryRequest(payload, senderFullName)
+    local sinceTime = tonumber(payload)
+    if not sinceTime or not senderFullName then return end
+
+    local cutoff = time() - HISTORY_SYNC_MAX_AGE
+    local toSend = {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if (e.time or 0) > sinceTime and (e.time or 0) > cutoff then
+            table.insert(toSend, e)
+        end
+    end
+    if #toSend == 0 then return end
+
+    table.sort(toSend, function(a, b) return (a.time or 0) < (b.time or 0) end)
+    if #toSend > HISTORY_SYNC_MAX_ENTRIES then
+        local trimmed = {}
+        for i = #toSend - HISTORY_SYNC_MAX_ENTRIES + 1, #toSend do
+            table.insert(trimmed, toSend[i])
+        end
+        toSend = trimmed
+    end
+
+    C_Timer.After(math.random() * 2, function()
+        for _, e in ipairs(toSend) do
+            local colorPacked = ""
+            if e.color then
+                colorPacked = string.format("%d,%d,%d",
+                    math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
+            end
+            -- itemLink is last on purpose: item links are full of colons internally.
+            local msg = string.format("LC_HIST_ENTRY:%d:%s:%s:%s:%s:%s:%s",
+                e.time or 0, e.winner or "", e.difficulty or "", e.reason or "", e.class or "", colorPacked, e.item or "")
+            C_ChatInfo.SendAddonMessage("KART", msg, "WHISPER", senderFullName)
+        end
+    end)
+end
+
+-- Runs on the requester when a peer whispers back a missing entry.
+function LH.HandleHistoryEntry(payload)
+    local t, winner, difficulty, reason, classFile, colorPacked, itemLink =
+        payload:match("^(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
+    t = tonumber(t)
+    if not t or not winner then return end
+
+    KART_LootHistory = KART_LootHistory or {}
+    for _, e in ipairs(KART_LootHistory) do
+        if e.time == t and e.winner == winner and e.item == itemLink then
+            return -- already have it (e.g. another peer answered first)
+        end
+    end
+
+    local color
+    if colorPacked and colorPacked ~= "" then
+        local cr, cg, cb = colorPacked:match("^(%d+),(%d+),(%d+)$")
+        if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
+    end
+
+    table.insert(KART_LootHistory, {
+        time       = t,
+        item       = itemLink or "",
+        winner     = winner,
+        reason     = reason or "",
+        class      = (classFile ~= "" and classFile) or nil,
+        color      = color,
+        difficulty = difficulty or "",
+    })
+    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
+        table.remove(KART_LootHistory, 1)
+    end
+    if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+        KART.LH.Refresh()
     end
 end

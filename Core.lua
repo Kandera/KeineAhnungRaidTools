@@ -396,9 +396,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg:sub(1, 10) == "LC_CONFIG:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
                 elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryRequest(msg:sub(13), sender) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LH.HandleHistoryRequest(msg:sub(13), sender) end
                 elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleHistoryEntry(msg:sub(15)) end
+                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LH.HandleHistoryEntry(msg:sub(15)) end
                 elseif msg:sub(1, 16) == "LC_SYNC_REQUEST:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleSyncRequest(msg:sub(17), sender, shortName) end
                 elseif msg == "LC_SYNC_ACCEPT" then
