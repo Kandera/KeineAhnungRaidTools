@@ -11,12 +11,26 @@ end
 function KART.LoadProfile(name)
     local snapshot = KART_Profiles[name]
     if not snapshot then return end
+    -- LibDBIcon holds a REFERENCE to the minimap sub-table it was registered with (Core.lua
+    -- ADDON_LOADED) — keep that table's identity across profile loads, otherwise icon position
+    -- changes are written into an orphaned table until the next reload.
+    local minimapTbl = KART_Settings.minimap
     wipe(KART_Settings)
     for k, v in pairs(KART.DeepCopy(snapshot)) do
         KART_Settings[k] = v
     end
     for k, v in pairs(KART.Defaults) do
-        if KART_Settings[k] == nil then KART_Settings[k] = v end
+        if KART_Settings[k] == nil then
+            KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
+        end
+    end
+    if minimapTbl then
+        local loaded = KART_Settings.minimap
+        wipe(minimapTbl)
+        if type(loaded) == "table" then
+            for k, v in pairs(loaded) do minimapTbl[k] = v end
+        end
+        KART_Settings.minimap = minimapTbl
     end
     KART_Settings.activeProfile = name
     KART.SyncSettingsToUI()
