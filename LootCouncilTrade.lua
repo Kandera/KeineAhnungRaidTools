@@ -182,10 +182,12 @@ function Trade.ClearRollState(rollID)
     if LC.rollLootedAt then LC.rollLootedAt[rollID] = nil end
 end
 
-function Trade.CreateTradeReminderFrame()
-    local f = CreateFrame("Frame", "KART_LCTradeReminder", UIParent, "BackdropTemplate")
+-- The "items still to trade" (lootmaster) and "items you still need to collect" (winner) windows
+-- are structurally identical — one builder and one row renderer serve both.
+local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
+    local f = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
     f:SetSize(320, 40)
-    f:SetPoint("CENTER", -220, 0)
+    f:SetPoint("CENTER", defaultX, 0)
     KART.RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -195,43 +197,35 @@ function Trade.CreateTradeReminderFrame()
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         if KART_Settings then
-            KART_Settings.lcTradeReminderPos = {x = self:GetLeft(), y = self:GetTop()}
+            KART_Settings[posKey] = {x = self:GetLeft(), y = self:GetTop()}
         end
     end)
     table.insert(UISpecialFrames, f:GetName())
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 10, -8)
-    f.title:SetText(KART.L.LC_TRADE_REMINDER_TITLE)
+    f.title:SetText(titleText)
 
     f.rows = {}
 
-    local pos = KART_Settings and KART_Settings.lcTradeReminderPos
+    local pos = KART_Settings and KART_Settings[posKey]
     if pos and type(pos) == "table" and pos.x and pos.y then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
 
-    LC.tradeReminderFrame = f
+    return f
 end
 
--- Rebuilds the reminder list from LC.pendingTrades; hides the frame entirely once it's empty.
-function Trade.RefreshTradeReminder()
-    if #LC.pendingTrades == 0 then
-        if LC.tradeReminderFrame then LC.tradeReminderFrame:Hide() end
-        return
-    end
-
-    if not LC.tradeReminderFrame then Trade.CreateTradeReminderFrame() end
-    local f = LC.tradeReminderFrame
-
-    for i, entry in ipairs(LC.pendingTrades) do
+-- Rebuilds f's rows from entries (LC.pendingTrades or LC.owedToMe). getTargetKey(entry) resolves
+-- which player this row's trade partner is; removeByRollID(rollID) is called when a row's
+-- done-button is clicked (Trade.RemovePendingTrade or Trade.RemoveOwedItem, per window).
+local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
+    for i, entry in ipairs(entries) do
         local row = f.rows[i]
         if not row then
             row = CreateFrame("Frame", nil, f)
             row:SetHeight(26)
-            row:SetPoint("LEFT", 10, 0)
-            row:SetPoint("RIGHT", -28, 0)
 
             row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.text:SetPoint("LEFT")
@@ -245,7 +239,7 @@ function Trade.RefreshTradeReminder()
             -- SetWordWrap(false) already means it doesn't reflow, only how far it can push nameBtn.
             row.text:SetWidth(160)
 
-            -- Separate, clickable element for just the winner's name — the item text above stays
+            -- Separate, clickable element for just the target's name — the item text above stays
             -- a plain FontString (no per-item action to take on it here).
             row.nameBtn = CreateFrame("Button", nil, row)
             row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
@@ -258,7 +252,7 @@ function Trade.RefreshTradeReminder()
             row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
-            row.doneBtn = CreateFrame("Button", nil, row)
+            row.doneBtn = CreateFrame("Button", nil, row) -- child of row so it hides with it
             row.doneBtn:SetSize(16, 16)
             row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
             -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
@@ -275,18 +269,18 @@ function Trade.RefreshTradeReminder()
         row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
         row:SetPoint("RIGHT", -28, 0)
         row.text:SetText(entry.itemLink or "???")
-        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.winnerKey))
+        local targetKey = getTargetKey(entry)
+        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(targetKey))
         local capturedRollID = entry.rollID
-        local capturedWinnerKey = entry.winnerKey
-        row.doneBtn:SetScript("OnClick", function() Trade.RemovePendingTrade(capturedRollID) end)
+        row.doneBtn:SetScript("OnClick", function() removeByRollID(capturedRollID) end)
         row.nameBtn:SetScript("OnClick", function()
-            local unit = capturedWinnerKey and KART.Identity.FindUnitForKey(capturedWinnerKey)
+            local unit = targetKey and KART.Identity.FindUnitForKey(targetKey)
             if not unit then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(targetKey)))
                 return
             end
             if not CheckInteractDistance(unit, 2) then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(capturedWinnerKey)))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(targetKey)))
                 return
             end
             TargetUnit(unit)
@@ -294,12 +288,25 @@ function Trade.RefreshTradeReminder()
         end)
         row:Show()
     end
-    for i = #LC.pendingTrades + 1, #f.rows do
+    for i = #entries + 1, #f.rows do
         if f.rows[i] then f.rows[i]:Hide() end
     end
 
-    f:SetHeight(8 + 26 + #LC.pendingTrades * 26 + 8)
+    f:SetHeight(8 + 26 + #entries * 26 + 8)
     f:Show()
+end
+
+-- Rebuilds the reminder list from LC.pendingTrades; hides the frame entirely once it's empty.
+function Trade.RefreshTradeReminder()
+    if #LC.pendingTrades == 0 then
+        if LC.tradeReminderFrame then LC.tradeReminderFrame:Hide() end
+        return
+    end
+    if not LC.tradeReminderFrame then
+        LC.tradeReminderFrame = CreateReminderFrame("KART_LCTradeReminder", KART.L.LC_TRADE_REMINDER_TITLE, "lcTradeReminderPos", -220)
+    end
+    RefreshReminderRows(LC.tradeReminderFrame, LC.pendingTrades,
+        function(e) return e.winnerKey end, Trade.RemovePendingTrade)
 end
 
 -- Removes rollID from LC.owedToMe, if present, and rebuilds the window.
@@ -310,39 +317,6 @@ function Trade.RemoveOwedItem(rollID)
     Trade.RefreshOwedReminder()
 end
 
-function Trade.CreateOwedReminderFrame()
-    local f = CreateFrame("Frame", "KART_LCOwedReminder", UIParent, "BackdropTemplate")
-    f:SetSize(320, 40)
-    f:SetPoint("CENTER", 220, 0)
-    KART.RegisterStrataFrame(f)
-    f:SetMovable(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
-    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    f:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        if KART_Settings then
-            KART_Settings.lcOwedReminderPos = {x = self:GetLeft(), y = self:GetTop()}
-        end
-    end)
-    table.insert(UISpecialFrames, f:GetName())
-
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    f.title:SetPoint("TOPLEFT", 10, -8)
-    f.title:SetText(KART.L.LC_OWED_REMINDER_TITLE)
-
-    f.rows = {}
-
-    local pos = KART_Settings and KART_Settings.lcOwedReminderPos
-    if pos and type(pos) == "table" and pos.x and pos.y then
-        f:ClearAllPoints()
-        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
-    end
-
-    LC.owedReminderFrame = f
-end
-
 -- Rebuilds the reminder list from LC.owedToMe; hides the frame entirely once it's empty.
 function Trade.RefreshOwedReminder()
     LC.owedToMe = LC.owedToMe or {}
@@ -350,78 +324,11 @@ function Trade.RefreshOwedReminder()
         if LC.owedReminderFrame then LC.owedReminderFrame:Hide() end
         return
     end
-
-    if not LC.owedReminderFrame then Trade.CreateOwedReminderFrame() end
-    local f = LC.owedReminderFrame
-
-    for i, entry in ipairs(LC.owedToMe) do
-        local row = f.rows[i]
-        if not row then
-            row = CreateFrame("Frame", nil, f)
-            row:SetHeight(26)
-            row:SetPoint("LEFT", 10, 0)
-            row:SetPoint("RIGHT", -28, 0)
-
-            row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.text:SetPoint("LEFT")
-            row.text:SetJustifyH("LEFT")
-            row.text:SetWordWrap(false)
-            -- Fixed max width — see the identical comment in Trade.CreateTradeReminderFrame's own
-            -- row.text for why (keeps row.nameBtn's clickable width real and predictable).
-            row.text:SetWidth(160)
-
-            row.nameBtn = CreateFrame("Button", nil, row)
-            row.nameBtn:SetPoint("LEFT", row.text, "RIGHT", 4, 0)
-            row.nameBtn:SetPoint("RIGHT")
-            row.nameBtn:SetHeight(16)
-            row.nameBtn.text = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.nameBtn.text:SetPoint("LEFT")
-            row.nameBtn.text:SetPoint("RIGHT")
-            row.nameBtn.text:SetJustifyH("LEFT")
-            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
-            row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
-
-            row.doneBtn = CreateFrame("Button", nil, row)
-            row.doneBtn:SetSize(16, 16)
-            row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
-            -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
-            -- symbol/dingbat Unicode ranges and silently render them as an empty box.
-            row.doneBtn.icon = row.doneBtn:CreateTexture(nil, "ARTWORK")
-            row.doneBtn.icon:SetAllPoints()
-            row.doneBtn.icon:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-            row.doneBtn:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT") GameTooltip:SetText(KART.L.LC_TRADE_REMINDER_DONE, 1, 1, 1) GameTooltip:Show() end)
-            row.doneBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-            f.rows[i] = row
-        end
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 10, -8 - 26 - (i - 1) * 26)
-        row:SetPoint("RIGHT", -28, 0)
-        row.text:SetText(entry.itemLink or "???")
-        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(entry.lootmasterKey))
-        local capturedRollID = entry.rollID
-        row.doneBtn:SetScript("OnClick", function() Trade.RemoveOwedItem(capturedRollID) end)
-        row.nameBtn:SetScript("OnClick", function()
-            local unit = KART.Identity.FindUnitForKey(entry.lootmasterKey)
-            if not unit then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
-                return
-            end
-            if not CheckInteractDistance(unit, 2) then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(entry.lootmasterKey)))
-                return
-            end
-            TargetUnit(unit)
-            InitiateTrade(unit)
-        end)
-        row:Show()
+    if not LC.owedReminderFrame then
+        LC.owedReminderFrame = CreateReminderFrame("KART_LCOwedReminder", KART.L.LC_OWED_REMINDER_TITLE, "lcOwedReminderPos", 220)
     end
-    for i = #LC.owedToMe + 1, #f.rows do
-        if f.rows[i] then f.rows[i]:Hide() end
-    end
-
-    f:SetHeight(8 + 26 + #LC.owedToMe * 26 + 8)
-    f:Show()
+    RefreshReminderRows(LC.owedReminderFrame, LC.owedToMe,
+        function(e) return e.lootmasterKey end, Trade.RemoveOwedItem)
 end
 
 -- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
