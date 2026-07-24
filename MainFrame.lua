@@ -271,9 +271,13 @@ kbListener:Hide()
 kbListener:EnableKeyboard(true)
 kbListener:SetPropagateKeyboardInput(false)
 
+-- The bind button currently in capture mode, if any (only one capture is active at a time).
+local kbActiveBtn
+
 local function StopCapture(activeBtn)
     kbListener:Hide()
     kbListener:SetScript("OnKeyDown", nil)
+    kbActiveBtn = nil
     if activeBtn then
         local current = KART_Settings and KART_Settings.keybinds and KART_Settings.keybinds[activeBtn.actionKey]
         activeBtn.text:SetText(current and current ~= "" and current or L.KB_NOT_BOUND)
@@ -281,6 +285,12 @@ local function StopCapture(activeBtn)
 end
 
 local function StartCapture(btn)
+    -- Cancel any capture already in progress on a different button, so its caption doesn't stay
+    -- stuck on "press a key".
+    if kbActiveBtn and kbActiveBtn ~= btn then
+        StopCapture(kbActiveBtn)
+    end
+    kbActiveBtn = btn
     btn.text:SetText(L.KB_PRESS_KEY)
     kbListener:Show()
     kbListener:SetScript("OnKeyDown", function(_, keyPressed)
@@ -303,6 +313,12 @@ local function StartCapture(btn)
         StopCapture(btn)
     end)
 end
+
+-- Cancel an in-progress capture when the panel hides (tab switch or window close) — otherwise the
+-- key listener silently resumes on reopen and binds the next keypress the player makes.
+kbCard:HookScript("OnHide", function()
+    if kbActiveBtn then StopCapture(kbActiveBtn) end
+end)
 
 local kbRowLabels = {}
 for i, action in ipairs(KART.KeybindActions) do
@@ -516,7 +532,13 @@ KART.BtnFont:SetScript("OnClick", function(self)
                 end)
             end
         else
-            rootDescription:CreateButton("Friz Quadrata", function() end)
+            -- No LibSharedMedia: only the built-in default is available — make the entry actually
+            -- apply it (set + restyle + relabel) instead of being a dead no-op button.
+            rootDescription:CreateButton("Friz Quadrata", function()
+                KART_Settings.fontName = "Friz Quadrata"
+                KART.UpdateStyles()
+                self.text:SetText(L.BTN_FONT_PREFIX .. "Friz Quadrata")
+            end)
         end
     end)
 end)
@@ -760,7 +782,7 @@ function KART.JumpToSearchResult(entry)
     local top = widget:GetTop()
     local scrollTop = scrollFrame:GetTop()
     if top and scrollTop then
-        local delta = top - scrollTop + 40
+        local delta = scrollTop - top - 40
         local maxScroll = math.max(0, scrollChild:GetHeight() - scrollFrame:GetHeight())
         local newScroll = math.max(0, math.min(scrollFrame:GetVerticalScroll() + delta, maxScroll))
         scrollFrame:SetVerticalScroll(newScroll)
@@ -774,7 +796,13 @@ function KART.JumpToSearchResult(entry)
     local r, g, b = KART.Theme.AccentColor()
     searchHighlight:SetBackdropColor(r, g, b, 0.35)
     searchHighlight:Show()
-    C_Timer.After(1.5, function() searchHighlight:Hide() end)
+    -- Generation token so jumping to a second result within 1.5s doesn't get its highlight hidden
+    -- early by the first jump's still-pending timer.
+    KART.searchHighlightGen = (KART.searchHighlightGen or 0) + 1
+    local myGen = KART.searchHighlightGen
+    C_Timer.After(1.5, function()
+        if KART.searchHighlightGen == myGen then searchHighlight:Hide() end
+    end)
 
     KART.HideSearchPopout()
 end

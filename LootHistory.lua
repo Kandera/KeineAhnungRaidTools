@@ -25,7 +25,7 @@ local function GetFilteredEntries()
         local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
         local matchSearch = true
         if LH.filters.search ~= "" then
-            matchSearch = GetItemNameFromLink(e.item):lower():find(LH.filters.search, 1, true) ~= nil
+            matchSearch = KART.CaseFold(GetItemNameFromLink(e.item)):find(LH.filters.search, 1, true) ~= nil
         end
         if matchPlayer and matchReason and matchSearch then
             table.insert(filtered, e)
@@ -52,8 +52,8 @@ end
 -- Canonical English difficulty names for JSON export, keyed by Blizzard difficultyID (see
 -- GetInstanceInfo/GetDifficultyInfo). The on-screen column stays localized; only the export is
 -- normalized to English so a mixed-language raid still produces one consistent "instance" field.
--- Entries logged before difficultyID was tracked — and entries backfilled via history sync, which
--- only carries the localized string over the wire — fall back to that stored string.
+-- Entries logged before difficultyID was tracked fall back to the stored string. History sync now
+-- carries the difficultyID over the wire, so backfilled entries are English-canonical too.
 local DIFFICULTY_EN = {
     [1]  = "Normal",          -- 5-player dungeon
     [2]  = "Heroic",          -- 5-player dungeon
@@ -322,7 +322,7 @@ function LH.CreateWindow()
     table.insert(KART.EditBoxes, searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
-        LH.filters.search = self:GetText():lower()
+        LH.filters.search = KART.CaseFold(self:GetText())
         LH.Refresh()
     end)
     f.searchBox = searchBox
@@ -424,6 +424,9 @@ function LH.CreateWindow()
 
     local scrollFrame = CreateFrame("ScrollFrame", "KART_LHScroll", scrollBG, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT"); scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
+    -- Pagination fits every page to the visible area, so there's no inner scroll — disable the
+    -- mouse wheel so it can't drag the (oversized, vestigial) child up into empty space.
+    scrollFrame:EnableMouseWheel(false)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetSize(520, 800)
@@ -682,7 +685,10 @@ local MAX_HISTORY_ENTRIES = 500
 -- history keeps its original color even if button labels/colors are changed later.
 -- Difficulty is captured locally on whichever client logs the entry (assigner or synced receiver),
 -- since every client in the same instance sees the same difficulty.
-function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID)
+-- winnerKey is the stable identity key (GUID) for the winner; winnerDisplayName is only for display.
+-- Storing the key lets the catch-up sync dedup two clients' entries for the same award even when
+-- their display names differ (NSRT nickname on one, character short name on another).
+function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
 
@@ -716,6 +722,7 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         time         = now,
         item         = itemLink or "",
         winner       = winnerDisplayName or "",
+        winnerKey    = winnerKey,
         reason       = reason or "",
         class        = classFile,
         color        = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
@@ -785,9 +792,30 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                 colorPacked = string.format("%d,%d,%d",
                     math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
             end
-            -- itemLink is last on purpose: item links are full of colons internally.
-            local msg = string.format("LC_HIST_ENTRY:%d:%s:%s:%s:%s:%s:%s",
-                e.time or 0, e.winner or "", e.difficulty or "", e.reason or "", e.class or "", colorPacked, e.item or "")
+            -- Item field is last on purpose: item links are full of colons internally, so only the
+            -- final field may contain them. winner (an NSRT nickname / free display name) and reason
+            -- are free text too — strip any colons so the fixed fields stay position-stable.
+            local winnerSafe = (e.winner or ""):gsub(":", "")
+            local reasonSafe = (e.reason or ""):gsub(":", "")
+            local winnerKey = e.winnerKey or "" -- stable identity key (GUID, no colons) for dedup
+            -- Wire difficultyID (locale-independent), not the localized name: history is
+            -- English-canonical, so the receiver derives both its own display name and the EN export
+            -- from the id. rollID lets a later reassignment replace this entry instead of duplicating,
+            -- and winnerKey lets the receiver dedup by identity rather than by (drifting) display name.
+            local msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
+                e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
+                winnerKey, winnerSafe, reasonSafe, e.item or "")
+            -- Full item links can run long (many bonus IDs + localized name); if the message would
+            -- blow the 255-byte SendAddonMessage cap, fall back to the compact, locale-independent
+            -- item string, which the receiver rebuilds into a full link.
+            if #msg > 255 then
+                local itemStr = KART.GetItemString(e.item)
+                if itemStr then
+                    msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
+                        e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
+                        winnerKey, winnerSafe, reasonSafe, itemStr)
+                end
+            end
             C_ChatInfo.SendAddonMessage("KART", msg, "WHISPER", senderFullName)
         end)
     end
@@ -798,17 +826,14 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
     if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
-    local t, winner, difficulty, reason, classFile, colorPacked, itemLink =
-        payload:match("^(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
+    local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, item =
+        payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
     t = tonumber(t)
     if not t or not winner then return end
-
-    KART_LootHistory = KART_LootHistory or {}
-    for _, e in ipairs(KART_LootHistory) do
-        if e.time == t and e.winner == winner and e.item == itemLink then
-            return -- already have it (e.g. another peer answered first)
-        end
-    end
+    diffID = tonumber(diffID); if diffID == 0 then diffID = nil end
+    rollID = tonumber(rollID); if rollID == 0 then rollID = nil end
+    if winnerKey == "" then winnerKey = nil end
+    item = item or ""
 
     local color
     if colorPacked and colorPacked ~= "" then
@@ -816,19 +841,76 @@ function LH.HandleHistoryEntry(payload, senderKey)
         if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
     end
 
+    -- The sender may have sent a bare item string (its full link was too long for one addon
+    -- message). Rebuild a full, locally-localized link so display/tooltip/icon work; if the item
+    -- isn't cached yet, store the string now and upgrade the entry in place once it loads.
+    local needsRebuild = item ~= "" and not KART.IsRealItemLink(item) and item:match("^item:") ~= nil
+    local itemLink = item
+    if needsRebuild then
+        local rebuilt = select(2, C_Item.GetItemInfo(item))
+        if rebuilt then itemLink = rebuilt end
+    end
+
+    KART_LootHistory = KART_LootHistory or {}
+    -- A reassignment carries the same rollID + item with a new winner — replace the prior entry
+    -- for this roll rather than stacking a duplicate (mirrors LH.LogHistory). Matching item too
+    -- guards against a manual rollID from a different session colliding on a different item.
+    if rollID then
+        for i = #KART_LootHistory, 1, -1 do
+            if KART_LootHistory[i].rollID == rollID and KART_LootHistory[i].item == itemLink then
+                table.remove(KART_LootHistory, i)
+                break
+            end
+        end
+    end
+    -- Skip if we already have this award. Compare by the stable identity key + locale-independent
+    -- item string (not display name + full link, which differ between DE/EN clients), and allow a
+    -- few seconds of clock skew between the two clients that logged it.
+    local incomingStr = KART.GetItemString(itemLink)
+    for _, e in ipairs(KART_LootHistory) do
+        local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
+        local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+        if sameWinner and sameItem and math.abs((e.time or 0) - t) <= 5 then
+            return -- already have it (e.g. another peer answered first)
+        end
+    end
+
     table.insert(KART_LootHistory, {
-        time       = t,
-        item       = itemLink or "",
-        winner     = winner,
-        reason     = reason or "",
-        class      = (classFile ~= "" and classFile) or nil,
-        color      = color,
-        difficulty = difficulty or "",
+        time         = t,
+        item         = itemLink or "",
+        winner       = winner,
+        winnerKey    = winnerKey,
+        reason       = reason or "",
+        class        = (classFile ~= "" and classFile) or nil,
+        color        = color,
+        difficulty   = diffID and (GetDifficultyInfo(diffID) or "") or "",
+        difficultyID = diffID,
+        rollID       = rollID,
     })
     if #KART_LootHistory > MAX_HISTORY_ENTRIES then
         table.remove(KART_LootHistory, 1)
     end
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
         KART.LH.Refresh()
+    end
+
+    -- Item wasn't cached — once it loads, swap the bare string for a real link in place.
+    if needsRebuild and not KART.IsRealItemLink(itemLink) then
+        local itemID = tonumber(item:match("^item:(%d+)"))
+        if itemID then
+            Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
+                local full = select(2, C_Item.GetItemInfo(item))
+                if not full then return end
+                for _, e in ipairs(KART_LootHistory or {}) do
+                    if e.time == t and e.winner == winner and e.item == item then
+                        e.item = full
+                        break
+                    end
+                end
+                if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+                    KART.LH.Refresh()
+                end
+            end)
+        end
     end
 end

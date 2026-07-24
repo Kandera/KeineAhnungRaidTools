@@ -12,7 +12,9 @@ local function NormalizeKey(name, realm)
     if not name or name == "" then return nil end
     realm = (realm and realm ~= "") and realm or GetRealmName()
     if not realm or realm == "" then return nil end
-    return (name .. "-" .. realm):lower()
+    -- CaseFold (not :lower()) so umlaut names fold the same way the index is built below — a name
+    -- starting with "Ö" would otherwise never match its lowercased "ö" cache key.
+    return KART.CaseFold(name .. "-" .. realm)
 end
 
 function DT.RebuildIndex()
@@ -24,7 +26,7 @@ function DT.RebuildIndex()
     end
     for key, candidates in pairs(cache.players) do
         if type(key) == "string" and type(candidates) == "table" then
-            DT.index[key:lower()] = candidates
+            DT.index[KART.CaseFold(key)] = candidates
         end
     end
     DT.RefreshStatusLabel()
@@ -37,7 +39,7 @@ local function FindPlayerCandidates(shortName)
     local ownRealmKey = NormalizeKey(shortName, GetRealmName())
     if ownRealmKey and DT.index[ownRealmKey] then return DT.index[ownRealmKey] end
 
-    local shortLower = shortName:lower()
+    local shortLower = KART.CaseFold(shortName)
     local match, matchCount = nil, 0
     for key, candidates in pairs(DT.index) do
         if key:match("^([^%-]+)") == shortLower then
@@ -57,7 +59,10 @@ function DT.GetGainPercent(shortName, itemLink)
 
     local itemId = C_Item.GetItemInfoInstant(itemLink)
     if not itemId then return nil end
-    local _, _, _, actualIlvl = C_Item.GetItemInfo(itemLink)
+    -- Effective (upgraded) item level of this specific link, not GetItemInfo's 4th return, which is
+    -- the item's BASE ilvl — the tie-break below needs the actual rolled ilvl to pick the closest
+    -- sim candidate when the same item was simmed at several upgrade tracks.
+    local actualIlvl = C_Item.GetDetailedItemLevelInfo(itemLink)
 
     local candidates = FindPlayerCandidates(shortName)
     if not candidates then return nil end
@@ -161,6 +166,14 @@ function DT.BuildSyncStatus(parent)
     table.insert(KART.DynamicLabels, hint)
 
     DT.RefreshStatusLabel()
+
+    -- The "synced Xm ago" relative time is otherwise only recomputed on rebuild/locale change and
+    -- would sit stale while the panel stays open — refresh it periodically while it's visible.
+    if not DT.statusTicker then
+        DT.statusTicker = C_Timer.NewTicker(60, function()
+            if DT.statusLabel and DT.statusLabel:IsVisible() then DT.RefreshStatusLabel() end
+        end)
+    end
 
     KART.RegisterLocaleRefresher(function()
         local Lx = KART.L

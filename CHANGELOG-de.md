@@ -11,6 +11,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die gesamte Oberfläche folgt jetzt der Spracheinstellung** — inklusive Hauptfenster, Einstellungen und Tooltips.
 - **Council-Mitglieder können jetzt selbst abstimmen.**
 - **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
+- **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
 - **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.
@@ -24,6 +25,28 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Minimap-Icon-Position wird nach Profilwechsel wieder korrekt gespeichert.**
 - **Raid-Marker-Buttons lösen nicht mehr doppelt pro Klick aus.**
 - **Übriggebliebener Haken-Button beim Abhaken von Trade-Erinnerungen behoben.**
+- **Der Loot-Verlauf dupliziert keine Einträge mehr zwischen deutschen und englischen Clients**, und die Schwierigkeit wird jetzt einheitlich auf Englisch gespeichert.
+- **Fern- und Einhandwaffen zeigen jetzt das getragene Item** im Council-Panel.
+- **Tastenbelegungen greifen jetzt auch nach einem Reload oder Login im Kampf.**
+- **Die Einstellungssuche springt jetzt zur passenden Einstellung.**
+- **Battle.net-Flüster-Einladungen laden jetzt tatsächlich ein.**
+- **Auto-Umwandlung in einen Raid greift jetzt bei voller 5er-Gruppe.**
+- **Manuelle Rolls nach einem `/reload` zeigen kein altes Item mehr.**
+- **Die "du bekommst noch"-Erinnerung verschwindet jetzt bei Neuvergabe** und stapelt keine Duplikate mehr.
+- **Ein Klick auf den Trade-Partner im Kampf meldet nicht mehr fälschlich "außer Reichweite".**
+- **Beide Kopien eines doppelten Drops werden jetzt in den Trade gelegt.**
+- **Spieler werden nur noch als veraltet markiert, wenn sie wirklich eine ältere Version haben.**
+- **Himmelsfurie wird jetzt auf deutschen Clients erkannt.**
+- **Die Verlaufssuche findet jetzt auch Items, deren Name mit einem Umlaut beginnt.**
+- **Der Import einer Boss-Liste dupliziert nach dem Login nicht mehr jeden Boss.**
+- **Buff-Check-Meldungen listen jetzt die richtigen fehlenden Spieler.**
+- **Raid-Assistenten können jetzt Spieler für einen Boss entfernen** — wie beim Einladen.
+- **Uninvite trifft jetzt den richtigen Charakter**, wenn zwei über Realms hinweg denselben Namen haben.
+- **Der Loot-Council-Schriftgrößen-Regler überlappt nicht mehr die Rolls-Checkbox.**
+- **Ready-Check- und Buff-Check-Fenster schließen nicht mehr zu früh**, wenn sie kurz hintereinander erneut ausgelöst werden.
+- **Die Tastenbelegungs-Aufnahme hängt nicht mehr am falschen Button** und läuft nach dem Schließen nicht weiter.
+- **Droptimizer wählt jetzt den richtigen Upgrade-Track**, wenn ein Item auf mehreren simuliert wurde.
+- **Officer-Notizen wachsen nicht mehr unbegrenzt.**
 
 ### Geändert
 - **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.

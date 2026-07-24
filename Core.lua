@@ -31,7 +31,7 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
         if button == "LeftButton" then
             if KART.MainFrame:IsShown() then KART.MainFrame:Hide() else KART.MainFrame:Show() KART.ShowTab(1) end
         elseif button == "RightButton" then
-            if KART.MainFrame then KART.MainFrame:Show() KART.ShowTab(4) end
+            KART.MainFrame:Show() KART.ShowTab(4) -- MainFrame loads before Core (.toc), always exists here
         end
     end,
     OnTooltipShow = function(tooltip)
@@ -49,7 +49,6 @@ function KART.SyncSettingsToUI()
     KART.UpdateCache()
     if KART.LC and KART.LC.BroadcastRaidConfig then KART.LC.BroadcastRaidConfig() end
     if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
-    KART.UpdateStyles()
 
     -- Sammel-Initialisierung der UI Elemente
     local settingsMap = {}
@@ -96,12 +95,15 @@ function KART.SyncSettingsToUI()
     if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
 
     for widget, key in pairs(settingsMap) do
-        if widget then
-            if widget.SetChecked then widget:SetChecked(KART_Settings[key])
-            elseif widget.SetValue then widget:SetValue(KART_Settings[key])
-            elseif widget.SetText then widget:SetText(KART_Settings[key]) end
-        end
+        -- Every entry above was inserted behind its own existence guard, so widget is always set.
+        if widget.SetChecked then widget:SetChecked(KART_Settings[key])
+        elseif widget.SetValue then widget:SetValue(KART_Settings[key])
+        elseif widget.SetText then widget:SetText(KART_Settings[key]) end
     end
+    -- Refresh styles AFTER the widgets have their values, so toggle-switch visuals (which only
+    -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
+    -- switch, which has no separate UpdateStyles of its own the way ADDON_LOADED does.
+    KART.UpdateStyles()
     -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
     if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= "" then
         local count = KART.WU.ParseImport(KART_Settings.wuImportText)
@@ -244,6 +246,31 @@ local PREFIX_HANDLERS = {
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
     end },
+    REQ_EQUIP = { lc = true, fn = function(payload, ctx)
+        -- A council member's open panel is asking what we've got equipped in the rolled item's
+        -- slot (payload = equipLoc token). Reply with our own link so they can show the comparison
+        -- for a raider they can't inspect locally. Modeled on REQ_GEAR, but carries a payload so it
+        -- lives here in PREFIX_HANDLERS (unlike the payload-less REQ_OIL/REQ_ILVL/REQ_GEAR above).
+        if not IsInGroup() then return end
+        local link = KART.LC and KART.LC.Council and KART.LC.Council.GetOwnEquippedLink(payload)
+        if link then
+            C_ChatInfo.SendAddonMessage("KART", "EQUIP:" .. payload .. ":" .. link, IsInRaid() and "RAID" or "PARTY")
+        end
+    end },
+    EQUIP = { lc = true, fn = function(payload, ctx)
+        -- Reply to our REQ_EQUIP: equipLoc token, then the sender's equipped link (which itself
+        -- contains colons, so it must be the rest of the payload). Cached per short name + slot,
+        -- read by Council.GetEquippedForUnit as the fallback for un-inspectable raid members.
+        local equipLoc, link = payload:match("^([^:]+):(.+)$")
+        if equipLoc and link then
+            KART.EquipCache = KART.EquipCache or {}
+            KART.EquipCache[ctx.shortName] = KART.EquipCache[ctx.shortName] or {}
+            KART.EquipCache[ctx.shortName][equipLoc] = link
+            if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+                KART.LC.Council.RefreshCouncilRows()
+            end
+        end
+    end },
     VERSION          = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, false) end },
     ANNOUNCE_VERSION = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, true) end },
     LC_ACTIVE       = { lc = true, fn = function(payload, ctx) KART.LC.HandleActive(payload, SenderKey(ctx)) end },
@@ -284,6 +311,25 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         for guid, entry in pairs(KART_PlayerCache) do
             if (entry.lastSeen or 0) < pruneCutoff then KART_PlayerCache[guid] = nil end
         end
+        -- Officer notes are standing per-person notes with no natural expiry, but HandleOfficerNote
+        -- inserts network-supplied keys, so a long-lived install can accumulate entries for players
+        -- who left the guild. Cap the table as a runaway backstop — real councils never approach this.
+        local MAX_OFFICER_NOTES = 250
+        local noteCount = 0
+        for _ in pairs(KART_LCOfficerNotes) do noteCount = noteCount + 1 end
+        if noteCount > MAX_OFFICER_NOTES then
+            local excess = noteCount - MAX_OFFICER_NOTES
+            for key in pairs(KART_LCOfficerNotes) do
+                KART_LCOfficerNotes[key] = nil
+                excess = excess - 1
+                if excess <= 0 then break end
+            end
+        end
+        -- LoggingCombat() state never survives a logout, so a persisted "KART owns the combat log"
+        -- flag from last session is stale — clear it, or a log the player starts manually this
+        -- session could be auto-stopped as if KART had started it (see KART.AutoLog.Evaluate).
+        KART_Settings.autoLogOwned = false
+
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         -- Apply language: copy the chosen locale's VALUES into KART.L instead of replacing
@@ -311,8 +357,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end
 
-        -- Minimap Icon mit LibDBIcon registrieren
-        KART_Settings.minimap = KART_Settings.minimap or {}
+        -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
+        -- the Defaults merge above — Defaults.minimap = {}).
         local dbIcon = LibStub("LibDBIcon-1.0", true)
         if dbIcon then
             dbIcon:Register("KeineAhnungRaidTools", ldb, KART_Settings.minimap)
@@ -393,7 +439,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
 
-        if KART_Settings.autoConvertToRaid and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() > 5 and not IsInRaid() then
+        if KART_Settings.autoConvertToRaid and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() >= 5 and not IsInRaid() then
             C_PartyInfo.ConvertToRaid()
         end
         KART.HandleAutoPromoteThrottled()
@@ -421,23 +467,36 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.RCDialog then KART.RCDialog:Hide() end
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
             local delay = KART_Settings.bcCombatDelay or 2
+            KART.bcHideGen = (KART.bcHideGen or 0) + 1
+            local myGen = KART.bcHideGen
             C_Timer.After(delay > 0 and delay or 0.01, function()
-                if KART.BuffCheckFrame then
+                -- Only hide if we're still in the same combat — a cancelled generation (combat
+                -- ended, see PLAYER_REGEN_ENABLED) or a no-longer-in-combat state means the delayed
+                -- hide is stale and would wrongly close a window the player is now free to read.
+                if KART.bcHideGen == myGen and InCombatLockdown() and KART.BuffCheckFrame then
                     KART.BuffCheckFrame:Hide()
                 end
             end)
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Aktualisiert ausstehende UI- und Makro-Änderungen (z.B. Pull-Timer), 
+        KART.bcHideGen = (KART.bcHideGen or 0) + 1 -- cancel any pending combat-hide from above
+        -- Aktualisiert ausstehende UI- und Makro-Änderungen (z.B. Pull-Timer),
         -- die während des Kampfes sicherheitshalber blockiert wurden.
         KART.UpdateRaidleadBarVisibility()
+        -- Re-apply keybinds if a login/reload during combat had to defer them (see KART.ApplyKeybinds).
+        if KART.keybindsPending and KART.ApplyKeybinds then KART.ApplyKeybinds() end
     elseif event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(5, function()
-            if IsInGuild() then
-                local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-                C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
-            end
-        end)
+        -- arg1 = isInitialLogin, arg2 = isReloadingUi. Only announce our version to the guild on an
+        -- actual login/reload — this event also fires on every loading screen (zone/instance change),
+        -- and re-announcing then just spams the guild addon channel.
+        if arg1 or arg2 then
+            C_Timer.After(5, function()
+                if IsInGuild() then
+                    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
+                    C_ChatInfo.SendAddonMessage("KART", "ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
+                end
+            end)
+        end
         if KART.AutoLog then KART.AutoLog.Evaluate() end
         -- Retry now that every addon has loaded — a LibDurability provider that loads after KART
         -- (e.g. MRT) is nil at BuffChecker parse time. Idempotent (see KART.RegisterLibDurability).
@@ -468,7 +527,7 @@ function KART.UpdateStyles()
     KART.ApplyFrameStrata()
     local fontPath = KART.GetFontPath(KART_Settings.fontName)
     local r, g, b = KART_Settings.accentR/100, KART_Settings.accentG/100, KART_Settings.accentB/100
-    local titleSize = KART_Settings.titleFontSize or 11
+    local titleSize = KART_Settings.titleFontSize or 12 -- matches Defaults.titleFontSize
     local menuSize = KART_Settings.menuFontSize or 11
     local contentSize = KART_Settings.contentFontSize or 12
     
@@ -681,7 +740,15 @@ function KART.ShowReadyCheckReasonDialog()
     end
     if KART.RCDialog.customInput then KART.RCDialog.customInput:SetText("") end
     KART.RCDialog:Show()
-    C_Timer.After(15, function() if KART.RCDialog and KART.RCDialog:IsShown() then KART.RCDialog:Hide() end end)
+    -- Generation token so a second ready check within 15s doesn't get its dialog closed early by the
+    -- first check's still-pending auto-hide timer.
+    KART.rcDialogGen = (KART.rcDialogGen or 0) + 1
+    local myGen = KART.rcDialogGen
+    C_Timer.After(15, function()
+        if KART.rcDialogGen == myGen and KART.RCDialog and KART.RCDialog:IsShown() then
+            KART.RCDialog:Hide()
+        end
+    end)
 end
 
 SLASH_KART1 = "/kart"

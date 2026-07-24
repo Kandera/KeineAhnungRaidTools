@@ -5,9 +5,9 @@ local LC = KART.LC
 
 LC.sessionActive        = false
 LC.promptedThisSession  = false
-LC.votes                = {}  -- [rollID][playerShortName] = {idx, note}
-LC.rolls                = {}  -- [rollID][playerShortName] = 1-100 random roll (opt-in, see lcRollsEnabled)
-LC.councilVotes         = {}  -- [rollID][councilMemberShortName] = candidateShortName they picked (tally only, not binding)
+LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KART.Identity)
+LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
+LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
 LC.rollItems            = {}  -- [rollID] = itemLink
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -58,7 +58,11 @@ local TEST_ITEM_COUNT = #TEST_ITEMS
 -- treats these as real rolls, which is exactly the wanted behavior (unlike test rolls, they
 -- should be tradeable).
 local MANUAL_ROLL_ID_BASE = 500000
-LC.nextManualRollID = LC.nextManualRollID or MANUAL_ROLL_ID_BASE
+-- Seed off the session clock (base + seconds-of-epoch mod 100000, range 500000..599999) so a
+-- mid-raid /reload doesn't restart the counter at the base and reuse an ID a peer is still
+-- tracking from before the reload — which would show the old item and old votes under the new
+-- roll. time() moves forward every reload, so each session's manual IDs occupy a distinct range.
+LC.nextManualRollID = LC.nextManualRollID or (MANUAL_ROLL_ID_BASE + time() % 100000)
 
 -- Which mode (true = council/master, false = looter) last actually (re)populated the test data
 -- in LC.StartTest — nil until the first test run. Lets StartTest tell "the OTHER test window is
@@ -119,7 +123,7 @@ end
 -- falling back to their own local setting only when solo / not yet synced (e.g. testing).
 function LC.GetButtonConfig()
     local raw
-    if UnitIsGroupLeader("player") or not (LC.raidConfig and LC.raidConfig.buttonLabels) then
+    if UnitIsGroupLeader("player") or not LC.raidConfig.buttonLabels then
         raw = (KART_Settings and KART_Settings.lcButtonLabels) or KART.L.LC_DEFAULT_BUTTONS
     else
         raw = LC.raidConfig.buttonLabels
@@ -177,7 +181,7 @@ function LC.GetRaidMinQuality()
     if UnitIsGroupLeader("player") then
         return KART_Settings.lcMinQuality or 4
     end
-    return (LC.raidConfig and LC.raidConfig.minQuality) or 4
+    return LC.raidConfig.minQuality or 4
 end
 
 -- Applies the LootCouncil-specific font size (KART_Settings.lcFontSize, independent from the main
@@ -199,6 +203,7 @@ function LC.ApplyFontSize()
 
     local vf = LC.voteListFrame
     if vf then
+        setAll({vf.title}, big) -- window title scales with lcFontSize like the council panel's does
         for _, row in ipairs(vf.rows or {}) do
             setAll({row.itemText}, big)
             setAll({row.timerText, row.gainText, row.votedText}, base)
@@ -256,7 +261,7 @@ function LC.GetLootmaster()
     if UnitIsGroupLeader("player") then
         return LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
     end
-    return (LC.raidConfig and LC.raidConfig.lootmaster) or ""
+    return LC.raidConfig.lootmaster or ""
 end
 
 -- Whether configuredKey (a resolved KART.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
@@ -277,7 +282,7 @@ function LC.GetRollsEnabled()
     -- synced too, not just when we're actually the leader — otherwise UnitIsGroupLeader("player")
     -- being false while ungrouped (e.g. solo testing) would always read as "rolls off", no
     -- matter what the checkbox says, since LC.raidConfig.rollsEnabled never gets synced there.
-    if UnitIsGroupLeader("player") or not (LC.raidConfig and LC.raidConfig.rollsEnabled ~= nil) then
+    if UnitIsGroupLeader("player") or LC.raidConfig.rollsEnabled == nil then
         return KART_Settings.lcRollsEnabled == true
     end
     return LC.raidConfig.rollsEnabled == true
@@ -313,7 +318,10 @@ function LC.BroadcastRaidConfig()
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
+    -- Keep the full "Name-Realm" text (don't strip the realm): GetLootmaster resolves the same
+    -- unstripped value on the leader, so stripping here would let a cross-realm lootmaster resolve
+    -- to a different person (or a same-named local) on peers than on the leader.
+    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
@@ -346,10 +354,11 @@ function LC.HandleConfig(payload, senderKey)
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
     LC.raidConfig.lootmaster    = LC.ResolveConfigName(lootmaster) or ""
-    LC.raidConfig.councilMembers = council or ""
+    -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
+    LC.raidConfig.councilMembers = council
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(council or "", ";")) do
+    for _, name in ipairs(KART.SplitString(council, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
@@ -391,7 +400,7 @@ function LC.RetryPendingResolutions()
         end
     end
 
-    if LC.raidConfig and LC.raidConfig.lootmaster and not KART.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
+    if LC.raidConfig.lootmaster and not KART.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
         local key = LC.ResolveConfigName(LC.raidConfig.lootmaster)
         if key and KART.Identity.IsResolvedKey(key) then
             LC.raidConfig.lootmaster = key
@@ -428,7 +437,9 @@ function LC.SendSettingsSync(targetName)
     local minQ = KART_Settings.lcMinQuality or 4
     local buttons = KART_Settings.lcButtonLabels or ""
     local rolls = KART_Settings.lcRollsEnabled and "1" or "0"
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or ""):match("([^%-]+)") or ""
+    -- Full "Name-Realm" text, not realm-stripped — same cross-realm consistency reason as
+    -- LC.BroadcastRaidConfig above.
+    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
     local voteSeconds = KART_Settings.lcVoteSeconds or 20
     local council = KART_Settings.lcCouncilMembers or ""
 
@@ -600,6 +611,24 @@ function LC.ShowSessionPrompt()
     LC.sessionPromptFrame = f
 end
 
+-- Forgets every tracked roll and closes both LC windows. Shared by the leader ending the session
+-- (SetSessionActive) and a peer receiving LC_ACTIVE:0, so both sides converge to a clean slate
+-- instead of the peer keeping stale tabs/votes/showall state around.
+function LC.ClearAllRolls()
+    for i = #LC.councilTabs, 1, -1 do
+        LC.Trade.ClearRollState(LC.councilTabs[i])
+    end
+    for i = #LC.voteListRolls, 1, -1 do
+        LC.Trade.ClearRollState(LC.voteListRolls[i])
+    end
+    wipe(LC.councilTabs)
+    wipe(LC.voteListRolls)
+    LC.showAllOverride = nil
+    LC.activeRollID = nil
+    if LC.councilPanel then LC.councilPanel:Hide() end
+    if LC.voteListFrame then LC.voteListFrame:Hide() end
+end
+
 function LC.SetSessionActive(active)
     LC.sessionActive = active
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
@@ -607,18 +636,8 @@ function LC.SetSessionActive(active)
         LC.BroadcastRaidConfig()
     else
         -- Ending the session forgets every tracked roll so the next boss starts clean instead of
-        -- showing leftover tabs/votes from this one (see LC.Trade.ClearRollState).
-        for i = #LC.councilTabs, 1, -1 do
-            LC.Trade.ClearRollState(LC.councilTabs[i])
-        end
-        for i = #LC.voteListRolls, 1, -1 do
-            LC.Trade.ClearRollState(LC.voteListRolls[i])
-        end
-        wipe(LC.councilTabs)
-        wipe(LC.voteListRolls)
-        LC.activeRollID = nil
-        if LC.councilPanel then LC.councilPanel:Hide() end
-        if LC.voteListFrame then LC.voteListFrame:Hide() end
+        -- showing leftover tabs/votes from this one (see LC.ClearAllRolls / LC.Trade.ClearRollState).
+        LC.ClearAllRolls()
     end
     print("|cff00ff00KART:|r " .. (active and KART.L.LC_SESSION_ON or KART.L.LC_SESSION_OFF))
 end
@@ -774,7 +793,10 @@ function LC.OnStartLootRoll(rollID)
     local newItemID = LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or ""
     PurgeStaleRoll(rollID, newItemID)
 
-    LC.rollItems[rollID] = itemLink or "???"
+    -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll
+    -- above deliberately didn't purge on unresolved data) — clobbering it with "???" would blank a
+    -- roll that was showing fine. Mirrors HandleStart's fallback chain.
+    LC.rollItems[rollID] = itemLink or LC.rollItems[rollID] or "???"
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
@@ -800,8 +822,8 @@ function LC.OnStartLootRoll(rollID)
     end
 end
 
-LC.votedByMe = LC.votedByMe or {} -- [rollID] = true once WE cast a vote for it (tracked by rollID,
-                                   -- not by row, since rows get recycled/reindexed as items expire)
+LC.votedByMe = LC.votedByMe or {} -- [rollID] = the buttonIdx WE cast (truthy = voted; tracked by
+                                   -- rollID, not by row, since rows get recycled/reindexed as items expire)
 LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed before voting, kept
                                    -- around purely so the "you voted" state can still show it —
                                    -- otherwise it vanishes the moment the note box hides, even
@@ -833,7 +855,14 @@ function LC.HandleActive(value, senderKey)
     -- Only the raid leader may flip the session flag — otherwise any group member could
     -- toggle Loot Council on/off for the whole raid with a forged LC_ACTIVE.
     if not IsSenderGroupLeader(senderKey) then return end
+    local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
+    -- A peer receiving the leader's session-end must also drop its tracked rolls and close its
+    -- windows, exactly like the leader's own SetSessionActive(false) — otherwise stale tabs, votes
+    -- and a leftover /kart showall override survive into the next session.
+    if wasActive and not LC.sessionActive then
+        LC.ClearAllRolls()
+    end
 end
 
 function LC.HandleStart(payload, senderKey)
@@ -887,7 +916,15 @@ function LC.StartManualRoll(itemsText)
         LC.rollItems[rollID] = itemLink
         LC.votes[rollID]     = {}
 
-        LC.SendLC("LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink)
+        local msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink
+        -- Guard the 255-byte SendAddonMessage cap: a very long item link (many bonus IDs) would be
+        -- silently dropped, desyncing peers while the lootmaster's own windows still open below.
+        -- Fall back to the compact item string, which HandleManualStart rebuilds into a full link.
+        if #msg > 255 then
+            local itemStr = KART.GetItemString(itemLink)
+            if itemStr then msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemStr end
+        end
+        LC.SendLC(msg)
 
         -- SendAddonMessage never echoes back to its own sender, so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
@@ -917,9 +954,17 @@ function LC.HandleManualStart(payload, senderKey)
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
     if not rollID or not itemLink or itemLink == "" then return end
+    -- The sender may have sent a compact item string instead of the full link (oversized-link
+    -- fallback, see LC.StartManualRoll). Rebuild a full link when the item is cached so it displays.
+    if not LC.IsRealItemLink(itemLink) and itemLink:match("^item:") then
+        itemLink = select(2, C_Item.GetItemInfo(itemLink)) or itemLink
+    end
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
-    LC.rollItems[rollID] = LC.rollItems[rollID] or itemLink
+    -- The payload link is always authoritative for a manual roll (there's no Blizzard roll behind
+    -- it, so it arrives intact) — take it unconditionally rather than preferring possibly-stale
+    -- state left over from an earlier roll that reused this ID.
+    LC.rollItems[rollID] = itemLink
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
@@ -999,7 +1044,10 @@ function LC.StartTest(mode)
             -- Pre-fill votes (and, if enabled, rolls) from current group members so the council
             -- panel looks populated
             if IsInGroup() then
-                local voteIdx = itemIdx -- offset per item so the fake votes aren't identical across items
+                -- Offset per item so the fake votes aren't identical across items, but wrap into the
+                -- valid 1..#buttons range from the start — with fewer than TEST_ITEM_COUNT buttons a
+                -- bare itemIdx seed would be out of range and render as "-".
+                local voteIdx = ((itemIdx - 1) % #buttons) + 1
                 for unit in KART.EachGroupUnit() do
                     local name = UnitName(unit)
                     if name then

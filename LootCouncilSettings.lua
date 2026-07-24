@@ -118,7 +118,7 @@ function LC.BuildSettingsPanel(parent)
     -- nobody mistakes their own tweaks here for something that affects the current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     raidBox:SetPoint("TOPLEFT", prefsCard, "BOTTOMLEFT", 0, -20)
-    raidBox:SetSize(500, 362)
+    raidBox:SetWidth(500) -- height is set by layoutRaidBox() from the measured content
     raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
     raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
@@ -330,6 +330,9 @@ function LC.BuildSettingsPanel(parent)
         y = y - 1 - 14
 
         KART.LC.SldVoteTimer:SetPoint("TOPLEFT", 20, y - 16) -- -16: slider's own title sits above it
+        y = y - 16 - 14 - 18
+
+        KART.LC.SldFontSize:SetPoint("TOPLEFT", 20, y - 16) -- same slider spacing as SldVoteTimer above
         y = y - 16 - 14 - 18
 
         KART.LC.CbRollsEnabled:SetPoint("TOPLEFT", 20, y)

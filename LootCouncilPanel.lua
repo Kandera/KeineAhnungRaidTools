@@ -4,6 +4,18 @@ KART.LC.Council = KART.LC.Council or {}
 local Council = KART.LC.Council
 local LC = KART.LC
 
+-- True only when semver `ver` is strictly OLDER than `current` — so a peer on a NEWER build isn't
+-- mislabeled "outdated" (mirrors the update-check comparison in Core.lua's HandleVersionMessage).
+local function IsOlderVersion(ver, current)
+    local a1, a2, a3 = tostring(ver):match("(%d+)%.(%d+)%.(%d+)")
+    local b1, b2, b3 = tostring(current):match("(%d+)%.(%d+)%.(%d+)")
+    a1, a2, a3 = tonumber(a1) or 0, tonumber(a2) or 0, tonumber(a3) or 0
+    b1, b2, b3 = tonumber(b1) or 0, tonumber(b2) or 0, tonumber(b3) or 0
+    if a1 ~= b1 then return a1 < b1 end
+    if a2 ~= b2 then return a2 < b2 end
+    return a3 < b3
+end
+
 -- =====================================================================
 --  Equipped-item helper for council panel
 -- =====================================================================
@@ -22,15 +34,35 @@ local EQUIP_LOC_TO_SLOT = {
     INVTYPE_FINGER         = {11, 12},
     INVTYPE_TRINKET        = {13, 14},
     INVTYPE_CLOAK          = {15},
-    INVTYPE_WEAPON         = {16},
+    INVTYPE_WEAPON         = {16, 17}, -- one-hand: can sit in either hand for dual-wielders
     INVTYPE_2HWEAPON       = {16},
     INVTYPE_WEAPONMAINHAND = {16},
     INVTYPE_WEAPONOFFHAND  = {17},
     INVTYPE_SHIELD         = {17},
     INVTYPE_HOLDABLE       = {17},
-    INVTYPE_RANGED         = {18},
-    INVTYPE_RANGEDRIGHT    = {18},
+    -- Bows/guns/crossbows/wands equip in the main-hand slot (16) on Retail — the dedicated
+    -- ranged slot (18) was removed in 6.0, so GetInventoryItemLink(unit, 18) is always nil.
+    INVTYPE_RANGED         = {16},
+    INVTYPE_RANGEDRIGHT    = {16},
 }
+
+-- Scans the given inventory slots on a unit and returns the lower-ilvl equipped piece (the one
+-- most likely to be replaced by the drop) as (link, ilvl). Shared by the panel display and the
+-- REQ_EQUIP responder so both pick the same piece for two-slot items (rings, trinkets).
+local function scanSlots(unit, slots)
+    local bestLink, bestIlvl
+    for _, slot in ipairs(slots) do
+        local link = GetInventoryItemLink(unit, slot)
+        if link then
+            local _, _, _, ilvl = C_Item.GetItemInfo(link)
+            if ilvl and (not bestIlvl or ilvl < bestIlvl) then
+                bestLink  = link
+                bestIlvl  = ilvl
+            end
+        end
+    end
+    return bestLink, bestIlvl
+end
 
 -- Returns (equippedLink, equippedIlvl) for the slot matching rollItemLink on unit.
 -- For two-slot items (rings, trinkets) returns the lower-ilvl piece (most likely to be replaced).
@@ -45,18 +77,41 @@ function Council.GetEquippedForUnit(unit, rollItemLink)
     local slots = EQUIP_LOC_TO_SLOT[itemEquipLoc]
     if not slots then return nil, nil end
 
-    local bestLink, bestIlvl
-    for _, slot in ipairs(slots) do
-        local link = GetInventoryItemLink(unit, slot)
-        if link then
-            local _, _, _, ilvl = C_Item.GetItemInfo(link)
-            if ilvl and (not bestIlvl or ilvl < bestIlvl) then
-                bestLink  = link
-                bestIlvl  = ilvl
-            end
+    local bestLink, bestIlvl = scanSlots(unit, slots)
+    -- GetInventoryItemLink only returns data for the player and currently-inspected units, so for
+    -- most raid members the local scan is nil. Fall back to the link they broadcast over the KART
+    -- sync (see REQ_EQUIP/EQUIP in Core.lua + Council.RequestEquipForRoll below).
+    if not bestLink then
+        local short = UnitName(unit)
+        short = short and short:match("([^%-]+)")
+        local cached = short and KART.EquipCache and KART.EquipCache[short] and KART.EquipCache[short][itemEquipLoc]
+        if cached then
+            bestLink = cached
+            local _, _, _, ilvl = C_Item.GetItemInfo(cached)
+            bestIlvl = ilvl
         end
     end
     return bestLink, bestIlvl
+end
+
+-- Own equipped link for an equipLoc token (lower-ilvl piece for two-slot items), matching what
+-- GetEquippedForUnit shows. Answers a REQ_EQUIP from a council member's open panel.
+function Council.GetOwnEquippedLink(equipLoc)
+    local slots = EQUIP_LOC_TO_SLOT[equipLoc]
+    if not slots then return nil end
+    return (scanSlots("player", slots))
+end
+
+-- Broadcasts a one-off request for every raider's equipped item in the rolled item's slot, so the
+-- council panel can show what each candidate currently wears (GetInventoryItemLink alone only sees
+-- the viewer + inspected units). Modeled on the BuffChecker REQ_GEAR/GEAR sync. Deduped per roll.
+LC.equipRequestedRolls = LC.equipRequestedRolls or {}
+function Council.RequestEquipForRoll(rollID, rollItemLink)
+    if not IsInGroup() or LC.equipRequestedRolls[rollID] then return end
+    local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
+    if not itemEquipLoc or itemEquipLoc == "" or not EQUIP_LOC_TO_SLOT[itemEquipLoc] then return end
+    LC.equipRequestedRolls[rollID] = true
+    C_ChatInfo.SendAddonMessage("KART", "REQ_EQUIP:" .. itemEquipLoc, IsInRaid() and "RAID" or "PARTY")
 end
 
 -- =====================================================================
@@ -658,6 +713,13 @@ function Council.RefreshCouncilRows()
     end
     local itemArmorRank = Council.GetItemArmorRank(rollItem)
 
+    -- Ask every raider for their equipped item in this slot (once per roll) so the equipped column
+    -- fills for members we can't inspect locally — replies land in KART.EquipCache and trigger a
+    -- refresh. Skipped until the item is cached (equipLoc unknown), retried on the reload above.
+    if rollID and rollItem and LC.IsRealItemLink(rollItem) then
+        Council.RequestEquipForRoll(rollID, rollItem)
+    end
+
     local rollsEnabled = LC.GetRollsEnabled()
     local dtEnabled = KART_Settings.dtModuleEnabled ~= false
     if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
@@ -697,7 +759,7 @@ function Council.RefreshCouncilRows()
                 local lcEnabled = KART.PlayerLCEnabled and KART.PlayerLCEnabled[short]
                 if not ver then
                     kartStatus = KART.L.LC_STATUS_NO_KART
-                elseif ver ~= KART.Version then
+                elseif IsOlderVersion(ver, KART.Version) then
                     kartStatus = string.format(KART.L.LC_STATUS_OLD_VERSION, ver)
                 elseif lcEnabled == false then
                     kartStatus = KART.L.LC_STATUS_MODULE_DISABLED

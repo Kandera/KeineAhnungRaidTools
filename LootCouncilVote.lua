@@ -71,15 +71,7 @@ function Vote.CreateVoteList()
         f.ticker = C_Timer.NewTicker(1, function()
             if not f:IsShown() then return end
             local now = GetTime()
-            local changed = false
-            for i = #LC.voteListRolls, 1, -1 do
-                local rid = LC.voteListRolls[i]
-                local deadline = LC.rollDeadlines[rid]
-                if deadline and now >= deadline then
-                    table.remove(LC.voteListRolls, i)
-                    changed = true
-                end
-            end
+            local changed = Vote.PruneExpiredRolls()
             if changed then
                 Vote.RefreshVoteListRows()
             else
@@ -104,9 +96,34 @@ function Vote.CreateVoteList()
     return f
 end
 
+-- Drops rolls whose voting window has closed from the list, and — for a non-council client that
+-- isn't tracking them in a council tab — frees their per-roll state (votes/item/deadline) so it
+-- doesn't accumulate for the whole session. The vote ticker only runs while the window is visible,
+-- so this also runs from ShowVotePopup to sweep rolls that expired while the window was hidden.
+-- Returns true if anything was removed.
+function Vote.PruneExpiredRolls()
+    local now = GetTime()
+    local changed = false
+    for i = #LC.voteListRolls, 1, -1 do
+        local rid = LC.voteListRolls[i]
+        local deadline = LC.rollDeadlines[rid]
+        if deadline and now >= deadline then
+            table.remove(LC.voteListRolls, i)
+            changed = true
+            local inCouncil = false
+            for _, cid in ipairs(LC.councilTabs) do
+                if cid == rid then inCouncil = true break end
+            end
+            if not inCouncil then LC.Trade.ClearRollState(rid) end
+        end
+    end
+    return changed
+end
+
 -- Registers rollID as an active roll and (re)builds the list. itemLink/seconds only matter the
 -- first time a rollID is seen — LC.rollItems/LC.rollDeadlines are the source of truth afterwards.
 function Vote.ShowVotePopup(rollID, itemLink, seconds)
+    Vote.PruneExpiredRolls() -- clear anything that expired while the window was hidden before adding
     LC.rollItems[rollID]     = LC.rollItems[rollID] or itemLink
     LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
 
@@ -201,20 +218,21 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     LC.votedByMe[rollID] = buttonIdx
     local note = KART.TrimString(noteBox and noteBox:GetText() or "")
     LC.votedNoteByMe[rollID] = note
-    if LC.IsTestRoll(rollID) then
-        local myKey = (KART.Identity.ResolvePlayer("player"))
-        LC.votes[rollID] = LC.votes[rollID] or {}
-        LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
-        LC.RefreshCouncilIfShown(rollID)
-    else
-        -- SendAddonMessage never echoes back to its own sender, so record our own vote locally
-        -- too (same as the test branch and LC_ROLL) — otherwise our own progress counter reads one
-        -- short, and a council member voting on their own drop wouldn't see themselves listed.
-        local myKey = (KART.Identity.ResolvePlayer("player"))
-        LC.votes[rollID] = LC.votes[rollID] or {}
-        LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
+
+    -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
+    -- its own sender, so without this our own progress counter reads one short and a council member
+    -- voting on their own drop wouldn't see themselves listed.
+    local myKey = (KART.Identity.ResolvePlayer("player"))
+    LC.votes[rollID] = LC.votes[rollID] or {}
+    LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
+
+    -- Test rolls stay local (no group to broadcast to); real rolls broadcast.
+    if not LC.IsTestRoll(rollID) then
         LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":" .. note)
     end
+    -- Both branches: refresh the council panel too, so a council member sees their own vote appear
+    -- in the panel (rows + tab badge), not just in the vote list.
+    LC.RefreshCouncilIfShown(rollID)
     Vote.RefreshVoteListRows()
 end
 
@@ -777,6 +795,9 @@ function Vote.ToggleCouncilVote(rollID, candidateKey)
 end
 
 function Vote.HandleVote(payload, senderKey)
+    -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
+    -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
+    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
     -- payload = "rollID:buttonIndex:note"
     local rollID, idx = payload:match("^(%d+):(%d+)")
     rollID = tonumber(rollID)
@@ -797,6 +818,7 @@ end
 -- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
 -- anything automatically.
 function Vote.HandleRoll(payload, senderKey)
+    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, value = payload:match("^(%d+):(%d+)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
@@ -815,6 +837,9 @@ end
 -- re-verifying council membership over the wire (the panel that sends it is only ever shown to
 -- council members in the first place — see IsCouncil in HandleStart/OnStartLootRoll).
 function Vote.HandleCouncilVote(payload, senderKey)
+    -- Council membership is intentionally trusted (see above), but the sender must at least be in
+    -- our group — a bare whisper from outside must not land in the council straw-poll tally.
+    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, candidateKey = payload:match("^(%d+):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end

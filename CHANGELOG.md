@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The whole UI now follows the language setting** — main window, settings and tooltips included.
 - **Council members can now cast their own loot vote.**
 - **Loot history is now paginated.**
+- **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
 - **Fixed a login error** for characters that never touched the Loot Council font-size slider.
@@ -24,6 +25,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Minimap icon position now saves correctly after switching profiles.**
 - **Raid-marker bar buttons no longer fire twice per click.**
 - **Fixed a leftover checkmark button when clearing trade reminders.**
+- **Loot history no longer duplicates entries across German and English clients**, and difficulty is now recorded consistently in English.
+- **Ranged and one-hand weapons now show the equipped item** in the council panel.
+- **Keybinds now apply after a reload or login during combat.**
+- **The settings search now scrolls to the matched setting.**
+- **Battle.net whisper invites now actually invite** the whispering friend.
+- **Auto-convert to raid now triggers with a full 5-player party.**
+- **Manual rolls after a `/reload` no longer show a stale item.**
+- **The "you still need to collect" reminder now clears on reassignment** and no longer stacks duplicates.
+- **Clicking a trade partner during combat no longer wrongly reports "out of range".**
+- **Both copies of a duplicated drop are now auto-placed into the trade.**
+- **Peers are only flagged as outdated when actually on an older version.**
+- **Skyfury is now detected on German clients.**
+- **History search now finds items whose names start with an umlaut.**
+- **Importing a boss list no longer duplicates every boss after logging in.**
+- **Buff-check reports now list the correct missing players.**
+- **Raid assistants can now remove players for a boss**, matching invite.
+- **Uninvite now targets the correct character** when two share a name across realms.
+- **The Loot Council font-size slider no longer overlaps the rolls checkbox.**
+- **Ready-check and buff-check windows no longer close early** when triggered again in quick succession.
+- **Keybind capture no longer sticks on the wrong button** or resumes after the window closes.
+- **Droptimizer now picks the correct upgrade track** when an item was simmed at several.
+- **Officer notes no longer grow without bound.**
 
 ### Changed
 - **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.

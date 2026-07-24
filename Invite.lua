@@ -69,11 +69,16 @@ function WU.ParseImport(rawText)
         end
     end
 
+    -- Remember the exact text we parsed, so the Import button can refuse to re-parse identical text
+    -- (which would duplicate every boss as "Name A"/"Name B") — e.g. after the saved text was
+    -- already auto-parsed at login. Genuinely additive imports paste *different* text each time.
+    if parsedCount > 0 then WU.lastImportedText = rawText end
     return parsedCount
 end
 
 function WU.ResetBosses()
     WU.bosses = {}
+    WU.lastImportedText = nil -- cleared list: allow re-importing the same text again
     WU.RefreshBossList()
 end
 
@@ -94,7 +99,7 @@ function WU.InviteBoss(idx)
         return
     end
 
-    if KART_Settings.autoConvertToRaid and IsInGroup() and not IsInRaid() and not InCombatLockdown() then
+    if KART_Settings.autoConvertToRaid and IsInGroup() and not IsInRaid() then -- already returned above if in combat
         C_PartyInfo.ConvertToRaid()
     end
 
@@ -133,7 +138,9 @@ function WU.RemoveForBoss(idx)
     if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
-    if not UnitIsGroupLeader("player") then
+    -- Leader OR assistant may uninvite in-game, so gate the same way WU.InviteBoss does rather than
+    -- being stricter (leader-only) for no reason.
+    if not KART.HasGroupPermissions() then
         print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
@@ -156,7 +163,9 @@ function WU.RemoveForBoss(idx)
             if name then
                 local full = (realm and realm ~= "") and (name.."-"..realm) or name
                 if not keepSet[full:lower()] and not keepSet[name:lower()] then
-                    UninviteUnit(name)
+                    -- Uninvite the specific character (full Name-Realm) — the realm-free short name
+                    -- is ambiguous when a same-named cross-realm twin is in the group.
+                    UninviteUnit(full)
                     removed = removed + 1
                 end
             end
@@ -250,9 +259,8 @@ function WU.RefreshBossList()
         end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        local capturedIdx = i
-        row.btnInvite:SetScript("OnClick", function() WU.InviteBoss(capturedIdx) end)
-        row.btnRemove:SetScript("OnClick", function() WU.RemoveForBoss(capturedIdx) end)
+        row.btnInvite:SetScript("OnClick", function() WU.InviteBoss(i) end)
+        row.btnRemove:SetScript("OnClick", function() WU.RemoveForBoss(i) end)
 
         row:Show()
         totalH = i * (ROW_H + ROW_GAP)
@@ -339,6 +347,13 @@ function WU.BuildPanel(parent)
     WU.BtnImport:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
         local text = WU.ImportEditBox:GetText()
+        if KART.TrimString(text) ~= "" and text == WU.lastImportedText then
+            -- Identical to what's already loaded (e.g. auto-parsed from the saved text at login) —
+            -- re-parsing would duplicate every boss. Report it as already loaded instead.
+            WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, #WU.bosses))
+            WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
+            return
+        end
         local count = WU.ParseImport(text)
         if count > 0 then
             WU.RefreshBossList()

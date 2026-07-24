@@ -142,7 +142,14 @@ end
 -- only the act of calling SetOverrideBindingClick itself is restricted while in combat, so this
 -- must only run out of combat (mirrors KART.UpdateRaidleadBarVisibility's own guard).
 function KART.ApplyKeybinds()
-    if InCombatLockdown() then return end
+    if InCombatLockdown() then
+        -- Logging in / reloading mid-combat (common in raids) would otherwise silently drop the
+        -- keybinds until the next manual bind change. Flag it so the PLAYER_REGEN_ENABLED handler
+        -- (Core.lua) re-applies them the moment combat ends.
+        KART.keybindsPending = true
+        return
+    end
+    KART.keybindsPending = nil
     ClearOverrideBindings(rlBar)
     local binds = KART_Settings and KART_Settings.keybinds
     if not binds then return end

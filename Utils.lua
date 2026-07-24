@@ -84,7 +84,7 @@ KART.Defaults = {
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
     pullTimerDuration = 10,
-    keybinds = { readyCheck = nil, clearWorldMarkers = nil, pullTimer = nil, buffCheckToggle = nil },
+    keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
     showBuffCheck = false,
     buffCheckAlpha = 90,
@@ -199,6 +199,15 @@ end
 -- interchangeable (see the auto-trade and history-export call sites).
 function KART.GetItemString(link)
     return KART.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+end
+
+-- Case-fold for comparison/search. Lua 5.1's string.lower is ASCII-only, so German umlauts (common
+-- on DE realms) don't fold — "Ö" stays "Ö" and never matches "ö". Folds the umlauts too. Not a full
+-- Unicode fold, just the letters WoW's German client uses. Fold BOTH sides of any comparison so the
+-- result is self-consistent regardless of how the other side cased its input.
+function KART.CaseFold(s)
+    if type(s) ~= "string" then return s end
+    return (s:gsub("Ä", "ä"):gsub("Ö", "ö"):gsub("Ü", "ü"):lower())
 end
 
 function KART.HasGroupPermissions()
@@ -318,14 +327,20 @@ function KART.ApplyRoundedMask(frame, radius)
 
     local function maskRegion(region)
         if not region then return end
-        -- Idempotent: drop any masks this helper previously added to this region before adding
-        -- new ones, so repeated calls (e.g. after a resize) don't stack masks indefinitely.
-        if region.kartRoundedMasks then
-            for _, old in ipairs(region.kartRoundedMasks) do
-                region:RemoveMaskTexture(old)
+        -- Reuse the mask textures we already created for this region. WoW can't destroy mask
+        -- textures, so removing and recreating them on every call (e.g. every OnSizeChanged) would
+        -- orphan the old ones for the whole session — instead create the set once, then only
+        -- reposition/resize on later calls.
+        local existing = region.kartRoundedMasks
+        if existing and #existing == #CORNERS then
+            for i, corner in ipairs(CORNERS) do
+                local m = existing[i]
+                m:SetSize(radius, radius)
+                m:ClearAllPoints()
+                m:SetPoint(corner.point, region, corner.point)
             end
+            return
         end
-        region.kartRoundedMasks = nil
 
         local applied = {}
         local ok = pcall(function()

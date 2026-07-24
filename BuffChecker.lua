@@ -10,7 +10,7 @@ KART.BuffData = {
     { id = "motw",   labelKey = "BC_LABEL_MOTW",   col = 4, icon = 136078,  class = "DRUID",   spells = {1126, 384461}, report = "buff", reportLabelKey = "BC_REPORT_MOTW" },
     { id = "shout",  labelKey = "BC_LABEL_SHOUT",  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabelKey = "BC_REPORT_SHOUT" },
     { id = "bronze", labelKey = "BC_LABEL_BRONZE", col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabelKey = "BC_REPORT_BRONZE" },
-    { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = "Skyfury", report = "buff", reportLabelKey = "BC_REPORT_SKY" },
+    { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelsfurie"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
     { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD" },
     { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK" },
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, nameMatch = "Vantus" },
@@ -67,8 +67,8 @@ function KART.RegisterLibDurability()
     if not (LibDurability and LibDurability.Register) then return end
     LibDurability:Register("KeineAhnungRaidTools", function(percent, _, sender)
         if type(sender) ~= "string" or type(percent) ~= "number" then return end
-        KART.DurabilityCache[sender] = percent
-        -- Servernamen abschneiden für saubere Zuordnung
+        -- Keyed by short name only — the render side reads DurabilityCache[shortName]. (A full
+        -- "Name-Realm" entry was never read.)
         local shortName = sender:match("([^%-]+)")
         if shortName then
             KART.DurabilityCache[shortName] = percent
@@ -127,7 +127,7 @@ function KART.CreateBuffCheckFrame()
     f:SetResizeBounds(710, 250, 1200, 1500) -- Breite kann nun auch skaliert werden
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self) if not IsKeyDown("SHIFT") then self:StartMoving() end end)
+    f:SetScript("OnDragStart", function(self) if not IsShiftKeyDown() then self:StartMoving() end end)
     f:SetScript("OnDragStop", function(self) 
         self:StopMovingOrSizing() 
         local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
@@ -489,11 +489,15 @@ function KART.ReportMissingBuffs()
     for _, buff in ipairs(KART.BuffData) do
         local list = KART.MissingBuffs[buff.id]
         if list and #list > 0 then
+            -- Snapshot the names now: this table is wiped/refilled by UpdateBuffCheck (roster,
+            -- durability and ready-check ticks all trigger it), so reading it when the staggered
+            -- message actually fires up to N*0.5s later could report a stale or empty player list.
+            local namesStr = table.concat(list, ", ")
             C_Timer.After(delay, function()
                 if buff.report == "buff" then
                     SendChatMessage(L.BC_MISSING .. (buff.reportLabel or buff.label), channel)
                 elseif buff.report == "item" then
-                    SendChatMessage(L.BC_MISSING .. (buff.reportLabel or buff.label) .. ": " .. table.concat(list, ", "), channel)
+                    SendChatMessage(L.BC_MISSING .. (buff.reportLabel or buff.label) .. ": " .. namesStr, channel)
                 end
             end)
             delay = delay + 0.5 -- 0.5 Sekunden Verzögerung zwischen den Nachrichten zum Schutz vor Disconnects
@@ -640,7 +644,7 @@ function KART.UpdateBuffCheck(isPreview)
         return
     end
 
-    local num = GetNumGroupMembers() or 0
+    local num = GetNumGroupMembers() -- always a number (0 when ungrouped)
     local isRaid = IsInRaid()
     local buffDataCount = #KART.BuffData
     local timeNow = GetTime()
@@ -706,7 +710,17 @@ function KART.UpdateBuffCheck(isPreview)
                             if aura.spellId == sid then match = true end
                         end
                     end
-                    if buff.nameMatch and aura.name:find(buff.nameMatch) then match = true end
+                    if buff.nameMatch then
+                        -- nameMatch may be a single string or a DE+EN list (spell-name fallback for
+                        -- when spellId detection misses) — match any of them.
+                        if type(buff.nameMatch) == "table" then
+                            for _, nm in ipairs(buff.nameMatch) do
+                                if aura.name:find(nm) then match = true break end
+                            end
+                        elseif aura.name:find(buff.nameMatch) then
+                            match = true
+                        end
+                    end
                     if buff.isFood and not match and (aura.name:find("Satt") or aura.name:find("Well Fed")) then match = true end
                     if buff.isFlask and (aura.name:find("Fläschchen") or aura.name:find("Phial") or aura.name:find("Flask")) then match = true end
                     if buff.isRune and (aura.name:find("Augment") or aura.name:find("Verstärkungsrune")) then match = true end
@@ -869,7 +883,7 @@ function KART.UpdateBuffCheck(isPreview)
             end
             
             if isMissing and buff.report then
-                if not buff.class or (buff.class and KART.ClassCache[buff.class]) then
+                if not buff.class or KART.ClassCache[buff.class] then
                     local repName = nameStr
                     if buff.isGearCheck then repName = nameStr .. " (-" .. missingCount .. ")" end
                     table.insert(KART.MissingBuffs[buff.id], repName)
@@ -884,5 +898,5 @@ function KART.UpdateBuffCheck(isPreview)
         end
         row:Show()
     end
-    KART.BuffCheckFrame.scrollContent:SetHeight(iterMax * 26)
+    KART.BuffCheckFrame.scrollContent:SetHeight(math.min(iterMax, 40) * 26) -- render loop caps rows at 40 (Epic BGs)
 end

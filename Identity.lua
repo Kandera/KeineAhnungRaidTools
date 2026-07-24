@@ -38,10 +38,12 @@ end
 -- Writes/refreshes this player's entry in the persistent cross-session cache, used to resolve
 -- config text for someone not currently in the group (see ResolvePlayer's cache fallback below).
 local function RememberPlayer(guid, unit)
+    local name = UnitName(unit)
+    if not guid or not name then return end -- loading-screen edge: UnitGUID/UnitName can be nil
     KART_PlayerCache = KART_PlayerCache or {}
     local _, nick = KART.GetNickname(unit)
     KART_PlayerCache[guid] = {
-        name = Ambiguate(UnitName(unit), "none"),
+        name = Ambiguate(name, "none"),
         nickname = nick,
         lastSeen = time(),
     }
@@ -57,11 +59,14 @@ end
 function Identity.ResolvePlayer(input)
     if not input or input == "" then return input, true end
 
-    -- Already a valid unit token.
+    -- Already a valid unit token. UnitGUID can momentarily be nil on a loading-screen edge; only
+    -- treat it as resolved once we actually have a GUID, otherwise fall through to name/cache/pending.
     if UnitExists(input) then
         local guid = UnitGUID(input)
-        RememberPlayer(guid, input)
-        return guid, false
+        if guid then
+            RememberPlayer(guid, input)
+            return guid, false
+        end
     end
 
     -- Name string (full realm-qualified sender, or free-typed short name/nickname) — scan the
@@ -69,13 +74,19 @@ function Identity.ResolvePlayer(input)
     local unit = FindUnitForName(input)
     if unit then
         local guid = UnitGUID(unit)
-        RememberPlayer(guid, unit)
-        return guid, false
+        if guid then
+            RememberPlayer(guid, unit)
+            return guid, false
+        end
     end
 
     -- No live match — fall back to the persistent cache (last-known GUID for this name or
     -- nickname), for someone who was seen before but isn't currently in the group.
-    local lowerInput = input:lower()
+    -- Cache entries store the realm-free short name (UnitName), so normalize the input the same way
+    -- — trimmed, realm stripped, lowercased — otherwise a realm-qualified sender ("Name-Realm" from
+    -- CHAT_MSG_ADDON) never matches, and untrimmed input disagrees with the pending key below.
+    local trimmed = KART.TrimString(input)
+    local lowerInput = (trimmed:match("([^%-]+)") or trimmed):lower()
     if KART_PlayerCache then
         for guid, entry in pairs(KART_PlayerCache) do
             if (entry.name and entry.name:lower() == lowerInput) or (entry.nickname and entry.nickname:lower() == lowerInput) then

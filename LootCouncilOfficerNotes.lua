@@ -40,7 +40,11 @@ function OfficerNotes.MigrateOfficerNoteKey(oldKey)
     if KART.Identity.IsResolvedKey(oldKey) then return false end -- already migrated
     local newKey, isPending = KART.Identity.ResolvePlayer(oldKey)
     if isPending then return false end
-    KART_LCOfficerNotes[newKey] = KART_LCOfficerNotes[oldKey]
+    -- Don't clobber a note already written under the resolved GUID key (e.g. edited normally after
+    -- the legacy entry went stale) with the older text-keyed one — keep the newer GUID note.
+    if KART_LCOfficerNotes[newKey] == nil then
+        KART_LCOfficerNotes[newKey] = KART_LCOfficerNotes[oldKey]
+    end
     KART_LCOfficerNotes[oldKey] = nil
     return true
 end

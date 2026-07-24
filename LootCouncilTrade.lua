@@ -10,7 +10,7 @@ local LC = KART.LC
 
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
-function Trade.AnnounceResult(rollID, winnerKey, reason)
+function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef)
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
     -- tester happened to click) and no raid-chat spam.
@@ -22,7 +22,15 @@ function Trade.AnnounceResult(rollID, winnerKey, reason)
         -- that landed on a stale, already-reused rollID instead of wrongly acting on it.
         local link = LC.rollItems[rollID] or ""
         local itemID = LC.IsRealItemLink(link) and (link:match("item:(%d+)") or "") or ""
-        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. (reason or ""))
+        -- Carry the vote-button colour explicitly (r,g,b) rather than having the receiver re-derive
+        -- it from the reason label — a peer that hasn't received LC_CONFIG yet would match the reason
+        -- against its own locale defaults ("Other" vs "Sonstiges") and end up with no colour.
+        local colorPacked = ""
+        if colorDef then
+            colorPacked = string.format("%d,%d,%d",
+                math.floor((colorDef.r or 0) * 255), math.floor((colorDef.g or 0) * 255), math.floor((colorDef.b or 0) * 255))
+        end
+        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. colorPacked .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
             local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KART.Identity.ResolveDisplayName(winnerKey), link)
@@ -43,13 +51,16 @@ function Trade.AnnounceResult(rollID, winnerKey, reason)
 end
 
 local function DoAssignWinner(rollID, playerKey, reason, colorDef)
+    -- The roll may have been cleared (session end / tab close) between opening the reassign-confirm
+    -- popup and accepting it — bail rather than logging a history entry with a nil item link.
+    if not LC.rollItems[rollID] then return end
     local classFile
     local unit = KART.Identity.FindUnitForKey(playerKey)
     if unit then
         local _, cf = UnitClass(unit)
         classFile = cf
     end
-    Trade.AnnounceResult(rollID, playerKey, reason)
+    Trade.AnnounceResult(rollID, playerKey, reason, colorDef)
 
     if LC.IsTestRoll(rollID) then
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
@@ -60,7 +71,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
             Trade.ShowWinnerNotification(LC.rollItems[rollID])
         end
     else
-        KART.LH.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID)
+        KART.LH.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
         -- Only the client that actually holds the item (the designated lootmaster, see
         -- LC.GetLootmaster/ForceWinRoll) needs a trade reminder — when the assigner (usually the
         -- raid leader) isn't also the lootmaster, they never physically have the item to trade.
@@ -180,6 +191,7 @@ function Trade.ClearRollState(rollID)
     LC.votedNoteByMe[rollID]   = nil
     LC.councilTabsNew[rollID]  = nil
     if LC.rollLootedAt then LC.rollLootedAt[rollID] = nil end
+    if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end
 end
 
 -- The "items still to trade" (lootmaster) and "items you still need to collect" (winner) windows
@@ -279,11 +291,15 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
                 print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(targetKey)))
                 return
             end
-            if not CheckInteractDistance(unit, 2) then
+            -- CheckInteractDistance is combat-restricted (returns nil in combat since 9.1), which
+            -- would falsely report "out of range" even when standing on the winner — only gate on it
+            -- out of combat; in combat just attempt the trade and let InitiateTrade fail if too far.
+            if not InCombatLockdown() and not CheckInteractDistance(unit, 2) then
                 print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(targetKey)))
                 return
             end
-            TargetUnit(unit)
+            -- InitiateTrade takes the unit token directly and needs no prior target; TargetUnit is
+            -- protected and would throw ADDON_ACTION_FORBIDDEN from this insecure OnClick.
             InitiateTrade(unit)
         end)
         row:Show()
@@ -361,13 +377,16 @@ function Trade.OnTradeInfoMessage(msgID)
     end
 end
 
-local function FindItemInBags(itemLink)
+-- skip (optional): a set keyed "bag:slot" of slots to ignore, so a caller placing several copies of
+-- the same item in one pass doesn't keep finding the same (now-locked) bag slot.
+local function FindItemInBags(itemLink, skip)
     local wantString = KART.GetItemString(itemLink)
     if not wantString then return nil end
     for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local bagLink = C_Container.GetContainerItemLink(bag, slot)
-            if bagLink and KART.GetItemString(bagLink) == wantString then
+            if bagLink and KART.GetItemString(bagLink) == wantString
+               and not (skip and skip[bag .. ":" .. slot]) then
                 return bag, slot
             end
         end
@@ -417,11 +436,15 @@ function Trade.OnTradeShow()
     -- side the features plan adds, which checks this same field from the other direction.
     LC.currentTradePartnerKey = partnerKey
 
+    -- Two copies of the same item assigned to this partner would otherwise both resolve to the same
+    -- first bag slot (the first gets locked into the trade, the second no-ops) — track placed slots
+    -- so each copy takes a distinct one.
+    local usedSlots = {}
     for _, entry in ipairs(LC.pendingTrades) do
         -- Bail if the cursor is already carrying something (e.g. the player was mid-drag of an
         -- unrelated item) — picking up our item now would swap it into whatever slot that is.
         if entry.winnerKey == partnerKey and not GetCursorInfo() then ---@diagnostic disable-line: undefined-global
-            local bag, slot = FindItemInBags(entry.itemLink)
+            local bag, slot = FindItemInBags(entry.itemLink, usedSlots)
             if bag then
                 local freeSlot
                 for i = 1, 6 do -- MAX_TRADE_ITEMS, fixed by the trade UI
@@ -433,6 +456,7 @@ function Trade.OnTradeShow()
                 if freeSlot then
                     C_Container.PickupContainerItem(bag, slot)
                     ClickTradeButton(freeSlot) ---@diagnostic disable-line: undefined-global
+                    usedSlots[bag .. ":" .. slot] = true
                     -- Not removed here anymore — only once the trade actually completes (see
                     -- LC.OnTradeClosed), so a cancelled trade doesn't silently drop the reminder.
                 end
@@ -485,8 +509,7 @@ function Trade.OnTradeClosed()
     -- tell which of them was the "real" intended recipient anyway, so warning once is more useful
     -- than spamming one message per pending entry for what's really a single physical mistake.
     local warnedItemStrings = {}
-    for i = #LC.pendingTrades, 1, -1 do
-        local entry = LC.pendingTrades[i]
+    for _, entry in ipairs(LC.pendingTrades) do -- read-only pass (only warns), no removal
         if entry.winnerKey ~= partnerKey then
             local itemString = KART.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
@@ -558,11 +581,11 @@ end
 
 function Trade.HandleResult(payload, senderKey)
     if not LC.IsSenderCouncil(senderKey) then return end
-    -- payload = "rollID:winnerKey:itemID:reason"
-    local rollID, winnerKey, itemID = payload:match("^(%d+):([^:]+):(%d*):")
+    -- payload = "rollID:winnerKey:itemID:colorPacked:reason"
+    local rollID, winnerKey, itemID, colorPacked = payload:match("^(%d+):([^:]+):(%d*):([^:]*):")
     rollID = tonumber(rollID)
     if not rollID or not winnerKey then return end
-    local reason = payload:match("^%d+:[^:]+:%d*:(.*)$") or ""
+    local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:(.*)$") or ""
 
     -- Blizzard's rollID can get reused for a genuinely different item before every client has
     -- finished with the first one (see Trade.AnnounceResult) — if we're still tracking a real
@@ -574,6 +597,15 @@ function Trade.HandleResult(payload, senderKey)
     if itemID ~= "" and LC.IsRealItemLink(localLink) then
         local localItemID = localLink:match("item:(%d+)")
         if localItemID and localItemID ~= itemID then return end
+    end
+
+    -- A council peer who joined late never tracked this roll, so LC.rollItems[rollID] is nil and the
+    -- winner notification / history / trade reminder would all show "???". Rebuild a link from the
+    -- itemID carried in the payload (full link if the item is cached, bare item string otherwise).
+    local itemLink = LC.rollItems[rollID]
+    if not itemLink and itemID ~= "" then
+        itemLink = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
+        LC.rollItems[rollID] = itemLink
     end
 
     -- A result came in for this roll — remove it from our vote list, if it's still there.
@@ -589,15 +621,29 @@ function Trade.HandleResult(payload, senderKey)
     LC.RefreshCouncilIfShown(rollID)
 
     local myKey = (KART.Identity.ResolvePlayer("player"))
+
+    -- Reassignment cleanup: drop any owed-to-me entry we were tracking for this roll before
+    -- re-evaluating the winner. Without this, a roll reassigned away from us leaves a stale "you
+    -- are owed X" reminder, and a reassignment back to the same player stacks a duplicate.
+    local owedChanged = false
+    if LC.owedToMe then
+        for i = #LC.owedToMe, 1, -1 do
+            if LC.owedToMe[i].rollID == rollID then
+                table.remove(LC.owedToMe, i)
+                owedChanged = true
+            end
+        end
+    end
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
         -- If I'm also the lootmaster, I already have the item — nothing to trade myself for.
         if not LC.IsMe(LC.GetLootmaster()) then
             LC.owedToMe = LC.owedToMe or {}
             table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = LC.GetLootmaster()})
-            Trade.RefreshOwedReminder()
+            owedChanged = true
         end
     end
+    if owedChanged then Trade.RefreshOwedReminder() end
 
     -- Every KART user logs the same entry locally, so everyone's loot history stays in sync
     -- without depending on the lootmaster being online later. The assigner already logged this
@@ -608,7 +654,15 @@ function Trade.HandleResult(payload, senderKey)
         local _, cf = UnitClass(unit)
         classFile = cf
     end
-    KART.LH.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(winnerKey), reason, classFile, Trade.ResolveColorForReason(reason), rollID)
+    -- Use the colour carried in the payload; only fall back to re-deriving it from the reason label
+    -- if the sender was on an older build that didn't send one.
+    local color
+    if colorPacked and colorPacked ~= "" then
+        local cr, cg, cb = colorPacked:match("^(%d+),(%d+),(%d+)$")
+        if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
+    end
+    color = color or Trade.ResolveColorForReason(reason)
+    KART.LH.LogHistory(itemLink, KART.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
     -- Same reasoning as DoAssignWinner: only the client physically holding the item (the
     -- designated lootmaster) needs a pending-trade reminder, regardless of who assigned it.
