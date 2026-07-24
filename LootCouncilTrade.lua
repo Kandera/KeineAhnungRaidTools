@@ -257,7 +257,7 @@ function Trade.RefreshTradeReminder()
             row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
-            row.doneBtn = CreateFrame("Button", nil, f)
+            row.doneBtn = CreateFrame("Button", nil, row)
             row.doneBtn:SetSize(16, 16)
             row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
             -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
@@ -380,7 +380,7 @@ function Trade.RefreshOwedReminder()
             row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
-            row.doneBtn = CreateFrame("Button", nil, f)
+            row.doneBtn = CreateFrame("Button", nil, row)
             row.doneBtn:SetSize(16, 16)
             row.doneBtn:SetPoint("LEFT", row, "RIGHT", 8, 0)
             -- A real texture, not a "✓" font glyph — WoW's default game fonts don't include most
