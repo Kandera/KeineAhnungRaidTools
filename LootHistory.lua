@@ -15,6 +15,26 @@ local function GetItemNameFromLink(link)
     return link:match("%[(.-)%]") or link
 end
 
+-- Applies the window's current player/reason/search filters and returns the matching
+-- entries newest-first. Shared by the window renderer and the JSON export, which must
+-- always agree on what "currently visible" means.
+local function GetFilteredEntries()
+    local filtered = {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        local matchPlayer = (not LH.filters.player) or (e.winner == LH.filters.player)
+        local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
+        local matchSearch = true
+        if LH.filters.search ~= "" then
+            matchSearch = GetItemNameFromLink(e.item):lower():find(LH.filters.search, 1, true) ~= nil
+        end
+        if matchPlayer and matchReason and matchSearch then
+            table.insert(filtered, e)
+        end
+    end
+    table.sort(filtered, function(a, b) return (a.time or 0) > (b.time or 0) end)
+    return filtered
+end
+
 local function JSONEscape(s)
     s = tostring(s or "")
     s = s:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", ""):gsub("\t", "\\t")
@@ -40,19 +60,7 @@ end
 -- Respects the history window's current player/reason/search filters, same as RCLootCouncil's
 -- own export (which only exports what's currently visible).
 function LH.BuildRCLootCouncilJSON()
-    local entries = {}
-    for _, e in ipairs(KART_LootHistory or {}) do
-        local matchPlayer = (not LH.filters.player) or (e.winner == LH.filters.player)
-        local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
-        local matchSearch = true
-        if LH.filters.search ~= "" then
-            matchSearch = GetItemNameFromLink(e.item):lower():find(LH.filters.search, 1, true) ~= nil
-        end
-        if matchPlayer and matchReason and matchSearch then
-            table.insert(entries, e)
-        end
-    end
-    table.sort(entries, function(a, b) return (a.time or 0) > (b.time or 0) end)
+    local entries = GetFilteredEntries()
 
     local objects = {}
     for i, e in ipairs(entries) do
@@ -457,21 +465,7 @@ function LH.Refresh()
     local f = LH.historyWindow
     if not f then return end
 
-    local filtered = {}
-    for _, e in ipairs(KART_LootHistory or {}) do
-        local matchPlayer = (not LH.filters.player) or (e.winner == LH.filters.player)
-        local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
-        local matchSearch = true
-        if LH.filters.search ~= "" then
-            local itemName = GetItemNameFromLink(e.item):lower()
-            matchSearch = itemName:find(LH.filters.search, 1, true) ~= nil
-        end
-        if matchPlayer and matchReason and matchSearch then
-            table.insert(filtered, e)
-        end
-    end
-
-    table.sort(filtered, function(a, b) return (a.time or 0) > (b.time or 0) end)
+    local filtered = GetFilteredEntries()
 
     local total = #(KART_LootHistory or {})
     f.countText:SetText(string.format(KART.L.LH_COUNT_FORMAT, #filtered, total))
