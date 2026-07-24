@@ -86,11 +86,11 @@ function WU.InviteBoss(idx)
     local boss = WU.bosses[idx]
     if not boss then return end
     if not KART.HasGroupPermissions() then
-        print("|cff00ff00KART:|r " .. (KART.L.WU_MSG_NOT_LEADER or "Only group leaders can invite players."))
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
     if InCombatLockdown() then
-        print("|cff00ff00KART:|r " .. (KART.L.WU_MSG_COMBAT or "Cannot invite during combat."))
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
         return
     end
 
@@ -124,9 +124,9 @@ function WU.InviteBoss(idx)
         end
     end
 
-    local msg = string.format("|cff00ff00KART:|r " .. (KART.L.WU_MSG_INVITED or "%d players invited for %s."), invited, boss.name)
+    local msg = string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_INVITED, invited, boss.name)
     if skipped > 0 then
-        msg = msg .. string.format(" " .. (KART.L.WU_MSG_ALREADY_IN or "(%d already in raid)"), skipped)
+        msg = msg .. string.format(" " .. KART.L.WU_MSG_ALREADY_IN, skipped)
     end
     print(msg)
 end
@@ -137,11 +137,11 @@ function WU.RemoveForBoss(idx)
     local boss = WU.bosses[idx]
     if not boss then return end
     if not UnitIsGroupLeader("player") then
-        print("|cff00ff00KART:|r " .. (KART.L.WU_MSG_NOT_LEADER or "Only the raid leader can remove players."))
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
     if InCombatLockdown() then
-        print("|cff00ff00KART:|r " .. (KART.L.WU_MSG_COMBAT or "Cannot remove during combat."))
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
         return
     end
 
@@ -168,7 +168,7 @@ function WU.RemoveForBoss(idx)
             end
         end
     end
-    print(string.format("|cff00ff00KART:|r " .. (KART.L.WU_MSG_REMOVED or "%d players removed for %s."), removed, boss.name))
+    print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, boss.name))
 end
 
 StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
@@ -178,7 +178,7 @@ StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
     OnAccept = function()
         WU.ResetBosses()
         if WU.statusLabel then
-            WU.statusLabel:SetText(KART.L.WU_STATUS_EMPTY or "Noch kein Import.")
+            WU.statusLabel:SetText(KART.L.WU_STATUS_EMPTY)
             WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
         end
     end,
@@ -230,11 +230,11 @@ function WU.RefreshBossList()
             row.nameText:SetJustifyH("LEFT")
             table.insert(KART.DynamicLabels, row.nameText)
 
-            row.btnInvite = KART.CreateModernButton(row, KART.L.WU_BTN_INVITE or "Einladen")
+            row.btnInvite = KART.CreateModernButton(row, KART.L.WU_BTN_INVITE)
             row.btnInvite:SetSize(70, 22)
             row.btnInvite:SetPoint("RIGHT", row, "RIGHT", -76, 0)
 
-            row.btnRemove = KART.CreateModernButton(row, KART.L.WU_BTN_REMOVE or "Entfernen")
+            row.btnRemove = KART.CreateModernButton(row, KART.L.WU_BTN_REMOVE)
             row.btnRemove:SetSize(70, 22)
             row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -2, 0)
 
@@ -256,7 +256,7 @@ function WU.RefreshBossList()
             GameTooltip:SetText(boss.name, 1, 0.82, 0)
             GameTooltip:AddLine(boss.difficulty, 0.7, 0.7, 0.7)
             GameTooltip:AddLine("EncounterID: " .. (boss.encounterID or "?"), 0.5, 0.5, 0.5)
-            GameTooltip:AddLine(#boss.players .. " " .. (KART.L.WU_PLAYERS or "Spieler"), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine(#boss.players .. " " .. KART.L.WU_PLAYERS, 0.8, 0.8, 0.8)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -281,7 +281,7 @@ end
 function WU.BuildPanel(parent)
     local L = KART.L
 
-    KART.CreateTabTitle(6, L.WU_TITLE or "WoWUtils Import")
+    KART.CreateTabTitle(6, L.WU_TITLE)
 
     -- Master switch: fully disables the WoWUtils import/invite module.
     KART.WU.CbModuleEnabled = KART.CreateSettingsCheckbox(
@@ -294,7 +294,7 @@ function WU.BuildPanel(parent)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     pasteLabel:SetPoint("TOPLEFT", 20, -15)
-    pasteLabel:SetText(L.WU_LABEL_PASTE or "WoWUtils Export hier einfügen:")
+    pasteLabel:SetText(L.WU_LABEL_PASTE)
     table.insert(KART.DynamicLabels, pasteLabel)
 
     local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
@@ -344,7 +344,7 @@ function WU.BuildPanel(parent)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
     table.insert(KART.EditBoxes, WU.ImportEditBox)
 
-    WU.BtnImport = KART.CreateModernButton(importCard, L.WU_BTN_IMPORT or "Importieren")
+    WU.BtnImport = KART.CreateModernButton(importCard, L.WU_BTN_IMPORT)
     WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
@@ -353,27 +353,27 @@ function WU.BuildPanel(parent)
         local count = WU.ParseImport(text)
         if count > 0 then
             WU.RefreshBossList()
-            WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED or "%d Bosse geladen.", count))
+            WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, count))
             WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
         else
-            WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR or "Kein gültiges WoWUtils-Format gefunden.")
+            WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR)
             WU.statusLabel:SetTextColor(0.9, 0.3, 0.3)
         end
     end)
 
-    WU.BtnReset = KART.CreateModernButton(importCard, L.WU_BTN_RESET or "Zurücksetzen")
+    WU.BtnReset = KART.CreateModernButton(importCard, L.WU_BTN_RESET)
     WU.BtnReset:SetSize(100, 26)
     WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
         if #WU.bosses == 0 then return end
-        StaticPopupDialogs["KART_WU_RESET_CONFIRM"].text = L.WU_RESET_CONFIRM_TEXT or "Boss-Liste wirklich zurücksetzen?"
+        StaticPopupDialogs["KART_WU_RESET_CONFIRM"].text = L.WU_RESET_CONFIRM_TEXT
         StaticPopup_Show("KART_WU_RESET_CONFIRM")
     end)
 
     WU.statusLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     WU.statusLabel:SetPoint("TOPLEFT", 20, -168)
-    WU.statusLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
+    WU.statusLabel:SetText(L.WU_STATUS_EMPTY)
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
     table.insert(KART.DynamicLabels, WU.statusLabel)
 
@@ -385,17 +385,17 @@ function WU.BuildPanel(parent)
 
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hBoss:SetPoint("TOPLEFT", 8, -262)
-    hBoss:SetText("|cffaaaaaa" .. (L.WU_COL_BOSS or "Boss") .. "|r")
+    hBoss:SetText("|cffaaaaaa" .. L.WU_COL_BOSS .. "|r")
     table.insert(KART.DynamicLabels, hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hInvite:SetPoint("TOPRIGHT", -110, -262)
-    hInvite:SetText("|cffaaaaaa" .. (L.WU_BTN_INVITE or "Einl.") .. "|r")
+    hInvite:SetText("|cffaaaaaa" .. L.WU_BTN_INVITE .. "|r")
     table.insert(KART.DynamicLabels, hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hRemove:SetPoint("TOPRIGHT", -38, -262)
-    hRemove:SetText("|cffaaaaaa" .. (L.WU_BTN_REMOVE or "Entf.") .. "|r")
+    hRemove:SetText("|cffaaaaaa" .. L.WU_BTN_REMOVE .. "|r")
     table.insert(KART.DynamicLabels, hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
@@ -406,7 +406,7 @@ function WU.BuildPanel(parent)
 
     WU.bossListFrame.emptyLabel = WU.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 6, -6)
-    WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY or "Noch kein Import.")
+    WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY)
     WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
     table.insert(KART.DynamicLabels, WU.bossListFrame.emptyLabel)
 

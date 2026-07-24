@@ -307,7 +307,7 @@ function LC.BroadcastRaidConfig()
     local budget = ADDON_MSG_MAX_BYTES - #prefix
     if #council > math.max(budget, 0) then
         council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
-        print("|cffff0000KART:|r " .. (KART.L.LC_CONFIG_TRUNCATED or "Council member list too long, truncated for broadcast."))
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
     end
     LC.SendLC(prefix .. council)
 end
@@ -416,7 +416,7 @@ function LC.SendSettingsSync(targetName)
     local budget = ADDON_MSG_MAX_BYTES - #prefix
     if #council > math.max(budget, 0) then
         council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
-        print("|cffff0000KART:|r " .. (KART.L.LC_CONFIG_TRUNCATED or "Council member list too long, truncated for broadcast."))
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
     end
     C_ChatInfo.SendAddonMessage("KART", prefix .. council, "WHISPER", targetName)
 end

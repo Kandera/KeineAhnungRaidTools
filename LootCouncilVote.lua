@@ -95,7 +95,7 @@ function Vote.CreateVoteList()
                     local deadline  = LC.rollDeadlines[rid]
                     local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
                     local votedCount, total = LC.CountVotes(rid)
-                    row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
+                    row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
                 end
             end
         end
@@ -375,7 +375,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
         do
             local votedCount, total = LC.CountVotes(rollID)
-            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
+            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
         end
         if deadline then
             row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
@@ -389,7 +389,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             and KART.DT.GetGainPercent(myShort, LC.rollItems[rollID]) or nil
         if gainPct then
             local color = gainPct >= 0 and "|cff40c040" or "|cffc04040"
-            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN or "Gain", color, gainPct))
+            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN, color, gainPct))
             row.gainText:Show()
         else
             row.gainText:Hide()
@@ -648,7 +648,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
         do
             local votedCount, total = LC.CountVotes(rollID)
-            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS or "(%d/%d)", votedCount, total))
+            row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
         end
         if deadline then
             row.itemCD:SetCooldown(GetTime(), math.max(deadline - GetTime(), 0))
@@ -659,7 +659,7 @@ function Vote.RefreshVoteListRows_Compact(f)
             and KART.DT.GetGainPercent(myShort, LC.rollItems[rollID]) or nil
         if gainPct then
             local color = gainPct >= 0 and "|cff40c040" or "|cffc04040"
-            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN or "Gain", color, gainPct))
+            row.gainText:SetText(string.format("%s: %s%+.1f%%|r", KART.L.DT_COL_GAIN, color, gainPct))
             row.gainText:Show()
         else
             row.gainText:Hide()

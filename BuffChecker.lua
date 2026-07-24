@@ -120,7 +120,7 @@ function KART.CreateBuffCheckFrame()
     -- Versteckter Header für Item-Level
     local hIlvl = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hIlvl:SetPoint("TOPLEFT", f, "TOPLEFT", offsets[2], -35)
-    hIlvl:SetText(L.BC_LABEL_ILVL or "iLvl")
+    hIlvl:SetText(L.BC_LABEL_ILVL)
     hIlvl:SetTextColor(0.8, 0.8, 0.8)
     hIlvl:Hide()
     f.hIlvl = hIlvl
@@ -267,16 +267,16 @@ function KART.CreateBuffCheckFrame()
         end
     end
 
-    local modeBtn = KART.CreateModernButton(f, L.BTN_MODE_ADVANCED or "Ansicht: Erweitert")
+    local modeBtn = KART.CreateModernButton(f, L.BTN_MODE_ADVANCED)
     modeBtn:SetPoint("BOTTOMLEFT", 10, 10)
     modeBtn:SetSize(150, 22)
     modeBtn:SetScript("OnClick", function() 
         if KART.BuffCheckMode == "advanced" then
             KART.BuffCheckMode = "default"
-            modeBtn.text:SetText(L.BTN_MODE_ADVANCED or "Ansicht: Erweitert")
+            modeBtn.text:SetText(L.BTN_MODE_ADVANCED)
         else
             KART.BuffCheckMode = "advanced"
-            modeBtn.text:SetText(L.BTN_MODE_DEFAULT or "Ansicht: Ready Check")
+            modeBtn.text:SetText(L.BTN_MODE_DEFAULT)
             -- Einmaliges Abrufen beim Wechseln auf die erweiterte Ansicht
             RequestAdvancedData()
         end
@@ -368,7 +368,7 @@ end
 -- answering regardless, so the raid leader still gets accurate data about this player.
 function KART.ShowBuffCheck()
     if KART_Settings.bcModuleEnabled == false then
-        print("|cff00ff00KART:|r " .. (KART.L.BC_MODULE_DISABLED_MSG or "Buff-Checker is disabled in settings."))
+        print("|cff00ff00KART:|r " .. KART.L.BC_MODULE_DISABLED_MSG)
         return
     end
     if not KART.BuffCheckFrame then

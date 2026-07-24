@@ -104,7 +104,7 @@ function DT.RefreshStatusLabel()
     local syncedAt = cache and cache.syncedAt
 
     if not syncedAt then
-        DT.statusLabel:SetText(L.DT_STATUS_NEVER_SYNCED or "Never synced - run the KART Companion app.")
+        DT.statusLabel:SetText(L.DT_STATUS_NEVER_SYNCED)
         DT.statusLabel:SetTextColor(0.5, 0.5, 0.5)
         return
     end
@@ -121,7 +121,7 @@ function DT.RefreshStatusLabel()
     elseif diffMin < 1440 then relStr = math.floor(diffMin / 60) .. "h"
     else relStr = math.floor(diffMin / 1440) .. "d" end
 
-    DT.statusLabel:SetText(string.format(L.DT_STATUS_SYNCED_FORMAT or "Synced %s ago (%d players).", relStr, playerCount))
+    DT.statusLabel:SetText(string.format(L.DT_STATUS_SYNCED_FORMAT, relStr, playerCount))
     DT.statusLabel:SetTextColor(0.6, 0.9, 0.6)
 end
 
@@ -157,7 +157,7 @@ function DT.BuildSyncStatus(parent)
     hint:SetWidth(460)
     hint:SetJustifyH("LEFT")
     hint:SetTextColor(0.6, 0.6, 0.6)
-    hint:SetText(L.DT_HINT_COMPANION or "Requires the KART Companion app running on an officer's PC.")
+    hint:SetText(L.DT_HINT_COMPANION)
     table.insert(KART.DynamicLabels, hint)
 
     DT.RefreshStatusLabel()

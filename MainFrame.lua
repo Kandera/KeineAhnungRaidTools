@@ -115,11 +115,11 @@ KART.BtnBuffCheck = KART.CreateTabButton(clickArea, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnLootCouncil = KART.CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL or "Loot Council")
+KART.BtnLootCouncil = KART.CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL)
 KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
-KART.BtnWoWUtils = KART.CreateTabButton(clickArea, L.TAB_WOWUTILS or "WoWUtils")
+KART.BtnWoWUtils = KART.CreateTabButton(clickArea, L.TAB_WOWUTILS)
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 
@@ -522,7 +522,7 @@ KART.BtnFont:SetScript("OnClick", function(self)
 end)
 
 -- Sprache Button
-KART.BtnLang = KART.CreateModernButton(txtCard, (L.BTN_LANGUAGE_PREFIX or "Language: ") .. (L.LANG_AUTO or "Auto"), L.DESC_LANGUAGE)
+KART.BtnLang = KART.CreateModernButton(txtCard, L.BTN_LANGUAGE_PREFIX .. L.LANG_AUTO, L.DESC_LANGUAGE)
 KART.BtnLang:SetPoint("TOPLEFT", KART.BtnFont, "BOTTOMLEFT", 0, -10)
 KART.BtnLang:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)

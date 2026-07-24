@@ -36,8 +36,8 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
     end,
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("Keine Ahnung Raid Tools")
-        tooltip:AddLine("|cffeda55fLeft-Click:|r " .. (KART.L.TAB_PROMOTE or "Open"))
-        tooltip:AddLine("|cffeda55fRight-Click:|r " .. (KART.L.TAB_SETTINGS or "Settings"))
+        tooltip:AddLine("|cffeda55fLeft-Click:|r " .. KART.L.TAB_PROMOTE)
+        tooltip:AddLine("|cffeda55fRight-Click:|r " .. KART.L.TAB_SETTINGS)
     end,
 })
 
@@ -108,7 +108,7 @@ function KART.SyncSettingsToUI()
         if count > 0 and KART.WU.RefreshBossList then
             KART.WU.RefreshBossList()
             if KART.WU.statusLabel then
-                KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED or "%d bosses loaded.", count))
+                KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED, count))
                 KART.WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
             end
         end
@@ -403,12 +403,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
                         if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
                             KART.UpdateWarned = true
-                            print(string.format(KART.L.UPDATE_AVAILABLE or "|cff00ff00KART:|r Ein Update ist verfügbar! Version %s ist neu (Du hast %s).", ver, KART.Version))
+                            print(string.format(KART.L.UPDATE_AVAILABLE, ver, KART.Version))
                         end
                     end
 
                     if KART.VersionCheckActive and not isAnnounce then
-                        print(string.format(KART.L.VERSION_CHECK_RES or "KART Version von %s: %s", shortName, ver))
+                        print(string.format(KART.L.VERSION_CHECK_RES, shortName, ver))
                     end
                 elseif msg:sub(1, 10) == "LC_ACTIVE:" then
                     if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleActive(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
@@ -608,7 +608,7 @@ function KART.ShowReadyCheckReasonDialog()
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
-        f.title:SetText(KART.L.RC_REASON_TITLE or "Nicht bereit? Grund:")
+        f.title:SetText(KART.L.RC_REASON_TITLE)
 
         local function sendReason(reasonKey, fallback)
             local text = fallback
@@ -622,17 +622,17 @@ function KART.ShowReadyCheckReasonDialog()
             f:Hide()
         end
 
-        local btnBio = KART.CreateModernButton(f, KART.L.RC_REASON_BIO or "Bio")
+        local btnBio = KART.CreateModernButton(f, KART.L.RC_REASON_BIO)
         btnBio:SetSize(75, 25)
         btnBio:SetPoint("TOPLEFT", 10, -35)
         btnBio:SetScript("OnClick", function() sendReason("RC_REASON_BIO", "Bio") end)
 
-        local btnDrink = KART.CreateModernButton(f, KART.L.RC_REASON_DRINK or "Trinken")
+        local btnDrink = KART.CreateModernButton(f, KART.L.RC_REASON_DRINK)
         btnDrink:SetSize(75, 25)
         btnDrink:SetPoint("TOP", 0, -35)
         btnDrink:SetScript("OnClick", function() sendReason("RC_REASON_DRINK", "Trinken") end)
 
-        local btn1Min = KART.CreateModernButton(f, KART.L.RC_REASON_1MIN or "1 Min")
+        local btn1Min = KART.CreateModernButton(f, KART.L.RC_REASON_1MIN)
         btn1Min:SetSize(75, 25)
         btn1Min:SetPoint("TOPRIGHT", -10, -35)
         btn1Min:SetScript("OnClick", function() sendReason("RC_REASON_1MIN", "1 Min") end)
@@ -655,7 +655,7 @@ function KART.ShowReadyCheckReasonDialog()
         KART.ApplyRoundedMask(customInput, KART.Theme.CORNER_RADIUS_SM)
         table.insert(KART.EditBoxes, customInput)
         
-        local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND or "Senden")
+        local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND)
         btnSend:SetSize(70, 25)
         btnSend:SetPoint("LEFT", customInput, "RIGHT", 10, 0)
         btnSend:SetScript("OnClick", function()
@@ -690,7 +690,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         local channel = "GUILD"
         if IsInRaid() then channel = "RAID"
         elseif IsInGroup() then channel = "PARTY" end
-        print(KART.L.VERSION_CHECK_REQ or "KART: Fordere Versionen an...")
+        print(KART.L.VERSION_CHECK_REQ)
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
         C_ChatInfo.SendAddonMessage("KART", "REQ_VERSION", channel)
@@ -720,14 +720,14 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
             KART.LC.Vote.RefreshVoteListRows()
         end
     elseif cmd == "help" or cmd == "h" then
-        print(KART.L.HELP_HEADER or "KART slash commands:")
-        print("  /kart - " .. (KART.L.HELP_TOGGLE or "open/close the main window"))
-        print("  /kart version (v) - " .. (KART.L.HELP_VERSION or "request everyone's KART version"))
-        print("  /kart lc - " .. (KART.L.HELP_LC or "reopen the Loot Council window if something's still active"))
-        print("  /kart add <item link> - " .. (KART.L.HELP_ADD or "hand item(s) back to Loot Council for a decision (lootmaster only)"))
-        print("  /kart trade - " .. (KART.L.HELP_TRADE or "reopen the trade reminder if something's still pending"))
-        print("  /kart showall - " .. (KART.L.HELP_SHOWALL or "reveal already-voted items hidden by your display setting"))
-        print("  /kart help (h) - " .. (KART.L.HELP_HELP or "show this help"))
+        print(KART.L.HELP_HEADER)
+        print("  /kart - " .. KART.L.HELP_TOGGLE)
+        print("  /kart version (v) - " .. KART.L.HELP_VERSION)
+        print("  /kart lc - " .. KART.L.HELP_LC)
+        print("  /kart add <item link> - " .. KART.L.HELP_ADD)
+        print("  /kart trade - " .. KART.L.HELP_TRADE)
+        print("  /kart showall - " .. KART.L.HELP_SHOWALL)
+        print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern
         if KART.MainFrame then

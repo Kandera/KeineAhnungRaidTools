@@ -552,7 +552,7 @@ function Council.CreateCouncilPanel()
     hGain:SetPoint("TOPLEFT", 481, -80)
     hGain:SetWidth(44)
     hGain:SetJustifyH("CENTER")
-    hGain:SetText(KART.L.DT_COL_GAIN or "Gain")
+    hGain:SetText(KART.L.DT_COL_GAIN)
     hGain:SetTextColor(0.5, 0.5, 0.5)
     f.hGain = hGain
 
@@ -1161,7 +1161,7 @@ function Council.RefreshCouncilRows()
             end
             GameTooltip:AddLine(capturedShort or "?", nr, ng, nb)
             if dtEnabled and capturedGainPct then
-                GameTooltip:AddLine(string.format(KART.L.DT_TOOLTIP_GAIN or "Gain: %+.1f%% (%s)",
+                GameTooltip:AddLine(string.format(KART.L.DT_TOOLTIP_GAIN,
                     capturedGainPct, capturedGainSource or "?"), 0.6, 0.9, 0.6, true)
             end
             -- Raider note / officer note deliberately NOT shown here anymore — they have their
@@ -1174,7 +1174,7 @@ function Council.RefreshCouncilRows()
             if capturedKartStatus then
                 GameTooltip:AddLine(capturedKartStatus, 1, 0.4, 0.4, true)
             end
-            GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK or "Right-click: assign this item", 0.5, 0.5, 0.5, true)
+            GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK, 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
 
             if capturedEquipLink and LC.equipCompareTooltip then
