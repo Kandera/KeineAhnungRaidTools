@@ -63,11 +63,7 @@ end
 -- Logik für Auto-Promote
 function KART.HandleAutoPromote()
     if not UnitIsGroupLeader("player") or not (IsInGroup() or IsInRaid()) then return end
-    local numMembers = GetNumGroupMembers()
-    local isRaid = IsInRaid()
-
-    for i = 1, numMembers do
-        local unit = isRaid and ("raid"..i) or (i == numMembers and "player" or "party"..i)
+    for unit in KART.EachGroupUnit() do
         local name = UnitName(unit)
         if name then
             local shortName = name:match("([^%-]+)")

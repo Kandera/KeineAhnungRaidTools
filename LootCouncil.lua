@@ -1019,11 +1019,8 @@ function LC.StartTest(mode)
             -- Pre-fill votes (and, if enabled, rolls) from current group members so the council
             -- panel looks populated
             if IsInGroup() then
-                local isRaid  = IsInRaid()
-                local numMem  = GetNumGroupMembers()
                 local voteIdx = itemIdx -- offset per item so the fake votes aren't identical across items
-                for i = 1, numMem do
-                    local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+                for unit in KART.EachGroupUnit() do
                     local name = UnitName(unit)
                     if name then
                         local short = name:match("([^%-]+)")

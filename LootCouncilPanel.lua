@@ -667,7 +667,6 @@ function Council.RefreshCouncilRows()
     local rollID  = LC.activeRollID
     local votes   = (rollID and LC.votes[rollID]) or {}
     local buttons = LC.GetButtonConfig()
-    local isRaid  = IsInRaid()
     local numMem  = GetNumGroupMembers()
 
     local rollItem = LC.rollItems[rollID]
@@ -701,8 +700,7 @@ function Council.RefreshCouncilRows()
     end
 
     local members = {}
-    for i = 1, numMem do
-        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+    for unit in KART.EachGroupUnit() do
         local fullName = UnitName(unit)
         if fullName then
             local short    = fullName:match("([^%-]+)")

@@ -100,10 +100,7 @@ function WU.InviteBoss(idx)
 
     -- Build a lookup of players already in the group (with and without realm).
     local alreadyIn = {}
-    local isRaid = IsInRaid()
-    local numMem = GetNumGroupMembers()
-    for i = 1, numMem do
-        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+    for unit in KART.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
             local full = (realm and realm ~= "") and (name.."-"..realm) or name
@@ -152,11 +149,8 @@ function WU.RemoveForBoss(idx)
         if short then keepSet[short:lower()] = true end
     end
 
-    local isRaid  = IsInRaid()
-    local numMem  = GetNumGroupMembers()
     local removed = 0
-    for i = 1, numMem do
-        local unit = isRaid and ("raid"..i) or (i == numMem and "player" or "party"..i)
+    for unit in KART.EachGroupUnit() do
         if unit ~= "player" then
             local name, realm = UnitName(unit)
             if name then

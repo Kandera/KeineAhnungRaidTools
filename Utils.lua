@@ -177,6 +177,19 @@ function KART.HasGroupPermissions()
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end
 
+-- Iterates every current raid/party unit token, including the player. Returns (unit, index)
+-- so callers that pool rows by position keep their index. Yields nothing when not in a group.
+function KART.EachGroupUnit()
+    local isRaid = IsInRaid()
+    local numMem = GetNumGroupMembers()
+    local i = 0
+    return function()
+        i = i + 1
+        if i > numMem then return nil end
+        return (isRaid and ("raid" .. i) or (i == numMem and "player" or "party" .. i)), i
+    end
+end
+
 -- Resolves unit's Northern Sky Raid Tools nickname, or nil if NSRT isn't installed, has no
 -- nickname stored for that character, or its "Global Nicknames" master toggle is off. NSAPI is
 -- NSRT's own public API global (see its NickNames.lua) — calling GetName with no AddonName

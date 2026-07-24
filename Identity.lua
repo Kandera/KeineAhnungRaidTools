@@ -3,23 +3,6 @@ local addonName, KART = ...
 KART.Identity = KART.Identity or {}
 local Identity = KART.Identity
 
--- Iterates every current raid/party unit token, including the player — the same isRaid/numMem
--- loop already used in a few places in this addon (LC.FindUnitForShortName, which this module
--- replaces; KART.HandleAutoPromote in GroupLogic.lua; Council.RefreshCouncilRows in
--- LootCouncilPanel.lua).
--- Kept as its own local copy here rather than extracting a shared helper, to avoid touching
--- those unrelated call sites for this change.
-local function EachGroupUnit()
-    local isRaid = IsInRaid()
-    local numMem = GetNumGroupMembers()
-    local i = 0
-    return function()
-        i = i + 1
-        if i > numMem then return nil end
-        return isRaid and ("raid" .. i) or (i == numMem and "player" or "party" .. i)
-    end
-end
-
 -- Finds the current unit token matching name — compared both as a realm-qualified full name
 -- (via Ambiguate(fullName, "none"), which only keeps the "-Realm" suffix when two identically-
 -- named characters would otherwise collide) and as an NSRT nickname, exactly like
@@ -30,7 +13,7 @@ end
 local function FindUnitForName(name)
     if not name or name == "" then return nil end
     local lowerName = name:lower()
-    for unit in EachGroupUnit() do
+    for unit in KART.EachGroupUnit() do
         local fullName = UnitName(unit)
         if fullName then
             if Ambiguate(fullName, "none"):lower() == lowerName then return unit end
@@ -46,7 +29,7 @@ end
 -- short name.
 function Identity.FindUnitForKey(key)
     if not key then return nil end
-    for unit in EachGroupUnit() do
+    for unit in KART.EachGroupUnit() do
         if UnitGUID(unit) == key then return unit end
     end
     return nil
