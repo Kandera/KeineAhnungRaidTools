@@ -295,6 +295,19 @@ end
 -- silently stuck on stale config. Trim the council list — the field most likely to grow large —
 -- to whatever whole entries fit instead, and tell the leader locally so they know to shorten it.
 local ADDON_MSG_MAX_BYTES = 255
+
+-- Fits council (the ";"-separated, variable-length tail shared by LC_CONFIG and LC_SYNC_REQUEST)
+-- into the addon-message byte budget left after prefix — dropping whole trailing entries rather than
+-- splitting one mid-name, and warning the user locally when it had to. Returns the full payload.
+local function BuildCouncilPayload(prefix, council)
+    local budget = ADDON_MSG_MAX_BYTES - #prefix
+    if #council > math.max(budget, 0) then
+        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
+    end
+    return prefix .. council
+end
+
 function LC.BroadcastRaidConfig()
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
     local minQ     = KART_Settings.lcMinQuality or 4
@@ -304,12 +317,7 @@ function LC.BroadcastRaidConfig()
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
-    local budget = ADDON_MSG_MAX_BYTES - #prefix
-    if #council > math.max(budget, 0) then
-        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
-        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
-    end
-    LC.SendLC(prefix .. council)
+    LC.SendLC(BuildCouncilPayload(prefix, council))
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
@@ -425,12 +433,7 @@ function LC.SendSettingsSync(targetName)
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    local budget = ADDON_MSG_MAX_BYTES - #prefix
-    if #council > math.max(budget, 0) then
-        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
-        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
-    end
-    C_ChatInfo.SendAddonMessage("KART", prefix .. council, "WHISPER", targetName)
+    C_ChatInfo.SendAddonMessage("KART", BuildCouncilPayload(prefix, council), "WHISPER", targetName)
 end
 
 function LC.ShowSyncTargetDialog()
