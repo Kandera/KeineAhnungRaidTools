@@ -103,8 +103,13 @@ function KART.SyncSettingsToUI()
     -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
     -- switch, which has no separate UpdateStyles of its own the way ADDON_LOADED does.
     KART.UpdateStyles()
-    -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login
-    if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= "" then
+    -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login. Guard on
+    -- lastImportedText (same check the Import button uses) because SyncSettingsToUI also runs on
+    -- every profile switch — without it, re-parsing the already-loaded text appends every boss a
+    -- second time ("Boss A"/"Boss B"). ParseImport itself is additive (never wipes WU.bosses), so
+    -- the dedup has to live here.
+    if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= ""
+       and KART_Settings.wuImportText ~= KART.WU.lastImportedText then
         local count = KART.WU.ParseImport(KART_Settings.wuImportText)
         if count > 0 and KART.WU.RefreshBossList then
             KART.WU.RefreshBossList()

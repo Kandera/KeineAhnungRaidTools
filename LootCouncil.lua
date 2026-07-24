@@ -98,7 +98,10 @@ local VOTE_ICON_TEXTURES = {
     "Interface\\Buttons\\UI-GroupLoot-Pass-Up",   -- 5: Pass
 }
 function LC.GetVoteIconTexture(index)
-    return VOTE_ICON_TEXTURES[index] or VOTE_ICON_TEXTURES[#VOTE_ICON_TEXTURES]
+    -- Out-of-range index (labels allow up to 6 buttons, this list holds the 5 default semantics)
+    -- falls back to the neutral catch-all icon (4), NOT Pass (the last entry, 5) — otherwise a
+    -- configured 6th button would render with the green Pass chip.
+    return VOTE_ICON_TEXTURES[index] or VOTE_ICON_TEXTURES[4]
 end
 
 -- Round class icon (the same atlas used by default raid/party frames) so a council-row candidate's
@@ -130,10 +133,14 @@ function LC.GetButtonConfig()
     end
     local parts = KART.SplitString(raw, ";")
     local result = {}
-    for i, label in ipairs(parts) do
+    for _, label in ipairs(parts) do
         local trimmed = KART.TrimString(label)
         if trimmed ~= "" and #result < 6 then
-            local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
+            -- Color by the COMPACTED position (#result+1), not the raw split index, so it matches the
+            -- vote icon (chosen by the returned button's index). A whitespace-only label between real
+            -- ones is dropped from result but would otherwise advance the split index, desyncing the
+            -- two.
+            local col = BUTTON_COLORS[#result + 1] or BUTTON_COLORS[6]
             table.insert(result, {label = trimmed, r = col.r, g = col.g, b = col.b})
         end
     end
@@ -162,6 +169,14 @@ function LC.IsSenderCouncil(senderKey)
     local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     if UnitIsGroupLeader(unit) then return true end
+    if LC.CouncilNamesTable[senderKey] == true then return true end
+    -- The council table can still hold this member under a pending-TEXT key (they were out of group
+    -- when the leader's config was parsed, so ResolveConfigName couldn't produce their GUID yet)
+    -- while senderKey is already a live GUID. GROUP_ROSTER_UPDATE's throttled retry would migrate it,
+    -- but an authoritative LC_RESULT/LC_ONOTE can arrive inside that throttle window and get wrongly
+    -- dropped. Force the synchronous, pending-only migration now, then re-check, so a genuine council
+    -- member's message is never lost to that timing race.
+    LC.RetryPendingResolutions()
     return LC.CouncilNamesTable[senderKey] == true
 end
 

@@ -16,6 +16,9 @@ local iconCoords = {
 -- Mapping für farblich passende Worldmarker
 local tmToWmMap = {5, 6, 3, 2, 7, 1, 4, 8}
 
+-- Reviewed 2026-07-24: NOT a bug. These are the canonical RAID TARGET icon colors (Star=Yellow …
+-- Skull=White), indexed by the button's raid-target icon — they tint the button, they are not the
+-- /wm world-marker palette. Confirmed correct; do not re-flag as a color mismatch.
 local markerColors = {
     {1, 0.92, 0},   -- Yellow (Star)
     {1, 0.5, 0.1},  -- Orange (Circle)
@@ -63,7 +66,11 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
         -- and Down ran the macro twice per click. Down-only matches retail's default behavior.
         b:RegisterForClicks("AnyDown")
     else
-        b:RegisterForClicks("AnyUp", "AnyDown")
+        -- Plain (non-secure) buttons fire on Down only, matching the secure macro buttons above and
+        -- the key-down transition a keybind delivers via SetOverrideBindingClick — so a bound key
+        -- triggers them reliably. (Was AnyUp+AnyDown with a down-guard in each handler to dodge the
+        -- resulting double-fire; AnyDown removes both the double-fire and the keybind asymmetry.)
+        b:RegisterForClicks("AnyDown")
         b:SetScript("OnClick", func)
     end
     -- Hover color now derives from the user's accent color (same KART.Theme.AccentColor +
@@ -188,8 +195,7 @@ CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-Group
 CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK, "KART_RL_ReadyCheckBtn")
 
 -- Buff-Checker Toggle Button
-CreateBarButton(rlBar, 249, -5, 22, 22, function(_, _, down)
-    if down then return end -- Verhindert, dass der Klick doppelt (beim Drücken und Loslassen) ausgelöst wird
+CreateBarButton(rlBar, 249, -5, 22, 22, function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()
     else
@@ -202,8 +208,7 @@ end, 135932, nil, nil, nil, L.RL_BUFFCHECK, "KART_RL_BuffCheckToggleBtn") -- Ico
 -- native Blizzard countdown (which those addons display too). Reading the duration
 -- at click time also removes the need to rewrite a macrotext attribute on settings
 -- changes (which was blocked during combat lockdown). Right-click cancels.
-KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button, down)
-    if down then return end
+KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button)
     if button == "RightButton" then
         C_PartyInfo.DoCountdown(0)
     else

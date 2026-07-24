@@ -878,7 +878,7 @@ function KART.UpdateBuffCheck(isPreview)
 
         for j, buff in ipairs(KART.BuffData) do
             local has = KART.BuffStatesCache[buff.id]
-            if buff.isRepair then has = KART.DurabilityCache[nameStr] or 100 end
+            if buff.isRepair then has = KART.DurabilityCache[shortName] or 100 end
             setInd(row, j, has, buff, KART.ClassCache)
             
             -- Advanced-panel checks (oil, enchants, gems — page = "advanced") are never chat-reported:

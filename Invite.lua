@@ -109,8 +109,10 @@ function WU.InviteBoss(idx)
         local name, realm = UnitName(unit)
         if name then
             local full = (realm and realm ~= "") and (name.."-"..realm) or name
-            alreadyIn[full:lower()] = true
-            alreadyIn[name:lower()] = true
+            -- CaseFold (not :lower()) so DE-realm umlaut names fold consistently with the boss list
+            -- below — :lower() is ASCII-only and leaves Ö/Ä/Ü untouched (see Utils.lua CaseFold).
+            alreadyIn[KART.CaseFold(full)] = true
+            alreadyIn[KART.CaseFold(name)] = true
         end
     end
 
@@ -123,9 +125,12 @@ function WU.InviteBoss(idx)
     local toInvite = 0
     for _, player in ipairs(boss.players) do
         local short = player:match("([^%-]+)") or player
-        if not (alreadyIn[player:lower()] or alreadyIn[short:lower()]) then toInvite = toInvite + 1 end
+        if not (alreadyIn[KART.CaseFold(player)] or alreadyIn[KART.CaseFold(short)]) then toInvite = toInvite + 1 end
     end
-    if UnitIsGroupLeader("player") and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
+    -- Solo counts too: UnitIsGroupLeader("player") is false when ungrouped, which would skip the
+    -- else-branch that flags the deferred conversion — so gate on "solo OR party leader" instead.
+    -- (A party non-leader can't convert anyway, and a raid needs no conversion.)
+    if (not IsInGroup() or UnitIsGroupLeader("player")) and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
         if IsInGroup() then C_PartyInfo.ConvertToRaid() else KART.pendingBulkRaidConvert = true end
     end
 
@@ -133,7 +138,7 @@ function WU.InviteBoss(idx)
     local skipped = 0
     for _, player in ipairs(boss.players) do
         local short = player:match("([^%-]+)") or player
-        if alreadyIn[player:lower()] or alreadyIn[short:lower()] then
+        if alreadyIn[KART.CaseFold(player)] or alreadyIn[KART.CaseFold(short)] then
             skipped = skipped + 1
         else
             C_PartyInfo.InviteUnit(player)
@@ -166,18 +171,23 @@ function WU.RemoveForBoss(idx)
 
     local keepSet = {}
     for _, p in ipairs(boss.players) do
-        keepSet[p:lower()] = true
+        -- CaseFold (not :lower()) so umlaut names fold consistently with the roster check below.
+        keepSet[KART.CaseFold(p)] = true
         local short = p:match("([^%-]+)")
-        if short then keepSet[short:lower()] = true end
+        if short then keepSet[KART.CaseFold(short)] = true end
     end
 
     local removed = 0
     for unit in KART.EachGroupUnit() do
-        if unit ~= "player" then
+        -- Never uninvite yourself. EachGroupUnit yields raid1..raidN in a raid (never the literal
+        -- "player" token), so a plain unit ~= "player" guard would fail to exclude your own raid
+        -- slot — UnitIsUnit matches the player under whatever token currently represents them, so
+        -- a roster that doesn't list you can't get you kicked from your own raid.
+        if not UnitIsUnit(unit, "player") then
             local name, realm = UnitName(unit)
             if name then
                 local full = (realm and realm ~= "") and (name.."-"..realm) or name
-                if not keepSet[full:lower()] and not keepSet[name:lower()] then
+                if not keepSet[KART.CaseFold(full)] and not keepSet[KART.CaseFold(name)] then
                     -- Uninvite the specific character (full Name-Realm) — the realm-free short name
                     -- is ambiguous when a same-named cross-realm twin is in the group.
                     UninviteUnit(full)

@@ -8,13 +8,27 @@ local DT = KART.DT
 -- character. See KART_WoWUtilsCache's schema in the KART Companion project for the full contract.
 DT.index = {}
 
+-- WoWUtils' characterId (the exact string KART Companion writes as each cache key) formats the realm
+-- as a lowercase slug: spaces become hyphens and apostrophes are dropped, so "Tarren Mill" becomes
+-- "tarren-mill" and a full key looks like "thrall-tarren-mill" (confirmed against WoWUtils' OpenAPI
+-- spec, example "thrall-tarren-mill", 2026-07-24). GetRealmName() on the addon side returns the
+-- DISPLAY name ("Tarren Mill") instead, so a naive name.."-"..realm key ("thrall-tarren mill") would
+-- never match the cache for ANY multi-word or apostrophe realm. Canonicalize both sides to the same
+-- form by stripping spaces, hyphens and apostrophes out of the realm portion, so the space-vs-hyphen
+-- and apostrophe differences collapse away regardless of WoWUtils' exact slug punctuation.
+local function CanonicalizeRealm(realm)
+    return (realm:gsub("[%s%-']", ""))
+end
+
 local function NormalizeKey(name, realm)
     if not name or name == "" then return nil end
     realm = (realm and realm ~= "") and realm or GetRealmName()
     if not realm or realm == "" then return nil end
-    -- CaseFold (not :lower()) so umlaut names fold the same way the index is built below — a name
-    -- starting with "Ö" would otherwise never match its lowercased "ö" cache key.
-    return KART.CaseFold(name .. "-" .. realm)
+    -- CaseFold (not :lower()) so umlaut names/realms fold the same way the index is built below — a
+    -- name starting with "Ö" would otherwise never match its lowercased "ö" cache key. The single
+    -- "-" between name and realm is the ONLY hyphen left (realm hyphens are stripped above), so the
+    -- short-name split in FindPlayerCandidates stays unambiguous.
+    return KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))
 end
 
 function DT.RebuildIndex()
@@ -26,7 +40,15 @@ function DT.RebuildIndex()
     end
     for key, candidates in pairs(cache.players) do
         if type(key) == "string" and type(candidates) == "table" then
-            DT.index[KART.CaseFold(key)] = candidates
+            -- Re-canonicalize the companion's "name-realm-slug" key to the same form NormalizeKey
+            -- produces (realm separators stripped). Split on the FIRST hyphen — WoW character names
+            -- never contain one, so everything after it is the realm slug.
+            local name, realm = key:match("^([^%-]+)%-(.+)$")
+            if name and realm then
+                DT.index[KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))] = candidates
+            else
+                DT.index[KART.CaseFold(key)] = candidates -- malformed / realm-less key: keep as-is
+            end
         end
     end
     DT.RefreshStatusLabel()

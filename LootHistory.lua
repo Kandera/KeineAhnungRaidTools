@@ -798,6 +798,10 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
     end
 
     local _, _, difficultyID, difficultyName = GetInstanceInfo()
+    -- Normalize the non-instance sentinel 0 to nil, matching LH.HandleHistoryEntry. 0 is truthy in
+    -- Lua, so leaving it would make DifficultyDisplay/Export take the ID branch (which resolves to
+    -- nothing for 0) instead of the stored-name fallback — the two write paths must agree here.
+    if difficultyID == 0 then difficultyID = nil end ---@diagnostic disable-line: cast-local-type
     table.insert(KART_LootHistory, {
         time         = now,
         item         = itemLink or "",
@@ -936,9 +940,24 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
     local incomingStr = KART.GetItemString(itemLink)
-    -- A reassignment carries the same rollID + item with a new winner — replace the prior entry
+    -- Skip if we already have this award. Compare by the stable identity key + locale-independent
+    -- item string (not display name + full link, which differ between DE/EN clients), and allow a
+    -- few seconds of clock skew between the two clients that logged it. Runs BEFORE the reassignment
+    -- removal below: a re-sent award we already hold (small clock skew between the two loggers, both
+    -- carrying the same rollID) must be recognized as a duplicate and skipped, not needlessly removed
+    -- and reinserted with the peer's timestamp/wire data.
+    for _, e in ipairs(KART_LootHistory) do
+        local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
+        local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+        if sameWinner and sameItem and math.abs((e.time or 0) - t) <= 5 then
+            return -- already have it (e.g. another peer answered first)
+        end
+    end
+    -- A reassignment carries the same rollID + item with a NEW winner — replace the prior entry
     -- for this roll rather than stacking a duplicate (mirrors LH.LogHistory). Matching item too
-    -- guards against a manual rollID from a different session colliding on a different item.
+    -- guards against a manual rollID from a different session colliding on a different item. (A
+    -- same-winner re-send was already caught by the duplicate check above, so anything still
+    -- matching this rollID here is a genuine winner change.)
     if rollID then
         for i = #KART_LootHistory, 1, -1 do
             local e = KART_LootHistory[i]
@@ -947,16 +966,6 @@ function LH.HandleHistoryEntry(payload, senderKey)
                 table.remove(KART_LootHistory, i)
                 break
             end
-        end
-    end
-    -- Skip if we already have this award. Compare by the stable identity key + locale-independent
-    -- item string (not display name + full link, which differ between DE/EN clients), and allow a
-    -- few seconds of clock skew between the two clients that logged it.
-    for _, e in ipairs(KART_LootHistory) do
-        local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
-        local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
-        if sameWinner and sameItem and math.abs((e.time or 0) - t) <= 5 then
-            return -- already have it (e.g. another peer answered first)
         end
     end
 

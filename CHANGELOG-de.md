@@ -14,6 +14,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
+- **Entfernen-für-Boss riskiert nicht mehr, dich selbst aus dem Raid zu werfen.**
+- **Eine volle Boss-Gruppe solo einzuladen wandelt jetzt in einen Raid um**, damit jede Einladung ankommt.
+- **Die Boss-Liste dupliziert sich nicht mehr** nach einem Profilwechsel.
+- **Der "Rang"-Header im Council-Panel bleibt nicht mehr übrig**, wenn das Panel minimiert ist.
+- **Droptimizer-Gewinne werden jetzt auch für Spieler auf mehrwortigen oder Apostroph-Realms angezeigt.**
+- **Pull-Timer- und Buff-Check-Tastenbelegungen lösen jetzt zuverlässig aus.**
+- **Das Loot-Ergebnis eines Council-Mitglieds geht nicht mehr gelegentlich verloren**, kurz nachdem es dem Raid wieder beitritt.
+- **Massen-Invite und -Entfernen matchen Namen jetzt korrekt auf deutschen Realms.**
+- **Keine Phantom-"Dir steht ein Item zu"-Erinnerung mehr**, wenn kein Lootmaster gesetzt ist.
+- **Ein sechster eigener Vote-Button zeigt nicht mehr das Pass-Icon.**
 - **Massen-Invites aus WoWUtils wandeln jetzt automatisch in einen Raid um**, damit Rosters über fünf Spieler auch voll werden.
 - **Der Spieler-Filter im Loot-Verlauf fasst die Einträge einer Person jetzt zusammen** — auch über Nickname und Charakternamen hinweg.
 - **Himmelszorn wird auf deutschen Clients jetzt korrekt erkannt.**

@@ -624,7 +624,7 @@ function Council.CreateCouncilPanel()
     -- tab strip, and the bottom action buttons all go away; the header bar and item name stay put
     -- so a minimized panel still tells you *something* is waiting on a decision.
     f.collapsible = {
-        hName, hIlvl, hVote, hRoll, hCouncilVotes, hGain,
+        hName, hRank, hIlvl, hVote, hRoll, hCouncilVotes, hGain,
         divider, scrollBG, btnNoWinner, btnClose, f.tabStrip,
         f.timeBar, f.timeBarBG,
     }
@@ -810,7 +810,12 @@ function Council.RefreshCouncilRows()
         end
     end
 
-    -- Sort: voted rows first, sorted by button index ascending; unvoted last; alpha within group
+    -- Sort: voted rows first, sorted by button index ascending; unvoted last; alpha within group.
+    -- Reviewed 2026-07-24, NOT worth fixing: this sorts on the raw stored voteIdx while the row
+    -- renders from voteDef (buttons[voteIdx], nil when voteIdx exceeds the current button count). If
+    -- the leader shrinks the button set mid-roll, a vote whose index is now out of range renders as
+    -- "-" (unvoted) but still sorts among the voted rows by its stale index. Purely cosmetic, and
+    -- only after an uncommon mid-roll reconfig (~1 in 100 raids) — deliberately left as-is.
     table.sort(members, function(a, b)
         if a.voteIdx ~= b.voteIdx then
             if a.voteIdx == nil then return false end

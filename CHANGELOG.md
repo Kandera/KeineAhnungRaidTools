@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
+- **Remove-for-boss no longer risks kicking yourself** from a raid.
+- **Bulk-inviting a full boss roster while solo now converts to a raid** so every invite lands.
+- **The boss list no longer duplicates** after switching profiles.
+- **The council panel's Rank header no longer lingers** when the panel is minimized.
+- **Droptimizer gains now show for players on multi-word or apostrophe realms.**
+- **Pull-timer and buff-check keybinds now trigger reliably.**
+- **A council member's loot result is no longer occasionally dropped** right after they rejoin the raid.
+- **Bulk invite and remove now match names correctly on German realms.**
+- **No more phantom "you're owed an item" reminder** when no lootmaster is set.
+- **A sixth custom vote button no longer shows the Pass icon.**
 - **Bulk WoWUtils invites now auto-convert to a raid** so rosters over five actually fill up.
 - **Loot history player filter now groups a person's entries together** even across a nickname and a character name.
 - **Skyfury now detects correctly on German clients.**

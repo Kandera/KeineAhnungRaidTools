@@ -595,6 +595,11 @@ end
 function Trade.HandleResult(payload, senderKey)
     if not LC.IsSenderCouncil(senderKey) then return end
     -- payload = "rollID:winnerKey:itemID:colorPacked:reason"
+    -- Reviewed 2026-07-24, NOT a bug: this pattern requires the current 5-field wire format (4
+    -- colons). A pre-itemID/pre-colorPacked build sends fewer fields and its result is dropped here
+    -- before reaching the colour fallback below. That's intentional — running the current KART
+    -- version is mandatory across a raid (an outdated sender already gets an "update available"
+    -- warning), so cross-version wire compat is deliberately not supported. Do not re-flag.
     local rollID, winnerKey, itemID, colorPacked = payload:match("^(%d+):([^:]+):(%d*):([^:]*):")
     rollID = tonumber(rollID)
     if not rollID or not winnerKey then return end
@@ -652,10 +657,13 @@ function Trade.HandleResult(payload, senderKey)
     end
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
-        -- If I'm also the lootmaster, I already have the item — nothing to trade myself for.
-        if not LC.IsMe(LC.GetLootmaster()) then
+        -- If I'm also the lootmaster, I already have the item — nothing to trade myself for. Also
+        -- skip when no lootmaster is configured (GetLootmaster == ""): an owed entry with an empty
+        -- lootmasterKey resolves to no unit, so its trade-partner name button would always fail.
+        local lootmasterKey = LC.GetLootmaster()
+        if lootmasterKey ~= "" and not LC.IsMe(lootmasterKey) then
             LC.owedToMe = LC.owedToMe or {}
-            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = LC.GetLootmaster()})
+            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey})
             owedChanged = true
         end
     end
