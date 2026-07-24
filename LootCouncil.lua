@@ -769,6 +769,10 @@ function LC.OnStartLootRoll(rollID)
         local secs = KART_Settings.lcVoteSeconds or 20
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
         KART.LC.Council.ShowCouncilPanel(rollID, secs)
+        -- Leader never receives their own LC_START, so open their own vote window here too — the
+        -- same both-windows treatment HandleStart gives every other client (review #29), otherwise
+        -- the leader would be the one council member who couldn't cast their own vote.
+        LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs)
     end
 end
 
@@ -832,9 +836,11 @@ function LC.HandleStart(payload, senderKey)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
-    else
-        LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
     end
+    -- Council members also get the vote window now (review #29): a council member who is in the raid
+    -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
+    -- gets the panel above.
+    LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
 end
 
 -- Entry point for /kart add <item1> <item2> ... — lets the designated lootmaster hand item(s)
@@ -867,9 +873,9 @@ function LC.StartManualRoll(itemsText)
         -- their own window locally, same as HandleStart does for every other client.
         if LC.IsCouncil() then
             KART.LC.Council.ShowCouncilPanel(rollID, seconds)
-        else
-            LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
         end
+        -- Council also gets the vote window (review #29) — see the same pattern in LC.HandleStart.
+        LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
     end
 
     if not startedAny then
@@ -897,9 +903,11 @@ function LC.HandleManualStart(payload, senderKey)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
-    else
-        LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
     end
+    -- Council members also get the vote window now (review #29): a council member who is in the raid
+    -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
+    -- gets the panel above.
+    LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
 end
 
 -- =====================================================================
@@ -995,9 +1003,9 @@ function LC.StartTest(mode)
         local testRollID = TEST_ROLL_ID + (itemIdx - 1)
         if showCouncil then
             KART.LC.Council.ShowCouncilPanel(testRollID, KART_Settings.lcVoteSeconds or 20)
-        else
-            LC.Vote.ShowVotePopup(testRollID, LC.rollItems[testRollID], KART_Settings.lcVoteSeconds or 20)
         end
+        -- Match live: council now sees both windows (review #29), so a master-mode test does too.
+        LC.Vote.ShowVotePopup(testRollID, LC.rollItems[testRollID], KART_Settings.lcVoteSeconds or 20)
     end
 
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_TEST_STARTED, TEST_ITEM_COUNT))
