@@ -37,17 +37,8 @@ function Vote.CreateVoteList()
 
     -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
     -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
-    local closeBtn = CreateFrame("Button", nil, f)
-    closeBtn:SetSize(22, 22)
+    local closeBtn = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
     closeBtn:SetPoint("TOPRIGHT", -6, -6)
-    closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
-    closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    closeBtn.text:SetPoint("CENTER", 0, 1)
-    closeBtn.text:SetText("×")
-    table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
-    closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
-    closeBtn:SetScript("OnClick", function() f:Hide() end)
 
     local scrollFrame = CreateFrame("ScrollFrame", "KART_LCVoteListScroll", f, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 5, -32)

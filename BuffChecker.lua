@@ -246,16 +246,8 @@ function KART.CreateBuffCheckFrame()
         f.rows[i] = row
     end
 
-    local close = CreateFrame("Button", nil, f, "BackdropTemplate")
+    local close = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
     close:SetPoint("TOPRIGHT", -5, -2)
-    close:SetSize(20, 20)
-    close.text = close:CreateFontString(nil, "OVERLAY")
-    close.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    close.text:SetPoint("CENTER", 0, 1)
-    close.text:SetText("×")
-    close:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
-    close:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
-    close:SetScript("OnClick", function() f:Hide() end)
     f.closeBtn = close
 
     local function RequestAdvancedData()

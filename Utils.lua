@@ -59,6 +59,22 @@ function KART.CreateHeaderLine(frame, y)
     return line
 end
 
+-- "×"/"-"/"+" header buttons used by every popup window. The glyph FontString registers in
+-- KART.CloseButtonTexts so KART.UpdateStyles keeps its font in sync with the chosen font.
+function KART.CreateHeaderIconButton(parent, glyph, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(22, 22)
+    btn.text = btn:CreateFontString(nil, "OVERLAY")
+    btn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    btn.text:SetPoint("CENTER", 0, 1)
+    btn.text:SetText(glyph or "×")
+    table.insert(KART.CloseButtonTexts, btn.text)
+    btn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
+    btn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
+    btn:SetScript("OnClick", onClick)
+    return btn
+end
+
 -- Standardeinstellungen
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",

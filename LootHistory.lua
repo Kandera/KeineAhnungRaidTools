@@ -272,17 +272,8 @@ function LH.CreateWindow()
     table.insert(KART.DynamicLabels, f.title)
     KART.CreateHeaderLine(f, -28)
 
-    local closeBtn = CreateFrame("Button", nil, hdr)
-    closeBtn:SetSize(22, 22)
+    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
     closeBtn:SetPoint("RIGHT", -4, 0)
-    closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
-    closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    closeBtn.text:SetPoint("CENTER", 0, 1)
-    closeBtn.text:SetText("×")
-    table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
-    closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
-    closeBtn:SetScript("OnClick", function() f:Hide() end)
 
     -- Filter row: item search + player filter + reason filter + reset
     local searchHint = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

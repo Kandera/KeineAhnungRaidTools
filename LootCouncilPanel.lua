@@ -405,36 +405,18 @@ function Council.CreateCouncilPanel()
     -- longer string (e.g. the "Done" text) or the button layout changed.
     f.timerText = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 
-    local closeBtn = CreateFrame("Button", nil, hdr)
-    closeBtn:SetSize(22, 22)
-    closeBtn:SetPoint("RIGHT", -4, 0)
-    closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
-    closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    closeBtn.text:SetPoint("CENTER", 0, 1)
-    closeBtn.text:SetText("×")
-    table.insert(KART.CloseButtonTexts, closeBtn.text)
-    closeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
-    closeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     -- Only hides the window — the active roll's tab (and all others) stay tracked and reappear
     -- next time the panel is shown; this is a deliberate "get it out of my way for now", not a
     -- "discard" action. Use a tab's own "x" to actually dismiss an item, or the "-" button (below)
     -- to shrink the panel down to just its header instead of hiding it outright.
-    closeBtn:SetScript("OnClick", function() f:Hide() end)
+    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
+    closeBtn:SetPoint("RIGHT", -4, 0)
 
     -- Collapses the panel to just its title bar + item name, keeping it out of the way during
     -- normal raiding without losing track of what's being voted on (tabs/rows are hidden, not
     -- discarded — see LC.SetCouncilPanelMinimized). Sits left of the close button, same style.
-    local minimizeBtn = CreateFrame("Button", nil, hdr)
-    minimizeBtn:SetSize(22, 22)
+    local minimizeBtn = KART.CreateHeaderIconButton(hdr, "-", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
     minimizeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
-    minimizeBtn.text = minimizeBtn:CreateFontString(nil, "OVERLAY")
-    minimizeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    minimizeBtn.text:SetPoint("CENTER", 0, 1)
-    minimizeBtn.text:SetText("-")
-    table.insert(KART.CloseButtonTexts, minimizeBtn.text)
-    minimizeBtn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
-    minimizeBtn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
-    minimizeBtn:SetScript("OnClick", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
     f.minimizeBtn = minimizeBtn
     f.timerText:SetPoint("RIGHT", minimizeBtn, "LEFT", -6, 0)
 

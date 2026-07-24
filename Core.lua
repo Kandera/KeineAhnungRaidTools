@@ -558,9 +558,6 @@ function KART.UpdateStyles()
             KART.BuffCheckFrame.title:SetFont(fontPath, titleSize, "OUTLINE")
             KART.BuffCheckFrame.title:SetTextColor(1, 1, 1)
         end
-        if KART.BuffCheckFrame.closeBtn then
-            KART.BuffCheckFrame.closeBtn.text:SetFont(fontPath, 14, "OUTLINE")
-        end
         -- Headers im BuffChecker
         if KART.BuffCheckFrame.hName then KART.BuffCheckFrame.hName:SetFont(fontPath, 10, "") end
         if KART.BuffCheckFrame.hRdy then KART.BuffCheckFrame.hRdy:SetFont(fontPath, 10, "") end
