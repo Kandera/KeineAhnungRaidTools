@@ -266,6 +266,16 @@ function KART.Theme.AccentColor()
     return r, g, b
 end
 
+-- Base color for alternating row stripes: the configured window background lightened a touch.
+-- bgR/bgG/bgB have no settings UI anymore (the background color picker was removed with the
+-- artwork rework) but are kept as tunable saved values; this helper is their only consumer.
+function KART.GetRowStripeColor()
+    local br = (KART_Settings and KART_Settings.bgR or 10) / 100
+    local bg = (KART_Settings and KART_Settings.bgG or 10) / 100
+    local bb = (KART_Settings and KART_Settings.bgB or 10) / 100
+    return KART.Theme.Lighten(br, bg, bb, 0.06)
+end
+
 -- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
 -- overlay, if any — see KART.CreateGradientOverlay). Uses four quarter-circle masks (one per corner)
 -- instead of one full-region circle mask, producing proper rounded rectangles. Wrapped in pcall:

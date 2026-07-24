@@ -238,8 +238,7 @@ function WU.RefreshBossList()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i-1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT",   panel, "RIGHT",   0, 0)
-        local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
-        local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+        local lr, lg, lb = KART.GetRowStripeColor()
         row:SetBackdropColor(lr, lg, lb, i % 2 == 0 and 0.4 or 0.15)
         row:SetBackdropBorderColor(0.18, 0.18, 0.18, 1)
 

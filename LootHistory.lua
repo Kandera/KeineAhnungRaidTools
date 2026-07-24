@@ -529,8 +529,7 @@ function LH.Refresh()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
-        local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
-        local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+        local lr, lg, lb = KART.GetRowStripeColor()
         row.bg:SetColorTexture(lr, lg, lb, i % 2 == 0 and 0.35 or 0.1)
 
         row.dateText:SetText(date("%d.%m %H:%M", e.time or 0))

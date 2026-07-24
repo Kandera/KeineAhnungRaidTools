@@ -536,8 +536,7 @@ function KART.UpdateBuffCheck(isPreview)
             local row = KART.BuffCheckFrame.rows[i]
             if row.stripeBg then
                 if i % 2 == 0 then
-                    local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
-                    local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                    local lr, lg, lb = KART.GetRowStripeColor()
                     row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                     row.stripeBg:Show()
                 else
@@ -643,8 +642,7 @@ function KART.UpdateBuffCheck(isPreview)
         local row = KART.BuffCheckFrame.rows[i]
         if row.stripeBg then
             if i % 2 == 0 then
-                local br, bg, bb = (KART_Settings.bgR or 10)/100, (KART_Settings.bgG or 10)/100, (KART_Settings.bgB or 10)/100
-                local lr, lg, lb = KART.Theme.Lighten(br, bg, bb, 0.06)
+                local lr, lg, lb = KART.GetRowStripeColor()
                 row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                 row.stripeBg:Show()
             else
