@@ -1037,6 +1037,24 @@ function KART.DeepCopy(t)
     return copy
 end
 
+-- Recursively fills missing default keys into dst, at every level. Unlike a shallow merge, a nested
+-- default table that already exists in dst gets its missing sub-keys added instead of being skipped
+-- whole — so a settings/profile blob saved before a nested default gained a field still picks that
+-- field up on load. Only fills gaps; never overwrites a value dst already holds.
+function KART.MergeDefaults(dst, defaults)
+    for k, v in pairs(defaults) do
+        if type(v) == "table" then
+            if type(dst[k]) ~= "table" then
+                dst[k] = KART.DeepCopy(v)
+            else
+                KART.MergeDefaults(dst[k], v)
+            end
+        elseif dst[k] == nil then
+            dst[k] = v
+        end
+    end
+end
+
 -- Maps each of the 6 main-window tab-content panels to its ShowTab index. Used by
 -- KART.BuildSearchIndex to figure out which tab a given label belongs to, by walking up the
 -- label's parent chain until one of these panels is found.

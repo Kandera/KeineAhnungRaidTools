@@ -20,7 +20,7 @@ end
 function DT.RebuildIndex()
     DT.index = {}
     local cache = KART_WoWUtilsCache
-    if type(cache) ~= "table" or cache.schemaVersion ~= 1 or type(cache.players) ~= "table" then
+    if type(cache) ~= "table" or tonumber(cache.schemaVersion) ~= 1 or type(cache.players) ~= "table" then
         DT.RefreshStatusLabel()
         return
     end
@@ -110,7 +110,7 @@ function DT.RefreshStatusLabel()
 
     -- Treat a schema-version mismatch as "never synced": RebuildIndex bails and leaves the index
     -- empty in that case, so gains silently don't work — reporting a player count would be a lie.
-    if not syncedAt or (cache and cache.schemaVersion ~= 1) then
+    if not syncedAt or (cache and tonumber(cache.schemaVersion) ~= 1) then
         DT.statusLabel:SetText(L.DT_STATUS_NEVER_SYNCED)
         DT.statusLabel:SetTextColor(0.5, 0.5, 0.5)
         return
@@ -123,10 +123,10 @@ function DT.RefreshStatusLabel()
 
     local diffMin = math.floor((time() - syncedAt) / 60)
     local relStr
-    if diffMin < 1 then relStr = "<1m"
-    elseif diffMin < 60 then relStr = diffMin .. "m"
-    elseif diffMin < 1440 then relStr = math.floor(diffMin / 60) .. "h"
-    else relStr = math.floor(diffMin / 1440) .. "d" end
+    if diffMin < 1 then relStr = L.DT_TIME_LT1M
+    elseif diffMin < 60 then relStr = string.format(L.DT_TIME_MIN, diffMin)
+    elseif diffMin < 1440 then relStr = string.format(L.DT_TIME_HOUR, math.floor(diffMin / 60))
+    else relStr = string.format(L.DT_TIME_DAY, math.floor(diffMin / 1440)) end
 
     DT.statusLabel:SetText(string.format(L.DT_STATUS_SYNCED_FORMAT, relStr, playerCount))
     DT.statusLabel:SetTextColor(0.6, 0.9, 0.6)

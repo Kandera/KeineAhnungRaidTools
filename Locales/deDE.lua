@@ -339,4 +339,13 @@ KART.L_deDE = {
     DT_STATUS_NEVER_SYNCED = "Noch nie synchronisiert - KART Companion App ausführen.",
     DT_STATUS_SYNCED_FORMAT = "Vor %s synchronisiert (%d Spieler).",
     DT_TOOLTIP_GAIN        = "Gewinn: %+.1f%% (%s)",
+
+    -- Misc (added 2026-07)
+    TOOLTIP_LEFTCLICK      = "Linksklick:",
+    TOOLTIP_RIGHTCLICK     = "Rechtsklick:",
+    BC_SLOT_FALLBACK       = "Slot %d",
+    DT_TIME_LT1M           = "<1m",
+    DT_TIME_MIN            = "%dm",
+    DT_TIME_HOUR           = "%dh",
+    DT_TIME_DAY            = "%dT",
 }

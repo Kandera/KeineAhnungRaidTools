@@ -31,7 +31,7 @@ function KART.HandleChatInvite(msg, sender, event, ...)
     local message = KART.TrimString(KART.CaseFold(msg))
 
     if KART.InviteKeywordsTable[message] and (not IsInGroup() or KART.HasGroupPermissions()) then
-        if KART_Settings.autoConvertToRaid and IsInGroup() and not IsInRaid() and GetNumGroupMembers() >= 5 and not InCombatLockdown() then
+        if KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player") and IsInGroup() and not IsInRaid() and GetNumGroupMembers() >= 5 and not InCombatLockdown() then
             C_PartyInfo.ConvertToRaid()
         end
 

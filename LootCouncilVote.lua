@@ -440,11 +440,14 @@ function Vote.RefreshVoteListRows_Spacious(f)
 
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
-        row.btnArea:SetShown(not voted)
-        row.noteLabel:SetShown(not voted)
-        row.noteBox:SetShown(not voted)
-        row.votedText:SetShown(voted ~= nil)
-        row.votedBadge:SetShown(voted ~= nil)
+        -- A stored vote index with no matching button (the leader shrank the label set after we
+        -- voted) reads as unvoted, so the vote buttons come back instead of an empty badge.
+        local hasVote  = votedDef ~= nil
+        row.btnArea:SetShown(not hasVote)
+        row.noteLabel:SetShown(not hasVote)
+        row.noteBox:SetShown(not hasVote)
+        row.votedText:SetShown(hasVote)
+        row.votedBadge:SetShown(hasVote)
         if votedDef then
             -- The note the raider typed before voting is otherwise gone the moment the note box
             -- hides (see LC.votedNoteByMe) — show it alongside the vote so it's not just forgotten.
@@ -684,10 +687,13 @@ function Vote.RefreshVoteListRows_Compact(f)
 
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
-        row.chipArea:SetShown(not voted)
-        row.votedText:SetShown(voted ~= nil)
-        row.votedBadge:SetShown(voted ~= nil)
-        if voted then row.noteBox:Hide() end
+        -- A stored vote index with no matching button (the leader shrank the label set after we
+        -- voted) reads as unvoted, so the vote chips come back instead of an empty badge.
+        local hasVote  = votedDef ~= nil
+        row.chipArea:SetShown(not hasVote)
+        row.votedText:SetShown(hasVote)
+        row.votedBadge:SetShown(hasVote)
+        if hasVote then row.noteBox:Hide() end
         if votedDef then
             local label = votedDef.label
             local noteText = LC.votedNoteByMe[rollID]

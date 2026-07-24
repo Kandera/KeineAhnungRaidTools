@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
+- **Bulk WoWUtils invites now auto-convert to a raid** so rosters over five actually fill up.
+- **Loot history player filter now groups a person's entries together** even across a nickname and a character name.
+- **Skyfury now detects correctly on German clients.**
+- **Vote window no longer shows a blank badge** when the leader shortens the vote buttons after you've voted.
+- **Profiles now keep newer default settings** when loaded.
+- **Minimap tooltip and Droptimizer sync time now follow your language.**
 - **Fixed a login error** for characters that never touched the Loot Council font-size slider.
 - **Durability data now loads automatically on ready checks.**
 - **"Player is not ready" chat messages now use your language.**

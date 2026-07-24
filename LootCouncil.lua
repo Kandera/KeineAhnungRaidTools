@@ -123,7 +123,7 @@ end
 -- falling back to their own local setting only when solo / not yet synced (e.g. testing).
 function LC.GetButtonConfig()
     local raw
-    if UnitIsGroupLeader("player") or not LC.raidConfig.buttonLabels then
+    if UnitIsGroupLeader("player") or not LC.raidConfig.buttonLabels or LC.raidConfig.buttonLabels == "" then
         raw = (KART_Settings and KART_Settings.lcButtonLabels) or KART.L.LC_DEFAULT_BUTTONS
     else
         raw = LC.raidConfig.buttonLabels
@@ -285,9 +285,11 @@ function LC.GetRollsEnabled()
 end
 
 -- Sends the leader's authoritative settings (min quality, vote-button labels, rolls toggle,
--- council member list) to the raid so every client interprets votes/roles identically. No-ops
--- for non-leaders. Council members stays last in the payload since it's free text (raider names
--- separated by semicolons, not colons) — everything after the rolls flag is captured greedily.
+-- lootmaster, council member list) to the raid so every client interprets votes/roles identically.
+-- No-ops for non-leaders. Payload order is minQ:buttons:rolls:lootmaster:council — council stays
+-- last because it's the only greedy (.*) capture in HandleConfig's pattern, so it's the only field
+-- allowed to contain further colons; every field before it (lootmaster included) is one colon-free
+-- segment, which is why the synced free-text fields strip colons at input (LootCouncilSettings).
 --
 -- SendAddonMessage payloads are capped at 255 bytes by the underlying chat protocol. Button
 -- labels (up to 128 chars) plus a large council list (up to 255 chars, per its editbox's

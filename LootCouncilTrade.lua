@@ -90,12 +90,25 @@ function Trade.AssignWinner(rollID, playerKey, reason, colorDef)
     local prevWinner = LC.assignedWinners[rollID]
     if prevWinner then
         local dialog = StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] ---@diagnostic disable-line: undefined-global
-        dialog.text = string.format(KART.L.LC_REASSIGN_CONFIRM_TEXT, KART.Identity.ResolveDisplayName(prevWinner), KART.Identity.ResolveDisplayName(playerKey))
-        dialog.OnAccept = function() DoAssignWinner(rollID, playerKey, reason, colorDef) end
-        StaticPopup_Show("KART_LC_REASSIGN_CONFIRM") ---@diagnostic disable-line: undefined-global
+        -- Set only the (language-dependent) template text; the two names fill its %s via the show
+        -- args, and the assignment parameters ride along in `data` rather than a per-call OnAccept
+        -- closure. A second reassign opened while this popup is still up gets its own `data`, so
+        -- confirming either dialog runs its own assignment (the old closure-overwrite could run the
+        -- wrong one).
+        dialog.text = KART.L.LC_REASSIGN_CONFIRM_TEXT
+        StaticPopup_Show("KART_LC_REASSIGN_CONFIRM", ---@diagnostic disable-line: undefined-global
+            KART.Identity.ResolveDisplayName(prevWinner),
+            KART.Identity.ResolveDisplayName(playerKey),
+            { rollID = rollID, playerKey = playerKey, reason = reason, colorDef = colorDef })
     else
         DoAssignWinner(rollID, playerKey, reason, colorDef)
     end
+end
+
+-- Set once (not per Trade.AssignWinner call, which used to overwrite it): reads the per-show data
+-- table so concurrent reassign popups can't run each other's assignment.
+StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"].OnAccept = function(_, data) ---@diagnostic disable-line: undefined-global
+    if data then DoAssignWinner(data.rollID, data.playerKey, data.reason, data.colorDef) end
 end
 
 -- =====================================================================
@@ -359,7 +372,7 @@ LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
 
 function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
-    for i = 1, 6 do -- MAX_TRADE_ITEMS - 1, fixed by the trade UI (slot 6 is "will not be traded")
+    for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
         local itemString = KART.GetItemString(link)
         if itemString then
@@ -447,7 +460,7 @@ function Trade.OnTradeShow()
             local bag, slot = FindItemInBags(entry.itemLink, usedSlots)
             if bag then
                 local freeSlot
-                for i = 1, 6 do -- MAX_TRADE_ITEMS, fixed by the trade UI
+                for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
                     if not GetTradePlayerItemLink(i) then ---@diagnostic disable-line: undefined-global
                         freeSlot = i
                         break

@@ -14,7 +14,11 @@ local LC = KART.LC
 -- no catch-up sync on raid join the way loot history has, so someone who was offline when a
 -- note was written won't see it until it's edited again while they're online.
 function OfficerNotes.SetOfficerNote(playerKey, noteText)
-    noteText = KART.TrimString(noteText or "")
+    -- Strip colons: they're the LC_ONOTE payload separator, so a note containing one would shift
+    -- the receiver's capture. Same colon-safety rule the synced council/lootmaster fields follow
+    -- (LootCouncilSettings.StripColons). Stripped before both the local store and the broadcast so
+    -- every client keeps the identical note text.
+    noteText = (KART.TrimString(noteText or ""):gsub(":", ""))
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
     LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     KART.LC.Council.RefreshCouncilRows()

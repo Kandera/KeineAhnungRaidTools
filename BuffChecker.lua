@@ -3,14 +3,17 @@ local L = KART.L
 
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 
--- Zentrale Buff-Konfiguration für einfachere Wartung
+-- Zentrale Buff-Konfiguration für einfachere Wartung.
+-- Reviewed 2026-07 (see docs/REVIEW-DECISIONS.md): the name-only detections kept on purpose —
+-- flask (no Phiole branch, past Dragonflight), vantus ("Vantus"), bronze fallback ("Bronze"),
+-- and the oil name fallback that treats any oil as "best". Do not re-flag these.
 KART.BuffData = {
     { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
     { id = "sta",    labelKey = "BC_LABEL_STA",    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabelKey = "BC_REPORT_STA" },
     { id = "motw",   labelKey = "BC_LABEL_MOTW",   col = 4, icon = 136078,  class = "DRUID",   spells = {1126, 384461}, report = "buff", reportLabelKey = "BC_REPORT_MOTW" },
     { id = "shout",  labelKey = "BC_LABEL_SHOUT",  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabelKey = "BC_REPORT_SHOUT" },
     { id = "bronze", labelKey = "BC_LABEL_BRONZE", col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabelKey = "BC_REPORT_BRONZE" },
-    { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelsfurie"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
+    { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelszorn"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
     { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD" },
     { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK" },
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, nameMatch = "Vantus" },
@@ -269,7 +272,7 @@ function KART.CreateBuffCheckFrame()
                             countMap[s] = countMap[s] + 1
                         end
                         for _, s in ipairs(uniqueSlots) do
-                            local name = KART.SlotNames[s] or ("Slot " .. s)
+                            local name = KART.SlotNames[s] or string.format(L.BC_SLOT_FALLBACK, s)
                             local amt = countMap[s]
                             local amtStr = amt > 1 and (" (x" .. amt .. ")") or ""
                             GameTooltip:AddLine("- " .. name .. amtStr, 1, 0.2, 0.2)
@@ -415,7 +418,11 @@ function KART.UpdateBuffCheckThrottled()
     isThrottled = true
     C_Timer.After(1, function()
         isThrottled = false
-        KART.UpdateBuffCheck()
+        -- Re-check visibility: the window may have been closed during the 1s throttle window, in
+        -- which case a full row rebuild is wasted work.
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
+            KART.UpdateBuffCheck()
+        end
     end)
 end
 
@@ -716,15 +723,15 @@ function KART.UpdateBuffCheck(isPreview)
                         -- when spellId detection misses) — match any of them.
                         if type(buff.nameMatch) == "table" then
                             for _, nm in ipairs(buff.nameMatch) do
-                                if aura.name:find(nm) then match = true break end
+                                if aura.name:find(nm, 1, true) then match = true break end
                             end
-                        elseif aura.name:find(buff.nameMatch) then
+                        elseif aura.name:find(buff.nameMatch, 1, true) then
                             match = true
                         end
                     end
-                    if buff.isFood and not match and (aura.name:find("gesättigt") or aura.name:find("Well Fed")) then match = true end
-                    if buff.isFlask and (aura.name:find("Fläschchen") or aura.name:find("Phial") or aura.name:find("Flask")) then match = true end
-                    if buff.isRune and (aura.name:find("Augment") or aura.name:find("Verstärkungsrune")) then match = true end
+                    if buff.isFood and not match and (aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true)) then match = true end
+                    if buff.isFlask and (aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true) or aura.name:find("Flask", 1, true)) then match = true end
+                    if buff.isRune and (aura.name:find("Augment", 1, true) or aura.name:find("Verstärkungsrune", 1, true)) then match = true end
                     if buff.isOil then
                         if buff.bestSpells and type(aura.spellId) == "number" then
                             for _, sid in ipairs(buff.bestSpells) do
@@ -874,20 +881,14 @@ function KART.UpdateBuffCheck(isPreview)
             if buff.isRepair then has = KART.DurabilityCache[nameStr] or 100 end
             setInd(row, j, has, buff, KART.ClassCache)
             
-            local isMissing = false
-            local missingCount = 0
-            if buff.isGearCheck and type(has) == "string" and has ~= "0" and has ~= "unknown" then
-                isMissing = true
-                missingCount = select(2, has:gsub(",", "")) + 1
-            elseif not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong") then
-                isMissing = true
-            end
-            
-            if isMissing and buff.report then
+            -- Advanced-panel checks (oil, enchants, gems — page = "advanced") are never chat-reported:
+            -- that panel is a separate, opt-in view and its data must stay out of the raid /Report.
+            -- Only default-panel buff/item checks feed KART.MissingBuffs. Enforced by buff.report
+            -- (those advanced items carry no report field) plus an explicit page guard as a backstop.
+            local isMissing = not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong")
+            if isMissing and buff.report and buff.page ~= "advanced" then
                 if not buff.class or KART.ClassCache[buff.class] then
-                    local repName = nameStr
-                    if buff.isGearCheck then repName = nameStr .. " (-" .. missingCount .. ")" end
-                    table.insert(KART.MissingBuffs[buff.id], repName)
+                    table.insert(KART.MissingBuffs[buff.id], nameStr)
                 end
             end
             

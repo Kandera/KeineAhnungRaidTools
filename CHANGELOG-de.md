@@ -14,6 +14,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
+- **Massen-Invites aus WoWUtils wandeln jetzt automatisch in einen Raid um**, damit Rosters über fünf Spieler auch voll werden.
+- **Der Spieler-Filter im Loot-Verlauf fasst die Einträge einer Person jetzt zusammen** — auch über Nickname und Charakternamen hinweg.
+- **Himmelszorn wird auf deutschen Clients jetzt korrekt erkannt.**
+- **Das Abstimmungsfenster zeigt kein leeres Badge mehr**, wenn der Raidleiter die Vote-Buttons nach deiner Stimme kürzt.
+- **Profile übernehmen jetzt neuere Standardeinstellungen** beim Laden.
+- **Minimap-Tooltip und Droptimizer-Sync-Zeit folgen jetzt deiner Sprache.**
 - **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.
 - **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
 - **"Spieler ist nicht bereit"-Chatmeldungen nutzen jetzt deine Sprache.**

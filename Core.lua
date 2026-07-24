@@ -35,8 +35,8 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
     end,
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("Keine Ahnung Raid Tools")
-        tooltip:AddLine("|cffeda55fLeft-Click:|r " .. KART.L.TAB_PROMOTE)
-        tooltip:AddLine("|cffeda55fRight-Click:|r " .. KART.L.TAB_SETTINGS)
+        tooltip:AddLine("|cffeda55f" .. KART.L.TOOLTIP_LEFTCLICK .. "|r " .. KART.L.TAB_PROMOTE)
+        tooltip:AddLine("|cffeda55f" .. KART.L.TOOLTIP_RIGHTCLICK .. "|r " .. KART.L.TAB_SETTINGS)
     end,
 })
 
@@ -197,14 +197,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- before the Defaults merge fills a fresh KART_Settings.
         KART.Defaults.lcButtonLabels = KART.L.LC_DEFAULT_BUTTONS
 
-        -- Deep-copy table defaults (keybinds, minimap): assigning them by reference let the
-        -- live settings mutate KART.Defaults itself, which then made "Reset Defaults" a no-op
-        -- for those keys within the same session.
-        for k, v in pairs(KART.Defaults) do
-            if KART_Settings[k] == nil then
-                KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
-            end
-        end
+        -- Fill in any missing defaults (top-level and nested). MergeDefaults deep-copies table
+        -- defaults (keybinds, minimap) rather than assigning them by reference — a reference would
+        -- let the live settings mutate KART.Defaults itself, which then made "Reset Defaults" a
+        -- no-op for those keys within the same session — and merges sub-keys added by a later
+        -- addon version into a settings blob saved before they existed.
+        KART.MergeDefaults(KART_Settings, KART.Defaults)
 
         -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
         -- the Defaults merge above — Defaults.minimap = {}).
@@ -288,9 +286,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
 
-        if KART_Settings.autoConvertToRaid and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() >= 5 and not IsInRaid() then
+        if (KART_Settings.autoConvertToRaid or KART.pendingBulkRaidConvert) and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() >= 5 and not IsInRaid() then
             C_PartyInfo.ConvertToRaid()
         end
+        -- One-shot flag set by a bulk WoWUtils invite (Invite.lua) that started while solo/small:
+        -- convert once the invitees fill the party, then clear it (also on leaving the group).
+        if IsInRaid() or not IsInGroup() then KART.pendingBulkRaidConvert = false end
         KART.HandleAutoPromoteThrottled()
         
     elseif event == "READY_CHECK" then

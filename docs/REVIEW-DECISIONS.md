@@ -1,0 +1,77 @@
+# Review Decisions — deliberately-not-fixed findings
+
+Record of findings raised in the full-addon review (2026-07) that we **decided not to
+change**, so a future review doesn't re-flag them as new. Each entry names the file/line, the
+original concern, and why it stays as-is. When a decision is tied to a specific code spot, that
+spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
+
+## Excluded by decision
+
+- **Flask detection has no German "Phiole" term** (BuffChecker.lua, `flask` entry).
+  Phiole is a Dragonflight-era name; we are past Dragonflight, so the missing term is moot.
+  Flask detection stays name-based ("Fläschchen"/"Flask") without a Phiole branch.
+
+- **Oil name fallback marks any oil as "best"** (BuffChecker.lua `isOil` handling).
+  Accepted as-is. The name fallback (`find("Oil")/"Öl"`) intentionally treats any weapon oil
+  as good rather than distinguishing rank; we are not tracking wrong-rank oil for now.
+
+- **`vantus` buff matched name-only, English "Vantus"** (BuffChecker.lua, `vantus` entry).
+  Kept. Relies on the buff name containing "Vantus" on both clients; acceptable.
+
+- **`bronze` `nameMatch = "Bronze"` English-only** (BuffChecker.lua, `bronze` entry).
+  Kept. spellIDs are the primary detection path; the single-language name is a fallback only.
+
+- **Hardcoded UI micro-strings** kept as-is:
+  - `"CV"` council-votes column header (LootCouncilPanel.lua).
+  - `"iLvl"`, `"Item Level "`, `"s"` seconds suffix (LootCouncilPanel.lua).
+  - `"s"` seconds suffix in the vote timer (LootCouncilVote.lua).
+  These are compact, universally-understood labels; not worth a locale key.
+
+- **Clear-World-Markers macro uses `/cwm <n>`** (RaidleadBar.lua).
+  Verified fine — the command exists on the clients we target. No change.
+
+## Design rules
+
+- **The advanced Buff-Checker panel is never chat-reported.** Oil, enchants, and gems live on the
+  separate, opt-in advanced panel (`page = "advanced"` in `KART.BuffData`); their missing state must
+  never be posted to raid chat via the Report button. The dead "gear check → report" code path
+  (which used to build a `Name (-N)` string) was removed, and `KART.ReportMissingBuffs`' feed is
+  gated on `buff.report and buff.page ~= "advanced"`. Do not wire advanced-panel items into the
+  report.
+
+## Verified, no change needed
+
+- **`LC_CONFIG` colon-in-button-label desync** (LootCouncil.lua BroadcastRaidConfig / HandleConfig).
+  Already mitigated: the button-labels, council-members, and lootmaster edit boxes all strip
+  colons at input via `StripColons` (LootCouncilSettings.lua). No colon can enter these synced
+  fields, so the payload separator is safe. Not a live bug.
+
+- **AutoLog M+ keystone detection** (AutoLog.lua `MatchContent`).
+  `C_ChallengeMode.GetActiveKeystoneInfo()` returns 0/nil outside an active run; worst case is
+  logging a few seconds early on zone-in, which is harmless. The difficultyID path guards
+  independently. Kept as-is.
+
+- **Any group member can inject an `LC_VOTE`/`LC_ROLL`** inflating straw-poll counts
+  (LootCouncilVote.lua). By design: votes are keyed by resolved GUID (self-key only), so they
+  can't be forged for another player. The council straw poll is informational and never drives an
+  assignment automatically. No trust-model change.
+
+- **Repair/durability shows 100% for a churn `UNKNOWN` name** (BuffChecker.lua UpdateBuffCheck).
+  The cache miss defaults to 100% ("no data = assume fine", intended to avoid false alarms). The
+  `UNKNOWN` edge is transient and self-corrects on the next update tick; not worth risking the
+  repair renderer (which needs a number) to special-case it.
+
+- **Raidlead bar visibility during combat** (RaidleadBar.lua `UpdateRaidleadBarVisibility`).
+  The in-combat early-return is correct (protected calls), and Core.lua already re-calls this on
+  `PLAYER_REGEN_ENABLED`, so visibility IS reconciled when combat ends. Not a bug.
+
+- **`Trade.ResolveColorForReason` compares config labels across locales, and `GetDuplicateOrdinal`
+  counts test items** (LootCouncilTrade.lua). Both are fallback/test-only paths: the color compare
+  only runs when a peer sent no packed color (colorPacked is the primary path), and the ordinal
+  test-item overlap is only reachable while a test session is active. Left as-is.
+
+- **Static labels not refreshed on a live language switch** (LootCouncilPanel/Settings, MainFrame
+  council headers, no-winner/close/quality/voted-display buttons) and the hardcoded `"Friz Quadrata"`
+  font-fallback label. Kept: the language picker always triggers `ReloadUI` (see DESC_LANGUAGE), so
+  these are rebuilt on reload — registering them for live refresh would be dead code with no live
+  effect. "Friz Quadrata" is a font proper noun.

@@ -22,11 +22,7 @@ function KART.LoadProfile(name)
     for k, v in pairs(KART.DeepCopy(snapshot)) do
         KART_Settings[k] = v
     end
-    for k, v in pairs(KART.Defaults) do
-        if KART_Settings[k] == nil then
-            KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
-        end
-    end
+    KART.MergeDefaults(KART_Settings, KART.Defaults)
     if minimapTbl then
         local loaded = KART_Settings.minimap
         wipe(minimapTbl)

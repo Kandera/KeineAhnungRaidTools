@@ -339,6 +339,15 @@ KART.L_enUS = {
     DT_STATUS_NEVER_SYNCED = "Never synced - run the KART Companion app.",
     DT_STATUS_SYNCED_FORMAT = "Synced %s ago (%d players).",
     DT_TOOLTIP_GAIN        = "Gain: %+.1f%% (%s)",
+
+    -- Misc (added 2026-07)
+    TOOLTIP_LEFTCLICK      = "Left-Click:",
+    TOOLTIP_RIGHTCLICK     = "Right-Click:",
+    BC_SLOT_FALLBACK       = "Slot %d",
+    DT_TIME_LT1M           = "<1m",
+    DT_TIME_MIN            = "%dm",
+    DT_TIME_HOUR           = "%dh",
+    DT_TIME_DAY            = "%dd",
 }
 -- English is the master language.
 

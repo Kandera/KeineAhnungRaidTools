@@ -21,7 +21,11 @@ end
 local function GetFilteredEntries()
     local filtered = {}
     for _, e in ipairs(KART_LootHistory or {}) do
-        local matchPlayer = (not LH.filters.player) or (e.winner == LH.filters.player)
+        -- filters.player holds a stable id: a winnerKey (GUID) for modern entries, or a legacy
+        -- display name. Match either so switching filters catches every entry for that person.
+        local matchPlayer = (not LH.filters.player)
+            or (e.winnerKey and e.winnerKey ~= "" and e.winnerKey == LH.filters.player)
+            or (e.winner == LH.filters.player)
         local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
         local matchSearch = true
         if LH.filters.search ~= "" then
@@ -37,7 +41,10 @@ end
 
 local function JSONEscape(s)
     s = tostring(s or "")
-    s = s:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", ""):gsub("\t", "\\t")
+    s = s:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    -- Escape any remaining control characters (U+0000–U+001F) as \u00XX so the output is always
+    -- valid JSON even if an item name or reason ever contains a stray control byte.
+    s = s:gsub("[%z\1-\31]", function(c) return string.format("\\u%04x", string.byte(c)) end)
     return s
 end
 
@@ -57,13 +64,21 @@ end
 local DIFFICULTY_EN = {
     [1]  = "Normal",          -- 5-player dungeon
     [2]  = "Heroic",          -- 5-player dungeon
+    [3]  = "10 Player",       -- legacy raid
+    [4]  = "25 Player",       -- legacy raid
+    [5]  = "10 Player (Heroic)",
+    [6]  = "25 Player (Heroic)",
+    [7]  = "LFR",             -- legacy raid finder
     [8]  = "Mythic Keystone",
+    [9]  = "40 Player",       -- legacy raid
     [14] = "Normal",          -- raid
     [15] = "Heroic",          -- raid
     [16] = "Mythic",          -- raid
     [17] = "LFR",             -- raid finder
     [23] = "Mythic",          -- 5-player dungeon
-    [24] = "Timewalking",
+    [24] = "Timewalking",     -- dungeon
+    [33] = "Timewalking",     -- raid
+    [208] = "Delve",
 }
 
 -- Canonical English slot names for JSON export, keyed by INVTYPE_* token. Same reasoning as
@@ -99,6 +114,29 @@ local INVTYPE_EN = {
     INVTYPE_TABARD = "Tabard",
 }
 
+-- Canonical English item subtype for export, keyed by numeric classID/subClassID — locale-
+-- independent, unlike C_Item.GetItemInfoInstant's localized itemSubType ("Platte" on a German
+-- client). Same English-canonical reasoning as DIFFICULTY_EN/INVTYPE_EN. Covers armor and weapons
+-- (the item classes that pass through Loot Council); anything else exports an empty subType rather
+-- than leaking a localized name.
+local SUBTYPE_EN = {
+    [4] = { -- Armor
+        [0] = "Miscellaneous", [1] = "Cloth", [2] = "Leather", [3] = "Mail", [4] = "Plate",
+        [5] = "Cosmetic", [6] = "Shield",
+    },
+    [2] = { -- Weapon
+        [0] = "Axe", [1] = "Axe", [2] = "Bow", [3] = "Gun", [4] = "Mace", [5] = "Mace",
+        [6] = "Polearm", [7] = "Sword", [8] = "Sword", [9] = "Warglaive", [10] = "Staff",
+        [13] = "Fist Weapon", [15] = "Dagger", [16] = "Thrown", [18] = "Crossbow", [19] = "Wand",
+        [20] = "Fishing Pole",
+    },
+}
+
+local function SubTypeExport(classID, subClassID)
+    local byClass = classID and SUBTYPE_EN[classID]
+    return (byClass and subClassID and byClass[subClassID]) or ""
+end
+
 -- Localized difficulty name for on-screen display; falls back to the stored string for pre-id entries.
 function LH.DifficultyDisplay(e)
     if e.difficultyID then
@@ -130,9 +168,9 @@ function LH.BuildRCLootCouncilJSON()
     for i, e in ipairs(entries) do
         local itemID, subType, equipLocToken = 0, "", ""
         if KART.IsRealItemLink(e.item) then
-            local id, _, sType, eLoc = C_Item.GetItemInfoInstant(e.item)
+            local id, _, _, eLoc, _, classID, subClassID = C_Item.GetItemInfoInstant(e.item)
             itemID = id or 0
-            subType = sType or ""
+            subType = SubTypeExport(classID, subClassID)
             equipLocToken = eLoc or ""
         end
 
@@ -252,15 +290,24 @@ function LH.ShowExportDialog()
     f.editBox:HighlightText()
 end
 
+-- Returns the distinct winners as { id, label } entries. `id` is the stable identity (winnerKey
+-- GUID when present, else the stored display name for legacy entries) and is what the filter stores;
+-- `label` is the current resolved display — NSRT nickname / short name via Identity.ResolveDisplayName
+-- — so the same person's entries logged under different display names collapse to one filter option.
 function LH.GetUniquePlayers()
     local seen, list = {}, {}
     for _, e in ipairs(KART_LootHistory or {}) do
-        if e.winner and e.winner ~= "" and not seen[e.winner] then
-            seen[e.winner] = true
-            table.insert(list, e.winner)
+        local id = (e.winnerKey and e.winnerKey ~= "" and e.winnerKey) or e.winner
+        if id and id ~= "" and not seen[id] then
+            seen[id] = true
+            local label = e.winner
+            if e.winnerKey and e.winnerKey ~= "" then
+                label = KART.Identity.ResolveDisplayName(e.winnerKey) or e.winner
+            end
+            table.insert(list, { id = id, label = label })
         end
     end
-    table.sort(list)
+    table.sort(list, function(a, b) return (a.label or "") < (b.label or "") end)
     return list
 end
 
@@ -371,10 +418,10 @@ function LH.CreateWindow()
                 self.text:SetText(KART.L.LH_FILTER_ALL_PLAYERS)
                 LH.Refresh()
             end)
-            for _, name in ipairs(LH.GetUniquePlayers()) do
-                rootDescription:CreateButton(name, function()
-                    LH.filters.player = name
-                    self.text:SetText(name)
+            for _, p in ipairs(LH.GetUniquePlayers()) do
+                rootDescription:CreateButton(p.label, function()
+                    LH.filters.player = p.id
+                    self.text:SetText(p.label)
                     LH.Refresh()
                 end)
             end
@@ -940,7 +987,8 @@ function LH.HandleHistoryEntry(payload, senderKey)
                 local full = select(2, C_Item.GetItemInfo(item))
                 if not full then return end
                 for _, e in ipairs(KART_LootHistory or {}) do
-                    if e.time == t and e.winner == winner and e.item == item then
+                    local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
+                    if e.time == t and sameWinner and e.item == item then
                         e.item = full
                         break
                     end

@@ -103,10 +103,6 @@ function WU.InviteBoss(idx)
         return
     end
 
-    if KART_Settings.autoConvertToRaid and IsInGroup() and not IsInRaid() then -- already returned above if in combat
-        C_PartyInfo.ConvertToRaid()
-    end
-
     -- Build a lookup of players already in the group (with and without realm).
     local alreadyIn = {}
     for unit in KART.EachGroupUnit() do
@@ -116,6 +112,21 @@ function WU.InviteBoss(idx)
             alreadyIn[full:lower()] = true
             alreadyIn[name:lower()] = true
         end
+    end
+
+    -- Count who we'd actually invite (not already present) so we can decide up front whether the
+    -- roster needs to be a raid. A party caps at 5, so without converting, invites past slot 5
+    -- silently fail. Convert an existing party right now; if we're still solo, flag Core's
+    -- GROUP_ROSTER_UPDATE handler to convert the moment the invitees fill the party — see
+    -- KART.pendingBulkRaidConvert in Core.lua. An explicit bulk invite always intends a raid, so
+    -- this ignores the autoConvertToRaid preference. (In-combat already returned above.)
+    local toInvite = 0
+    for _, player in ipairs(boss.players) do
+        local short = player:match("([^%-]+)") or player
+        if not (alreadyIn[player:lower()] or alreadyIn[short:lower()]) then toInvite = toInvite + 1 end
+    end
+    if UnitIsGroupLeader("player") and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
+        if IsInGroup() then C_PartyInfo.ConvertToRaid() else KART.pendingBulkRaidConvert = true end
     end
 
     local invited = 0
