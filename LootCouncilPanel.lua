@@ -1172,6 +1172,8 @@ function Council.RefreshCouncilRows()
         if panel.rows[i] then panel.rows[i]:Hide() end
     end
 
+    panel.scrollChild:SetHeight(math.max(#members * 26, 1))
+
     LC.ApplyFontSize()
 end
 

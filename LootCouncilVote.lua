@@ -484,6 +484,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         if f.rows[i] then f.rows[i]:Hide() end
     end
 
+    f.scrollChild:SetHeight(math.max(y, 1))
     f:SetHeight(math.min(32 + y + 12, 600))
 
     LC.ApplyFontSize()
@@ -742,6 +743,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         if f.compactRows[i] then f.compactRows[i]:Hide() end
     end
 
+    f.scrollChild:SetHeight(math.max(#visibleRolls * (rowH + ROW_GAP), 1))
     f:SetHeight(math.min(32 + #visibleRolls * (rowH + ROW_GAP) + 12, 600))
 
     LC.ApplyFontSize()
