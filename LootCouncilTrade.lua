@@ -403,17 +403,12 @@ end
 function Trade.OnTradeShow()
     if KART_Settings.lcModuleEnabled == false then return end
 
-    local partnerName = UnitName("npc") -- the trade-partner unit token, a historical quirk of the trade API
-    if not partnerName and TradeFrameRecipientNameText then ---@diagnostic disable-line: undefined-global
-        partnerName = TradeFrameRecipientNameText:GetText() ---@diagnostic disable-line: undefined-global
-        -- Blizzard renders a foreign-realm partner as "Name (*)" — the old sub(1, -4) kept the
-        -- separating space, which made every downstream name match fail silently.
-        if partnerName then
-            partnerName = KART.TrimString(partnerName:gsub("%(%*%)", ""))
-        end
-    end
-    if not partnerName then return end
-    local partnerKey = (KART.Identity.ResolvePlayer(partnerName))
+    -- "npc" is the trade-partner unit token during TRADE_SHOW. Resolve it straight to a GUID key
+    -- (cross-realm-safe) rather than via UnitName("npc"), which returned nil for foreign-realm
+    -- partners and needed a TradeFrameRecipientNameText "(*)" text-parse fallback. UnitExists/UnitGUID
+    -- stay valid exactly where UnitName didn't, so that whole fallback is unnecessary.
+    if not UnitExists("npc") then return end
+    local partnerKey = (KART.Identity.ResolvePlayer("npc"))
     -- Remembered for LC.OnTradeClosed, which fires after the trade frame (and UnitName("npc"))
     -- has already started tearing down, so the partner has to be captured here instead. Set
     -- unconditionally (not gated on #LC.pendingTrades, which is specifically this client's own
