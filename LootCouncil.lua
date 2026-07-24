@@ -120,7 +120,7 @@ end
 function LC.GetButtonConfig()
     local raw
     if UnitIsGroupLeader("player") or not (LC.raidConfig and LC.raidConfig.buttonLabels) then
-        raw = (KART_Settings and KART_Settings.lcButtonLabels) or "BIS;Upgrade;Offspec;Sonstiges;Pass"
+        raw = (KART_Settings and KART_Settings.lcButtonLabels) or KART.L.LC_DEFAULT_BUTTONS
     else
         raw = LC.raidConfig.buttonLabels
     end
@@ -134,13 +134,10 @@ function LC.GetButtonConfig()
         end
     end
     if #result == 0 then
-        result = {
-            {label="BIS",       r=1.0,  g=0.15, b=0.0 },
-            {label="Upgrade",   r=0.0,  g=0.85, b=0.25},
-            {label="Offspec",   r=0.2,  g=0.4,  b=1.0 },
-            {label="Sonstiges", r=0.9,  g=0.75, b=0.0 },
-            {label="Pass",      r=0.55, g=0.55, b=0.55},
-        }
+        for i, label in ipairs(KART.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
+            local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
+            table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
+        end
     end
     return result
 end

@@ -169,6 +169,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             for k, v in pairs(KART.L_deDE) do KART.L[k] = v end
         end
 
+        -- The default vote-button set is user-visible text — pick it from the active locale
+        -- before the Defaults merge fills a fresh KART_Settings.
+        KART.Defaults.lcButtonLabels = KART.L.LC_DEFAULT_BUTTONS
+
         -- Deep-copy table defaults (keybinds, minimap): assigning them by reference let the
         -- live settings mutate KART.Defaults itself, which then made "Reset Defaults" a no-op
         -- for those keys within the same session.

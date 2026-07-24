@@ -205,6 +205,7 @@ KART.L_deDE = {
     LC_DESC_ROLLS_ENABLED  = "Jeder berechtigte Raider würfelt automatisch einen Wert von 1-100 (wie bei RCLootCouncil), sichtbar als eigene Spalte im Council-Panel. Rein informativ, beeinflusst keine Zuweisung automatisch. Wirkt sich auf den Raid nur aus, wenn du Raidleiter bist.",
     LC_SET_BUTTONS         = "Vote-Buttons (Semikolon-getrennt, max. 6):",
     LC_SET_BUTTONS_HINT    = "Beispiel: BIS;Upgrade;Offspec;Pass",
+    LC_DEFAULT_BUTTONS     = "BIS;Upgrade;Offspec;Sonstiges;Pass",
     LC_SET_COUNCIL         = "Weitere Council-Mitglieder (Semikolon-getrennt):",
     LC_SET_COUNCIL_HINT    = "Raidleiter ist immer automatisch im Council. Assistenten nicht. Charaktername ODER Northern Sky Raid Tools Nickname — bei Nickname zählt das für alle Charaktere mit diesem Nickname.",
     LC_SET_COUNCIL_PENDING = "%d Name(n) noch nicht aufgelöst — werden erkannt, sobald die Person online gesehen wird.",

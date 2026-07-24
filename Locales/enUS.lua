@@ -205,6 +205,7 @@ KART.L_enUS = {
     LC_DESC_ROLLS_ENABLED  = "Every eligible raider automatically rolls a 1-100 value (like RCLootCouncil), shown as its own column in the council panel. Purely informational — never drives an assignment automatically. Only takes effect for the raid when you are the raid leader.",
     LC_SET_BUTTONS         = "Vote buttons (semicolon-separated, max 6):",
     LC_SET_BUTTONS_HINT    = "Example: BIS;Upgrade;Offspec;Pass",
+    LC_DEFAULT_BUTTONS     = "BIS;Upgrade;Offspec;Other;Pass",
     LC_SET_COUNCIL         = "Additional council members (semicolon-separated):",
     LC_SET_COUNCIL_HINT    = "The raid leader is always in the council. Assistants are not. Character name OR Northern Sky Raid Tools nickname — with a nickname this applies to every character sharing it.",
     LC_SET_COUNCIL_PENDING = "%d name(s) not resolved yet — they'll be matched once seen online.",
