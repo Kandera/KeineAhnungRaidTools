@@ -179,6 +179,7 @@ function Trade.ClearRollState(rollID)
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
     LC.councilTabsNew[rollID]  = nil
+    if LC.rollLootedAt then LC.rollLootedAt[rollID] = nil end
 end
 
 function Trade.CreateTradeReminderFrame()

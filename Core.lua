@@ -155,6 +155,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_WoWUtilsCache = KART_WoWUtilsCache or {}
         KART_Profiles = KART_Profiles or {}
         KART_PlayerCache = KART_PlayerCache or {}
+        -- Prune identity-cache entries not seen for 90+ days so the SavedVariable doesn't
+        -- grow forever (it gains one entry per distinct group member ever encountered).
+        local pruneCutoff = time() - 90 * 24 * 60 * 60
+        for guid, entry in pairs(KART_PlayerCache) do
+            if (entry.lastSeen or 0) < pruneCutoff then KART_PlayerCache[guid] = nil end
+        end
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
         -- Apply language: copy the chosen locale's VALUES into KART.L instead of replacing
