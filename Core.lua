@@ -439,6 +439,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end
         end)
         if KART.AutoLog then KART.AutoLog.Evaluate() end
+        -- Retry now that every addon has loaded — a LibDurability provider that loads after KART
+        -- (e.g. MRT) is nil at BuffChecker parse time. Idempotent (see KART.RegisterLibDurability).
+        if KART.RegisterLibDurability then KART.RegisterLibDurability() end
     elseif event == "CHALLENGE_MODE_START" then
         if KART.AutoLog then KART.AutoLog.Evaluate() end
     elseif event == "CHAT_MSG_ADDON" and arg1 == "KART" then

@@ -56,12 +56,17 @@ KART.RegisterLocaleRefresher(function()
     -- labels up at creation; nothing else to re-apply here.
 end)
 
--- Integration von LibDurability (wird durch BigWigs/MRT bereitgestellt)
-local LibDurability = LibStub and LibStub("LibDurability", true)
-if LibDurability and LibDurability.Register then
+-- Integration von LibDurability (wird durch BigWigs/MRT bereitgestellt). LibDurability is
+-- LibStub-only (no global) and may be provided by an addon that loads AFTER KART (e.g. MRT — "M"
+-- sorts after "K"), so the lookup can be nil at parse time. Idempotent + retried from Core's
+-- PLAYER_ENTERING_WORLD once every addon has loaded, otherwise the repair column stays 100% for
+-- everyone else forever.
+function KART.RegisterLibDurability()
+    if KART._durabilityRegistered then return end
+    local LibDurability = LibStub and LibStub("LibDurability", true)
+    if not (LibDurability and LibDurability.Register) then return end
     LibDurability:Register("KeineAhnungRaidTools", function(percent, _, sender)
         if type(sender) ~= "string" or type(percent) ~= "number" then return end
-        
         KART.DurabilityCache[sender] = percent
         -- Servernamen abschneiden für saubere Zuordnung
         local shortName = sender:match("([^%-]+)")
@@ -73,7 +78,9 @@ if LibDurability and LibDurability.Register then
             KART.UpdateBuffCheckThrottled()
         end
     end)
+    KART._durabilityRegistered = true
 end
+KART.RegisterLibDurability()
 
 KART.BuffCheckMode = "default" -- Standardmodus: "default" oder "advanced"
 
