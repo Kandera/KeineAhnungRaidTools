@@ -195,6 +195,27 @@ function Vote.RefreshVoteListRowsIfShown()
     end
 end
 
+-- Shared click path for both layouts' vote buttons. Test rolls stay local (no group to
+-- broadcast to — see the original comment in the Spacious handler); real rolls broadcast.
+function Vote.CastVote(rollID, buttonIdx, noteBox)
+    if LC.votedByMe[rollID] then return end
+    LC.votedByMe[rollID] = buttonIdx
+    local note = KART.TrimString(noteBox and noteBox:GetText() or "")
+    LC.votedNoteByMe[rollID] = note
+    if LC.IsTestRoll(rollID) then
+        local myKey = (KART.Identity.ResolvePlayer("player"))
+        LC.votes[rollID] = LC.votes[rollID] or {}
+        LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
+        if LC.councilPanel and LC.councilPanel:IsShown() then
+            if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
+            KART.LC.Council.RefreshCouncilTabs()
+        end
+    else
+        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":" .. note)
+    end
+    Vote.RefreshVoteListRows()
+end
+
 -- "Spacious" style: one card per item, full window width each, large touch targets. The default
 -- and recommended style — see docs/superpowers/specs/2026-07-15-vote-window-layouts-design.md.
 function Vote.RefreshVoteListRows_Spacious(f)
@@ -462,27 +483,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 local capturedIdx    = bi
                 local capturedRollID = rollID
                 btn:SetScript("OnClick", function()
-                    if LC.votedByMe[capturedRollID] then return end
-                    LC.votedByMe[capturedRollID] = capturedIdx
-                    local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
-                    LC.votedNoteByMe[capturedRollID] = note
-                    if LC.IsTestRoll(capturedRollID) then
-                        -- Test rolls have no real raid to broadcast to (and testing solo may
-                        -- mean no group at all), so record the vote locally and push it
-                        -- straight into the Test-Master council panel if it's open, instead of
-                        -- relying on a round-trip through the addon channel that would never
-                        -- come back to this same client.
-                        local myKey = (KART.Identity.ResolvePlayer("player"))
-                        LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
-                        LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
-                        if LC.councilPanel and LC.councilPanel:IsShown() then
-                            if LC.activeRollID == capturedRollID then KART.LC.Council.RefreshCouncilRows() end
-                            KART.LC.Council.RefreshCouncilTabs()
-                        end
-                    else
-                        LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
-                    end
-                    Vote.RefreshVoteListRows()
+                    Vote.CastVote(capturedRollID, capturedIdx, row.noteBox)
                 end)
             end
         end
@@ -733,22 +734,7 @@ function Vote.RefreshVoteListRows_Compact(f)
                 local capturedIdx    = bi
                 local capturedRollID = rollID
                 btn:SetScript("OnClick", function()
-                    if LC.votedByMe[capturedRollID] then return end
-                    LC.votedByMe[capturedRollID] = capturedIdx
-                    local note = KART.TrimString(row.noteBox and row.noteBox:GetText() or "")
-                    LC.votedNoteByMe[capturedRollID] = note
-                    if LC.IsTestRoll(capturedRollID) then
-                        local myKey = (KART.Identity.ResolvePlayer("player"))
-                        LC.votes[capturedRollID] = LC.votes[capturedRollID] or {}
-                        LC.votes[capturedRollID][myKey] = {idx = capturedIdx, note = note}
-                        if LC.councilPanel and LC.councilPanel:IsShown() then
-                            if LC.activeRollID == capturedRollID then KART.LC.Council.RefreshCouncilRows() end
-                            KART.LC.Council.RefreshCouncilTabs()
-                        end
-                    else
-                        LC.SendLC("LC_VOTE:" .. capturedRollID .. ":" .. capturedIdx .. ":" .. note)
-                    end
-                    Vote.RefreshVoteListRows()
+                    Vote.CastVote(capturedRollID, capturedIdx, row.noteBox)
                 end)
 
                 -- Chip position doubles as the pencil icon's anchor point once all 5 default
