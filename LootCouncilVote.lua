@@ -754,7 +754,7 @@ end
 function Vote.SetPlayerVote(rollID, playerKey, buttonIdx)
     LC.votes[rollID] = LC.votes[rollID] or {}
     local prev = LC.votes[rollID][playerKey]
-    local note = (type(prev) == "table" and prev.note) or ""
+    local note = (prev and prev.note) or ""
     LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note}
 
     if LC.councilPanel and LC.councilPanel:IsShown() then

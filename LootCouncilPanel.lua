@@ -302,7 +302,7 @@ function Council.RefreshCouncilTabs()
             local anyVotes = false
             for key, voteData in pairs(LC.votes[capturedRollID] or {}) do
                 anyVotes = true
-                local idx = type(voteData) == "table" and voteData.idx or voteData
+                local idx = voteData.idx
                 local def = idx and buttons[tonumber(idx)]
                 GameTooltip:AddDoubleLine(KART.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
             end
@@ -687,10 +687,9 @@ function Council.RefreshCouncilRows()
         if fullName then
             local short    = fullName:match("([^%-]+)")
             local key      = (KART.Identity.ResolvePlayer(unit))
-            local voteData = votes[key]
-            -- Support both legacy number and new {idx, note} table
-            local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
-            local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
+            local voteData = votes[key] -- always {idx, note} — every writer produces tables
+            local voteIdx  = voteData and voteData.idx
+            local voteNote = (voteData and voteData.note) or ""
             local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit(unit, rollItem)
 
@@ -738,9 +737,9 @@ function Council.RefreshCouncilRows()
             if m.short == myShort then alreadyListed = true break end
         end
         if not alreadyListed and myShort ~= "" then
-            local voteData = votes[myKey]
-            local voteIdx  = voteData and (type(voteData) == "table" and voteData.idx or voteData)
-            local voteNote = voteData and type(voteData) == "table" and voteData.note or ""
+            local voteData = votes[myKey] -- always {idx, note} — every writer produces tables
+            local voteIdx  = voteData and voteData.idx
+            local voteNote = (voteData and voteData.note) or ""
             local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit("player", rollItem)
             table.insert(members, {
