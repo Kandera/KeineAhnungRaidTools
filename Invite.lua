@@ -20,6 +20,10 @@ function WU.ParseImport(rawText)
     if not rawText or KART.TrimString(rawText) == "" then return 0 end
 
     local parsedCount = 0
+    -- intentional: the invitelist capture [^;]+ is correct for the real WoWUtils export — each
+    -- invitelist is terminated by a trailing ";" ("...Name-Realm;"), so [^;]+ stops there and never
+    -- bleeds into the next boss block; %s+ absorbs the blank line before "invitelist:". Verified
+    -- against a real multi-boss export, not changed (review 2026-07-24).
     for encounterID, difficulty, bossName, playerStr in rawText:gmatch(
             "EncounterID:(%d+);Difficulty:([^;]+);Name:([^\n\r]+)%s+invitelist:([^;]+)") do
 
@@ -253,7 +257,7 @@ function WU.RefreshBossList()
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
             GameTooltip:SetText(boss.name, 1, 0.82, 0)
             GameTooltip:AddLine(boss.difficulty, 0.7, 0.7, 0.7)
-            GameTooltip:AddLine("EncounterID: " .. (boss.encounterID or "?"), 0.5, 0.5, 0.5)
+            GameTooltip:AddLine(KART.L.WU_ENCOUNTER_ID .. (boss.encounterID or "?"), 0.5, 0.5, 0.5)
             GameTooltip:AddLine(#boss.players .. " " .. KART.L.WU_PLAYERS, 0.8, 0.8, 0.8)
             GameTooltip:Show()
         end)

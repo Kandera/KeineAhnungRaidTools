@@ -152,7 +152,7 @@ function KART.CreateBuffCheckFrame()
     -- Neues Label: ReadyCheck (Rdy)
     local hRdy = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hRdy:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -35)
-    hRdy:SetText("Rdy")
+    hRdy:SetText("Rdy") -- intentional: short abbreviation kept un-localized by design (review 2026-07-24)
     hRdy:SetTextColor(0.8, 0.8, 0.8)
     f.hRdy = hRdy
 
@@ -438,11 +438,11 @@ local function setInd(row, idx, has, buffData, classes)
     if buffData.isGearCheck then
         local textObj = ind.text or ind
         if has == "unknown" or not has then
-            textObj:SetText("?")
+            textObj:SetText("?") -- intentional: status glyph kept un-localized by design (review 2026-07-24)
             textObj:SetTextColor(0.5, 0.5, 0.5)
             ind.missingSlots = nil
         elseif has == "0" then
-            textObj:SetText("OK")
+            textObj:SetText("OK") -- intentional: status glyph kept un-localized by design (review 2026-07-24)
             textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
             ind.missingSlots = nil
         else
@@ -564,6 +564,8 @@ function KART.UpdateBuffCheck(isPreview)
     end
 
     if isPreview then
+        -- Intentional: these preview sample reasons stay hardcoded German by design — sample data
+        -- for the settings preview only, never shown in the live ready-check (review 2026-07-24).
         local rcPreview = {"ready", "notready", "waiting", nil, "ready"}
         local rcReasonsPreview = {nil, "Katze brennt", "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil}
         for i = 1, 5 do
@@ -720,7 +722,7 @@ function KART.UpdateBuffCheck(isPreview)
                             match = true
                         end
                     end
-                    if buff.isFood and not match and (aura.name:find("Satt") or aura.name:find("Well Fed")) then match = true end
+                    if buff.isFood and not match and (aura.name:find("gesättigt") or aura.name:find("Well Fed")) then match = true end
                     if buff.isFlask and (aura.name:find("Fläschchen") or aura.name:find("Phial") or aura.name:find("Flask")) then match = true end
                     if buff.isRune and (aura.name:find("Augment") or aura.name:find("Verstärkungsrune")) then match = true end
                     if buff.isOil then

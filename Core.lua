@@ -449,7 +449,7 @@ function KART.UpdateStyles()
         -- Artwork background: only the ground texture fades with buffCheckAlpha so rows,
         -- buttons and text stay fully readable at low opacities.
         if KART.BuffCheckFrame.bg then
-            KART.BuffCheckFrame.bg:SetAlpha((KART_Settings.buffCheckAlpha or 95) / 100)
+            KART.BuffCheckFrame.bg:SetAlpha((KART_Settings.buffCheckAlpha or 90) / 100)
         end
         if KART.BuffCheckFrame.title then
             KART.BuffCheckFrame.title:SetFont(fontPath, titleSize, "OUTLINE")

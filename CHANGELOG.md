@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Durability data now loads automatically on ready checks.**
 - **"Player is not ready" chat messages now use your language.**
 - **Reset Defaults now resets everything**, including window positions and keybinds.
+- **Assign menu and equip tooltip now show nicknames** when that setting is on, instead of always the short name.
 - **The lootmaster no longer force-wins trash, collectibles or BoE items** — only council-relevant BoP gear.
 - **Loot Council is now explicitly raid-only.**
 - **Session, roll-start and history-sync messages are now sender-verified.**
@@ -47,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keybind capture no longer sticks on the wrong button** or resumes after the window closes.
 - **Droptimizer now picks the correct upgrade track** when an item was simmed at several.
 - **Officer notes no longer grow without bound.**
+- **Well-fed food buffs are now detected on German clients.**
+- **Player names with umlauts now resolve** for council, lootmaster and auto-promote.
+- **Loot won by a late-joining council member no longer logs as "???".**
+- **The council straw-poll bar now fills correctly.**
+- **Settings sliders now show their value right away** instead of staying blank until first dragged.
+- **Loading a profile now applies its saved language.**
 
 ### Changed
 - **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.

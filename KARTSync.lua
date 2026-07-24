@@ -156,8 +156,8 @@ local PREFIX_HANDLERS = {
     LC_ONOTE        = { lc = true, fn = function(payload, ctx) KART.LC.OfficerNotes.HandleOfficerNote(payload, SenderKey(ctx)) end },
     LC_RESULT       = { lc = true, fn = function(payload, ctx) KART.LC.Trade.HandleResult(payload, SenderKey(ctx)) end },
     LC_CONFIG       = { lc = true, fn = function(payload, ctx) KART.LC.HandleConfig(payload, SenderKey(ctx)) end },
-    LC_HIST_REQ     = { lc = true, fn = function(payload, ctx) KART.LH.HandleHistoryRequest(payload, ctx.sender) end },
-    LC_HIST_ENTRY   = { lc = true, fn = function(payload, ctx) KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end },
+    LC_HIST_REQ     = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryRequest(payload, ctx.sender) end end },
+    LC_HIST_ENTRY   = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end end },
     LC_SYNC_REQUEST = { lc = true, fn = function(payload, ctx) KART.LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end },
     RC_REASON = { fn = function(payload, ctx)
         KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}

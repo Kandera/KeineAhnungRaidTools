@@ -108,7 +108,9 @@ function DT.RefreshStatusLabel()
     local cache = KART_WoWUtilsCache
     local syncedAt = cache and cache.syncedAt
 
-    if not syncedAt then
+    -- Treat a schema-version mismatch as "never synced": RebuildIndex bails and leaves the index
+    -- empty in that case, so gains silently don't work — reporting a player count would be a lie.
+    if not syncedAt or (cache and cache.schemaVersion ~= 1) then
         DT.statusLabel:SetText(L.DT_STATUS_NEVER_SYNCED)
         DT.statusLabel:SetTextColor(0.5, 0.5, 0.5)
         return

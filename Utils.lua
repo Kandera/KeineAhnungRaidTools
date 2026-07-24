@@ -246,7 +246,9 @@ function KART.GetNickname(unit)
     if not ok or not nick or nick == "" then return nil end
     local realName = UnitName(unit)
     if nick == realName then return nil end -- no nickname set, NSAPI just echoed the real name back
-    return nick:lower(), nick
+    -- CaseFold (not :lower()) so an umlaut nickname folds the same way the promote/council
+    -- lists and Identity's name matching fold their side — otherwise umlaut nicks never match.
+    return KART.CaseFold(nick), nick
 end
 
 function KART.GetFontPath(name)
@@ -660,6 +662,13 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     s:HookScript("OnMouseDown", function() s.isDragging = true; glow:SetAlpha(0.5) end)
     s:HookScript("OnMouseUp", function() s.isDragging = false; glow:SetAlpha(0) end)
 
+    -- A slider whose saved value equals its minimum never fires OnValueChanged (SetValue(min) is a
+    -- no-op on a fresh slider), so valueText would stay blank until the first drag. Populate it on
+    -- show from the current value.
+    s:HookScript("OnShow", function(self)
+        self.valueText:SetText(math.floor(self:GetValue()))
+    end)
+
     s.tooltipText = tooltipText
     s:HookScript("OnEnter", function(self)
         if not self.tooltipText then return end
@@ -803,15 +812,15 @@ function KART.ShowInputDialog(opts)
             o.onAccept(text)
         end
 
-        f.btnOK = KART.CreateModernButton(f, ACCEPT)
+        f.btnOK = KART.CreateModernButton(f, KART.L.BTN_ACCEPT)
         f.btnOK:SetSize(120, 26)
         f.btnOK:SetPoint("BOTTOMLEFT", 15, 12)
         f.btnOK:SetScript("OnClick", accept)
 
-        local btnCancel = KART.CreateModernButton(f, CANCEL)
-        btnCancel:SetSize(120, 26)
-        btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
-        btnCancel:SetScript("OnClick", function() f:Hide() end)
+        f.btnCancel = KART.CreateModernButton(f, KART.L.BTN_CANCEL)
+        f.btnCancel:SetSize(120, 26)
+        f.btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
+        f.btnCancel:SetScript("OnClick", function() f:Hide() end)
 
         f.editBox:SetScript("OnEnterPressed", accept)
         f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
@@ -820,7 +829,10 @@ function KART.ShowInputDialog(opts)
     local f = inputDialog
     f.opts = opts
     f.title:SetText(opts.title)
-    f.btnOK.text:SetText(opts.okLabel or ACCEPT)
+    -- Re-set both button captions each show so they follow the KART language (which the picker
+    -- reloads to switch), not the WoW client locale that ACCEPT/CANCEL globals would carry.
+    f.btnOK.text:SetText(opts.okLabel or KART.L.BTN_ACCEPT)
+    f.btnCancel.text:SetText(KART.L.BTN_CANCEL)
     f.editBox:SetMaxLetters(opts.maxLetters or 64)
     f.editBox:SetText(opts.initialText or "")
     f:Show()

@@ -11,6 +11,9 @@ end
 function KART.LoadProfile(name)
     local snapshot = KART_Profiles[name]
     if not snapshot then return end
+    -- Language is only applied once at load (Core.lua) and the language picker itself reloads to
+    -- switch it, so a profile that stored a different language needs the same reload to take effect.
+    local prevLang = KART_Settings.language
     -- LibDBIcon holds a REFERENCE to the minimap sub-table it was registered with (Core.lua
     -- ADDON_LOADED) — keep that table's identity across profile loads, otherwise icon position
     -- changes are written into an orphaned table until the next reload.
@@ -33,6 +36,10 @@ function KART.LoadProfile(name)
         KART_Settings.minimap = minimapTbl
     end
     KART_Settings.activeProfile = name
+    if KART_Settings.language ~= prevLang then
+        ReloadUI() -- language change needs a reload; the reload re-runs SyncSettingsToUI on load
+        return
+    end
     KART.SyncSettingsToUI()
 end
 
@@ -58,7 +65,9 @@ function KART.ShowSaveProfileDialog()
         emptyMessage = KART.L.PROFILE_NAME_EMPTY,
         onAccept = function(name)
             if KART_Profiles[name] then
-                StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"].text = KART.L.PROFILE_OVERWRITE_CONFIRM_TEXT
+                local dlg = StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"]
+                dlg.text = KART.L.PROFILE_OVERWRITE_CONFIRM_TEXT
+                dlg.button1, dlg.button2 = KART.L.BTN_ACCEPT, KART.L.BTN_CANCEL
                 StaticPopup_Show("KART_PROFILE_OVERWRITE_CONFIRM", name, nil, { name = name })
             else
                 KART.SaveProfile(name)

@@ -648,7 +648,9 @@ KART.BtnProfileDelete:SetPoint("TOPLEFT", KART.BtnProfileSave, "TOPRIGHT", 10, 0
 KART.BtnProfileDelete:SetScript("OnClick", function()
     local name = KART_Settings.activeProfile
     if not name then return end
-    StaticPopupDialogs["KART_PROFILE_DELETE_CONFIRM"].text = KART.L.PROFILE_DELETE_CONFIRM_TEXT
+    local dlg = StaticPopupDialogs["KART_PROFILE_DELETE_CONFIRM"]
+    dlg.text = KART.L.PROFILE_DELETE_CONFIRM_TEXT
+    dlg.button1, dlg.button2 = KART.L.BTN_YES, KART.L.BTN_NO
     StaticPopup_Show("KART_PROFILE_DELETE_CONFIRM", name, nil, { name = name })
 end)
 
@@ -722,12 +724,12 @@ end
 KART.HideSearchPopout = CloseSearchPopout
 
 local function FilterSearch(query)
-    query = query:lower()
+    query = KART.CaseFold(query)
     local shown = 0
     if query ~= "" then
         for _, entry in ipairs(searchIndex) do
             if shown >= RESULT_ROW_COUNT then break end
-            if entry.text:lower():find(query, 1, true) then
+            if KART.CaseFold(entry.text):find(query, 1, true) then
                 shown = shown + 1
                 local row = resultRows[shown]
                 row.text:SetText(entry.text)

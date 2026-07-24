@@ -18,6 +18,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
 - **"Spieler ist nicht bereit"-Chatmeldungen nutzen jetzt deine Sprache.**
 - **Standardwerte-Reset setzt jetzt alles zurück**, inklusive Fensterpositionen und Tastenbelegung.
+- **Zuweisungs-Menü und Ausrüstungs-Tooltip zeigen jetzt Nicknames**, wenn diese Einstellung aktiv ist, statt immer den Kurznamen.
 - **Der Lootmaster gewinnt nicht mehr automatisch Trash, Sammelobjekte oder BoE-Items** — nur noch Council-relevante BoP-Gegenstände.
 - **Loot Council ist jetzt ausdrücklich Raid-only.**
 - **Session-, Roll-Start- und History-Sync-Nachrichten werden jetzt auf ihren Absender geprüft.**
@@ -47,6 +48,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Tastenbelegungs-Aufnahme hängt nicht mehr am falschen Button** und läuft nach dem Schließen nicht weiter.
 - **Droptimizer wählt jetzt den richtigen Upgrade-Track**, wenn ein Item auf mehreren simuliert wurde.
 - **Officer-Notizen wachsen nicht mehr unbegrenzt.**
+- **Gut-gesättigt-Foodbuffs werden jetzt auf deutschen Clients erkannt.**
+- **Spielernamen mit Umlauten werden jetzt korrekt aufgelöst** — für Council, Lootmaster und Auto-Promote.
+- **Loot, den ein spät beigetretenes Council-Mitglied gewinnt, wird nicht mehr als "???" protokolliert.**
+- **Der Council-Straw-Poll-Balken füllt sich jetzt korrekt.**
+- **Einstellungs-Regler zeigen ihren Wert jetzt sofort** statt leer zu bleiben, bis man sie einmal zieht.
+- **Das Laden eines Profils übernimmt jetzt dessen gespeicherte Sprache.**
 
 ### Geändert
 - **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.

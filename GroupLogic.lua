@@ -7,14 +7,14 @@ KART.PromoteNamesTable = {}
 -- Aktualisiert die lokalen Such-Tabellen basierend auf den Einstellungen
 function KART.UpdateCache()
     if KART_Settings then
-        local keywords = KART.SplitString(KART_Settings.inviteKeywords:lower(), ";")
+        local keywords = KART.SplitString(KART.CaseFold(KART_Settings.inviteKeywords or ""), ";")
         KART.InviteKeywordsTable = {}
         for _, kw in ipairs(keywords) do 
             local trimmed = KART.TrimString(kw)
             if trimmed ~= "" then KART.InviteKeywordsTable[trimmed] = true end 
         end
 
-        local names = KART.SplitString(KART_Settings.promoteNames:lower(), ";")
+        local names = KART.SplitString(KART.CaseFold(KART_Settings.promoteNames or ""), ";")
         KART.PromoteNamesTable = {}
         for _, name in ipairs(names) do
             -- Trim each entry (like the keywords above) — an untrimmed " bar" from "Foo; Bar" would
@@ -28,7 +28,7 @@ end
 -- Logik für Keyword-Einladungen
 function KART.HandleChatInvite(msg, sender, event, ...)
     if type(msg) ~= "string" then return end
-    local message = KART.TrimString(msg:lower())
+    local message = KART.TrimString(KART.CaseFold(msg))
 
     if KART.InviteKeywordsTable[message] and (not IsInGroup() or KART.HasGroupPermissions()) then
         if KART_Settings.autoConvertToRaid and IsInGroup() and not IsInRaid() and GetNumGroupMembers() >= 5 and not InCombatLockdown() then
@@ -80,7 +80,7 @@ function KART.HandleAutoPromote()
             -- Matches either the character's own short name (as always) or its Northern Sky Raid
             -- Tools nickname (see KART.GetNickname), so a name in the promote list applies to
             -- every character sharing that nickname, not just one specific alt.
-            local matches = shortName and KART.PromoteNamesTable[shortName:lower()]
+            local matches = shortName and KART.PromoteNamesTable[KART.CaseFold(shortName)]
             if not matches then
                 local nick = KART.GetNickname(unit)
                 matches = nick ~= nil and KART.PromoteNamesTable[nick]

@@ -12,11 +12,13 @@ local Identity = KART.Identity
 -- module exists to remove.
 local function FindUnitForName(name)
     if not name or name == "" then return nil end
-    local lowerName = name:lower()
+    -- CaseFold (not :lower()) so German umlaut names fold consistently — :lower() leaves
+    -- Ö/Ä/Ü untouched, so a config name cased differently than the client returns wouldn't match.
+    local lowerName = KART.CaseFold(name)
     for unit in KART.EachGroupUnit() do
         local fullName = UnitName(unit)
         if fullName then
-            if Ambiguate(fullName, "none"):lower() == lowerName then return unit end
+            if KART.CaseFold(Ambiguate(fullName, "none")) == lowerName then return unit end
             local nick = KART.GetNickname(unit)
             if nick and nick == lowerName then return unit end
         end
@@ -83,20 +85,20 @@ function Identity.ResolvePlayer(input)
     -- No live match — fall back to the persistent cache (last-known GUID for this name or
     -- nickname), for someone who was seen before but isn't currently in the group.
     -- Cache entries store the realm-free short name (UnitName), so normalize the input the same way
-    -- — trimmed, realm stripped, lowercased — otherwise a realm-qualified sender ("Name-Realm" from
+    -- — trimmed, realm stripped, case-folded — otherwise a realm-qualified sender ("Name-Realm" from
     -- CHAT_MSG_ADDON) never matches, and untrimmed input disagrees with the pending key below.
     local trimmed = KART.TrimString(input)
-    local lowerInput = (trimmed:match("([^%-]+)") or trimmed):lower()
+    local lowerInput = KART.CaseFold(trimmed:match("([^%-]+)") or trimmed)
     if KART_PlayerCache then
         for guid, entry in pairs(KART_PlayerCache) do
-            if (entry.name and entry.name:lower() == lowerInput) or (entry.nickname and entry.nickname:lower() == lowerInput) then
+            if (entry.name and KART.CaseFold(entry.name) == lowerInput) or (entry.nickname and KART.CaseFold(entry.nickname) == lowerInput) then
                 return guid, false
             end
         end
     end
 
     -- Never seen — pending.
-    return KART.TrimString(input):lower(), true
+    return KART.CaseFold(KART.TrimString(input)), true
 end
 
 -- Inverse of ResolvePlayer, for rendering a stored key back to a human-readable name. Only needed

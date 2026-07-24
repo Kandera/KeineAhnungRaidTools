@@ -698,7 +698,6 @@ function Council.RefreshCouncilRows()
     local rollID  = LC.activeRollID
     local votes   = (rollID and LC.votes[rollID]) or {}
     local buttons = LC.GetButtonConfig()
-    local numMem  = GetNumGroupMembers()
 
     local rollItem = LC.rollItems[rollID]
     if rollID and rollItem and LC.IsRealItemLink(rollItem) and not LC.pendingItemLoads[rollID]
@@ -734,6 +733,7 @@ function Council.RefreshCouncilRows()
         rollItemIlvl = ilvl
     end
     if panel.ilvlText then
+        -- intentional: "Item Level" prefix kept un-localized by design (review 2026-07-24)
         panel.ilvlText:SetText(rollItemIlvl and ("Item Level " .. rollItemIlvl) or "")
     end
 
@@ -895,7 +895,7 @@ function Council.RefreshCouncilRows()
             row.councilVoteBtn:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.councilVoteBtn:SetBackdropColor(0, 0, 0, 0.4)
 
-            -- Fill proportional to pollCount/numMem, so the tally reads as a bar at a glance
+            -- Fill proportional to pollCount/councilSize, so the tally reads as a bar at a glance
             -- instead of requiring the number to be read every time (see the update below).
             row.councilVoteBtn.fill = row.councilVoteBtn:CreateTexture(nil, "ARTWORK")
             row.councilVoteBtn.fill:SetColorTexture(1, 0.85, 0.2, 1)
@@ -957,7 +957,6 @@ function Council.RefreshCouncilRows()
         -- player and then switching to item B's tab would keep that player highlighted green
         -- there too, even though they never won item B.
         local isWinner            = (rollID ~= nil and m.key == LC.assignedWinners[rollID])
-        local capturedShort       = m.short
         local capturedKey         = m.key
         local capturedRoll        = rollID
         local capturedNote        = m.voteNote or ""
@@ -1017,6 +1016,7 @@ function Council.RefreshCouncilRows()
         -- the character short name whenever no nickname is available, so the toggle is always
         -- safe to leave on even for raiders without NSRT or without a nickname set.
         local displayName = (KART_Settings.lcShowNickNames and m.nickname) or m.short or "?"
+        local capturedDisplayName = displayName
         row.nameText:SetText(displayName)
         row.nameText:SetTextColor(nr, ng, nb)
 
@@ -1117,7 +1117,11 @@ function Council.RefreshCouncilRows()
         end
         row.councilVoteBtn.fill:SetShown(pollCount > 0)
         if pollCount > 0 then
-            row.councilVoteBtn.fill:SetWidth(38 * math.min(pollCount / math.max(numMem, 1), 1))
+            -- Fill as a share of the COUNCIL, not the whole raid (numMem) — only council members
+            -- cast straw-poll picks, so a raid-sized denominator could never fill even at unanimity.
+            local councilSize = 0
+            for _ in pairs(LC.CouncilNamesTable or {}) do councilSize = councilSize + 1 end
+            row.councilVoteBtn.fill:SetWidth(38 * math.min(pollCount / math.max(councilSize, 1), 1))
             row.councilVoteBtn.fill:SetAlpha(votedByMe and 0.4 or 0.22)
         end
         row.councilVoteBtn:SetScript("OnClick", function()
@@ -1161,7 +1165,7 @@ function Council.RefreshCouncilRows()
         -- The panel never closes on its own here — only the X / Close button does.
         row:SetScript("OnClick", function(self)
             if not capturedRoll or not capturedKey then return end
-            Council.ShowAssignMenu(self, capturedRoll, capturedKey, capturedShort, capturedVoteDef)
+            Council.ShowAssignMenu(self, capturedRoll, capturedKey, capturedDisplayName, capturedVoteDef)
         end)
         -- Hover highlight only — no tooltip on the row itself. All tooltip content lives on
         -- the equip-icon hitbox below, so something is only shown while hovering that icon.
@@ -1194,7 +1198,7 @@ function Council.RefreshCouncilRows()
             else
                 GameTooltip:SetText(rollItem or "???", 1, 1, 1)
             end
-            GameTooltip:AddLine(capturedShort or "?", nr, ng, nb)
+            GameTooltip:AddLine(capturedDisplayName or "?", nr, ng, nb)
             if dtEnabled and capturedGainPct then
                 GameTooltip:AddLine(string.format(KART.L.DT_TOOLTIP_GAIN,
                     capturedGainPct, capturedGainSource or "?"), 0.6, 0.9, 0.6, true)

@@ -602,8 +602,11 @@ function Trade.HandleResult(payload, senderKey)
     -- A council peer who joined late never tracked this roll, so LC.rollItems[rollID] is nil and the
     -- winner notification / history / trade reminder would all show "???". Rebuild a link from the
     -- itemID carried in the payload (full link if the item is cached, bare item string otherwise).
+    -- Rebuild when we have no link OR only a non-real placeholder ("???" from a late-joiner who saw
+    -- LC_START but never resolved the link) — a truthy "???" would otherwise skip this and land in
+    -- the winner popup / history.
     local itemLink = LC.rollItems[rollID]
-    if not itemLink and itemID ~= "" then
+    if (not itemLink or not LC.IsRealItemLink(itemLink)) and itemID ~= "" then
         itemLink = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
         LC.rollItems[rollID] = itemLink
     end

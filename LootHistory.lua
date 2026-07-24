@@ -66,6 +66,39 @@ local DIFFICULTY_EN = {
     [24] = "Timewalking",
 }
 
+-- Canonical English slot names for JSON export, keyed by INVTYPE_* token. Same reasoning as
+-- DIFFICULTY_EN above: _G[token] would return the WoW *client-locale* slot name ("Kopf" on a
+-- German client), so a mixed-language raid would produce inconsistent "equipLoc" fields. Mapping
+-- the locale-independent token to its English name keeps the export English-canonical, matching
+-- what an English client's RCLootCouncil export would contain.
+local INVTYPE_EN = {
+    INVTYPE_HEAD = "Head",
+    INVTYPE_NECK = "Neck",
+    INVTYPE_SHOULDER = "Shoulder",
+    INVTYPE_BODY = "Shirt",
+    INVTYPE_CHEST = "Chest",
+    INVTYPE_ROBE = "Chest",
+    INVTYPE_WAIST = "Waist",
+    INVTYPE_LEGS = "Legs",
+    INVTYPE_FEET = "Feet",
+    INVTYPE_WRIST = "Wrist",
+    INVTYPE_HAND = "Hands",
+    INVTYPE_FINGER = "Finger",
+    INVTYPE_TRINKET = "Trinket",
+    INVTYPE_CLOAK = "Back",
+    INVTYPE_WEAPON = "One-Hand",
+    INVTYPE_SHIELD = "Off Hand",
+    INVTYPE_2HWEAPON = "Two-Hand",
+    INVTYPE_WEAPONMAINHAND = "Main Hand",
+    INVTYPE_WEAPONOFFHAND = "Off Hand",
+    INVTYPE_HOLDABLE = "Held In Off-hand",
+    INVTYPE_RANGED = "Ranged",
+    INVTYPE_RANGEDRIGHT = "Ranged",
+    INVTYPE_THROWN = "Thrown",
+    INVTYPE_RELIC = "Relic",
+    INVTYPE_TABARD = "Tabard",
+}
+
 -- Localized difficulty name for on-screen display; falls back to the stored string for pre-id entries.
 function LH.DifficultyDisplay(e)
     if e.difficultyID then
@@ -121,7 +154,7 @@ function LH.BuildRCLootCouncilJSON()
             JSONString("isAwardReason", "false"),
             JSONString("rollType", "normal"),
             JSONString("subType", subType),
-            JSONString("equipLoc", equipLocToken ~= "" and (_G[equipLocToken] or "") or ""),
+            JSONString("equipLoc", (equipLocToken ~= "" and INVTYPE_EN[equipLocToken]) or ""),
             JSONString("note", ""),
             JSONString("owner", ""),
             JSONString("itemName", GetItemNameFromLink(e.item)),
@@ -852,12 +885,18 @@ function LH.HandleHistoryEntry(payload, senderKey)
     end
 
     KART_LootHistory = KART_LootHistory or {}
+    -- Locale-independent item string (not the full link, which differs between DE/EN clients and
+    -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
+    -- match below and the duplicate check further down.
+    local incomingStr = KART.GetItemString(itemLink)
     -- A reassignment carries the same rollID + item with a new winner — replace the prior entry
     -- for this roll rather than stacking a duplicate (mirrors LH.LogHistory). Matching item too
     -- guards against a manual rollID from a different session colliding on a different item.
     if rollID then
         for i = #KART_LootHistory, 1, -1 do
-            if KART_LootHistory[i].rollID == rollID and KART_LootHistory[i].item == itemLink then
+            local e = KART_LootHistory[i]
+            local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+            if e.rollID == rollID and sameItem then
                 table.remove(KART_LootHistory, i)
                 break
             end
@@ -866,7 +905,6 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Skip if we already have this award. Compare by the stable identity key + locale-independent
     -- item string (not display name + full link, which differ between DE/EN clients), and allow a
     -- few seconds of clock skew between the two clients that logged it.
-    local incomingStr = KART.GetItemString(itemLink)
     for _, e in ipairs(KART_LootHistory) do
         local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
         local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)

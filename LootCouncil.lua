@@ -911,6 +911,11 @@ function LC.StartManualRoll(itemsText)
 
         LC.rollItems[rollID] = itemLink
         LC.votes[rollID]     = {}
+        -- Start the BoP trade-timeout clock at roll creation rather than at assign time
+        -- (AddPendingTrade's fallback): we can't know a manually-added item's real Blizzard loot
+        -- time, but roll creation is the earliest, most conservative moment we control.
+        LC.rollLootedAt = LC.rollLootedAt or {}
+        LC.rollLootedAt[rollID] = GetTime()
 
         local msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink
         -- Guard the 255-byte SendAddonMessage cap: a very long item link (many bonus IDs) would be
