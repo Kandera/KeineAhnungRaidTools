@@ -704,8 +704,11 @@ function LH.HandleHistoryRequest(payload, senderFullName)
         toSend = trimmed
     end
 
-    C_Timer.After(math.random() * 2, function()
-        for _, e in ipairs(toSend) do
+    -- Random base delay de-collides multiple answering peers; the per-entry 0.2s spacing keeps
+    -- a 30-entry reply under the client's addon-message throttle instead of bursting one frame.
+    local baseDelay = math.random() * 2
+    for i, e in ipairs(toSend) do
+        C_Timer.After(baseDelay + (i - 1) * 0.2, function()
             local colorPacked = ""
             if e.color then
                 colorPacked = string.format("%d,%d,%d",
@@ -715,8 +718,8 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             local msg = string.format("LC_HIST_ENTRY:%d:%s:%s:%s:%s:%s:%s",
                 e.time or 0, e.winner or "", e.difficulty or "", e.reason or "", e.class or "", colorPacked, e.item or "")
             C_ChatInfo.SendAddonMessage("KART", msg, "WHISPER", senderFullName)
-        end
-    end)
+        end)
+    end
 end
 
 -- Runs on the requester when a peer whispers back a missing entry.
