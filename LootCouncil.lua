@@ -312,6 +312,18 @@ function LC.BroadcastRaidConfig()
     LC.SendLC(prefix .. council)
 end
 
+-- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
+-- the full raid config per letter floods the raid with addon messages. Coalesce edits into a single
+-- broadcast ~1s after typing stops (trailing edge, so the final complete text is what actually goes
+-- out — unlike the leading-edge throttles elsewhere, which would send partial text mid-word).
+function LC.BroadcastRaidConfigThrottled()
+    if LC._cfgBroadcastTimer then LC._cfgBroadcastTimer:Cancel() end
+    LC._cfgBroadcastTimer = C_Timer.NewTimer(1, function()
+        LC._cfgBroadcastTimer = nil
+        LC.BroadcastRaidConfig()
+    end)
+end
+
 -- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
 -- accepted from the actual current raid/party leader — otherwise a forged LC_CONFIG could add the
 -- sender's own name to CouncilNamesTable below and self-promote to council on every client.

@@ -184,7 +184,7 @@ function LC.BuildSettingsPanel(parent)
     eb:SetScript("OnTextChanged", function(self)
         if StripColons(self) then return end
         KART_Settings.lcButtonLabels = self:GetText()
-        LC.BroadcastRaidConfig()
+        LC.BroadcastRaidConfigThrottled()
     end)
 
     local hint = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -208,7 +208,7 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetScript("OnTextChanged", function(self)
         if StripColons(self) then return end
         KART_Settings.lcCouncilMembers = self:GetText()
-        LC.BroadcastRaidConfig()
+        LC.BroadcastRaidConfigThrottled()
     end)
 
     local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -263,7 +263,7 @@ function LC.BuildSettingsPanel(parent)
     ebL:SetScript("OnTextChanged", function(self)
         if StripColons(self) then return end
         KART_Settings.lcLootmaster = self:GetText()
-        LC.BroadcastRaidConfig()
+        LC.BroadcastRaidConfigThrottled()
     end)
 
     local hintLootmaster = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
