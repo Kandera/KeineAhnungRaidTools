@@ -651,7 +651,8 @@ function KART.UpdateBuffCheck(isPreview)
                 row.stripeBg:Hide()
             end
         end
-        local nameStr = UnitName(unit)
+        -- roster churn can briefly yield nil; UNKNOWN is Blizzard's own localized "Unknown" string
+        local nameStr = UnitName(unit) or UNKNOWN ---@diagnostic disable-line: undefined-global
         local _, class = UnitClass(unit)
 
         -- Offline Check
