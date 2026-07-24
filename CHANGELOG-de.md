@@ -7,6 +7,9 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Hinzugefügt
+- **Die gesamte Oberfläche folgt jetzt der Spracheinstellung** — inklusive Hauptfenster, Einstellungen und Tooltips.
+
 ### Behoben
 - **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.
 - **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
