@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **The whole UI now follows the language setting** — main window, settings and tooltips included.
 - **Council members can now cast their own loot vote.**
+- **Loot history is now paginated.**
 
 ### Fixed
 - **Fixed a login error** for characters that never touched the Loot Council font-size slider.

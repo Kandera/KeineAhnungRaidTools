@@ -296,6 +296,7 @@ KART.L_deDE = {
     LH_NO_REASON           = "Ohne Grund",
     LH_EMPTY               = "Noch keine Einträge.",
     LH_COUNT_FORMAT        = "%d von %d Einträgen",
+    LH_PAGE_INDICATOR      = "Seite %d / %d",
     LH_BTN_CLEAR           = "Verlauf leeren",
     LH_CLEAR_CONFIRM_TEXT  = "Gesamten Loot-Verlauf wirklich löschen? Dies kann nicht rückgängig gemacht werden.",
     LH_BTN_EXPORT_JSON     = "JSON exportieren",

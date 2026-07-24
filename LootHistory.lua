@@ -407,6 +407,7 @@ function LH.CreateWindow()
     KART.LHScrollThumb = thumb
 
     f.scrollChild = scrollChild
+    f.scrollFrame = scrollFrame
     f.rows        = {}
 
     -- Empty-state label
@@ -436,6 +437,31 @@ function LH.CreateWindow()
     btnExport:SetPoint("BOTTOMRIGHT", btnClear, "BOTTOMLEFT", -6, 0)
     btnExport:SetScript("OnClick", function() LH.ShowExportDialog() end)
 
+    -- Pagination controls, anchored just left of the export button and growing leftward, so they
+    -- never collide with the right-hand buttons regardless of their localized widths. The list uses
+    -- a fit-to-window page size (see LH.Refresh) and so never scrolls — Prev/Next page through it.
+    f.nextPageBtn = KART.CreateModernButton(f, ">")
+    f.nextPageBtn:SetSize(24, 22)
+    f.nextPageBtn:SetPoint("RIGHT", btnExport, "LEFT", -10, -1)
+    f.nextPageBtn:SetScript("OnClick", function()
+        LH.currentPage = (LH.currentPage or 1) + 1
+        LH.Refresh() -- clamped inside Refresh
+    end)
+
+    f.pageIndicator = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.pageIndicator:SetSize(70, 14)
+    f.pageIndicator:SetJustifyH("CENTER")
+    f.pageIndicator:SetPoint("RIGHT", f.nextPageBtn, "LEFT", -6, 1)
+    f.pageIndicator:SetTextColor(0.6, 0.6, 0.6)
+
+    f.prevPageBtn = KART.CreateModernButton(f, "<")
+    f.prevPageBtn:SetSize(24, 22)
+    f.prevPageBtn:SetPoint("RIGHT", f.pageIndicator, "LEFT", -6, -1)
+    f.prevPageBtn:SetScript("OnClick", function()
+        LH.currentPage = math.max(1, (LH.currentPage or 1) - 1)
+        LH.Refresh()
+    end)
+
     LH.historyWindow = f
 
     -- Restore saved position
@@ -462,7 +488,46 @@ function LH.Refresh()
     f.countText:SetText(string.format(KART.L.LH_COUNT_FORMAT, #filtered, total))
     f.emptyLabel:SetShown(#filtered == 0)
 
-    for i, e in ipairs(filtered) do
+    -- Fit-to-window page size from the visible row area (26px stride) so the list never needs an
+    -- inner scrollbar. Cached once the frame has a real height (the first Refresh runs pre-Show, so
+    -- GetHeight is 0 then); 11 until then — its true value at the default window size, so even that
+    -- first pre-show render is already correct.
+    if (not f.pageSize) and f.scrollFrame then
+        local h = f.scrollFrame:GetHeight()
+        if h and h > 0 then f.pageSize = math.max(1, math.floor(h / 26)) end
+    end
+    local pageSize = f.pageSize or 11
+
+    -- Snap back to the first (newest) page whenever the active filter/search changes; Prev/Next move
+    -- within the same result set and leave the signature untouched, so they don't trigger a reset.
+    local sig = (LH.filters.player or "") .. "\1" .. (LH.filters.reason or "") .. "\1" .. (LH.filters.search or "")
+    if sig ~= LH._lastFilterSig then
+        LH.currentPage = 1
+        LH._lastFilterSig = sig
+    end
+
+    local totalPages = math.max(1, math.ceil(#filtered / pageSize))
+    LH.currentPage = math.min(math.max(LH.currentPage or 1, 1), totalPages)
+    local startIdx = (LH.currentPage - 1) * pageSize
+
+    if totalPages > 1 then
+        f.pageIndicator:SetText(string.format(KART.L.LH_PAGE_INDICATOR, LH.currentPage, totalPages))
+        f.pageIndicator:Show()
+        f.prevPageBtn:Show(); f.nextPageBtn:Show()
+        local pc = (LH.currentPage > 1) and 1 or 0.35
+        f.prevPageBtn.text:SetTextColor(pc, pc, pc)
+        local nc = (LH.currentPage < totalPages) and 1 or 0.35
+        f.nextPageBtn.text:SetTextColor(nc, nc, nc)
+    else
+        f.pageIndicator:Hide()
+        f.prevPageBtn:Hide(); f.nextPageBtn:Hide()
+    end
+
+    local pageCount = 0
+    for i = 1, pageSize do
+        local e = filtered[startIdx + i]
+        if not e then break end
+        pageCount = i
         local row = f.rows[i]
         if not row then
             row = CreateFrame("Frame", nil, f.scrollChild)
@@ -559,7 +624,7 @@ function LH.Refresh()
         end
     end
 
-    for i = #filtered + 1, #f.rows do
+    for i = pageCount + 1, #f.rows do
         if f.rows[i] then f.rows[i]:Hide() end
     end
 end
@@ -572,6 +637,7 @@ function LH.Toggle()
     if LH.historyWindow:IsShown() then
         LH.historyWindow:Hide()
     else
+        LH.currentPage = 1 -- always open on the first (newest) page
         LH.Refresh()
         LH.historyWindow:Show()
     end

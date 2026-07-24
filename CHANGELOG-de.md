@@ -10,6 +10,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Die gesamte Oberfläche folgt jetzt der Spracheinstellung** — inklusive Hauptfenster, Einstellungen und Tooltips.
 - **Council-Mitglieder können jetzt selbst abstimmen.**
+- **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
 
 ### Behoben
 - **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.

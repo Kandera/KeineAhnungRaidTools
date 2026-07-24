@@ -296,6 +296,7 @@ KART.L_enUS = {
     LH_NO_REASON           = "No reason",
     LH_EMPTY               = "No entries yet.",
     LH_COUNT_FORMAT        = "%d of %d entries",
+    LH_PAGE_INDICATOR      = "Page %d / %d",
     LH_BTN_CLEAR           = "Clear History",
     LH_CLEAR_CONFIRM_TEXT  = "Really delete the entire loot history? This cannot be undone.",
     LH_BTN_EXPORT_JSON     = "Export JSON",
