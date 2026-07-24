@@ -173,6 +173,18 @@ function KART.SplitString(inputstr, sep)
     return t
 end
 
+-- Test mode uses plain coloured strings as fake items; guard against SetHyperlink on non-links.
+function KART.IsRealItemLink(link)
+    return type(link) == "string" and link:find("|Hitem:") ~= nil
+end
+
+-- Full item string (itemID + every bonus ID), not just the bare itemID — two drops can share
+-- an itemID while being different variants, and comparing only itemID would treat them as
+-- interchangeable (see the auto-trade and history-export call sites).
+function KART.GetItemString(link)
+    return KART.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+end
+
 function KART.HasGroupPermissions()
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end

@@ -10,17 +10,9 @@ LH.filters = { player = nil, reason = nil, search = "" }
 --  Helpers
 -- =====================================================================
 
-local function IsRealItemLink(link)
-    return type(link) == "string" and link:find("|Hitem:") ~= nil
-end
-
 local function GetItemNameFromLink(link)
     if not link or link == "" then return "" end
     return link:match("%[(.-)%]") or link
-end
-
-local function GetItemStringFromLink(link)
-    return IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or ""
 end
 
 local function JSONEscape(s)
@@ -65,7 +57,7 @@ function LH.BuildRCLootCouncilJSON()
     local objects = {}
     for i, e in ipairs(entries) do
         local itemID, subType, equipLocToken = 0, "", ""
-        if IsRealItemLink(e.item) then
+        if KART.IsRealItemLink(e.item) then
             local id, _, sType, eLoc = C_Item.GetItemInfoInstant(e.item)
             itemID = id or 0
             subType = sType or ""
@@ -78,7 +70,7 @@ function LH.BuildRCLootCouncilJSON()
             JSONString("time", date("%H:%M:%S", e.time or 0)),
             JSONString("id", (e.time or 0) .. "-" .. i),
             JSONNumber("itemID", itemID),
-            JSONString("itemString", GetItemStringFromLink(e.item)),
+            JSONString("itemString", (KART.GetItemString(e.item) or "")),
             JSONString("response", e.reason or ""),
             JSONNumber("votes", 0),
             JSONString("class", e.class or ""),
@@ -528,7 +520,7 @@ function LH.Refresh()
 
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
-                if IsRealItemLink(self.itemLink) then
+                if KART.IsRealItemLink(self.itemLink) then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:SetHyperlink(self.itemLink)
                     GameTooltip:Show()
@@ -557,7 +549,7 @@ function LH.Refresh()
         row.playerText:SetTextColor(nr, ng, nb)
 
         row.itemLink = e.item
-        if IsRealItemLink(e.item) then
+        if KART.IsRealItemLink(e.item) then
             local itemID = C_Item.GetItemInfoInstant(e.item)
             local icon = itemID and C_Item.GetItemIconByID(itemID)
             row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")

@@ -538,10 +538,7 @@ StaticPopupDialogs["KART_LC_SYNC_REQUEST"] = {
     preferredIndex = 3,
 }
 
--- Test mode uses a plain coloured string as a fake item; guard against SetHyperlink on non-links.
-function LC.IsRealItemLink(link)
-    return type(link) == "string" and link:find("|Hitem:") ~= nil
-end
+LC.IsRealItemLink = KART.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
 -- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
 -- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's

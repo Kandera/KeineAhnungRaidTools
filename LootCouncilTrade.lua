@@ -426,19 +426,10 @@ end
 
 -- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
 -- traded, mailed, or on a different character).
--- Full item string (itemID + every bonus ID: enchant, gems, suffix, upgrade level, etc.), not just
--- the bare itemID — two drops can share an itemID while being different variants (e.g. one has a
--- tertiary stat/bonus ID the other doesn't), and comparing only itemID would treat them as
--- interchangeable, letting auto-trade grab whichever copy happens to sort first in bags instead of
--- the exact one that was assigned. Same pattern LootHistory.lua's GetItemStringFromLink already uses.
-local function GetItemString(link)
-    return LC.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
-end
-
 -- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
 -- only reliable moment to read them, since the trade frame may already be tearing down by the
 -- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
--- (bonus-ID aware, see GetItemString), with a count rather than a plain boolean, so this composes
+-- (bonus-ID aware, see KART.GetItemString), with a count rather than a plain boolean, so this composes
 -- correctly with Trade.OnTradeClosed below even when a duplicate drop puts two copies of the exact
 -- same item string in the trade window at once.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
@@ -447,7 +438,7 @@ function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
     for i = 1, 6 do -- MAX_TRADE_ITEMS - 1, fixed by the trade UI (slot 6 is "will not be traded")
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
-        local itemString = GetItemString(link)
+        local itemString = KART.GetItemString(link)
         if itemString then
             LC.tradeWindowItemStrings[itemString] = (LC.tradeWindowItemStrings[itemString] or 0) + 1
         end
@@ -464,12 +455,12 @@ function Trade.OnTradeInfoMessage(msgID)
 end
 
 local function FindItemInBags(itemLink)
-    local wantString = GetItemString(itemLink)
+    local wantString = KART.GetItemString(itemLink)
     if not wantString then return nil end
     for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local bagLink = C_Container.GetContainerItemLink(bag, slot)
-            if bagLink and GetItemString(bagLink) == wantString then
+            if bagLink and KART.GetItemString(bagLink) == wantString then
                 return bag, slot
             end
         end
@@ -482,11 +473,11 @@ end
 -- included. Ordered by ascending rollID so every client's ordinal for the same physical drop
 -- agrees, since all clients see the same rollItems keys via the same broadcasts.
 function Trade.GetDuplicateOrdinal(rollID)
-    local myString = GetItemString(LC.rollItems[rollID])
+    local myString = KART.GetItemString(LC.rollItems[rollID])
     if not myString then return "" end
     local matches = {}
     for otherRollID, link in pairs(LC.rollItems) do
-        if GetItemString(link) == myString then
+        if KART.GetItemString(link) == myString then
             table.insert(matches, otherRollID)
         end
     end
@@ -571,7 +562,7 @@ function Trade.OnTradeClosed()
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         if entry.winnerKey == partnerKey then
-            local itemString = GetItemString(entry.itemLink)
+            local itemString = KART.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             local confirmedByTrade = tradeSucceeded and remaining and remaining > 0
             local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
@@ -595,7 +586,7 @@ function Trade.OnTradeClosed()
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         if entry.winnerKey ~= partnerKey then
-            local itemString = GetItemString(entry.itemLink)
+            local itemString = KART.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             if tradeSucceeded and remaining and remaining > 0 and not warnedItemStrings[itemString] then
                 warnedItemStrings[itemString] = true
