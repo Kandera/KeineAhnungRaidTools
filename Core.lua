@@ -145,6 +145,129 @@ function KART.SyncSettingsToUI()
     KART.ApplyKeybinds()
 end
 
+-- CHAT_MSG_ADDON dispatch. A message is either a fixed token (EXACT_HANDLERS) or
+-- "PREFIX:payload" (PREFIX_HANDLERS, keyed by the part before the FIRST colon — payloads may
+-- contain further colons; each handler parses its own format). Entries with lc = true only
+-- run while the Loot Council module is enabled; LC_SYNC_ACCEPT/DECLINE deliberately skip that
+-- gate (a decline must still print even if the receiver just disabled the module).
+-- ctx = { sender = full sender name, shortName, channel }.
+local function SenderKey(ctx)
+    return (KART.Identity.ResolvePlayer(ctx.sender))
+end
+
+local function HandleVersionMessage(payload, ctx, isAnnounce)
+    local ver, lcFlag = payload:match("^([^:]+):?([01]?)$")
+    ver = ver or payload
+
+    KART.PlayerVersions = KART.PlayerVersions or {}
+    KART.PlayerVersions[ctx.shortName] = ver
+    if lcFlag == "1" or lcFlag == "0" then
+        KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
+        KART.PlayerLCEnabled[ctx.shortName] = (lcFlag == "1")
+    end
+    if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+        KART.LC.Council.RefreshCouncilRows()
+    end
+
+    if not KART.UpdateWarned and ver ~= KART.Version then
+        local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
+        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
+        nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
+        oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
+        if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
+            KART.UpdateWarned = true
+            print(string.format(KART.L.UPDATE_AVAILABLE, ver, KART.Version))
+        end
+    end
+
+    if KART.VersionCheckActive and not isAnnounce then
+        print(string.format(KART.L.VERSION_CHECK_RES, ctx.shortName, ver))
+    end
+end
+
+local EXACT_HANDLERS = {
+    REQ_OIL = { fn = function(_, ctx)
+        local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
+        local outMH = (hasMH and mhID) and mhID or 0
+        local outOH = (hasOH and ohID) and ohID or 0
+        if IsInGroup() then
+            C_ChatInfo.SendAddonMessage("KART", "OIL:" .. outMH .. ":" .. outOH, IsInRaid() and "RAID" or "PARTY")
+        end
+    end },
+    REQ_ILVL = { fn = function(_, ctx)
+        local _, equipped = GetAverageItemLevel()
+        if equipped and IsInGroup() then
+            C_ChatInfo.SendAddonMessage("KART", "ILVL:" .. string.format("%.1f", equipped), IsInRaid() and "RAID" or "PARTY")
+        end
+    end },
+    REQ_GEAR = { fn = function(_, ctx)
+        if IsInGroup() then
+            local e, g = KART.CountMissingGear()
+            C_ChatInfo.SendAddonMessage("KART", "GEAR:" .. e .. ":" .. g, IsInRaid() and "RAID" or "PARTY")
+        end
+    end },
+    REQ_VERSION = { fn = function(_, ctx)
+        local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
+        if ctx.channel == "WHISPER" then
+            C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, "WHISPER", ctx.sender)
+        else
+            C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, ctx.channel)
+        end
+    end },
+    LC_SYNC_ACCEPT  = { fn = function(_, ctx) if KART.LC then KART.LC.HandleSyncAccept(ctx.shortName) end end },
+    LC_SYNC_DECLINE = { fn = function(_, ctx) if KART.LC then KART.LC.HandleSyncDecline(ctx.shortName) end end },
+    LC_STATE_REQ    = { lc = true, fn = function(_, ctx) KART.LC.HandleStateRequest() end },
+}
+
+local PREFIX_HANDLERS = {
+    OIL = { fn = function(payload, ctx)
+        local mhID, ohID = payload:match("^(%d+):(%d+)$")
+        if mhID and ohID then
+            KART.OilCache = KART.OilCache or {}
+            KART.OilCache[ctx.shortName] = { mh = tonumber(mhID), oh = tonumber(ohID) }
+            if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+        end
+    end },
+    ILVL = { fn = function(payload, ctx)
+        local ilvl = tonumber(payload)
+        if ilvl then
+            KART.ILvlCache = KART.ILvlCache or {}
+            KART.ILvlCache[ctx.shortName] = ilvl
+            if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+        end
+    end },
+    GEAR = { fn = function(payload, ctx)
+        local e, g = payload:match("^([^:]+):([^:]+)$")
+        if e and g then
+            KART.GearCache = KART.GearCache or {}
+            KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
+            if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+        end
+    end },
+    VERSION          = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, false) end },
+    ANNOUNCE_VERSION = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, true) end },
+    LC_ACTIVE       = { lc = true, fn = function(payload, ctx) KART.LC.HandleActive(payload, SenderKey(ctx)) end },
+    LC_START        = { lc = true, fn = function(payload, ctx) KART.LC.HandleStart(payload, SenderKey(ctx)) end },
+    LC_MANUAL_START = { lc = true, fn = function(payload, ctx) KART.LC.HandleManualStart(payload, SenderKey(ctx)) end },
+    LC_VOTE         = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleVote(payload, SenderKey(ctx)) end },
+    LC_ROLL         = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleRoll(payload, SenderKey(ctx)) end },
+    LC_CVOTE        = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleCouncilVote(payload, SenderKey(ctx)) end },
+    LC_ONOTE        = { lc = true, fn = function(payload, ctx) KART.LC.OfficerNotes.HandleOfficerNote(payload, SenderKey(ctx)) end },
+    LC_RESULT       = { lc = true, fn = function(payload, ctx) KART.LC.Trade.HandleResult(payload, SenderKey(ctx)) end },
+    LC_CONFIG       = { lc = true, fn = function(payload, ctx) KART.LC.HandleConfig(payload, SenderKey(ctx)) end },
+    LC_HIST_REQ     = { lc = true, fn = function(payload, ctx) KART.LH.HandleHistoryRequest(payload, ctx.sender) end },
+    LC_HIST_ENTRY   = { lc = true, fn = function(payload, ctx) KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end },
+    LC_SYNC_REQUEST = { lc = true, fn = function(payload, ctx) KART.LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end },
+    RC_REASON = { fn = function(payload, ctx)
+        KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
+        KART.ReadyCheckReasons[ctx.shortName] = payload
+        if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
+            print(string.format(KART.L.RC_REASON_RECEIVED, ctx.shortName, payload))
+        end
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end },
+}
+
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     if event == "ADDON_LOADED" and arg1 == addonName then
         C_ChatInfo.RegisterAddonMessagePrefix("KART")
@@ -322,136 +445,14 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         local msg = arg2
         local channel = select(1, ...)
         local sender = select(2, ...)
-        
         if sender then
             local shortName = sender:match("([^%-]+)")
             if shortName then
-                if msg == "REQ_OIL" then
-                    local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
-                    local outMH = (hasMH and mhID) and mhID or 0
-                    local outOH = (hasOH and ohID) and ohID or 0
-                    if IsInGroup() then
-                        C_ChatInfo.SendAddonMessage("KART", "OIL:" .. outMH .. ":" .. outOH, IsInRaid() and "RAID" or "PARTY")
-                    end
-                elseif msg:sub(1, 4) == "OIL:" then
-                    local mhID, ohID = msg:match("OIL:(%d+):(%d+)")
-                    if mhID and ohID then
-                        KART.OilCache = KART.OilCache or {}
-                        KART.OilCache[shortName] = { mh = tonumber(mhID), oh = tonumber(ohID) }
-                        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-                            KART.UpdateBuffCheckThrottled()
-                        end
-                    end
-                elseif msg == "REQ_ILVL" then
-                    local _, equipped = GetAverageItemLevel()
-                    if equipped then
-                        if IsInGroup() then
-                            C_ChatInfo.SendAddonMessage("KART", "ILVL:" .. string.format("%.1f", equipped), IsInRaid() and "RAID" or "PARTY")
-                        end
-                    end
-                elseif msg:sub(1, 5) == "ILVL:" then
-                    local ilvl = tonumber(msg:sub(6))
-                    if ilvl then
-                        KART.ILvlCache = KART.ILvlCache or {}
-                        KART.ILvlCache[shortName] = ilvl
-                        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-                            KART.UpdateBuffCheckThrottled()
-                        end
-                    end
-                elseif msg == "REQ_GEAR" then
-                    local e, g = KART.CountMissingGear()
-                    if IsInGroup() then
-                        C_ChatInfo.SendAddonMessage("KART", "GEAR:" .. e .. ":" .. g, IsInRaid() and "RAID" or "PARTY")
-                    end
-                elseif msg:sub(1, 5) == "GEAR:" then
-                    local e, g = msg:match("GEAR:([^:]+):([^:]+)")
-                    if e and g then
-                        KART.GearCache = KART.GearCache or {}
-                        KART.GearCache[shortName] = { enchants = e, gems = g }
-                        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-                            KART.UpdateBuffCheckThrottled()
-                        end
-                    end
-                elseif msg == "REQ_VERSION" then
-                    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-                    if channel == "WHISPER" then
-                        C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, "WHISPER", sender)
-                    else
-                        C_ChatInfo.SendAddonMessage("KART", "VERSION:" .. KART.Version .. ":" .. lcFlag, channel)
-                    end
-                elseif msg:sub(1, 8) == "VERSION:" or msg:sub(1, 17) == "ANNOUNCE_VERSION:" then
-                    local isAnnounce = (msg:sub(1, 17) == "ANNOUNCE_VERSION:")
-                    local rest = isAnnounce and msg:sub(18) or msg:sub(9)
-                    local ver, lcFlag = rest:match("^([^:]+):?([01]?)$")
-                    ver = ver or rest
-
-                    KART.PlayerVersions = KART.PlayerVersions or {}
-                    KART.PlayerVersions[shortName] = ver
-                    if lcFlag == "1" or lcFlag == "0" then
-                        KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
-                        KART.PlayerLCEnabled[shortName] = (lcFlag == "1")
-                    end
-                    if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-                        KART.LC.Council.RefreshCouncilRows()
-                    end
-
-                    if not KART.UpdateWarned and ver ~= KART.Version then
-                        local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
-                        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
-                        nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
-                        oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
-
-                        if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
-                            KART.UpdateWarned = true
-                            print(string.format(KART.L.UPDATE_AVAILABLE, ver, KART.Version))
-                        end
-                    end
-
-                    if KART.VersionCheckActive and not isAnnounce then
-                        print(string.format(KART.L.VERSION_CHECK_RES, shortName, ver))
-                    end
-                elseif msg:sub(1, 10) == "LC_ACTIVE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleActive(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 9) == "LC_START:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStart(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 16) == "LC_MANUAL_START:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleManualStart(msg:sub(17), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 8) == "LC_VOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleVote(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 8) == "LC_ROLL:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleRoll(msg:sub(9), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 9) == "LC_CVOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Vote.HandleCouncilVote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 9) == "LC_ONOTE:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.OfficerNotes.HandleOfficerNote(msg:sub(10), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 10) == "LC_RESULT:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.Trade.HandleResult(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 10) == "LC_CONFIG:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleConfig(msg:sub(11), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 12) == "LC_HIST_REQ:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LH.HandleHistoryRequest(msg:sub(13), sender) end
-                elseif msg:sub(1, 14) == "LC_HIST_ENTRY:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LH.HandleHistoryEntry(msg:sub(15), (KART.Identity.ResolvePlayer(sender))) end
-                elseif msg:sub(1, 16) == "LC_SYNC_REQUEST:" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleSyncRequest(msg:sub(17), sender, shortName) end
-                elseif msg == "LC_SYNC_ACCEPT" then
-                    if KART.LC then KART.LC.HandleSyncAccept(shortName) end
-                elseif msg == "LC_SYNC_DECLINE" then
-                    if KART.LC then KART.LC.HandleSyncDecline(shortName) end
-                elseif msg == "LC_STATE_REQ" then
-                    if KART.LC and KART_Settings.lcModuleEnabled ~= false then KART.LC.HandleStateRequest() end
-                elseif msg:sub(1, 10) == "RC_REASON:" then
-                    local reason = msg:sub(11)
-                    KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
-                    KART.ReadyCheckReasons[shortName] = reason
-                    
-                    if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
-                        print(string.format(KART.L.RC_REASON_RECEIVED, shortName, reason))
-                    end
-                    
-                    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-                        KART.UpdateBuffCheckThrottled()
-                    end
+                local ctx = { sender = sender, shortName = shortName, channel = channel }
+                local prefix, payload = msg:match("^([^:]+):(.*)$")
+                local entry = (prefix and PREFIX_HANDLERS[prefix]) or EXACT_HANDLERS[msg]
+                if entry and not (entry.lc and not (KART.LC and KART_Settings.lcModuleEnabled ~= false)) then
+                    entry.fn(payload, ctx)
                 end
             end
         end
