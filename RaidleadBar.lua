@@ -200,3 +200,19 @@ KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button, down
         C_PartyInfo.DoCountdown(KART_Settings and KART_Settings.pullTimerDuration or 10)
     end
 end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER, "KART_RL_PullTimerBtn")
+
+-- Bar buttons are created at file load with the pre-locale (English) tooltip strings;
+-- re-point them at the selected language once it's known.
+KART.RegisterLocaleRefresher(function()
+    local tips = {
+        KART_RL_ClearWorldMarkersBtn = KART.L.RL_CLEAR_WM,
+        KART_RL_ReadyCheckBtn        = KART.L.RL_READYCHECK,
+        KART_RL_BuffCheckToggleBtn   = KART.L.RL_BUFFCHECK,
+        KART_RL_PullTimerBtn         = KART.L.RL_PULL_TIMER,
+    }
+    for btnName, tip in pairs(tips) do
+        local btn = _G[btnName]
+        if btn then btn.tooltipText = tip end
+    end
+    if KART.PullBtn and KART.PullBtn.text then KART.PullBtn.text:SetText(KART.L.RL_PULL_LABEL) end
+end)

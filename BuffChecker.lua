@@ -5,36 +5,56 @@ KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 
 -- Zentrale Buff-Konfiguration für einfachere Wartung
 KART.BuffData = {
-    { id = "int",    label = L.BC_LABEL_INT,    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabel = L.BC_REPORT_INT },
-    { id = "sta",    label = L.BC_LABEL_STA,    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabel = L.BC_REPORT_STA },
-    { id = "motw",   label = L.BC_LABEL_MOTW,   col = 4, icon = 136078,  class = "DRUID",   spells = {1126, 384461}, report = "buff", reportLabel = L.BC_REPORT_MOTW },
-    { id = "shout",  label = L.BC_LABEL_SHOUT,  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabel = L.BC_REPORT_SHOUT },
-    { id = "bronze", label = L.BC_LABEL_BRONZE, col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabel = L.BC_REPORT_BRONZE },
-    { id = "sky",    label = L.BC_LABEL_SKY,    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = "Skyfury", report = "buff", reportLabel = L.BC_REPORT_SKY },
-    { id = "food",   label = L.BC_LABEL_FOOD,   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabel = L.BC_REPORT_FOOD },
-    { id = "flask",  label = L.BC_LABEL_FLASK,  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabel = L.BC_REPORT_FLASK },
-    { id = "vantus", label = L.BC_LABEL_VANTUS, col = 10, icon = 5976918, nameMatch = "Vantus" },
-    { id = "rune",   label = L.BC_LABEL_RUNE,   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
-    { id = "repair", label = L.BC_LABEL_REPAIR, col = 12, isRepair = true },
-    { id = "oil",    label = L.BC_LABEL_OIL,    col = 3, icon = 7548987, isOil = true, bestSpells = {8052}, wrongSpells = {8051}, page = "advanced" },
-    { id = "enchants",label= L.BC_LABEL_ENCHANTS,col= 4, isGearCheck = "enchants", page = "advanced" },
-    { id = "gems",   label = L.BC_LABEL_GEMS,   col = 5, isGearCheck = "gems", page = "advanced" }
+    { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
+    { id = "sta",    labelKey = "BC_LABEL_STA",    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabelKey = "BC_REPORT_STA" },
+    { id = "motw",   labelKey = "BC_LABEL_MOTW",   col = 4, icon = 136078,  class = "DRUID",   spells = {1126, 384461}, report = "buff", reportLabelKey = "BC_REPORT_MOTW" },
+    { id = "shout",  labelKey = "BC_LABEL_SHOUT",  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabelKey = "BC_REPORT_SHOUT" },
+    { id = "bronze", labelKey = "BC_LABEL_BRONZE", col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabelKey = "BC_REPORT_BRONZE" },
+    { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = "Skyfury", report = "buff", reportLabelKey = "BC_REPORT_SKY" },
+    { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD" },
+    { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK" },
+    { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, nameMatch = "Vantus" },
+    { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
+    { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
+    { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true, bestSpells = {8052}, wrongSpells = {8051}, page = "advanced" },
+    { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
+    { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
 }
 
-KART.SlotNames = {
-    ["1"] = L.SLOT_HEAD or "Kopf",
-    ["2"] = L.SLOT_NECK or "Hals",
-    ["3"] = L.SLOT_SHOULDER or "Schulter",
-    ["5"] = L.SLOT_CHEST or "Brust",
-    ["7"] = L.SLOT_LEGS or "Beine",
-    ["8"] = L.SLOT_FEET or "Füße",
-    ["9"] = L.SLOT_WRIST or "Handgelenke",
-    ["10"] = L.SLOT_WAIST or "Taille",
-    ["11"] = (L.SLOT_FINGER or "Ring").." 1",
-    ["12"] = (L.SLOT_FINGER or "Ring").." 2",
-    ["16"] = L.SLOT_WEAPON or "Waffe",
-    ["17"] = L.SLOT_OFFHAND or "Schildhand"
-}
+-- label/reportLabel are resolved from keys so a locale change (applied after file load,
+-- see KART.RegisterLocaleRefresher) reaches the baked-at-load BuffData table too.
+local function ResolveBuffDataLabels()
+    for _, d in ipairs(KART.BuffData) do
+        d.label = L[d.labelKey]
+        if d.reportLabelKey then d.reportLabel = L[d.reportLabelKey] end
+    end
+end
+ResolveBuffDataLabels()
+
+local function BuildSlotNames()
+    KART.SlotNames = {
+        ["1"] = L.SLOT_HEAD,
+        ["2"] = L.SLOT_NECK,
+        ["3"] = L.SLOT_SHOULDER,
+        ["5"] = L.SLOT_CHEST,
+        ["7"] = L.SLOT_LEGS,
+        ["8"] = L.SLOT_FEET,
+        ["9"] = L.SLOT_WRIST,
+        ["10"] = L.SLOT_WAIST,
+        ["11"] = L.SLOT_FINGER .. " 1",
+        ["12"] = L.SLOT_FINGER .. " 2",
+        ["16"] = L.SLOT_WEAPON,
+        ["17"] = L.SLOT_OFFHAND,
+    }
+end
+BuildSlotNames()
+
+KART.RegisterLocaleRefresher(function()
+    ResolveBuffDataLabels()
+    BuildSlotNames()
+    -- Window is built lazily (after the refreshers ran), so headers/buttons pick the fresh
+    -- labels up at creation; nothing else to re-apply here.
+end)
 
 -- Integration von LibDurability (wird durch BigWigs/MRT bereitgestellt)
 local LibDurability = LibStub and LibStub("LibDurability", true)
