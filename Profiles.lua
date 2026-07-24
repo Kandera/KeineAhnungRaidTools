@@ -68,7 +68,7 @@ function KART.ShowSaveProfileDialog()
     })
 end
 
-StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"] = {
+KART.RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
     text = "A profile named '%s' already exists. Overwrite it?", -- overwritten with KART.L.PROFILE_OVERWRITE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -76,13 +76,9 @@ StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"] = {
         KART.SaveProfile(data.name)
         KART.RefreshProfileButton()
     end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})
 
-StaticPopupDialogs["KART_PROFILE_DELETE_CONFIRM"] = {
+KART.RegisterStaticPopup("KART_PROFILE_DELETE_CONFIRM", {
     text = "Really delete profile '%s'?", -- overwritten with KART.L.PROFILE_DELETE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = YES,
     button2 = NO,
@@ -90,8 +86,4 @@ StaticPopupDialogs["KART_PROFILE_DELETE_CONFIRM"] = {
         KART.DeleteProfile(data.name)
         KART.RefreshProfileButton()
     end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})

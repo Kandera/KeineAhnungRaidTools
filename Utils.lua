@@ -409,6 +409,17 @@ function KART.CreateModernButton(parent, text, tooltipText)
     return b
 end
 
+-- Registers a StaticPopup with KART's shared modal defaults (no timeout, usable while dead, closable
+-- with Escape, drawn above the default UI). Pass only the dialog-specific fields — these four were
+-- copy-pasted identically across every KART popup.
+function KART.RegisterStaticPopup(name, def)
+    def.timeout        = 0
+    def.whileDead      = true
+    def.hideOnEscape   = true
+    def.preferredIndex = 3
+    StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
+end
+
 -- UI Factory: Sidebar tab button, flat style for the PNG-artwork sidebar.
 -- Transparent at rest so the baked artwork shows through; subtle white tint
 -- on hover; active tab gets a translucent accent fill, a left accent bar and

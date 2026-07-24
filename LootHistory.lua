@@ -244,7 +244,7 @@ function LH.GetUniqueReasons()
     return list
 end
 
-StaticPopupDialogs["KART_LH_CLEAR_CONFIRM"] = {
+KART.RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
     text = "Really clear loot history?", -- unconditionally overwritten with KART.L.LH_CLEAR_CONFIRM_TEXT below
     button1 = YES,
     button2 = NO,
@@ -252,11 +252,7 @@ StaticPopupDialogs["KART_LH_CLEAR_CONFIRM"] = {
         wipe(KART_LootHistory)
         LH.Refresh()
     end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})
 
 -- =====================================================================
 --  Window

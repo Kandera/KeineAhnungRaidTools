@@ -165,7 +165,7 @@ function WU.RemoveForBoss(idx)
     print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, boss.name))
 end
 
-StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
+KART.RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
     text = "Really reset the boss list?", -- overwritten with KART.L.WU_RESET_CONFIRM_TEXT before every StaticPopup_Show call below
     button1 = YES,
     button2 = NO,
@@ -176,11 +176,7 @@ StaticPopupDialogs["KART_WU_RESET_CONFIRM"] = {
             WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
         end
     end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})
 
 -- =====================================================================
 --  Boss List UI

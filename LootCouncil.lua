@@ -473,7 +473,7 @@ function LC.HandleSyncDecline(senderShort)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_DECLINED_MSG, senderShort))
 end
 
-StaticPopupDialogs["KART_LC_SYNC_REQUEST"] = {
+KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
     text = "Raidlead-Only Settings Sync from Player %s", -- overwritten with KART.L.LC_SYNC_REQUEST_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -490,11 +490,7 @@ StaticPopupDialogs["KART_LC_SYNC_REQUEST"] = {
     OnCancel = function(self, data)
         C_ChatInfo.SendAddonMessage("KART", "LC_SYNC_DECLINE", "WHISPER", data.sender)
     end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})
 
 LC.IsRealItemLink = KART.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
@@ -815,15 +811,11 @@ LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed b
 -- double-assignment when the assign menu is used more than once for the same item).
 LC.assignedWinners = LC.assignedWinners or {}
 
-StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] = { ---@diagnostic disable-line: undefined-global
+KART.RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
     text = "Already assigned.", -- unconditionally overwritten with KART.L.LC_REASSIGN_CONFIRM_TEXT in LC.Trade.AssignWinner below
     button1 = YES, ---@diagnostic disable-line: undefined-global
     button2 = NO,  ---@diagnostic disable-line: undefined-global
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+})
 
 -- =====================================================================
 --  Addon Message Handlers  (called from Core.lua CHAT_MSG_ADDON)
