@@ -720,7 +720,10 @@ function LH.HandleHistoryRequest(payload, senderFullName)
 end
 
 -- Runs on the requester when a peer whispers back a missing entry.
-function LH.HandleHistoryEntry(payload)
+function LH.HandleHistoryEntry(payload, senderKey)
+    -- Catch-up entries land in the permanent loot history — only accept them from someone
+    -- actually in our current group, not from arbitrary whispers.
+    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
     local t, winner, difficulty, reason, classFile, colorPacked, itemLink =
         payload:match("^(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
     t = tonumber(t)

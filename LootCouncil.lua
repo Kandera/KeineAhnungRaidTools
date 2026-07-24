@@ -854,11 +854,25 @@ StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"] = { ---@diagnostic disable-line: 
 --  Addon Message Handlers  (called from Core.lua CHAT_MSG_ADDON)
 -- =====================================================================
 
-function LC.HandleActive(value)
+-- Sender-authorization helper for messages that carry raid-wide authority: resolving to a
+-- live unit first (rather than trusting the key alone) matters because CHAT_MSG_ADDON also
+-- delivers whispers — someone not currently in our group is never authorized.
+local function IsSenderGroupLeader(senderKey)
+    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    return unit ~= nil and UnitIsGroupLeader(unit)
+end
+
+function LC.HandleActive(value, senderKey)
+    -- Only the raid leader may flip the session flag — otherwise any group member could
+    -- toggle Loot Council on/off for the whole raid with a forged LC_ACTIVE.
+    if not IsSenderGroupLeader(senderKey) then return end
     LC.sessionActive = (value == "1")
 end
 
-function LC.HandleStart(payload)
+function LC.HandleStart(payload, senderKey)
+    -- Only the leader broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
+    -- would pop fake vote windows on every client.
+    if not IsSenderGroupLeader(senderKey) then return end
     -- payload = "rollID:seconds:itemID"
     local rollID, secs, itemID = payload:match("^(%d+):(%d+):?(%d*)$")
     rollID = tonumber(rollID)
@@ -924,7 +938,12 @@ end
 -- (there's no real Blizzard roll behind a manually-added item, so the link always arrives intact
 -- in the payload itself). Fires once per item — the sender broadcasts one LC_MANUAL_START per
 -- link, not a single batched message.
-function LC.HandleManualStart(payload)
+function LC.HandleManualStart(payload, senderKey)
+    -- Only the designated lootmaster legitimately sends manual rolls (see LC.StartManualRoll).
+    -- A client without a synced raid config has lootmaster == "" and rejects — the state
+    -- request on raid join (LC_STATE_REQ) closes that gap.
+    local lootmaster = LC.GetLootmaster()
+    if lootmaster == "" or senderKey ~= lootmaster then return end
     local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
