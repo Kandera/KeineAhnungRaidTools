@@ -18,6 +18,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Lootmaster gewinnt nicht mehr automatisch Trash, Sammelobjekte oder BoE-Items** — nur noch Council-relevante BoP-Gegenstände.
 - **Loot Council ist jetzt ausdrücklich Raid-only.**
 - **Session-, Roll-Start- und History-Sync-Nachrichten werden jetzt auf ihren Absender geprüft.**
+- **Auto-Trade für Cross-Realm-Gewinner repariert.**
+- **Minimap-Icon-Position wird nach Profilwechsel wieder korrekt gespeichert.**
+- **Raid-Marker-Buttons lösen nicht mehr doppelt pro Klick aus.**
+- **Übriggebliebener Haken-Button beim Abhaken von Trade-Erinnerungen behoben.**
 
 ## [2.8.0] - 2026-07-23
 ### Hinzugefügt

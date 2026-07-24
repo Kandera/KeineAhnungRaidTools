@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The lootmaster no longer force-wins trash, collectibles or BoE items** — only council-relevant BoP gear.
 - **Loot Council is now explicitly raid-only.**
 - **Session, roll-start and history-sync messages are now sender-verified.**
+- **Fixed auto-trade for cross-realm winners.**
+- **Minimap icon position now saves correctly after switching profiles.**
+- **Raid-marker bar buttons no longer fire twice per click.**
+- **Fixed a leftover checkmark button when clearing trade reminders.**
 
 ## [2.8.0] - 2026-07-23
 ### Added
