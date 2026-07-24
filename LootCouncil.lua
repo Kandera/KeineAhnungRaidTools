@@ -1325,7 +1325,9 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnToggleSession = KART.CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
     KART.LC.BtnToggleSession:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
-        if IsInGroup() and UnitIsGroupLeader("player") then
+        if not IsInRaid() then
+            print("|cff00ff00KART:|r " .. KART.L.LC_RAID_ONLY)
+        elseif UnitIsGroupLeader("player") then
             LC.SetSessionActive(not LC.sessionActive)
         else
             print("|cff00ff00KART:|r " .. KART.L.LC_NOT_LEADER)

@@ -226,6 +226,7 @@ KART.L_deDE = {
     LC_DESC_TEST_MASTER    = "Zeigt das Council-Panel so wie der Raidleiter es sieht, mit 4 simulierten Items gleichzeitig als Tabs — Votes werden aus aktuellen Gruppenmitgliedern vorbefüllt (bzw. nur aus dir selbst, wenn keine Gruppe besteht). Zuweisungen bleiben rein lokal: keine Raidchat-Ankündigung, kein Eintrag in der echten Loot-Historie.",
     LC_TEST_STARTED        = "Loot Council Test gestartet (%d Items).",
     LC_NOT_LEADER          = "Nur der Raidleiter kann den Loot Council steuern.",
+    LC_RAID_ONLY           = "Loot Council funktioniert nur in Schlachtzugsgruppen.",
     LC_NOT_LOOTMASTER      = "Nur der festgelegte Lootmaster kann Items zu Loot Council hinzufügen.",
     LC_MANUAL_ADD_USAGE    = "Verwendung: /kart add <Item-Link> [Item-Link] ... (Items per Shift-Klick in den Befehl einfügen)",
     LC_PROMPT_TITLE        = "Loot Council",
