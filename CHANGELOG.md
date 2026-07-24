@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raid-marker bar buttons no longer fire twice per click.**
 - **Fixed a leftover checkmark button when clearing trade reminders.**
 
+### Changed
+- **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.
+
 ## [2.8.0] - 2026-07-23
 ### Added
 - **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.

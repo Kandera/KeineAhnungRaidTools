@@ -23,6 +23,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Raid-Marker-Buttons lösen nicht mehr doppelt pro Klick aus.**
 - **Übriggebliebener Haken-Button beim Abhaken von Trade-Erinnerungen behoben.**
 
+### Geändert
+- **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.
+
 ## [2.8.0] - 2026-07-23
 ### Hinzugefügt
 - **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
