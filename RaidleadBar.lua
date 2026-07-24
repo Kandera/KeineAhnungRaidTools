@@ -32,7 +32,6 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate, BackdropTemplate")
     b:SetSize(width or 22, height or 22)
     b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    b:RegisterForClicks("AnyUp", "AnyDown")
     b:SetFrameLevel(parent:GetFrameLevel() + 5)
     b:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -60,7 +59,11 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     if macrotext then
         b:SetAttribute("type", "macro")
         b:SetAttribute("macrotext", macrotext)
+        -- Secure buttons execute on EVERY registered click transition — registering both Up
+        -- and Down ran the macro twice per click. Down-only matches retail's default behavior.
+        b:RegisterForClicks("AnyDown")
     else
+        b:RegisterForClicks("AnyUp", "AnyDown")
         b:SetScript("OnClick", func)
     end
     -- Hover color now derives from the user's accent color (same KART.Theme.AccentColor +
