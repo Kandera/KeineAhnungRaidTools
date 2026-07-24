@@ -221,7 +221,7 @@ local EXACT_HANDLERS = {
 
 local PREFIX_HANDLERS = {
     OIL = { fn = function(payload, ctx)
-        local mhID, ohID = payload:match("^(%d+):(%d+)$")
+        local mhID, ohID = payload:match("^(%d+):(%d+)")
         if mhID and ohID then
             KART.OilCache = KART.OilCache or {}
             KART.OilCache[ctx.shortName] = { mh = tonumber(mhID), oh = tonumber(ohID) }
@@ -237,7 +237,7 @@ local PREFIX_HANDLERS = {
         end
     end },
     GEAR = { fn = function(payload, ctx)
-        local e, g = payload:match("^([^:]+):([^:]+)$")
+        local e, g = payload:match("^([^:]+):([^:]+)")
         if e and g then
             KART.GearCache = KART.GearCache or {}
             KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
