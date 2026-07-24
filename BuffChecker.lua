@@ -84,6 +84,38 @@ KART.RegisterLibDurability()
 
 KART.BuffCheckMode = "default" -- Standardmodus: "default" oder "advanced"
 
+-- ReadyCheck status -> its Blizzard ready-check icon; an unlisted/nil status hides the icon. Shared
+-- by the live buff-check rows and the settings preview so both stay identical.
+local READY_CHECK_ICONS = { ready = 136814, notready = 136813, waiting = 136815 }
+function KART.SetReadyCheckIcon(icon, status)
+    local tex = status and READY_CHECK_ICONS[status]
+    if tex then
+        icon:SetTexture(tex)
+        icon:Show()
+    else
+        icon:Hide()
+    end
+end
+
+-- Merges one player's result for a buff id into the group-wide cache, keeping the strongest signal
+-- seen across the raid: best > expiring > wrong > unknown > present(true). "unknown" only comes from
+-- the gear/oil checks; the plain buff/gem path never passes it, so those callers simply never take
+-- that branch. Priority is deliberately identical to the two inlined copies this replaced.
+local function MergeBuffState(id, stateToSet)
+    local current = KART.BuffStatesCache[id]
+    if stateToSet == "best" then
+        KART.BuffStatesCache[id] = "best"
+    elseif stateToSet == "expiring" and current ~= "best" then
+        KART.BuffStatesCache[id] = "expiring"
+    elseif stateToSet == "wrong" and current ~= "best" and current ~= "expiring" then
+        KART.BuffStatesCache[id] = "wrong"
+    elseif stateToSet == "unknown" and current ~= "best" and current ~= "expiring" and current ~= "wrong" then
+        KART.BuffStatesCache[id] = "unknown"
+    elseif stateToSet == true and current ~= "best" and current ~= "expiring" and current ~= "wrong" then
+        KART.BuffStatesCache[id] = true
+    end
+end
+
 -- Buff Check Logik & UI
 function KART.CreateBuffCheckFrame()
     if KART.BuffCheckFrame then return end
@@ -555,18 +587,7 @@ function KART.UpdateBuffCheck(isPreview)
                 row.reasonIcon:Hide()
             end
             
-            if rc == "ready" then
-                row.rcIcon:SetTexture(136814)
-                row.rcIcon:Show()
-            elseif rc == "notready" then
-                row.rcIcon:SetTexture(136813)
-                row.rcIcon:Show()
-            elseif rc == "waiting" then
-                row.rcIcon:SetTexture(136815)
-                row.rcIcon:Show()
-            else
-                row.rcIcon:Hide()
-            end
+            KART.SetReadyCheckIcon(row.rcIcon, rc)
             
             if KART.BuffCheckMode == "advanced" then
                 row.ilvlText:SetText(string.format("%.1f", 620 + i))
@@ -662,18 +683,7 @@ function KART.UpdateBuffCheck(isPreview)
         
         -- ReadyCheck Status
         local rcStatus = GetReadyCheckStatus(unit)
-        if rcStatus == "ready" then
-            row.rcIcon:SetTexture(136814)
-            row.rcIcon:Show()
-        elseif rcStatus == "notready" then
-            row.rcIcon:SetTexture(136813)
-            row.rcIcon:Show()
-        elseif rcStatus == "waiting" then
-            row.rcIcon:SetTexture(136815)
-            row.rcIcon:Show()
-        else
-            row.rcIcon:Hide()
-        end
+        KART.SetReadyCheckIcon(row.rcIcon, rcStatus)
 
         wipe(KART.BuffStatesCache) -- Vor jedem Spieler leeren
         
@@ -731,16 +741,7 @@ function KART.UpdateBuffCheck(isPreview)
                             stateToSet = "expiring"
                         end
 
-                        local current = KART.BuffStatesCache[buff.id]
-                        if stateToSet == "best" then
-                            KART.BuffStatesCache[buff.id] = "best"
-                        elseif stateToSet == "expiring" and current ~= "best" then
-                            KART.BuffStatesCache[buff.id] = "expiring"
-                        elseif stateToSet == "wrong" and current ~= "best" and current ~= "expiring" then
-                            KART.BuffStatesCache[buff.id] = "wrong"
-                        elseif stateToSet == true and current ~= "best" and current ~= "expiring" and current ~= "wrong" then
-                            KART.BuffStatesCache[buff.id] = true
-                        end
+                        MergeBuffState(buff.id, stateToSet)
                     end
                 end
             end
@@ -796,18 +797,7 @@ function KART.UpdateBuffCheck(isPreview)
                     local stateToSet = buffState
                     if isExpiring and buffState ~= "wrong" then stateToSet = "expiring" end
 
-                    local current = KART.BuffStatesCache[buff.id]
-                    if stateToSet == "best" then
-                        KART.BuffStatesCache[buff.id] = "best"
-                    elseif stateToSet == "expiring" and current ~= "best" then
-                        KART.BuffStatesCache[buff.id] = "expiring"
-                    elseif stateToSet == "wrong" and current ~= "best" and current ~= "expiring" then
-                        KART.BuffStatesCache[buff.id] = "wrong"
-                    elseif stateToSet == "unknown" and current ~= "best" and current ~= "expiring" and current ~= "wrong" then
-                        KART.BuffStatesCache[buff.id] = "unknown"
-                    elseif stateToSet == true and current ~= "best" and current ~= "expiring" and current ~= "wrong" then
-                        KART.BuffStatesCache[buff.id] = true
-                    end
+                    MergeBuffState(buff.id, stateToSet)
                 end
             end
         end
