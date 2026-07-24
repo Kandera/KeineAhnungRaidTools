@@ -205,10 +205,7 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
         local myKey = (KART.Identity.ResolvePlayer("player"))
         LC.votes[rollID] = LC.votes[rollID] or {}
         LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
-        if LC.councilPanel and LC.councilPanel:IsShown() then
-            if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
-            KART.LC.Council.RefreshCouncilTabs()
-        end
+        LC.RefreshCouncilIfShown(rollID)
     else
         -- SendAddonMessage never echoes back to its own sender, so record our own vote locally
         -- too (same as the test branch and LC_ROLL) — otherwise our own progress counter reads one
@@ -759,10 +756,7 @@ function Vote.SetPlayerVote(rollID, playerKey, buttonIdx)
     local note = (prev and prev.note) or ""
     LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note}
 
-    if LC.councilPanel and LC.councilPanel:IsShown() then
-        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
-        KART.LC.Council.RefreshCouncilTabs()
-    end
+    LC.RefreshCouncilIfShown(rollID)
 end
 
 -- Toggles this council member's own (non-binding) pick for who should get rollID — clicking the
@@ -794,12 +788,9 @@ function Vote.HandleVote(payload, senderKey)
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][senderKey] = {idx = idx, note = note}
 
-    if LC.councilPanel and LC.councilPanel:IsShown() then
-        -- Row list only matters for whichever roll is the active tab; the vote-count badge on
-        -- every tab (including inactive ones) should stay live regardless.
-        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
-        KART.LC.Council.RefreshCouncilTabs()
-    end
+    -- Row list only matters for whichever roll is the active tab; the vote-count badge on every
+    -- tab (including inactive ones) stays live regardless — see LC.RefreshCouncilIfShown.
+    LC.RefreshCouncilIfShown(rollID)
 end
 
 -- Receives another raider's automatic 1-100 roll (see LC.OnStartLootRoll) — opt-in, analogous to

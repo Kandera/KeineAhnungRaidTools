@@ -504,6 +504,17 @@ function LC.ParseItemColor(link)
     return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
 end
 
+-- Refresh the council panel after a vote/assignment mutation, but only when it's actually open: the
+-- row list only matters for the currently-active tab, while the per-tab vote-count badges stay live
+-- on every tab. This exact guard was copy-pasted across the handlers that mutate vote/assignment
+-- state. Handlers that only ever touch the active roll's rows, or refresh unconditionally, keep
+-- their own narrower guard on purpose.
+function LC.RefreshCouncilIfShown(rollID)
+    if not (LC.councilPanel and LC.councilPanel:IsShown()) then return end
+    if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
+    KART.LC.Council.RefreshCouncilTabs()
+end
+
 -- Sets an item icon texture: the item's real icon when the link resolves, otherwise a generic
 -- question-mark placeholder tinted with the item's quality colour (r,g,b — pass what
 -- LC.ParseItemColor returned, which the caller usually also needs for the surrounding border/strip).

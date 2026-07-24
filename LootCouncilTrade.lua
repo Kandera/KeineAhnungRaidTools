@@ -591,10 +591,7 @@ function Trade.HandleResult(payload, senderKey)
     -- both read from LC.assignedWinners. The result broadcast is a peer's only signal (the assigner
     -- already set this in AssignWinner and never receives its own message), so mirror it here.
     LC.assignedWinners[rollID] = winnerKey
-    if LC.councilPanel and LC.councilPanel:IsShown() then
-        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
-        KART.LC.Council.RefreshCouncilTabs()
-    end
+    LC.RefreshCouncilIfShown(rollID)
 
     local myKey = (KART.Identity.ResolvePlayer("player"))
     if winnerKey == myKey then
