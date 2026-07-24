@@ -358,7 +358,13 @@ git commit -m "fix: store canonical difficulty id and export it in English (mixe
 
 # Block 3 — Packaging
 
-### Task 9: Bundle libraries + guard bare LibStub (#4)
+### Task 9: Bundle libraries + guard bare LibStub (#4) — SKIPPED (2026-07-24)
+
+**Decision (maintainer):** Skipped. The guild's raiders all run BigWigs/DBM, which
+bundle LibStub, so LibStub is always provided in practice. The "fresh CurseForge
+install with no lib provider" case doesn't apply to this audience. Left as-is;
+revisit only if the addon is distributed to a broader audience.
+
 
 **Files:**
 - Modify: `.pkgmeta` (add `externals`), `KeineAhnungRaidTools.toc` (load embeds), create `Libs/` via packager, `Core.lua:26` (guard).
