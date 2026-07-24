@@ -64,33 +64,41 @@ function Vote.CreateVoteList()
     -- One shared ticker drives every row's countdown; a row is dropped once its own voting
     -- window closes. Only touches timer text on a normal tick — a full rebuild (which would
     -- reset in-progress note text) only happens when a row actually gets added or removed.
-    f.ticker = C_Timer.NewTicker(1, function()
-        if not f:IsShown() then return end
-        local now = GetTime()
-        local changed = false
-        for i = #LC.voteListRolls, 1, -1 do
-            local rid = LC.voteListRolls[i]
-            local deadline = LC.rollDeadlines[rid]
-            if deadline and now >= deadline then
-                table.remove(LC.voteListRolls, i)
-                changed = true
-            end
-        end
-        if changed then
-            Vote.RefreshVoteListRows()
-        else
-            local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
-            for i, rid in ipairs(Vote.GetVisibleRolls()) do
-                local row = pool and pool[i]
-                if row and row:IsShown() then
-                    local deadline  = LC.rollDeadlines[rid]
-                    local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
-                    local votedCount, total = LC.CountVotes(rid)
-                    row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
+    -- Only runs while the window is actually visible: created on show, cancelled on hide, instead
+    -- of ticking forever behind an IsShown guard. The guard stays as belt-and-braces.
+    local function startVoteTicker()
+        if f.ticker then return end
+        f.ticker = C_Timer.NewTicker(1, function()
+            if not f:IsShown() then return end
+            local now = GetTime()
+            local changed = false
+            for i = #LC.voteListRolls, 1, -1 do
+                local rid = LC.voteListRolls[i]
+                local deadline = LC.rollDeadlines[rid]
+                if deadline and now >= deadline then
+                    table.remove(LC.voteListRolls, i)
+                    changed = true
                 end
             end
-        end
-    end)
+            if changed then
+                Vote.RefreshVoteListRows()
+            else
+                local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
+                for i, rid in ipairs(Vote.GetVisibleRolls()) do
+                    local row = pool and pool[i]
+                    if row and row:IsShown() then
+                        local deadline  = LC.rollDeadlines[rid]
+                        local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
+                        local votedCount, total = LC.CountVotes(rid)
+                        row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
+                    end
+                end
+            end
+        end)
+    end
+    f:HookScript("OnShow", startVoteTicker)
+    f:HookScript("OnHide", function() if f.ticker then f.ticker:Cancel() f.ticker = nil end end)
+    if f:IsShown() then startVoteTicker() end
 
     LC.voteListFrame = f
     return f

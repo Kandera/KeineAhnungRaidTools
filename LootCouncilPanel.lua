@@ -599,17 +599,25 @@ function Council.CreateCouncilPanel()
 
     -- Single shared ticker drives the header countdown for whichever roll is currently active —
     -- avoids juggling a per-call ticker across tab switches.
-    f.timerTicker = C_Timer.NewTicker(1, function()
-        if not f:IsShown() or not LC.activeRollID then return end
-        local deadline = LC.rollDeadlines[LC.activeRollID]
-        if not deadline then f.timerText:SetText("") return end
-        local remaining = math.ceil(deadline - GetTime())
-        f.timerText:SetText(remaining > 0 and (remaining .. "s") or KART.L.LC_VOTING_DONE)
+    -- Only runs while the panel is visible: created on show, cancelled on hide, instead of ticking
+    -- forever behind an IsShown guard. The guard stays as belt-and-braces.
+    local function startTimerTicker()
+        if f.timerTicker then return end
+        f.timerTicker = C_Timer.NewTicker(1, function()
+            if not f:IsShown() or not LC.activeRollID then return end
+            local deadline = LC.rollDeadlines[LC.activeRollID]
+            if not deadline then f.timerText:SetText("") return end
+            local remaining = math.ceil(deadline - GetTime())
+            f.timerText:SetText(remaining > 0 and (remaining .. "s") or KART.L.LC_VOTING_DONE)
 
-        local duration = LC.rollDurations[LC.activeRollID] or 20
-        f.timeBar:SetMinMaxValues(0, duration)
-        f.timeBar:SetValue(math.max(remaining, 0))
-    end)
+            local duration = LC.rollDurations[LC.activeRollID] or 20
+            f.timeBar:SetMinMaxValues(0, duration)
+            f.timeBar:SetValue(math.max(remaining, 0))
+        end)
+    end
+    f:HookScript("OnShow", startTimerTicker)
+    f:HookScript("OnHide", function() if f.timerTicker then f.timerTicker:Cancel() f.timerTicker = nil end end)
+    if f:IsShown() then startTimerTicker() end
 
     -- Dedicated tooltip for the equipped-item icon hover (see RefreshCouncilRows) — deliberately
     -- NOT Blizzard's shared ShoppingTooltip1/2: those are also driven automatically by Blizzard's
