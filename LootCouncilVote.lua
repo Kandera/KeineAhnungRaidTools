@@ -202,6 +202,12 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
             KART.LC.Council.RefreshCouncilTabs()
         end
     else
+        -- SendAddonMessage never echoes back to its own sender, so record our own vote locally
+        -- too (same as the test branch and LC_ROLL) — otherwise our own progress counter reads one
+        -- short, and a council member voting on their own drop wouldn't see themselves listed.
+        local myKey = (KART.Identity.ResolvePlayer("player"))
+        LC.votes[rollID] = LC.votes[rollID] or {}
+        LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
         LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":" .. note)
     end
     Vote.RefreshVoteListRows()
