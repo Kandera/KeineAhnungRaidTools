@@ -45,65 +45,13 @@ function OfficerNotes.MigrateOfficerNoteKey(oldKey)
     return true
 end
 
--- A hand-rolled little dialog instead of StaticPopupDialogs — retail's StaticPopup system was
--- reworked (routes through Blizzard_StaticPopup_Game/GameDialog.lua now) and no longer reliably
--- exposes the edit box as `self.editBox` inside OnAccept (errored with "attempt to index field
--- 'editBox' (a nil value)" there, even though OnShow's `self.editBox` worked fine — the popup
--- frame passed to the two callbacks isn't consistently the same shape). Owning the whole frame
--- ourselves means the edit box reference is always exactly what we created it as.
 function OfficerNotes.ShowOfficerNoteDialog(playerKey, playerDisplayName)
-    if not LC.officerNoteDialog then
-        local f = CreateFrame("Frame", "KART_LCOfficerNoteDialog", UIParent, "BackdropTemplate")
-        f:SetSize(300, 120)
-        f:SetPoint("CENTER")
-        KART.RegisterStrataFrame(f, true)
-        KART.ApplyPopupArtwork(f)
-        f:SetMovable(true)
-        f:EnableMouse(true)
-        f:RegisterForDrag("LeftButton")
-        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-        table.insert(UISpecialFrames, f:GetName())
-
-        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        f.title:SetPoint("TOP", 0, -14)
-        f.title:SetWidth(270)
-        f.title:SetWordWrap(true)
-
-        f.editBox = KART.CreateStyledEditBox(f, "KART_LCOfficerNoteEditBox")
-        f.editBox:SetSize(260, 26)
-        f.editBox:SetPoint("TOP", 0, -46)
-        f.editBox:SetMaxLetters(120)
-        -- Fallback font until the next KART.UpdateStyles pass — this dialog is created lazily,
-        -- long after the login-time style pass already ran.
-        f.editBox:SetFontObject("GameFontHighlightSmall")
-
-        local function accept()
-            if f.key then OfficerNotes.SetOfficerNote(f.key, f.editBox:GetText()) end
-            f:Hide()
-        end
-
-        local btnOK = KART.CreateModernButton(f, OKAY) ---@diagnostic disable-line: undefined-global
-        btnOK:SetSize(120, 26)
-        btnOK:SetPoint("BOTTOMLEFT", 15, 12)
-        btnOK:SetScript("OnClick", accept)
-
-        local btnCancel = KART.CreateModernButton(f, CANCEL) ---@diagnostic disable-line: undefined-global
-        btnCancel:SetSize(120, 26)
-        btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
-        btnCancel:SetScript("OnClick", function() f:Hide() end)
-
-        f.editBox:SetScript("OnEnterPressed", accept)
-        f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
-
-        LC.officerNoteDialog = f
-    end
-
-    local f = LC.officerNoteDialog
-    f.key = playerKey
-    f.title:SetText(string.format(KART.L.LC_OFFICER_NOTE_PROMPT, playerDisplayName))
-    f.editBox:SetText(KART_LCOfficerNotes[playerKey] or "")
-    f:Show()
-    f.editBox:SetFocus()
-    f.editBox:HighlightText()
+    KART.ShowInputDialog({
+        title = string.format(KART.L.LC_OFFICER_NOTE_PROMPT, playerDisplayName),
+        maxLetters = 120,
+        initialText = KART_LCOfficerNotes[playerKey] or "",
+        allowEmpty = true, -- empty input clears the note (see SetOfficerNote)
+        okLabel = OKAY, ---@diagnostic disable-line: undefined-global
+        onAccept = function(text) OfficerNotes.SetOfficerNote(playerKey, text) end,
+    })
 end

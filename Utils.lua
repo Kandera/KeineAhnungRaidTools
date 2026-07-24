@@ -719,6 +719,71 @@ function KART.CreateStyledEditBox(parent, name)
     return eb
 end
 
+-- Generic single-line input dialog, replacing three near-identical hand-rolled dialogs
+-- (LC sync target, officer note, save profile). Hand-rolled rather than StaticPopup because
+-- retail's StaticPopup doesn't reliably expose its edit box to OnAccept (see the original
+-- ShowOfficerNoteDialog comment in git history for the full story).
+local inputDialog
+function KART.ShowInputDialog(opts)
+    if not inputDialog then
+        local f = CreateFrame("Frame", "KART_InputDialog", UIParent, "BackdropTemplate")
+        f:SetSize(300, 120)
+        f:SetPoint("CENTER")
+        KART.RegisterStrataFrame(f, true)
+        KART.ApplyPopupArtwork(f)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        table.insert(UISpecialFrames, f:GetName())
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        f.title:SetPoint("TOP", 0, -14)
+        f.title:SetWidth(270)
+        f.title:SetWordWrap(true)
+
+        f.editBox = KART.CreateStyledEditBox(f, "KART_InputDialogEditBox")
+        f.editBox:SetSize(260, 26)
+        f.editBox:SetPoint("TOP", 0, -46)
+        f.editBox:SetFontObject("GameFontHighlightSmall")
+
+        local function accept()
+            local o = f.opts
+            local text = KART.TrimString(f.editBox:GetText() or "")
+            if text == "" and not o.allowEmpty then
+                if o.emptyMessage then UIErrorsFrame:AddMessage(o.emptyMessage, 1, 0.1, 0.1, 1, 3) end
+                return
+            end
+            f:Hide()
+            o.onAccept(text)
+        end
+
+        f.btnOK = KART.CreateModernButton(f, ACCEPT)
+        f.btnOK:SetSize(120, 26)
+        f.btnOK:SetPoint("BOTTOMLEFT", 15, 12)
+        f.btnOK:SetScript("OnClick", accept)
+
+        local btnCancel = KART.CreateModernButton(f, CANCEL)
+        btnCancel:SetSize(120, 26)
+        btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
+        btnCancel:SetScript("OnClick", function() f:Hide() end)
+
+        f.editBox:SetScript("OnEnterPressed", accept)
+        f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
+        inputDialog = f
+    end
+    local f = inputDialog
+    f.opts = opts
+    f.title:SetText(opts.title)
+    f.btnOK.text:SetText(opts.okLabel or ACCEPT)
+    f.editBox:SetMaxLetters(opts.maxLetters or 64)
+    f.editBox:SetText(opts.initialText or "")
+    f:Show()
+    f.editBox:SetFocus()
+    if (opts.initialText or "") ~= "" then f.editBox:HighlightText() end
+end
+
 function KART.UpdateMinimapButton()
     local dbIcon = LibStub("LibDBIcon-1.0", true)
     if dbIcon then
