@@ -586,6 +586,16 @@ function Trade.HandleResult(payload, senderKey)
 
     if winnerKey == "NONE" then return end
 
+    -- Council peers must see the same assigned winner the assigner recorded locally — the gold
+    -- winner highlight (see RefreshCouncilRows) and a correct prevWinner on any later reassignment
+    -- both read from LC.assignedWinners. The result broadcast is a peer's only signal (the assigner
+    -- already set this in AssignWinner and never receives its own message), so mirror it here.
+    LC.assignedWinners[rollID] = winnerKey
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        if LC.activeRollID == rollID then KART.LC.Council.RefreshCouncilRows() end
+        KART.LC.Council.RefreshCouncilTabs()
+    end
+
     local myKey = (KART.Identity.ResolvePlayer("player"))
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
