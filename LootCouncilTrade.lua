@@ -507,10 +507,10 @@ function Trade.OnTradeShow()
     local partnerName = UnitName("npc") -- the trade-partner unit token, a historical quirk of the trade API
     if not partnerName and TradeFrameRecipientNameText then ---@diagnostic disable-line: undefined-global
         partnerName = TradeFrameRecipientNameText:GetText() ---@diagnostic disable-line: undefined-global
-        -- Blizzard's trade frame displays a foreign-realm partner's name with a trailing "(*)"
-        -- marker instead of "-Realm" — strip it so the short-name match below isn't corrupted.
-        if partnerName and partnerName:find("(*)", 1, true) then
-            partnerName = partnerName:sub(1, -4)
+        -- Blizzard renders a foreign-realm partner as "Name (*)" — the old sub(1, -4) kept the
+        -- separating space, which made every downstream name match fail silently.
+        if partnerName then
+            partnerName = KART.TrimString(partnerName:gsub("%(%*%)", ""))
         end
     end
     if not partnerName then return end
