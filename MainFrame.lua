@@ -659,7 +659,7 @@ searchPopout:SetBackdrop({
 })
 searchPopout:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
 searchPopout:SetBackdropBorderColor(0, 0, 0, 1)
-searchPopout:SetFrameStrata("DIALOG")
+KART.RegisterStrataFrame(searchPopout, true) -- one stratum above the windows, follows the setting
 searchPopout:Hide()
 KART.ApplyRoundedMask(searchPopout, KART.Theme.CORNER_RADIUS_SM)
 
