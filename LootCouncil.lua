@@ -1084,6 +1084,18 @@ function LC.UpdateRoleStatusLabel()
     if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
 end
 
+-- Colons are the LC_CONFIG/LC_SYNC payload separator (see LC.BroadcastRaidConfig) — a colon
+-- inside any synced free-text field would make the receivers' payload pattern silently fail,
+-- leaving every other client stuck on stale config. Strip them at input time.
+local function StripColons(editBox)
+    local text = editBox:GetText()
+    if text:find(":", 1, true) then
+        editBox:SetText((text:gsub(":", ""))) -- re-fires OnTextChanged with the clean text
+        return true
+    end
+    return false
+end
+
 function LC.BuildSettingsPanel(parent)
     local L = KART.L
 
@@ -1227,6 +1239,7 @@ function LC.BuildSettingsPanel(parent)
     eb:SetSize(CONTENT_WIDTH, 28)
     eb:SetMaxLetters(128)
     eb:SetScript("OnTextChanged", function(self)
+        if StripColons(self) then return end
         KART_Settings.lcButtonLabels = self:GetText()
         LC.BroadcastRaidConfig()
     end)
@@ -1250,6 +1263,7 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetSize(CONTENT_WIDTH, 28)
     ebC:SetMaxLetters(255)
     ebC:SetScript("OnTextChanged", function(self)
+        if StripColons(self) then return end
         KART_Settings.lcCouncilMembers = self:GetText()
         LC.UpdateCouncilCache()
     end)
@@ -1304,6 +1318,7 @@ function LC.BuildSettingsPanel(parent)
     ebL:SetSize(CONTENT_WIDTH, 28)
     ebL:SetMaxLetters(48)
     ebL:SetScript("OnTextChanged", function(self)
+        if StripColons(self) then return end
         KART_Settings.lcLootmaster = self:GetText()
         LC.BroadcastRaidConfig()
     end)
