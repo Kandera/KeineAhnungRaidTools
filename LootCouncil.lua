@@ -767,34 +767,42 @@ function LC.OnStartLootRoll(rollID)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
 
-    local lootmaster = LC.GetLootmaster()
+    -- Quality/bind data first — the lootmaster branch below depends on it. bindOnPickUp comes
+    -- from GetLootRollItemInfo (reliable even for uncached items); classID via GetItemInfoInstant
+    -- for the same reason (GetItemInfo returns nil until the item is cached).
+    local _, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
+    local itemLink = GetLootRollItemLink(rollID)
+    local classID = LC.IsRealItemLink(itemLink) and select(6, C_Item.GetItemInfoInstant(itemLink))
+    -- Miscellaneous (classID 15: toys, pets, mounts, housing decor): never rarity-gated, since
+    -- it's virtually always Common/Uncommon regardless of how desirable it is.
+    local isCollectible = (classID == 15)
+    local councilEngages = isCollectible or not (quality and quality < LC.GetRaidMinQuality())
 
-    if LC.IsMe(lootmaster) then
-        -- The lootmaster is the one exception to Auto-Pass: they must physically win every item
-        -- (regardless of their own local Auto-Pass setting) so they can trade it out afterwards —
-        -- see LC.GetLootmaster for why this is raid-leader-controlled, not a personal toggle.
+    local lootmaster = LC.GetLootmaster()
+    local isLootmaster = LC.IsMe(lootmaster)
+    if isLootmaster and councilEngages and bindOnPickUp and not isCollectible then
+        -- The lootmaster only needs to physically win items they must later hand out through
+        -- Blizzard's 2-hour BoP trade window: council-relevant, BoP, non-collectible gear.
         ForceWinRoll(rollID)
         -- Blizzard's 2-hour Bind-on-Pickup trade window starts now, not whenever Council later
         -- decides a winner — see LC.CheckTradeTimeouts, which measures from this timestamp.
         LC.rollLootedAt = LC.rollLootedAt or {}
         LC.rollLootedAt[rollID] = GetTime()
+    elseif isLootmaster then
+        -- Everything the lootmaster does NOT force-win (collectibles, BoE/non-binding items,
+        -- sub-threshold drops) they ALWAYS pass — deliberately independent of their own
+        -- Auto-Pass setting, so those items cleanly go to the raid's normal rolls instead of
+        -- silently piling up in the lootmaster's bags.
+        RollOnLoot(rollID, 0)
     elseif KART_Settings.lcAutoPass then
         -- Auto-Pass is a personal preference and is intentionally independent of the raid's
-        -- min-quality setting (that setting only gates whether Council itself engages) —
-        -- evaluated unconditionally so a raider's own choice is never overridden by the raid
-        -- leader's quality threshold.
+        -- min-quality setting (that setting only gates whether Council itself engages).
         RollOnLoot(rollID, 0)
     end
 
-    -- Below the raid-wide minimum rarity: let Blizzard's own roll UI handle it, untouched — unless
-    -- it's a Miscellaneous-class item (classID 15: toys, pets, mounts, housing decor, and similar
-    -- non-equipment collectibles), which is never gated on rarity since it's virtually always
-    -- Common/Uncommon regardless of how desirable it is.
-    local _, _, _, quality = GetLootRollItemInfo(rollID)
-    local minQuality = LC.GetRaidMinQuality()
-    local itemLink = GetLootRollItemLink(rollID)
-    local classID = LC.IsRealItemLink(itemLink) and select(12, C_Item.GetItemInfo(itemLink))
-    if quality and quality < minQuality and classID ~= 15 then return end
+    -- Below the raid-wide minimum rarity (and not a collectible): let Blizzard's own roll UI
+    -- handle it, untouched.
+    if not councilEngages then return end
 
     local newItemID = LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or ""
     PurgeStaleRoll(rollID, newItemID)
