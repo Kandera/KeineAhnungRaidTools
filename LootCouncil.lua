@@ -142,12 +142,6 @@ function LC.GetButtonConfig()
     return result
 end
 
--- Only the leader's own edits are authoritative; this just re-broadcasts them to the raid.
--- (Non-leaders calling this would have no effect, since BroadcastRaidConfig no-ops for them.)
-function LC.UpdateCouncilCache()
-    LC.BroadcastRaidConfig()
-end
-
 function LC.IsCouncil()
     if UnitIsGroupLeader("player") then return true end
     local myKey = (KART.Identity.ResolvePlayer("player"))
@@ -1262,7 +1256,7 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetScript("OnTextChanged", function(self)
         if StripColons(self) then return end
         KART_Settings.lcCouncilMembers = self:GetText()
-        LC.UpdateCouncilCache()
+        LC.BroadcastRaidConfig()
     end)
 
     local hintCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")

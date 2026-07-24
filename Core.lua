@@ -47,7 +47,7 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
 -- (AddonCompartment registration, hooksecurefunc) since those must never run twice.
 function KART.SyncSettingsToUI()
     KART.UpdateCache()
-    if KART.LC and KART.LC.UpdateCouncilCache then KART.LC.UpdateCouncilCache() end
+    if KART.LC and KART.LC.BroadcastRaidConfig then KART.LC.BroadcastRaidConfig() end
     if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
     KART.UpdateStyles()
 
@@ -339,7 +339,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 elseif msg == "REQ_ILVL" then
                     local _, equipped = GetAverageItemLevel()
                     if equipped then
-                        C_ChatInfo.SendAddonMessage("KART", "ILVL:" .. string.format("%.1f", equipped), IsInRaid() and "RAID" or "PARTY")
+                        if IsInGroup() then
+                            C_ChatInfo.SendAddonMessage("KART", "ILVL:" .. string.format("%.1f", equipped), IsInRaid() and "RAID" or "PARTY")
+                        end
                     end
                 elseif msg:sub(1, 5) == "ILVL:" then
                     local ilvl = tonumber(msg:sub(6))
@@ -352,7 +354,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                     end
                 elseif msg == "REQ_GEAR" then
                     local e, g = KART.CountMissingGear()
-                    C_ChatInfo.SendAddonMessage("KART", "GEAR:" .. e .. ":" .. g, IsInRaid() and "RAID" or "PARTY")
+                    if IsInGroup() then
+                        C_ChatInfo.SendAddonMessage("KART", "GEAR:" .. e .. ":" .. g, IsInRaid() and "RAID" or "PARTY")
+                    end
                 elseif msg:sub(1, 5) == "GEAR:" then
                     local e, g = msg:match("GEAR:([^:]+):([^:]+)")
                     if e and g then

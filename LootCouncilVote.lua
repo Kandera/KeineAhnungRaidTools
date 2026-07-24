@@ -423,7 +423,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.votedText:SetText(string.format(KART.L.LC_VOTED_ROW, label))
             row.votedBadge:SetBackdropColor(votedDef.r, votedDef.g, votedDef.b, 0.18)
             row.votedBadge:SetBackdropBorderColor(votedDef.r, votedDef.g, votedDef.b, 0.7)
-            row.votedBadge:SetWidth(math.min(row.votedText:GetStringWidth() + 20, 329))
+            row.votedBadge:SetWidth(math.min(row.votedText:GetStringWidth() + 20, CONTENT_W - MARGIN * 2))
         end
 
         for bi = #buttons + 1, #row.voteButtons do

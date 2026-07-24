@@ -1,6 +1,5 @@
 local addonName, KART = ...
 KART.L_deDE = {
-    ADDON_TITLE = "Keine Ahnung Raid Tools",
     -- Tabs
     TAB_PROMOTE = "Automation",
     TAB_RAIDLEAD = "Raidlead-Leiste",

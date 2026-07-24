@@ -683,6 +683,11 @@ function Council.RefreshCouncilRows()
     end
     local itemArmorRank = Council.GetItemArmorRank(rollItem)
 
+    local rollsEnabled = LC.GetRollsEnabled()
+    local dtEnabled = KART_Settings.dtModuleEnabled ~= false
+    if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
+    if panel.hGain then panel.hGain:SetShown(dtEnabled) end
+
     -- Rolled item's own ilvl, purely to show a +/- delta next to each candidate's equipped ilvl
     -- (see the equippedText update below) — nil until the item link is cached, same as everywhere
     -- else in this function that reads C_Item.GetItemInfo.
@@ -1010,7 +1015,6 @@ function Council.RefreshCouncilRows()
 
         -- Droptimizer gain % column — entirely hidden when the module is off, matching the
         -- rollText pattern below.
-        local dtEnabled = KART_Settings.dtModuleEnabled ~= false
         row.gainText:SetShown(dtEnabled)
         if dtEnabled then
             if capturedGainPct then
@@ -1037,7 +1041,6 @@ function Council.RefreshCouncilRows()
 
         -- Opt-in 1-100 roll column — entirely hidden (not just blank) when the raid leader has
         -- rolls turned off, both to save space and to avoid implying a feature that isn't active.
-        local rollsEnabled = LC.GetRollsEnabled()
         row.rollText:SetShown(rollsEnabled)
         if rollsEnabled then
             if m.rollValue then
@@ -1058,8 +1061,6 @@ function Council.RefreshCouncilRows()
                 row.rollText:SetShadowOffset(1, -1)
             end
         end
-        if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
-        if panel.hGain then panel.hGain:SetShown(dtEnabled) end
 
         -- Council straw-poll button: tally of how many council members (including possibly
         -- yourself) picked this candidate, and a toggle for your own pick.

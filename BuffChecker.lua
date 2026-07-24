@@ -107,7 +107,7 @@ function KART.CreateBuffCheckFrame()
     KART.CreateHeaderLine(f, -30)
 
     -- Header Labels
-    local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590, 635}
+    local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
     f.headerStrings = {}
     
     -- Neues Label: ReadyCheck (Rdy)
