@@ -21,6 +21,14 @@ function Sync.Send(msg, channel, target)
     C_ChatInfo.SendAddonMessage(PREFIX, msg, channel or Sync.DefaultChannel(), target)
 end
 
+-- Reply channel/target for a request handler: whisper straight back to the sender when the request
+-- itself arrived as a whisper (a targeted single-player query), otherwise the default broadcast
+-- channel. Matches REQ_VERSION's behavior so every request/response pair round-trips on one channel.
+local function ReplyTo(ctx)
+    if ctx.channel == "WHISPER" then return "WHISPER", ctx.sender end
+    return Sync.DefaultChannel(), nil
+end
+
 -- CHAT_MSG_ADDON dispatch. A message is either a fixed token (EXACT_HANDLERS) or
 -- "PREFIX:payload" (PREFIX_HANDLERS, keyed by the part before the FIRST colon — payloads may
 -- contain further colons; each handler parses its own format). Entries with lc = true only
@@ -46,8 +54,11 @@ local function HandleVersionMessage(payload, ctx, isAnnounce)
     end
 
     if not KART.UpdateWarned and ver ~= KART.Version then
-        local nMaj, nMin, nPat = ver:match("(%d+)%.(%d+)%.(%d+)")
-        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.(%d+)%.(%d+)")
+        -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields usable
+        -- numbers (missing parts fall to 0 via the tonumber-or-0 below) instead of failing the
+        -- match outright and collapsing to 0.0.0, which would suppress the update warning entirely.
+        local nMaj, nMin, nPat = ver:match("(%d+)%.?(%d*)%.?(%d*)")
+        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.?(%d*)%.?(%d*)")
         nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
         oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
         if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
@@ -67,19 +78,19 @@ local EXACT_HANDLERS = {
         local outMH = (hasMH and mhID) and mhID or 0
         local outOH = (hasOH and ohID) and ohID or 0
         if IsInGroup() then
-            Sync.Send("OIL:" .. outMH .. ":" .. outOH)
+            Sync.Send("OIL:" .. outMH .. ":" .. outOH, ReplyTo(ctx))
         end
     end },
     REQ_ILVL = { fn = function(_, ctx)
         local _, equipped = GetAverageItemLevel()
         if equipped and IsInGroup() then
-            Sync.Send("ILVL:" .. string.format("%.1f", equipped))
+            Sync.Send("ILVL:" .. string.format("%.1f", equipped), ReplyTo(ctx))
         end
     end },
     REQ_GEAR = { fn = function(_, ctx)
         if IsInGroup() then
             local e, g = KART.CountMissingGear()
-            Sync.Send("GEAR:" .. e .. ":" .. g)
+            Sync.Send("GEAR:" .. e .. ":" .. g, ReplyTo(ctx))
         end
     end },
     REQ_VERSION = { fn = function(_, ctx)
@@ -128,7 +139,15 @@ local PREFIX_HANDLERS = {
         if not IsInGroup() then return end
         local link = KART.LC and KART.LC.Council and KART.LC.Council.GetOwnEquippedLink(payload)
         if link then
-            Sync.Send("EQUIP:" .. payload .. ":" .. link)
+            local msg = "EQUIP:" .. payload .. ":" .. link
+            -- A max-crafted/heavily-bonused link can exceed the 255-byte addon-message cap and get
+            -- its trailing link truncated into garbage; fall back to the compact item string (the
+            -- EQUIP receiver rebuilds it into a full link), same guard as the history sync.
+            if #msg > 255 then
+                local itemStr = KART.GetItemString(link)
+                if itemStr then msg = "EQUIP:" .. payload .. ":" .. itemStr end
+            end
+            Sync.Send(msg)
         end
     end },
     EQUIP = { lc = true, fn = function(payload, ctx)
@@ -137,6 +156,12 @@ local PREFIX_HANDLERS = {
         -- read by Council.GetEquippedForUnit as the fallback for un-inspectable raid members.
         local equipLoc, link = payload:match("^([^:]+):(.+)$")
         if equipLoc and link then
+            -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
+            -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring
+            -- the history-sync rebuild.
+            if not KART.IsRealItemLink(link) and link:match("^item:") then
+                link = select(2, C_Item.GetItemInfo(link)) or link
+            end
             KART.EquipCache = KART.EquipCache or {}
             KART.EquipCache[ctx.shortName] = KART.EquipCache[ctx.shortName] or {}
             KART.EquipCache[ctx.shortName][equipLoc] = link

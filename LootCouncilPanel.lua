@@ -633,7 +633,7 @@ function Council.CreateCouncilPanel()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcCouncilPanelPos
-    if pos and type(pos) == "table" and pos.x and pos.y then
+    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -942,8 +942,13 @@ function Council.RefreshCouncilRows()
             row.officerNoteIcon:SetWidth(14)
             row.officerNoteIcon:SetJustifyH("CENTER")
 
+            -- Fixed size + CENTER anchor, NOT SetAllPoints(officerNoteIcon): the icon is a FontString
+            -- that's empty until a note exists, and an empty FontString collapses toward 0 height, so
+            -- SetAllPoints (a live constraint) would inherit that collapse and leave no hoverable hit
+            -- target even once a note is set. Same reasoning as row.noteHitbox above.
             row.officerNoteHitbox = CreateFrame("Frame", nil, row)
-            row.officerNoteHitbox:SetAllPoints(row.officerNoteIcon)
+            row.officerNoteHitbox:SetSize(18, 18)
+            row.officerNoteHitbox:SetPoint("CENTER", row.officerNoteIcon)
             row.officerNoteHitbox:EnableMouse(true)
 
             -- Droptimizer gain % for the item currently being rolled — see Droptimizer.lua

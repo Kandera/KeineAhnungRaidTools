@@ -489,6 +489,9 @@ end
 
 function KART.ReportMissingBuffs()
     if not IsInGroup() or not KART.MissingBuffs then return end
+    -- Reviewed 2026-07-25, intentional: RAID/PARTY only, never INSTANCE_CHAT. /Report targets the
+    -- organized premade raids this tool is for; posting into LFR/LFG instance chat is deliberately
+    -- not supported. Do not re-flag.
     local channel = IsInRaid() and "RAID" or "PARTY"
     
     local delay = 0
@@ -515,13 +518,26 @@ end
 -- the string's SetWidth just overflows past it into whatever's anchored next (here, the reason
 -- icon). Truncates to the widest prefix that fits maxWidth, so the name column never runs into the
 -- next column regardless of the user's chosen content font size or how long the name-realm string is.
+-- Snaps a byte index back to the end of a full UTF-8 character so a multi-byte glyph (German
+-- umlauts are 2 bytes) is never sliced in half — a half glyph renders as a broken "?" box. A UTF-8
+-- continuation byte is 0x80-0xBF; if the byte right after i is one, i sits inside a character, so
+-- back up until the next byte starts a new character (or the string ends).
+local function Utf8Floor(s, i)
+    while i > 0 do
+        local nb = s:byte(i + 1)
+        if not nb or nb < 128 or nb >= 192 then return i end
+        i = i - 1
+    end
+    return i
+end
+
 local function SetTruncatedName(fontString, text, maxWidth)
     fontString:SetText(text)
     if fontString:GetStringWidth() <= maxWidth then return end
     local lo, hi, best = 1, #text, ""
     while lo <= hi do
         local mid = math.floor((lo + hi) / 2)
-        local candidate = text:sub(1, mid) .. "..."
+        local candidate = text:sub(1, Utf8Floor(text, mid)) .. "..."
         fontString:SetText(candidate)
         if fontString:GetStringWidth() <= maxWidth then
             best = candidate
@@ -591,7 +607,9 @@ function KART.UpdateBuffCheck(isPreview)
             row.name:SetTextColor(0.5, 0.5, 1)
 
             local rc = rcPreview[i]
-            local reason = (rc == "notready" or rc == "waiting") and rcReasonsPreview[i] or nil
+            -- Only "notready" shows a reason icon in the live path (see the row update below), so the
+            -- preview must match — "waiting" never carries a reason.
+            local reason = (rc == "notready") and rcReasonsPreview[i] or nil
             if reason then
                 row.reasonIcon.reasonText = reason
                 row.reasonIcon:Show()

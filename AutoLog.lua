@@ -41,6 +41,13 @@ end
 
 function KART.AutoLog.Evaluate()
     if not KART_Settings then return end -- settings not loaded yet (widget init during login)
+    -- Ownership can go stale: LoggingCombat() resets on logout but autoLogOwned (a SavedVariable)
+    -- persists, so a log that ended outside our control leaves us falsely "owning" nothing. If we
+    -- think we own the log but nothing is actually logging, drop the claim before deciding anything —
+    -- otherwise a later manually-started log gets wrongly stopped as if it were ours.
+    if KART_Settings.autoLogOwned and not LoggingCombat() then
+        KART_Settings.autoLogOwned = false
+    end
     local match, desc = MatchContent()
     if match then
         if not LoggingCombat() then

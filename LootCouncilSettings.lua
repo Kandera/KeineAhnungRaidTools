@@ -241,7 +241,10 @@ function LC.BuildSettingsPanel(parent)
         -- The label's shown/hidden state changes how much vertical space it occupies (see
         -- layoutRaidBox()) — re-flow the box the same way LC.UpdateRoleStatusLabel already does
         -- for its own height-dependent label, so everything below shifts to make/reclaim room.
-        if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
+        -- Skip the relayout while the tab is hidden (this also fires on the synchronous pending-
+        -- resolution retry from an incoming LC message); the OnShow hook re-runs this in full when
+        -- the tab is next shown, so the layout is always correct by the time it's visible.
+        if LC.RelayoutRaidBox and raidBox:IsShown() then LC.RelayoutRaidBox() end
     end
     KART.LC.CouncilMembersEditBox:HookScript("OnShow", UpdateCouncilPendingLabel)
     hooksecurefunc(LC, "RetryPendingResolutions", UpdateCouncilPendingLabel)

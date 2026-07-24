@@ -576,7 +576,7 @@ function LH.CreateWindow()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcHistoryWindowPos
-    if pos and type(pos) == "table" and pos.x and pos.y then
+    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -847,6 +847,11 @@ end
 function LH.HandleHistoryRequest(payload, senderFullName)
     local sinceTime = tonumber(payload)
     if not sinceTime or not senderFullName then return end
+    -- Only answer group members. CHAT_MSG_ADDON also delivers whispers and the "KART" prefix is
+    -- public, so without this any stranger could whisper LC_HIST_REQ and exfiltrate our loot history
+    -- (winners, items, reasons). Mirrors the group-membership check LH.HandleHistoryEntry already does.
+    local senderKey = KART.Identity.ResolvePlayer(senderFullName)
+    if not KART.Identity.FindUnitForKey(senderKey) then return end
 
     local cutoff = time() - HISTORY_SYNC_MAX_AGE
     local toSend = {}
@@ -899,6 +904,14 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                         e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                         winnerKey, winnerSafe, reasonSafe, itemStr)
                 end
+            end
+            -- Still over budget (a non-link item, or a very long nickname + reason): send an empty
+            -- item field rather than let SendAddonMessage truncate the trailing item into garbage.
+            -- The entry still syncs; the item just shows blank on the receiver instead of corrupt.
+            if #msg > 255 then
+                msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
+                    e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
+                    winnerKey, winnerSafe, reasonSafe, "")
             end
             KART.Sync.Send(msg, "WHISPER", senderFullName)
         end)

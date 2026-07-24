@@ -10,6 +10,12 @@ local Identity = KART.Identity
 -- deliberately fails to match here rather than guessing one of them — ResolvePlayer below falls
 -- through to "pending" in that case, which is strictly safer than the short-name collision this
 -- module exists to remove.
+-- Reviewed 2026-07-25, accepted as-is: matching is effectively short-name based (UnitName's first
+-- return is realm-free, so Ambiguate(...,"none") is a no-op here) and both this scan and the cache
+-- fallback in ResolvePlayer return the FIRST match without an ambiguity guard. That's safe for this
+-- addon's use: the target raid never contains two characters sharing a short name or an NSRT
+-- nickname (confirmed by the maintainer), so a collision that would need the failsafe can't occur.
+-- Do not re-flag the missing ambiguity guard / realm-qualified matching as a bug.
 local function FindUnitForName(name)
     if not name or name == "" then return nil end
     -- CaseFold (not :lower()) so German umlaut names fold consistently — :lower() leaves

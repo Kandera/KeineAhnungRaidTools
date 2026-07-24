@@ -967,6 +967,15 @@ function LC.HandleManualStart(payload, senderKey)
     -- A client without a synced raid config has lootmaster == "" and rejects — the state
     -- request on raid join (LC_STATE_REQ) closes that gap.
     local lootmaster = LC.GetLootmaster()
+    -- Same GUID-vs-pending-text race that LC.IsSenderCouncil guards: senderKey is always a resolved
+    -- GUID, but GetLootmaster() can still be a pending-text key if the lootmaster wasn't in our
+    -- roster when LC_CONFIG was parsed. Force the synchronous pending-resolution migration before
+    -- comparing, so a legitimate manual roll isn't dropped inside the GROUP_ROSTER_UPDATE throttle
+    -- window (the LC_STATE_REQ path only covers a fresh raid join, not this mid-session window).
+    if lootmaster ~= "" and not KART.Identity.IsResolvedKey(lootmaster) then
+        LC.RetryPendingResolutions()
+        lootmaster = LC.GetLootmaster()
+    end
     if lootmaster == "" or senderKey ~= lootmaster then return end
     local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
     rollID = tonumber(rollID)

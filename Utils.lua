@@ -180,6 +180,16 @@ function KART.TrimString(s)
     return s:match("^%s*(.-)%s*$")
 end
 
+-- Returns true if a saved window position (a TOPLEFT offset relative to UIParent's BOTTOMLEFT — the
+-- anchor every KART popup restores with) still lands the window on screen. A position saved at a
+-- larger resolution or UI scale can otherwise restore a window fully off-screen where it can't be
+-- grabbed; callers keep their default anchor when this returns false.
+function KART.IsSavedPosOnScreen(x, y)
+    if type(x) ~= "number" or type(y) ~= "number" then return false end
+    local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+    return x >= 0 and x <= sw - 40 and y >= 40 and y <= sh
+end
+
 function KART.SplitString(inputstr, sep)
     if sep == nil then sep = "%s" end
     local t = {}

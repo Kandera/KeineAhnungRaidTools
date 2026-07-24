@@ -234,7 +234,7 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     f.rows = {}
 
     local pos = KART_Settings and KART_Settings[posKey]
-    if pos and type(pos) == "table" and pos.x and pos.y then
+    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -632,7 +632,14 @@ function Trade.HandleResult(payload, senderKey)
     -- A result came in for this roll — remove it from our vote list, if it's still there.
     LC.Vote.RemoveVoteListItem(rollID)
 
-    if winnerKey == "NONE" then return end
+    if winnerKey == "NONE" then
+        -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
+        -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
+        -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab
+        -- with stale votes and a stale gold winner highlight from any prior assignment on this roll.
+        KART.LC.Council.CloseCouncilTab(rollID)
+        return
+    end
 
     -- Council peers must see the same assigned winner the assigner recorded locally — the gold
     -- winner highlight (see RefreshCouncilRows) and a correct prevWinner on any later reassignment

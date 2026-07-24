@@ -14,6 +14,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
+- **Der Loot-Verlauf wird nicht mehr an Spieler außerhalb deiner Gruppe gesendet.**
+- **Officer-Notiz-Tooltips erscheinen wieder beim Überfahren.**
+- **"Kein Gewinner" leert das Item jetzt beim gesamten Council**, nicht nur beim Klickenden.
+- **Manuelle Loot-Rolls gehen nicht mehr gelegentlich verloren**, kurz nachdem jemand dem Raid beitritt.
+- **Der Ausrüstungsvergleich bricht nicht mehr** bei sehr langen Item-Links.
+- **Das Auto-Kampflog stoppt kein Log mehr, das du selbst gestartet hast.**
+- **Lange Namen mit Umlauten werden im Buff-Check nicht mehr kaputt dargestellt.**
+- **Ein außerhalb des Bildschirms gespeichertes Council-Fenster wird jetzt wieder sichtbar zurückgesetzt.**
 - **Entfernen-für-Boss riskiert nicht mehr, dich selbst aus dem Raid zu werfen.**
 - **Eine volle Boss-Gruppe solo einzuladen wandelt jetzt in einen Raid um**, damit jede Einladung ankommt.
 - **Die Boss-Liste dupliziert sich nicht mehr** nach einem Profilwechsel.

@@ -56,7 +56,7 @@ function Vote.CreateVoteList()
 
     -- Restore saved position (reuses the old single-popup setting name)
     local pos = KART_Settings and KART_Settings.lcVotePopupPos
-    if pos and type(pos) == "table" and pos.x and pos.y then
+    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -809,6 +809,11 @@ function Vote.HandleVote(payload, senderKey)
     rollID = tonumber(rollID)
     idx    = tonumber(idx)
     if not rollID or not idx then return end
+    -- Ignore votes for a roll we're no longer tracking (already resolved/pruned): a late straggler
+    -- would otherwise re-create LC.votes[rollID] as an orphan that no cleanup path ever frees. Every
+    -- peer processes LC_START (which sets rollItems) before any vote can be cast, so a legitimate
+    -- vote never arrives before this is set.
+    if not LC.rollItems[rollID] then return end
 
     local note = payload:match("^%d+:%d+:(.*)") or ""
 
@@ -829,6 +834,9 @@ function Vote.HandleRoll(payload, senderKey)
     rollID = tonumber(rollID)
     value  = tonumber(value)
     if not rollID or not value then return end
+    -- Ignore rolls for an untracked (already resolved/pruned) roll — see HandleVote: prevents an
+    -- orphan LC.rolls[rollID] that no cleanup path frees. rollItems is always set first for a live roll.
+    if not LC.rollItems[rollID] then return end
 
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][senderKey] = value
@@ -849,6 +857,9 @@ function Vote.HandleCouncilVote(payload, senderKey)
     local rollID, candidateKey = payload:match("^(%d+):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
+    -- Ignore council votes for an untracked (already resolved/pruned) roll — see HandleVote:
+    -- prevents an orphan LC.councilVotes[rollID] that no cleanup path frees.
+    if not LC.rollItems[rollID] then return end
 
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     if candidateKey == "" then

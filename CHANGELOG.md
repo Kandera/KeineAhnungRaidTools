@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
+- **Loot history is no longer sent to players outside your group.**
+- **Officer note tooltips now show on hover again.**
+- **"No winner" now clears the item for the whole council**, not just whoever clicked it.
+- **Manual loot rolls are no longer occasionally dropped** right after someone joins the raid.
+- **Equipped-item comparison no longer breaks** for very long item links.
+- **Auto combat log no longer stops a log you started yourself.**
+- **Long names with umlauts no longer render broken** in the buff check.
+- **A council window saved off-screen now resets on-screen.**
 - **Remove-for-boss no longer risks kicking yourself** from a raid.
 - **Bulk-inviting a full boss roster while solo now converts to a raid** so every invite lands.
 - **The boss list no longer duplicates** after switching profiles.
