@@ -49,6 +49,37 @@ local function JSONNumber(key, value)
     return string.format("\"%s\":%d", key, value or 0)
 end
 
+-- Canonical English difficulty names for JSON export, keyed by Blizzard difficultyID (see
+-- GetInstanceInfo/GetDifficultyInfo). The on-screen column stays localized; only the export is
+-- normalized to English so a mixed-language raid still produces one consistent "instance" field.
+-- Entries logged before difficultyID was tracked — and entries backfilled via history sync, which
+-- only carries the localized string over the wire — fall back to that stored string.
+local DIFFICULTY_EN = {
+    [1]  = "Normal",          -- 5-player dungeon
+    [2]  = "Heroic",          -- 5-player dungeon
+    [8]  = "Mythic Keystone",
+    [14] = "Normal",          -- raid
+    [15] = "Heroic",          -- raid
+    [16] = "Mythic",          -- raid
+    [17] = "LFR",             -- raid finder
+    [23] = "Mythic",          -- 5-player dungeon
+    [24] = "Timewalking",
+}
+
+-- Localized difficulty name for on-screen display; falls back to the stored string for pre-id entries.
+function LH.DifficultyDisplay(e)
+    if e.difficultyID then
+        local name = GetDifficultyInfo(e.difficultyID)
+        if name and name ~= "" then return name end
+    end
+    return e.difficulty
+end
+
+-- Canonical English difficulty name for export; falls back to the stored (possibly localized) string.
+function LH.DifficultyExport(e)
+    return (e.difficultyID and DIFFICULTY_EN[e.difficultyID]) or e.difficulty or ""
+end
+
 -- =====================================================================
 --  RCLootCouncil-compatible JSON export
 -- =====================================================================
@@ -82,7 +113,7 @@ function LH.BuildRCLootCouncilJSON()
             JSONString("response", e.reason or ""),
             JSONNumber("votes", 0),
             JSONString("class", e.class or ""),
-            JSONString("instance", e.difficulty or ""),
+            JSONString("instance", LH.DifficultyExport(e)),
             JSONString("boss", ""),
             JSONString("gear1", ""),
             JSONString("gear2", ""),
@@ -609,7 +640,8 @@ function LH.Refresh()
             row.itemText:SetText(e.item ~= "" and e.item or "???")
         end
 
-        row.difficultyText:SetText((e.difficulty and e.difficulty ~= "") and e.difficulty or "—")
+        local diffName = LH.DifficultyDisplay(e)
+        row.difficultyText:SetText((diffName and diffName ~= "") and diffName or "—")
 
         if e.reason and e.reason ~= "" then
             local c = e.color
@@ -683,16 +715,17 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         end
     end
 
-    local _, _, _, difficultyName = GetInstanceInfo()
+    local _, _, difficultyID, difficultyName = GetInstanceInfo()
     table.insert(KART_LootHistory, {
-        time       = now,
-        item       = itemLink or "",
-        winner     = winnerDisplayName or "",
-        reason     = reason or "",
-        class      = classFile,
-        color      = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
-        difficulty = difficultyName or "",
-        rollID     = rollID,
+        time         = now,
+        item         = itemLink or "",
+        winner       = winnerDisplayName or "",
+        reason       = reason or "",
+        class        = classFile,
+        color        = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
+        difficulty   = difficultyName or "",
+        difficultyID = difficultyID,
+        rollID       = rollID,
     })
     if #KART_LootHistory > MAX_HISTORY_ENTRIES then
         table.remove(KART_LootHistory, 1)
