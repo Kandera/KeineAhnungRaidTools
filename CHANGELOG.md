@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Durability data now loads automatically on ready checks.**
 - **"Player is not ready" chat messages now use your language.**
 - **Reset Defaults now resets everything**, including window positions and keybinds.
+- **The lootmaster no longer force-wins trash, collectibles or BoE items** — only council-relevant BoP gear.
+- **Loot Council is now explicitly raid-only.**
+- **Session, roll-start and history-sync messages are now sender-verified.**
 
 ## [2.8.0] - 2026-07-23
 ### Added

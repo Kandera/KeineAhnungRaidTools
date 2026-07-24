@@ -15,6 +15,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
 - **"Spieler ist nicht bereit"-Chatmeldungen nutzen jetzt deine Sprache.**
 - **Standardwerte-Reset setzt jetzt alles zurück**, inklusive Fensterpositionen und Tastenbelegung.
+- **Der Lootmaster gewinnt nicht mehr automatisch Trash, Sammelobjekte oder BoE-Items** — nur noch Council-relevante BoP-Gegenstände.
+- **Loot Council ist jetzt ausdrücklich Raid-only.**
+- **Session-, Roll-Start- und History-Sync-Nachrichten werden jetzt auf ihren Absender geprüft.**
 
 ## [2.8.0] - 2026-07-23
 ### Hinzugefügt
