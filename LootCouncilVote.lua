@@ -386,14 +386,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         -- Real icon when we have one; otherwise the same tinted placeholder used by the council
         -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
         local ir, ig, ib = LC.ParseItemColor(rollLink)
-        local iconTexture = LC.IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
-        if iconTexture then
-            row.itemIcon:SetTexture(iconTexture)
-            row.itemIcon:SetVertexColor(1, 1, 1)
-        else
-            row.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-            row.itemIcon:SetVertexColor(ir, ig, ib)
-        end
+        LC.SetItemIcon(row.itemIcon, rollLink, ir, ig, ib)
         row.itemIconBorder:SetVertexColor(ir, ig, ib)
         row.accentStrip:SetColorTexture(ir, ig, ib)
 
@@ -640,14 +633,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 8 - 60)
 
         local ir, ig, ib = LC.ParseItemColor(rollLink)
-        local iconTexture = LC.IsRealItemLink(rollLink) and C_Item.GetItemIconByID(rollLink)
-        if iconTexture then
-            row.itemIcon:SetTexture(iconTexture)
-            row.itemIcon:SetVertexColor(1, 1, 1)
-        else
-            row.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-            row.itemIcon:SetVertexColor(ir, ig, ib)
-        end
+        LC.SetItemIcon(row.itemIcon, rollLink, ir, ig, ib)
         row.itemIconBorder:SetVertexColor(ir, ig, ib)
         row.itemText:SetTextColor(ir, ig, ib)
 

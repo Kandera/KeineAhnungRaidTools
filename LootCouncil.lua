@@ -504,6 +504,20 @@ function LC.ParseItemColor(link)
     return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
 end
 
+-- Sets an item icon texture: the item's real icon when the link resolves, otherwise a generic
+-- question-mark placeholder tinted with the item's quality colour (r,g,b — pass what
+-- LC.ParseItemColor returned, which the caller usually also needs for the surrounding border/strip).
+function LC.SetItemIcon(icon, link, r, g, b)
+    local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+    if iconTexture then
+        icon:SetTexture(iconTexture)
+        icon:SetVertexColor(1, 1, 1)
+    else
+        icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        icon:SetVertexColor(r, g, b)
+    end
+end
+
 -- Counts how many people have voted on rollID so far, and a rough denominator (current group
 -- size, at least 1) for a "voted/total" badge. The denominator is approximate — not everyone in
 -- the group necessarily has KART or is eligible — but good enough for an at-a-glance indicator.

@@ -151,14 +151,7 @@ function Council.SwitchCouncilTab(rollID)
 
     local link = LC.rollItems[rollID]
     local ir, ig, ib = LC.ParseItemColor(link)
-    local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
-    if iconTexture then
-        panel.itemIcon:SetTexture(iconTexture)
-        panel.itemIcon:SetVertexColor(1, 1, 1)
-    else
-        panel.itemIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-        panel.itemIcon:SetVertexColor(ir, ig, ib)
-    end
+    LC.SetItemIcon(panel.itemIcon, link, ir, ig, ib)
     panel.itemIconBorder:SetVertexColor(ir, ig, ib)
     local deadline = LC.rollDeadlines[rollID]
     if deadline then
@@ -265,14 +258,7 @@ function Council.RefreshCouncilTabs()
 
         -- Real items show their actual icon; test mode has no real item to fetch an icon for,
         -- so it gets a generic placeholder tinted with the item's own colour instead.
-        local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
-        if iconTexture then
-            tab.icon:SetTexture(iconTexture)
-            tab.icon:SetVertexColor(1, 1, 1)
-        else
-            tab.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-            tab.icon:SetVertexColor(r, g, b)
-        end
+        LC.SetItemIcon(tab.icon, link, r, g, b)
 
         local voted, total = LC.CountVotes(rollID)
         tab.countText:SetText(voted .. "/" .. total)
