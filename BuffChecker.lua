@@ -291,10 +291,9 @@ function KART.CreateBuffCheckFrame()
 
     local function RequestAdvancedData()
         if IsInGroup() then
-            local chan = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage("KART", "REQ_OIL", chan)
-            C_ChatInfo.SendAddonMessage("KART", "REQ_ILVL", chan)
-            C_ChatInfo.SendAddonMessage("KART", "REQ_GEAR", chan)
+            KART.Sync.Send("REQ_OIL")
+            KART.Sync.Send("REQ_ILVL")
+            KART.Sync.Send("REQ_GEAR")
         end
     end
 

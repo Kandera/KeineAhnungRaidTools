@@ -111,7 +111,7 @@ function Council.RequestEquipForRoll(rollID, rollItemLink)
     local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
     if not itemEquipLoc or itemEquipLoc == "" or not EQUIP_LOC_TO_SLOT[itemEquipLoc] then return end
     LC.equipRequestedRolls[rollID] = true
-    C_ChatInfo.SendAddonMessage("KART", "REQ_EQUIP:" .. itemEquipLoc, IsInRaid() and "RAID" or "PARTY")
+    KART.Sync.Send("REQ_EQUIP:" .. itemEquipLoc)
 end
 
 -- =====================================================================

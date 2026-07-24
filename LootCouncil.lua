@@ -165,13 +165,9 @@ function LC.IsSenderCouncil(senderKey)
     return LC.CouncilNamesTable[senderKey] == true
 end
 
-function LC.GetChannel()
-    return IsInRaid() and "RAID" or "PARTY"
-end
-
 function LC.SendLC(msg)
     if IsInGroup() then
-        C_ChatInfo.SendAddonMessage("KART", msg, LC.GetChannel())
+        KART.Sync.Send(msg)
     end
 end
 
@@ -444,7 +440,7 @@ function LC.SendSettingsSync(targetName)
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    C_ChatInfo.SendAddonMessage("KART", BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    KART.Sync.Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
 end
 
 function LC.ShowSyncTargetDialog()
@@ -496,10 +492,10 @@ KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
         KART_Settings.lcVoteSeconds = data.voteSeconds
         KART_Settings.lcCouncilMembers = data.councilMembers
         KART.SyncSettingsToUI()
-        C_ChatInfo.SendAddonMessage("KART", "LC_SYNC_ACCEPT", "WHISPER", data.sender)
+        KART.Sync.Send("LC_SYNC_ACCEPT", "WHISPER", data.sender)
     end,
     OnCancel = function(self, data)
-        C_ChatInfo.SendAddonMessage("KART", "LC_SYNC_DECLINE", "WHISPER", data.sender)
+        KART.Sync.Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
     end,
 })
 

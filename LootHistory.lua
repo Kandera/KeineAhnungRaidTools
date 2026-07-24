@@ -816,7 +816,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                         winnerKey, winnerSafe, reasonSafe, itemStr)
                 end
             end
-            C_ChatInfo.SendAddonMessage("KART", msg, "WHISPER", senderFullName)
+            KART.Sync.Send(msg, "WHISPER", senderFullName)
         end)
     end
 end

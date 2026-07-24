@@ -13,6 +13,7 @@ Locales\deDE.lua
 
 Utils.lua
 Identity.lua
+KARTSync.lua
 MainFrame.lua
 GroupLogic.lua
 RaidleadBar.lua
