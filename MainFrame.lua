@@ -244,7 +244,7 @@ end, L.DESC_RL_AUTOHIDE)
 
 -- Pull-Timer Slider: the pull button (RaidleadBar.lua) reads pullTimerDuration
 -- at click time, so no macrotext attribute needs updating here anymore.
-KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER)
+KART.PullSlider = KART.CreateSettingsSlider(rlCard, L.SET_PULL_TIMER, 5, 30, "pullTimerDuration", -130, "KART_PullTimerSlider", L.DESC_PULL_TIMER, true)
 
 -- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
 local kbCard = KART.CreateCard(KART.RaidleadPanel)
@@ -375,7 +375,7 @@ end)
 KART.SldBuffCheckAlpha = KART.CreateSettingsSlider(bcCard, L.SET_BC_ALPHA, 0, 100, "buffCheckAlpha", -30, "KART_BuffCheckAlphaSlider", L.DESC_BC_ALPHA)
 KART.SldBuffCheckAlpha:ClearAllPoints()
 KART.SldBuffCheckAlpha:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -46)
-KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -90, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY)
+KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0, 30, "bcCombatDelay", -90, "KART_BuffCheckCombatDelaySlider", L.DESC_BC_COMBAT_DELAY, true)
 KART.SldCombatDelay:ClearAllPoints()
 KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
 
@@ -447,7 +447,7 @@ KART.CbAlMythicPlus:ClearAllPoints()
 KART.CbAlMythicPlus:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -50)
 KART.CbAlMythicPlus.text:SetWidth(192)
 KART.CbAlMythicPlus.text:SetJustifyH("LEFT")
-KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -80, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY)
+KART.SldAlMinKey = KART.CreateSettingsSlider(alCard, L.SET_AL_MIN_KEY, 2, 20, "autoLogMinKey", -80, "KART_AlMinKeySlider", L.DESC_AL_MIN_KEY, true)
 KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
 KART.SldAlMinKey:ClearAllPoints()
 KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -96)

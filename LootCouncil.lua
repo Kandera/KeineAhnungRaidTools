@@ -1129,7 +1129,7 @@ function LC.BuildSettingsPanel(parent)
 
     KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
         raidBox, L.LC_SET_VOTE_TIMER, 5, 180, "lcVoteSeconds",
-        -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER)
+        -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER, true)
 
     -- Independent from the main window's Content Font Size — the vote-list/council-panel grid
     -- layouts don't necessarily want the same size as the rest of the addon (see LC.ApplyFontSize).

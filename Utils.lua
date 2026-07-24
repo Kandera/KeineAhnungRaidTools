@@ -568,7 +568,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     return cb
 end
 
-function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yOffset, name, tooltipText)
+function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yOffset, name, tooltipText, skipStyleRefresh)
     local s = CreateFrame("Slider", name, parent, "BackdropTemplate")
     s:SetSize(180, 4) -- thin track instead of the old 14px-tall bar
     s:SetPoint("TOPLEFT", 20, yOffset - 16) -- 16px Platz für das Label oben
@@ -625,7 +625,9 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
         KART_Settings[settingKey] = val
         self.valueText:SetText(val)
         positionGlow()
-        if KART.UpdateStyles then KART.UpdateStyles() end
+        -- skipStyleRefresh: sliders whose value doesn't feed KART.UpdateStyles (pull timer,
+        -- combat delay, min key level, vote timer) skip the full restyle on every drag tick.
+        if not skipStyleRefresh and KART.UpdateStyles then KART.UpdateStyles() end
     end)
     s:SetScript("OnEnter", function() glow:SetAlpha(0.35) end)
     s:SetScript("OnLeave", function() if not s.isDragging then glow:SetAlpha(0) end end)
