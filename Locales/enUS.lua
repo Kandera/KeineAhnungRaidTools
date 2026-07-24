@@ -336,7 +336,6 @@ KART.L_enUS = {
     DT_TOOLTIP_GAIN        = "Gain: %+.1f%% (%s)",
 }
 -- English is the master language.
-KART.L_enUS = KART.L_enUS or {}
 
 -- Initialize the global L table with English as the base
 KART.L = KART.L or {}

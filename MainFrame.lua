@@ -379,7 +379,7 @@ KART.SldCombatDelay = KART.CreateSettingsSlider(bcCard, L.SET_BC_COMBAT_DELAY, 0
 KART.SldCombatDelay:ClearAllPoints()
 KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
 
--- 6. Automation panel: promote/invite settings grouped into a card.
+-- 7. Automation panel: promote/invite settings grouped into a card.
 KART.CreateTabTitle(1, L.TAB_PROMOTE)
 
 local autoCard = KART.CreateCard(KART.PromotePanel)
@@ -462,7 +462,7 @@ KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -170)
 KART.CbAlDelves.text:SetWidth(192)
 KART.CbAlDelves.text:SetJustifyH("LEFT")
 
--- 7. Settings Panel Inhalt
+-- 8. Settings Panel Inhalt
 KART.CreateTabTitle(4, L.LABEL_GENERAL_SETTINGS)
 
 -- Card: window-level interface options
@@ -630,7 +630,7 @@ KART.BtnProfileDelete:SetScript("OnClick", function()
     StaticPopup_Show("KART_PROFILE_DELETE_CONFIRM", name, nil, { name = name })
 end)
 
--- 8. Close button: invisible hit area over the X baked into the artwork.
+-- 9. Close button: invisible hit area over the X baked into the artwork.
 -- HIGHLIGHT-layer texture shows automatically on hover, no scripts needed.
 local closeBtn = CreateFrame("Button", nil, clickArea)
 closeBtn:SetSize(36, 36)
@@ -641,7 +641,7 @@ closeHover:SetColorTexture(1, 1, 1, 0.08)
 closeBtn:SetScript("OnClick", function() KART.MainFrame:Hide() end)
 mainFrame.closeBtn = closeBtn
 
--- 9. Settings search: small always-visible button + popout (edit box + up to 8 result rows).
+-- 10. Settings search: small always-visible button + popout (edit box + up to 8 result rows).
 -- Positioned left of the close button, in the same header row as the active tab's title, well
 -- clear of the close button's hit area (closeBtn spans roughly x -45..-9, y -42..-6 from
 -- clickArea's TOPRIGHT) and of the baked logo/title zone above y -22.

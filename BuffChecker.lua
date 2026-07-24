@@ -460,15 +460,15 @@ local function setInd(row, idx, has, buffData, classes)
     if has == "expiring" then
         ind:SetAlpha(1.0)
         ind:SetVertexColor(1, 0.8, 0)
-                elseif has == "best" then
-                    ind:SetAlpha(1.0)
-                    ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
-                elseif has == "wrong" then
-                    ind:SetAlpha(1.0)
-                    ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
-                elseif has == "unknown" then
-                    ind:SetAlpha(0.3)
-                    ind:SetVertexColor(0.5, 0.5, 0.5) -- Grau für fremde Spieler
+    elseif has == "best" then
+        ind:SetAlpha(1.0)
+        ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
+    elseif has == "wrong" then
+        ind:SetAlpha(1.0)
+        ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
+    elseif has == "unknown" then
+        ind:SetAlpha(0.3)
+        ind:SetVertexColor(0.5, 0.5, 0.5) -- Grau für fremde Spieler
     elseif has then
         ind:SetAlpha(1.0)
         ind:SetVertexColor(1, 1, 1)

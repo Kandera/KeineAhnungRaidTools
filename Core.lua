@@ -611,6 +611,10 @@ function KART.ShowReadyCheckReasonDialog()
         f.title:SetPoint("TOP", 0, -10)
         f.title:SetText(KART.L.RC_REASON_TITLE)
 
+        -- reasonKey names a localized preset (Bio/Drink/1min); a nil reasonKey with a fallback is
+        -- the custom free-typed reason path (see the Send button / edit box below). The preset
+        -- callers pass no fallback — their key always exists in KART.L, so the old literal fallbacks
+        -- there were dead.
         local function sendReason(reasonKey, fallback)
             local text = fallback
             if reasonKey and KART.L[reasonKey] then
@@ -626,17 +630,17 @@ function KART.ShowReadyCheckReasonDialog()
         local btnBio = KART.CreateModernButton(f, KART.L.RC_REASON_BIO)
         btnBio:SetSize(75, 25)
         btnBio:SetPoint("TOPLEFT", 10, -35)
-        btnBio:SetScript("OnClick", function() sendReason("RC_REASON_BIO", "Bio") end)
+        btnBio:SetScript("OnClick", function() sendReason("RC_REASON_BIO") end)
 
         local btnDrink = KART.CreateModernButton(f, KART.L.RC_REASON_DRINK)
         btnDrink:SetSize(75, 25)
         btnDrink:SetPoint("TOP", 0, -35)
-        btnDrink:SetScript("OnClick", function() sendReason("RC_REASON_DRINK", "Trinken") end)
+        btnDrink:SetScript("OnClick", function() sendReason("RC_REASON_DRINK") end)
 
         local btn1Min = KART.CreateModernButton(f, KART.L.RC_REASON_1MIN)
         btn1Min:SetSize(75, 25)
         btn1Min:SetPoint("TOPRIGHT", -10, -35)
-        btn1Min:SetScript("OnClick", function() sendReason("RC_REASON_1MIN", "1 Min") end)
+        btn1Min:SetScript("OnClick", function() sendReason("RC_REASON_1MIN") end)
 
         -- Textfeld für eigenen Grund
         local customInput = CreateFrame("EditBox", nil, f, "BackdropTemplate")
