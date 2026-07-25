@@ -985,9 +985,17 @@ local function IsSenderGroupLeader(senderKey)
 end
 
 function LC.HandleActive(value, senderKey)
-    -- Only the raid leader may flip the session flag — otherwise any group member could
-    -- toggle Loot Council on/off for the whole raid with a forged LC_ACTIVE.
-    if not IsSenderGroupLeader(senderKey) then return end
+    -- Two people may flip the session flag: the raid leader (the settings toggle) and the configured
+    -- lootmaster (the council panel's "Close Session" button — they own the loot flow and are the one
+    -- holding the items). Nobody else, or any group member could toggle Loot Council off for the
+    -- whole raid with a forged LC_ACTIVE.
+    --
+    -- The lootmaster check compares against the value we currently hold, which is "" until a config
+    -- has been received — so on a fresh client only the leader is accepted, which is the bootstrap
+    -- path anyway.
+    local lootmaster = LC.GetLootmaster()
+    local fromLootmaster = senderKey and lootmaster ~= "" and senderKey == lootmaster
+    if not (IsSenderGroupLeader(senderKey) or fromLootmaster) then return end
     local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
     -- A peer receiving the leader's session-end must also drop its tracked rolls and close its

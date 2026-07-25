@@ -15,7 +15,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Geändert
 - **Handels-Erinnerungen und ausstehende Items überleben jetzt einen Reload oder Relog.**
-- **Council-Tabs schließen sich, sobald das Item vergeben ist.**
+- **Neuer "Session beenden"-Button im Council-Panel** beendet die Session und räumt alle offenen Items auf einmal ab. Nur für den Lootmaster.
 - **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
 
 ### Behoben

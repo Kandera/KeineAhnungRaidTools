@@ -406,6 +406,35 @@ end
 -- +70 over the original 555/520 (panel/scrollChild) for the guild-rank column inserted right
 -- after Name (see hRank/row.rankText below) — every column from iLvl rightward is shifted by
 -- this same DELTA so all existing gaps between columns stay exactly as they were.
+-- Confirmed because it is destructive and raid-wide: every client drops its tabs, votes and rolls.
+-- Registered once at file scope rather than per panel build (the panel is created lazily).
+KART.RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
+    text = "End the Loot Council session?", -- overwritten with KART.L.LC_CLOSE_SESSION_CONFIRM before each Show
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function()
+        -- Same call the raid leader's session toggle uses: clears our own state and broadcasts
+        -- LC_ACTIVE:0 so every peer converges to the same clean slate (see LC.HandleActive).
+        LC.SetSessionActive(false)
+    end,
+})
+
+-- Keeps the "Close Session" button in step with who currently owns the session. Called from the
+-- panel's OnShow and from every row refresh, so a config change that hands the lootmaster role to
+-- someone else takes effect on an already-open panel too.
+function Council.UpdateSessionButton()
+    local f = LC.councilPanel
+    if not f or not f.btnCloseSession then return end
+    local isOwner = LC.IsMe(LC.GetLootmaster())
+    if isOwner then
+        f.btnCloseSession:Enable()
+        f.btnCloseSession.text:SetTextColor(1, 1, 1)
+    else
+        f.btnCloseSession:Disable()
+        f.btnCloseSession.text:SetTextColor(0.4, 0.4, 0.4)
+    end
+end
+
 local COUNCIL_PANEL_WIDTH   = 625
 local COUNCIL_PANEL_HEIGHT  = 462
 local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
@@ -634,6 +663,22 @@ function Council.CreateCouncilPanel()
         end
     end)
 
+    -- Ends the whole session in one go, whatever is still open. This is the counterpart to tabs
+    -- deliberately NOT closing themselves on an award (reassigning has to stay possible, see
+    -- DoAssignWinner) — without it the only way to clear a finished raid's tabs would be closing each
+    -- one by hand. Lootmaster-only, since it wipes state for every client in the raid; everyone else
+    -- sees it greyed out and uses "Close" (or the header "×") to just put the window away.
+    local btnCloseSession = KART.CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
+    btnCloseSession:SetSize(150, 28)
+    btnCloseSession:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
+    btnCloseSession:SetScript("OnClick", function()
+        if not LC.IsMe(LC.GetLootmaster()) then return end -- belt-and-braces; the button is disabled
+        StaticPopupDialogs["KART_LC_CLOSE_SESSION_CONFIRM"].text = KART.L.LC_CLOSE_SESSION_CONFIRM ---@diagnostic disable-line: undefined-global
+        StaticPopup_Show("KART_LC_CLOSE_SESSION_CONFIRM") ---@diagnostic disable-line: undefined-global
+    end)
+    f.btnCloseSession = btnCloseSession
+
+    -- Plain window close: hides the panel, ends nothing. Same as the header "×".
     local btnClose = KART.CreateModernButton(f, KART.L.LC_BTN_CANCEL)
     btnClose:SetSize(150, 28)
     btnClose:SetPoint("BOTTOMRIGHT", -10, 10)
@@ -645,7 +690,7 @@ function Council.CreateCouncilPanel()
     -- so a minimized panel still tells you *something* is waiting on a decision.
     f.collapsible = {
         hName, hRank, hIlvl, hVote, hRoll, hCouncilVotes, hGain,
-        divider, scrollBG, btnNoWinner, btnClose, f.tabStrip,
+        divider, scrollBG, btnNoWinner, btnCloseSession, btnClose, f.tabStrip,
         f.timeBar, f.timeBarBG,
     }
 
@@ -677,6 +722,7 @@ function Council.CreateCouncilPanel()
         end)
     end
     f:HookScript("OnShow", startTimerTicker)
+    f:HookScript("OnShow", Council.UpdateSessionButton)
     f:HookScript("OnHide", function()
         if f.timerTicker then f.timerTicker:Cancel() f.timerTicker = nil end
         -- The equip-comparison tooltip is parented to UIParent, not to this panel, so hiding the
@@ -775,6 +821,10 @@ function Council.RefreshCouncilRows()
     if rollID and rollItem and LC.IsRealItemLink(rollItem) then
         Council.RequestEquipForRoll(rollID, rollItem)
     end
+
+    -- Cheap, and this is the one place that runs on every config/roster change, so the button can't
+    -- get stuck enabled for someone who just stopped being the lootmaster.
+    Council.UpdateSessionButton()
 
     local rollsEnabled = LC.GetRollsEnabled()
     local dtEnabled = KART_Settings.dtModuleEnabled ~= false

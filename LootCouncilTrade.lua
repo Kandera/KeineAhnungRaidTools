@@ -80,13 +80,9 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         end
     end
     LC.assignedWinners[rollID] = playerKey
-    -- The item is decided — close its tab, same as "No Winner" does. Without this the tab strip only
-    -- ever grows, and past ~9 tabs they render off the bottom of the panel where their close buttons
-    -- can't be reached.
-    -- NOTE: this ends the reassign flow for that item (Trade.AssignWinner's confirm dialog reads
-    -- LC.assignedWinners, which ClearRollState drops with the tab). Changing a decision afterwards
-    -- means re-adding the item with /kart add.
-    KART.LC.Council.CloseCouncilTab(rollID)
+    -- The tab deliberately stays open after an award: reassigning is a first-class feature, and
+    -- Trade.AssignWinner's confirm dialog needs LC.assignedWinners, which ClearRollState would drop
+    -- along with the tab. Tabs are cleared in bulk by "Close Session" (see the council panel).
 end
 
 -- Awards the item to playerKey (a resolved player identity, see KART.Identity.ResolvePlayer) with

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Trade reminders and owed items now survive a reload or relog.**
-- **Council tabs close once the item is awarded.**
+- **New "Close Session" button in the council panel** ends the session and clears every open item at once. Lootmaster only.
 - **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
 
 ### Fixed
