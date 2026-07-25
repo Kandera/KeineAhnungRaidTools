@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **When the same item drops twice at once, each one is now marked "(1/2)"/"(2/2)"** so you can tell them apart.
 - **Choose what happens to an item in your vote window once you've voted on it**: stay full-size (default), shrink, or hide completely. New setting in Loot Council settings.
 - **`/kart showall`** brings back any items hidden by that setting.
+- **`/kart owed`** reopens the list of items you're still owed.
 
 ### Changed
 - **Both weapons are now checked for oil** — a dual wielder with only one oiled weapon is flagged, while an empty off-hand or a shield is not asked for one.
@@ -40,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Buff-Checker now checks the off-hand enchant** on a second weapon — shields and caster off-hands take none.
 - **A buff that merely has "oil" in its name no longer triggers a false oil warning.**
 - **Items added with `/kart add` now roll like a normal drop** — the council's Roll column stayed empty for them.
+- **Re-adding an awarded item now frees it even after its council tab was closed**, which is when it usually happens.
+- **Binding a key already used by another Raidlead action now takes it from that action**, instead of both showing it and only one working.
+- **Names and nicknames with accents now match** wherever umlauts already did.
 - **"No Winner" now also removes the item from loot history**, instead of leaving it credited to the revoked winner.
 - **An item with two sockets now reports both empty ones**, not just one.
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.

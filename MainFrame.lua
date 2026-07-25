@@ -277,6 +277,9 @@ kbListener:SetPropagateKeyboardInput(false)
 
 -- The bind button currently in capture mode, if any (only one capture is active at a time).
 local kbActiveBtn
+-- [actionKey] = its bind button, so StartCapture can update the caption of a DIFFERENT action whose
+-- key it just took over. Filled by the row loop below, which runs after this.
+local kbButtons = {}
 
 local function StopCapture(activeBtn)
     kbListener:Hide()
@@ -312,6 +315,17 @@ local function StartCapture(btn)
         if IsShiftKeyDown() then binding = "SHIFT-" .. binding end
         if IsControlKeyDown() then binding = "CTRL-" .. binding end
         if IsAltKeyDown() then binding = "ALT-" .. binding end
+        -- Take the key off whoever else holds it, the way Blizzard's own keybind UI does. Two
+        -- actions sharing a binding isn't something KART.ApplyKeybinds can honour: it sets one
+        -- override per action in list order, so the later action simply won and the earlier button
+        -- went on displaying a key that did nothing. Stealing it makes the settings tell the truth.
+        for _, other in ipairs(KART.KeybindActions) do
+            if other.key ~= btn.actionKey and KART_Settings.keybinds[other.key] == binding then
+                KART_Settings.keybinds[other.key] = nil
+                local otherBtn = kbButtons[other.key]
+                if otherBtn then otherBtn.text:SetText(L.KB_NOT_BOUND) end
+            end
+        end
         KART_Settings.keybinds[btn.actionKey] = binding
         KART.ApplyKeybinds()
         StopCapture(btn)
@@ -340,6 +354,7 @@ for i, action in ipairs(KART.KeybindActions) do
     btn:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 260, yOff + 6)
     btn:SetSize(150, 22)
     btn.actionKey = action.key
+    kbButtons[action.key] = btn
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:SetScript("OnClick", function(self, button)
         if InCombatLockdown() then

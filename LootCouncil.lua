@@ -1273,14 +1273,29 @@ local function RevokePriorAward(itemLink)
     local itemID = LC.IsRealItemLink(itemLink) and itemLink:match("item:(%d+)")
     if not itemID then return end
 
-    local matches = {}
-    for rid, winnerKey in pairs(LC.assignedWinners) do
-        if winnerKey and winnerKey ~= "NONE" and not LC.IsTestRoll(rid) then
-            local link = LC.rollItems[rid]
-            if LC.IsRealItemLink(link) and link:match("item:(%d+)") == itemID then
-                matches[#matches + 1] = rid
-            end
+    -- Both tables are searched, because neither covers the realistic case alone.
+    --
+    -- LC.pendingTrades is the durable one and the reason this works at all: an award is normally
+    -- followed by closing the tab (or "Close Session"), and Council.CloseCouncilTab runs
+    -- Trade.ClearRollState, which nils LC.assignedWinners[rollID] while deliberately leaving the
+    -- pending trade alone. Pending trades also survive a full relog (KART_LCTrades) and carry their
+    -- own itemLink, so they still match long after LC.rollItems was cleared.
+    --
+    -- LC.assignedWinners covers the one case pendingTrades can't: the lootmaster awarding the item
+    -- to themselves, where Trade.AddPendingTrade returns early and no obligation is ever recorded.
+    local seen, matches = {}, {}
+    local function consider(rid, link)
+        if type(rid) ~= "number" or seen[rid] or LC.IsTestRoll(rid) then return end
+        if LC.IsRealItemLink(link) and link:match("item:(%d+)") == itemID then
+            seen[rid] = true
+            matches[#matches + 1] = { rollID = rid, link = link }
         end
+    end
+    for _, e in ipairs(LC.pendingTrades or {}) do
+        consider(e.rollID, e.itemLink)
+    end
+    for rid, winnerKey in pairs(LC.assignedWinners) do
+        if winnerKey and winnerKey ~= "NONE" then consider(rid, LC.rollItems[rid]) end
     end
 
     if #matches == 0 then return end
@@ -1291,11 +1306,16 @@ local function RevokePriorAward(itemLink)
 
     -- Same three steps the council panel's "No Winner" button runs: tell the raid, then do the peer
     -- side's cleanup locally too, since we never receive our own broadcast.
-    local rid = matches[1]
-    LC.Trade.AnnounceResult(rid, "NONE")
-    KART.LH.RemoveHistoryForRoll(rid)
-    LC.Trade.ClearWinnerObligations(rid)
-    KART.LC.Council.CloseCouncilTab(rid)
+    local m = matches[1]
+    -- Trade.AnnounceResult reads the link back out of LC.rollItems to carry the itemID peers use to
+    -- reject a result for a stale rollID. After a relog that table is empty while the obligation is
+    -- not, so put the link the pending trade remembered back before announcing.
+    if not LC.IsRealItemLink(LC.rollItems[m.rollID]) then LC.rollItems[m.rollID] = m.link end
+
+    LC.Trade.AnnounceResult(m.rollID, "NONE")
+    KART.LH.RemoveHistoryForRoll(m.rollID)
+    LC.Trade.ClearWinnerObligations(m.rollID)
+    KART.LC.Council.CloseCouncilTab(m.rollID)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_MANUAL_REVOKED, itemLink))
 end
 

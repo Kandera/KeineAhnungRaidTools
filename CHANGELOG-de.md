@@ -26,6 +26,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Wenn das gleiche Item doppelt gleichzeitig droppt, wird jedes jetzt mit "(1/2)"/"(2/2)" markiert**, damit du sie unterscheiden kannst.
 - **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
 - **`/kart showall`** holt ausgeblendete Items zurück.
+- **`/kart owed`** öffnet die Liste der Items, die dir noch zustehen.
 
 ### Geändert
 - **Beide Waffen werden jetzt auf Öl geprüft** — wer mit zwei Waffen kämpft und nur eine geölt hat, wird gemeldet; eine leere Schildhand oder ein Schild wird nicht verlangt.
@@ -40,6 +41,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Buff-Checker prüft jetzt die Verzauberung der Schildhand** — nur bei einer zweiten Waffe, Schilde und Zauberer-Schildhände nehmen keine.
 - **Ein Buff, in dessen Namen bloß „Öl" vorkommt, löst keine falsche Öl-Warnung mehr aus.**
 - **Items aus `/kart add` würfeln jetzt wie ein normaler Drop** — die Wurf-Spalte im Council blieb für sie leer.
+- **Ein erneut hinzugefügtes Item wird jetzt auch dann freigegeben, wenn sein Council-Tab schon zu war** — also im Regelfall.
+- **Eine Taste, die schon eine andere Raidlead-Aktion belegt, wird dieser jetzt weggenommen**, statt bei beiden zu stehen und nur bei einer zu wirken.
+- **Namen und Nicknames mit Akzenten matchen jetzt** überall dort, wo Umlaute es schon taten.
 - **„Kein Gewinner" entfernt das Item jetzt auch aus der Loot-Historie**, statt es dem widerrufenen Gewinner gutzuschreiben.
 - **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.

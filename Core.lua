@@ -640,6 +640,13 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         if KART.LC and KART.LC.tradeReminderFrame and #KART.LC.pendingTrades > 0 then
             KART.LC.tradeReminderFrame:Show()
         end
+    elseif cmd == "owed" then
+        -- Winner-side counterpart to /kart trade. Both reminder windows' "x" only hides them, and
+        -- Trade.RefreshOwedReminder re-shows this one only when the list actually changes — so
+        -- without this, closing it meant losing the list until the next item was won.
+        if KART.LC and KART.LC.owedReminderFrame and #(KART.LC.owedToMe or {}) > 0 then
+            KART.LC.owedReminderFrame:Show()
+        end
     elseif cmd == "showall" then
         -- Reveals every currently active roll in the vote-list window, including ones already
         -- voted on and hidden by KART_Settings.lcVotedItemDisplay == "hide" (see
@@ -655,6 +662,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print("  /kart lc - " .. KART.L.HELP_LC)
         print("  /kart add <item link> - " .. KART.L.HELP_ADD)
         print("  /kart trade - " .. KART.L.HELP_TRADE)
+        print("  /kart owed - " .. KART.L.HELP_OWED)
         print("  /kart showall - " .. KART.L.HELP_SHOWALL)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else

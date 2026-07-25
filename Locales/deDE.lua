@@ -180,6 +180,7 @@ KART.L_deDE = {
     HELP_VERSION = "Versionen aller Spieler abfragen",
     HELP_LC      = "Loot-Council-Fenster erneut öffnen, falls noch etwas aktiv ist",
     HELP_TRADE   = "Trade-Erinnerung erneut öffnen, falls noch etwas offen ist",
+    HELP_OWED    = "Liste der Items erneut öffnen, die dir noch zustehen",
     HELP_SHOWALL = "bereits abgestimmte, ausgeblendete Items wieder anzeigen",
     HELP_ADD     = "Item(s) zur Entscheidung an Loot Council zurückgeben (nur Lootmaster)",
     HELP_HELP    = "diese Hilfe anzeigen",

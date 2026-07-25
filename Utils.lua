@@ -266,9 +266,25 @@ end
 -- on DE realms) don't fold — "Ö" stays "Ö" and never matches "ö". Folds the umlauts too. Not a full
 -- Unicode fold, just the letters WoW's German client uses. Fold BOTH sides of any comparison so the
 -- result is self-consistent regardless of how the other side cased its input.
+-- Uppercase to lowercase for the whole Latin-1 Supplement block. :lower() is ASCII-only in WoW's
+-- Lua, so every one of these has to be folded by hand or a config entry typed in the "wrong" case
+-- never matches what the client returns. This used to cover Ä/Ö/Ü alone, which is enough for German
+-- character and realm names but not for NSRT nicknames — those are free text, so a nickname like
+-- "Éclair" entered as "éclair" in the council or promote list silently failed to match.
+local CASEFOLD_LATIN1 = {
+    ["À"]="à", ["Á"]="á", ["Â"]="â", ["Ã"]="ã", ["Ä"]="ä", ["Å"]="å", ["Æ"]="æ", ["Ç"]="ç",
+    ["È"]="è", ["É"]="é", ["Ê"]="ê", ["Ë"]="ë", ["Ì"]="ì", ["Í"]="í", ["Î"]="î", ["Ï"]="ï",
+    ["Ð"]="ð", ["Ñ"]="ñ", ["Ò"]="ò", ["Ó"]="ó", ["Ô"]="ô", ["Õ"]="õ", ["Ö"]="ö",
+    ["Ø"]="ø", ["Ù"]="ù", ["Ú"]="ú", ["Û"]="û", ["Ü"]="ü", ["Ý"]="ý", ["Þ"]="þ",
+}
+
 function KART.CaseFold(s)
     if type(s) ~= "string" then return s end
-    return (s:gsub("Ä", "ä"):gsub("Ö", "ö"):gsub("Ü", "ü"):lower())
+    -- "\195[\128-\191]" is exactly the two-byte UTF-8 range C3 80..C3 BF, i.e. all of Latin-1
+    -- Supplement and nothing else — the multiplication/division signs and the already-lowercase
+    -- half simply aren't in the table and pass through. Everything outside that range (ASCII,
+    -- Cyrillic, ...) is left to :lower(), which is what the previous gsub chain did too.
+    return (s:gsub("\195[\128-\191]", function(c) return CASEFOLD_LATIN1[c] or c end):lower())
 end
 
 function KART.HasGroupPermissions()
