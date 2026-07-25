@@ -6,7 +6,7 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.9.0] - 2026-07-25
 ### Hinzugefügt
 - **Die gesamte Oberfläche folgt jetzt der Spracheinstellung** — inklusive Hauptfenster, Einstellungen und Tooltips.
 - **Council-Mitglieder können jetzt selbst abstimmen.**
@@ -15,6 +15,17 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Buff-Checker meldet jetzt auch veraltete Verzauberungen**, nicht nur fehlende — der Tooltip nennt den Slot mit der falschen. Runenschmieden von Todesrittern gilt als korrekt.
 - **Die Vantus-Rune wird jetzt am Zauber erkannt**, nicht am Buff-Namen.
 - **Öl vom falschen Rang wird jetzt als falsch angezeigt**, statt als gut zu gelten — Schleifsteine gelten als gut, und Schamanen-Imbues, Schurken-Gifte und Paladin-Waffen werden nicht mehr angemahnt.
+- **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
+- **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
+- **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.
+- **Der Abstimmungs-Timer kann jetzt auf bis zu 3 Minuten eingestellt werden**, vorher 1 Minute.
+- **Die Loot-Council-Fenster haben jetzt eine eigene Schriftgrößen-Einstellung**, die jetzt tatsächlich überall darin greift.
+- **Trade-Abschluss wird jetzt direkt bestätigt**, nicht mehr nur aus deinen Taschen geraten.
+- **Du wirst gewarnt, wenn du ein zugewiesenes Item an die falsche Person tradest.**
+- **Du wirst gewarnt, bevor das 4-Stunden-Handelsfenster eines ausstehenden Trades abläuft** — der Timer läuft auch weiter, während du offline bist.
+- **Wenn das gleiche Item doppelt gleichzeitig droppt, wird jedes jetzt mit "(1/2)"/"(2/2)" markiert**, damit du sie unterscheiden kannst.
+- **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
+- **`/kart showall`** holt ausgeblendete Items zurück.
 
 ### Geändert
 - **Beide Waffen werden jetzt auf Öl geprüft** — wer mit zwei Waffen kämpft und nur eine geölt hat, wird gemeldet; eine leere Schildhand oder ein Schild wird nicht verlangt.
@@ -44,7 +55,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Box mit den raid-weiten Einstellungen zeigt jetzt korrekt an, ob deine Einstellungen für den Raid gelten** — und wie sie dorthin kommen, wenn nicht.
 - **Der Buff-Checker wirft keinen Fehler mehr bei einer kaputten Gear-Antwort** eines anderen Raiders.
 - **Abbrechen im Akzentfarben-Picker stellt exakt die alte Farbe wieder her**, und eine Auswahl macht sie nicht mehr minimal dunkler.
-- **Der Handels-Timer entspricht jetzt Blizzards 4-Stunden-Fenster** und läuft auch offline weiter.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
 - **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**
 - **Das Zurücknehmen eines Gewinners löscht die Handels-Erinnerung überall** — auch beim Zurücknehmenden selbst.
@@ -121,30 +131,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Council-Straw-Poll-Balken füllt sich jetzt korrekt.**
 - **Einstellungs-Regler zeigen ihren Wert jetzt sofort** statt leer zu bleiben, bis man sie einmal zieht.
 - **Das Laden eines Profils übernimmt jetzt dessen gespeicherte Sprache.**
-
-## [2.8.0] - 2026-07-23
-### Hinzugefügt
-- **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
-- **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
-- **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.
-- **Der Abstimmungs-Timer kann jetzt auf bis zu 3 Minuten eingestellt werden**, vorher 1 Minute.
-- **Die Loot-Council-Fenster haben jetzt eine eigene Schriftgrößen-Einstellung**, die jetzt tatsächlich überall darin greift.
-- **Trade-Abschluss wird jetzt direkt bestätigt**, nicht mehr nur aus deinen Taschen geraten.
-- **Du wirst gewarnt, wenn du ein zugewiesenes Item an die falsche Person tradest.**
-- **Du wirst gewarnt, bevor das 2-Stunden-Handelsfenster eines ausstehenden Trades abläuft.**
-- **Wenn das gleiche Item doppelt gleichzeitig droppt, wird jedes jetzt mit "(1/2)"/"(2/2)" markiert**, damit du sie unterscheiden kannst.
-
-## [2.7.0] - 2026-07-23
-### Hinzugefügt
-- **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
-- **`/kart showall`** holt ausgeblendete Items zurück.
-
-## [2.6.0] - 2026-07-23
-### Behoben
 - **Der Loot Council verwechselt keine zwei Spieler mehr, die sich einen Charakternamen über verbundene Realms teilen.** Votes, Council-Mitgliedschaft, Item-Zuweisungen und Officer-Notizen werden jetzt pro Spieler verfolgt.
-
-## [2.5.0] - 2026-07-23
-### Behoben
 - **Der Loot-Council-Sitzungsstatus (An/Aus, Mindestqualität, Stimm-Labels, Opt-in-Würfe) synchronisiert sich jetzt sofort beim Beitreten/`/reload`**, statt erst bei der nächsten Rosteränderung.
 - **Das automatische Need/Greed des Lootmasters beansprucht jetzt auch reine Transmog-Würfe**, statt nichts zu tun.
 - **Rechtsklick-Zuweisung und Loot-Historie verwechseln Items nicht mehr zwischen Bossen**, und eine Neuzuteilung ersetzt den alten Historieneintrag statt ihn zu duplizieren.
@@ -155,7 +142,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Spielzeuge, Begleiter, Mounts und Wohnungsdeko werden nicht mehr von der Mindestqualitäts-Regel herausgefiltert.**
 - **Der Schließen-Button im Abstimmungsfenster ist größer und leichter zu treffen.**
 - **Der KART-Status eines Spielers zeigt nach dem Beitreten nicht mehr fälschlich "nicht installiert" an.**
-- **Die Essensbuff-Erkennung im BuffCheck funktioniert jetzt auch auf deutschen Clients korrekt.**
 
 ## [2.4.0] - 2026-07-19
 ### Added

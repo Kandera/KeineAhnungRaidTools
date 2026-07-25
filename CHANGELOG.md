@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.9.0] - 2026-07-25
 ### Added
 - **The whole UI now follows the language setting** — main window, settings and tooltips included.
 - **Council members can now cast their own loot vote.**
@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Buff-Checker now flags outdated enchants**, not just missing ones — the tooltip names the slot carrying the wrong one. Death knight runeforges count as correct.
 - **The Vantus rune is now detected by spell**, not by buff name.
 - **Off-rank weapon oil is now shown as wrong** instead of counting as good — sharpening stones count as good, and shaman imbues, rogue poisons and paladin armaments are no longer nagged about.
+- **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
+- **Click a name in the trade reminder to target and open a trade with them** (range-checked).
+- **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.
+- **The vote timer can now be set up to 3 minutes**, up from 1.
+- **The Loot Council windows have their own font-size setting**, and it now actually applies to everything in them.
+- **Trade completion is now confirmed directly**, not just inferred from your bags.
+- **You'll be warned if you trade an assigned item to the wrong person.**
+- **You'll be warned before a pending trade's 4-hour tradeable window runs out** — the timer keeps counting while you're offline.
+- **When the same item drops twice at once, each one is now marked "(1/2)"/"(2/2)"** so you can tell them apart.
+- **Choose what happens to an item in your vote window once you've voted on it**: stay full-size (default), shrink, or hide completely. New setting in Loot Council settings.
+- **`/kart showall`** brings back any items hidden by that setting.
 
 ### Changed
 - **Both weapons are now checked for oil** — a dual wielder with only one oiled weapon is flagged, while an empty off-hand or a shield is not asked for one.
@@ -44,7 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The raid-wide settings box now says correctly whether your settings apply to the raid** — and how to get them there when they don't.
 - **The Buff-Checker no longer errors on a broken gear reply** from another raider.
 - **Cancelling the accent-colour picker restores the exact colour you had**, and picking one no longer darkens it slightly.
-- **The trade timer now matches Blizzard's 4-hour window** and keeps counting while you're offline.
 - **Gear, item level and ready-check sync works again for everyone on your own realm.**
 - **A late raid join no longer wipes the whole raid's in-progress loot rolls.**
 - **Revoking a winner now clears the trade reminder everywhere**, including for whoever revoked it.
@@ -121,30 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council straw-poll bar now fills correctly.**
 - **Settings sliders now show their value right away** instead of staying blank until first dragged.
 - **Loading a profile now applies its saved language.**
-
-## [2.8.0] - 2026-07-23
-### Added
-- **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
-- **Click a name in the trade reminder to target and open a trade with them** (range-checked).
-- **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.
-- **The vote timer can now be set up to 3 minutes**, up from 1.
-- **The Loot Council windows have their own font-size setting**, and it now actually applies to everything in them.
-- **Trade completion is now confirmed directly**, not just inferred from your bags.
-- **You'll be warned if you trade an assigned item to the wrong person.**
-- **You'll be warned before a pending trade's 2-hour tradeable window runs out.**
-- **When the same item drops twice at once, each one is now marked "(1/2)"/"(2/2)"** so you can tell them apart.
-
-## [2.7.0] - 2026-07-23
-### Added
-- **Choose what happens to an item in your vote window once you've voted on it**: stay full-size (default), shrink, or hide completely. New setting in Loot Council settings.
-- **`/kart showall`** brings back any items hidden by that setting.
-
-## [2.6.0] - 2026-07-23
-### Fixed
 - **Loot Council no longer confuses two players who share a character name across connected realms.** Votes, council membership, item assignments, and officer notes are now tracked per player.
-
-## [2.5.0] - 2026-07-23
-### Fixed
 - **Loot Council session state (session on/off, min-quality, vote labels, opt-in rolls) now syncs immediately when you join or `/reload`**, instead of only updating on the next roster change.
 - **The designated lootmaster's auto-Need/Greed now also claims Transmog-only rolls**, instead of doing nothing.
 - **Right-click assignment and the loot-history log no longer confuse items across bosses**, and a reassigned item replaces its old history entry instead of duplicating it.
@@ -155,7 +142,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Toys, pets, mounts, and housing decor are no longer filtered out by the minimum-quality rule.**
 - **The vote window's close button is bigger and easier to click.**
 - **A player's KART status no longer falsely shows "not installed" right after joining.**
-- **BuffCheck's food-buff detection now works correctly on German clients.**
 
 ## [2.4.0] - 2026-07-19
 ### Added
