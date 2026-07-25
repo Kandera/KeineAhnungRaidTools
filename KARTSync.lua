@@ -134,6 +134,11 @@ local EXACT_HANDLERS = {
             Sync.Send("ILVL:" .. string.format("%.1f", equipped))
         end
     end },
+    REQ_ENCH = { group = true, fn = function(_, ctx)
+        -- Maintenance scan (see KART.StartEnchantScan), not part of any display path — it exists so
+        -- the accepted-enchant lists can be built from what the raid actually wears.
+        if IsInGroup() then Sync.Send("ENCH:" .. KART.SerializeOwnEnchantIDs()) end
+    end },
     REQ_GEAR = { group = true, fn = function(_, ctx)
         if IsInGroup() then
             local e, g = KART.CountMissingGear()
@@ -170,6 +175,25 @@ local PREFIX_HANDLERS = {
             KART.ILvlCache[ctx.shortName] = ilvl
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
+    end },
+    ENCH = { group = true, fn = function(payload, ctx)
+        -- Reply to REQ_ENCH: "slot=id" pairs, plus "oil=id" for the temporary weapon enchant. Purely
+        -- a maintenance tally (KART.PrintEnchantScan) — nothing renders it, so the only rule is that
+        -- one malformed entry drops the whole message rather than poisoning the counts.
+        local ids = {}
+        for entry in payload:gmatch("[^,]+") do
+            local k, v = entry:match("^(%w+)=(%d+)$")
+            if not k then return end
+            if k == "oil" then
+                ids.oil = v
+            elseif k:match("^%d+$") then
+                ids[tonumber(k)] = v
+            else
+                return
+            end
+        end
+        KART.EnchantScan = KART.EnchantScan or {}
+        KART.EnchantScan[ctx.shortName] = ids
     end },
     GEAR = { group = true, fn = function(payload, ctx)
         local e, g = payload:match("^([^:]+):([^:]+)")

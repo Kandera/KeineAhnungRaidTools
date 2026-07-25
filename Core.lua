@@ -655,11 +655,12 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
             KART.LC.showAllOverride = true
             KART.LC.Vote.RefreshVoteListRows()
         end
-    elseif cmd == "ench" then
+    elseif cmd == "ench" or cmd == "ench raid" then
         -- Maintenance tool, not a player feature: prints the enchant ids the client actually reports
         -- so GOOD_ENCHANTS (Utils.lua) and the oil's bestSpells (BuffChecker.lua) can be refilled
-        -- from real data each tier instead of from memory.
-        KART.PrintEnchantDump()
+        -- from real data each tier instead of from memory. "raid" polls the whole group, since most
+        -- slots accept several enchants and one character's dump can't show which.
+        if cmd == "ench raid" then KART.StartEnchantScan() else KART.PrintEnchantDump() end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
@@ -668,7 +669,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print("  /kart add <item link> - " .. KART.L.HELP_ADD)
         print("  /kart trade - " .. KART.L.HELP_TRADE)
         print("  /kart owed - " .. KART.L.HELP_OWED)
-        print("  /kart ench - " .. KART.L.HELP_ENCH)
+        print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
         print("  /kart showall - " .. KART.L.HELP_SHOWALL)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else

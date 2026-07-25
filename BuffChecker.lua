@@ -29,8 +29,13 @@ KART.BuffData = {
     -- bestSpells EMPTIED 2026-07-25, same reason as GOOD_ENCHANTS in Utils.lua: these ids were
     -- written from memory and an in-game check showed an oiled weapon reported as un-oiled. An empty
     -- bestSpells makes the rank check fall back to "any weapon enchant is fine" (see rate() in
-    -- KART.UpdateBuffCheck), so the column goes back to answering "is there an oil at all". Refill it
-    -- from "/kart ench" output — the main-hand id it prints while the intended oil is applied.
+    -- KART.UpdateBuffCheck), so the column goes back to answering "is there an oil at all".
+    --
+    -- The commit that replaced the original {8052} claimed "8052/8051 are stale, both are ring
+    -- enchantIDs in Midnight". That was false, and it is what broke oil detection: a live client
+    -- reports 8052 as the WEAPON OIL and 7997 as the ring enchant. 8052 had been right all along.
+    -- Refill from "/kart ench raid" output (its "oil:" line), not from memory — and note that
+    -- several oils are current at once, which is why one person's id is not the whole list.
     -- neutralSpells is left in place but is inert until then; those ids are unverified too.
     { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true,
       bestSpells = {},

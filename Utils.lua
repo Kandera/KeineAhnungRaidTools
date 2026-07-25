@@ -1031,6 +1031,26 @@ end
 -- disproved, but go back in only alongside verified weapon-enchant ids.)
 local GOOD_ENCHANTS = {}
 
+-- Enchantable slots: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12),
+-- Main Hand(16), Off Hand(17 — only when it holds a second weapon, see SlotTakesEnchant).
+-- Wrist(9) and Back(15) lost their enchants. Shared by KART.CountMissingGear, the /kart ench dump
+-- and the raid scan, so all three always agree on what "enchantable" means.
+KART.ENCHANTABLE_SLOTS = {1, 3, 5, 7, 8, 11, 12, 16, 17}
+
+-- VERIFIED enchant ids, read off a live client 2026-07-25 (one death knight, 2H, fully enchanted):
+--   head 7961 | shoulders 8031 | chest 7987 | legs 8159 | boots 7993 | rings 7997
+--   main hand 6241 (a runeforge — those really are in the 3365-3370 / 6241-6244 range after all)
+--   weapon oil 8052 (temporary, from GetWeaponEnchantInfo — NOT a ring id, see BuffChecker)
+-- Kept as a record, deliberately NOT loaded into GOOD_ENCHANTS above: this is one character's choice
+-- per slot, and most slots accept several enchants that are all correct. Filling the list from it
+-- would flag every raider who picked a different, equally valid one — the same bug with new numbers.
+--
+-- Note what CANNOT fill this list: asking the raid what it wears. That returns whatever people have,
+-- outdated enchants included, so it would approve precisely the case the check exists to catch. WoW
+-- exposes no API that ranks an enchantID either. The accepted set has to come from outside the game
+-- (Wowhead/simc for the current tier) and be maintained here per patch — or the check has to stop
+-- judging ids at all. See the note on this in KART.StartEnchantScan.
+
 -- Equip locations that can carry a temporary weapon enchant (oil, sharpening stone, poison, imbue).
 -- A shield or a caster off-hand cannot, and an empty hand has nothing to oil.
 local OIL_EQUIP_LOCS = {
@@ -1084,11 +1104,7 @@ function KART.CountMissingGear()
     local missingEnchants = {}
     local missingGems = {}
 
-    -- Enchantable slots: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12),
-    -- Main Hand(16), Off Hand(17 — only when it holds a second weapon, see SlotTakesEnchant).
-    -- Wrist(9) and Back(15) lost their enchants.
-    local enchantableSlots = {1, 3, 5, 7, 8, 11, 12, 16, 17}
-    for _, slot in ipairs(enchantableSlots) do
+    for _, slot in ipairs(KART.ENCHANTABLE_SLOTS) do
         local link = GetInventoryItemLink("player", slot)
         if link and SlotTakesEnchant(slot, link) then
             local enchant = link:match("item:%d+:(%d*):")
@@ -1125,9 +1141,36 @@ end
 -- Permanent enchants live in the item link's third field; temporary ones (oil, sharpening stone,
 -- shaman imbue, rogue poison) are not in the link at all and come from GetWeaponEnchantInfo, which is
 -- why both are printed separately here.
+-- Our own enchant state as {[slot] = "id", oil = "id"} — only slots that actually carry one appear.
+-- Shared by the /kart ench print and the raid scan's reply, so both report identically.
+function KART.GetOwnEnchantIDs()
+    local out = {}
+    for _, slot in ipairs(KART.ENCHANTABLE_SLOTS) do
+        local link = GetInventoryItemLink("player", slot)
+        if link then
+            local enchant = link:match("item:%d+:(%d*):")
+            if enchant and enchant ~= "" and enchant ~= "0" then out[slot] = enchant end
+        end
+    end
+    -- The oil is a TEMPORARY enchant and never appears in the item link, so it needs its own read.
+    local hasMH, _, _, mhID = GetWeaponEnchantInfo()
+    if hasMH and mhID and mhID > 0 then out.oil = tostring(mhID) end
+    return out
+end
+
+-- "1=7961,3=8031,...,oil=8052" — the wire form of the above, for the raid scan's ENCH reply.
+function KART.SerializeOwnEnchantIDs()
+    local ids, parts = KART.GetOwnEnchantIDs(), {}
+    for _, slot in ipairs(KART.ENCHANTABLE_SLOTS) do
+        if ids[slot] then parts[#parts + 1] = slot .. "=" .. ids[slot] end
+    end
+    if ids.oil then parts[#parts + 1] = "oil=" .. ids.oil end
+    return table.concat(parts, ",")
+end
+
 function KART.PrintEnchantDump()
     print("|cff00ff00KART|r " .. KART.L.ENCH_DUMP_PERMANENT)
-    for _, slot in ipairs({1, 3, 5, 7, 8, 11, 12, 16, 17}) do
+    for _, slot in ipairs(KART.ENCHANTABLE_SLOTS) do
         local link = GetInventoryItemLink("player", slot)
         if not link then
             print(string.format("  slot %d: -", slot))
@@ -1148,6 +1191,64 @@ function KART.PrintEnchantDump()
         tostring(hasMH), tostring(mhID), tostring(mhExp), tostring(KART.SlotNeedsOil(16))))
     print(string.format("  off hand:  has=%s id=%s ms_left=%s needsOil=%s",
         tostring(hasOH), tostring(ohID), tostring(ohExp), tostring(KART.SlotNeedsOil(17))))
+end
+
+-- Answers to a raid scan, keyed by short name so a repeated reply replaces rather than double-counts.
+KART.EnchantScan = KART.EnchantScan or {}
+
+-- Asks every KART user in the group for their enchant ids and prints the tally a few seconds later.
+--
+-- READ THIS BEFORE USING THE OUTPUT: the tally shows what the raid WEARS, which is not the same as
+-- what is CORRECT. Pasting it into GOOD_ENCHANTS would bless whatever outdated enchant someone
+-- happens to have — the list would then approve exactly the case the check is meant to catch. There
+-- is no in-game API that ranks an enchantID, so correctness can only come from outside the game.
+--
+-- What it is actually good for is spotting outliers by eye: when eighteen people share an id on a
+-- slot and one person has a different one, that one is worth a look. A human reads that; the code
+-- must not.
+function KART.StartEnchantScan()
+    if not IsInGroup() then
+        print("|cffff0000KART:|r " .. KART.L.ENCH_SCAN_NOT_IN_GROUP)
+        return
+    end
+    wipe(KART.EnchantScan)
+    -- Our own answer: SendAddonMessage never echoes back to its sender.
+    KART.EnchantScan[UnitName("player") or "?"] = KART.GetOwnEnchantIDs()
+    KART.Sync.Send("REQ_ENCH")
+    print("|cff00ff00KART:|r " .. KART.L.ENCH_SCAN_START)
+    C_Timer.After(5, KART.PrintEnchantScan)
+end
+
+function KART.PrintEnchantScan()
+    local perSlot, responders = {}, 0
+    for _, ids in pairs(KART.EnchantScan) do
+        responders = responders + 1
+        for slot, id in pairs(ids) do
+            perSlot[slot] = perSlot[slot] or {}
+            perSlot[slot][id] = (perSlot[slot][id] or 0) + 1
+        end
+    end
+
+    print("|cff00ff00KART|r " .. string.format(KART.L.ENCH_SCAN_RESULT, responders))
+    local order = {}
+    for _, s in ipairs(KART.ENCHANTABLE_SLOTS) do order[#order + 1] = s end
+    order[#order + 1] = "oil"
+    for _, slot in ipairs(order) do
+        local counts = perSlot[slot]
+        if counts then
+            local list = {}
+            for id, n in pairs(counts) do list[#list + 1] = { id = id, n = n } end
+            -- Most-used first, so the common enchants read as the accepted set and any one-off
+            -- (the likely outdated one) sits at the end.
+            table.sort(list, function(a, b)
+                if a.n ~= b.n then return a.n > b.n end
+                return a.id < b.id
+            end)
+            local parts = {}
+            for _, e in ipairs(list) do parts[#parts + 1] = e.id .. " (x" .. e.n .. ")" end
+            print(string.format("  %s: %s", tostring(slot), table.concat(parts, ", ")))
+        end
+    end
 end
 
 -- Helper: Scrollbars bereinigen (verhindert Code-Duplizierung)
