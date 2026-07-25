@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Re-adding an awarded item now frees it even after its council tab was closed**, which is when it usually happens.
 - **Binding a key already used by another Raidlead action now takes it from that action**, instead of both showing it and only one working.
 - **Names and nicknames with accents now match** wherever umlauts already did.
+- **A one-hand drop now compares against the candidate's weapon**, not against their shield or off-hand.
+- **The council's equipped-item column no longer trusts a broken reply** from another raider.
 - **"No Winner" now also removes the item from loot history**, instead of leaving it credited to the revoked winner.
 - **An item with two sockets now reports both empty ones**, not just one.
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.

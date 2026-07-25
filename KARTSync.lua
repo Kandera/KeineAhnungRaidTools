@@ -217,6 +217,12 @@ local PREFIX_HANDLERS = {
         -- contains colons, so it must be the rest of the payload). Cached per short name + slot,
         -- read by Council.GetEquippedForUnit as the fallback for un-inspectable raid members.
         local equipLoc, link = payload:match("^([^:]+):(.+)$")
+        -- Must actually be an item. The capture takes everything after the first colon, and what it
+        -- captures is cached and later handed straight to SetHyperlink by the council row's compare
+        -- tooltip (LootCouncilPanel) — so a "|Hspell:"/"|Hquest:" from a broken or hostile client
+        -- would render a foreign tooltip in every council member's panel. Rejected at the network
+        -- boundary, the same rule the GEAR handler follows.
+        if link and not (KART.IsRealItemLink(link) or link:match("^item:%d+")) then return end
         if equipLoc and link then
             -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
             -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring

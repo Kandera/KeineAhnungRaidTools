@@ -46,14 +46,32 @@ local EQUIP_LOC_TO_SLOT = {
     INVTYPE_RANGEDRIGHT    = {16},
 }
 
+-- Equip locations that hold an actual weapon, for the weaponsOnly filter in scanSlots below.
+local WEAPON_EQUIP_LOCS = {
+    INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true,
+    INVTYPE_WEAPONMAINHAND = true, INVTYPE_WEAPONOFFHAND = true,
+    INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true,
+}
+
+local function HoldsWeapon(link)
+    local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+    return WEAPON_EQUIP_LOCS[equipLoc] or false
+end
+
 -- Scans the given inventory slots on a unit and returns the lower-ilvl equipped piece (the one
 -- most likely to be replaced by the drop) as (link, ilvl). Shared by the panel display and the
 -- REQ_EQUIP responder so both pick the same piece for two-slot items (rings, trinkets).
-local function scanSlots(unit, slots)
+--
+-- weaponsOnly is for the INVTYPE_WEAPON case alone: a one-hand drop scans BOTH hands because a dual
+-- wielder could put it in either, but slot 17 also holds shields and caster off-hands — and picking
+-- the lowest ilvl across the pair then reported a shield as the piece the weapon would replace, with
+-- the +/- delta computed against it. Every other equip location maps to slots that can only hold
+-- what the drop itself is, so whatever sits there really is what gets replaced.
+local function scanSlots(unit, slots, weaponsOnly)
     local bestLink, bestIlvl
     for _, slot in ipairs(slots) do
         local link = GetInventoryItemLink(unit, slot)
-        if link then
+        if link and (not weaponsOnly or HoldsWeapon(link)) then
             local _, _, _, ilvl = C_Item.GetItemInfo(link)
             if ilvl and (not bestIlvl or ilvl < bestIlvl) then
                 bestLink  = link
@@ -77,7 +95,7 @@ function Council.GetEquippedForUnit(unit, rollItemLink)
     local slots = EQUIP_LOC_TO_SLOT[itemEquipLoc]
     if not slots then return nil, nil end
 
-    local bestLink, bestIlvl = scanSlots(unit, slots)
+    local bestLink, bestIlvl = scanSlots(unit, slots, itemEquipLoc == "INVTYPE_WEAPON")
     -- GetInventoryItemLink only returns data for the player and currently-inspected units, so for
     -- most raid members the local scan is nil. Fall back to the link they broadcast over the KART
     -- sync (see REQ_EQUIP/EQUIP in Core.lua + Council.RequestEquipForRoll below).
@@ -99,7 +117,9 @@ end
 function Council.GetOwnEquippedLink(equipLoc)
     local slots = EQUIP_LOC_TO_SLOT[equipLoc]
     if not slots then return nil end
-    return (scanSlots("player", slots))
+    -- Same weaponsOnly rule as the display side, so a shield tank answering a REQ_EQUIP for a
+    -- one-hand drop doesn't put their shield on every council member's panel.
+    return (scanSlots("player", slots, equipLoc == "INVTYPE_WEAPON"))
 end
 
 -- Broadcasts a one-off request for every raider's equipped item in the rolled item's slot, so the
@@ -1366,7 +1386,10 @@ function Council.RefreshCouncilRows()
             GameTooltip:AddLine(KART.L.LC_TOOLTIP_RCLICK, 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
 
-            if capturedEquipLink and LC.equipCompareTooltip then
+            -- IsRealItemLink, matching the tab tooltip's own guard: the cached link can be a bare
+            -- "item:12345" string that never resolved (see the EQUIP handler's oversized-link
+            -- fallback), which SetHyperlink renders as an empty tooltip rather than nothing at all.
+            if capturedEquipLink and LC.IsRealItemLink(capturedEquipLink) and LC.equipCompareTooltip then
                 LC.equipCompareTooltip:SetOwner(row, "ANCHOR_LEFT")
                 LC.equipCompareTooltip:SetHyperlink(capturedEquipLink)
                 LC.equipCompareTooltip:Show()

@@ -44,6 +44,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein erneut hinzugefügtes Item wird jetzt auch dann freigegeben, wenn sein Council-Tab schon zu war** — also im Regelfall.
 - **Eine Taste, die schon eine andere Raidlead-Aktion belegt, wird dieser jetzt weggenommen**, statt bei beiden zu stehen und nur bei einer zu wirken.
 - **Namen und Nicknames mit Akzenten matchen jetzt** überall dort, wo Umlaute es schon taten.
+- **Eine Einhandwaffe wird jetzt mit der Waffe des Kandidaten verglichen**, nicht mit dessen Schild oder Nebenhand.
+- **Die Equipped-Spalte im Council vertraut einer kaputten Antwort** eines Mitspielers nicht mehr.
 - **„Kein Gewinner" entfernt das Item jetzt auch aus der Loot-Historie**, statt es dem widerrufenen Gewinner gutzuschreiben.
 - **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
