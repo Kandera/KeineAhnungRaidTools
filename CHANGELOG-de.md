@@ -12,9 +12,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Council-Mitglieder können jetzt selbst abstimmen.**
 - **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
-- **Der Buff-Checker meldet jetzt auch veraltete Verzauberungen**, nicht nur fehlende — der Tooltip nennt den Slot mit der falschen. Runenschmieden von Todesrittern gilt als korrekt.
 - **Die Vantus-Rune wird jetzt am Zauber erkannt**, nicht am Buff-Namen.
-- **Öl vom falschen Rang wird jetzt als falsch angezeigt**, statt als gut zu gelten — Schleifsteine gelten als gut, und Schamanen-Imbues, Schurken-Gifte und Paladin-Waffen werden nicht mehr angemahnt.
 - **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf. Ein bereits vergebenes Item wird dabei zuerst wieder freigegeben.
 - **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
 - **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.
@@ -27,6 +25,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Wähle, was mit einem Item in deinem Abstimmungsfenster passiert, sobald du abgestimmt hast**: normal groß bleiben (Standard), kleiner werden, oder komplett ausblenden. Neue Einstellung in den Loot-Council-Einstellungen.
 - **`/kart showall`** holt ausgeblendete Items zurück.
 - **`/kart owed`** öffnet die Liste der Items, die dir noch zustehen.
+- **`/kart ench`** gibt die eigenen Enchant-IDs aus, um die Enchant-Prüfung aktuell zu halten.
 
 ### Geändert
 - **Beide Waffen werden jetzt auf Öl geprüft** — wer mit zwei Waffen kämpft und nur eine geölt hat, wird gemeldet; eine leere Schildhand oder ein Schild wird nicht verlangt.

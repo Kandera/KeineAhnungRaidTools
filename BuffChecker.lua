@@ -26,9 +26,14 @@ KART.BuffData = {
     -- neutralSpells = class mechanics that occupy the very same weapon slot, so an oil is either
     -- impossible (shaman imbue, rogue poison) or temporarily overridden (paladin Holy Armaments);
     -- those count as "nothing to fix" instead of a wrong-rank oil. Anything else is off-rank.
-    -- The old {8052}/{8051} pair was stale — both are ring enchantIDs in Midnight.
+    -- bestSpells EMPTIED 2026-07-25, same reason as GOOD_ENCHANTS in Utils.lua: these ids were
+    -- written from memory and an in-game check showed an oiled weapon reported as un-oiled. An empty
+    -- bestSpells makes the rank check fall back to "any weapon enchant is fine" (see rate() in
+    -- KART.UpdateBuffCheck), so the column goes back to answering "is there an oil at all". Refill it
+    -- from "/kart ench" output — the main-hand id it prints while the intended oil is applied.
+    -- neutralSpells is left in place but is inert until then; those ids are unverified too.
     { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true,
-      bestSpells = {8712, 8716, 8720, 8732, 8736},
+      bestSpells = {},
       neutralSpells = {8012, 8015, 8018, 8201, 8205, 8209, 7150, 7155}, page = "advanced" },
     { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
     { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
@@ -862,7 +867,12 @@ function KART.UpdateBuffCheck(isPreview)
                     rated = true
                     local r = 1
                     if enchantID and enchantID > 0 then
-                        r = 2
+                        -- No id list yet: anything on the weapon counts as current rank. Same
+                        -- fallback rule as KART.CountMissingGear's IsGoodEnchant, and for the same
+                        -- reason — an empty list must mean "can't judge the rank, so don't accuse",
+                        -- not "nothing is ever right". Without this, emptying bestSpells would rate
+                        -- every oiled weapon as off-rank instead of simply skipping the rank check.
+                        r = (#buff.bestSpells == 0) and 4 or 2
                         for _, id in ipairs(buff.bestSpells) do
                             if enchantID == id then r = 4; break end
                         end

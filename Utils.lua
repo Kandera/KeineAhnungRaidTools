@@ -1015,22 +1015,21 @@ end
 -- (item:ID:ENCHANT:...), NOT the enchanter's spell ids.
 -- A slot whose list is missing or empty is only checked for having *some* enchant, so this table can
 -- be filled in slot by slot without producing false "wrong enchant" reports in the meantime.
-local GOOD_ENCHANTS = {
-    [1]  = { 8210, 8211, 8212 },                         -- Head: Avoidance, Leeching, Speed
-    [3]  = { 8220, 8221, 8222 },                         -- Shoulders: Amirdrassil, Silvermoon, Akil'zon
-    [5]  = { 8150, 8151, 8152, 8153 },                   -- Chest: Worldsoul, Nalorakk, Magister, Rootwarden
-    [7]  = { 8190, 8191, 8192 },                         -- Legs: spellthreads and armor kit
-    [8]  = { 8110, 8111, 8112 },                         -- Boots: Lynx, Shaladrassil, Farstrider
-    [11] = { 8050, 8051, 8052, 8053, 8054 },             -- Finger 1: one per secondary stat
-    [12] = { 8050, 8051, 8052, 8053, 8054 },             -- Finger 2
-    -- Weapons: the proc enchants, plus every death knight runeforge — runeforging is a permanent
-    -- enchant in the item link (not a temporary one like oil), and it is the only weapon enchant a
-    -- death knight can apply, so all of them count as correct.
-    [16] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
-             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Main Hand
-    [17] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
-             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Off Hand (second WEAPON only)
-}
+--
+-- EMPTIED 2026-07-25 after the first in-game check: a fully enchanted character reported
+-- "(wrong enchant)" on all seven armour slots at once, because not one of the ids that were here
+-- matched what the client actually stores. They were written from memory, never verified, and were
+-- all wrong. The list stays empty rather than getting re-guessed: IsGoodEnchant below then falls
+-- back to a presence-only check, which is exactly the behaviour from before the quality check
+-- existed — less strict, but never a false accusation.
+--
+-- To refill: wear the intended enchants, run "/kart ench", and paste the ids it prints into the slot
+-- they belong to. That command reads the live item links, so what it prints is ground truth.
+-- Do NOT restore the previous contents — head 8210-8212, shoulders 8220-8222, chest 8150-8153,
+-- legs 8190-8192, boots 8110-8112, rings 8050-8054, weapons 8100-8107 — they are known wrong.
+-- (The death-knight runeforge ids 3365-3370 / 6241-6244 that sat on the weapon slots were never
+-- disproved, but go back in only alongside verified weapon-enchant ids.)
+local GOOD_ENCHANTS = {}
 
 -- Equip locations that can carry a temporary weapon enchant (oil, sharpening stone, poison, imbue).
 -- A shield or a caster off-hand cannot, and an empty hand has nothing to oil.
@@ -1117,6 +1116,38 @@ function KART.CountMissingGear()
     if eStr == "" then eStr = "0" end
     if gStr == "" then gStr = "0" end
     return eStr, gStr
+end
+
+-- Prints the enchant data this addon actually sees, so GOOD_ENCHANTS above and the oil's bestSpells
+-- (BuffChecker.lua) can be filled from real client output instead of from memory — the first attempt
+-- at both was guessed and every single id was wrong. Bound to "/kart ench".
+--
+-- Permanent enchants live in the item link's third field; temporary ones (oil, sharpening stone,
+-- shaman imbue, rogue poison) are not in the link at all and come from GetWeaponEnchantInfo, which is
+-- why both are printed separately here.
+function KART.PrintEnchantDump()
+    print("|cff00ff00KART|r " .. KART.L.ENCH_DUMP_PERMANENT)
+    for _, slot in ipairs({1, 3, 5, 7, 8, 11, 12, 16, 17}) do
+        local link = GetInventoryItemLink("player", slot)
+        if not link then
+            print(string.format("  slot %d: -", slot))
+        else
+            local enchant = link:match("item:%d+:(%d*):")
+            local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+            print(string.format("  slot %d: enchant=%s  equipLoc=%s  %s",
+                slot,
+                (enchant and enchant ~= "" and enchant ~= "0") and enchant or "NONE",
+                tostring(equipLoc),
+                C_Item.GetItemInfo(link) or "?"))
+        end
+    end
+
+    local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
+    print("|cff00ff00KART|r " .. KART.L.ENCH_DUMP_TEMPORARY)
+    print(string.format("  main hand: has=%s id=%s ms_left=%s needsOil=%s",
+        tostring(hasMH), tostring(mhID), tostring(mhExp), tostring(KART.SlotNeedsOil(16))))
+    print(string.format("  off hand:  has=%s id=%s ms_left=%s needsOil=%s",
+        tostring(hasOH), tostring(ohID), tostring(ohExp), tostring(KART.SlotNeedsOil(17))))
 end
 
 -- Helper: Scrollbars bereinigen (verhindert Code-Duplizierung)

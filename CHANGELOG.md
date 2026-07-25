@@ -12,9 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Council members can now cast their own loot vote.**
 - **Loot history is now paginated.**
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
-- **The Buff-Checker now flags outdated enchants**, not just missing ones — the tooltip names the slot carrying the wrong one. Death knight runeforges count as correct.
 - **The Vantus rune is now detected by spell**, not by buff name.
-- **Off-rank weapon oil is now shown as wrong** instead of counting as good — sharpening stones count as good, and shaman imbues, rogue poisons and paladin armaments are no longer nagged about.
 - **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll. Re-adding an already-awarded item revokes that award first.
 - **Click a name in the trade reminder to target and open a trade with them** (range-checked).
 - **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.
@@ -27,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Choose what happens to an item in your vote window once you've voted on it**: stay full-size (default), shrink, or hide completely. New setting in Loot Council settings.
 - **`/kart showall`** brings back any items hidden by that setting.
 - **`/kart owed`** reopens the list of items you're still owed.
+- **`/kart ench`** prints your own enchant ids, for keeping the enchant check current.
 
 ### Changed
 - **Both weapons are now checked for oil** — a dual wielder with only one oiled weapon is flagged, while an empty off-hand or a shield is not asked for one.
