@@ -163,8 +163,13 @@ function LC.GetButtonConfig()
     return result
 end
 
+-- The lootmaster counts as council without having to be listed in the council-member field. He is
+-- the one who physically wins every item (ForceWinRoll) and the only one who may end the session, so
+-- a lootmaster left out of that list ended up with no council panel at all — no way to assign a
+-- winner, no "Close Session" button (it lives on that panel), and no window for his own "/kart add".
 function LC.IsCouncil()
     if UnitIsGroupLeader("player") then return true end
+    if LC.IsMe(LC.GetLootmaster()) then return true end
     local myKey = (KART.Identity.ResolvePlayer("player"))
     return LC.CouncilNamesTable[myKey] == true
 end
@@ -179,14 +184,22 @@ function LC.IsSenderCouncil(senderKey)
     local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     if UnitIsGroupLeader(unit) then return true end
+    -- Mirrors LC.IsCouncil: the lootmaster is council whether or not he's in the council-member list.
+    -- Without this, peers rejected the LC_RESULT of an unlisted lootmaster — so his awards produced
+    -- no loot-history entry, no winner popup and no owed-item reminder anywhere in the raid.
+    local lootmaster = LC.GetLootmaster()
+    if lootmaster ~= "" and senderKey == lootmaster then return true end
     if LC.CouncilNamesTable[senderKey] == true then return true end
     -- The council table can still hold this member under a pending-TEXT key (they were out of group
     -- when the leader's config was parsed, so ResolveConfigName couldn't produce their GUID yet)
     -- while senderKey is already a live GUID. GROUP_ROSTER_UPDATE's throttled retry would migrate it,
     -- but an authoritative LC_RESULT/LC_ONOTE can arrive inside that throttle window and get wrongly
     -- dropped. Force the synchronous, pending-only migration now, then re-check, so a genuine council
-    -- member's message is never lost to that timing race.
+    -- member's message is never lost to that timing race. The lootmaster entry can be pending for the
+    -- same reason, so re-check that one too (same pattern as LC.HandleManualStart).
     LC.RetryPendingResolutions()
+    lootmaster = LC.GetLootmaster()
+    if lootmaster ~= "" and senderKey == lootmaster then return true end
     return LC.CouncilNamesTable[senderKey] == true
 end
 
@@ -347,8 +360,12 @@ end
 -- LC.HandleConfig). Reads KART_Settings directly rather than LC.GetLootmaster, which for a non-owner
 -- returns the synced raidConfig value — that would make everyone who received a config think they
 -- own it.
+-- KART_Settings is guarded, not read raw: this runs at FILE-LOAD time too (the settings panel's
+-- role-status label is set while building, before ADDON_LOADED has created the SavedVariable), and
+-- an unguarded read errored out mid-build on a fresh install. ResolveConfigName(nil) returns nil and
+-- IsMe(nil) is false, so "no settings yet" correctly reads as "we don't own the config".
 function LC.IsConfigOwner()
-    return LC.IsMe(LC.ResolveConfigName(KART_Settings.lcLootmaster))
+    return LC.IsMe(LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster))
 end
 
 -- Applies OUR OWN settings as the raid config, locally. SendAddonMessage never echoes back to its
@@ -781,6 +798,7 @@ function LC.ClearAllRolls()
     wipe(LC.councilTabsNew)
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
     if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
+    if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
     LC.showAllOverride = nil
     LC.activeRollID = nil
     if LC.councilPanel then LC.councilPanel:Hide() end
@@ -927,15 +945,42 @@ local function PurgeStaleRoll(rollID, newItemID)
     LC.Trade.ClearRollState(rollID)
 end
 
-function LC.OnStartLootRoll(rollID)
+-- How often LC.OnStartLootRoll re-checks for the item link before giving up, and the per-attempt
+-- backoff — same schedule as ResolveRollItemLink, for the same reason (see the retry block there).
+local START_ROLL_MAX_ATTEMPTS = 8
+local START_ROLL_RETRY_STEP   = 0.25
+
+-- attempt is internal (see the link-retry block below); Core.lua's START_LOOT_ROLL handler passes
+-- only rollID.
+function LC.OnStartLootRoll(rollID, attempt)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
 
     -- Quality/bind data first — the lootmaster branch below depends on it. bindOnPickUp comes
-    -- from GetLootRollItemInfo (reliable even for uncached items); classID via GetItemInfoInstant
-    -- for the same reason (GetItemInfo returns nil until the item is cached).
-    local _, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
+    -- from GetLootRollItemInfo (reliable even for uncached items); classID via GetItemInfoInstant,
+    -- which needs the link (GetItemInfo returns nil until the item is cached, GetItemInfoInstant
+    -- doesn't, but both need something to look the item up by).
+    local itemName, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
     local itemLink = GetLootRollItemLink(rollID)
+
+    -- The link can be nil for a moment right at roll start, most often for a brand-new item whose
+    -- data hasn't propagated client-side yet (see ResolveRollItemLink). Deciding without it would
+    -- silently break the collectible carve-out below: with no link there's no classID, a freshly
+    -- dropped MOUNT would read as ordinary Bind-on-Pickup gear, and KART would force-win it for the
+    -- lootmaster while every Auto-Pass client passed on it — the exact outcome the standing rule
+    -- forbids, and inconsistent across the raid since only some clients would still be waiting.
+    -- So retry instead of guessing. Blizzard's roll timer runs for minutes, so the few hundred ms
+    -- cost nothing. itemName nil means the roll itself is gone (expired or already rolled) — stop.
+    if itemName and not itemLink then
+        attempt = attempt or 1
+        if attempt < START_ROLL_MAX_ATTEMPTS then
+            C_Timer.After(START_ROLL_RETRY_STEP * attempt, function()
+                LC.OnStartLootRoll(rollID, attempt + 1)
+            end)
+        end
+        return
+    end
+
     local classID = LC.IsRealItemLink(itemLink) and select(6, C_Item.GetItemInfoInstant(itemLink))
     -- Miscellaneous (classID 15): mounts, pets, toys, housing decor.
     local isCollectible = (classID == 15)

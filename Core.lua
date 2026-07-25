@@ -132,6 +132,11 @@ function KART.SyncSettingsToUI()
         KART.LC.BtnVotedItemDisplay.text:SetText(KART.LC.VotedItemDisplayLabel(KART_Settings.lcVotedItemDisplay or "full"))
     end
 
+    -- Derived from lcLootmaster, so it belongs to this push like every widget above. The panel builds
+    -- itself before KART_Settings exists and can only render "not the owner" there; without this it
+    -- would stay wrong until the next roster change or the next keystroke in the lootmaster field.
+    if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
+
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
     KART.UpdateMinimapButton()

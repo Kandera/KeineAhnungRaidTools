@@ -20,7 +20,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Mounts, Pets, Spielzeuge, Housing-Items und Bind-on-Equip-Drops laufen nie über den Loot Council** — sie werden normal ausgewürfelt und Auto-Pass lässt sie in Ruhe.
 
 ### Behoben
+- **Der Loot-Council-Einstellungstab geht beim Login nicht mehr kaputt.**
 - **Der Lootmaster funktioniert wieder, wenn er nicht gleichzeitig Raidleiter ist** — Rolls gewinnen, `/kart add`, Handels-Erinnerungen, Council-Panel und Session beenden waren für ihn alle tot.
+- **Der Lootmaster muss nicht mehr als Councilmitglied eingetragen sein**, um das Council-Panel zu bekommen und dass seine Vergaben zählen.
+- **Ein Mount, dessen Daten noch nicht geladen sind, rutscht nicht mehr in den Loot Council.**
+- **Das Council-Panel warnt in deiner eigenen Zeile nicht mehr, dass dir KART fehlt.**
 - **Der Raidleiter folgt jetzt den raid-weiten Einstellungen des Lootmasters**, statt still seine eigenen zu nutzen.
 - **Ein entschiedenes Item behält seinen Council-Tab auf jedem Client**, nicht nur bei dem, der zugewiesen hat.
 - **Vote-Notizen und Officer-Notizen können keine Farbcodes oder Links mehr** in fremde Tooltips schmuggeln.

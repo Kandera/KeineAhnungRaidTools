@@ -888,7 +888,11 @@ function Council.RefreshCouncilRows()
             -- version broadcast, so PlayerVersions never has an entry for "player"). PlayerVersions
             -- stays short-name keyed — out of scope for the identity rework, see the design doc.
             local kartStatus
-            if unit ~= "player" then
+            -- UnitIsUnit, NOT unit ~= "player": KART.EachGroupUnit yields raid1..raidN in a raid and
+            -- never the literal "player" token, so the plain comparison failed to exclude our own raid
+            -- slot — and since we never receive our own version broadcast, every raid showed a red
+            -- "KART missing" warning on the viewer's own row. Same pitfall as in WU.RemoveForBoss.
+            if not UnitIsUnit(unit, "player") then
                 local ver = KART.PlayerVersions and KART.PlayerVersions[short]
                 local lcEnabled = KART.PlayerLCEnabled and KART.PlayerLCEnabled[short]
                 if not ver then

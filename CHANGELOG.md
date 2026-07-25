@@ -20,7 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mounts, pets, toys, housing items and Bind-on-Equip drops never go through Loot Council** — they are rolled the normal way and Auto-Pass leaves them alone.
 
 ### Fixed
+- **The Loot Council settings tab no longer breaks on login.**
 - **The lootmaster works again when they aren't also the raid leader** — winning rolls, `/kart add`, trade reminders, the council panel and Close Session were all dead for them.
+- **The lootmaster no longer has to be listed as a council member** to get the council panel and have their awards count.
+- **A mount whose data hasn't loaded yet no longer slips into Loot Council.**
+- **The council panel no longer warns that you are missing KART** on your own row.
 - **The raid leader now follows the lootmaster's raid-wide settings** instead of quietly using their own.
 - **A decided item keeps its council tab on every client**, not just on the one who assigned it.
 - **Vote notes and officer notes can no longer smuggle colour codes or links** into other people's tooltips.

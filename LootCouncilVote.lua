@@ -381,7 +381,15 @@ function Vote.RefreshVoteListRows_Spacious(f)
             f.rows[i] = row
         end
 
-        local thisRowH = (shrinkVoted and LC.votedByMe[rollID]) and votedRowH or rowH
+        -- Resolved up here because the row HEIGHT depends on it. hasVote, not the raw LC.votedByMe
+        -- flag: a stored vote index with no matching button (the leader shrank the label set after we
+        -- voted) renders as unvoted below, so it must also lay out as unvoted — otherwise the row got
+        -- shrunk to badge height while still showing the full button/note area inside it.
+        local voted    = LC.votedByMe[rollID]
+        local votedDef = voted and buttons[tonumber(voted)]
+        local hasVote  = votedDef ~= nil
+
+        local thisRowH = (shrinkVoted and hasVote) and votedRowH or rowH
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -y)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
@@ -448,11 +456,8 @@ function Vote.RefreshVoteListRows_Spacious(f)
         end)
         row.itemHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        local voted    = LC.votedByMe[rollID]
-        local votedDef = voted and buttons[tonumber(voted)]
-        -- A stored vote index with no matching button (the leader shrank the label set after we
-        -- voted) reads as unvoted, so the vote buttons come back instead of an empty badge.
-        local hasVote  = votedDef ~= nil
+        -- voted / votedDef / hasVote are resolved further up (the row height needs them) — see there
+        -- for why a stored index with no matching button reads as unvoted.
         row.btnArea:SetShown(not hasVote)
         row.noteLabel:SetShown(not hasVote)
         row.noteBox:SetShown(not hasVote)
@@ -477,7 +482,10 @@ function Vote.RefreshVoteListRows_Spacious(f)
             if row.voteButtons[bi] then row.voteButtons[bi]:Hide() end
         end
 
-        if not voted then
+        -- hasVote, not voted: the button area is shown whenever hasVote is false, so it has to be
+        -- populated in exactly those cases too. Keyed off the raw flag it stayed empty for a vote
+        -- whose button no longer exists — a blank gap where the buttons should be.
+        if not hasVote then
             for bi, def in ipairs(buttons) do
                 local col = (bi - 1) % cols
                 local brow = math.floor((bi - 1) / cols)
@@ -721,7 +729,9 @@ function Vote.RefreshVoteListRows_Compact(f)
             if row.chipButtons[bi] then row.chipButtons[bi]:Hide() end
         end
 
-        if not voted then
+        -- hasVote, not voted — same reasoning as the spacious layout: chipArea is shown whenever
+        -- hasVote is false, so it has to be filled in exactly those cases.
+        if not hasVote then
             for bi, def in ipairs(buttons) do
                 local btn = row.chipButtons[bi]
                 if not btn then
