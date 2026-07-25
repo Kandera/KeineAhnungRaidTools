@@ -260,6 +260,9 @@ kbTitle:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, -14)
 kbTitle:SetText(L.LABEL_RL_KEYBINDS)
 table.insert(KART.DynamicLabels, kbTitle)
 
+-- [actionKey] = its bind button. Read back by the locale refresher, by KART.SyncSettingsToUI (which
+-- repaints every caption after a profile load) and by StartCapture, which updates the caption of a
+-- DIFFERENT action when it takes that action's key away. One registry — don't add a second local one.
 KART.KeybindButtons = {}
 local kbLabels = {
     readyCheck = L.KB_READYCHECK,
@@ -277,9 +280,6 @@ kbListener:SetPropagateKeyboardInput(false)
 
 -- The bind button currently in capture mode, if any (only one capture is active at a time).
 local kbActiveBtn
--- [actionKey] = its bind button, so StartCapture can update the caption of a DIFFERENT action whose
--- key it just took over. Filled by the row loop below, which runs after this.
-local kbButtons = {}
 
 local function StopCapture(activeBtn)
     kbListener:Hide()
@@ -322,7 +322,7 @@ local function StartCapture(btn)
         for _, other in ipairs(KART.KeybindActions) do
             if other.key ~= btn.actionKey and KART_Settings.keybinds[other.key] == binding then
                 KART_Settings.keybinds[other.key] = nil
-                local otherBtn = kbButtons[other.key]
+                local otherBtn = KART.KeybindButtons[other.key]
                 if otherBtn then otherBtn.text:SetText(L.KB_NOT_BOUND) end
             end
         end
@@ -354,7 +354,6 @@ for i, action in ipairs(KART.KeybindActions) do
     btn:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 260, yOff + 6)
     btn:SetSize(150, 22)
     btn.actionKey = action.key
-    kbButtons[action.key] = btn
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:SetScript("OnClick", function(self, button)
         if InCombatLockdown() then

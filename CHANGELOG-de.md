@@ -46,6 +46,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Namen und Nicknames mit Akzenten matchen jetzt** überall dort, wo Umlaute es schon taten.
 - **Eine Einhandwaffe wird jetzt mit der Waffe des Kandidaten verglichen**, nicht mit dessen Schild oder Nebenhand.
 - **Die Equipped-Spalte im Council vertraut einer kaputten Antwort** eines Mitspielers nicht mehr.
+- **Eine geschlossene Trade- oder Owed-Erinnerung bleibt zu**, wenn ein Eintrag wegfällt — nur ein neuer Gewinn öffnet sie wieder.
 - **„Kein Gewinner" entfernt das Item jetzt auch aus der Loot-Historie**, statt es dem widerrufenen Gewinner gutzuschreiben.
 - **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.

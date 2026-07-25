@@ -642,8 +642,8 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         end
     elseif cmd == "owed" then
         -- Winner-side counterpart to /kart trade. Both reminder windows' "x" only hides them, and
-        -- Trade.RefreshOwedReminder re-shows this one only when the list actually changes — so
-        -- without this, closing it meant losing the list until the next item was won.
+        -- nothing re-opens a closed one except winning another item (removals deliberately don't —
+        -- see Trade.RefreshOwedReminderIfShown), so this is the only way back to the list.
         if KART.LC and KART.LC.owedReminderFrame and #(KART.LC.owedToMe or {}) > 0 then
             KART.LC.owedReminderFrame:Show()
         end

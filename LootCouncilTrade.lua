@@ -190,7 +190,7 @@ function Trade.RemovePendingTrade(rollID)
             table.remove(LC.pendingTrades, i)
         end
     end
-    Trade.RefreshTradeReminder()
+    Trade.RefreshTradeReminderIfShown()
     -- Cancel the BoP-timeout ticker (see Trade.StartTradeTimeoutTicker) immediately once the last
     -- pending trade clears, instead of waiting up to TRADE_TIMEOUT_CHECK_EVERY (5 minutes) for the
     -- next periodic Trade.CheckTradeTimeouts to notice the list is empty.
@@ -262,7 +262,7 @@ function Trade.ClearWinnerObligations(rollID)
             changed = true
         end
     end
-    if changed then Trade.RefreshOwedReminder() end
+    if changed then Trade.RefreshOwedReminderIfShown() end
 end
 
 -- Drops LC.rollLootedAt stamps that are older than the Bind-on-Pickup trade window.
@@ -444,12 +444,24 @@ function Trade.RefreshTradeReminder()
         function(e) return e.winnerKey end, Trade.RemovePendingTrade)
 end
 
+-- What every REMOVAL path calls instead of the plain refresh above. Both reminder frames' "x" only
+-- hides them, and RefreshReminderRows ends in an unconditional Show(), so dropping a single entry
+-- re-opened a window the user had deliberately closed — completing a trade popped the lootmaster's
+-- list straight back up, with the remaining rows. Same rule the vote list already follows (see
+-- Vote.RefreshVoteListRowsIfShown): removing an item must never open a window. ADDING one still may,
+-- which is why Trade.AddPendingTrade, the owed insert in Trade.HandleResult and the login restore all
+-- keep calling the plain refresh. An emptied list still hides the frame — that runs inside the
+-- refresh, which this only skips when the frame is already hidden anyway.
+function Trade.RefreshTradeReminderIfShown()
+    if LC.tradeReminderFrame and LC.tradeReminderFrame:IsShown() then Trade.RefreshTradeReminder() end
+end
+
 -- Removes rollID from LC.owedToMe, if present, and rebuilds the window.
 function Trade.RemoveOwedItem(rollID)
     for i = #(LC.owedToMe or {}), 1, -1 do
         if LC.owedToMe[i].rollID == rollID then table.remove(LC.owedToMe, i) end
     end
-    Trade.RefreshOwedReminder()
+    Trade.RefreshOwedReminderIfShown()
 end
 
 -- Rebuilds the reminder list from LC.owedToMe; hides the frame entirely once it's empty.
@@ -464,6 +476,11 @@ function Trade.RefreshOwedReminder()
     end
     RefreshReminderRows(LC.owedReminderFrame, LC.owedToMe,
         function(e) return e.lootmasterKey end, Trade.RemoveOwedItem)
+end
+
+-- Owed-side counterpart to Trade.RefreshTradeReminderIfShown — see the reasoning there.
+function Trade.RefreshOwedReminderIfShown()
+    if LC.owedReminderFrame and LC.owedReminderFrame:IsShown() then Trade.RefreshOwedReminder() end
 end
 
 -- Finds itemLink in our own bags, returning (bag, slot) or nil if we're not carrying it (already
