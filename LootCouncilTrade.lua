@@ -60,6 +60,14 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         local _, cf = UnitClass(unit)
         classFile = cf
     end
+    -- Recorded BEFORE the announce, which ends in a RefreshCouncilRows: the gold winner highlight
+    -- reads LC.assignedWinners, so setting it afterwards left the assigner's own panel showing no
+    -- winner at all until some unrelated event refreshed it — while every peer (Trade.HandleResult
+    -- sets it first, then refreshes) showed the highlight immediately. Trade.AssignWinner has
+    -- already read the previous winner for its confirm dialog by this point, so writing it here is
+    -- safe. Row OnLeave re-reads this table live, which is why the highlight used to appear as soon
+    -- as the mouse left the row — it looked intermittent rather than broken.
+    LC.assignedWinners[rollID] = playerKey
     Trade.AnnounceResult(rollID, playerKey, reason, colorDef)
 
     if LC.IsTestRoll(rollID) then
@@ -72,14 +80,13 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         end
     else
         KART.LH.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
-        -- Only the client that actually holds the item (the designated lootmaster, see
-        -- LC.GetLootmaster/ForceWinRoll) needs a trade reminder — when the assigner (usually the
-        -- raid leader) isn't also the lootmaster, they never physically have the item to trade.
-        if LC.IsMe(LC.GetLootmaster()) then
+        -- Only the client that actually holds the item (the loot owner, see
+        -- LC.IsLootOwner/ForceWinRoll) needs a trade reminder — an assigner who isn't the loot owner
+        -- never physically has the item to trade.
+        if LC.IsLootOwner() then
             Trade.AddPendingTrade(rollID, playerKey)
         end
     end
-    LC.assignedWinners[rollID] = playerKey
     -- The tab deliberately stays open after an award: reassigning is a first-class feature, and
     -- Trade.AssignWinner's confirm dialog needs LC.assignedWinners, which ClearRollState would drop
     -- along with the tab. Tabs are cleared in bulk by "Close Session" (see the council panel).
@@ -736,10 +743,12 @@ function Trade.HandleResult(payload, senderKey)
 
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
-        -- If I'm also the lootmaster, I already have the item — nothing to trade myself for. Also
-        -- skip when no lootmaster is configured (GetLootmaster == ""): an owed entry with an empty
-        -- lootmasterKey resolves to no unit, so its trade-partner name button would always fail.
-        local lootmasterKey = LC.GetLootmaster()
+        -- If I'm the loot owner myself, I already have the item — nothing to trade myself for.
+        -- GetLootOwnerKey resolves the raid leader when no lootmaster is configured (they hold the
+        -- items in that case, see LC.IsLootOwner); "" only when neither can be resolved at all, and
+        -- an owed entry with an empty key resolves to no unit, so its trade-partner name button
+        -- would always fail.
+        local lootmasterKey = LC.GetLootOwnerKey()
         if lootmasterKey ~= "" and not LC.IsMe(lootmasterKey) then
             LC.owedToMe = LC.owedToMe or {}
             -- lootedAt drives the same expiry the lootmaster's pending trade uses, and lets
@@ -774,9 +783,9 @@ function Trade.HandleResult(payload, senderKey)
     color = color or Trade.ResolveColorForReason(reason)
     KART.LH.LogHistory(itemLink, KART.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
-    -- Same reasoning as DoAssignWinner: only the client physically holding the item (the
-    -- designated lootmaster) needs a pending-trade reminder, regardless of who assigned it.
-    if LC.IsMe(LC.GetLootmaster()) then
+    -- Same reasoning as DoAssignWinner: only the client physically holding the item (the loot
+    -- owner) needs a pending-trade reminder, regardless of who assigned it.
+    if LC.IsLootOwner() then
         Trade.AddPendingTrade(rollID, winnerKey)
     end
 

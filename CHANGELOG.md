@@ -18,8 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New "Close Session" button in the council panel** ends the session and clears every open item at once. Lootmaster only.
 - **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
 - **Mounts, pets, toys, housing items and Bind-on-Equip drops never go through Loot Council** — they are rolled the normal way and Auto-Pass leaves them alone.
+- **The lootmaster now runs the whole loot flow** — session, rolls and awards. The raid leader only stands in while no lootmaster is set.
 
 ### Fixed
+- **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.
+- **A raid leader reloading mid-raid no longer stops the raid's vote windows** while items keep being won.
+- **The winner's row turns gold right away** for whoever assigned the item, not only for everyone else.
 - **The Loot Council settings tab no longer breaks on login.**
 - **The lootmaster works again when they aren't also the raid leader** — winning rolls, `/kart add`, trade reminders, the council panel and Close Session were all dead for them.
 - **The lootmaster no longer has to be listed as a council member** to get the council panel and have their awards count.

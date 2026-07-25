@@ -163,13 +163,16 @@ function LC.GetButtonConfig()
     return result
 end
 
--- The lootmaster counts as council without having to be listed in the council-member field. He is
+-- The loot owner counts as council without having to be listed in the council-member field. He is
 -- the one who physically wins every item (ForceWinRoll) and the only one who may end the session, so
 -- a lootmaster left out of that list ended up with no council panel at all — no way to assign a
 -- winner, no "Close Session" button (it lives on that panel), and no window for his own "/kart add".
+--
+-- The raid leader is NOT council by virtue of being the leader (see LC.IsLootOwner's standing
+-- decision) — only while no lootmaster is configured, where IsLootOwner falls back to them anyway.
+-- A leader who should sit on the council goes in the council-member list like everyone else.
 function LC.IsCouncil()
-    if UnitIsGroupLeader("player") then return true end
-    if LC.IsMe(LC.GetLootmaster()) then return true end
+    if LC.IsLootOwner() then return true end
     local myKey = (KART.Identity.ResolvePlayer("player"))
     return LC.CouncilNamesTable[myKey] == true
 end
@@ -183,23 +186,20 @@ end
 function LC.IsSenderCouncil(senderKey)
     local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
-    if UnitIsGroupLeader(unit) then return true end
-    -- Mirrors LC.IsCouncil: the lootmaster is council whether or not he's in the council-member list.
-    -- Without this, peers rejected the LC_RESULT of an unlisted lootmaster — so his awards produced
-    -- no loot-history entry, no winner popup and no owed-item reminder anywhere in the raid.
-    local lootmaster = LC.GetLootmaster()
-    if lootmaster ~= "" and senderKey == lootmaster then return true end
+    -- Mirrors LC.IsCouncil: the loot owner is council whether or not he's in the council-member
+    -- list. Without this, peers rejected the LC_RESULT of an unlisted lootmaster — so his awards
+    -- produced no loot-history entry, no winner popup and no owed-item reminder anywhere in the
+    -- raid. IsSenderLootOwner also covers the leader while no lootmaster is configured, and forces
+    -- the pending-key migration itself.
+    if LC.IsSenderLootOwner(senderKey) then return true end
     if LC.CouncilNamesTable[senderKey] == true then return true end
     -- The council table can still hold this member under a pending-TEXT key (they were out of group
-    -- when the leader's config was parsed, so ResolveConfigName couldn't produce their GUID yet)
-    -- while senderKey is already a live GUID. GROUP_ROSTER_UPDATE's throttled retry would migrate it,
-    -- but an authoritative LC_RESULT/LC_ONOTE can arrive inside that throttle window and get wrongly
-    -- dropped. Force the synchronous, pending-only migration now, then re-check, so a genuine council
-    -- member's message is never lost to that timing race. The lootmaster entry can be pending for the
-    -- same reason, so re-check that one too (same pattern as LC.HandleManualStart).
+    -- when the config was parsed, so ResolveConfigName couldn't produce their GUID yet) while
+    -- senderKey is already a live GUID. GROUP_ROSTER_UPDATE's throttled retry would migrate it, but
+    -- an authoritative LC_RESULT/LC_ONOTE can arrive inside that throttle window and get wrongly
+    -- dropped. Force the synchronous, pending-only migration now, then re-check, so a genuine
+    -- council member's message is never lost to that timing race.
     LC.RetryPendingResolutions()
-    lootmaster = LC.GetLootmaster()
-    if lootmaster ~= "" and senderKey == lootmaster then return true end
     return LC.CouncilNamesTable[senderKey] == true
 end
 
@@ -313,6 +313,57 @@ end
 function LC.IsMe(configuredKey)
     if not configuredKey or configuredKey == "" then return false end
     return (KART.Identity.ResolvePlayer("player")) == configuredKey
+end
+
+-- =====================================================================
+--  Loot owner  (who drives the whole loot flow)
+-- =====================================================================
+-- STANDING DECISION (maintainer, 2026-07-25): the LOOTMASTER owns the entire loot flow — starting
+-- and ending the session, broadcasting every roll, adding items with /kart add, assigning winners,
+-- and physically holding the items until they're traded. The raid leader has nothing to do with any
+-- of it unless they ARE the lootmaster or are listed as a council member. The only exception is the
+-- fallback below: while NO lootmaster is configured at all, the raid leader stands in, so a raid
+-- that never filled the field keeps working exactly as before.
+--
+-- Every authority check in this module goes through LC.IsLootOwner / LC.IsSenderLootOwner. Do not
+-- reintroduce a bare UnitIsGroupLeader test for anything loot-related — that is what made a raid
+-- leader's /reload silently stop the whole raid's roll broadcasts while the lootmaster kept winning
+-- items nobody could vote on.
+
+-- Whether WE are that client. Falls back to the plain leader check while no lootmaster is set,
+-- which is byte-for-byte the behaviour this module had before the role existed (including solo,
+-- where UnitIsGroupLeader("player") is false).
+function LC.IsLootOwner()
+    local lootmaster = LC.GetLootmaster()
+    if lootmaster ~= "" then return LC.IsMe(lootmaster) end
+    return UnitIsGroupLeader("player")
+end
+
+-- The loot owner's resolved identity key, for the places that need to name them rather than test
+-- for themselves (the winner's "you're owed this" entry). "" when nobody can be resolved.
+function LC.GetLootOwnerKey()
+    local lootmaster = LC.GetLootmaster()
+    if lootmaster ~= "" then return lootmaster end
+    for unit in KART.EachGroupUnit() do
+        if UnitIsGroupLeader(unit) then return (KART.Identity.ResolvePlayer(unit)) end
+    end
+    return ""
+end
+
+-- Sender-side counterpart, for validating an incoming addon message. Resolves to a live unit first
+-- (CHAT_MSG_ADDON also delivers whispers, so someone outside the group is never authorized) and
+-- forces the pending-key migration before comparing — senderKey is always a GUID while the stored
+-- lootmaster can still be plain config text if they weren't in our roster when LC_CONFIG was parsed.
+function LC.IsSenderLootOwner(senderKey)
+    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    if not unit then return false end
+    local lootmaster = LC.GetLootmaster()
+    if lootmaster ~= "" and not KART.Identity.IsResolvedKey(lootmaster) then
+        LC.RetryPendingResolutions()
+        lootmaster = LC.GetLootmaster()
+    end
+    if lootmaster ~= "" then return senderKey == lootmaster end
+    return UnitIsGroupLeader(unit)
 end
 
 -- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
@@ -538,25 +589,29 @@ end
 
 -- Answers an "LC_STATE_REQ" broadcast from a joining/reloading peer with the current session flag
 -- and, if a session is active, the full raid config — a one-shot pull instead of waiting for the
--- leader's own roster-change handler to happen to fire (see LC.CheckRaidJoin). Only the actual
--- leader replies, same authority rule as LC.BroadcastRaidConfig itself.
+-- owner's own roster-change handler to happen to fire (see LC.CheckRaidJoin).
 -- requester: the full "Name-Realm" of whoever asked (CHAT_MSG_ADDON sender).
 --
 -- The reply is WHISPERED to them, never broadcast. Broadcasting was actively harmful: LC_ACTIVE:0
--- makes every receiver run LC.ClearAllRolls, so one late joiner asking for state while the leader's
--- own sessionActive is still false (the state a fresh /reload starts in, until the leader answers the
+-- makes every receiver run LC.ClearAllRolls, so one late joiner asking for state while the owner's
+-- own sessionActive is still false (the state a fresh /reload starts in, until they answer the
 -- session prompt) would wipe the in-flight rolls of the entire raid. The requester is the only client
 -- that needs the answer, and they have no roll state to lose.
 function LC.HandleStateRequest(requester)
     if not (IsInGroup() and requester) then return end
-    -- Two different owners answer here: the session flag belongs to the raid leader (only they can
-    -- toggle it, see LC.SetSessionActive/HandleActive), the config belongs to the lootmaster (see
-    -- LC.IsConfigOwner). On the common setup where they're the same person this sends both.
-    if UnitIsGroupLeader("player") then
-        LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
-    end
+    -- Two owners answer here: the session flag belongs to the loot owner (only they can toggle it,
+    -- see LC.SetSessionActive/HandleActive), the config to whoever the lootmaster field names (see
+    -- LC.IsConfigOwner). Normally the same person, in which case this sends both.
+    --
+    -- Config first, then the session flag — same ordering requirement as LC.SetSessionActive: the
+    -- requester validates LC_ACTIVE against the lootmaster it knows, and a fresh joiner knows none
+    -- until this config lands. Sent the other way round, a lootmaster who isn't the raid leader had
+    -- their reply dropped and the joiner sat out the session.
     if LC.sessionActive and LC.IsConfigOwner() then
         LC.BroadcastRaidConfig(requester)
+    end
+    if LC.IsLootOwner() then
+        LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
     end
 end
 
@@ -807,10 +862,18 @@ end
 
 function LC.SetSessionActive(active)
     LC.sessionActive = active
-    LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
+    -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
+    -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
+    -- never received a config has lootmaster == "" and falls back to "is the sender the raid
+    -- leader?". For a lootmaster who ISN'T the leader that fallback says no, so the very first
+    -- LC_ACTIVE:1 of the raid — the one that starts the session — was rejected by everyone, and
+    -- nothing ever re-sent it. Addon messages arrive in send order, so shipping the config first
+    -- means the lootmaster is known by the time LC_ACTIVE is evaluated.
     if active then
         LC.BroadcastRaidConfig()
-    else
+    end
+    LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
+    if not active then
         -- Ending the session forgets every tracked roll so the next boss starts clean instead of
         -- showing leftover tabs/votes from this one (see LC.ClearAllRolls / LC.Trade.ClearRollState).
         LC.ClearAllRolls()
@@ -849,7 +912,9 @@ function LC.CheckRaidJoin()
         LC.SendLC("LC_STATE_REQ")
     end
 
-    if not UnitIsGroupLeader("player") then return end
+    -- The loot owner, not the raid leader (see LC.IsLootOwner): they open and close the session, so
+    -- they are also the one who gets asked whether to start one.
+    if not LC.IsLootOwner() then return end
 
     -- Re-broadcast the authoritative config on every roster change so late joiners get it too.
     if LC.sessionActive then LC.BroadcastRaidConfig() end
@@ -858,7 +923,7 @@ function LC.CheckRaidJoin()
     LC.promptedThisSession = true
     -- Small delay so the roster is fully settled before showing the prompt
     C_Timer.After(3, function()
-        if IsInRaid() and UnitIsGroupLeader("player") then
+        if IsInRaid() and LC.IsLootOwner() then
             LC.ShowSessionPrompt()
         end
     end)
@@ -960,7 +1025,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- from GetLootRollItemInfo (reliable even for uncached items); classID via GetItemInfoInstant,
     -- which needs the link (GetItemInfo returns nil until the item is cached, GetItemInfoInstant
     -- doesn't, but both need something to look the item up by).
-    local itemName, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
+    -- First return is the TEXTURE, not the name — used here purely as an "is this roll still live?"
+    -- probe for the retry below (it goes nil once the roll expires or has been rolled).
+    local rollTexture, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
     local itemLink = GetLootRollItemLink(rollID)
 
     -- The link can be nil for a moment right at roll start, most often for a brand-new item whose
@@ -970,8 +1037,8 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- lootmaster while every Auto-Pass client passed on it — the exact outcome the standing rule
     -- forbids, and inconsistent across the raid since only some clients would still be waiting.
     -- So retry instead of guessing. Blizzard's roll timer runs for minutes, so the few hundred ms
-    -- cost nothing. itemName nil means the roll itself is gone (expired or already rolled) — stop.
-    if itemName and not itemLink then
+    -- cost nothing. A nil texture means the roll itself is gone (expired or already rolled) — stop.
+    if rollTexture and not itemLink then
         attempt = attempt or 1
         if attempt < START_ROLL_MAX_ATTEMPTS then
             C_Timer.After(START_ROLL_RETRY_STEP * attempt, function()
@@ -1007,8 +1074,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     local councilEligible = bindOnPickUp and not isCollectible
     local councilEngages  = councilEligible and not (quality and quality < LC.GetRaidMinQuality())
 
-    local lootmaster = LC.GetLootmaster()
-    local isLootmaster = LC.IsMe(lootmaster)
+    -- IsLootOwner, not a bare lootmaster test: while no lootmaster is configured the raid leader
+    -- stands in and holds the items instead (see LC.IsLootOwner).
+    local isLootmaster = LC.IsLootOwner()
     if isLootmaster and councilEngages then
         -- The lootmaster physically wins everything Council decides on, so he can hand it over
         -- through Blizzard's BoP trade window afterwards.
@@ -1050,11 +1118,16 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- LC_START goes out BEFORE the roll broadcast below: a client that never gets its own
     -- START_LOOT_ROLL (dead, out of range, ineligible, or its session/min-quality state made
     -- OnStartLootRoll return early) only learns the roll exists from LC_START, and Vote.HandleRoll
-    -- discards data for a roll it doesn't know yet. Sending the roll first would lose the leader's
+    -- discards data for a roll it doesn't know yet. Sending the roll first would lose the owner's
     -- own roll on every such client, every time.
-    local isLeader = UnitIsGroupLeader("player")
+    --
+    -- Sent by the LOOT OWNER, not the raid leader (see LC.IsLootOwner). Exactly one client
+    -- broadcasts, so no duplicate tabs: while a lootmaster is configured it's them, otherwise the
+    -- leader. Tying this to the leader meant a leader who reloaded mid-raid (sessionActive back to
+    -- false until they re-answered the prompt) silently stopped every roll broadcast for the whole
+    -- raid, while the lootmaster kept force-winning items nobody could vote on.
     local secs = KART_Settings.lcVoteSeconds or 20
-    if isLeader then
+    if isLootmaster then
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
     end
 
@@ -1069,11 +1142,14 @@ function LC.OnStartLootRoll(rollID, attempt)
         LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
     end
 
-    if isLeader then
-        KART.LC.Council.ShowCouncilPanel(rollID, secs)
-        -- Leader never receives their own LC_START, so open their own vote window here too — the
-        -- same both-windows treatment HandleStart gives every other client (review #29), otherwise
-        -- the leader would be the one council member who couldn't cast their own vote.
+    -- The broadcaster never receives their own LC_START, so they open their own windows here —
+    -- same treatment HandleStart gives every other client, gated the same way (council gets the
+    -- panel, everyone gets the vote popup), otherwise the loot owner would be the one council
+    -- member who couldn't cast their own vote.
+    if isLootmaster then
+        if LC.IsCouncil() then
+            KART.LC.Council.ShowCouncilPanel(rollID, secs)
+        end
         LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs)
     end
 end
@@ -1099,45 +1175,31 @@ KART.RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-li
 --  Addon Message Handlers  (called from Core.lua CHAT_MSG_ADDON)
 -- =====================================================================
 
--- Sender-authorization helper for messages that carry raid-wide authority: resolving to a
--- live unit first (rather than trusting the key alone) matters because CHAT_MSG_ADDON also
--- delivers whispers — someone not currently in our group is never authorized.
-local function IsSenderGroupLeader(senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
-    return unit ~= nil and UnitIsGroupLeader(unit)
-end
-
 function LC.HandleActive(value, senderKey)
-    -- Two people may flip the session flag: the raid leader (the settings toggle) and the configured
-    -- lootmaster (the council panel's "Close Session" button — they own the loot flow and are the one
-    -- holding the items). Nobody else, or any group member could toggle Loot Council off for the
-    -- whole raid with a forged LC_ACTIVE.
-    --
-    -- The lootmaster check compares against the value we currently hold, which is "" until a config
-    -- has been received — so on a fresh client only the leader is accepted, which is the bootstrap
-    -- path anyway.
-    local lootmaster = LC.GetLootmaster()
-    local fromLootmaster = senderKey and lootmaster ~= "" and senderKey == lootmaster
-    if not (IsSenderGroupLeader(senderKey) or fromLootmaster) then return end
+    -- Only the loot owner may flip the session flag (see LC.IsLootOwner) — otherwise any group
+    -- member could turn Loot Council off for the whole raid with a forged LC_ACTIVE. On a client
+    -- that hasn't received a config yet the lootmaster reads "" and IsSenderLootOwner falls back to
+    -- the leader, which is the bootstrap path anyway.
+    if not LC.IsSenderLootOwner(senderKey) then return end
     local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
-    -- A peer receiving the leader's session-end must also drop its tracked rolls and close its
-    -- windows, exactly like the leader's own SetSessionActive(false) — otherwise stale tabs, votes
+    -- A peer receiving the owner's session-end must also drop its tracked rolls and close its
+    -- windows, exactly like the owner's own SetSessionActive(false) — otherwise stale tabs, votes
     -- and a leftover /kart showall override survive into the next session.
     if wasActive and not LC.sessionActive then
         LC.ClearAllRolls()
     elseif not wasActive and LC.sessionActive and LC.IsConfigOwner() then
-        -- Session just opened and we own the config (see LC.IsConfigOwner). The leader's own
-        -- SetSessionActive only broadcasts the config when the leader IS the lootmaster, so when
-        -- those are different people this is what actually gets the config out to the raid.
+        -- Session just opened and we own the config (see LC.IsConfigOwner). The owner's own
+        -- SetSessionActive only broadcasts the config when they ARE the lootmaster, so when those
+        -- are different people this is what actually gets the config out to the raid.
         LC.BroadcastRaidConfig()
     end
 end
 
 function LC.HandleStart(payload, senderKey)
-    -- Only the leader broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
+    -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
     -- would pop fake vote windows on every client.
-    if not IsSenderGroupLeader(senderKey) then return end
+    if not LC.IsSenderLootOwner(senderKey) then return end
     -- payload = "rollID:seconds:itemID"
     local rollID, secs, itemID = payload:match("^(%d+):(%d+):?(%d*)$")
     rollID = tonumber(rollID)
@@ -1173,7 +1235,7 @@ end
 -- roll behind them. Only the lootmaster may do this — same person ForceWinRoll makes physically
 -- win every real drop, so they're always the one actually holding whatever they manually add too.
 function LC.StartManualRoll(itemsText)
-    if not LC.IsMe(LC.GetLootmaster()) then
+    if not LC.IsLootOwner() then
         print("|cffff0000KART:|r " .. KART.L.LC_NOT_LOOTMASTER)
         return
     end
@@ -1227,20 +1289,12 @@ end
 -- in the payload itself). Fires once per item — the sender broadcasts one LC_MANUAL_START per
 -- link, not a single batched message.
 function LC.HandleManualStart(payload, senderKey)
-    -- Only the designated lootmaster legitimately sends manual rolls (see LC.StartManualRoll).
-    -- A client without a synced raid config has lootmaster == "" and rejects — the state
-    -- request on raid join (LC_STATE_REQ) closes that gap.
-    local lootmaster = LC.GetLootmaster()
-    -- Same GUID-vs-pending-text race that LC.IsSenderCouncil guards: senderKey is always a resolved
-    -- GUID, but GetLootmaster() can still be a pending-text key if the lootmaster wasn't in our
-    -- roster when LC_CONFIG was parsed. Force the synchronous pending-resolution migration before
-    -- comparing, so a legitimate manual roll isn't dropped inside the GROUP_ROSTER_UPDATE throttle
-    -- window (the LC_STATE_REQ path only covers a fresh raid join, not this mid-session window).
-    if lootmaster ~= "" and not KART.Identity.IsResolvedKey(lootmaster) then
-        LC.RetryPendingResolutions()
-        lootmaster = LC.GetLootmaster()
-    end
-    if lootmaster == "" or senderKey ~= lootmaster then return end
+    -- Only the loot owner legitimately sends manual rolls (see LC.StartManualRoll).
+    -- IsSenderLootOwner also handles the GUID-vs-pending-text race: senderKey is always a resolved
+    -- GUID, but the stored lootmaster can still be pending config text if they weren't in our roster
+    -- when LC_CONFIG was parsed, which would drop a legitimate manual roll inside the
+    -- GROUP_ROSTER_UPDATE throttle window (LC_STATE_REQ only covers a fresh raid join).
+    if not LC.IsSenderLootOwner(senderKey) then return end
     local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)

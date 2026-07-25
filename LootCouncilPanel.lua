@@ -430,7 +430,7 @@ KART.RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
 function Council.UpdateSessionButton()
     local f = LC.councilPanel
     if not f or not f.btnCloseSession then return end
-    local isOwner = LC.IsMe(LC.GetLootmaster())
+    local isOwner = LC.IsLootOwner()
     if isOwner then
         f.btnCloseSession:Enable()
         f.btnCloseSession.text:SetTextColor(1, 1, 1)
@@ -673,7 +673,7 @@ function Council.CreateCouncilPanel()
     btnCloseSession:SetSize(150, 28)
     btnCloseSession:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
     btnCloseSession:SetScript("OnClick", function()
-        if not LC.IsMe(LC.GetLootmaster()) then return end -- belt-and-braces; the button is disabled
+        if not LC.IsLootOwner() then return end -- belt-and-braces; the button is disabled
         StaticPopupDialogs["KART_LC_CLOSE_SESSION_CONFIRM"].text = KART.L.LC_CLOSE_SESSION_CONFIRM ---@diagnostic disable-line: undefined-global
         StaticPopup_Show("KART_LC_CLOSE_SESSION_CONFIRM") ---@diagnostic disable-line: undefined-global
     end)

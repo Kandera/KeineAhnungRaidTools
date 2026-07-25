@@ -18,8 +18,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Neuer "Session beenden"-Button im Council-Panel** beendet die Session und räumt alle offenen Items auf einmal ab. Nur für den Lootmaster.
 - **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
 - **Mounts, Pets, Spielzeuge, Housing-Items und Bind-on-Equip-Drops laufen nie über den Loot Council** — sie werden normal ausgewürfelt und Auto-Pass lässt sie in Ruhe.
+- **Der Lootmaster steuert den kompletten Loot-Ablauf** — Session, Rolls und Vergaben. Der Raidleiter springt nur ein, solange kein Lootmaster gesetzt ist.
 
 ### Behoben
+- **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
+- **Ein Reload des Raidleiters mitten im Raid stoppt nicht mehr die Vote-Fenster des Raids**, während weiter Items gewonnen werden.
+- **Die Gewinnerzeile wird sofort gold** — auch bei dem, der zugewiesen hat, nicht nur bei allen anderen.
 - **Der Loot-Council-Einstellungstab geht beim Login nicht mehr kaputt.**
 - **Der Lootmaster funktioniert wieder, wenn er nicht gleichzeitig Raidleiter ist** — Rolls gewinnen, `/kart add`, Handels-Erinnerungen, Council-Panel und Session beenden waren für ihn alle tot.
 - **Der Lootmaster muss nicht mehr als Councilmitglied eingetragen sein**, um das Council-Panel zu bekommen und dass seine Vergaben zählen.
