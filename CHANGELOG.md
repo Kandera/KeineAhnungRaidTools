@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Loot history is now paginated.**
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 - **The Vantus rune is now detected by spell**, not by buff name.
+- **The Buff-Checker now flags outdated enchants**, not just missing ones — the tooltip names the slot carrying the wrong one. Only the top craft quality counts.
+- **Off-rank weapon oil is now shown as wrong** — the current oils and sharpening stones count as good, and shaman weapon imbues are not nagged about.
 - **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll. Re-adding an already-awarded item revokes that award first.
 - **Click a name in the trade reminder to target and open a trade with them** (range-checked).
 - **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.

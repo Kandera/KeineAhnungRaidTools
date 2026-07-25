@@ -13,6 +13,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 - **Die Vantus-Rune wird jetzt am Zauber erkannt**, nicht am Buff-Namen.
+- **Der Buff-Checker meldet jetzt auch veraltete Verzauberungen**, nicht nur fehlende — der Tooltip nennt den Slot mit der falschen. Nur die beste Handwerksqualität zählt.
+- **Öl vom falschen Rang wird jetzt als falsch angezeigt** — die aktuellen Öle und Schleifsteine gelten als gut, Schamanen-Imbues werden nicht angemahnt.
 - **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf. Ein bereits vergebenes Item wird dabei zuerst wieder freigegeben.
 - **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
 - **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.

@@ -21,9 +21,19 @@ KART.BuffData = {
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
     { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
     { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
-    -- bestSpells holds enchantIDs, not spell ids: the weapon slot is read from GetWeaponEnchantInfo.
-    -- An id in the list is the current tier's oil; anything else on the weapon is simply "something
-    -- we can't judge" and is not reported (see rate() in KART.UpdateBuffCheck for why).
+    -- All three lists hold enchantIDs, not spell ids: the weapon slot is read from
+    -- GetWeaponEnchantInfo. Every id was taken from the game's own SpellItemEnchantment table
+    -- (wago.tools DB2 export) and 8052 is confirmed against a live client. Temporary weapon enchants
+    -- carry a Duration there, which is how each was classified.
+    --   bestSpells  = top craft quality (Tier2) weapon consumables: the three enchanting oils plus
+    --                 the three blacksmithing stones. All 7200s duration.
+    --   offRankSpells = the SAME six at Tier1. Reported as the wrong rank, per the maintainer's rule
+    --                 that only the best quality counts. The tiers have no fixed offset — Sharpened
+    --                 is 7906/7905 but Weighted is 7907/7908 — so both were looked up, not derived.
+    --   neutralSpells = shaman weapon imbues, which occupy this very slot and make an oil impossible.
+    --                 Nothing to fix, so they must not be reported. Rogue poisons and the paladin's
+    --                 Sacred Weapon are NOT here on purpose: neither is a weapon enchant any more,
+    --                 they are player auras, so they never reach this check.
     -- bestSpells VERIFIED 2026-07-25 — all three of Midnight's weapon oils, each read off its own
     -- Wowhead spell page ("Enchant Item - Temporary: <name> (<id>)") and cross-checked against a live
     -- client, which reported 8052 while the player was using Thalassian Phoenix Oil:
@@ -43,7 +53,13 @@ KART.BuffData = {
     -- verifying those ids first — the old numbers are recorded here purely as a starting point, not
     -- as fact.
     { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true,
-      bestSpells = {8052, 8054, 8056}, page = "advanced" },
+      -- Tier2: Thalassian Phoenix Oil, Oil of Dawn, Smuggler's Enchanted Edge,
+      --        Sharpened, Weighted, Razor Sharp
+      bestSpells    = {8052, 8054, 8056, 7905, 7908, 7910},
+      -- The same six at Tier1.
+      offRankSpells = {8051, 8053, 8055, 7906, 7907, 7909},
+      -- Flametongue and Windfury, both their old and current table entries.
+      neutralSpells = {5400, 5401, 5872, 5875}, page = "advanced" },
     { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
     { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
 }
@@ -868,26 +884,31 @@ function KART.UpdateBuffCheck(isPreview)
                 -- with oil on one weapon only still counts as missing it. Which hands take part is
                 -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's
                 -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
-                -- Ranks: 1 = weapon is bare, 3 = carrying something we can't judge, 4 = a current oil.
+                -- Ranks: 1 = weapon is bare, 2 = a KNOWN off-rank consumable, 3 = something we can't
+                -- judge, 4 = a current-quality consumable.
                 --
-                -- There is deliberately no "off-rank" rank here. Telling an old oil apart from a
-                -- shaman imbue, a rogue poison or a paladin armament needs verified ids for all of
-                -- those, and only the three current oils are verified (see bestSpells). Anything
-                -- unrecognised therefore rates 3 — "has something on the weapon, nothing to nag
-                -- about" — because the alternative is accusing every enhancement shaman in the raid
-                -- of using the wrong oil. To add off-rank detection later, verify the class-mechanic
-                -- and previous-tier oil ids first, then reintroduce a rank between 1 and 3 for ids
-                -- that are known-bad rather than merely unknown.
+                -- 2 and 3 are deliberately different. Rank 2 needs positive evidence that the id is
+                -- the wrong thing (a Tier1 craft, see offRankSpells); merely not recognising an id
+                -- rates 3 and is never reported. That asymmetry is the whole lesson from the first
+                -- version of this check, which treated unknown as wrong and accused a raid full of
+                -- correctly enchanted players.
                 local rank, isExpiring, rated, hasData = nil, false, false, true
+
+                local function inList(list, id)
+                    if not list then return false end
+                    for _, v in ipairs(list) do
+                        if v == id then return true end
+                    end
+                    return false
+                end
 
                 local function rate(enchantID, expTime)
                     rated = true
                     local r = 1
                     if enchantID and enchantID > 0 then
-                        r = 3
-                        for _, id in ipairs(buff.bestSpells) do
-                            if enchantID == id then r = 4; break end
-                        end
+                        if inList(buff.bestSpells, enchantID) then r = 4
+                        elseif inList(buff.offRankSpells, enchantID) then r = 2
+                        else r = 3 end -- includes neutralSpells: a shaman imbue is nothing to fix
                     end
                     -- Only a current-rank oil can run out on us; a class mechanic like Sacred Weapon is
                     -- short-lived by design and must not blink as "expiring".
@@ -922,8 +943,9 @@ function KART.UpdateBuffCheck(isPreview)
                     stateToSet = isExpiring and "expiring" or "best"
                 elseif rank == 3 then
                     stateToSet = true
+                elseif rank == 2 then
+                    stateToSet = "wrong"
                 end
-                -- No rank-2 branch: rate() cannot produce one while off-rank detection is off.
                 -- rank 1 sets nothing: a bare weapon leaves the column in its "missing" look.
                 if stateToSet then MergeBuffState(buff.id, stateToSet) end
             end

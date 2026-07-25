@@ -1016,20 +1016,58 @@ end
 -- A slot whose list is missing or empty is only checked for having *some* enchant, so this table can
 -- be filled in slot by slot without producing false "wrong enchant" reports in the meantime.
 --
--- EMPTIED 2026-07-25 after the first in-game check: a fully enchanted character reported
--- "(wrong enchant)" on all seven armour slots at once, because not one of the ids that were here
--- matched what the client actually stores. They were written from memory, never verified, and were
--- all wrong. The list stays empty rather than getting re-guessed: IsGoodEnchant below then falls
--- back to a presence-only check, which is exactly the behaviour from before the quality check
--- existed — less strict, but never a false accusation.
+-- REBUILT 2026-07-25 from the game's own SpellItemEnchantment table (wago.tools DB2 export), after
+-- the hand-written first attempt reported "(wrong enchant)" on all seven armour slots of a fully
+-- enchanted character. Every id below was read out of that table by name, and six of them were
+-- cross-checked against a live client's item links: 7961 head, 8031 shoulders, 7987 chest, 8159
+-- legs, 7993 boots, 7997 rings all matched. Nothing here is from memory.
 --
--- To refill: wear the intended enchants, run "/kart ench", and paste the ids it prints into the slot
--- they belong to. That command reads the live item links, so what it prints is ground truth.
--- Do NOT restore the previous contents — head 8210-8212, shoulders 8220-8222, chest 8150-8153,
--- legs 8190-8192, boots 8110-8112, rings 8050-8054, weapons 8100-8107 — they are known wrong.
--- (The death-knight runeforge ids 3365-3370 / 6241-6244 that sat on the weapon slots were never
--- disproved, but go back in only alongside verified weapon-enchant ids.)
-local GOOD_ENCHANTS = {}
+-- ONLY the top craft quality (Tier2) counts, by explicit maintainer decision — a Tier1 craft is
+-- reported as the wrong enchant. Midnight enchants are crafting recipes, so each name exists twice
+-- in the table, once per quality, with NO fixed offset between them (Sharpened is 7906/7905 while
+-- Weighted is 7907/7908). Never derive one tier's id from the other's; look both up.
+--
+-- Where a slot is in doubt, the id is INCLUDED rather than left out. Wrongly including one can only
+-- let a bad enchant pass unnoticed; wrongly leaving one out accuses a player who did everything
+-- right, which is the failure this table is recovering from.
+--
+-- To refresh for a new tier: https://wago.tools/db2/SpellItemEnchantment/csv?filter[Name_lang]=
+-- Quality-NN-Tier2 lists a whole expansion's crafted enchants in one request ("12" is Midnight).
+-- "/kart ench" prints a live character's ids with their names for cross-checking.
+local GOOD_ENCHANTS = {
+    -- Head — three enchants, each with a stronger "Empowered" version. Both count: Empowered is a
+    -- separate recipe, not a higher craft quality.
+    [1]  = { 7959, 7961, 7989, 7991, 8015, 8017 },
+    -- Shoulders — two per faction tree (Amani, Haranir, Thalassian).
+    [3]  = { 7971, 7973, 7999, 8001, 8029, 8031 },
+    -- Chest — Mark of Nalorakk / Rootwarden / Worldsoul / the Magister.
+    [5]  = { 7957, 7985, 7987, 8013 },
+    -- Legs are NOT enchanted: they take a tailoring spellthread or a leatherworking armour kit, so
+    -- these are stat lines rather than named enchants. Caster set first, then agility/strength.
+    [7]  = { 7935, 7937, 7939, 8159, 8161, 8163 },
+    -- Boots — Lynx's Dexterity, Shaladrassil's Roots, Farstrider's Hunt.
+    [8]  = { 7963, 7993, 8019 },
+    -- Rings — nine of them, three per faction tree. Both rings take the same set.
+    [11] = { 7965, 7967, 7969, 7995, 7997, 8021, 8023, 8025, 8027 },
+    [12] = { 7965, 7967, 7969, 7995, 7997, 8021, 8023, 8025, 8027 },
+    -- Weapons, and the reason this slot needs the most care: three unrelated professions and one
+    -- class all write here.
+    --   crafted enchants  7979-8041 : three per faction tree
+    --   engineering scopes 8609-8615 : a ranged weapon carries one of these instead
+    --   Rite of the Hash'ey    8689 : Midnight, permanent, slot unconfirmed — see the note above on
+    --                                 why an uncertain id is included rather than omitted
+    --   runeforges 3366-6245       : death knights only, and the ONLY weapon enchant they can use.
+    --                                No craft quality, so every one of them is valid. 6241 (Rune of
+    --                                Sanguination) is the one confirmed against a live client.
+    [16] = { 7979, 7981, 7983, 8007, 8009, 8011, 8037, 8039, 8041,
+             8609, 8611, 8613, 8615, 8689,
+             3366, 3367, 3368, 3370, 3595, 3847, 5869, 5870,
+             6241, 6242, 6243, 6244, 6245 },
+    [17] = { 7979, 7981, 7983, 8007, 8009, 8011, 8037, 8039, 8041,
+             8609, 8611, 8613, 8615, 8689,
+             3366, 3367, 3368, 3370, 3595, 3847, 5869, 5870,
+             6241, 6242, 6243, 6244, 6245 },
+}
 
 -- Enchantable slots: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12),
 -- Main Hand(16), Off Hand(17 — only when it holds a second weapon, see SlotTakesEnchant).
@@ -1037,19 +1075,10 @@ local GOOD_ENCHANTS = {}
 -- and the raid scan, so all three always agree on what "enchantable" means.
 KART.ENCHANTABLE_SLOTS = {1, 3, 5, 7, 8, 11, 12, 16, 17}
 
--- VERIFIED enchant ids, read off a live client 2026-07-25 (one death knight, 2H, fully enchanted):
---   head 7961 | shoulders 8031 | chest 7987 | legs 8159 | boots 7993 | rings 7997
---   main hand 6241 (a runeforge — those really are in the 3365-3370 / 6241-6244 range after all)
---   weapon oil 8052 (temporary, from GetWeaponEnchantInfo — NOT a ring id, see BuffChecker)
--- Kept as a record, deliberately NOT loaded into GOOD_ENCHANTS above: this is one character's choice
--- per slot, and most slots accept several enchants that are all correct. Filling the list from it
--- would flag every raider who picked a different, equally valid one — the same bug with new numbers.
---
--- Note what CANNOT fill this list: asking the raid what it wears. That returns whatever people have,
--- outdated enchants included, so it would approve precisely the case the check exists to catch. WoW
--- exposes no API that ranks an enchantID either. The accepted set has to come from outside the game
--- (Wowhead/simc for the current tier) and be maintained here per patch — or the check has to stop
--- judging ids at all. See the note on this in KART.StartEnchantScan.
+-- Note what must NOT be used to extend the table above: asking the raid what it wears. That returns
+-- whatever people have, outdated enchants included, so it would approve precisely the case the check
+-- exists to catch. The accepted set comes from the game's own data, never from a survey — see the
+-- note in KART.StartEnchantScan, whose tally is for human eyes only.
 
 -- Equip locations that can carry a temporary weapon enchant (oil, sharpening stone, poison, imbue).
 -- A shield or a caster off-hand cannot, and an empty hand has nothing to oil.
