@@ -985,6 +985,25 @@ end
 -- unmatched after this is left over from an earlier roll that used the same ID.
 local ROLL_ORPHAN_GRACE = 15
 
+-- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational — it gives the
+-- council one more tie-breaker next to the votes.
+--
+-- Must run exactly once per client per roll, and which code path guarantees that differs by roll
+-- type: a real drop fires START_LOOT_ROLL on every eligible client, so LC.OnStartLootRoll covers
+-- everyone by itself; a manual roll only exists as an addon message, so the sender rolls in
+-- LC.StartManualRoll and everyone else in LC.HandleManualStart (SendAddonMessage never echoes back).
+-- Note the resulting difference in who takes part: a real roll is limited to players Blizzard deemed
+-- eligible, while a manually added item is open to the whole raid — which is the point of handing it
+-- back to the council in the first place.
+local function RollForSelf(rollID)
+    if not LC.GetRollsEnabled() then return end
+    local myKey  = (KART.Identity.ResolvePlayer("player"))
+    local myRoll = math.random(1, 100)
+    LC.rolls[rollID] = LC.rolls[rollID] or {}
+    LC.rolls[rollID][myKey] = myRoll
+    LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
+end
+
 local function PurgeStaleRoll(rollID, newItemID)
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
@@ -1136,16 +1155,9 @@ function LC.OnStartLootRoll(rollID, attempt)
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
     end
 
-    -- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational. Every
-    -- eligible raider's client independently receives this same START_LOOT_ROLL event, so this
-    -- is the one place that reliably runs once per roll for everyone, council members included.
-    if LC.GetRollsEnabled() then
-        local myKey  = (KART.Identity.ResolvePlayer("player"))
-        local myRoll = math.random(1, 100)
-        LC.rolls[rollID] = LC.rolls[rollID] or {}
-        LC.rolls[rollID][myKey] = myRoll
-        LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
-    end
+    -- Every eligible raider's client independently receives this same START_LOOT_ROLL event, so this
+    -- is the one place that reliably rolls once per client for a real drop, council members included.
+    RollForSelf(rollID)
 
     -- The broadcaster never receives their own LC_START, so they open their own windows here —
     -- same treatment HandleStart gives every other client, gated the same way (council gets the
@@ -1247,6 +1259,46 @@ end
 -- they're currently holding back to Council for a (re)decision, without a real Blizzard loot
 -- roll behind them. Only the lootmaster may do this — same person ForceWinRoll makes physically
 -- win every real drop, so they're always the one actually holding whatever they manually add too.
+-- Voids an earlier award of the same item before it goes back to the council, so the previous
+-- winner's "you're owed this" entry, the lootmaster's pending trade and the history line naming them
+-- all disappear — otherwise a re-decided item leaves a ghost obligation to someone who never gets it,
+-- and (since the re-decision runs under a fresh rollID) history would list the same physical item
+-- twice with two different winners.
+--
+-- Matched by itemID, which is deliberately NOT enough on its own: two copies of one item can be in
+-- play at once (see the "(1/2)"/"(2/2)" duplicate marking). Revoking the wrong copy's award would be
+-- worse than doing nothing, so an ambiguous match revokes nothing and says so — the lootmaster then
+-- picks the right tab and uses "No Winner" by hand.
+local function RevokePriorAward(itemLink)
+    local itemID = LC.IsRealItemLink(itemLink) and itemLink:match("item:(%d+)")
+    if not itemID then return end
+
+    local matches = {}
+    for rid, winnerKey in pairs(LC.assignedWinners) do
+        if winnerKey and winnerKey ~= "NONE" and not LC.IsTestRoll(rid) then
+            local link = LC.rollItems[rid]
+            if LC.IsRealItemLink(link) and link:match("item:(%d+)") == itemID then
+                matches[#matches + 1] = rid
+            end
+        end
+    end
+
+    if #matches == 0 then return end
+    if #matches > 1 then
+        print("|cffff0000KART:|r " .. string.format(KART.L.LC_MANUAL_AMBIGUOUS_REVOKE, itemLink))
+        return
+    end
+
+    -- Same three steps the council panel's "No Winner" button runs: tell the raid, then do the peer
+    -- side's cleanup locally too, since we never receive our own broadcast.
+    local rid = matches[1]
+    LC.Trade.AnnounceResult(rid, "NONE")
+    KART.LH.RemoveHistoryForRoll(rid)
+    LC.Trade.ClearWinnerObligations(rid)
+    KART.LC.Council.CloseCouncilTab(rid)
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_MANUAL_REVOKED, itemLink))
+end
+
 function LC.StartManualRoll(itemsText)
     if not LC.IsLootOwner() then
         print("|cffff0000KART:|r " .. KART.L.LC_NOT_LOOTMASTER)
@@ -1261,6 +1313,10 @@ function LC.StartManualRoll(itemsText)
     -- would break apart item names that contain spaces (e.g. "[Sulfuras, Hand von Ragnaros]").
     for itemLink in (itemsText or ""):gmatch("|c%x%x%x%x%x%x%x%x|Hitem:.-|h|r") do
         startedAny = true
+        -- Before anything else: the item is being handed back for a new decision, so whatever was
+        -- decided about it last time has to stop being true first.
+        RevokePriorAward(itemLink)
+
         local rollID = LC.nextManualRollID
         LC.nextManualRollID = LC.nextManualRollID + 1
 
@@ -1282,6 +1338,10 @@ function LC.StartManualRoll(itemsText)
             if itemStr then msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemStr end
         end
         LC.SendLC(msg)
+
+        -- Our own roll. Peers do the same in LC.HandleManualStart — see RollForSelf for why the
+        -- two halves are needed here while a real drop gets by with one.
+        RollForSelf(rollID)
 
         -- SendAddonMessage never echoes back to its own sender, so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
@@ -1331,6 +1391,10 @@ function LC.HandleManualStart(payload, senderKey)
     -- real deadline by however long the vote took. Wall clock, same reason as everywhere else.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
+
+    -- Our own roll. The sender rolled in LC.StartManualRoll; there is no START_LOOT_ROLL behind a
+    -- manual item, so this handler is the only place the rest of the raid ever rolls for it.
+    RollForSelf(rollID)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

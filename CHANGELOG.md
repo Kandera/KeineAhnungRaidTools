@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Buff-Checker now flags outdated enchants**, not just missing ones — the tooltip names the slot carrying the wrong one. Death knight runeforges count as correct.
 - **The Vantus rune is now detected by spell**, not by buff name.
 - **Off-rank weapon oil is now shown as wrong** instead of counting as good — sharpening stones count as good, and shaman imbues, rogue poisons and paladin armaments are no longer nagged about.
-- **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll.
+- **`/kart add <item link>` hands an item back to Loot Council for a decision**, without needing a real loot roll. Re-adding an already-awarded item revokes that award first.
 - **Click a name in the trade reminder to target and open a trade with them** (range-checked).
 - **A new reminder window tells you when you still need to trade the lootmaster** for something you won, with the same one-click trade.
 - **The vote timer can now be set up to 3 minutes**, up from 1.
@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **The Buff-Checker now checks the off-hand enchant** on a second weapon — shields and caster off-hands take none.
 - **A buff that merely has "oil" in its name no longer triggers a false oil warning.**
+- **Items added with `/kart add` now roll like a normal drop** — the council's Roll column stayed empty for them.
+- **"No Winner" now also removes the item from loot history**, instead of leaving it credited to the revoked winner.
 - **An item with two sockets now reports both empty ones**, not just one.
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.
 - **A raid leader reloading mid-raid no longer stops the raid's vote windows** while items keep being won.

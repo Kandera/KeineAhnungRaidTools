@@ -265,13 +265,6 @@ function Trade.ClearWinnerObligations(rollID)
     if changed then Trade.RefreshOwedReminder() end
 end
 
--- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
--- — called when a tab is dismissed or a session ends, so a later real roll that happens to
--- reuse the same small rollID integer never inherits stale data from a previous boss
--- (see the "wrong item posted on right-click assign" and "stale tabs after next boss" reports).
--- Note: pending trades are NOT cleared here; they are independent long-lived obligations that
--- should only be removed when the trade actually completes, is manually marked done, or is
--- reassigned to someone else.
 -- Drops LC.rollLootedAt stamps that are older than the Bind-on-Pickup trade window.
 --
 -- That table is the BoP trade CLOCK, not roll state, and it has to outlive the roll's own tracking:
@@ -291,6 +284,13 @@ function Trade.PruneExpiredLootStamps()
     end
 end
 
+-- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
+-- — called when a tab is dismissed or a session ends, so a later real roll that happens to
+-- reuse the same small rollID integer never inherits stale data from a previous boss
+-- (see the "wrong item posted on right-click assign" and "stale tabs after next boss" reports).
+-- Note: pending trades are NOT cleared here; they are independent long-lived obligations that
+-- should only be removed when the trade actually completes, is manually marked done, or is
+-- reassigned to someone else.
 function Trade.ClearRollState(rollID)
     LC.votes[rollID]           = nil
     LC.rolls[rollID]           = nil
@@ -745,6 +745,11 @@ function Trade.HandleResult(payload, senderKey)
     Trade.ClearWinnerObligations(rollID)
 
     if winnerKey == "NONE" then
+        -- The item ended up with nobody, so any history entry naming a winner for it is now wrong.
+        -- Every client logs the same award locally, so every client has to drop it locally too —
+        -- the revoker does this itself (it never receives its own message, see the panel's No-Winner
+        -- button and LC.StartManualRoll's re-decision path).
+        KART.LH.RemoveHistoryForRoll(rollID)
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab

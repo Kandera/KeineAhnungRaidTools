@@ -783,6 +783,24 @@ local function TrimHistory()
     end
 end
 
+-- Drops rollID's history entry, if it has one. Used when an award is revoked ("No Winner", or a
+-- "/kart add" re-decision of an already-awarded item): the item then has no winner, so leaving the
+-- old attribution in the log would credit someone who never received it — and since the re-decision
+-- gets a fresh rollID, the dedupe in LogHistory/HandleHistoryEntry (which matches on rollID) can't
+-- collapse the two entries later. Runs on every client, so all logs stay identical: the revoker
+-- calls it locally, everyone else through Trade.HandleResult's "NONE" branch.
+function LH.RemoveHistoryForRoll(rollID)
+    if not rollID or not KART_LootHistory then return end
+    local changed = false
+    for i = #KART_LootHistory, 1, -1 do
+        if KART_LootHistory[i].rollID == rollID then
+            table.remove(KART_LootHistory, i)
+            changed = true
+        end
+    end
+    if changed and LH.historyWindow and LH.historyWindow:IsShown() then LH.Refresh() end
+end
+
 function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()

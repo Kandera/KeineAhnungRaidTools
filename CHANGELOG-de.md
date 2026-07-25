@@ -15,7 +15,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Buff-Checker meldet jetzt auch veraltete Verzauberungen**, nicht nur fehlende — der Tooltip nennt den Slot mit der falschen. Runenschmieden von Todesrittern gilt als korrekt.
 - **Die Vantus-Rune wird jetzt am Zauber erkannt**, nicht am Buff-Namen.
 - **Öl vom falschen Rang wird jetzt als falsch angezeigt**, statt als gut zu gelten — Schleifsteine gelten als gut, und Schamanen-Imbues, Schurken-Gifte und Paladin-Waffen werden nicht mehr angemahnt.
-- **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf.
+- **`/kart add <Item-Link>` gibt ein Item zur Entscheidung an Loot Council zurück**, ohne echten Lootwurf. Ein bereits vergebenes Item wird dabei zuerst wieder freigegeben.
 - **Klick auf einen Namen in der Trade-Erinnerung zielt auf die Person und öffnet den Handel** (mit Reichweitenprüfung).
 - **Ein neues Erinnerungsfenster zeigt dir, wenn du noch den Lootmaster für ein gewonnenes Item traden musst**, mit demselben Ein-Klick-Handel.
 - **Der Abstimmungs-Timer kann jetzt auf bis zu 3 Minuten eingestellt werden**, vorher 1 Minute.
@@ -39,6 +39,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Der Buff-Checker prüft jetzt die Verzauberung der Schildhand** — nur bei einer zweiten Waffe, Schilde und Zauberer-Schildhände nehmen keine.
 - **Ein Buff, in dessen Namen bloß „Öl" vorkommt, löst keine falsche Öl-Warnung mehr aus.**
+- **Items aus `/kart add` würfeln jetzt wie ein normaler Drop** — die Wurf-Spalte im Council blieb für sie leer.
+- **„Kein Gewinner" entfernt das Item jetzt auch aus der Loot-Historie**, statt es dem widerrufenen Gewinner gutzuschreiben.
 - **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
 - **Ein Reload des Raidleiters mitten im Raid stoppt nicht mehr die Vote-Fenster des Raids**, während weiter Items gewonnen werden.
