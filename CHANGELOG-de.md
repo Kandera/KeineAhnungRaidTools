@@ -19,6 +19,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
 - **Mounts, Pets, Spielzeuge, Housing-Items und Bind-on-Equip-Drops laufen nie über den Loot Council** — sie werden normal ausgewürfelt und Auto-Pass lässt sie in Ruhe.
 - **Der Lootmaster steuert den kompletten Loot-Ablauf** — Session, Rolls und Vergaben. Der Raidleiter springt nur ein, solange kein Lootmaster gesetzt ist.
+- **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.
 
 ### Behoben
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
@@ -29,7 +30,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Lootmaster muss nicht mehr als Councilmitglied eingetragen sein**, um das Council-Panel zu bekommen und dass seine Vergaben zählen.
 - **Ein Mount, dessen Daten noch nicht geladen sind, rutscht nicht mehr in den Loot Council.**
 - **Das Council-Panel warnt in deiner eigenen Zeile nicht mehr, dass dir KART fehlt.**
-- **Der Raidleiter folgt jetzt den raid-weiten Einstellungen des Lootmasters**, statt still seine eigenen zu nutzen.
 - **Ein entschiedenes Item behält seinen Council-Tab auf jedem Client**, nicht nur bei dem, der zugewiesen hat.
 - **Vote-Notizen und Officer-Notizen können keine Farbcodes oder Links mehr** in fremde Tooltips schmuggeln.
 - **Das Council-Panel ruckelt nicht mehr, während Loot verteilt wird.**
@@ -40,42 +40,36 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Handels-Timer entspricht jetzt Blizzards 4-Stunden-Fenster** und läuft auch offline weiter.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
 - **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**
-- **Das Zurücknehmen eines Gewinners löscht die Handels-Erinnerung jetzt auch beim Zurücknehmenden.**
+- **Das Zurücknehmen eines Gewinners löscht die Handels-Erinnerung überall** — auch beim Zurücknehmenden selbst.
 - **Der Loot-Zustand eines Raids wird nicht mehr** in den nächsten Raid oder die nächste Sitzung übernommen.
 - **Der Loot-Verlauf-Button unten im Loot-Council-Tab ist wieder erreichbar.**
 - **Das Minimieren des Council-Panels lässt es nicht mehr über den Bildschirm springen.**
-- **Das Schließen eines Council-Tabs öffnet das geschlossene Abstimmungsfenster nicht mehr erneut.**
+- **Das Schließen eines Council-Tabs öffnet das Abstimmungsfenster nicht mehr erneut** und hinterlässt dort auch keinen hängenden Eintrag.
 - **Die Buff-Checker-Vorschau verschwindet nicht mehr**, während du die Regler bedienst.
 - **Die Fenster-Deckkraft setzt sich nicht mehr zurück**, wenn du das Fenster erneut öffnest.
 - **Die Raidlead-Leiste erscheint nach einem Reload nicht mehr mitten im Kampf.**
 - **Ein Profilwechsel wendet jetzt die Auto-Kampflog-Einstellungen an.**
-- **Ein Bosslisten-Import ersetzt jetzt die alte Liste**, statt sie zu ergänzen.
+- **Ein Bosslisten-Import dupliziert die Liste nicht mehr** — weder beim erneuten Import noch nach dem Login.
 - **Zurücksetzen fragt jetzt nach**, bevor alle Einstellungen gelöscht werden.
 - **Würfe gehen nicht mehr verloren** bei Spielern, die für das Item nicht berechtigt waren.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Daten können nicht mehr von Spielern außerhalb deiner Gruppe abgefragt oder gefälscht werden.**
 - **Die Bossliste folgt jetzt dem aktiven Profil**, statt sich aufzustapeln, und ein Reset überlebt den Reload.
 - **Leere Sockel nennen jetzt den richtigen Slot** — inklusive Handschuhe, Gürtel, Schmuck und Umhang.
-- **Das Zurücknehmen eines Gewinners löscht jetzt auch die Handels-Erinnerungen** bei allen.
 - **Ein minimiertes Council-Panel bleibt minimiert**, während Stimmen eingehen.
 - **Das Auto-Kampflog läuft nach einem Reload im Raid nicht mehr endlos weiter.**
 - **Tastenbelegungen der Raidlead-Leiste werden freigegeben**, wenn die Leiste versteckt oder deaktiviert ist.
-- **Buff-Check und Raidlead-Leiste können nicht mehr außerhalb des Bildschirms landen.**
-- **Das Schließen eines Council-Tabs hinterlässt keinen hängenden Eintrag mehr** im Abstimmungsfenster.
+- **Außerhalb des Bildschirms gespeicherte Fenster kommen wieder zurück** — Buff-Check, Raidlead-Leiste und die Council-Fenster.
 - **Der Loot-Verlauf wird nicht mehr an Spieler außerhalb deiner Gruppe gesendet.**
 - **Officer-Notiz-Tooltips erscheinen wieder beim Überfahren.**
 - **"Kein Gewinner" leert das Item jetzt beim gesamten Council**, nicht nur beim Klickenden.
-- **Manuelle Loot-Rolls gehen nicht mehr gelegentlich verloren**, kurz nachdem jemand dem Raid beitritt.
+- **Manuelle Rolls und Loot-Ergebnisse gehen nicht mehr gelegentlich verloren**, kurz nachdem jemand dem Raid beitritt.
 - **Der Ausrüstungsvergleich bricht nicht mehr** bei sehr langen Item-Links.
 - **Das Auto-Kampflog stoppt kein Log mehr, das du selbst gestartet hast.**
 - **Lange Namen mit Umlauten werden im Buff-Check nicht mehr kaputt dargestellt.**
-- **Ein außerhalb des Bildschirms gespeichertes Council-Fenster wird jetzt wieder sichtbar zurückgesetzt.**
 - **Entfernen-für-Boss riskiert nicht mehr, dich selbst aus dem Raid zu werfen.**
 - **Eine volle Boss-Gruppe solo einzuladen wandelt jetzt in einen Raid um**, damit jede Einladung ankommt.
-- **Die Boss-Liste dupliziert sich nicht mehr** nach einem Profilwechsel.
-- **Der "Rang"-Header im Council-Panel bleibt nicht mehr übrig**, wenn das Panel minimiert ist.
 - **Droptimizer-Gewinne werden jetzt auch für Spieler auf mehrwortigen oder Apostroph-Realms angezeigt.**
 - **Pull-Timer- und Buff-Check-Tastenbelegungen lösen jetzt zuverlässig aus.**
-- **Das Loot-Ergebnis eines Council-Mitglieds geht nicht mehr gelegentlich verloren**, kurz nachdem es dem Raid wieder beitritt.
 - **Massen-Invite und -Entfernen matchen Namen jetzt korrekt auf deutschen Realms.**
 - **Keine Phantom-"Dir steht ein Item zu"-Erinnerung mehr**, wenn kein Lootmaster gesetzt ist.
 - **Ein sechster eigener Vote-Button zeigt nicht mehr das Pass-Icon.**
@@ -84,13 +78,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Himmelszorn wird auf deutschen Clients jetzt korrekt erkannt.**
 - **Das Abstimmungsfenster zeigt kein leeres Badge mehr**, wenn der Raidleiter die Vote-Buttons nach deiner Stimme kürzt.
 - **Profile übernehmen jetzt neuere Standardeinstellungen** beim Laden.
-- **Minimap-Tooltip und Droptimizer-Sync-Zeit folgen jetzt deiner Sprache.**
 - **Login-Fehler behoben** für Charaktere, die den Loot-Council-Schriftgrößen-Regler nie benutzt haben.
 - **Haltbarkeitsdaten laden jetzt automatisch beim Ready-Check.**
-- **"Spieler ist nicht bereit"-Chatmeldungen nutzen jetzt deine Sprache.**
 - **Standardwerte-Reset setzt jetzt alles zurück**, inklusive Fensterpositionen und Tastenbelegung.
 - **Zuweisungs-Menü und Ausrüstungs-Tooltip zeigen jetzt Nicknames**, wenn diese Einstellung aktiv ist, statt immer den Kurznamen.
-- **Der Lootmaster gewinnt nicht mehr automatisch Trash, Sammelobjekte oder BoE-Items** — nur noch Council-relevante BoP-Gegenstände.
 - **Loot Council ist jetzt ausdrücklich Raid-only.**
 - **Session-, Roll-Start- und History-Sync-Nachrichten werden jetzt auf ihren Absender geprüft.**
 - **Auto-Trade für Cross-Realm-Gewinner repariert.**
@@ -108,9 +99,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Klick auf den Trade-Partner im Kampf meldet nicht mehr fälschlich "außer Reichweite".**
 - **Beide Kopien eines doppelten Drops werden jetzt in den Trade gelegt.**
 - **Spieler werden nur noch als veraltet markiert, wenn sie wirklich eine ältere Version haben.**
-- **Himmelsfurie wird jetzt auf deutschen Clients erkannt.**
 - **Die Verlaufssuche findet jetzt auch Items, deren Name mit einem Umlaut beginnt.**
-- **Der Import einer Boss-Liste dupliziert nach dem Login nicht mehr jeden Boss.**
 - **Buff-Check-Meldungen listen jetzt die richtigen fehlenden Spieler.**
 - **Raid-Assistenten können jetzt Spieler für einen Boss entfernen** — wie beim Einladen.
 - **Uninvite trifft jetzt den richtigen Charakter**, wenn zwei über Realms hinweg denselben Namen haben.
@@ -125,9 +114,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Council-Straw-Poll-Balken füllt sich jetzt korrekt.**
 - **Einstellungs-Regler zeigen ihren Wert jetzt sofort** statt leer zu bleiben, bis man sie einmal zieht.
 - **Das Laden eines Profils übernimmt jetzt dessen gespeicherte Sprache.**
-
-### Geändert
-- **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.
 
 ## [2.8.0] - 2026-07-23
 ### Hinzugefügt

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
 - **Mounts, pets, toys, housing items and Bind-on-Equip drops never go through Loot Council** — they are rolled the normal way and Auto-Pass leaves them alone.
 - **The lootmaster now runs the whole loot flow** — session, rolls and awards. The raid leader only stands in while no lootmaster is set.
+- **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.
 
 ### Fixed
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.
@@ -29,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The lootmaster no longer has to be listed as a council member** to get the council panel and have their awards count.
 - **A mount whose data hasn't loaded yet no longer slips into Loot Council.**
 - **The council panel no longer warns that you are missing KART** on your own row.
-- **The raid leader now follows the lootmaster's raid-wide settings** instead of quietly using their own.
 - **A decided item keeps its council tab on every client**, not just on the one who assigned it.
 - **Vote notes and officer notes can no longer smuggle colour codes or links** into other people's tooltips.
 - **The council panel no longer stutters while loot is being handled.**
@@ -40,42 +40,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The trade timer now matches Blizzard's 4-hour window** and keeps counting while you're offline.
 - **Gear, item level and ready-check sync works again for everyone on your own realm.**
 - **A late raid join no longer wipes the whole raid's in-progress loot rolls.**
-- **Revoking a winner now clears the trade reminder for whoever revoked it too.**
+- **Revoking a winner now clears the trade reminder everywhere**, including for whoever revoked it.
 - **A raid's loot state no longer carries over** into the next raid or the next session.
 - **The Loot History button at the bottom of the Loot Council tab is reachable again.**
 - **Minimizing the council panel no longer makes it jump** across the screen.
-- **Closing a council tab no longer re-opens the vote window** you had closed.
+- **Closing a council tab no longer re-opens the vote window** or leaves a stuck entry in it.
 - **The Buff-Checker settings preview no longer disappears** while you adjust the sliders.
 - **Window opacity no longer resets itself** when you reopen the window.
 - **The Raidlead bar no longer appears mid-fight** after a reload.
 - **Switching profiles now applies the auto combat log settings.**
-- **Importing a boss list now replaces the old one** instead of stacking onto it.
+- **Importing a boss list no longer duplicates it** — neither on re-import nor after logging in.
 - **Reset now asks for confirmation** before clearing all settings.
 - **Rolls are no longer lost** for raiders who weren't eligible for the item.
 - **Gear, item level and ready-check data can no longer be requested or spoofed** by players outside your group.
 - **The boss list now follows the active profile** instead of stacking up, and a reset survives a reload.
 - **Empty gem sockets now name the right slot** — gloves, belt, trinkets and cloak included.
-- **Revoking a winner now also clears the trade reminders** on everyone.
 - **A minimized council panel stays minimized** while votes come in.
 - **Auto combat log no longer keeps running** after a reload mid-raid.
 - **Raidlead bar keybinds are released** when the bar is hidden or disabled.
-- **Buff-Check and Raidlead bar can no longer end up off-screen.**
-- **Closing a council tab no longer leaves a stuck entry** in the vote window.
+- **Windows saved off-screen now come back on-screen** — Buff-Check, Raidlead bar and the council windows.
 - **Loot history is no longer sent to players outside your group.**
 - **Officer note tooltips now show on hover again.**
 - **"No winner" now clears the item for the whole council**, not just whoever clicked it.
-- **Manual loot rolls are no longer occasionally dropped** right after someone joins the raid.
+- **Manual rolls and loot results are no longer occasionally dropped** right after someone joins the raid.
 - **Equipped-item comparison no longer breaks** for very long item links.
 - **Auto combat log no longer stops a log you started yourself.**
 - **Long names with umlauts no longer render broken** in the buff check.
-- **A council window saved off-screen now resets on-screen.**
 - **Remove-for-boss no longer risks kicking yourself** from a raid.
 - **Bulk-inviting a full boss roster while solo now converts to a raid** so every invite lands.
-- **The boss list no longer duplicates** after switching profiles.
-- **The council panel's Rank header no longer lingers** when the panel is minimized.
 - **Droptimizer gains now show for players on multi-word or apostrophe realms.**
 - **Pull-timer and buff-check keybinds now trigger reliably.**
-- **A council member's loot result is no longer occasionally dropped** right after they rejoin the raid.
 - **Bulk invite and remove now match names correctly on German realms.**
 - **No more phantom "you're owed an item" reminder** when no lootmaster is set.
 - **A sixth custom vote button no longer shows the Pass icon.**
@@ -84,13 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Skyfury now detects correctly on German clients.**
 - **Vote window no longer shows a blank badge** when the leader shortens the vote buttons after you've voted.
 - **Profiles now keep newer default settings** when loaded.
-- **Minimap tooltip and Droptimizer sync time now follow your language.**
 - **Fixed a login error** for characters that never touched the Loot Council font-size slider.
 - **Durability data now loads automatically on ready checks.**
-- **"Player is not ready" chat messages now use your language.**
 - **Reset Defaults now resets everything**, including window positions and keybinds.
 - **Assign menu and equip tooltip now show nicknames** when that setting is on, instead of always the short name.
-- **The lootmaster no longer force-wins trash, collectibles or BoE items** — only council-relevant BoP gear.
 - **Loot Council is now explicitly raid-only.**
 - **Session, roll-start and history-sync messages are now sender-verified.**
 - **Fixed auto-trade for cross-realm winners.**
@@ -108,9 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clicking a trade partner during combat no longer wrongly reports "out of range".**
 - **Both copies of a duplicated drop are now auto-placed into the trade.**
 - **Peers are only flagged as outdated when actually on an older version.**
-- **Skyfury is now detected on German clients.**
 - **History search now finds items whose names start with an umlaut.**
-- **Importing a boss list no longer duplicates every boss after logging in.**
 - **Buff-check reports now list the correct missing players.**
 - **Raid assistants can now remove players for a boss**, matching invite.
 - **Uninvite now targets the correct character** when two share a name across realms.
@@ -125,9 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council straw-poll bar now fills correctly.**
 - **Settings sliders now show their value right away** instead of staying blank until first dragged.
 - **Loading a profile now applies its saved language.**
-
-### Changed
-- **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.
 
 ## [2.8.0] - 2026-07-23
 ### Added
