@@ -39,6 +39,16 @@ local function SenderKey(ctx)
     return (KART.Identity.ResolvePlayer(ctx.sender))
 end
 
+-- Per-equipLoc cooldown for answering REQ_EQUIP. Council.RequestEquipForRoll dedups per REQUESTING
+-- client, so a 5-member council sends five identical requests for the same slot and we used to
+-- broadcast five identical replies to the whole raid — councilSize * raidSize messages per item,
+-- each one waking every open council panel. The answer is a raid-wide broadcast, so the first reply
+-- already served every requester; anything arriving inside this window is a duplicate. Well below a
+-- vote window, and our equipped item can't meaningfully change mid-loot anyway.
+local EQUIP_ANSWER_COOLDOWN = 5
+local lastEquipAnswer = {} -- [equipLoc] = GetTime() of our last reply; only written on an actual send,
+                           -- so a bogus token from an unknown sender can't grow this table
+
 local function HandleVersionMessage(payload, ctx, isAnnounce)
     local ver, lcFlag = payload:match("^([^:]+):?([01]?)$")
     ver = ver or payload
@@ -54,8 +64,9 @@ local function HandleVersionMessage(payload, ctx, isAnnounce)
         KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
         KART.PlayerLCEnabled[ctx.shortName] = (lcFlag == "1")
     end
+    -- Throttled: a raid join answers one REQ_VERSION with one reply per raider, all at once.
     if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-        KART.LC.Council.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilRowsThrottled()
     end
 
     if not KART.UpdateWarned and ver ~= KART.Version then
@@ -147,6 +158,8 @@ local PREFIX_HANDLERS = {
         -- for a raider they can't inspect locally. Modeled on REQ_GEAR, but carries a payload so it
         -- lives here in PREFIX_HANDLERS (unlike the payload-less REQ_OIL/REQ_ILVL/REQ_GEAR above).
         if not IsInGroup() then return end
+        local now = GetTime()
+        if now - (lastEquipAnswer[payload] or -EQUIP_ANSWER_COOLDOWN) < EQUIP_ANSWER_COOLDOWN then return end
         local link = KART.LC and KART.LC.Council and KART.LC.Council.GetOwnEquippedLink(payload)
         if link then
             local msg = "EQUIP:" .. payload .. ":" .. link
@@ -161,6 +174,7 @@ local PREFIX_HANDLERS = {
             -- than let SendAddonMessage truncate the link into something the receiver would cache as
             -- garbage. Missing data renders as "no comparison"; corrupt data renders as a wrong one.
             if #msg > 255 then return end
+            lastEquipAnswer[payload] = now
             Sync.Send(msg)
         end
     end },
@@ -196,14 +210,16 @@ local PREFIX_HANDLERS = {
                         if slotCache and slotCache[equipLoc] == itemStr then
                             slotCache[equipLoc] = full
                             if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-                                KART.LC.Council.RefreshCouncilRows()
+                                KART.LC.Council.RefreshCouncilRowsThrottled()
                             end
                         end
                     end)
                 end
             end
+            -- Throttled: one item can draw councilSize * raidSize of these (see EQUIP_ANSWER_COOLDOWN
+            -- and Council.RefreshCouncilRowsThrottled), and they all land within the same second.
             if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-                KART.LC.Council.RefreshCouncilRows()
+                KART.LC.Council.RefreshCouncilRowsThrottled()
             end
         end
     end },

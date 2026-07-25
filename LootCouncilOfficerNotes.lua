@@ -16,9 +16,11 @@ local LC = KART.LC
 function OfficerNotes.SetOfficerNote(playerKey, noteText)
     -- Strip colons: they're the LC_ONOTE payload separator, so a note containing one would shift
     -- the receiver's capture. Same colon-safety rule the synced council/lootmaster fields follow
-    -- (LootCouncilSettings.StripColons). Stripped before both the local store and the broadcast so
-    -- every client keeps the identical note text.
-    noteText = (KART.TrimString(noteText or ""):gsub(":", ""))
+    -- (LootCouncilSettings.StripColons). Pipes go too: this note is rendered raw into the council
+    -- row's tooltip AND persisted in KART_LCOfficerNotes forever, so a "|c"/"|H"/"|T" escape would
+    -- inject coloured text, a fake hyperlink or a texture into every council member's UI for good.
+    -- Both stripped before the local store and the broadcast, so every client keeps identical text.
+    noteText = (KART.TrimString(noteText or ""):gsub("[:|]", ""))
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
     LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     KART.LC.Council.RefreshCouncilRows()
@@ -28,6 +30,10 @@ function OfficerNotes.HandleOfficerNote(payload, senderKey)
     if not LC.IsSenderCouncil(senderKey) then return end
     local subjectKey, noteText = payload:match("^([^:]+):(.*)$")
     if not subjectKey then return end
+    -- Escape pipes even though SetOfficerNote already strips them: this arrives over the wire, so a
+    -- client that didn't strip must not be able to write escape sequences into a SavedVariable that
+    -- is rendered raw in the council tooltip from then on.
+    noteText = (noteText:gsub("|", "||"))
     KART_LCOfficerNotes[subjectKey] = (noteText ~= "") and noteText or nil
 
     if LC.councilPanel and LC.councilPanel:IsShown() then

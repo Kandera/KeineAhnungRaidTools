@@ -221,7 +221,12 @@ end
 function Vote.CastVote(rollID, buttonIdx, noteBox)
     if LC.votedByMe[rollID] then return end
     LC.votedByMe[rollID] = buttonIdx
-    local note = KART.TrimString(noteBox and noteBox:GetText() or "")
+    -- Strip pipes at input, the same way LootCouncilSettings strips colons from the synced fields:
+    -- this note is rendered raw into every council member's tooltip, and "|c"/"|H"/"|T" escapes would
+    -- otherwise let a raider inject coloured text, fake hyperlinks or textures there. Stripping (not
+    -- escaping) at the source keeps the sender's own copy byte-identical to what the receivers store
+    -- — HandleVote escapes on top of this, since a hostile client won't have stripped anything.
+    local note = (KART.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
     LC.votedNoteByMe[rollID] = note
 
     -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
@@ -820,7 +825,11 @@ function Vote.HandleVote(payload, senderKey)
     -- vote never arrives before this is set.
     if not LC.rollItems[rollID] then return end
 
-    local note = payload:match("^%d+:%d+:(.*)") or ""
+    -- Free text from another client, rendered raw into the council row's note tooltip. Double the
+    -- pipes so |c colour codes, |H hyperlinks and |T textures can't be injected there (same guard
+    -- RC_REASON and LC_HIST_ENTRY already apply on their own receive side). Vote.CastVote strips
+    -- them at input, so a well-behaved sender never has any left for this to escape.
+    local note = ((payload:match("^%d+:%d+:(.*)") or ""):gsub("|", "||"))
 
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][senderKey] = {idx = idx, note = note}

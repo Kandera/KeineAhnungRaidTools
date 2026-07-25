@@ -406,8 +406,13 @@ end
 -- +70 over the original 555/520 (panel/scrollChild) for the guild-rank column inserted right
 -- after Name (see hRank/row.rankText below) — every column from iLvl rightward is shifted by
 -- this same DELTA so all existing gaps between columns stay exactly as they were.
--- Confirmed because it is destructive and raid-wide: every client drops its tabs, votes and rolls.
--- Registered once at file scope rather than per panel build (the panel is created lazily).
+local COUNCIL_PANEL_WIDTH   = 625
+local COUNCIL_PANEL_HEIGHT  = 462
+local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
+
+-- Confirm dialog for the "Close Session" button below, because it is destructive and raid-wide:
+-- every client drops its tabs, votes and rolls. Registered once at file scope rather than per panel
+-- build (the panel is created lazily).
 KART.RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
     text = "End the Loot Council session?", -- overwritten with KART.L.LC_CLOSE_SESSION_CONFIRM before each Show
     button1 = YES,
@@ -434,10 +439,6 @@ function Council.UpdateSessionButton()
         f.btnCloseSession.text:SetTextColor(0.4, 0.4, 0.4)
     end
 end
-
-local COUNCIL_PANEL_WIDTH   = 625
-local COUNCIL_PANEL_HEIGHT  = 462
-local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
 
 function Council.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
@@ -793,6 +794,28 @@ end
 -- unless some other event happens to trigger a refresh in the meantime. Kick off an async load
 -- once per rollID and re-render when it completes, instead of depending on luck.
 LC.pendingItemLoads = LC.pendingItemLoads or {}
+
+-- Coalesces the rebuild storm an incoming message burst causes. RefreshCouncilRows is expensive
+-- (per member: ResolvePlayer + a GetNickname pcall into NSRT + GetGuildInfo + GetItemInfo, then
+-- ApplyFontSize over every row), and the equipped-item sync multiplies it: RequestEquipForRoll
+-- dedups per REQUESTING client, so each council member sends their own REQ_EQUIP and every raider
+-- answers each one with a separate raid-wide EQUIP broadcast — councilSize * raidSize messages per
+-- item, each of which triggered a full rebuild on every open panel.
+--
+-- Trailing edge, same shape as KART.UpdateBuffCheckThrottled, but a much shorter window so it still
+-- reads as instant. Only the high-volume NETWORK paths use it; local UI actions (a vote click, a tab
+-- switch) keep calling RefreshCouncilRows directly so they stay immediate.
+local rowsRefreshPending = false
+function Council.RefreshCouncilRowsThrottled()
+    if rowsRefreshPending then return end
+    rowsRefreshPending = true
+    C_Timer.After(0.3, function()
+        rowsRefreshPending = false
+        if LC.councilPanel and LC.councilPanel:IsShown() then
+            Council.RefreshCouncilRows()
+        end
+    end)
+end
 
 function Council.RefreshCouncilRows()
     local panel = LC.councilPanel

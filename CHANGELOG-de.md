@@ -17,8 +17,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Handels-Erinnerungen und ausstehende Items überleben jetzt einen Reload oder Relog.**
 - **Neuer "Session beenden"-Button im Council-Panel** beendet die Session und räumt alle offenen Items auf einmal ab. Nur für den Lootmaster.
 - **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
+- **Mounts, Pets, Spielzeuge, Housing-Items und Bind-on-Equip-Drops laufen nie über den Loot Council** — sie werden normal ausgewürfelt und Auto-Pass lässt sie in Ruhe.
 
 ### Behoben
+- **Der Lootmaster funktioniert wieder, wenn er nicht gleichzeitig Raidleiter ist** — Rolls gewinnen, `/kart add`, Handels-Erinnerungen, Council-Panel und Session beenden waren für ihn alle tot.
+- **Der Raidleiter folgt jetzt den raid-weiten Einstellungen des Lootmasters**, statt still seine eigenen zu nutzen.
+- **Ein entschiedenes Item behält seinen Council-Tab auf jedem Client**, nicht nur bei dem, der zugewiesen hat.
+- **Vote-Notizen und Officer-Notizen können keine Farbcodes oder Links mehr** in fremde Tooltips schmuggeln.
+- **Das Council-Panel ruckelt nicht mehr, während Loot verteilt wird.**
+- **Der "Dir steht noch zu"-Timer startet jetzt beim Drop**, nicht erst bei der Entscheidung des Councils.
+- **Die Box mit den raid-weiten Einstellungen zeigt jetzt korrekt an, ob deine Einstellungen für den Raid gelten.**
 - **Der Handels-Timer entspricht jetzt Blizzards 4-Stunden-Fenster** und läuft auch offline weiter.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
 - **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**

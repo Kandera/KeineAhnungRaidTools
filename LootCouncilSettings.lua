@@ -10,20 +10,25 @@ local LC = KART.LC
 --  Settings Panel  (fills KART.LootCouncilPanel created by MainFrame.lua)
 -- =====================================================================
 
--- Updates the role-status line inside the raid-wide settings box. Called on build, and whenever
--- the group roster changes (leadership can change without a UI interaction).
+-- Updates the role-status line inside the raid-wide settings box. Called on build, whenever the
+-- group roster changes (resolution of the lootmaster entry can change without a UI interaction),
+-- and whenever the lootmaster field itself is edited.
+--
+-- Keys off LC.IsConfigOwner, not UnitIsGroupLeader: raid-wide authority follows the lootmaster entry
+-- (see LC.HandleConfig). The old leader check told the actual lootmaster that their settings don't
+-- count, and told a raid leader who isn't the lootmaster that theirs do — both exactly backwards.
 function LC.UpdateRoleStatusLabel()
     local lbl = KART.LC.RoleStatusLabel
     if not lbl then return end
-    if UnitIsGroupLeader("player") then
-        lbl:SetText(KART.L.LC_ROLE_STATUS_LEADER)
-        lbl:SetTextColor(0.3, 0.9, 0.3)
-    else
-        lbl:SetText(KART.L.LC_ROLE_STATUS_MEMBER)
-        lbl:SetTextColor(0.9, 0.7, 0.2)
-    end
-    -- The leader/member texts wrap to a different number of lines, so the box below needs to
-    -- re-flow too (no-op on the very first call, before layoutRaidBox() has run yet).
+    local isOwner = LC.IsConfigOwner()
+    local text = isOwner and KART.L.LC_ROLE_STATUS_OWNER or KART.L.LC_ROLE_STATUS_MEMBER
+    -- Nothing moved, so skip the re-flow below. Matters because the lootmaster edit box calls this on
+    -- every keystroke, and the status only ever flips on the one keystroke that changes ownership.
+    if lbl:GetText() == text then return end
+    lbl:SetText(text)
+    lbl:SetTextColor(isOwner and 0.3 or 0.9, isOwner and 0.9 or 0.7, isOwner and 0.3 or 0.2)
+    -- The two texts wrap to a different number of lines, so the box below needs to re-flow too
+    -- (no-op on the very first call, before layoutRaidBox() has run yet).
     if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
 end
 
@@ -113,9 +118,11 @@ function LC.BuildSettingsPanel(parent)
     -- to it rather than getting its own settings tab.
 
     -- ================= Raid-wide settings box =================
-    -- Everything in here only takes effect for the raid when YOU are the raid leader; otherwise
-    -- the actual raid leader's values are used automatically. Visually set apart on purpose so
-    -- nobody mistakes their own tweaks here for something that affects the current raid.
+    -- Everything in here only takes effect for the raid when YOU are the one named in the Lootmaster
+    -- field below (LC.IsConfigOwner) — that person owns the config and is the only one whose client
+    -- broadcasts it; everyone else, raid leader included, automatically uses their values. Visually
+    -- set apart on purpose so nobody mistakes their own tweaks here for something that affects the
+    -- current raid.
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     raidBox:SetPoint("TOPLEFT", prefsCard, "BOTTOMLEFT", 0, -20)
     raidBox:SetWidth(500) -- height is set by layoutRaidBox() from the measured content
@@ -265,6 +272,10 @@ function LC.BuildSettingsPanel(parent)
     ebL:SetScript("OnTextChanged", function(self)
         if StripColons(self) then return end
         KART_Settings.lcLootmaster = self:GetText()
+        -- This field decides config ownership (LC.IsConfigOwner), so the role-status line above can
+        -- flip on the very keystroke that names/unnames us — it would otherwise stay stale until the
+        -- next roster change.
+        LC.UpdateRoleStatusLabel()
         LC.BroadcastRaidConfigThrottled()
     end)
 

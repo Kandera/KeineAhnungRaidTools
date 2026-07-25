@@ -17,10 +17,14 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
-LC.CouncilNamesTable    = {}  -- resolved KART.Identity key -> true. Populated ONLY from the raid leader's
-                               -- broadcast (LC_CONFIG) — never from local settings — so a regular
-                               -- raider can't self-promote by editing their own council-member list.
-LC.raidConfig           = {}  -- authoritative config received from the raid leader: minQuality, buttonLabels, councilMembers
+LC.CouncilNamesTable    = {}  -- resolved KART.Identity key -> true. Written by exactly two paths:
+                               -- LC.HandleConfig (a received LC_CONFIG) and LC.ApplyOwnConfig (our own
+                               -- settings, but only while WE own the config — see LC.IsConfigOwner).
+                               -- Never from a non-owner's local settings, so a regular raider can't
+                               -- self-promote by editing their own council-member list.
+LC.raidConfig           = {}  -- the authoritative config: minQuality, buttonLabels, rollsEnabled,
+                               -- lootmaster, councilMembers. Same two writers as CouncilNamesTable above;
+                               -- raidConfig.fromSelf marks the ApplyOwnConfig case (see there).
 
 -- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel
 -- handling of multiple simultaneous rolls can actually be tested (multiple items dropping at
@@ -120,13 +124,19 @@ end
 --  Helpers
 -- =====================================================================
 
--- Vote-button labels/colors are authoritative from the raid leader (LC.raidConfig), so every
--- raider's vote index maps to the SAME label in everyone's UI. The leader always uses their own
+-- Vote-button labels/colors are authoritative from the config owner (LC.raidConfig), so every
+-- raider's vote index maps to the SAME label in everyone's UI. The owner always uses their own
 -- local setting directly (they ARE the source of truth); everyone else uses the synced value,
 -- falling back to their own local setting only when solo / not yet synced (e.g. testing).
+--
+-- Gated on LC.IsConfigOwner, NOT UnitIsGroupLeader: config ownership follows the lootmaster entry
+-- (see LC.HandleConfig). A raid leader who isn't the lootmaster receives the owner's LC_CONFIG like
+-- everyone else and must honour it — the old leader check made them silently keep their own
+-- (usually default) labels, quality threshold and rolls flag while the rest of the raid used the
+-- owner's, and made LC_ACTIVE from the lootmaster get rejected on the leader's client.
 function LC.GetButtonConfig()
     local raw
-    if UnitIsGroupLeader("player") or not LC.raidConfig.buttonLabels or LC.raidConfig.buttonLabels == "" then
+    if LC.IsConfigOwner() or not LC.raidConfig.buttonLabels or LC.raidConfig.buttonLabels == "" then
         raw = (KART_Settings and KART_Settings.lcButtonLabels) or KART.L.LC_DEFAULT_BUTTONS
     else
         raw = LC.raidConfig.buttonLabels
@@ -195,7 +205,7 @@ end
 -- Minimum item quality is authoritative from the raid leader, same reasoning as GetButtonConfig.
 -- NOTE: this does NOT gate Auto-Pass (see OnStartLootRoll) — that stays a personal preference.
 function LC.GetRaidMinQuality()
-    if UnitIsGroupLeader("player") then
+    if LC.IsConfigOwner() then
         return KART_Settings.lcMinQuality or 4
     end
     return LC.raidConfig.minQuality or 4
@@ -275,7 +285,7 @@ function LC.ResolveConfigName(text)
 end
 
 function LC.GetLootmaster()
-    if UnitIsGroupLeader("player") then
+    if LC.IsConfigOwner() then
         return LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
     end
     return LC.raidConfig.lootmaster or ""
@@ -296,10 +306,10 @@ end
 -- same authority reasoning as GetButtonConfig/GetRaidMinQuality.
 function LC.GetRollsEnabled()
     -- Same fallback shape as GetButtonConfig: trust our own local setting when solo/not yet
-    -- synced too, not just when we're actually the leader — otherwise UnitIsGroupLeader("player")
-    -- being false while ungrouped (e.g. solo testing) would always read as "rolls off", no
-    -- matter what the checkbox says, since LC.raidConfig.rollsEnabled never gets synced there.
-    if UnitIsGroupLeader("player") or LC.raidConfig.rollsEnabled == nil then
+    -- synced too, not just when we actually own the config — otherwise LC.IsConfigOwner() being
+    -- false while ungrouped (e.g. solo testing) would always read as "rolls off", no matter what
+    -- the checkbox says, since LC.raidConfig.rollsEnabled never gets synced there.
+    if LC.IsConfigOwner() or LC.raidConfig.rollsEnabled == nil then
         return KART_Settings.lcRollsEnabled == true
     end
     return LC.raidConfig.rollsEnabled == true
@@ -341,8 +351,48 @@ function LC.IsConfigOwner()
     return LC.IsMe(LC.ResolveConfigName(KART_Settings.lcLootmaster))
 end
 
+-- Applies OUR OWN settings as the raid config, locally. SendAddonMessage never echoes back to its
+-- own sender, so the config owner is the one client that never receives their own LC_CONFIG — which
+-- left LC.raidConfig and LC.CouncilNamesTable empty on exactly the person the config is about. On a
+-- lootmaster who isn't also the raid leader that broke their entire role: GetLootmaster() read "",
+-- so they never force-won a roll (they auto-passed instead), "/kart add" refused, no pending-trade
+-- reminder was created for the person actually holding the items, and Close Session stayed greyed
+-- out — while an empty CouncilNamesTable made IsCouncil() false (no council panel at all) and made
+-- IsSenderCouncil reject LC_RESULT/LC_ONOTE from every council member except the raid leader.
+--
+-- Mirrors LC.HandleConfig's parsing exactly, so both write paths produce identical state.
+function LC.ApplyOwnConfig()
+    if not LC.IsConfigOwner() then
+        -- We owned it and just handed it over (the lootmaster field now names someone else, e.g.
+        -- after a Sync-button handover): drop our own copy instead of keeping ourselves listed as
+        -- lootmaster until the new owner happens to broadcast. A config we RECEIVED is never touched
+        -- here — that's what the fromSelf marker distinguishes.
+        if LC.raidConfig.fromSelf then
+            wipe(LC.raidConfig)
+            LC.CouncilNamesTable = {}
+        end
+        return
+    end
+
+    LC.raidConfig.minQuality     = KART_Settings.lcMinQuality or 4
+    LC.raidConfig.buttonLabels   = KART_Settings.lcButtonLabels or ""
+    LC.raidConfig.rollsEnabled   = KART_Settings.lcRollsEnabled == true
+    LC.raidConfig.lootmaster     = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
+    LC.raidConfig.councilMembers = KART_Settings.lcCouncilMembers or ""
+    LC.raidConfig.fromSelf       = true
+
+    LC.CouncilNamesTable = {}
+    for _, name in ipairs(KART.SplitString(LC.raidConfig.councilMembers, ";")) do
+        local key = LC.ResolveConfigName(name)
+        if key then LC.CouncilNamesTable[key] = true end
+    end
+end
+
 -- target (optional): whisper the config to one player instead of broadcasting (see LC.SendLC).
 function LC.BroadcastRaidConfig(target)
+    -- Apply it to ourselves first, and outside the IsInGroup guard below: our own state has to be
+    -- right even while solo (test mode) — see LC.ApplyOwnConfig, which self-guards on ownership.
+    LC.ApplyOwnConfig()
     -- Config authority follows the lootmaster entry, NOT raid lead — see LC.HandleConfig. A promoted
     -- assistant with empty settings would otherwise push those over the whole raid's config.
     if not (IsInGroup() and LC.IsConfigOwner()) then return end
@@ -399,6 +449,7 @@ function LC.HandleConfig(payload, senderKey)
     LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
+    LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
 
     LC.CouncilNamesTable = {}
     for _, name in ipairs(KART.SplitString(council, ";")) do
@@ -426,6 +477,12 @@ end
 -- first parsed. Promotes them to a real key in place; still-unresolvable entries are left alone
 -- and retried again next time the roster changes.
 function LC.RetryPendingResolutions()
+    -- Our own config first: LC.IsConfigOwner needs our own lootmaster entry to resolve, which it
+    -- can't while solo on a cold cache — so the ApplyOwnConfig at login may have no-opped and left
+    -- us with no council table at all. Re-running it here rebuilds it the moment the roster makes
+    -- the name resolvable. No-ops for anyone who isn't the owner, so this is free for everyone else.
+    LC.ApplyOwnConfig()
+
     -- Collect first, mutate second — Lua's pairs()/next() traversal is undefined if a new key
     -- (not already present) is added to the table mid-loop, which LC.CouncilNamesTable[key] = true
     -- below would otherwise do for every newly-resolved entry.
@@ -880,42 +937,63 @@ function LC.OnStartLootRoll(rollID)
     local _, _, _, quality, bindOnPickUp = GetLootRollItemInfo(rollID)
     local itemLink = GetLootRollItemLink(rollID)
     local classID = LC.IsRealItemLink(itemLink) and select(6, C_Item.GetItemInfoInstant(itemLink))
-    -- Miscellaneous (classID 15: toys, pets, mounts, housing decor): never rarity-gated, since
-    -- it's virtually always Common/Uncommon regardless of how desirable it is.
+    -- Miscellaneous (classID 15): mounts, pets, toys, housing decor.
     local isCollectible = (classID == 15)
-    local councilEngages = isCollectible or not (quality and quality < LC.GetRaidMinQuality())
+
+    -- Two tiers, and the outer one decides whether KART touches this roll AT ALL.
+    --
+    -- STANDING DECISION (maintainer, 2026-07-25): collectibles — mounts, pets, toys, housing items —
+    -- and Bind-on-Equip drops must NEVER enter Loot Council, under any rarity. This is deliberate,
+    -- not an oversight: do not re-flag it, and do not "fix" it by letting the council vote on a mount
+    -- again. Anything that changes which items reach Council has to keep this rule.
+    --
+    -- councilEligible = Bind-on-Pickup, non-collectible gear. Collectibles and anything that isn't
+    -- BoP are deliberately outside the whole addon: Blizzard's own roll window handles them exactly
+    -- as it would without KART — no force-win, no forced pass, and Auto-Pass stays out of it too.
+    -- The lootmaster can't hand out through the BoP trade window what he never physically holds, so
+    -- running Council on those produced a decision nobody could execute (the mount went to whoever
+    -- won Blizzard's roll) plus a trade reminder for an item that was never in his bags. And since
+    -- Auto-Pass is ON by default, force-passing them for every KART user would have handed each
+    -- mount to whichever raider ISN'T running the addon.
+    --
+    -- councilEngages narrows that further by the raid's rarity threshold. Auto-Pass deliberately
+    -- ignores THAT one — a raider's "don't make me click loot windows" preference is their own call,
+    -- not the raid leader's (reviewed; do not re-tie Auto-Pass to min quality).
+    local councilEligible = bindOnPickUp and not isCollectible
+    local councilEngages  = councilEligible and not (quality and quality < LC.GetRaidMinQuality())
 
     local lootmaster = LC.GetLootmaster()
     local isLootmaster = LC.IsMe(lootmaster)
-    if isLootmaster and councilEngages and bindOnPickUp and not isCollectible then
-        -- The lootmaster only needs to physically win items they must later hand out through
-        -- Blizzard's BoP trade window: council-relevant, BoP, non-collectible gear.
+    if isLootmaster and councilEngages then
+        -- The lootmaster physically wins everything Council decides on, so he can hand it over
+        -- through Blizzard's BoP trade window afterwards.
         ForceWinRoll(rollID)
-        -- Blizzard's Bind-on-Pickup trade window starts now, not whenever Council later
-        -- decides a winner — see LC.CheckTradeTimeouts, which measures from this timestamp.
-        -- time() (wall clock), NOT GetTime() (seconds since client start): pending trades are saved
-        -- across sessions now, and GetTime() resets to ~0 on every reload, which would make a
-        -- restored entry look freshly looted.
-        LC.rollLootedAt = LC.rollLootedAt or {}
-        LC.rollLootedAt[rollID] = time()
-    elseif isLootmaster then
-        -- Everything the lootmaster does NOT force-win (collectibles, BoE/non-binding items,
-        -- sub-threshold drops) they ALWAYS pass — deliberately independent of their own
-        -- Auto-Pass setting, so those items cleanly go to the raid's normal rolls instead of
-        -- silently piling up in the lootmaster's bags.
+    elseif isLootmaster and councilEligible then
+        -- Council-eligible but below the rarity threshold: nothing for him to hand out, and it
+        -- shouldn't pile up in his bags either. Always passes, deliberately independent of his own
+        -- Auto-Pass setting.
         RollOnLoot(rollID, 0)
-    elseif KART_Settings.lcAutoPass then
-        -- Auto-Pass is a personal preference and is intentionally independent of the raid's
-        -- min-quality setting (that setting only gates whether Council itself engages).
+    elseif KART_Settings.lcAutoPass and councilEligible then
         RollOnLoot(rollID, 0)
     end
 
-    -- Below the raid-wide minimum rarity (and not a collectible): let Blizzard's own roll UI
-    -- handle it, untouched.
+    -- Not Council's business (collectible, BoE, or below the raid-wide minimum rarity): let
+    -- Blizzard's own roll UI handle it, untouched.
     if not councilEngages then return end
 
     local newItemID = LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or ""
     PurgeStaleRoll(rollID, newItemID)
+
+    -- Blizzard's Bind-on-Pickup trade window opens the moment the item is looted, not whenever
+    -- Council later decides a winner — LC.CheckTradeTimeouts and Trade.RestorePersistedTrades both
+    -- measure from this stamp. Taken on EVERY client, not just the lootmaster's: the winner's own
+    -- "you're owed this" entry (Trade.HandleResult) needs the same clock, and only clients that saw
+    -- the roll start know when that was — it used to fall back to time() at award time there, which
+    -- started the 4-hour countdown minutes late and kept dead entries alive across a reload.
+    -- time() (wall clock), NOT GetTime() (seconds since client start): these stamps are persisted,
+    -- and GetTime() resets to ~0 on every reload, which would make a restored entry look freshly looted.
+    LC.rollLootedAt = LC.rollLootedAt or {}
+    LC.rollLootedAt[rollID] = time()
 
     -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll
     -- above deliberately didn't purge on unresolved data) — clobbering it with "???" would blank a
@@ -1022,6 +1100,13 @@ function LC.HandleStart(payload, senderKey)
     if not rollID then return end
 
     PurgeStaleRoll(rollID, itemID)
+
+    -- Same BoP trade clock as LC.OnStartLootRoll, for clients that never got their own
+    -- START_LOOT_ROLL (dead, out of range, ineligible). LC_START arrives within a fraction of a
+    -- second of the loot, so it's accurate enough for a 4-hour window. Never overwrites a local
+    -- stamp — that one is closer to the truth.
+    LC.rollLootedAt = LC.rollLootedAt or {}
+    LC.rollLootedAt[rollID] = LC.rollLootedAt[rollID] or time()
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"

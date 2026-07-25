@@ -17,8 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Trade reminders and owed items now survive a reload or relog.**
 - **New "Close Session" button in the council panel** ends the session and clears every open item at once. Lootmaster only.
 - **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
+- **Mounts, pets, toys, housing items and Bind-on-Equip drops never go through Loot Council** — they are rolled the normal way and Auto-Pass leaves them alone.
 
 ### Fixed
+- **The lootmaster works again when they aren't also the raid leader** — winning rolls, `/kart add`, trade reminders, the council panel and Close Session were all dead for them.
+- **The raid leader now follows the lootmaster's raid-wide settings** instead of quietly using their own.
+- **A decided item keeps its council tab on every client**, not just on the one who assigned it.
+- **Vote notes and officer notes can no longer smuggle colour codes or links** into other people's tooltips.
+- **The council panel no longer stutters while loot is being handled.**
+- **The "you're owed this" timer now starts when the item drops**, not when the council decides.
+- **The raid-wide settings box now says correctly whether your settings apply to the raid.**
 - **The trade timer now matches Blizzard's 4-hour window** and keeps counting while you're offline.
 - **Gear, item level and ready-check sync works again for everyone on your own realm.**
 - **A late raid join no longer wipes the whole raid's in-progress loot rolls.**

@@ -744,6 +744,9 @@ function Trade.HandleResult(payload, senderKey)
             LC.owedToMe = LC.owedToMe or {}
             -- lootedAt drives the same expiry the lootmaster's pending trade uses, and lets
             -- Trade.RestorePersistedTrades drop entries whose trade window closed while we were gone.
+            -- Every client stamps LC.rollLootedAt when the roll starts (see LC.OnStartLootRoll /
+            -- LC.HandleStart), so this is the real loot time, not the award time; the time() fallback
+            -- only covers a roll this client never saw start at all.
             table.insert(LC.owedToMe, {
                 rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey,
                 lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time(),
@@ -777,7 +780,10 @@ function Trade.HandleResult(payload, senderKey)
         Trade.AddPendingTrade(rollID, winnerKey)
     end
 
-    -- Mirror the assigner's own CloseCouncilTab (see DoAssignWinner): the item is decided, so its
-    -- tab goes away on every client rather than piling up on the peers only.
-    KART.LC.Council.CloseCouncilTab(rollID)
+    -- The tab deliberately stays open here, exactly like on the assigner's own client (see
+    -- DoAssignWinner): reassigning is a first-class feature and the council has to keep seeing the
+    -- votes for a decided item. Closing it only on the peers — which is what an earlier version did —
+    -- left the assigner with a tab nobody else had, and stripped the item's votes and winner
+    -- highlight from every OTHER council member, the lootmaster included. Tabs are cleared in bulk
+    -- by "Close Session" (see the council panel). Do not re-add a close here.
 end
