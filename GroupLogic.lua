@@ -74,13 +74,19 @@ end
 function KART.HandleAutoPromote()
     if not UnitIsGroupLeader("player") or not IsInGroup() then return end -- IsInRaid implies IsInGroup
     for unit in KART.EachGroupUnit() do
-        local name = UnitName(unit)
+        local name, realm = UnitName(unit)
         if name then
             local shortName = name -- UnitName's first return is already realm-free
             -- Matches either the character's own short name (as always) or its Northern Sky Raid
             -- Tools nickname (see KART.GetNickname), so a name in the promote list applies to
             -- every character sharing that nickname, not just one specific alt.
             local matches = shortName and KART.PromoteNamesTable[KART.CaseFold(shortName)]
+            if not matches and realm and realm ~= "" then
+                -- Also accept a realm-qualified entry. "Name-Realm" is the format the WoWUtils
+                -- export uses and the format this function itself passes to PromoteToAssistant, so a
+                -- user copying a name from there would otherwise never get promoted.
+                matches = KART.PromoteNamesTable[KART.CaseFold(name .. "-" .. realm)]
+            end
             if not matches then
                 local nick = KART.GetNickname(unit)
                 matches = nick ~= nil and KART.PromoteNamesTable[nick]
@@ -91,8 +97,7 @@ function KART.HandleAutoPromote()
                     -- name — two same-named cross-realm raiders would otherwise be ambiguous. The
                     -- NSRT nickname is only used for MATCHING above; the promote targets the real
                     -- character.
-                    local n, realm = UnitName(unit)
-                    local target = (realm and realm ~= "") and (n .. "-" .. realm) or n
+                    local target = (realm and realm ~= "") and (name .. "-" .. realm) or name
                     PromoteToAssistant(target)
                 end
             end

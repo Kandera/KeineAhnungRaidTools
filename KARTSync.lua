@@ -42,6 +42,11 @@ end
 local function HandleVersionMessage(payload, ctx, isAnnounce)
     local ver, lcFlag = payload:match("^([^:]+):?([01]?)$")
     ver = ver or payload
+    -- Version strings are printed to chat and rendered in the council panel. This handler is
+    -- deliberately ungated (ANNOUNCE_VERSION travels over GUILD, so the sender need not be grouped),
+    -- which means the string is untrusted — double the pipes so it can't carry colour codes or
+    -- hyperlinks into either.
+    ver = ver:gsub("|", "||")
 
     KART.PlayerVersions = KART.PlayerVersions or {}
     KART.PlayerVersions[ctx.shortName] = ver
@@ -108,7 +113,7 @@ local EXACT_HANDLERS = {
     end },
     LC_SYNC_ACCEPT  = { fn = function(_, ctx) if KART.LC then KART.LC.HandleSyncAccept(ctx.shortName) end end },
     LC_SYNC_DECLINE = { fn = function(_, ctx) if KART.LC then KART.LC.HandleSyncDecline(ctx.shortName) end end },
-    LC_STATE_REQ    = { lc = true, fn = function(_, ctx) KART.LC.HandleStateRequest() end },
+    LC_STATE_REQ    = { lc = true, group = true, fn = function(_, ctx) KART.LC.HandleStateRequest(ctx.sender) end },
 }
 
 local PREFIX_HANDLERS = {
@@ -204,22 +209,30 @@ local PREFIX_HANDLERS = {
     end },
     VERSION          = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, false) end },
     ANNOUNCE_VERSION = { fn = function(payload, ctx) HandleVersionMessage(payload, ctx, true) end },
-    LC_ACTIVE       = { lc = true, fn = function(payload, ctx) KART.LC.HandleActive(payload, SenderKey(ctx)) end },
-    LC_START        = { lc = true, fn = function(payload, ctx) KART.LC.HandleStart(payload, SenderKey(ctx)) end },
-    LC_MANUAL_START = { lc = true, fn = function(payload, ctx) KART.LC.HandleManualStart(payload, SenderKey(ctx)) end },
-    LC_VOTE         = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleVote(payload, SenderKey(ctx)) end },
-    LC_ROLL         = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleRoll(payload, SenderKey(ctx)) end },
-    LC_CVOTE        = { lc = true, fn = function(payload, ctx) KART.LC.Vote.HandleCouncilVote(payload, SenderKey(ctx)) end },
-    LC_ONOTE        = { lc = true, fn = function(payload, ctx) KART.LC.OfficerNotes.HandleOfficerNote(payload, SenderKey(ctx)) end },
-    LC_RESULT       = { lc = true, fn = function(payload, ctx) KART.LC.Trade.HandleResult(payload, SenderKey(ctx)) end },
-    LC_CONFIG       = { lc = true, fn = function(payload, ctx) KART.LC.HandleConfig(payload, SenderKey(ctx)) end },
-    LC_HIST_REQ     = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryRequest(payload, ctx.sender) end end },
-    LC_HIST_ENTRY   = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end end },
+    -- group = true on every LC message that carries authority or writes tracked state. The sender's
+    -- resolved key alone is NOT proof of membership: Identity resolution is short-name based (see
+    -- Identity.lua), so an out-of-group player sharing a short name with a council member would
+    -- otherwise resolve onto their GUID and pass IsSenderCouncil/IsSenderGroupLeader. The three
+    -- LC_SYNC_* messages are deliberately left ungated — that feature is an explicit whisper to
+    -- someone outside the group, and the receiver confirms it via popup before anything is applied.
+    LC_ACTIVE       = { lc = true, group = true, fn = function(payload, ctx) KART.LC.HandleActive(payload, SenderKey(ctx)) end },
+    LC_START        = { lc = true, group = true, fn = function(payload, ctx) KART.LC.HandleStart(payload, SenderKey(ctx)) end },
+    LC_MANUAL_START = { lc = true, group = true, fn = function(payload, ctx) KART.LC.HandleManualStart(payload, SenderKey(ctx)) end },
+    LC_VOTE         = { lc = true, group = true, fn = function(payload, ctx) KART.LC.Vote.HandleVote(payload, SenderKey(ctx)) end },
+    LC_ROLL         = { lc = true, group = true, fn = function(payload, ctx) KART.LC.Vote.HandleRoll(payload, SenderKey(ctx)) end },
+    LC_CVOTE        = { lc = true, group = true, fn = function(payload, ctx) KART.LC.Vote.HandleCouncilVote(payload, SenderKey(ctx)) end },
+    LC_ONOTE        = { lc = true, group = true, fn = function(payload, ctx) KART.LC.OfficerNotes.HandleOfficerNote(payload, SenderKey(ctx)) end },
+    LC_RESULT       = { lc = true, group = true, fn = function(payload, ctx) KART.LC.Trade.HandleResult(payload, SenderKey(ctx)) end },
+    LC_CONFIG       = { lc = true, group = true, fn = function(payload, ctx) KART.LC.HandleConfig(payload, SenderKey(ctx)) end },
+    LC_HIST_REQ     = { lc = true, group = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryRequest(payload, ctx.sender) end end },
+    LC_HIST_ENTRY   = { lc = true, group = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end end },
     LC_SYNC_REQUEST = { lc = true, fn = function(payload, ctx) KART.LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end },
     RC_REASON = { group = true, fn = function(payload, ctx)
         -- Free text from another client goes straight into a chat print and a tooltip, so strip the
         -- UI escape sequences WoW would otherwise render: |c/|r recoloring and |H...|h hyperlinks
         -- would let a raider inject fake colored text and clickable links into every officer's chat.
+        if payload == "" then return end -- "" is truthy in Lua: an empty reason would still show the
+                                         -- icon, with an empty tooltip behind it
         payload = payload:gsub("|", "||")
         KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
         KART.ReadyCheckReasons[ctx.shortName] = payload

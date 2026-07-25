@@ -3,30 +3,38 @@ local addonName, KART = ...
 KART.Identity = KART.Identity or {}
 local Identity = KART.Identity
 
--- Finds the current unit token matching name — compared both as a realm-qualified full name
--- (via Ambiguate(fullName, "none"), which only keeps the "-Realm" suffix when two identically-
--- named characters would otherwise collide) and as an NSRT nickname, exactly like
--- LC.IsCouncil/LC.IsMe already do today. A name that IS genuinely ambiguous (two live matches)
--- deliberately fails to match here rather than guessing one of them — ResolvePlayer below falls
--- through to "pending" in that case, which is strictly safer than the short-name collision this
--- module exists to remove.
--- Reviewed 2026-07-25, accepted as-is: matching is effectively short-name based (UnitName's first
--- return is realm-free, so Ambiguate(...,"none") is a no-op here) and both this scan and the cache
--- fallback in ResolvePlayer return the FIRST match without an ambiguity guard. That's safe for this
--- addon's use: the target raid never contains two characters sharing a short name or an NSRT
--- nickname (confirmed by the maintainer), so a collision that would need the failsafe can't occur.
--- Do not re-flag the missing ambiguity guard / realm-qualified matching as a bug.
+-- Finds the current unit token matching name — compared against both the character name and the
+-- NSRT nickname, exactly like LC.IsCouncil/LC.IsMe already do today.
+--
+-- Reviewed 2026-07-25, accepted as-is: matching is short-name based (UnitName's first return is
+-- realm-free) and both this scan and the cache fallback in ResolvePlayer return the FIRST match
+-- without an ambiguity guard. That's safe for this addon's use: the target raid never contains two
+-- characters sharing a short name or an NSRT nickname (confirmed by the maintainer), so a collision
+-- that would need a failsafe can't occur. Do not re-flag the missing ambiguity guard.
+-- NOTE: because of that, resolution alone is NOT an authorization check — an out-of-group sender can
+-- resolve onto a same-short-named group member. Anything acting on a sender's authority gates on
+-- KART.IsFullNameInGroup (see the `group` flag in KARTSync's dispatcher), which compares the realm too.
 local function FindUnitForName(name)
     if not name or name == "" then return nil end
     -- CaseFold (not :lower()) so German umlaut names fold consistently — :lower() leaves
     -- Ö/Ä/Ü untouched, so a config name cased differently than the client returns wouldn't match.
     local lowerName = KART.CaseFold(name)
+    -- Also try the realm-stripped form. Input reaches here in two shapes: free-typed config text
+    -- (short name or NSRT nickname, no realm) and a realm-qualified sender from CHAT_MSG_ADDON
+    -- ("Bob-TarrenMill"). UnitName's first return is always realm-free, so the qualified shape can
+    -- never match it directly — without this the live scan silently fails for every addon-message
+    -- sender and resolution falls through to the persistent cache (or to "pending" on a cold cache,
+    -- which drops the message entirely).
+    -- Both forms are compared against both the character name and the NSRT nickname: a nickname
+    -- containing a hyphen would otherwise be truncated by the split and stop matching.
+    local shortName = KART.CaseFold(name:match("^([^%-]+)") or name)
     for unit in KART.EachGroupUnit() do
-        local fullName = UnitName(unit)
-        if fullName then
-            if KART.CaseFold(Ambiguate(fullName, "none")) == lowerName then return unit end
+        local unitName = UnitName(unit)
+        if unitName then
+            local unitLower = KART.CaseFold(unitName)
+            if unitLower == lowerName or unitLower == shortName then return unit end
             local nick = KART.GetNickname(unit)
-            if nick and nick == lowerName then return unit end
+            if nick and (nick == lowerName or nick == shortName) then return unit end
         end
     end
     return nil

@@ -379,11 +379,19 @@ function Council.RefreshCouncilTabs()
                 tab.closeBtn:Hide()
             end
         end)
+        -- Tabs are pooled by POSITION, so closing one shifts every later roll onto a different frame
+        -- without the mouse ever leaving it — no OnEnter/OnLeave fires. Re-derive the close button's
+        -- visibility from the actual hover state here, or the tab that slid under the cursor comes up
+        -- with the previous tab's "x" already showing and one click closes the wrong roll.
+        tab.closeBtn:SetShown(tab:IsMouseOver())
         tab:Show()
     end
 
     for i = #LC.councilTabs + 1, #panel.tabs do
-        if panel.tabs[i] then panel.tabs[i]:Hide() end
+        if panel.tabs[i] then
+            panel.tabs[i].closeBtn:Hide() -- so a recycled tab never returns with its "x" pre-shown
+            panel.tabs[i]:Hide()
+        end
     end
     -- Same as the column headers in RefreshCouncilRows: tabStrip is collapsible, so a minimized
     -- panel must keep it hidden instead of having every refresh pop it back out.
@@ -616,8 +624,13 @@ function Council.CreateCouncilPanel()
     btnNoWinner:SetPoint("BOTTOMLEFT", 10, 10)
     btnNoWinner:SetScript("OnClick", function()
         if LC.activeRollID then
-            LC.Trade.AnnounceResult(LC.activeRollID, "NONE")
-            Council.CloseCouncilTab(LC.activeRollID)
+            local rollID = LC.activeRollID
+            LC.Trade.AnnounceResult(rollID, "NONE")
+            -- We never receive our own LC_RESULT, so the cleanup the peer side does in
+            -- Trade.HandleResult has to be run locally too — otherwise whoever revokes the winner is
+            -- the one client left holding a pending trade / owed reminder for it.
+            LC.Trade.ClearWinnerObligations(rollID)
+            Council.CloseCouncilTab(rollID)
         end
     end)
 
@@ -671,7 +684,19 @@ function Council.CreateCouncilPanel()
         -- (the roll timing out closes it by itself), its row's OnLeave may never fire and the
         -- tooltip would be stranded on screen with nothing left to dismiss it.
         if LC.equipCompareTooltip then LC.equipCompareTooltip:Hide() end
-        GameTooltip:Hide()
+        -- Only if it belongs to us: GameTooltip is shared UI-wide, and this panel can hide without
+        -- any user interaction (a roll resolving, ESC, UIParent hiding for a cinematic). Hiding it
+        -- unconditionally would yank a tooltip the user is reading on a bag slot or another addon.
+        -- Walk the owner's parent chain rather than comparing to f directly — the tooltip is owned by
+        -- a row's hitbox frame, never by the panel itself.
+        local owner = GameTooltip:GetOwner()
+        while owner do
+            if owner == f then
+                GameTooltip:Hide()
+                break
+            end
+            owner = owner.GetParent and owner:GetParent() or nil
+        end
     end)
     if f:IsShown() then startTimerTicker() end
 
@@ -695,7 +720,17 @@ function Council.SetCouncilPanelMinimized(minimized)
     for _, widget in ipairs(f.collapsible) do
         widget:SetShown(not minimized)
     end
+    -- Pin the top edge across the resize. Without a saved position the panel still sits on its
+    -- creation-time CENTER anchor, where changing the height moves the top edge by half the delta —
+    -- collapsing 462 -> 68 would visibly drop the title bar ~197px down the screen (and restoring
+    -- would throw it back up). Re-anchoring by TOPLEFT is also the same anchor the saved-position
+    -- restore uses, so the two stay consistent.
+    local left, top = f:GetLeft(), f:GetTop()
     f:SetHeight(minimized and COUNCIL_PANEL_MIN_H or COUNCIL_PANEL_HEIGHT)
+    if left and top then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
     if f.minimizeBtn then f.minimizeBtn.text:SetText(minimized and "+" or "-") end
     -- Three of the collapsible widgets have their own visibility conditions (hRoll on rolls being
     -- enabled, hGain on the Droptimizer module, tabStrip on there being any tab) — the blanket

@@ -768,6 +768,21 @@ local MAX_HISTORY_ENTRIES = 500
 -- winnerKey is the stable identity key (GUID) for the winner; winnerDisplayName is only for display.
 -- Storing the key lets the catch-up sync dedup two clients' entries for the same award even when
 -- their display names differ (NSRT nickname on one, character short name on another).
+-- Enforces MAX_HISTORY_ENTRIES by dropping the entry with the OLDEST timestamp, not index 1.
+-- Insertion order only equals chronological order for locally-logged awards; the catch-up sync
+-- appends backfilled entries that are older than everything already stored, so a plain remove(1)
+-- would evict the NEWEST rows — one per received entry.
+local function TrimHistory()
+    while #KART_LootHistory > MAX_HISTORY_ENTRIES do
+        local oldestIdx, oldestTime = 1, (KART_LootHistory[1] and KART_LootHistory[1].time) or 0
+        for i = 2, #KART_LootHistory do
+            local t = KART_LootHistory[i].time or 0
+            if t < oldestTime then oldestIdx, oldestTime = i, t end
+        end
+        table.remove(KART_LootHistory, oldestIdx)
+    end
+end
+
 function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
@@ -814,9 +829,7 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         difficultyID = difficultyID,
         rollID       = rollID,
     })
-    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
-        table.remove(KART_LootHistory, 1)
-    end
+    TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
         KART.LH.Refresh()
     end
@@ -833,6 +846,9 @@ end
 
 local HISTORY_SYNC_MAX_ENTRIES = 30
 local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
+-- Minimum seconds between two answered catch-up requests from the same player. Long enough to
+-- absorb a rejoin burst, short enough that a genuine relog later in the raid still gets served.
+local HISTORY_SYNC_ANSWER_COOLDOWN = 60
 
 function LH.RequestHistorySync()
     local latest = 0
@@ -856,15 +872,17 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
     if not KART.IsFullNameInGroup(senderFullName) then return end
-    -- One reply burst per sender per session. Each request queues up to HISTORY_SYNC_MAX_ENTRIES
-    -- timers spanning ~8s; a peer that repeatedly leaves and rejoins would otherwise stack bursts
-    -- until the outgoing addon messages hit the client's throttle and the server's spam kick.
-    -- A genuine requester only asks once (LC.historySyncRequested guards the sending side).
+    -- Rate-limit the reply burst per sender: each answered request queues up to
+    -- HISTORY_SYNC_MAX_ENTRIES timers spanning ~8s, so a peer repeatedly leaving and rejoining would
+    -- otherwise stack bursts until the outgoing messages hit the client's throttle and the server's
+    -- spam kick. A cooldown rather than a once-per-session latch, and applied only once we actually
+    -- have something to send (below): a legitimate re-request after a disconnect — the entire point
+    -- of catch-up sync — must not be blocked by an earlier request that turned out to be a no-op.
     LH.historySyncAnswered = LH.historySyncAnswered or {}
-    if LH.historySyncAnswered[senderFullName] then return end
-    LH.historySyncAnswered[senderFullName] = true
+    local now = time()
+    if now - (LH.historySyncAnswered[senderFullName] or 0) < HISTORY_SYNC_ANSWER_COOLDOWN then return end
 
-    local cutoff = time() - HISTORY_SYNC_MAX_AGE
+    local cutoff = now - HISTORY_SYNC_MAX_AGE
     local toSend = {}
     for _, e in ipairs(KART_LootHistory or {}) do
         if (e.time or 0) > sinceTime and (e.time or 0) > cutoff then
@@ -872,6 +890,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
         end
     end
     if #toSend == 0 then return end
+    LH.historySyncAnswered[senderFullName] = now
 
     table.sort(toSend, function(a, b) return (a.time or 0) < (b.time or 0) end)
     if #toSend > HISTORY_SYNC_MAX_ENTRIES then
@@ -887,6 +906,10 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     local baseDelay = math.random() * 2
     for i, e in ipairs(toSend) do
         C_Timer.After(baseDelay + (i - 1) * 0.2, function()
+            -- Re-check membership at fire time, not just when the request arrived: the burst spans
+            -- ~8 seconds, and whispers keep working after either side has left the group — so
+            -- without this we'd keep streaming loot history to someone who is no longer authorized.
+            if not KART.IsFullNameInGroup(senderFullName) then return end
             local colorPacked = ""
             if e.color then
                 colorPacked = string.format("%d,%d,%d",
@@ -938,6 +961,16 @@ function LH.HandleHistoryEntry(payload, senderKey)
         payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
     t = tonumber(t)
     if not t or not winner then return end
+    -- Reject a timestamp from the future. time() is each client's OS clock, so a peer with a badly
+    -- set clock (or a hostile one) would otherwise write an entry dated years ahead — which then
+    -- becomes the "since" watermark LH.RequestHistorySync sends, permanently asking every peer for
+    -- entries newer than that date and silently killing catch-up sync for good.
+    if t > time() + 300 then return end
+    -- Free text from another client, rendered raw into the history window and the export. Double the
+    -- pipes so |c colour codes and |H hyperlinks can't be injected into a SavedVariable that is then
+    -- displayed forever. (RC_REASON does the same on its own receive side.)
+    winner = winner:gsub("|", "||")
+    reason = (reason or ""):gsub("|", "||")
     diffID = tonumber(diffID); if diffID == 0 then diffID = nil end
     rollID = tonumber(rollID); if rollID == 0 then rollID = nil end
     if winnerKey == "" then winnerKey = nil end
@@ -963,7 +996,15 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Locale-independent item string (not the full link, which differs between DE/EN clients and
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
-    local incomingStr = KART.GetItemString(itemLink)
+    -- KART.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
+    -- "item:12345:..." string the oversized-link fallback sends — which is also exactly the case
+    -- where the local rebuild above can fail (item not in the client's cache yet). Fall back to the
+    -- bare form so both sides still reduce to the same locale-independent key.
+    local function ItemKey(link)
+        if type(link) ~= "string" then return nil end
+        return KART.GetItemString(link) or link:match("^item:[%-%d:]+")
+    end
+    local incomingStr = ItemKey(itemLink)
     -- The sender drops the item field entirely when even the compact item string won't fit the
     -- 255-byte cap (see LH.HandleHistoryRequest). An empty item can't be compared by item at all:
     -- matching on `e.item == ""` would both miss the copy we already hold under its real link (→
@@ -972,7 +1013,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     local itemUnknown = (itemLink == "")
     local function SameItemAs(e)
         if itemUnknown then return rollID ~= nil and e.rollID == rollID end
-        return (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+        return (incomingStr and ItemKey(e.item) == incomingStr) or (e.item == itemLink)
     end
     -- Skip if we already have this award. Compare by the stable identity key + locale-independent
     -- item string (not display name + full link, which differ between DE/EN clients), and allow a
@@ -1014,9 +1055,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
         difficultyID = diffID,
         rollID       = rollID,
     })
-    if #KART_LootHistory > MAX_HISTORY_ENTRIES then
-        table.remove(KART_LootHistory, 1)
-    end
+    TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
         KART.LH.Refresh()
     end

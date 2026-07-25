@@ -180,8 +180,14 @@ function LC.IsSenderCouncil(senderKey)
     return LC.CouncilNamesTable[senderKey] == true
 end
 
-function LC.SendLC(msg)
-    if IsInGroup() then
+-- target (optional): whisper this one player instead of broadcasting to the group. Used for replies
+-- to a directed request (see LC.HandleStateRequest), so answering one person doesn't push state at
+-- everyone else.
+function LC.SendLC(msg, target)
+    if not IsInGroup() then return end
+    if target then
+        KART.Sync.Send(msg, "WHISPER", target)
+    else
         KART.Sync.Send(msg)
     end
 end
@@ -326,7 +332,8 @@ local function BuildCouncilPayload(prefix, council)
     return prefix .. council
 end
 
-function LC.BroadcastRaidConfig()
+-- target (optional): whisper the config to one player instead of broadcasting (see LC.SendLC).
+function LC.BroadcastRaidConfig(target)
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
@@ -338,7 +345,7 @@ function LC.BroadcastRaidConfig()
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
-    LC.SendLC(BuildCouncilPayload(prefix, council))
+    LC.SendLC(BuildCouncilPayload(prefix, council), target)
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
@@ -436,10 +443,18 @@ end
 -- and, if a session is active, the full raid config — a one-shot pull instead of waiting for the
 -- leader's own roster-change handler to happen to fire (see LC.CheckRaidJoin). Only the actual
 -- leader replies, same authority rule as LC.BroadcastRaidConfig itself.
-function LC.HandleStateRequest()
+-- requester: the full "Name-Realm" of whoever asked (CHAT_MSG_ADDON sender).
+--
+-- The reply is WHISPERED to them, never broadcast. Broadcasting was actively harmful: LC_ACTIVE:0
+-- makes every receiver run LC.ClearAllRolls, so one late joiner asking for state while the leader's
+-- own sessionActive is still false (the state a fresh /reload starts in, until the leader answers the
+-- session prompt) would wipe the in-flight rolls of the entire raid. The requester is the only client
+-- that needs the answer, and they have no roll state to lose.
+function LC.HandleStateRequest(requester)
     if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
-    LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"))
-    if LC.sessionActive then LC.BroadcastRaidConfig() end
+    if not requester then return end
+    LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
+    if LC.sessionActive then LC.BroadcastRaidConfig(requester) end
 end
 
 -- Whispers the sender's current Loot Council raid-wide-authority settings to targetName as a
@@ -458,6 +473,10 @@ function LC.SendSettingsSync(targetName)
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
     KART.Sync.Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
+    -- messages are deliberately not group-gated — the whole feature targets someone outside the
+    -- group — which without this would let anyone spam a line into our chat frame at will.
+    LC.syncRequestSentTo = KART.CaseFold(KART.TrimString(targetName or ""))
 end
 
 function LC.ShowSyncTargetDialog()
@@ -489,11 +508,24 @@ function LC.HandleSyncRequest(payload, sender, senderShort)
     })
 end
 
+-- Only the player we actually sent a sync request to may print here (LC.syncRequestSentTo). The
+-- target was typed by hand, so it may or may not carry a realm — compare on the short name, which
+-- both forms reduce to.
+local function IsExpectedSyncReply(senderShort)
+    local expected = LC.syncRequestSentTo
+    if not expected or not senderShort then return false end
+    return KART.CaseFold(expected:match("^([^%-]+)") or expected) == KART.CaseFold(senderShort)
+end
+
 function LC.HandleSyncAccept(senderShort)
+    if not IsExpectedSyncReply(senderShort) then return end
+    LC.syncRequestSentTo = nil
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_ACCEPTED_MSG, senderShort))
 end
 
 function LC.HandleSyncDecline(senderShort)
+    if not IsExpectedSyncReply(senderShort) then return end
+    LC.syncRequestSentTo = nil
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_DECLINED_MSG, senderShort))
 end
 
@@ -636,13 +668,33 @@ function LC.ClearAllRolls()
     end
     wipe(LC.councilTabs)
     wipe(LC.voteListRolls)
-    -- Sweep any per-roll state that isn't reachable from the two lists above — Vote.HandleRoll
-    -- deliberately accepts rolls for a not-yet-known rollID (see the comment there), so an orphan
-    -- can exist for a roll that never materialized. Session end is the natural point to drop it.
+    -- Sweep per-roll state that the two lists above can't reach. Two ways it gets orphaned:
+    -- Vote.HandleRoll deliberately accepts a roll for a not-yet-known rollID (see the comment there),
+    -- and Trade.HandleResult drops a decided roll from the vote list without calling ClearRollState.
+    --
+    -- This MUST cover the same tables as Trade.ClearRollState — keep the two in sync. Wiping only
+    -- some of them is worse than wiping none: PurgeStaleRoll detects a reused rollID by looking at
+    -- LC.rollItems, so clearing that while leaving votedByMe/assignedWinners behind blinds the
+    -- detector and lets the leftovers attach themselves to whatever item Blizzard next hands that
+    -- same rollID — showing a stale "you voted" badge that hides the vote buttons, and a stale gold
+    -- winner highlight on the council panel.
+    --
+    -- LC.rollLootedAt is the one deliberate exception: it is the BoP trade-timeout clock for entries
+    -- in LC.pendingTrades/LC.owedToMe, which are long-lived obligations that intentionally survive a
+    -- session end (see Trade.ClearRollState's own note). Tracked rolls already had theirs cleared by
+    -- the ClearRollState loops above.
     wipe(LC.votes)
     wipe(LC.rolls)
     wipe(LC.councilVotes)
     wipe(LC.rollItems)
+    wipe(LC.rollDeadlines)
+    wipe(LC.rollDurations)
+    wipe(LC.assignedWinners)
+    wipe(LC.votedByMe)
+    wipe(LC.votedNoteByMe)
+    wipe(LC.councilTabsNew)
+    if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
+    if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
     LC.showAllOverride = nil
     LC.activeRollID = nil
     if LC.councilPanel then LC.councilPanel:Hide() end
@@ -664,10 +716,16 @@ end
 
 function LC.CheckRaidJoin()
     if not IsInRaid() then
+        local wasActive = LC.sessionActive
         LC.promptedThisSession = false
         LC.sessionActive = false
         LC.historySyncRequested = false
         LC.stateSyncRequested = false
+        -- Leaving the raid ends the session for us as well, so drop the tracked rolls the same way
+        -- SetSessionActive(false) and an incoming LC_ACTIVE:0 do. Without this the council panel and
+        -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are
+        -- exactly the ones Blizzard hands out first in the next raid — an immediate collision.
+        if wasActive then LC.ClearAllRolls() end
         return
     end
     if KART_Settings.lcModuleEnabled == false then return end
@@ -752,7 +810,21 @@ end
 -- for the wrong item. newItemID == "" means "not resolved yet" — never purge on unresolved data,
 -- only on a confirmed different item (see the LC_RESULT-side fix this complements, in
 -- Trade.HandleResult, for the other half of this same rollID-collision class of bug).
+-- How long roll data for an untracked rollID stays trusted. Vote.HandleRoll accepts rolls before
+-- LC_START arrives (see its comment); that gap is one addon-message round trip, so anything still
+-- unmatched after this is left over from an earlier roll that used the same ID.
+local ROLL_ORPHAN_GRACE = 15
+
 local function PurgeStaleRoll(rollID, newItemID)
+    -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
+    -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
+    -- numbers would render as the NEW item's rolls on the council panel.
+    local pendingSince = LC.rollsPendingSince and LC.rollsPendingSince[rollID]
+    if pendingSince and (GetTime() - pendingSince) > ROLL_ORPHAN_GRACE then
+        LC.rolls[rollID] = nil
+        LC.rollsPendingSince[rollID] = nil
+    end
+
     if not newItemID or newItemID == "" then return end
     local oldLink = LC.rollItems[rollID]
     if not LC.IsRealItemLink(oldLink) then return end

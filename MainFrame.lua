@@ -199,9 +199,13 @@ function KART.UpdateScrollRange()
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
     if tab == 5 then
-        -- 292 = prefs card block above the raid box + buttons below it + bottom padding
+        -- 342 = everything around the raid box, which is the only variable-height part:
+        --   12 top inset + 215 prefs card + 20 gap  (= 247, the raid box's own top)
+        -- + 16 gap + 28 test buttons + 8 gap + 28 history button + 15 bottom padding.
+        -- (Was 292, left over from when the prefs card was 165 tall — the history button ended up
+        -- below the scrollable area and couldn't be reached.)
         local rb = KART.LC and KART.LC.RaidBox
-        h = 292 + ((rb and rb:GetHeight()) or 420)
+        h = 342 + ((rb and rb:GetHeight()) or 420)
     elseif tab == 6 then
         -- 293 = import card block + separator/headers above the boss list + bottom padding
         local bl = KART.WU and KART.WU.bossListFrame
@@ -586,15 +590,27 @@ KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 -- Reset Button
 KART.BtnReset = KART.CreateModernButton(colCard, L.BTN_RESET, L.DESC_RESET)
 KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -16)
+-- Confirmed, like every other destructive action in the addon (boss-list reset, profile delete):
+-- this discards every setting, window position and keybind with no undo, and the button sits one
+-- 16px gap below the accent-colour button.
+KART.RegisterStaticPopup("KART_RESET_CONFIRM", {
+    text = "Really reset all settings?", -- overwritten with KART.L.DESC_RESET before each Show below
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function()
+        -- Full wipe, not a per-key overwrite: keys without a Defaults entry (window positions,
+        -- sizes) must reset too. Tables are deep-copied so KART.Defaults itself is never shared
+        -- into (and later mutated through) KART_Settings.
+        wipe(KART_Settings)
+        for k, v in pairs(KART.Defaults) do
+            KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
+        end
+        ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
+    end,
+})
 KART.BtnReset:SetScript("OnClick", function()
-    -- Full wipe, not a per-key overwrite: keys without a Defaults entry (window positions,
-    -- sizes) must reset too. Tables are deep-copied so KART.Defaults itself is never shared
-    -- into (and later mutated through) KART_Settings.
-    wipe(KART_Settings)
-    for k, v in pairs(KART.Defaults) do
-        KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
-    end
-    ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
+    StaticPopupDialogs["KART_RESET_CONFIRM"].text = KART.L.DESC_RESET
+    StaticPopup_Show("KART_RESET_CONFIRM")
 end)
 
 -- Card: settings profiles (save/switch/delete named KART_Settings snapshots)
@@ -722,6 +738,10 @@ local function CloseSearchPopout()
     searchBox:ClearFocus()
 end
 KART.HideSearchPopout = CloseSearchPopout
+-- The popout is a child of clickArea, so closing the main window only makes it invisible — its shown
+-- flag and its query text survive. Reopening would bring back a stale search whose result rows point
+-- at whatever tab happens to be active now. Close it properly whenever the window goes away.
+mainFrame:HookScript("OnHide", CloseSearchPopout)
 
 local function FilterSearch(query)
     query = KART.CaseFold(query)

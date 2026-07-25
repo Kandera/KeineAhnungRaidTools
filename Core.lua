@@ -135,8 +135,14 @@ function KART.SyncSettingsToUI()
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
     KART.UpdateMinimapButton()
+    -- Applies the keybinds too (its tail call), since whether they may be bound at all depends on
+    -- the bar's resulting visibility — see KART.ApplyKeybinds.
     KART.UpdateRaidleadBarVisibility()
-    KART.ApplyKeybinds()
+    -- SetChecked/SetValue above don't fire the widgets' own callbacks, and the auto-log filters live
+    -- entirely in theirs. Without this a profile switch changes the settings but never acts on them:
+    -- switching away from the raid profile mid-instance would leave KART's combat log running, and
+    -- switching to it after the pull would never start one.
+    if KART.AutoLog then KART.AutoLog.Evaluate() end
 end
 
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
@@ -330,9 +336,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.bcHideGen = (KART.bcHideGen or 0) + 1 -- cancel any pending combat-hide from above
         -- Aktualisiert ausstehende UI- und Makro-Änderungen (z.B. Pull-Timer),
         -- die während des Kampfes sicherheitshalber blockiert wurden.
+        -- Also re-applies keybinds via its tail call, which covers the case where a login/reload
+        -- during combat had to defer them (KART.keybindsPending, see KART.ApplyKeybinds).
         KART.UpdateRaidleadBarVisibility()
-        -- Re-apply keybinds if a login/reload during combat had to defer them (see KART.ApplyKeybinds).
-        if KART.keybindsPending and KART.ApplyKeybinds then KART.ApplyKeybinds() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- arg1 = isInitialLogin, arg2 = isReloadingUi. Only announce our version to the guild on an
         -- actual login/reload — this event also fires on every loading screen (zone/instance change),

@@ -141,7 +141,10 @@ function KART.CreateBuffCheckFrame()
     -- repositioned by dragging, the only way back is a full settings reset.
     f:SetClampedToScreen(true)
     f:SetResizable(true)
-    f:SetResizeBounds(710, 250, 1200, 1500) -- Breite kann nun auch skaliert werden
+    -- Max height is capped to the screen: taller than that and SetClampedToScreen pins the window
+    -- against the top edge with its bottom — including the resize grip and the mode/refresh/report
+    -- buttons — off screen and unreachable.
+    f:SetResizeBounds(710, 250, 1200, math.max(600, math.floor(UIParent:GetHeight())))
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", function(self) if not IsShiftKeyDown() then self:StartMoving() end end)
@@ -455,7 +458,9 @@ function KART.UpdateBuffCheckThrottled()
         -- Re-check visibility: the window may have been closed during the 1s throttle window, in
         -- which case a full row rebuild is wasted work.
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
-            KART.UpdateBuffCheck()
+            -- Preserve preview mode (see KART.UpdateBuffCheck): a refresh triggered while the
+            -- settings preview is on screen must re-render the preview, not swap in live rows.
+            KART.UpdateBuffCheck(KART.BuffCheckPreviewActive)
         end
     end)
 end
@@ -592,6 +597,11 @@ end
 
 function KART.UpdateBuffCheck(isPreview)
     if not KART.BuffCheckFrame then return end
+    -- Remember which mode the window is currently rendering. The throttled refresh (fired by roster
+    -- events, incoming sync data and KART.UpdateStyles) has no argument of its own, so without this
+    -- it would re-render the settings preview as live data — replacing the sample rows the moment
+    -- the user touches the very sliders the preview exists to demonstrate.
+    KART.BuffCheckPreviewActive = isPreview and true or false
 
     -- Table-Wiederverwendung für bessere Performance
     KART.MissingBuffs = KART.MissingBuffs or {}

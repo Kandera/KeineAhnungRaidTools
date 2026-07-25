@@ -143,7 +143,12 @@ function Vote.RemoveVoteListItem(rollID)
     for i = #LC.voteListRolls, 1, -1 do
         if LC.voteListRolls[i] == rollID then table.remove(LC.voteListRolls, i) end
     end
-    Vote.RefreshVoteListRows()
+    -- ...IfShown, not the plain refresh: RefreshVoteListRows ends in an unconditional f:Show() when
+    -- any roll remains, so refreshing here would pop the vote window back up on a client that had
+    -- deliberately closed it (its "x" only hides). Removing an item must never open a window.
+    -- When the window IS up, the normal refresh still runs and still hides it if this was the last row.
+    Vote.RefreshVoteListRowsIfShown()
+    if #LC.voteListRolls == 0 then LC.showAllOverride = nil end
 end
 
 -- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
@@ -838,8 +843,16 @@ function Vote.HandleRoll(payload, senderKey)
     -- roll is auto-broadcast from START_LOOT_ROLL, so it can legitimately arrive before this client
     -- knows the roll exists (a client that gets no local START_LOOT_ROLL learns it only from
     -- LC_START, and other raiders broadcast their rolls at the same instant the leader does). Rolls
-    -- are sent exactly once with no retry, so dropping one loses it permanently. Any orphan left by
-    -- a roll that never materializes is swept by LC.ClearAllRolls at session end.
+    -- are sent exactly once with no retry, so dropping one loses it permanently.
+    --
+    -- Accepting them means an untracked rollID can hold roll data indefinitely if the roll never
+    -- materializes here at all. Stamp when that started so PurgeStaleRoll can tell a legitimately
+    -- early roll (sub-second, its LC_START is already on the way) from an orphan left over from a
+    -- previous roll that used this same ID. ClearAllRolls sweeps the rest at session end.
+    if not LC.rollItems[rollID] then
+        LC.rollsPendingSince = LC.rollsPendingSince or {}
+        LC.rollsPendingSince[rollID] = LC.rollsPendingSince[rollID] or GetTime()
+    end
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][senderKey] = value
 

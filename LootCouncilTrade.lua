@@ -185,6 +185,27 @@ function Trade.RemovePendingTrade(rollID)
     end
 end
 
+-- Drops both halves of the "this roll has a winner" bookkeeping: the lootmaster's pending trade and
+-- the winner's owed-item reminder. Used by every path that invalidates a previous award — a
+-- reassignment (the old winner's obligations must go before the new one's are created) and a
+-- revocation via "No Winner".
+--
+-- Single implementation on purpose: the local button and the peer-side LC_RESULT handler used to do
+-- this separately, and the local one silently didn't, so whoever clicked "No Winner" kept a trade
+-- reminder for an award nobody else still had.
+function Trade.ClearWinnerObligations(rollID)
+    Trade.RemovePendingTrade(rollID) -- refreshes the trade reminder itself
+    if not LC.owedToMe then return end
+    local changed = false
+    for i = #LC.owedToMe, 1, -1 do
+        if LC.owedToMe[i].rollID == rollID then
+            table.remove(LC.owedToMe, i)
+            changed = true
+        end
+    end
+    if changed then Trade.RefreshOwedReminder() end
+end
+
 -- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
 -- — called when a tab is dismissed or a session ends, so a later real roll that happens to
 -- reuse the same small rollID integer never inherits stale data from a previous boss
@@ -205,6 +226,11 @@ function Trade.ClearRollState(rollID)
     LC.councilTabsNew[rollID]  = nil
     if LC.rollLootedAt then LC.rollLootedAt[rollID] = nil end
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end
+    if LC.rollsPendingSince then LC.rollsPendingSince[rollID] = nil end
+    -- Normally cleared by its own ContinueOnItemLoad callback; clear it here too so a callback that
+    -- never resolves can't leave the latch set and block the async item load for a later roll that
+    -- reuses this rollID (its iLvl/armor columns would stay blank).
+    if LC.pendingItemLoads then LC.pendingItemLoads[rollID] = nil end
 end
 
 -- The "items still to trade" (lootmaster) and "items you still need to collect" (winner) windows
@@ -632,30 +658,17 @@ function Trade.HandleResult(payload, senderKey)
     -- A result came in for this roll — remove it from our vote list, if it's still there.
     LC.Vote.RemoveVoteListItem(rollID)
 
-    -- Reassignment cleanup: drop any owed-to-me entry we were tracking for this roll before
-    -- re-evaluating the winner. Without this, a roll reassigned away from us leaves a stale "you
-    -- are owed X" reminder, and a reassignment back to the same player stacks a duplicate. Runs
-    -- BEFORE the NONE branch below: revoking a winner must clear the previous winner's reminder too,
-    -- otherwise "no winner" leaves them owed an item nobody is going to trade them.
-    local owedChanged = false
-    if LC.owedToMe then
-        for i = #LC.owedToMe, 1, -1 do
-            if LC.owedToMe[i].rollID == rollID then
-                table.remove(LC.owedToMe, i)
-                owedChanged = true
-            end
-        end
-    end
+    -- Any previous award under this rollID is now void — drop the old winner's owed reminder and the
+    -- lootmaster's pending trade before re-evaluating. A real winner below re-creates both; a
+    -- reassignment back to the same player therefore can't stack duplicates. Must run BEFORE the
+    -- NONE branch: revoking a winner has to clear their obligations too.
+    Trade.ClearWinnerObligations(rollID)
 
     if winnerKey == "NONE" then
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab
         -- with stale votes and a stale gold winner highlight from any prior assignment on this roll.
-        -- The lootmaster's pending-trade entry for the revoked winner has to go as well — there is
-        -- no longer anyone to hand the item to.
-        Trade.RemovePendingTrade(rollID)
-        if owedChanged then Trade.RefreshOwedReminder() end
         KART.LC.Council.CloseCouncilTab(rollID)
         return
     end
@@ -678,10 +691,9 @@ function Trade.HandleResult(payload, senderKey)
         if lootmasterKey ~= "" and not LC.IsMe(lootmasterKey) then
             LC.owedToMe = LC.owedToMe or {}
             table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey})
-            owedChanged = true
+            Trade.RefreshOwedReminder()
         end
     end
-    if owedChanged then Trade.RefreshOwedReminder() end
 
     -- Every KART user logs the same entry locally, so everyone's loot history stays in sync
     -- without depending on the lootmaster being online later. The assigner already logged this

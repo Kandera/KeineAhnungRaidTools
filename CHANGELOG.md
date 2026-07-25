@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
+- **Gear, item level and ready-check sync works again for everyone on your own realm.**
+- **A late raid join no longer wipes the whole raid's in-progress loot rolls.**
+- **Revoking a winner now clears the trade reminder for whoever revoked it too.**
+- **A raid's loot state no longer carries over** into the next raid or the next session.
+- **The Loot History button at the bottom of the Loot Council tab is reachable again.**
+- **Minimizing the council panel no longer makes it jump** across the screen.
+- **Closing a council tab no longer re-opens the vote window** you had closed.
+- **The Buff-Checker settings preview no longer disappears** while you adjust the sliders.
+- **Window opacity no longer resets itself** when you reopen the window.
+- **The Raidlead bar no longer appears mid-fight** after a reload.
+- **Switching profiles now applies the auto combat log settings.**
+- **Importing a boss list now replaces the old one** instead of stacking onto it.
+- **Reset now asks for confirmation** before clearing all settings.
 - **Rolls are no longer lost** for raiders who weren't eligible for the item.
 - **Gear, item level and ready-check data can no longer be requested or spoofed** by players outside your group.
 - **The boss list now follows the active profile** instead of stacking up, and a reset survives a reload.

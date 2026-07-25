@@ -182,21 +182,42 @@ end
 
 -- Whether fullName (a realm-qualified "Name-Realm", as CHAT_MSG_ADDON delivers its sender) is a
 -- member of our current group. Used to authorize addon messages that make us answer with our own
--- data or write into a shared cache — CHAT_MSG_ADDON also carries WHISPER and GUILD, and the "KART"
--- prefix is public, so an unauthorized sender is entirely possible.
+-- data, write into a shared cache, or act on someone else's authority — CHAT_MSG_ADDON also carries
+-- WHISPER and GUILD, and the "KART" prefix is public, so an unauthorized sender is entirely possible.
 --
--- Compares the FULL name, not a resolved identity key: Identity.ResolvePlayer falls back to a
--- short-name cache lookup for anyone not currently in the group, which would map an outsider onto a
--- same-short-named group member and wrongly authorize them. UnitName's realm return is nil for
--- same-realm units, so those are compared short-to-short.
+-- Compares name AND realm separately, never the raw concatenation, because the two sides spell the
+-- realm differently:
+--   * CHAT_MSG_ADDON's sender is ALWAYS realm-qualified, with the realm in normalized form
+--     ("Bob-TarrenMill") — including for a sender on our own realm.
+--   * UnitName(unit)'s realm return is nil for a same-realm unit, and for a cross-realm one it may
+--     carry the display spelling ("Tarren Mill").
+-- So the realm is canonicalized on both sides (separators stripped, case-folded, same treatment
+-- Droptimizer applies for the same reason) and a missing realm on either side means "our realm".
+-- A raw "name-realm" string compare would reject EVERY same-realm member, silently disabling every
+-- handler gated on this.
+--
+-- Deliberately not routed through Identity.ResolvePlayer: that falls back to a short-name cache
+-- lookup for anyone not currently in the group, which would map an outsider onto a same-short-named
+-- group member and wrongly authorize them. That is exactly what this function exists to prevent.
+local function CanonRealm(realm)
+    return KART.CaseFold(((realm or ""):gsub("[%s%-']", "")))
+end
+
 function KART.IsFullNameInGroup(fullName)
     if type(fullName) ~= "string" or fullName == "" then return false end
-    local wanted = KART.CaseFold(fullName)
+    local wantName, wantRealm = fullName:match("^([^%-]+)%-?(.*)$")
+    if not wantName then return false end
+    local ownRealm = CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    wantName  = KART.CaseFold(wantName)
+    wantRealm = CanonRealm(wantRealm)
+    if wantRealm == "" then wantRealm = ownRealm end
+
     for unit in KART.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
-            local full = (realm and realm ~= "") and (name .. "-" .. realm) or name
-            if KART.CaseFold(full) == wanted then return true end
+            local unitRealm = CanonRealm(realm)
+            if unitRealm == "" then unitRealm = ownRealm end
+            if KART.CaseFold(name) == wantName and unitRealm == wantRealm then return true end
         end
     end
     return false
@@ -882,12 +903,17 @@ end
 
 function KART.UpdateMinimapButton()
     local dbIcon = LibStub("LibDBIcon-1.0", true)
-    if dbIcon then
-        if KART_Settings.showMinimapIcon then
-            dbIcon:Show("KeineAhnungRaidTools")
-        else
-            dbIcon:Hide("KeineAhnungRaidTools")
-        end
+    if not dbIcon then return end
+    if KART_Settings.showMinimapIcon then
+        dbIcon:Show("KeineAhnungRaidTools")
+    else
+        dbIcon:Hide("KeineAhnungRaidTools")
+    end
+    -- LibDBIcon only reads minimapPos out of its saved table when told to refresh. A profile switch
+    -- swaps that table's contents (Profiles.lua keeps the table's identity for exactly this reason),
+    -- so without this the icon keeps the previous profile's angle until the next drag or reload.
+    if dbIcon.Refresh then
+        pcall(dbIcon.Refresh, dbIcon, "KeineAhnungRaidTools", KART_Settings.minimap)
     end
 end
 
@@ -1018,21 +1044,26 @@ function KART.AddShowFade(frame, duration)
     local ag = frame:CreateAnimationGroup()
     local alpha = ag:CreateAnimation("Alpha")
     alpha:SetFromAlpha(0)
-    alpha:SetToAlpha(1)
     alpha:SetDuration(duration or 0.15)
     alpha:SetSmoothing("OUT")
-    -- The animation fades to 1, but the frame's resting alpha may be the user's Window Opacity
-    -- setting (KART.UpdateStyles calls SetAlpha on the main window). Snapshot that value when the
-    -- fade starts and restore it when it ends, so the fade can't leave the window stuck at full
-    -- opacity or visibly pop back down — whichever way the client's final-alpha handling falls.
+
+    -- The target alpha is the frame's OWN resting alpha, sampled fresh on every show, not a
+    -- hard-coded 1: the main window's opacity is a user setting (KART.UpdateStyles calls SetAlpha on
+    -- it), so fading to full would flash the window opaque and then snap it back down.
+    --
+    -- restingAlpha is only held for the duration of one run and cleared when it finishes. Keeping it
+    -- across runs would mean re-applying a value the opacity slider has since changed, silently
+    -- reverting the user's setting the next time the window is opened.
     local restingAlpha
     ag:SetScript("OnFinished", function()
         if restingAlpha then frame:SetAlpha(restingAlpha) end
+        restingAlpha = nil
     end)
     frame:HookScript("OnShow", function()
-        ag:Stop()
-        if restingAlpha then frame:SetAlpha(restingAlpha) end -- undo a previous run cut short by Stop()
+        ag:Stop() -- Stop() fires OnStop, not OnFinished, so the restore below is still needed
+        if restingAlpha then frame:SetAlpha(restingAlpha) end -- undo a run cut short mid-fade
         restingAlpha = frame:GetAlpha()
+        alpha:SetToAlpha(restingAlpha)
         ag:Play()
     end)
 end
@@ -1126,7 +1157,10 @@ function KART.BuildSearchIndex()
     local index = {}
     for _, fs in ipairs(KART.DynamicLabels) do
         local text = fs:GetText()
-        if text and text ~= "" then
+        -- Skip hidden labels: a FontString keeps its text after :Hide(), so a conditionally-shown one
+        -- (e.g. the council pending-resolution label) would stay searchable and its result row would
+        -- scroll to and highlight an invisible, zero-content strip of the panel.
+        if text and text ~= "" and fs:IsShown() then
             local ancestor = fs:GetParent()
             local tabIndex
             while ancestor and not tabIndex do

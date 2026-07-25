@@ -14,6 +14,19 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
+- **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
+- **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**
+- **Das Zurücknehmen eines Gewinners löscht die Handels-Erinnerung jetzt auch beim Zurücknehmenden.**
+- **Der Loot-Zustand eines Raids wird nicht mehr** in den nächsten Raid oder die nächste Sitzung übernommen.
+- **Der Loot-Verlauf-Button unten im Loot-Council-Tab ist wieder erreichbar.**
+- **Das Minimieren des Council-Panels lässt es nicht mehr über den Bildschirm springen.**
+- **Das Schließen eines Council-Tabs öffnet das geschlossene Abstimmungsfenster nicht mehr erneut.**
+- **Die Buff-Checker-Vorschau verschwindet nicht mehr**, während du die Regler bedienst.
+- **Die Fenster-Deckkraft setzt sich nicht mehr zurück**, wenn du das Fenster erneut öffnest.
+- **Die Raidlead-Leiste erscheint nach einem Reload nicht mehr mitten im Kampf.**
+- **Ein Profilwechsel wendet jetzt die Auto-Kampflog-Einstellungen an.**
+- **Ein Bosslisten-Import ersetzt jetzt die alte Liste**, statt sie zu ergänzen.
+- **Zurücksetzen fragt jetzt nach**, bevor alle Einstellungen gelöscht werden.
 - **Würfe gehen nicht mehr verloren** bei Spielern, die für das Item nicht berechtigt waren.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Daten können nicht mehr von Spielern außerhalb deiner Gruppe abgefragt oder gefälscht werden.**
 - **Die Bossliste folgt jetzt dem aktiven Profil**, statt sich aufzustapeln, und ein Reset überlebt den Reload.

@@ -86,9 +86,14 @@ end
 -- by hand), which would otherwise leave the previous profile's bosses in place and relabel the
 -- collisions "Boss A"/"Boss B". A profile whose import text is empty correctly ends up with no
 -- bosses instead of inheriting the previous profile's.
+--
+-- Deliberately NOT gated on wuModuleEnabled: the module toggle disables the invite/remove ACTIONS
+-- (each of those checks it directly) and has no callback of its own, so gating here would empty the
+-- list on disable and never rebuild it on re-enable — the list would only come back via a manual
+-- Import or a reload.
 function WU.SyncBossesToSavedText()
     if not WU.ImportEditBox then return end
-    local text = (KART_Settings.wuModuleEnabled ~= false) and (KART_Settings.wuImportText or "") or ""
+    local text = KART_Settings.wuImportText or ""
     if text == WU.lastImportedText then return end -- already exactly this list
 
     WU.bosses = {}
@@ -137,6 +142,21 @@ function WU.InviteBoss(idx)
 
     -- Build a lookup of players already in the group (with and without realm).
     local alreadyIn = {}
+    -- Seed with ourselves unconditionally: EachGroupUnit yields nothing while solo, so a bulk invite
+    -- started alone (the case the deferred raid conversion below exists for) would otherwise try to
+    -- invite the player themselves — a red "You can't invite yourself" error, and an invited count
+    -- one too high.
+    do
+        local myName, myRealm = UnitName("player")
+        if myName then
+            alreadyIn[KART.CaseFold(myName)] = true
+            if myRealm and myRealm ~= "" then alreadyIn[KART.CaseFold(myName.."-"..myRealm)] = true end
+            local normalized = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
+            if normalized and normalized ~= "" then
+                alreadyIn[KART.CaseFold(myName.."-"..normalized)] = true
+            end
+        end
+    end
     for unit in KART.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
@@ -163,7 +183,15 @@ function WU.InviteBoss(idx)
     -- else-branch that flags the deferred conversion — so gate on "solo OR party leader" instead.
     -- (A party non-leader can't convert anyway, and a raid needs no conversion.)
     if (not IsInGroup() or UnitIsGroupLeader("player")) and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
-        if IsInGroup() then C_PartyInfo.ConvertToRaid() else KART.pendingBulkRaidConvert = true end
+        if IsInGroup() then
+            C_PartyInfo.ConvertToRaid()
+        else
+            KART.pendingBulkRaidConvert = true
+            -- Expire the flag if the invites never land. It is otherwise only cleared once we're in
+            -- a raid or out of a group, so a bulk invite nobody accepts would leave it armed for the
+            -- session and silently convert some unrelated 5-man party an hour later.
+            C_Timer.After(120, function() KART.pendingBulkRaidConvert = false end)
+        end
     end
 
     local invited = 0
@@ -411,12 +439,24 @@ function WU.BuildPanel(parent)
             WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
             return
         end
+        -- Replace, don't append. Only the edit box's text is persisted (wuImportText), so the list
+        -- has to be reconstructible from it alone — an appended second import would silently shrink
+        -- back to just the last export on the next /reload or profile switch, and re-clicking Import
+        -- on a box holding both exports would duplicate the first one as "Boss A"/"Boss B".
+        -- Stacking several exports still works the intended way: paste them all into the box, which
+        -- parses every EncounterID block it contains.
+        local previous = WU.bosses
+        WU.bosses = {}
         local count = WU.ParseImport(text)
         if count > 0 then
             WU.RefreshBossList()
             WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, count))
             WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
         else
+            -- Nothing parsed — hand the previous list straight back instead of leaving the user with
+            -- an empty one. (Rebuilding from wuImportText wouldn't work: the edit box's OnTextChanged
+            -- has already overwritten it with the text that just failed to parse.)
+            WU.bosses = previous
             WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR)
             WU.statusLabel:SetTextColor(0.9, 0.3, 0.3)
         end
@@ -427,7 +467,10 @@ function WU.BuildPanel(parent)
     WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
-        if #WU.bosses == 0 then return end
+        -- Also offer the reset when the visible list is empty but a saved import text still exists:
+        -- that text is what rebuilds the list on the next login/profile switch, so it is exactly what
+        -- needs clearing (see WU.ResetBosses). Only a truly clean slate is a no-op.
+        if #WU.bosses == 0 and (KART_Settings.wuImportText or "") == "" then return end
         StaticPopupDialogs["KART_WU_RESET_CONFIRM"].text = L.WU_RESET_CONFIRM_TEXT
         StaticPopup_Show("KART_WU_RESET_CONFIRM")
     end)

@@ -99,6 +99,11 @@ end
 local rlBar = CreateFrame("Frame", "KART_RaidleadBar", UIParent, "BackdropTemplate")
 rlBar:SetSize(275, 56)
 rlBar:SetPoint("TOP", UIParent, "TOP", 0, -50)
+-- Start hidden and let KART.UpdateRaidleadBarVisibility decide. A frame is shown by default, and
+-- that function early-returns while in combat — so a /reload mid-pull (common) would otherwise
+-- leave the toolbar stuck on screen at its hard-coded default position, ignoring both the
+-- "show bar" setting and the saved position, until combat ends.
+rlBar:Hide()
 rlBar:SetMovable(true)
 -- Same reasoning as the Buff-Check window: the bar saves point/relativePoint/offset, so let WoW keep
 -- it on screen rather than restoring a position saved at a bigger resolution into the void.
