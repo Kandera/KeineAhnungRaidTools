@@ -14,8 +14,22 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
 - **Oil name fallback marks any oil as "best"** (BuffChecker.lua `isOil` handling).
   Resolved 2026-07-25: only the current rank's enchantIDs count as "best" — the three Midnight oils
   plus the two blacksmithing stones. Class mechanics sharing the weapon slot (shaman imbues, rogue
-  poisons, paladin Holy Armaments) are neutral, everything else is reported as wrong rank, and the
-  name fallback (`find("Oil")/"Öl"`) now yields "wrong" rather than "best".
+  poisons, paladin Holy Armaments) are neutral, everything else is reported as wrong rank.
+  Superseded the same day: the name fallback (`find("Oil")/"Öl"`) was **removed entirely**, not
+  changed to "wrong". As a bare substring it also matched "Coil", "Turmoil", "Wölfe" and "Höllen…",
+  and because `MergeBuffState` only lets "best" beat "wrong", one such aura pinned the column red for
+  a shaman with a legitimate imbue or any raider without KART. An oil is a temporary weapon enchant
+  and never appears as an aura at all, so the fallback could only ever add false positives. The
+  enchantID pass is now the sole writer of the oil state. **Do not re-add a name fallback.**
+
+- **Manual rolls don't purge stale state on a rollID collision** (LootCouncil.lua
+  `LC.HandleManualStart`). Kept 2026-07-25. `LC.HandleStart` calls `PurgeStaleRoll` because Blizzard
+  reuses server rollIDs constantly; manual IDs are self-issued from a per-client seed
+  (`MANUAL_ROLL_ID_BASE + time() % 100000`), so a collision needs the lootmaster role to change
+  mid-raid between two people who logged in seconds apart AND both to have used `/kart add`. Only the
+  lootmaster can issue these at all and they are rare by nature. Not worth the extra purge path on a
+  code path that would otherwise stay untested. `LC.rollItems[rollID]` is already overwritten
+  unconditionally, so the item itself is always right; only `LC.votes[rollID]` could carry over.
 
 - **`vantus` buff matched name-only, English "Vantus"** (BuffChecker.lua, `vantus` entry).
   Resolved 2026-07-25: the 12.0 and 12.1 spellIDs are now the primary detection path, with the
@@ -32,6 +46,14 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
 
 - **Clear-World-Markers macro uses `/cwm <n>`** (RaidleadBar.lua).
   Verified fine — the command exists on the clients we target. No change.
+
+- **`GOOD_ENCHANTS` is a hardcoded list with no opt-out** (Utils.lua). Intended. Anything not on the
+  list is reported as "(wrong enchant)", so a wrong ID or a patch adding new enchants shows every
+  correctly-enchanted player as red — that loud failure is accepted deliberately, in exchange for
+  catching an outdated enchant at all. The lists are a per-patch maintenance item. The only built-in
+  softening stays as-is: a slot whose list is missing or empty falls back to a presence-only check
+  (`IsGoodEnchant`'s `#good == 0` branch), so slots can be filled in one at a time. Do not propose a
+  settings toggle for this.
 
 ## Design rules
 

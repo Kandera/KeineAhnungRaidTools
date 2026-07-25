@@ -7,7 +7,8 @@ KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 -- Reviewed 2026-07 (see docs/REVIEW-DECISIONS.md): the name-only detections kept on purpose —
 -- flask (no Phiole branch, past Dragonflight) and the bronze fallback ("Bronze"). Do not re-flag
 -- these. Two are no longer among them: vantus matches on spellID now (name kept as a fallback for
--- future rune versions), and an oil is only "best" at the current rank's enchantID.
+-- future rune versions), and the oil is matched by enchantID only — it has no name detection at all
+-- any more, deliberately (see the aura loop in KART.UpdateBuffCheck).
 KART.BuffData = {
     { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
     { id = "sta",    labelKey = "BC_LABEL_STA",    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabelKey = "BC_REPORT_STA" },
@@ -795,7 +796,6 @@ function KART.UpdateBuffCheck(isPreview)
                 for k = 1, buffDataCount do
                     local buff = KART.BuffData[k]
                     local match = false
-                    local buffState = true
                     if buff.spells and type(aura.spellId) == "number" then
                         for _, sid in ipairs(buff.spells) do
                             if aura.spellId == sid then match = true end
@@ -815,33 +815,29 @@ function KART.UpdateBuffCheck(isPreview)
                     if buff.isFood and not match and (aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true)) then match = true end
                     if buff.isFlask and (aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true) or aura.name:find("Flask", 1, true)) then match = true end
                     if buff.isRune and (aura.name:find("Augment", 1, true) or aura.name:find("Verstärkungsrune", 1, true)) then match = true end
-                    if buff.isOil then
-                        -- No spellId comparison here: an oil is a temporary weapon enchant, so it is
-                        -- identified by enchantID in the weapon-enchant pass below, not by an aura.
-                        if not match and (aura.name:find("Oil") or aura.name:find("oil") or aura.name:find("Öl") or aura.name:find("öl")) then
-                            match = true
-                            -- An oil recognized only by name is off-rank until proven otherwise: the
-                            -- current one is identified by its enchantID in the weapon-enchant pass
-                            -- below, and "best" from there overrides this (see MergeBuffState).
-                            buffState = "wrong"
-                        end
-                    end
+                    -- buff.isOil is deliberately absent from this loop. An oil is a temporary WEAPON
+                    -- enchant and never shows up as an aura at all, so the only thing this pass could
+                    -- ever do for it was match by name — and "oil"/"öl" as a bare substring also hits
+                    -- "Coil", "Turmoil", "Wölfe", "Höllen…". That fallback wrote "wrong", and
+                    -- MergeBuffState only lets "best" override "wrong", so one such aura pinned the
+                    -- column red with no way back: a shaman with a legitimate imbue rates 3 (-> true,
+                    -- blocked) and a raider without KART rates "unknown" (also blocked). Both
+                    -- authoritative paths already exist in the weapon-enchant pass below
+                    -- (GetWeaponEnchantInfo for us, KART.OilCache for everyone else), so this only
+                    -- ever produced false alarms. Do not re-add a name fallback here.
 
                     if match then
+                        -- Everything this loop can still match is a plain present/absent aura, so the
+                        -- only distinction left is whether it's about to run out. (There used to be a
+                        -- "best"/"wrong" state here too — that was the oil, which is rated by
+                        -- enchantID in the weapon pass below and no longer reaches this loop at all.)
                         local expiring = false
                         if aura.expirationTime and aura.expirationTime > 0 then
                             local remaining = aura.expirationTime - timeNow
-                            if remaining > 0 and remaining < 300 then
-                                expiring = true
-                            end
+                            expiring = remaining > 0 and remaining < 300
                         end
 
-                        local stateToSet = buffState
-                        if expiring and buffState ~= "wrong" then
-                            stateToSet = "expiring"
-                        end
-
-                        MergeBuffState(buff.id, stateToSet)
+                        MergeBuffState(buff.id, expiring and "expiring" or true)
                     end
                 end
             end
@@ -850,7 +846,10 @@ function KART.UpdateBuffCheck(isPreview)
         -- 2. Nach der Aura-Schleife prüfen wir auf Waffenverzauberungen (für das Öl)
         for k = 1, buffDataCount do
             local buff = KART.BuffData[k]
-            if buff.isOil and KART.BuffStatesCache[buff.id] ~= "best" then
+            -- No "unless the aura loop already found something better" guard: that loop no longer
+            -- matches the oil at all (see the comment where its name fallback used to be), so this
+            -- pass is the only writer of the oil state and always runs.
+            if buff.isOil then
                 -- Every hand holding a weapon is rated and the worst result wins, so a dual wielder
                 -- with oil on one weapon only still counts as missing it. Which hands take part is
                 -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's

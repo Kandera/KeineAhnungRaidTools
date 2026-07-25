@@ -26,7 +26,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.
 
 ### Behoben
-- **Der Buff-Checker prüft jetzt die Verzauberung der Schildhand** — Waffe wie Schild.
+- **Der Buff-Checker prüft jetzt die Verzauberung der Schildhand** — nur bei einer zweiten Waffe, Schilde und Zauberer-Schildhände nehmen keine.
+- **Ein Buff, in dessen Namen bloß „Öl" vorkommt, löst keine falsche Öl-Warnung mehr aus.**
 - **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
 - **Ein Reload des Raidleiters mitten im Raid stoppt nicht mehr die Vote-Fenster des Raids**, während weiter Items gewonnen werden.

@@ -1324,6 +1324,14 @@ function LC.HandleManualStart(payload, senderKey)
     -- state left over from an earlier roll that reused this ID.
     LC.rollItems[rollID] = itemLink
 
+    -- Same BoP trade clock LC.HandleStart sets for a real roll. The SENDER stamps this in
+    -- LC.StartManualRoll, but the receiving side was missing it entirely, so the winner's owedToMe
+    -- entry (Trade.HandleResult) fell back to time() at AWARD time — their 4-hour countdown started
+    -- when the council finished instead of when the item was added, and the reminder outlived the
+    -- real deadline by however long the vote took. Wall clock, same reason as everywhere else.
+    LC.rollLootedAt = LC.rollLootedAt or {}
+    LC.rollLootedAt[rollID] = time()
+
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
     end

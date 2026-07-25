@@ -120,8 +120,14 @@ function Vote.PruneExpiredRolls()
     return changed
 end
 
--- Registers rollID as an active roll and (re)builds the list. itemLink/seconds only matter the
--- first time a rollID is seen — LC.rollItems/LC.rollDeadlines are the source of truth afterwards.
+-- Registers rollID as an active roll and (re)builds the list.
+--
+-- The two arguments behave differently on a repeat call for the same rollID, on purpose: itemLink is
+-- only used the first time (LC.rollItems keeps the link it already has), while the deadline is RESET
+-- every call. That reset is load-bearing — LC.StartTest reuses its four fixed test rollIDs and
+-- refreshes their countdown by simply calling this again. In live play nothing calls this twice for
+-- one roll (LC_START is sent once, and LC.HandleStateRequest deliberately doesn't replay it), so the
+-- difference never shows up outside the test window.
 function Vote.ShowVotePopup(rollID, itemLink, seconds)
     Vote.PruneExpiredRolls() -- clear anything that expired while the window was hidden before adding
     LC.rollItems[rollID]     = LC.rollItems[rollID] or itemLink

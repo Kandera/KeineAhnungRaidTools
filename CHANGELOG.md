@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.
 
 ### Fixed
-- **The Buff-Checker now checks the off-hand enchant** on weapons and shields.
+- **The Buff-Checker now checks the off-hand enchant** on a second weapon — shields and caster off-hands take none.
+- **A buff that merely has "oil" in its name no longer triggers a false oil warning.**
 - **An item with two sockets now reports both empty ones**, not just one.
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.
 - **A raid leader reloading mid-raid no longer stops the raid's vote windows** while items keep being won.

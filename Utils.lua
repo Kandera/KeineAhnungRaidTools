@@ -1013,7 +1013,7 @@ local GOOD_ENCHANTS = {
     [16] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
              3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Main Hand
     [17] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
-             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Off Hand (weapon or shield)
+             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Off Hand (second WEAPON only)
 }
 
 -- Equip locations that can carry a temporary weapon enchant (oil, sharpening stone, poison, imbue).
@@ -1034,12 +1034,21 @@ function KART.SlotNeedsOil(slot)
     return OIL_EQUIP_LOCS[equipLoc] or false
 end
 
--- Slot 17 also takes caster off-hands (INVTYPE_HOLDABLE), which carry no enchant in Midnight — only
--- a shield or a second weapon in that slot does. Every other slot in enchantableSlots is unconditional.
+-- Off-hand item types that carry no enchant at all in Midnight. Shields lost theirs expansions ago
+-- (there is no "Enchant Shield" any more) and caster off-hands never had one — only a second WEAPON
+-- in slot 17 is enchantable. Both must be excluded, not just the caster off-hand: an unenchantable
+-- item left in the check has an empty enchant field, so it was reported as "enchant missing" on a
+-- slot the player cannot do anything about, permanently, for every shield tank and holy paladin.
+local NO_ENCHANT_OFFHANDS = {
+    INVTYPE_SHIELD = true,
+    INVTYPE_HOLDABLE = true,
+}
+
+-- Only slot 17 can hold something unenchantable; every other slot in enchantableSlots is unconditional.
 local function SlotTakesEnchant(slot, link)
     if slot ~= 17 then return true end
     local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
-    return equipLoc ~= "INVTYPE_HOLDABLE"
+    return not NO_ENCHANT_OFFHANDS[equipLoc]
 end
 
 local function IsGoodEnchant(slot, enchantID)
@@ -1061,7 +1070,8 @@ function KART.CountMissingGear()
     local missingGems = {}
 
     -- Enchantable slots: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12),
-    -- Main Hand(16), Off Hand(17 — weapon or shield). Wrist(9) and Back(15) lost their enchants.
+    -- Main Hand(16), Off Hand(17 — only when it holds a second weapon, see SlotTakesEnchant).
+    -- Wrist(9) and Back(15) lost their enchants.
     local enchantableSlots = {1, 3, 5, 7, 8, 11, 12, 16, 17}
     for _, slot in ipairs(enchantableSlots) do
         local link = GetInventoryItemLink("player", slot)

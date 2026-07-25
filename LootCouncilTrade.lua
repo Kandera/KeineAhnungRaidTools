@@ -775,7 +775,8 @@ function Trade.HandleResult(payload, senderKey)
             -- lootedAt drives the same expiry the lootmaster's pending trade uses, and lets
             -- Trade.RestorePersistedTrades drop entries whose trade window closed while we were gone.
             -- Every client stamps LC.rollLootedAt when the roll starts (see LC.OnStartLootRoll /
-            -- LC.HandleStart) and the stamp deliberately outlives the roll's own tracking (see
+            -- LC.HandleStart, and LC.StartManualRoll / LC.HandleManualStart for /kart add) and the
+            -- stamp deliberately outlives the roll's own tracking (see
             -- Trade.PruneExpiredLootStamps), so this is the real loot time, not the award time; the
             -- time() fallback only covers a roll this client never saw start at all.
             table.insert(LC.owedToMe, {
