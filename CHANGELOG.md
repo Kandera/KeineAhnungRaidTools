@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
 ### Fixed
+- **Rolls are no longer lost** for raiders who weren't eligible for the item.
+- **Gear, item level and ready-check data can no longer be requested or spoofed** by players outside your group.
+- **The boss list now follows the active profile** instead of stacking up, and a reset survives a reload.
+- **Empty gem sockets now name the right slot** — gloves, belt, trinkets and cloak included.
+- **Revoking a winner now also clears the trade reminders** on everyone.
+- **A minimized council panel stays minimized** while votes come in.
+- **Auto combat log no longer keeps running** after a reload mid-raid.
+- **Raidlead bar keybinds are released** when the bar is hidden or disabled.
+- **Buff-Check and Raidlead bar can no longer end up off-screen.**
+- **Closing a council tab no longer leaves a stuck entry** in the vote window.
 - **Loot history is no longer sent to players outside your group.**
 - **Officer note tooltips now show on hover again.**
 - **"No winner" now clears the item for the whole council**, not just whoever clicked it.

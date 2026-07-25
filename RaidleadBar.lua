@@ -100,6 +100,9 @@ local rlBar = CreateFrame("Frame", "KART_RaidleadBar", UIParent, "BackdropTempla
 rlBar:SetSize(275, 56)
 rlBar:SetPoint("TOP", UIParent, "TOP", 0, -50)
 rlBar:SetMovable(true)
+-- Same reasoning as the Buff-Check window: the bar saves point/relativePoint/offset, so let WoW keep
+-- it on screen rather than restoring a position saved at a bigger resolution into the void.
+rlBar:SetClampedToScreen(true)
 rlBar:EnableMouse(true)
 rlBar:RegisterForDrag("LeftButton")
 KART.RaidleadBar = rlBar
@@ -141,6 +144,9 @@ function KART.UpdateRaidleadBarVisibility()
     else
         rlBar:Hide()
     end
+    -- Keep the override bindings in step with visibility: ApplyKeybinds sets them when the bar is
+    -- shown and clears them when it isn't, so a hidden bar never leaves a key hijacked.
+    KART.ApplyKeybinds()
 end
 
 -- Applies every stored keybind as an override click-binding on its target button. Override
@@ -149,6 +155,14 @@ end
 -- only the act of calling SetOverrideBindingClick itself is restricted while in combat, so this
 -- must only run out of combat (mirrors KART.UpdateRaidleadBarVisibility's own guard).
 function KART.ApplyKeybinds()
+    -- A hidden or disabled bar must not keep its keys hijacked: the bindings are override bindings,
+    -- so they outrank the player's normal keybinds for the whole session even though the buttons
+    -- they click are gone from the screen. Drop them whenever the bar isn't actually shown, and
+    -- re-apply from KART.UpdateRaidleadBarVisibility when it comes back.
+    if not (KART_Settings and KART_Settings.showRaidleadBar) or not rlBar:IsShown() then
+        if not InCombatLockdown() then ClearOverrideBindings(rlBar) end
+        return
+    end
     if InCombatLockdown() then
         -- Logging in / reloading mid-combat (common in raids) would otherwise silently drop the
         -- keybinds until the next manual bind change. Flag it so the PLAYER_REGEN_ENABLED handler

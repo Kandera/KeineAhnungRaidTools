@@ -42,10 +42,18 @@ local function BuildSlotNames()
         ["5"] = L.SLOT_CHEST,
         ["7"] = L.SLOT_LEGS,
         ["8"] = L.SLOT_FEET,
+        -- Blizzard INVSLOT ids: 6 = Waist, 9 = Wrist, 10 = Hands (slot 10 was previously labelled
+        -- "Waist", so an empty gem socket in gloves reported the wrong item and the belt fell through
+        -- to the "Slot %d" fallback). Slots 13/14 (trinkets) and 15 (back) can hold sockets too and
+        -- are scanned by KART.CountMissingGear's 1..17 loop, so they need names as well.
+        ["6"] = L.SLOT_WAIST,
         ["9"] = L.SLOT_WRIST,
-        ["10"] = L.SLOT_WAIST,
+        ["10"] = L.SLOT_HANDS,
         ["11"] = L.SLOT_FINGER .. " 1",
         ["12"] = L.SLOT_FINGER .. " 2",
+        ["13"] = L.SLOT_TRINKET .. " 1",
+        ["14"] = L.SLOT_TRINKET .. " 2",
+        ["15"] = L.SLOT_BACK,
         ["16"] = L.SLOT_WEAPON,
         ["17"] = L.SLOT_OFFHAND,
     }
@@ -126,6 +134,12 @@ function KART.CreateBuffCheckFrame()
     f:SetSize(KART_Settings.bcWidth or 710, KART_Settings.bcHeight or 450)
     f:SetPoint(KART_Settings.bcPoint or "CENTER", UIParent, KART_Settings.bcRelativePoint or "CENTER", KART_Settings.bcX or 200, KART_Settings.bcY or 0)
     f:SetMovable(true)
+    -- This window stores its position as point/relativePoint/offset (not the TOPLEFT-from-
+    -- BOTTOMLEFT pair the LC popups use, so KART.IsSavedPosOnScreen doesn't apply). Let WoW keep it
+    -- on screen instead: without this, a position saved on a wider monitor or at a different UI
+    -- scale restores fully off screen, and since this frame isn't in UISpecialFrames and is only
+    -- repositioned by dragging, the only way back is a full settings reset.
+    f:SetClampedToScreen(true)
     f:SetResizable(true)
     f:SetResizeBounds(710, 250, 1200, 1500) -- Breite kann nun auch skaliert werden
     f:EnableMouse(true)
@@ -229,13 +243,22 @@ function KART.CreateBuffCheckFrame()
         row.reasonIcon:SetTexture("Interface\\Common\\help-i")
         row.reasonIcon:SetVertexColor(1, 0.85, 0.1)
         row.reasonIcon:Hide()
-        row.reasonIcon:EnableMouse(true)
-        row.reasonIcon:SetScript("OnEnter", function(self)
+
+        -- Textures are regions, not frames, so they take no mouse scripts of their own (same reason
+        -- the Loot Council panel overlays hitbox frames on its note FontStrings). Put the tooltip on
+        -- a small frame tracking the icon instead, shown/hidden alongside it. The reason text lives
+        -- on row.reasonIcon, which is what the row update writes to.
+        row.reasonHitbox = CreateFrame("Frame", nil, row)
+        row.reasonHitbox:SetSize(16, 16)
+        row.reasonHitbox:SetPoint("CENTER", row.reasonIcon)
+        row.reasonHitbox:EnableMouse(true)
+        row.reasonHitbox:Hide()
+        row.reasonHitbox:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.reasonText or "", 1, 1, 1, 1, true)
+            GameTooltip:SetText(row.reasonIcon.reasonText or "", 1, 1, 1, 1, true)
             GameTooltip:Show()
         end)
-        row.reasonIcon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row.reasonHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         row.ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.ilvlText:SetPoint("LEFT", row, "LEFT", offsets[2] - 10, 0)
@@ -344,14 +367,25 @@ function KART.CreateBuffCheckFrame()
     resizeHover:SetAllPoints()
     resizeHover:SetColorTexture(1, 1, 1, 0.08)
     f.resizeBtn:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
-    f.resizeBtn:SetScript("OnMouseUp", function() 
-        f:StopMovingOrSizing() 
+    f.resizeBtn:SetScript("OnMouseUp", function()
+        f:StopMovingOrSizing()
         KART_Settings.bcWidth = f:GetWidth()
         KART_Settings.bcHeight = f:GetHeight()
+        -- Persist the anchor too, not just the size. StartSizing("BOTTOMRIGHT") keeps the TOP-LEFT
+        -- corner fixed, but the saved anchor may be CENTER (the default) — restoring a now-wider
+        -- window against a centred anchor shifts it sideways by half the growth on the next reload.
+        local point, _, relativePoint, xOfs, yOfs = f:GetPoint()
+        KART_Settings.bcPoint = point
+        KART_Settings.bcRelativePoint = relativePoint
+        KART_Settings.bcX = xOfs
+        KART_Settings.bcY = yOfs
     end)
 
-    -- Dynamisches Verschieben der Spalten, wenn das Fenster breiter gezogen wird
-    f:SetScript("OnSizeChanged", function(self, width, height)
+    -- Dynamisches Verschieben der Spalten, wenn das Fenster breiter gezogen wird.
+    -- HookScript, NOT SetScript: KART.ApplyPopupArtwork already hooked OnSizeChanged to re-scale the
+    -- background artwork's inset offsets, and SetScript would replace that whole handler chain. This
+    -- is the only resizable KART window, i.e. the only one where that rescale actually matters.
+    f:HookScript("OnSizeChanged", function(self, width, height)
         local extra = width - 710
         if extra < 0 then extra = 0 end
         
@@ -589,8 +623,12 @@ function KART.UpdateBuffCheck(isPreview)
     if isPreview then
         -- Intentional: these preview sample reasons stay hardcoded German by design — sample data
         -- for the settings preview only, never shown in the live ready-check (review 2026-07-24).
+        -- Indexed 1..5 explicitly by the loop below (the embedded nil means # / ipairs would stop
+        -- early — don't convert these to ipairs). Only "notready" rows carry a reason, matching the
+        -- live path, so both sample reasons sit on the one "notready" row: the long one demonstrates
+        -- the tooltip wrapping that the reason icon exists for.
         local rcPreview = {"ready", "notready", "waiting", nil, "ready"}
-        local rcReasonsPreview = {nil, "Katze brennt", "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil}
+        local rcReasonsPreview = {nil, "Muss kurz zur Tür, der Postbote hat geklingelt", nil, nil, nil}
         for i = 1, 5 do
             local row = KART.BuffCheckFrame.rows[i]
             if row.stripeBg then
@@ -613,8 +651,10 @@ function KART.UpdateBuffCheck(isPreview)
             if reason then
                 row.reasonIcon.reasonText = reason
                 row.reasonIcon:Show()
+                row.reasonHitbox:Show()
             else
                 row.reasonIcon:Hide()
+                row.reasonHitbox:Hide()
             end
             
             KART.SetReadyCheckIcon(row.rcIcon, rc)
@@ -870,8 +910,10 @@ function KART.UpdateBuffCheck(isPreview)
         if reason then
             row.reasonIcon.reasonText = reason
             row.reasonIcon:Show()
+            row.reasonHitbox:Show()
         else
             row.reasonIcon:Hide()
+            row.reasonHitbox:Hide()
         end
 
         if UnitIsUnit(unit, "player") then

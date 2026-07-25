@@ -14,6 +14,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
 ### Behoben
+- **Würfe gehen nicht mehr verloren** bei Spielern, die für das Item nicht berechtigt waren.
+- **Ausrüstungs-, Item-Level- und Ready-Check-Daten können nicht mehr von Spielern außerhalb deiner Gruppe abgefragt oder gefälscht werden.**
+- **Die Bossliste folgt jetzt dem aktiven Profil**, statt sich aufzustapeln, und ein Reset überlebt den Reload.
+- **Leere Sockel nennen jetzt den richtigen Slot** — inklusive Handschuhe, Gürtel, Schmuck und Umhang.
+- **Das Zurücknehmen eines Gewinners löscht jetzt auch die Handels-Erinnerungen** bei allen.
+- **Ein minimiertes Council-Panel bleibt minimiert**, während Stimmen eingehen.
+- **Das Auto-Kampflog läuft nach einem Reload im Raid nicht mehr endlos weiter.**
+- **Tastenbelegungen der Raidlead-Leiste werden freigegeben**, wenn die Leiste versteckt oder deaktiviert ist.
+- **Buff-Check und Raidlead-Leiste können nicht mehr außerhalb des Bildschirms landen.**
+- **Das Schließen eines Council-Tabs hinterlässt keinen hängenden Eintrag mehr** im Abstimmungsfenster.
 - **Der Loot-Verlauf wird nicht mehr an Spieler außerhalb deiner Gruppe gesendet.**
 - **Officer-Notiz-Tooltips erscheinen wieder beim Überfahren.**
 - **"Kein Gewinner" leert das Item jetzt beim gesamten Council**, nicht nur beim Klickenden.

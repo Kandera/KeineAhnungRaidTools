@@ -128,7 +128,11 @@ function DT.RefreshStatusLabel()
     if not DT.statusLabel then return end
     local L = KART.L
     local cache = KART_WoWUtilsCache
-    local syncedAt = cache and cache.syncedAt
+    -- tonumber, not a raw read: this whole table is written by the external companion app, and a
+    -- non-numeric timestamp (an ISO-8601 string is the natural thing for an external writer to
+    -- produce) would make the arithmetic below throw — from a 60s ticker, so once a minute forever.
+    -- A nil here just falls into the "never synced" branch, which is the honest thing to show.
+    local syncedAt = tonumber(cache and cache.syncedAt)
 
     -- Treat a schema-version mismatch as "never synced": RebuildIndex bails and leaves the index
     -- empty in that case, so gains silently don't work — reporting a player count would be a lie.

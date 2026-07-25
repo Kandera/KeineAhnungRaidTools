@@ -632,11 +632,30 @@ function Trade.HandleResult(payload, senderKey)
     -- A result came in for this roll — remove it from our vote list, if it's still there.
     LC.Vote.RemoveVoteListItem(rollID)
 
+    -- Reassignment cleanup: drop any owed-to-me entry we were tracking for this roll before
+    -- re-evaluating the winner. Without this, a roll reassigned away from us leaves a stale "you
+    -- are owed X" reminder, and a reassignment back to the same player stacks a duplicate. Runs
+    -- BEFORE the NONE branch below: revoking a winner must clear the previous winner's reminder too,
+    -- otherwise "no winner" leaves them owed an item nobody is going to trade them.
+    local owedChanged = false
+    if LC.owedToMe then
+        for i = #LC.owedToMe, 1, -1 do
+            if LC.owedToMe[i].rollID == rollID then
+                table.remove(LC.owedToMe, i)
+                owedChanged = true
+            end
+        end
+    end
+
     if winnerKey == "NONE" then
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab
         -- with stale votes and a stale gold winner highlight from any prior assignment on this roll.
+        -- The lootmaster's pending-trade entry for the revoked winner has to go as well — there is
+        -- no longer anyone to hand the item to.
+        Trade.RemovePendingTrade(rollID)
+        if owedChanged then Trade.RefreshOwedReminder() end
         KART.LC.Council.CloseCouncilTab(rollID)
         return
     end
@@ -650,18 +669,6 @@ function Trade.HandleResult(payload, senderKey)
 
     local myKey = (KART.Identity.ResolvePlayer("player"))
 
-    -- Reassignment cleanup: drop any owed-to-me entry we were tracking for this roll before
-    -- re-evaluating the winner. Without this, a roll reassigned away from us leaves a stale "you
-    -- are owed X" reminder, and a reassignment back to the same player stacks a duplicate.
-    local owedChanged = false
-    if LC.owedToMe then
-        for i = #LC.owedToMe, 1, -1 do
-            if LC.owedToMe[i].rollID == rollID then
-                table.remove(LC.owedToMe, i)
-                owedChanged = true
-            end
-        end
-    end
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
         -- If I'm also the lootmaster, I already have the item — nothing to trade myself for. Also

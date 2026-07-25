@@ -103,22 +103,10 @@ function KART.SyncSettingsToUI()
     -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
     -- switch, which has no separate UpdateStyles of its own the way ADDON_LOADED does.
     KART.UpdateStyles()
-    -- Auto-parse saved WoWUtils import so boss buttons are ready immediately on login. Guard on
-    -- lastImportedText (same check the Import button uses) because SyncSettingsToUI also runs on
-    -- every profile switch — without it, re-parsing the already-loaded text appends every boss a
-    -- second time ("Boss A"/"Boss B"). ParseImport itself is additive (never wipes WU.bosses), so
-    -- the dedup has to live here.
-    if KART.WU and KART.WU.ImportEditBox and KART_Settings.wuModuleEnabled ~= false and KART_Settings.wuImportText ~= ""
-       and KART_Settings.wuImportText ~= KART.WU.lastImportedText then
-        local count = KART.WU.ParseImport(KART_Settings.wuImportText)
-        if count > 0 and KART.WU.RefreshBossList then
-            KART.WU.RefreshBossList()
-            if KART.WU.statusLabel then
-                KART.WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED, count))
-                KART.WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
-            end
-        end
-    end
+    -- Rebuild the boss buttons from the saved WoWUtils import so they're ready immediately on login.
+    -- SyncSettingsToUI also runs on every profile switch, so this has to REPLACE the list rather
+    -- than add to it — see WU.SyncBossesToSavedText.
+    if KART.WU and KART.WU.SyncBossesToSavedText then KART.WU.SyncBossesToSavedText() end
 
     if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
 
@@ -179,10 +167,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 if excess <= 0 then break end
             end
         end
-        -- LoggingCombat() state never survives a logout, so a persisted "KART owns the combat log"
-        -- flag from last session is stale — clear it, or a log the player starts manually this
-        -- session could be auto-stopped as if KART had started it (see KART.AutoLog.Evaluate).
-        KART_Settings.autoLogOwned = false
+        -- Reconcile the "KART owns the combat log" flag with reality. ADDON_LOADED fires on /reload
+        -- as well as on login, and LoggingCombat() SURVIVES a reload while it never survives a
+        -- logout — so only clear the flag when nothing is actually logging. Clearing it
+        -- unconditionally would orphan a log KART started before a mid-raid /reload, leaving it
+        -- running forever because AutoLog.Evaluate's stop branch requires ownership.
+        if not LoggingCombat() then KART_Settings.autoLogOwned = false end
 
         if KART_Settings.language == nil then KART_Settings.language = "Auto" end
 
@@ -302,7 +292,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})
         if KART.RCDialog then KART.RCDialog:Hide() end
-        if KART_Settings.showBuffCheck and KART.ShowBuffCheck then
+        -- Also gate on the module toggle: ShowBuffCheck itself refuses and prints
+        -- BC_MODULE_DISABLED_MSG when the module is off, which would spam chat on every single ready
+        -- check for anyone who enabled "show on ready check" without enabling the module.
+        if KART_Settings.showBuffCheck and KART_Settings.bcModuleEnabled ~= false and KART.ShowBuffCheck then
             KART.ShowBuffCheck()
             -- LibDurability is LibStub-only (no global) — a bare global lookup here was always
             -- nil, so the durability request on ready check never fired.
@@ -488,6 +481,14 @@ function KART.UpdateStyles()
     -- Font changes can re-flow the Loot Council raid box (RelayoutRaidBox above), which
     -- changes the active tab's content height — keep the scroll range in sync.
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+
+    -- Buff-Check names are truncated to fit their column by MEASURING them in the current font
+    -- (see SetTruncatedName), so a font or size change invalidates every rendered name. Nothing
+    -- else re-runs that until the next roster/aura event, so an open window would show overflowing
+    -- names running into the next column until then.
+    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() and KART.UpdateBuffCheckThrottled then
+        KART.UpdateBuffCheckThrottled()
+    end
 end
 
 -- UI für den erweiterten Ready-Check Grund

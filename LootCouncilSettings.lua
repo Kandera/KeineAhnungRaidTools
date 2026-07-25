@@ -241,10 +241,9 @@ function LC.BuildSettingsPanel(parent)
         -- The label's shown/hidden state changes how much vertical space it occupies (see
         -- layoutRaidBox()) — re-flow the box the same way LC.UpdateRoleStatusLabel already does
         -- for its own height-dependent label, so everything below shifts to make/reclaim room.
-        -- Skip the relayout while the tab is hidden (this also fires on the synchronous pending-
-        -- resolution retry from an incoming LC message); the OnShow hook re-runs this in full when
-        -- the tab is next shown, so the layout is always correct by the time it's visible.
-        if LC.RelayoutRaidBox and raidBox:IsShown() then LC.RelayoutRaidBox() end
+        -- LC.RelayoutRaidBox self-guards on visibility and syncs the scroll range (see its
+        -- definition below), so this fires cheaply even for the per-message pending-resolution retry.
+        if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
     end
     KART.LC.CouncilMembersEditBox:HookScript("OnShow", UpdateCouncilPendingLabel)
     hooksecurefunc(LC, "RetryPendingResolutions", UpdateCouncilPendingLabel)
@@ -390,7 +389,26 @@ function LC.BuildSettingsPanel(parent)
 
     layoutRaidBox()
     KART.ApplyRoundedMask(raidBox, KART.Theme.CORNER_RADIUS_LG)
-    LC.RelayoutRaidBox = layoutRaidBox
+    -- Exported entry point for every external caller (role-status change, pending-resolution retry,
+    -- UpdateStyles). Two things the raw layoutRaidBox doesn't do:
+    --  * Skip while off screen. IsVisible(), NOT IsShown(): tab switching hides the parent panel, so
+    --    raidBox's own shown flag stays true forever and an IsShown() test would never skip anything.
+    --    LC.IsSenderCouncil runs the pending-resolution retry for every unresolved LC message, which
+    --    would otherwise re-flow an invisible box once per incoming vote.
+    --  * Keep the scroll range in sync. The box's height feeds KART.UpdateScrollRange's tab-5 extent;
+    --    growing it (e.g. the pending label appearing) while the tab is open would otherwise push the
+    --    bottom buttons past the scrollable area until the user switched tabs and back.
+    LC.RelayoutRaidBox = function()
+        if not raidBox:IsVisible() then return end
+        layoutRaidBox()
+        if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    end
+    -- Catches up whatever was skipped while hidden. WoW fires OnShow on children when the parent
+    -- becomes visible, so this runs on every switch back to the Loot Council tab.
+    raidBox:HookScript("OnShow", function()
+        layoutRaidBox()
+        if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    end)
     KART.LC.RaidBox = raidBox -- measured by KART.UpdateScrollRange (dynamic panel height)
     -- ================= /Raid-wide settings box =================
 

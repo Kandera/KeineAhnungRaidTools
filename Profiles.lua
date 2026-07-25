@@ -14,6 +14,7 @@ function KART.LoadProfile(name)
     -- Language is only applied once at load (Core.lua) and the language picker itself reloads to
     -- switch it, so a profile that stored a different language needs the same reload to take effect.
     local prevLang = KART_Settings.language
+    local prevOwned = KART_Settings.autoLogOwned -- runtime log ownership, restored below (not a preference)
     -- LibDBIcon holds a REFERENCE to the minimap sub-table it was registered with (Core.lua
     -- ADDON_LOADED) — keep that table's identity across profile loads, otherwise icon position
     -- changes are written into an orphaned table until the next reload.
@@ -32,6 +33,11 @@ function KART.LoadProfile(name)
         KART_Settings.minimap = minimapTbl
     end
     KART_Settings.activeProfile = name
+    -- autoLogOwned is runtime state, not a preference — it only means "KART started the log that is
+    -- running right now". A snapshot taken while KART was logging would otherwise restore a true
+    -- claim over a log this session never started (or over no log at all), and AutoLog.Evaluate
+    -- would later stop a log the player started by hand. Re-derive it from what's actually running.
+    KART_Settings.autoLogOwned = prevOwned and LoggingCombat() or false
     if KART_Settings.language ~= prevLang then
         ReloadUI() -- language change needs a reload; the reload re-runs SyncSettingsToUI on load
         return

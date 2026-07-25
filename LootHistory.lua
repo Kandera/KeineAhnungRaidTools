@@ -849,9 +849,20 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     if not sinceTime or not senderFullName then return end
     -- Only answer group members. CHAT_MSG_ADDON also delivers whispers and the "KART" prefix is
     -- public, so without this any stranger could whisper LC_HIST_REQ and exfiltrate our loot history
-    -- (winners, items, reasons). Mirrors the group-membership check LH.HandleHistoryEntry already does.
-    local senderKey = KART.Identity.ResolvePlayer(senderFullName)
-    if not KART.Identity.FindUnitForKey(senderKey) then return end
+    -- (winners, items, reasons).
+    --
+    -- Deliberately NOT via Identity.ResolvePlayer: for a sender who isn't in the group that falls
+    -- back to the persistent cache, which matches on the realm-stripped short name — so an outsider
+    -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
+    -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
+    if not KART.IsFullNameInGroup(senderFullName) then return end
+    -- One reply burst per sender per session. Each request queues up to HISTORY_SYNC_MAX_ENTRIES
+    -- timers spanning ~8s; a peer that repeatedly leaves and rejoins would otherwise stack bursts
+    -- until the outgoing addon messages hit the client's throttle and the server's spam kick.
+    -- A genuine requester only asks once (LC.historySyncRequested guards the sending side).
+    LH.historySyncAnswered = LH.historySyncAnswered or {}
+    if LH.historySyncAnswered[senderFullName] then return end
+    LH.historySyncAnswered[senderFullName] = true
 
     local cutoff = time() - HISTORY_SYNC_MAX_AGE
     local toSend = {}
@@ -953,6 +964,16 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
     local incomingStr = KART.GetItemString(itemLink)
+    -- The sender drops the item field entirely when even the compact item string won't fit the
+    -- 255-byte cap (see LH.HandleHistoryRequest). An empty item can't be compared by item at all:
+    -- matching on `e.item == ""` would both miss the copy we already hold under its real link (→
+    -- duplicate) and collide with any other item-less award for the same winner (→ wrongly dropped).
+    -- Fall back to rollID, which identifies the award on its own.
+    local itemUnknown = (itemLink == "")
+    local function SameItemAs(e)
+        if itemUnknown then return rollID ~= nil and e.rollID == rollID end
+        return (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+    end
     -- Skip if we already have this award. Compare by the stable identity key + locale-independent
     -- item string (not display name + full link, which differ between DE/EN clients), and allow a
     -- few seconds of clock skew between the two clients that logged it. Runs BEFORE the reassignment
@@ -961,7 +982,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- and reinserted with the peer's timestamp/wire data.
     for _, e in ipairs(KART_LootHistory) do
         local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
-        local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
+        local sameItem = SameItemAs(e)
         if sameWinner and sameItem and math.abs((e.time or 0) - t) <= 5 then
             return -- already have it (e.g. another peer answered first)
         end
@@ -974,8 +995,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     if rollID then
         for i = #KART_LootHistory, 1, -1 do
             local e = KART_LootHistory[i]
-            local sameItem = (incomingStr and KART.GetItemString(e.item) == incomingStr) or (e.item == itemLink)
-            if e.rollID == rollID and sameItem then
+            if e.rollID == rollID and SameItemAs(e) then
                 table.remove(KART_LootHistory, i)
                 break
             end

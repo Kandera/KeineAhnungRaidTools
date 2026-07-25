@@ -834,10 +834,12 @@ function Vote.HandleRoll(payload, senderKey)
     rollID = tonumber(rollID)
     value  = tonumber(value)
     if not rollID or not value then return end
-    -- Ignore rolls for an untracked (already resolved/pruned) roll — see HandleVote: prevents an
-    -- orphan LC.rolls[rollID] that no cleanup path frees. rollItems is always set first for a live roll.
-    if not LC.rollItems[rollID] then return end
-
+    -- Deliberately NOT gated on LC.rollItems[rollID] the way HandleVote/HandleCouncilVote are: a
+    -- roll is auto-broadcast from START_LOOT_ROLL, so it can legitimately arrive before this client
+    -- knows the roll exists (a client that gets no local START_LOOT_ROLL learns it only from
+    -- LC_START, and other raiders broadcast their rolls at the same instant the leader does). Rolls
+    -- are sent exactly once with no retry, so dropping one loses it permanently. Any orphan left by
+    -- a roll that never materializes is swept by LC.ClearAllRolls at session end.
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][senderKey] = value
 

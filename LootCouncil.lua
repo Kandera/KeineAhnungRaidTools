@@ -636,6 +636,13 @@ function LC.ClearAllRolls()
     end
     wipe(LC.councilTabs)
     wipe(LC.voteListRolls)
+    -- Sweep any per-roll state that isn't reachable from the two lists above — Vote.HandleRoll
+    -- deliberately accepts rolls for a not-yet-known rollID (see the comment there), so an orphan
+    -- can exist for a roll that never materialized. Session end is the natural point to drop it.
+    wipe(LC.votes)
+    wipe(LC.rolls)
+    wipe(LC.councilVotes)
+    wipe(LC.rollItems)
     LC.showAllOverride = nil
     LC.activeRollID = nil
     if LC.councilPanel then LC.councilPanel:Hide() end
@@ -813,6 +820,17 @@ function LC.OnStartLootRoll(rollID)
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
+    -- LC_START goes out BEFORE the roll broadcast below: a client that never gets its own
+    -- START_LOOT_ROLL (dead, out of range, ineligible, or its session/min-quality state made
+    -- OnStartLootRoll return early) only learns the roll exists from LC_START, and Vote.HandleRoll
+    -- discards data for a roll it doesn't know yet. Sending the roll first would lose the leader's
+    -- own roll on every such client, every time.
+    local isLeader = UnitIsGroupLeader("player")
+    local secs = KART_Settings.lcVoteSeconds or 20
+    if isLeader then
+        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
+    end
+
     -- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational. Every
     -- eligible raider's client independently receives this same START_LOOT_ROLL event, so this
     -- is the one place that reliably runs once per roll for everyone, council members included.
@@ -824,9 +842,7 @@ function LC.OnStartLootRoll(rollID)
         LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
     end
 
-    if UnitIsGroupLeader("player") then
-        local secs = KART_Settings.lcVoteSeconds or 20
-        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
+    if isLeader then
         KART.LC.Council.ShowCouncilPanel(rollID, secs)
         -- Leader never receives their own LC_START, so open their own vote window here too — the
         -- same both-windows treatment HandleStart gives every other client (review #29), otherwise

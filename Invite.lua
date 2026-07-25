@@ -80,9 +80,41 @@ function WU.ParseImport(rawText)
     return parsedCount
 end
 
+-- Makes the in-memory boss list match KART_Settings.wuImportText exactly. Called from
+-- KART.SyncSettingsToUI, which runs both at login and on every profile switch — so it must REPLACE
+-- the list, not extend it: WU.ParseImport is deliberately additive (several exports can be stacked
+-- by hand), which would otherwise leave the previous profile's bosses in place and relabel the
+-- collisions "Boss A"/"Boss B". A profile whose import text is empty correctly ends up with no
+-- bosses instead of inheriting the previous profile's.
+function WU.SyncBossesToSavedText()
+    if not WU.ImportEditBox then return end
+    local text = (KART_Settings.wuModuleEnabled ~= false) and (KART_Settings.wuImportText or "") or ""
+    if text == WU.lastImportedText then return end -- already exactly this list
+
+    WU.bosses = {}
+    WU.lastImportedText = nil
+    local count = text ~= "" and WU.ParseImport(text) or 0
+    if not WU.RefreshBossList then return end
+    WU.RefreshBossList()
+    if WU.statusLabel then
+        if count > 0 then
+            WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED, count))
+            WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
+        else
+            WU.statusLabel:SetText(KART.L.WU_STATUS_EMPTY)
+            WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end
+end
+
 function WU.ResetBosses()
     WU.bosses = {}
     WU.lastImportedText = nil -- cleared list: allow re-importing the same text again
+    -- Also drop the saved import text, otherwise the login/profile-switch auto-parse in
+    -- KART.SyncSettingsToUI re-creates the whole list from it and the reset silently undoes itself
+    -- on the next /reload (lastImportedText is a runtime field and never survives a session).
+    KART_Settings.wuImportText = ""
+    if WU.ImportEditBox then WU.ImportEditBox:SetText("") end
     WU.RefreshBossList()
 end
 

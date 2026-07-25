@@ -223,6 +223,11 @@ function Council.CloseCouncilTab(rollID)
     for i = #LC.councilTabs, 1, -1 do
         if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
     end
+    -- Council members hold the vote list as well (review #29), and ClearRollState below nils this
+    -- roll's deadline — after which Vote.PruneExpiredRolls can never expire it (it only drops rows
+    -- whose deadline has passed). Drop the row explicitly, or closing a tab leaves a permanently
+    -- stuck "???" row with live vote buttons for a roll everyone else has finished with.
+    LC.Vote.RemoveVoteListItem(rollID)
     LC.Trade.ClearRollState(rollID)
 
     if LC.activeRollID == rollID then
@@ -380,7 +385,9 @@ function Council.RefreshCouncilTabs()
     for i = #LC.councilTabs + 1, #panel.tabs do
         if panel.tabs[i] then panel.tabs[i]:Hide() end
     end
-    panel.tabStrip:SetShown(#LC.councilTabs > 0)
+    -- Same as the column headers in RefreshCouncilRows: tabStrip is collapsible, so a minimized
+    -- panel must keep it hidden instead of having every refresh pop it back out.
+    panel.tabStrip:SetShown(#LC.councilTabs > 0 and not panel.isMinimized)
 
     LC.ApplyFontSize()
 end
@@ -657,7 +664,15 @@ function Council.CreateCouncilPanel()
         end)
     end
     f:HookScript("OnShow", startTimerTicker)
-    f:HookScript("OnHide", function() if f.timerTicker then f.timerTicker:Cancel() f.timerTicker = nil end end)
+    f:HookScript("OnHide", function()
+        if f.timerTicker then f.timerTicker:Cancel() f.timerTicker = nil end
+        -- The equip-comparison tooltip is parented to UIParent, not to this panel, so hiding the
+        -- panel doesn't take it with it. If the panel closes while the cursor sits on an equip icon
+        -- (the roll timing out closes it by itself), its row's OnLeave may never fire and the
+        -- tooltip would be stranded on screen with nothing left to dismiss it.
+        if LC.equipCompareTooltip then LC.equipCompareTooltip:Hide() end
+        GameTooltip:Hide()
+    end)
     if f:IsShown() then startTimerTicker() end
 
     -- Dedicated tooltip for the equipped-item icon hover (see RefreshCouncilRows) — deliberately
@@ -682,6 +697,13 @@ function Council.SetCouncilPanelMinimized(minimized)
     end
     f:SetHeight(minimized and COUNCIL_PANEL_MIN_H or COUNCIL_PANEL_HEIGHT)
     if f.minimizeBtn then f.minimizeBtn.text:SetText(minimized and "+" or "-") end
+    -- Three of the collapsible widgets have their own visibility conditions (hRoll on rolls being
+    -- enabled, hGain on the Droptimizer module, tabStrip on there being any tab) — the blanket
+    -- SetShown(true) above would ignore those when restoring, so let the refreshes re-decide.
+    if not minimized then
+        Council.RefreshCouncilRows()
+        Council.RefreshCouncilTabs()
+    end
 end
 
 -- Freshly-dropped items are frequently not yet cached client-side when the panel first renders,
@@ -721,8 +743,12 @@ function Council.RefreshCouncilRows()
 
     local rollsEnabled = LC.GetRollsEnabled()
     local dtEnabled = KART_Settings.dtModuleEnabled ~= false
-    if panel.hRoll then panel.hRoll:SetShown(rollsEnabled) end
-    if panel.hGain then panel.hGain:SetShown(dtEnabled) end
+    -- hRoll/hGain are part of f.collapsible, so a minimized panel has deliberately hidden them —
+    -- don't re-show them here (this runs on every incoming vote/note/equip reply, which would
+    -- otherwise pop the column headers back out into the empty space below the collapsed panel).
+    local minimized = panel.isMinimized
+    if panel.hRoll then panel.hRoll:SetShown(rollsEnabled and not minimized) end
+    if panel.hGain then panel.hGain:SetShown(dtEnabled and not minimized) end
 
     -- Rolled item's own ilvl, purely to show a +/- delta next to each candidate's equipped ilvl
     -- (see the equippedText update below) — nil until the item link is cached, same as everywhere

@@ -180,14 +180,44 @@ function KART.TrimString(s)
     return s:match("^%s*(.-)%s*$")
 end
 
+-- Whether fullName (a realm-qualified "Name-Realm", as CHAT_MSG_ADDON delivers its sender) is a
+-- member of our current group. Used to authorize addon messages that make us answer with our own
+-- data or write into a shared cache — CHAT_MSG_ADDON also carries WHISPER and GUILD, and the "KART"
+-- prefix is public, so an unauthorized sender is entirely possible.
+--
+-- Compares the FULL name, not a resolved identity key: Identity.ResolvePlayer falls back to a
+-- short-name cache lookup for anyone not currently in the group, which would map an outsider onto a
+-- same-short-named group member and wrongly authorize them. UnitName's realm return is nil for
+-- same-realm units, so those are compared short-to-short.
+function KART.IsFullNameInGroup(fullName)
+    if type(fullName) ~= "string" or fullName == "" then return false end
+    local wanted = KART.CaseFold(fullName)
+    for unit in KART.EachGroupUnit() do
+        local name, realm = UnitName(unit)
+        if name then
+            local full = (realm and realm ~= "") and (name .. "-" .. realm) or name
+            if KART.CaseFold(full) == wanted then return true end
+        end
+    end
+    return false
+end
+
 -- Returns true if a saved window position (a TOPLEFT offset relative to UIParent's BOTTOMLEFT — the
 -- anchor every KART popup restores with) still lands the window on screen. A position saved at a
 -- larger resolution or UI scale can otherwise restore a window fully off-screen where it can't be
 -- grabbed; callers keep their default anchor when this returns false.
+-- The margins are deliberately loose and symmetric: the point is to catch a window stranded
+-- entirely off screen (saved at a bigger resolution or UI scale), NOT to enforce that it sits fully
+-- inside the viewport. These frames are freely movable and unclamped, and parking one slightly past
+-- an edge is normal — the council panel's tab strip even lives 44px to the LEFT of the frame, so a
+-- deliberate negative x is a legitimate saved layout. Rejecting those would silently reset the
+-- user's window position on the next login.
+local POS_ON_SCREEN_MARGIN = 60 -- how much of the window must remain reachable, in pixels
 function KART.IsSavedPosOnScreen(x, y)
     if type(x) ~= "number" or type(y) ~= "number" then return false end
     local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
-    return x >= 0 and x <= sw - 40 and y >= 40 and y <= sh
+    local m = POS_ON_SCREEN_MARGIN
+    return x <= sw - m and x >= -(sw - m) and y >= m and y <= sh + m
 end
 
 function KART.SplitString(inputstr, sep)
@@ -991,8 +1021,18 @@ function KART.AddShowFade(frame, duration)
     alpha:SetToAlpha(1)
     alpha:SetDuration(duration or 0.15)
     alpha:SetSmoothing("OUT")
+    -- The animation fades to 1, but the frame's resting alpha may be the user's Window Opacity
+    -- setting (KART.UpdateStyles calls SetAlpha on the main window). Snapshot that value when the
+    -- fade starts and restore it when it ends, so the fade can't leave the window stuck at full
+    -- opacity or visibly pop back down — whichever way the client's final-alpha handling falls.
+    local restingAlpha
+    ag:SetScript("OnFinished", function()
+        if restingAlpha then frame:SetAlpha(restingAlpha) end
+    end)
     frame:HookScript("OnShow", function()
         ag:Stop()
+        if restingAlpha then frame:SetAlpha(restingAlpha) end -- undo a previous run cut short by Stop()
+        restingAlpha = frame:GetAlpha()
         ag:Play()
     end)
 end

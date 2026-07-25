@@ -21,12 +21,12 @@ function Sync.Send(msg, channel, target)
     C_ChatInfo.SendAddonMessage(PREFIX, msg, channel or Sync.DefaultChannel(), target)
 end
 
--- Reply channel/target for a request handler: whisper straight back to the sender when the request
--- itself arrived as a whisper (a targeted single-player query), otherwise the default broadcast
--- channel. Matches REQ_VERSION's behavior so every request/response pair round-trips on one channel.
-local function ReplyTo(ctx)
-    if ctx.channel == "WHISPER" then return "WHISPER", ctx.sender end
-    return Sync.DefaultChannel(), nil
+-- Whether an incoming request may be answered at all. CHAT_MSG_ADDON also delivers WHISPER and
+-- GUILD, and the "KART" prefix is public, so any player can send a request — answering one from
+-- outside the group discloses our gear/enchant/ilvl state to a stranger. Every data-reply handler
+-- below gates on this; replies always go to the group channel, never back to the whisperer.
+local function SenderInGroup(ctx)
+    return KART.IsFullNameInGroup(ctx.sender)
 end
 
 -- CHAT_MSG_ADDON dispatch. A message is either a fixed token (EXACT_HANDLERS) or
@@ -61,7 +61,12 @@ local function HandleVersionMessage(payload, ctx, isAnnounce)
         local oMaj, oMin, oPat = KART.Version:match("(%d+)%.?(%d*)%.?(%d*)")
         nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
         oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
-        if nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat) then
+        -- Sanity clamp before trusting the number. ANNOUNCE_VERSION also travels over GUILD and no
+        -- handler here authenticates its sender, so anyone can claim "VERSION:99" — and since
+        -- UpdateWarned latches after the first print, one bogus claim would suppress the real update
+        -- warning for the whole session. A genuine release never jumps more than a major ahead.
+        local plausible = nMaj <= oMaj + 1
+        if plausible and (nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
             KART.UpdateWarned = true
             print(string.format(KART.L.UPDATE_AVAILABLE, ver, KART.Version))
         end
@@ -73,24 +78,24 @@ local function HandleVersionMessage(payload, ctx, isAnnounce)
 end
 
 local EXACT_HANDLERS = {
-    REQ_OIL = { fn = function(_, ctx)
+    REQ_OIL = { group = true, fn = function(_, ctx)
         local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
         local outMH = (hasMH and mhID) and mhID or 0
         local outOH = (hasOH and ohID) and ohID or 0
         if IsInGroup() then
-            Sync.Send("OIL:" .. outMH .. ":" .. outOH, ReplyTo(ctx))
+            Sync.Send("OIL:" .. outMH .. ":" .. outOH)
         end
     end },
-    REQ_ILVL = { fn = function(_, ctx)
+    REQ_ILVL = { group = true, fn = function(_, ctx)
         local _, equipped = GetAverageItemLevel()
         if equipped and IsInGroup() then
-            Sync.Send("ILVL:" .. string.format("%.1f", equipped), ReplyTo(ctx))
+            Sync.Send("ILVL:" .. string.format("%.1f", equipped))
         end
     end },
-    REQ_GEAR = { fn = function(_, ctx)
+    REQ_GEAR = { group = true, fn = function(_, ctx)
         if IsInGroup() then
             local e, g = KART.CountMissingGear()
-            Sync.Send("GEAR:" .. e .. ":" .. g, ReplyTo(ctx))
+            Sync.Send("GEAR:" .. e .. ":" .. g)
         end
     end },
     REQ_VERSION = { fn = function(_, ctx)
@@ -107,7 +112,7 @@ local EXACT_HANDLERS = {
 }
 
 local PREFIX_HANDLERS = {
-    OIL = { fn = function(payload, ctx)
+    OIL = { group = true, fn = function(payload, ctx)
         local mhID, ohID = payload:match("^(%d+):(%d+)")
         if mhID and ohID then
             KART.OilCache = KART.OilCache or {}
@@ -115,7 +120,7 @@ local PREFIX_HANDLERS = {
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
     end },
-    ILVL = { fn = function(payload, ctx)
+    ILVL = { group = true, fn = function(payload, ctx)
         local ilvl = tonumber(payload)
         if ilvl then
             KART.ILvlCache = KART.ILvlCache or {}
@@ -123,7 +128,7 @@ local PREFIX_HANDLERS = {
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
     end },
-    GEAR = { fn = function(payload, ctx)
+    GEAR = { group = true, fn = function(payload, ctx)
         local e, g = payload:match("^([^:]+):([^:]+)")
         if e and g then
             KART.GearCache = KART.GearCache or {}
@@ -131,7 +136,7 @@ local PREFIX_HANDLERS = {
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
     end },
-    REQ_EQUIP = { lc = true, fn = function(payload, ctx)
+    REQ_EQUIP = { lc = true, group = true, fn = function(payload, ctx)
         -- A council member's open panel is asking what we've got equipped in the rolled item's
         -- slot (payload = equipLoc token). Reply with our own link so they can show the comparison
         -- for a raider they can't inspect locally. Modeled on REQ_GEAR, but carries a payload so it
@@ -147,10 +152,14 @@ local PREFIX_HANDLERS = {
                 local itemStr = KART.GetItemString(link)
                 if itemStr then msg = "EQUIP:" .. payload .. ":" .. itemStr end
             end
+            -- Still over budget (or no item string to fall back to): drop the reply entirely rather
+            -- than let SendAddonMessage truncate the link into something the receiver would cache as
+            -- garbage. Missing data renders as "no comparison"; corrupt data renders as a wrong one.
+            if #msg > 255 then return end
             Sync.Send(msg)
         end
     end },
-    EQUIP = { lc = true, fn = function(payload, ctx)
+    EQUIP = { lc = true, group = true, fn = function(payload, ctx)
         -- Reply to our REQ_EQUIP: equipLoc token, then the sender's equipped link (which itself
         -- contains colons, so it must be the rest of the payload). Cached per short name + slot,
         -- read by Council.GetEquippedForUnit as the fallback for un-inspectable raid members.
@@ -159,12 +168,35 @@ local PREFIX_HANDLERS = {
             -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
             -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring
             -- the history-sync rebuild.
-            if not KART.IsRealItemLink(link) and link:match("^item:") then
-                link = select(2, C_Item.GetItemInfo(link)) or link
+            local itemStr = (not KART.IsRealItemLink(link)) and link:match("^item:%d+") and link or nil
+            if itemStr then
+                link = select(2, C_Item.GetItemInfo(itemStr)) or link
             end
             KART.EquipCache = KART.EquipCache or {}
             KART.EquipCache[ctx.shortName] = KART.EquipCache[ctx.shortName] or {}
-            KART.EquipCache[ctx.shortName][equipLoc] = link
+            local shortName = ctx.shortName
+            KART.EquipCache[shortName][equipLoc] = link
+            -- Item not cached yet: nothing re-asks for it (Council.RequestEquipForRoll dedups per
+            -- roll), so the bare string would stay in the cache all session and the Equipped column
+            -- would keep showing a placeholder icon. Upgrade it in place once the item loads.
+            if itemStr and not KART.IsRealItemLink(link) then
+                local itemID = tonumber(itemStr:match("^item:(%d+)"))
+                if itemID then
+                    Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
+                        local full = select(2, C_Item.GetItemInfo(itemStr))
+                        if not full then return end
+                        local slotCache = KART.EquipCache and KART.EquipCache[shortName]
+                        -- Only replace if it's still the same bare string (a newer reply may have
+                        -- landed for this slot in the meantime).
+                        if slotCache and slotCache[equipLoc] == itemStr then
+                            slotCache[equipLoc] = full
+                            if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+                                KART.LC.Council.RefreshCouncilRows()
+                            end
+                        end
+                    end)
+                end
+            end
             if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
                 KART.LC.Council.RefreshCouncilRows()
             end
@@ -184,7 +216,11 @@ local PREFIX_HANDLERS = {
     LC_HIST_REQ     = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryRequest(payload, ctx.sender) end end },
     LC_HIST_ENTRY   = { lc = true, fn = function(payload, ctx) if KART.LH then KART.LH.HandleHistoryEntry(payload, SenderKey(ctx)) end end },
     LC_SYNC_REQUEST = { lc = true, fn = function(payload, ctx) KART.LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end },
-    RC_REASON = { fn = function(payload, ctx)
+    RC_REASON = { group = true, fn = function(payload, ctx)
+        -- Free text from another client goes straight into a chat print and a tooltip, so strip the
+        -- UI escape sequences WoW would otherwise render: |c/|r recoloring and |H...|h hyperlinks
+        -- would let a raider inject fake colored text and clickable links into every officer's chat.
+        payload = payload:gsub("|", "||")
         KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
         KART.ReadyCheckReasons[ctx.shortName] = payload
         if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
@@ -210,7 +246,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 local ctx = { sender = sender, shortName = shortName, channel = channel }
                 local prefix, payload = msg:match("^([^:]+):(.*)$")
                 local entry = (prefix and PREFIX_HANDLERS[prefix]) or EXACT_HANDLERS[msg]
-                if entry and not (entry.lc and not (KART.LC and KART_Settings.lcModuleEnabled ~= false)) then
+                if entry and not (entry.lc and not (KART.LC and KART_Settings.lcModuleEnabled ~= false))
+                   and not (entry.group and not SenderInGroup(ctx)) then
                     entry.fn(payload, ctx)
                 end
             end
