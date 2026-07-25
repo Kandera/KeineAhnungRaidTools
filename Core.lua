@@ -215,6 +215,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Re-apply every statically-built UI text with the now-selected language.
         KART.ApplyLocaleRefreshers()
 
+        -- Outstanding BoP trade obligations from the previous session. After the locale refresh
+        -- because the restored reminder windows render localized text.
+        if KART.LC and KART.LC.Trade and KART.LC.Trade.RestorePersistedTrades then
+            KART.LC.Trade.RestorePersistedTrades()
+        end
+
         KART.SyncSettingsToUI()
 
         AddonCompartmentFrame:RegisterAddon({

@@ -332,9 +332,20 @@ local function BuildCouncilPayload(prefix, council)
     return prefix .. council
 end
 
+-- Whether WE own the raid config, i.e. whether our own settings name us as the lootmaster. Only the
+-- config owner broadcasts it (see LC.BroadcastRaidConfig) and only their broadcast is accepted (see
+-- LC.HandleConfig). Reads KART_Settings directly rather than LC.GetLootmaster, which for a non-owner
+-- returns the synced raidConfig value — that would make everyone who received a config think they
+-- own it.
+function LC.IsConfigOwner()
+    return LC.IsMe(LC.ResolveConfigName(KART_Settings.lcLootmaster))
+end
+
 -- target (optional): whisper the config to one player instead of broadcasting (see LC.SendLC).
 function LC.BroadcastRaidConfig(target)
-    if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
+    -- Config authority follows the lootmaster entry, NOT raid lead — see LC.HandleConfig. A promoted
+    -- assistant with empty settings would otherwise push those over the whole raid's config.
+    if not (IsInGroup() and LC.IsConfigOwner()) then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
@@ -360,20 +371,32 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
--- Applies a raid-config broadcast from the leader (called from Core.lua CHAT_MSG_ADDON). Only
--- accepted from the actual current raid/party leader — otherwise a forged LC_CONFIG could add the
--- sender's own name to CouncilNamesTable below and self-promote to council on every client.
+-- Applies a raid-config broadcast (called from KARTSync's dispatcher).
+--
+-- Authority is the configured LOOTMASTER, not the raid leader: the config is only accepted when the
+-- sender is the very player the payload names as lootmaster. That is self-validating — no prior
+-- state is needed, so it works for a client that has never seen a config — and it means handing raid
+-- lead to someone else no longer lets their (usually empty) local settings overwrite the raid's
+-- council list and lootmaster. Someone who should take over the config pulls it with the Sync button
+-- (LC_SYNC_REQUEST) first, which is confirmed by the receiver.
+--
+-- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
+-- lootmaster, and every client resolves that name against the live roster the same way.
 function LC.HandleConfig(payload, senderKey)
     local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
-    if not unit or not UnitIsGroupLeader(unit) then return end
+    if not unit then return end
 
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return end
 
+    -- The payload must declare a lootmaster, and the sender must BE them.
+    local declaredKey = LC.ResolveConfigName(lootmaster)
+    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then return end
+
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = LC.ResolveConfigName(lootmaster) or ""
+    LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
 
@@ -451,10 +474,16 @@ end
 -- session prompt) would wipe the in-flight rolls of the entire raid. The requester is the only client
 -- that needs the answer, and they have no roll state to lose.
 function LC.HandleStateRequest(requester)
-    if not (IsInGroup() and UnitIsGroupLeader("player")) then return end
-    if not requester then return end
-    LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
-    if LC.sessionActive then LC.BroadcastRaidConfig(requester) end
+    if not (IsInGroup() and requester) then return end
+    -- Two different owners answer here: the session flag belongs to the raid leader (only they can
+    -- toggle it, see LC.SetSessionActive/HandleActive), the config belongs to the lootmaster (see
+    -- LC.IsConfigOwner). On the common setup where they're the same person this sends both.
+    if UnitIsGroupLeader("player") then
+        LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
+    end
+    if LC.sessionActive and LC.IsConfigOwner() then
+        LC.BroadcastRaidConfig(requester)
+    end
 end
 
 -- Whispers the sender's current Loot Council raid-wide-authority settings to targetName as a
@@ -860,12 +889,15 @@ function LC.OnStartLootRoll(rollID)
     local isLootmaster = LC.IsMe(lootmaster)
     if isLootmaster and councilEngages and bindOnPickUp and not isCollectible then
         -- The lootmaster only needs to physically win items they must later hand out through
-        -- Blizzard's 2-hour BoP trade window: council-relevant, BoP, non-collectible gear.
+        -- Blizzard's BoP trade window: council-relevant, BoP, non-collectible gear.
         ForceWinRoll(rollID)
-        -- Blizzard's 2-hour Bind-on-Pickup trade window starts now, not whenever Council later
+        -- Blizzard's Bind-on-Pickup trade window starts now, not whenever Council later
         -- decides a winner — see LC.CheckTradeTimeouts, which measures from this timestamp.
+        -- time() (wall clock), NOT GetTime() (seconds since client start): pending trades are saved
+        -- across sessions now, and GetTime() resets to ~0 on every reload, which would make a
+        -- restored entry look freshly looted.
         LC.rollLootedAt = LC.rollLootedAt or {}
-        LC.rollLootedAt[rollID] = GetTime()
+        LC.rollLootedAt[rollID] = time()
     elseif isLootmaster then
         -- Everything the lootmaster does NOT force-win (collectibles, BoE/non-binding items,
         -- sub-threshold drops) they ALWAYS pass — deliberately independent of their own
@@ -963,6 +995,11 @@ function LC.HandleActive(value, senderKey)
     -- and a leftover /kart showall override survive into the next session.
     if wasActive and not LC.sessionActive then
         LC.ClearAllRolls()
+    elseif not wasActive and LC.sessionActive and LC.IsConfigOwner() then
+        -- Session just opened and we own the config (see LC.IsConfigOwner). The leader's own
+        -- SetSessionActive only broadcasts the config when the leader IS the lootmaster, so when
+        -- those are different people this is what actually gets the config out to the raid.
+        LC.BroadcastRaidConfig()
     end
 end
 
@@ -1019,8 +1056,9 @@ function LC.StartManualRoll(itemsText)
         -- Start the BoP trade-timeout clock at roll creation rather than at assign time
         -- (AddPendingTrade's fallback): we can't know a manually-added item's real Blizzard loot
         -- time, but roll creation is the earliest, most conservative moment we control.
+        -- Wall clock, same reason as in OnStartLootRoll above.
         LC.rollLootedAt = LC.rollLootedAt or {}
-        LC.rollLootedAt[rollID] = GetTime()
+        LC.rollLootedAt[rollID] = time()
 
         local msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink
         -- Guard the 255-byte SendAddonMessage cap: a very long item link (many bonus IDs) would be

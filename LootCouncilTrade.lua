@@ -80,6 +80,13 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         end
     end
     LC.assignedWinners[rollID] = playerKey
+    -- The item is decided — close its tab, same as "No Winner" does. Without this the tab strip only
+    -- ever grows, and past ~9 tabs they render off the bottom of the panel where their close buttons
+    -- can't be reached.
+    -- NOTE: this ends the reassign flow for that item (Trade.AssignWinner's confirm dialog reads
+    -- LC.assignedWinners, which ClearRollState drops with the tab). Changing a decision afterwards
+    -- means re-adding the item with /kart add.
+    KART.LC.Council.CloseCouncilTab(rollID)
 end
 
 -- Awards the item to playerKey (a resolved player identity, see KART.Identity.ResolvePlayer) with
@@ -129,18 +136,23 @@ function Trade.AddPendingTrade(rollID, playerKey)
     Trade.RemovePendingTrade(rollID)
     if playerKey == myKey then return end
 
-    local lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or GetTime()
+    -- Wall clock (time()), not GetTime(): this entry is persisted across sessions, see
+    -- Trade.RestorePersistedTrades.
+    local lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time()
     table.insert(LC.pendingTrades, {rollID = rollID, itemLink = LC.rollItems[rollID], winnerKey = playerKey, lootedAt = lootedAt})
     Trade.RefreshTradeReminder()
     Trade.StartTradeTimeoutTicker()
 end
 
-local TRADE_TIMEOUT_SECONDS = 2 * 60 * 60      -- Blizzard's fixed BoP trade-eligibility window
-local TRADE_TIMEOUT_WARN_AT = 100 * 60         -- warn with 20 minutes left, same margin RCLootCouncil uses
+-- Blizzard's BoP trade-eligibility window: 4 hours, and it runs on WALL CLOCK — it keeps counting
+-- down while the player is logged out. That's why every lootedAt stamp uses time() rather than
+-- GetTime() (which resets each session and would only measure time spent online).
+local TRADE_TIMEOUT_SECONDS = 4 * 60 * 60
+local TRADE_TIMEOUT_WARN_AT = TRADE_TIMEOUT_SECONDS - 20 * 60 -- warn with 20 minutes left
 local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
 
 -- Warns once (per entry, via entry.timeoutWarned) as a pending trade's item approaches the end of
--- its 2-hour Bind-on-Pickup trade-eligibility window. Never removes the entry itself — that still
+-- its Bind-on-Pickup trade-eligibility window (see TRADE_TIMEOUT_SECONDS). Never removes the entry itself — that still
 -- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
 -- removal path; this is purely a heads-up so the lootmaster doesn't lose the item to the timer.
 function Trade.CheckTradeTimeouts()
@@ -148,7 +160,7 @@ function Trade.CheckTradeTimeouts()
         if LC.tradeTimeoutTicker then LC.tradeTimeoutTicker:Cancel() LC.tradeTimeoutTicker = nil end
         return
     end
-    local now = GetTime()
+    local now = time() -- matches the wall-clock lootedAt stamps (see Trade.AddPendingTrade)
     for _, entry in ipairs(LC.pendingTrades) do
         local elapsed = now - (entry.lootedAt or now)
         if not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
@@ -182,6 +194,50 @@ function Trade.RemovePendingTrade(rollID)
     if #LC.pendingTrades == 0 and LC.tradeTimeoutTicker then
         LC.tradeTimeoutTicker:Cancel()
         LC.tradeTimeoutTicker = nil
+    end
+end
+
+-- Restores the outstanding trade obligations saved by the previous session and points LC's live
+-- tables at the saved ones, so every later insert/remove persists automatically. Called once from
+-- Core.lua's ADDON_LOADED, after the locale is available (the reminder rows render localized text).
+--
+-- These are real obligations with a hard Blizzard deadline (4 hours, wall clock), and a /reload used to drop them
+-- silently: the lootmaster lost the reminder list, the auto-trade placement and the timeout warning
+-- for items they were still holding, and every winner lost their "you're owed this" list.
+--
+-- Per-character, not account-wide (see the .toc): the items sit in one specific character's bags.
+-- Entries past the trade window are dropped on load — the item can no longer be traded, so a
+-- reminder for it would be noise.
+function Trade.RestorePersistedTrades()
+    KART_LCTrades = KART_LCTrades or {}
+    local store = KART_LCTrades
+    store.pending = type(store.pending) == "table" and store.pending or {}
+    store.owed    = type(store.owed) == "table" and store.owed or {}
+
+    local now = time()
+    local function pruneExpired(list)
+        for i = #list, 1, -1 do
+            local e = list[i]
+            -- Drop malformed entries too (a schema change or a partially written SavedVariables
+            -- file), so one bad row can't break every reminder render for the rest of the session.
+            if type(e) ~= "table" or type(e.rollID) ~= "number"
+               or type(e.lootedAt) ~= "number" or (now - e.lootedAt) >= TRADE_TIMEOUT_SECONDS then
+                table.remove(list, i)
+            end
+        end
+    end
+    pruneExpired(store.pending)
+    pruneExpired(store.owed)
+
+    LC.pendingTrades = store.pending
+    LC.owedToMe      = store.owed
+
+    if #LC.pendingTrades > 0 then
+        Trade.RefreshTradeReminder()
+        Trade.StartTradeTimeoutTicker()
+    end
+    if #LC.owedToMe > 0 then
+        Trade.RefreshOwedReminder()
     end
 end
 
@@ -690,7 +746,12 @@ function Trade.HandleResult(payload, senderKey)
         local lootmasterKey = LC.GetLootmaster()
         if lootmasterKey ~= "" and not LC.IsMe(lootmasterKey) then
             LC.owedToMe = LC.owedToMe or {}
-            table.insert(LC.owedToMe, {rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey})
+            -- lootedAt drives the same expiry the lootmaster's pending trade uses, and lets
+            -- Trade.RestorePersistedTrades drop entries whose trade window closed while we were gone.
+            table.insert(LC.owedToMe, {
+                rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey,
+                lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time(),
+            })
             Trade.RefreshOwedReminder()
         end
     end
@@ -719,4 +780,8 @@ function Trade.HandleResult(payload, senderKey)
     if LC.IsMe(LC.GetLootmaster()) then
         Trade.AddPendingTrade(rollID, winnerKey)
     end
+
+    -- Mirror the assigner's own CloseCouncilTab (see DoAssignWinner): the item is decided, so its
+    -- tab goes away on every client rather than piling up on the peers only.
+    KART.LC.Council.CloseCouncilTab(rollID)
 end

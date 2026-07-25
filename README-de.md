@@ -12,8 +12,6 @@ Alle automatischen Gruppen-Funktionen gebündelt in einem Tab:
 *   **Auto-Promote:** Befördert vordefinierte Spieler automatisch zu Assistenten, sobald sie der Gruppe beitreten. Ideal für Co-Leiter und feste Rollen im Raid. Jeder Eintrag akzeptiert wahlweise einen Charakternamen oder einen [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) Nickname, sodass er automatisch weitergilt, auch wenn diese Person auf einen anderen Charakter wechselt.
 *   **Auto-Raid:** Wandelt die Gruppe automatisch in einen Schlachtzug um, sobald mehr als 5 Mitglieder beitreten.
 
-> Die frühere „Paste Raid Composition"-Funktion (Bulk-Invite per Copy-Paste) wurde entfernt und vollständig durch den [WoWUtils Import](#6-wowutils-import) ersetzt.
-
 ### 2. Raidlead-Leiste
 Eine kompakte, verschiebbare Leiste für den schnellen Zugriff auf:
 *   **Schlachtzugs-Symbole:** Setzen von Markern auf Ziele.

@@ -13,7 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Loot history is now paginated.**
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
 
+### Changed
+- **Trade reminders and owed items now survive a reload or relog.**
+- **Council tabs close once the item is awarded.**
+- **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
+
 ### Fixed
+- **The trade timer now matches Blizzard's 4-hour window** and keeps counting while you're offline.
 - **Gear, item level and ready-check sync works again for everyone on your own realm.**
 - **A late raid join no longer wipes the whole raid's in-progress loot rolls.**
 - **Revoking a winner now clears the trade reminder for whoever revoked it too.**

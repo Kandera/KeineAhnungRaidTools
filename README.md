@@ -12,8 +12,6 @@ All automatic group functions bundled into a single tab:
 *   **Auto-Promote:** Automatically promotes predefined players to assistant as soon as they join the group. Ideal for co-leads and fixed raid roles. Each entry accepts either a character name or a [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) nickname, so it keeps applying automatically even after that person switches to a different character.
 *   **Auto-Raid:** Automatically converts the group into a raid once more than 5 members join.
 
-> The former "Paste Raid Composition" feature (bulk invite via copy-paste) has been removed and fully replaced by [WoWUtils Import](#6-wowutils-import).
-
 ### 2. Raid Lead Bar
 A compact, movable bar for quick access to:
 *   **Raid Target Icons:** Set markers on targets.

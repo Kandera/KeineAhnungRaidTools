@@ -13,7 +13,13 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
 
+### Geändert
+- **Handels-Erinnerungen und ausstehende Items überleben jetzt einen Reload oder Relog.**
+- **Council-Tabs schließen sich, sobald das Item vergeben ist.**
+- **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
+
 ### Behoben
+- **Der Handels-Timer entspricht jetzt Blizzards 4-Stunden-Fenster** und läuft auch offline weiter.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
 - **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**
 - **Das Zurücknehmen eines Gewinners löscht die Handels-Erinnerung jetzt auch beim Zurücknehmenden.**
