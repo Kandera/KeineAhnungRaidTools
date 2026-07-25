@@ -5,8 +5,9 @@ KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 
 -- Zentrale Buff-Konfiguration für einfachere Wartung.
 -- Reviewed 2026-07 (see docs/REVIEW-DECISIONS.md): the name-only detections kept on purpose —
--- flask (no Phiole branch, past Dragonflight), vantus ("Vantus"), bronze fallback ("Bronze"),
--- and the oil name fallback that treats any oil as "best". Do not re-flag these.
+-- flask (no Phiole branch, past Dragonflight) and the bronze fallback ("Bronze"). Do not re-flag
+-- these. Two are no longer among them: vantus matches on spellID now (name kept as a fallback for
+-- future rune versions), and an oil is only "best" at the current rank's enchantID.
 KART.BuffData = {
     { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
     { id = "sta",    labelKey = "BC_LABEL_STA",    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabelKey = "BC_REPORT_STA" },
@@ -16,10 +17,18 @@ KART.BuffData = {
     { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelszorn"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
     { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD" },
     { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK" },
-    { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, nameMatch = "Vantus" },
+    { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
     { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
     { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
-    { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true, bestSpells = {8052}, wrongSpells = {8051}, page = "advanced" },
+    -- Both lists hold enchantIDs, not spell ids: the weapon slot is read from GetWeaponEnchantInfo.
+    -- bestSpells = the current rank's consumables (enchanting oils and blacksmithing stones).
+    -- neutralSpells = class mechanics that occupy the very same weapon slot, so an oil is either
+    -- impossible (shaman imbue, rogue poison) or temporarily overridden (paladin Holy Armaments);
+    -- those count as "nothing to fix" instead of a wrong-rank oil. Anything else is off-rank.
+    -- The old {8052}/{8051} pair was stale — both are ring enchantIDs in Midnight.
+    { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true,
+      bestSpells = {8712, 8716, 8720, 8732, 8736},
+      neutralSpells = {8012, 8015, 8018, 8201, 8205, 8209, 7150, 7155}, page = "advanced" },
     { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
     { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
 }
@@ -44,8 +53,8 @@ local function BuildSlotNames()
         ["8"] = L.SLOT_FEET,
         -- Blizzard INVSLOT ids: 6 = Waist, 9 = Wrist, 10 = Hands (slot 10 was previously labelled
         -- "Waist", so an empty gem socket in gloves reported the wrong item and the belt fell through
-        -- to the "Slot %d" fallback). Slots 13/14 (trinkets) and 15 (back) can hold sockets too and
-        -- are scanned by KART.CountMissingGear's 1..17 loop, so they need names as well.
+        -- to the "Slot %d" fallback). Sockets only appear on head/neck/waist/wrist/rings, but
+        -- KART.CountMissingGear scans slots 1..17, so every slot it can report keeps a name.
         ["6"] = L.SLOT_WAIST,
         ["9"] = L.SLOT_WRIST,
         ["10"] = L.SLOT_HANDS,
@@ -298,7 +307,13 @@ function KART.CreateBuffCheckFrame()
                             countMap[s] = countMap[s] + 1
                         end
                         for _, s in ipairs(uniqueSlots) do
-                            local name = KART.SlotNames[s] or string.format(L.BC_SLOT_FALLBACK, s)
+                            -- Entries are a slot number, "w"-suffixed when that slot carries the wrong
+                            -- enchant rather than none (see KART.CountMissingGear). Both variants of a
+                            -- slot keep their own line, so the player can tell the two cases apart.
+                            local id, wrong = s:match("^(%d+)(w?)$")
+                            id = id or s
+                            local name = KART.SlotNames[id] or string.format(L.BC_SLOT_FALLBACK, id)
+                            if wrong == "w" then name = name .. " " .. L.BC_SLOT_WRONG_ENCHANT end
                             local amt = countMap[s]
                             local amtStr = amt > 1 and (" (x" .. amt .. ")") or ""
                             GameTooltip:AddLine("- " .. name .. amtStr, 1, 0.2, 0.2)
@@ -801,19 +816,14 @@ function KART.UpdateBuffCheck(isPreview)
                     if buff.isFlask and (aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true) or aura.name:find("Flask", 1, true)) then match = true end
                     if buff.isRune and (aura.name:find("Augment", 1, true) or aura.name:find("Verstärkungsrune", 1, true)) then match = true end
                     if buff.isOil then
-                        if buff.bestSpells and type(aura.spellId) == "number" then
-                            for _, sid in ipairs(buff.bestSpells) do
-                                if aura.spellId == sid then match = true; buffState = "best" end
-                            end
-                        end
-                        if buff.wrongSpells and type(aura.spellId) == "number" then
-                            for _, sid in ipairs(buff.wrongSpells) do
-                                if aura.spellId == sid then match = true; buffState = "wrong" end
-                            end
-                        end
+                        -- No spellId comparison here: an oil is a temporary weapon enchant, so it is
+                        -- identified by enchantID in the weapon-enchant pass below, not by an aura.
                         if not match and (aura.name:find("Oil") or aura.name:find("oil") or aura.name:find("Öl") or aura.name:find("öl")) then
                             match = true
-                            buffState = "best" -- Fallback, bis IDs eingetragen sind
+                            -- An oil recognized only by name is off-rank until proven otherwise: the
+                            -- current one is identified by its enchantID in the weapon-enchant pass
+                            -- below, and "best" from there overrides this (see MergeBuffState).
+                            buffState = "wrong"
                         end
                     end
 
@@ -841,54 +851,66 @@ function KART.UpdateBuffCheck(isPreview)
         for k = 1, buffDataCount do
             local buff = KART.BuffData[k]
             if buff.isOil and KART.BuffStatesCache[buff.id] ~= "best" then
-                local match = false
-                local buffState = true
-                local isExpiring = false
+                -- Every hand holding a weapon is rated and the worst result wins, so a dual wielder
+                -- with oil on one weapon only still counts as missing it. Which hands take part is
+                -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's
+                -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
+                -- Ranks: 1 = weapon is bare, 2 = off-rank consumable, 3 = class mechanic occupying the
+                -- slot, 4 = current rank.
+                local rank, isExpiring, rated, hasData = nil, false, false, true
 
-                local function checkEnchant(enchantID, expTime)
-                    if not enchantID then return end
-                    local found = false
-                    if buff.bestSpells then
+                local function rate(enchantID, expTime)
+                    rated = true
+                    local r = 1
+                    if enchantID and enchantID > 0 then
+                        r = 2
                         for _, id in ipairs(buff.bestSpells) do
-                            if enchantID == id then match = true; buffState = "best"; found = true; break end
+                            if enchantID == id then r = 4; break end
+                        end
+                        if r == 2 then
+                            for _, id in ipairs(buff.neutralSpells) do
+                                if enchantID == id then r = 3; break end
+                            end
                         end
                     end
-                    if not found and buff.wrongSpells then
-                        for _, id in ipairs(buff.wrongSpells) do
-                            if enchantID == id then match = true; buffState = "wrong"; found = true; break end
-                        end
-                    end
-                    if found and expTime and expTime > 0 and expTime < 300000 then -- 300.000 ms = 5 Minuten
+                    -- Only a current-rank oil can run out on us; a class mechanic like Sacred Weapon is
+                    -- short-lived by design and must not blink as "expiring".
+                    if r == 4 and expTime and expTime > 0 and expTime < 300000 then -- 300.000 ms = 5 Min
                         isExpiring = true
                     end
+                    if not rank or r < rank then rank = r end
                 end
 
                 if UnitIsUnit(unit, "player") then
                     local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
-                    if hasMH and mhID then checkEnchant(mhID, mhExp) end
-                    if not match and hasOH and ohID then checkEnchant(ohID, ohExp) end
+                    if KART.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
+                    if KART.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
                 else
-                    -- 1. KART Addon Sync auslesen (für Spieler, die KART installiert haben)
+                    -- KART Addon Sync auslesen (für Spieler, die KART installiert haben). "n" is that
+                    -- player's own verdict that the hand takes no oil at all.
                     local shortName = nameStr:match("([^%-]+)")
-                    if KART.OilCache and shortName and KART.OilCache[shortName] then
-                        local o = KART.OilCache[shortName]
-                        if o.mh and o.mh > 0 then checkEnchant(o.mh, 300000) end
-                        if not match and o.oh and o.oh > 0 then checkEnchant(o.oh, 300000) end
-                    end
-
-                    -- 2. Wenn unbekannt (Addon fehlt), grau anzeigen
-                    if not match then
-                        buffState = "unknown"
-                        match = true
+                    local o = KART.OilCache and shortName and KART.OilCache[shortName]
+                    hasData = o ~= nil
+                    if o then
+                        if o.mh ~= "n" then rate(o.mh, 300000) end
+                        if o.oh ~= "n" then rate(o.oh, 300000) end
                     end
                 end
 
-                if match then
-                    local stateToSet = buffState
-                    if isExpiring and buffState ~= "wrong" then stateToSet = "expiring" end
-
-                    MergeBuffState(buff.id, stateToSet)
+                local stateToSet
+                if not hasData then
+                    stateToSet = "unknown" -- Addon fehlt, grau anzeigen
+                elseif not rated then
+                    stateToSet = true -- no hand takes an oil, so there is nothing to ask for
+                elseif rank == 4 then
+                    stateToSet = isExpiring and "expiring" or "best"
+                elseif rank == 3 then
+                    stateToSet = true
+                elseif rank == 2 then
+                    stateToSet = "wrong"
                 end
+                -- rank 1 sets nothing: a bare weapon leaves the column in its "missing" look.
+                if stateToSet then MergeBuffState(buff.id, stateToSet) end
             end
         end
         

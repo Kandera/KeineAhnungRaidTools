@@ -351,6 +351,7 @@ KART.L_enUS = {
     TOOLTIP_LEFTCLICK      = "Left-Click:",
     TOOLTIP_RIGHTCLICK     = "Right-Click:",
     BC_SLOT_FALLBACK       = "Slot %d",
+    BC_SLOT_WRONG_ENCHANT  = "(wrong enchant)",
     DT_TIME_LT1M           = "<1m",
     DT_TIME_MIN            = "%dm",
     DT_TIME_HOUR           = "%dh",

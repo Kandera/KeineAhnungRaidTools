@@ -12,11 +12,14 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   Flask detection stays name-based ("Fläschchen"/"Flask") without a Phiole branch.
 
 - **Oil name fallback marks any oil as "best"** (BuffChecker.lua `isOil` handling).
-  Accepted as-is. The name fallback (`find("Oil")/"Öl"`) intentionally treats any weapon oil
-  as good rather than distinguishing rank; we are not tracking wrong-rank oil for now.
+  Resolved 2026-07-25: only the current rank's enchantIDs count as "best" — the three Midnight oils
+  plus the two blacksmithing stones. Class mechanics sharing the weapon slot (shaman imbues, rogue
+  poisons, paladin Holy Armaments) are neutral, everything else is reported as wrong rank, and the
+  name fallback (`find("Oil")/"Öl"`) now yields "wrong" rather than "best".
 
 - **`vantus` buff matched name-only, English "Vantus"** (BuffChecker.lua, `vantus` entry).
-  Kept. Relies on the buff name containing "Vantus" on both clients; acceptable.
+  Resolved 2026-07-25: the 12.0 and 12.1 spellIDs are now the primary detection path, with the
+  English name kept as a fallback for future rune versions.
 
 - **`bronze` `nameMatch = "Bronze"` English-only** (BuffChecker.lua, `bronze` entry).
   Kept. spellIDs are the primary detection path; the single-language name is a fallback only.

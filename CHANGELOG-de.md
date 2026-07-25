@@ -12,8 +12,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Council-Mitglieder können jetzt selbst abstimmen.**
 - **Der Loot-Verlauf ist jetzt seitenweise blätterbar.**
 - **Das Council-Panel zeigt jetzt, was jeder Kandidat im Slot des gedroppten Items trägt** — inklusive Item-Level-Differenz.
+- **Der Buff-Checker meldet jetzt auch veraltete Verzauberungen**, nicht nur fehlende — der Tooltip nennt den Slot mit der falschen. Runenschmieden von Todesrittern gilt als korrekt.
+- **Die Vantus-Rune wird jetzt am Zauber erkannt**, nicht am Buff-Namen.
+- **Öl vom falschen Rang wird jetzt als falsch angezeigt**, statt als gut zu gelten — Schleifsteine gelten als gut, und Schamanen-Imbues, Schurken-Gifte und Paladin-Waffen werden nicht mehr angemahnt.
 
 ### Geändert
+- **Beide Waffen werden jetzt auf Öl geprüft** — wer mit zwei Waffen kämpft und nur eine geölt hat, wird gemeldet; eine leere Schildhand oder ein Schild wird nicht verlangt.
 - **Handels-Erinnerungen und ausstehende Items überleben jetzt einen Reload oder Relog.**
 - **Neuer "Session beenden"-Button im Council-Panel** beendet die Session und räumt alle offenen Items auf einmal ab. Nur für den Lootmaster.
 - **Nur der eingetragene Lootmaster setzt die Loot-Council-Konfiguration des Raids** — ein Lead-Wechsel überschreibt sie nicht mehr. Zum Übergeben den Sync-Button nutzen.
@@ -22,6 +26,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Interne Aufräumarbeiten:** toter Code entfernt, doppelte Logik zusammengeführt, Addon-Nachrichten-Verarbeitung restrukturiert.
 
 ### Behoben
+- **Der Buff-Checker prüft jetzt die Verzauberung der Schildhand** — Waffe wie Schild.
+- **Ein Item mit zwei Sockeln meldet jetzt beide leeren Sockel**, nicht nur einen.
 - **Das Starten einer Session erreicht jetzt den Raid, wenn der Lootmaster nicht Raidleiter ist** — auch für alle, die später dazukommen.
 - **Ein Reload des Raidleiters mitten im Raid stoppt nicht mehr die Vote-Fenster des Raids**, während weiter Items gewonnen werden.
 - **Die Gewinnerzeile wird sofort gold** — auch bei dem, der zugewiesen hat, nicht nur bei allen anderen.

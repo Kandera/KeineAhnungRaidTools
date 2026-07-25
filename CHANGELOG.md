@@ -12,8 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Council members can now cast their own loot vote.**
 - **Loot history is now paginated.**
 - **The council panel now shows what each candidate has equipped** in the dropped item's slot, with the item-level difference.
+- **The Buff-Checker now flags outdated enchants**, not just missing ones — the tooltip names the slot carrying the wrong one. Death knight runeforges count as correct.
+- **The Vantus rune is now detected by spell**, not by buff name.
+- **Off-rank weapon oil is now shown as wrong** instead of counting as good — sharpening stones count as good, and shaman imbues, rogue poisons and paladin armaments are no longer nagged about.
 
 ### Changed
+- **Both weapons are now checked for oil** — a dual wielder with only one oiled weapon is flagged, while an empty off-hand or a shield is not asked for one.
 - **Trade reminders and owed items now survive a reload or relog.**
 - **New "Close Session" button in the council panel** ends the session and clears every open item at once. Lootmaster only.
 - **Only the configured lootmaster sets the raid's Loot Council config** — passing raid lead no longer overwrites it. Use the Sync button to hand the settings over.
@@ -22,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Internal cleanup:** dead code removed, duplicated logic consolidated, addon-message handling restructured.
 
 ### Fixed
+- **The Buff-Checker now checks the off-hand enchant** on weapons and shields.
+- **An item with two sockets now reports both empty ones**, not just one.
 - **Starting a session now reaches the raid when the lootmaster isn't the raid leader** — including for anyone joining later.
 - **A raid leader reloading mid-raid no longer stops the raid's vote windows** while items keep being won.
 - **The winner's row turns gold right away** for whoever assigned the item, not only for everyone else.

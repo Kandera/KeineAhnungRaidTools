@@ -351,6 +351,7 @@ KART.L_deDE = {
     TOOLTIP_LEFTCLICK      = "Linksklick:",
     TOOLTIP_RIGHTCLICK     = "Rechtsklick:",
     BC_SLOT_FALLBACK       = "Slot %d",
+    BC_SLOT_WRONG_ENCHANT  = "(falscher Enchant)",
     DT_TIME_LT1M           = "<1m",
     DT_TIME_MIN            = "%dm",
     DT_TIME_HOUR           = "%dh",

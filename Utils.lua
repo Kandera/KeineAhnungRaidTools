@@ -957,7 +957,7 @@ function KART.OpenColorPicker(rKey, gKey, bKey)
     end
 end
 
--- Hidden scanning tooltip for KART.CountMissingGear's gem check below. C_Item.GetItemStats can
+-- Hidden scanning tooltip for KART.CountMissingGear's socket check below. C_Item.GetItemStats can
 -- report a stale EMPTY_SOCKET_* stat for an item that was already gemmed this session (its cached
 -- link predates the gem), so we read the socket state straight from the tooltip instead - that's
 -- rendered fresh every time and matches exactly what the player sees on hover.
@@ -978,39 +978,111 @@ local function GetEmptySocketTexts()
     return emptySocketTexts
 end
 
-local function SlotHasEmptySocket(slot)
+-- Counted rather than boolean: a few raid items drop with two prismatic sockets (the Midnight neck
+-- "Hexlord's Choker" and ring "Loop of the Devouring Abyss"), and a player who filled neither needs
+-- both reported. The slot id is then listed once per empty socket, which the panel renders as "(x2)".
+local function CountEmptySockets(slot)
     KART_GearScanTooltip:ClearLines()
     KART_GearScanTooltip:SetInventoryItem("player", slot)
     local texts = GetEmptySocketTexts()
+    local count = 0
     for i = 1, KART_GearScanTooltip:NumLines() do
         local fs = _G["KART_GearScanTooltipTextLeft" .. i]
         local text = fs and fs:GetText()
-        if text and texts[text] then return true end
+        if text and texts[text] then count = count + 1 end
+    end
+    return count
+end
+
+-- Accepted enchant ids per inventory slot — the current tier's rank-2 enchants, everything else on
+-- that slot counts as wrong. These are the ids from the item link's enchant field
+-- (item:ID:ENCHANT:...), NOT the enchanter's spell ids.
+-- A slot whose list is missing or empty is only checked for having *some* enchant, so this table can
+-- be filled in slot by slot without producing false "wrong enchant" reports in the meantime.
+local GOOD_ENCHANTS = {
+    [1]  = { 8210, 8211, 8212 },                         -- Head: Avoidance, Leeching, Speed
+    [3]  = { 8220, 8221, 8222 },                         -- Shoulders: Amirdrassil, Silvermoon, Akil'zon
+    [5]  = { 8150, 8151, 8152, 8153 },                   -- Chest: Worldsoul, Nalorakk, Magister, Rootwarden
+    [7]  = { 8190, 8191, 8192 },                         -- Legs: spellthreads and armor kit
+    [8]  = { 8110, 8111, 8112 },                         -- Boots: Lynx, Shaladrassil, Farstrider
+    [11] = { 8050, 8051, 8052, 8053, 8054 },             -- Finger 1: one per secondary stat
+    [12] = { 8050, 8051, 8052, 8053, 8054 },             -- Finger 2
+    -- Weapons: the proc enchants, plus every death knight runeforge — runeforging is a permanent
+    -- enchant in the item link (not a temporary one like oil), and it is the only weapon enchant a
+    -- death knight can apply, so all of them count as correct.
+    [16] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
+             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Main Hand
+    [17] = { 8100, 8101, 8102, 8103, 8105, 8106, 8107,
+             3365, 3367, 3368, 3369, 3370, 6241, 6242, 6243, 6244 }, -- Off Hand (weapon or shield)
+}
+
+-- Equip locations that can carry a temporary weapon enchant (oil, sharpening stone, poison, imbue).
+-- A shield or a caster off-hand cannot, and an empty hand has nothing to oil.
+local OIL_EQUIP_LOCS = {
+    INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true,
+    INVTYPE_WEAPONMAINHAND = true, INVTYPE_WEAPONOFFHAND = true,
+    INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true,
+}
+
+-- Whether our own `slot` (16 or 17) holds a weapon that is expected to carry an oil. This is what
+-- keeps a shield tank and an Arms warrior's empty off-hand out of the oil check while a Fury warrior
+-- or a Frost death knight gets both hands checked — the equipped items decide, not the spec.
+function KART.SlotNeedsOil(slot)
+    local link = GetInventoryItemLink("player", slot)
+    if not link then return false end
+    local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+    return OIL_EQUIP_LOCS[equipLoc] or false
+end
+
+-- Slot 17 also takes caster off-hands (INVTYPE_HOLDABLE), which carry no enchant in Midnight — only
+-- a shield or a second weapon in that slot does. Every other slot in enchantableSlots is unconditional.
+local function SlotTakesEnchant(slot, link)
+    if slot ~= 17 then return true end
+    local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+    return equipLoc ~= "INVTYPE_HOLDABLE"
+end
+
+local function IsGoodEnchant(slot, enchantID)
+    local good = GOOD_ENCHANTS[slot]
+    if not good or #good == 0 then return true end -- no list for this slot yet: presence is enough
+    local id = tonumber(enchantID)
+    for _, v in ipairs(good) do
+        if v == id then return true end
     end
     return false
 end
 
 -- Funktion zum Zählen fehlender Verzauberungen und leerer Sockelplätze (Retail)
+-- Both return values are slot lists: "0" for nothing missing, otherwise comma-separated entries of
+-- an inventory slot number, with a "w" suffix marking a slot that has the wrong enchant rather than
+-- none at all (e.g. "1,16w"). KARTSync sends these verbatim, so the format is protocol.
 function KART.CountMissingGear()
     local missingEnchants = {}
     local missingGems = {}
 
-    -- Slots mit Enchant: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12), Weapon(16)
-    local enchantableSlots = {1, 3, 5, 7, 8, 11, 12, 16}
+    -- Enchantable slots: Head(1), Shoulders(3), Chest(5), Legs(7), Boots(8), Rings(11,12),
+    -- Main Hand(16), Off Hand(17 — weapon or shield). Wrist(9) and Back(15) lost their enchants.
+    local enchantableSlots = {1, 3, 5, 7, 8, 11, 12, 16, 17}
     for _, slot in ipairs(enchantableSlots) do
         local link = GetInventoryItemLink("player", slot)
-        if link then
+        if link and SlotTakesEnchant(slot, link) then
             local enchant = link:match("item:%d+:(%d*):")
             if not enchant or enchant == "" or enchant == "0" then
                 table.insert(missingEnchants, tostring(slot))
+            elseif not IsGoodEnchant(slot, enchant) then
+                table.insert(missingEnchants, tostring(slot) .. "w")
             end
         end
     end
 
+    -- Every slot is scanned rather than only the socketable ones (head, neck, waist, wrist, rings):
+    -- the tooltip is authoritative, so a socket type appearing on a new slot needs no code change.
     for slot = 1, 17 do
         local link = GetInventoryItemLink("player", slot)
-        if link and SlotHasEmptySocket(slot) then
-            table.insert(missingGems, tostring(slot))
+        if link then
+            for _ = 1, CountEmptySockets(slot) do
+                table.insert(missingGems, tostring(slot))
+            end
         end
     end
 

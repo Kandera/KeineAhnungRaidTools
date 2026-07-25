@@ -50,14 +50,27 @@ local lastEquipAnswer = {} -- [equipLoc] = GetTime() of our last reply; only wri
                            -- so a bogus token from an unknown sender can't grow this table
 
 -- Whether s is a well-formed missing-slot list as KART.CountMissingGear produces them: "0", or one
--- or more inventory slot numbers separated by single commas. Used to reject a malformed GEAR reply
--- before it reaches the cache (see the GEAR handler below).
--- Spelled out rather than one anchored pattern: Lua patterns can't quantify a group, so
--- "^%d+(,%d+)*$" silently matches nothing at all.
+-- or more comma-separated entries, each an inventory slot number optionally suffixed with "w" for
+-- "wrong enchant". Used to reject a malformed GEAR reply before it reaches the cache (see the GEAR
+-- handler below). Entries are validated one at a time because Lua patterns can't quantify a group,
+-- so a single anchored "^%d+w?(,%d+w?)*$" would silently match nothing at all.
 local function IsSlotList(s)
-    if s:find("[^%d,]") then return false end -- digits and separators only
+    if s == "" then return false end
     if s:find(",,") or s:find("^,") or s:find(",$") then return false end -- no empty entries
-    return s ~= ""
+    for entry in s:gmatch("[^,]+") do
+        if not entry:match("^%d+w?$") then return false end
+    end
+    return true
+end
+
+-- One hand of an OIL payload: an enchantID, "0" for a weapon carrying nothing, or "n" for a hand that
+-- takes no oil at all (see the REQ_OIL responder). Returns nil for anything else, so a malformed or
+-- hostile reply is dropped instead of reaching the cache.
+local function ParseOilField(s)
+    if not s then return nil end
+    if s == "n" then return "n" end
+    if s:match("^%d+$") then return tonumber(s) end
+    return nil
 end
 
 local function HandleVersionMessage(payload, ctx, isAnnounce)
@@ -107,8 +120,10 @@ end
 local EXACT_HANDLERS = {
     REQ_OIL = { group = true, fn = function(_, ctx)
         local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
-        local outMH = (hasMH and mhID) and mhID or 0
-        local outOH = (hasOH and ohID) and ohID or 0
+        -- "n" for a hand that takes no oil at all (empty, shield, caster off-hand), so the receiver can
+        -- tell it apart from a weapon that is simply unoiled ("0"). Only we can see our own equipment.
+        local outMH = KART.SlotNeedsOil(16) and ((hasMH and mhID) and mhID or 0) or "n"
+        local outOH = KART.SlotNeedsOil(17) and ((hasOH and ohID) and ohID or 0) or "n"
         if IsInGroup() then
             Sync.Send("OIL:" .. outMH .. ":" .. outOH)
         end
@@ -140,10 +155,11 @@ local EXACT_HANDLERS = {
 
 local PREFIX_HANDLERS = {
     OIL = { group = true, fn = function(payload, ctx)
-        local mhID, ohID = payload:match("^(%d+):(%d+)")
-        if mhID and ohID then
+        local mhStr, ohStr = payload:match("^([^:]+):([^:]+)$")
+        local mh, oh = ParseOilField(mhStr), ParseOilField(ohStr)
+        if mh and oh then
             KART.OilCache = KART.OilCache or {}
-            KART.OilCache[ctx.shortName] = { mh = tonumber(mhID), oh = tonumber(ohID) }
+            KART.OilCache[ctx.shortName] = { mh = mh, oh = oh }
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
         end
     end },
@@ -158,7 +174,8 @@ local PREFIX_HANDLERS = {
     GEAR = { group = true, fn = function(payload, ctx)
         local e, g = payload:match("^([^:]+):([^:]+)")
         -- Validate the shape before caching. Both fields are slot lists — "0" for "nothing missing",
-        -- otherwise comma-separated inventory slot NUMBERS (see KART.CountMissingGear) — but the
+        -- otherwise comma-separated inventory slot NUMBERS, optionally "w"-suffixed for a wrong
+        -- enchant (see KART.CountMissingGear) — but the
         -- captures above accept any colon-free text. BuffChecker renders an unrecognized slot through
         -- string.format(BC_SLOT_FALLBACK, s), whose "%d" throws a Lua error on non-numeric input, so a
         -- broken or hostile client could make the Advanced-view tooltip error on every hover. Rejecting
