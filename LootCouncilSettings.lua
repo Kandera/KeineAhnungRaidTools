@@ -21,7 +21,20 @@ function LC.UpdateRoleStatusLabel()
     local lbl = KART.LC.RoleStatusLabel
     if not lbl then return end
     local isOwner = LC.IsConfigOwner()
-    local text = isOwner and KART.L.LC_ROLE_STATUS_OWNER or KART.L.LC_ROLE_STATUS_MEMBER
+    local text
+    if isOwner then
+        text = KART.L.LC_ROLE_STATUS_OWNER
+    elseif KART.TrimString((KART_Settings and KART_Settings.lcLootmaster) or "") ~= "" then
+        -- Field names someone who isn't us. Everything in this box is then inert — not just for the
+        -- raid, but locally too: LC.ApplyOwnConfig no-ops for a non-owner, so our own council list
+        -- never gets built either, and LC.IsLootOwner still falls back to the raid leader because no
+        -- LC_CONFIG naming that person exists anywhere yet. A leader who fills the whole box in and
+        -- types someone else's name gets exactly nothing, and the plain "the lootmaster's settings
+        -- apply" reads like it's already taken care of — so say what's actually missing.
+        text = KART.L.LC_ROLE_STATUS_FOREIGN
+    else
+        text = KART.L.LC_ROLE_STATUS_MEMBER
+    end
     -- Nothing moved, so skip the re-flow below. Matters because the lootmaster edit box calls this on
     -- every keystroke, and the status only ever flips on the one keystroke that changes ownership.
     if lbl:GetText() == text then return end

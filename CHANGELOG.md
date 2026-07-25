@@ -34,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vote notes and officer notes can no longer smuggle colour codes or links** into other people's tooltips.
 - **The council panel no longer stutters while loot is being handled.**
 - **The "you're owed this" timer now starts when the item drops**, not when the council decides.
-- **The raid-wide settings box now says correctly whether your settings apply to the raid.**
+- **The raid-wide settings box now says correctly whether your settings apply to the raid** — and how to get them there when they don't.
+- **The Buff-Checker no longer errors on a broken gear reply** from another raider.
+- **Cancelling the accent-colour picker restores the exact colour you had**, and picking one no longer darkens it slightly.
 - **The trade timer now matches Blizzard's 4-hour window** and keeps counting while you're offline.
 - **Gear, item level and ready-check sync works again for everyone on your own realm.**
 - **A late raid join no longer wipes the whole raid's in-progress loot rolls.**

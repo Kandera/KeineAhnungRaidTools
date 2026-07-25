@@ -272,6 +272,25 @@ end
 -- Note: pending trades are NOT cleared here; they are independent long-lived obligations that
 -- should only be removed when the trade actually completes, is manually marked done, or is
 -- reassigned to someone else.
+-- Drops LC.rollLootedAt stamps that are older than the Bind-on-Pickup trade window.
+--
+-- That table is the BoP trade CLOCK, not roll state, and it has to outlive the roll's own tracking:
+-- for a non-council raider Vote.PruneExpiredRolls clears the roll the moment the vote window closes
+-- (20s by default), while the award — which is what reads the stamp, via Trade.AddPendingTrade and
+-- the winner's owedToMe entry — lands whenever the council is done. Clearing the stamp along with
+-- the rest of the roll state made both fall back to time() at AWARD time, so the 4-hour countdown
+-- started late and the reminder outlived the real deadline (badly so for a "/kart add" hours later).
+-- Age is the natural bound instead: past the trade window the stamp can't matter to anything.
+function Trade.PruneExpiredLootStamps()
+    if not LC.rollLootedAt then return end
+    local cutoff = time() - TRADE_TIMEOUT_SECONDS
+    -- Assigning nil to keys that already exist is safe during a pairs() traversal; only ADDING new
+    -- ones is undefined (see the collect-first loops in LC.RetryPendingResolutions).
+    for rollID, stamp in pairs(LC.rollLootedAt) do
+        if (stamp or 0) < cutoff then LC.rollLootedAt[rollID] = nil end
+    end
+end
+
 function Trade.ClearRollState(rollID)
     LC.votes[rollID]           = nil
     LC.rolls[rollID]           = nil
@@ -283,7 +302,9 @@ function Trade.ClearRollState(rollID)
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
     LC.councilTabsNew[rollID]  = nil
-    if LC.rollLootedAt then LC.rollLootedAt[rollID] = nil end
+    -- LC.rollLootedAt[rollID] is deliberately NOT cleared here — see Trade.PruneExpiredLootStamps
+    -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves.
+    Trade.PruneExpiredLootStamps()
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end
     if LC.rollsPendingSince then LC.rollsPendingSince[rollID] = nil end
     -- Normally cleared by its own ContinueOnItemLoad callback; clear it here too so a callback that
@@ -754,8 +775,9 @@ function Trade.HandleResult(payload, senderKey)
             -- lootedAt drives the same expiry the lootmaster's pending trade uses, and lets
             -- Trade.RestorePersistedTrades drop entries whose trade window closed while we were gone.
             -- Every client stamps LC.rollLootedAt when the roll starts (see LC.OnStartLootRoll /
-            -- LC.HandleStart), so this is the real loot time, not the award time; the time() fallback
-            -- only covers a roll this client never saw start at all.
+            -- LC.HandleStart) and the stamp deliberately outlives the roll's own tracking (see
+            -- Trade.PruneExpiredLootStamps), so this is the real loot time, not the award time; the
+            -- time() fallback only covers a roll this client never saw start at all.
             table.insert(LC.owedToMe, {
                 rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey,
                 lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time(),

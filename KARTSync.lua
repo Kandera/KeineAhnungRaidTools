@@ -49,6 +49,17 @@ local EQUIP_ANSWER_COOLDOWN = 5
 local lastEquipAnswer = {} -- [equipLoc] = GetTime() of our last reply; only written on an actual send,
                            -- so a bogus token from an unknown sender can't grow this table
 
+-- Whether s is a well-formed missing-slot list as KART.CountMissingGear produces them: "0", or one
+-- or more inventory slot numbers separated by single commas. Used to reject a malformed GEAR reply
+-- before it reaches the cache (see the GEAR handler below).
+-- Spelled out rather than one anchored pattern: Lua patterns can't quantify a group, so
+-- "^%d+(,%d+)*$" silently matches nothing at all.
+local function IsSlotList(s)
+    if s:find("[^%d,]") then return false end -- digits and separators only
+    if s:find(",,") or s:find("^,") or s:find(",$") then return false end -- no empty entries
+    return s ~= ""
+end
+
 local function HandleVersionMessage(payload, ctx, isAnnounce)
     local ver, lcFlag = payload:match("^([^:]+):?([01]?)$")
     ver = ver or payload
@@ -146,7 +157,13 @@ local PREFIX_HANDLERS = {
     end },
     GEAR = { group = true, fn = function(payload, ctx)
         local e, g = payload:match("^([^:]+):([^:]+)")
-        if e and g then
+        -- Validate the shape before caching. Both fields are slot lists — "0" for "nothing missing",
+        -- otherwise comma-separated inventory slot NUMBERS (see KART.CountMissingGear) — but the
+        -- captures above accept any colon-free text. BuffChecker renders an unrecognized slot through
+        -- string.format(BC_SLOT_FALLBACK, s), whose "%d" throws a Lua error on non-numeric input, so a
+        -- broken or hostile client could make the Advanced-view tooltip error on every hover. Rejecting
+        -- the whole message is also what keeps a bogus "-5 missing" count out of the cache.
+        if e and g and IsSlotList(e) and IsSlotList(g) then
             KART.GearCache = KART.GearCache or {}
             KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
             if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end

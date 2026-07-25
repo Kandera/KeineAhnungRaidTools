@@ -203,6 +203,7 @@ KART.L_deDE = {
     LC_RAIDWIDE_TITLE      = "Raid-weite Einstellungen",
     LC_ROLE_STATUS_OWNER   = "Deine Einstellungen gelten für den Raid (du bist Lootmaster)",
     LC_ROLE_STATUS_MEMBER  = "Einstellungen des Lootmasters gelten",
+    LC_ROLE_STATUS_FOREIGN = "Diese Einstellungen bewirken noch nichts — nur der Client des eingetragenen Lootmasters wendet sie an. Schick deine mit \"Settings an Spieler senden...\" unten rüber.",
     LC_SET_VOTE_TIMER      = "Abstimmungs-Timer (Sek)",
     LC_DESC_VOTE_TIMER     = "Wie viele Sekunden Raider Zeit haben, ihre Stimme abzugeben, bevor das Council-Panel abschließt. Wirkt sich auf den Raid nur aus, wenn du Lootmaster bist.",
     LC_SET_FONT_SIZE  = "Loot-Council-Schriftgröße",

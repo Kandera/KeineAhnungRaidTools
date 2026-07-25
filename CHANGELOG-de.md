@@ -34,7 +34,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Vote-Notizen und Officer-Notizen können keine Farbcodes oder Links mehr** in fremde Tooltips schmuggeln.
 - **Das Council-Panel ruckelt nicht mehr, während Loot verteilt wird.**
 - **Der "Dir steht noch zu"-Timer startet jetzt beim Drop**, nicht erst bei der Entscheidung des Councils.
-- **Die Box mit den raid-weiten Einstellungen zeigt jetzt korrekt an, ob deine Einstellungen für den Raid gelten.**
+- **Die Box mit den raid-weiten Einstellungen zeigt jetzt korrekt an, ob deine Einstellungen für den Raid gelten** — und wie sie dorthin kommen, wenn nicht.
+- **Der Buff-Checker wirft keinen Fehler mehr bei einer kaputten Gear-Antwort** eines anderen Raiders.
+- **Abbrechen im Akzentfarben-Picker stellt exakt die alte Farbe wieder her**, und eine Auswahl macht sie nicht mehr minimal dunkler.
 - **Der Handels-Timer entspricht jetzt Blizzards 4-Stunden-Fenster** und läuft auch offline weiter.
 - **Ausrüstungs-, Item-Level- und Ready-Check-Sync funktioniert wieder für alle auf dem eigenen Realm.**
 - **Ein später Raid-Beitritt löscht nicht mehr die laufenden Loot-Würfe des ganzen Raids.**

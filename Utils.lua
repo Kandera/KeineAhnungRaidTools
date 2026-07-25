@@ -918,26 +918,33 @@ function KART.UpdateMinimapButton()
 end
 
 function KART.OpenColorPicker(rKey, gKey, bKey)
-    local startR = (KART_Settings[rKey] or 100) / 100
-    local startG = (KART_Settings[gKey] or 100) / 100
-    local startB = (KART_Settings[bKey] or 100) / 100
-    
+    -- The ORIGINAL 0-100 integers are kept for the cancel path below, not re-derived from the 0-1
+    -- values handed to the picker: round-tripping through /100 and math.floor(x*100) loses a whole
+    -- unit for 29, 57 and 58 (binary floating point), so cancelling silently darkened the colour
+    -- instead of restoring exactly what was there.
+    local origR = KART_Settings[rKey] or 100
+    local origG = KART_Settings[gKey] or 100
+    local origB = KART_Settings[bKey] or 100
+    local startR, startG, startB = origR / 100, origG / 100, origB / 100
+
     local function onUpdate()
         local r, g, b
         if ColorPickerFrame.GetColorRGB then
             r, g, b = ColorPickerFrame:GetColorRGB()
         end
         if not r then return end
-        KART_Settings[rKey] = math.floor(r * 100)
-        KART_Settings[gKey] = math.floor(g * 100)
-        KART_Settings[bKey] = math.floor(b * 100)
+        -- Round (+0.5), don't truncate: the picker returns 0-1 floats and plain flooring drops a
+        -- full unit off most of them (0.29 * 100 is 28.999…), so every pick drifted darker.
+        KART_Settings[rKey] = math.floor(r * 100 + 0.5)
+        KART_Settings[gKey] = math.floor(g * 100 + 0.5)
+        KART_Settings[bKey] = math.floor(b * 100 + 0.5)
         if KART.UpdateStyles then KART.UpdateStyles() end
     end
 
     local function onCancel()
-        KART_Settings[rKey] = math.floor(startR * 100)
-        KART_Settings[gKey] = math.floor(startG * 100)
-        KART_Settings[bKey] = math.floor(startB * 100)
+        KART_Settings[rKey] = origR
+        KART_Settings[gKey] = origG
+        KART_Settings[bKey] = origB
         if KART.UpdateStyles then KART.UpdateStyles() end
     end
 

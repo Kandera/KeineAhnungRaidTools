@@ -203,6 +203,7 @@ KART.L_enUS = {
     LC_RAIDWIDE_TITLE      = "Raid-wide settings",
     LC_ROLE_STATUS_OWNER   = "Your settings apply to the raid (you are the lootmaster)",
     LC_ROLE_STATUS_MEMBER  = "The lootmaster's settings apply",
+    LC_ROLE_STATUS_FOREIGN = "These settings do nothing yet — only the named lootmaster's own client applies them. Send yours over with \"Sync Settings to Player...\" below.",
     LC_SET_VOTE_TIMER      = "Vote Timer (sec)",
     LC_DESC_VOTE_TIMER     = "How many seconds raiders have to submit their vote before the council panel finalises. Only takes effect for the raid when you are the lootmaster.",
     LC_SET_FONT_SIZE  = "Loot Council Font Size",

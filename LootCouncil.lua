@@ -837,10 +837,11 @@ function LC.ClearAllRolls()
     -- same rollID — showing a stale "you voted" badge that hides the vote buttons, and a stale gold
     -- winner highlight on the council panel.
     --
-    -- LC.rollLootedAt is the one deliberate exception: it is the BoP trade-timeout clock for entries
-    -- in LC.pendingTrades/LC.owedToMe, which are long-lived obligations that intentionally survive a
-    -- session end (see Trade.ClearRollState's own note). Tracked rolls already had theirs cleared by
-    -- the ClearRollState loops above.
+    -- LC.rollLootedAt is the one deliberate exception, and nothing below touches it: it is the BoP
+    -- trade-timeout clock for entries in LC.pendingTrades/LC.owedToMe, which are long-lived
+    -- obligations that intentionally survive a session end. It outlives roll tracking on purpose and
+    -- is bounded by age instead — see Trade.PruneExpiredLootStamps, which the ClearRollState loops
+    -- above already ran.
     wipe(LC.votes)
     wipe(LC.rolls)
     wipe(LC.councilVotes)
@@ -1007,6 +1008,10 @@ local function PurgeStaleRoll(rollID, newItemID)
         if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
     end
     if LC.activeRollID == rollID then LC.activeRollID = nil end
+    -- LC.rollLootedAt needs no clearing here even though this IS the rollID-reuse case: both callers
+    -- (LC.OnStartLootRoll, LC.HandleStart) re-stamp it unconditionally right after this returns, so
+    -- the new roll always gets its own time(). See Trade.PruneExpiredLootStamps for why the stamp
+    -- otherwise outlives Trade.ClearRollState.
     LC.Trade.ClearRollState(rollID)
 end
 
@@ -1188,12 +1193,13 @@ function LC.HandleActive(value, senderKey)
     -- and a leftover /kart showall override survive into the next session.
     if wasActive and not LC.sessionActive then
         LC.ClearAllRolls()
-    elseif not wasActive and LC.sessionActive and LC.IsConfigOwner() then
-        -- Session just opened and we own the config (see LC.IsConfigOwner). The owner's own
-        -- SetSessionActive only broadcasts the config when they ARE the lootmaster, so when those
-        -- are different people this is what actually gets the config out to the raid.
-        LC.BroadcastRaidConfig()
     end
+    -- No "and if we own the config, broadcast it" branch here, deliberately: config ownership and
+    -- loot ownership can never be split across two people. LC.IsConfigOwner() true means our own
+    -- lcLootmaster names US, which makes LC.GetLootmaster() return our own key, which makes the
+    -- IsSenderLootOwner check above reject every sender but ourselves — and we never receive our own
+    -- messages. So such a branch is unreachable by construction. The config reaches the raid from
+    -- LC.SetSessionActive (sent before LC_ACTIVE) and LC.HandleStateRequest instead.
 end
 
 function LC.HandleStart(payload, senderKey)
@@ -1209,11 +1215,18 @@ function LC.HandleStart(payload, senderKey)
     PurgeStaleRoll(rollID, itemID)
 
     -- Same BoP trade clock as LC.OnStartLootRoll, for clients that never got their own
-    -- START_LOOT_ROLL (dead, out of range, ineligible). LC_START arrives within a fraction of a
-    -- second of the loot, so it's accurate enough for a 4-hour window. Never overwrites a local
-    -- stamp — that one is closer to the truth.
+    -- START_LOOT_ROLL (dead, out of range, ineligible). LC_START goes out inside the owner's own
+    -- START_LOOT_ROLL handler, so it lands within a fraction of a second of the loot — accurate
+    -- enough for a 4-hour window.
+    --
+    -- Overwrites unconditionally (this used to keep an existing stamp as "closer to the truth").
+    -- The stamp now deliberately outlives the roll it belonged to (see Trade.PruneExpiredLootStamps)
+    -- and Blizzard reuses rollIDs, so a stamp already sitting under this ID may well be the PREVIOUS
+    -- roll's — PurgeStaleRoll above can only detect that when it still has the old link to compare.
+    -- Keeping it would date a brand-new roll from the old one; the accuracy it bought in the normal
+    -- case was milliseconds, since the owner sends LC_START from inside its own roll handler.
     LC.rollLootedAt = LC.rollLootedAt or {}
-    LC.rollLootedAt[rollID] = LC.rollLootedAt[rollID] or time()
+    LC.rollLootedAt[rollID] = time()
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"
