@@ -21,25 +21,29 @@ KART.BuffData = {
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
     { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
     { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
-    -- Both lists hold enchantIDs, not spell ids: the weapon slot is read from GetWeaponEnchantInfo.
-    -- bestSpells = the current rank's consumables (enchanting oils and blacksmithing stones).
-    -- neutralSpells = class mechanics that occupy the very same weapon slot, so an oil is either
-    -- impossible (shaman imbue, rogue poison) or temporarily overridden (paladin Holy Armaments);
-    -- those count as "nothing to fix" instead of a wrong-rank oil. Anything else is off-rank.
-    -- bestSpells EMPTIED 2026-07-25, same reason as GOOD_ENCHANTS in Utils.lua: these ids were
-    -- written from memory and an in-game check showed an oiled weapon reported as un-oiled. An empty
-    -- bestSpells makes the rank check fall back to "any weapon enchant is fine" (see rate() in
-    -- KART.UpdateBuffCheck), so the column goes back to answering "is there an oil at all".
+    -- bestSpells holds enchantIDs, not spell ids: the weapon slot is read from GetWeaponEnchantInfo.
+    -- An id in the list is the current tier's oil; anything else on the weapon is simply "something
+    -- we can't judge" and is not reported (see rate() in KART.UpdateBuffCheck for why).
+    -- bestSpells VERIFIED 2026-07-25 — all three of Midnight's weapon oils, each read off its own
+    -- Wowhead spell page ("Enchant Item - Temporary: <name> (<id>)") and cross-checked against a live
+    -- client, which reported 8052 while the player was using Thalassian Phoenix Oil:
+    --   8052 Thalassian Phoenix Oil | 8054 Oil of Dawn | 8056 Smuggler's Enchanted Edge
+    -- Temporary enchants carry their id on the spell itself, which is why these could be resolved at
+    -- all — the permanent armour enchants can NOT (see GOOD_ENCHANTS in Utils.lua).
     --
     -- The commit that replaced the original {8052} claimed "8052/8051 are stale, both are ring
-    -- enchantIDs in Midnight". That was false, and it is what broke oil detection: a live client
-    -- reports 8052 as the WEAPON OIL and 7997 as the ring enchant. 8052 had been right all along.
-    -- Refill from "/kart ench raid" output (its "oil:" line), not from memory — and note that
-    -- several oils are current at once, which is why one person's id is not the whole list.
-    -- neutralSpells is left in place but is inert until then; those ids are unverified too.
+    -- enchantIDs in Midnight". That was false, and it is what broke oil detection: 8052 is the oil,
+    -- 7997 is the ring enchant. 8052 had been right all along. Verify before deleting an id.
+    --
+    -- There is no neutralSpells list any more. It held guessed ids for the class mechanics that
+    -- share the weapon slot (shaman imbues, rogue poisons, paladin armaments — the values were
+    -- 8012, 8015, 8018, 8201, 8205, 8209, 7150, 7155, none of them verified) and existed only to
+    -- keep those from being reported as a wrong-rank oil. rate() no longer reports ANY unrecognised
+    -- enchant, so the list had stopped affecting the outcome. Reviving off-rank detection means
+    -- verifying those ids first — the old numbers are recorded here purely as a starting point, not
+    -- as fact.
     { id = "oil",    labelKey = "BC_LABEL_OIL",    col = 3, icon = 7548987, isOil = true,
-      bestSpells = {},
-      neutralSpells = {8012, 8015, 8018, 8201, 8205, 8209, 7150, 7155}, page = "advanced" },
+      bestSpells = {8052, 8054, 8056}, page = "advanced" },
     { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
     { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
 }
@@ -864,27 +868,25 @@ function KART.UpdateBuffCheck(isPreview)
                 -- with oil on one weapon only still counts as missing it. Which hands take part is
                 -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's
                 -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
-                -- Ranks: 1 = weapon is bare, 2 = off-rank consumable, 3 = class mechanic occupying the
-                -- slot, 4 = current rank.
+                -- Ranks: 1 = weapon is bare, 3 = carrying something we can't judge, 4 = a current oil.
+                --
+                -- There is deliberately no "off-rank" rank here. Telling an old oil apart from a
+                -- shaman imbue, a rogue poison or a paladin armament needs verified ids for all of
+                -- those, and only the three current oils are verified (see bestSpells). Anything
+                -- unrecognised therefore rates 3 — "has something on the weapon, nothing to nag
+                -- about" — because the alternative is accusing every enhancement shaman in the raid
+                -- of using the wrong oil. To add off-rank detection later, verify the class-mechanic
+                -- and previous-tier oil ids first, then reintroduce a rank between 1 and 3 for ids
+                -- that are known-bad rather than merely unknown.
                 local rank, isExpiring, rated, hasData = nil, false, false, true
 
                 local function rate(enchantID, expTime)
                     rated = true
                     local r = 1
                     if enchantID and enchantID > 0 then
-                        -- No id list yet: anything on the weapon counts as current rank. Same
-                        -- fallback rule as KART.CountMissingGear's IsGoodEnchant, and for the same
-                        -- reason — an empty list must mean "can't judge the rank, so don't accuse",
-                        -- not "nothing is ever right". Without this, emptying bestSpells would rate
-                        -- every oiled weapon as off-rank instead of simply skipping the rank check.
-                        r = (#buff.bestSpells == 0) and 4 or 2
+                        r = 3
                         for _, id in ipairs(buff.bestSpells) do
                             if enchantID == id then r = 4; break end
-                        end
-                        if r == 2 then
-                            for _, id in ipairs(buff.neutralSpells) do
-                                if enchantID == id then r = 3; break end
-                            end
                         end
                     end
                     -- Only a current-rank oil can run out on us; a class mechanic like Sacred Weapon is
@@ -920,9 +922,8 @@ function KART.UpdateBuffCheck(isPreview)
                     stateToSet = isExpiring and "expiring" or "best"
                 elseif rank == 3 then
                     stateToSet = true
-                elseif rank == 2 then
-                    stateToSet = "wrong"
                 end
+                -- No rank-2 branch: rate() cannot produce one while off-rank detection is off.
                 -- rank 1 sets nothing: a bare weapon leaves the column in its "missing" look.
                 if stateToSet then MergeBuffState(buff.id, stateToSet) end
             end
