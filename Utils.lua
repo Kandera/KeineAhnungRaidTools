@@ -1168,6 +1168,31 @@ function KART.SerializeOwnEnchantIDs()
     return table.concat(parts, ",")
 end
 
+-- The enchant's display NAME for `slot`, read off the item tooltip's "Enchanted: X" line.
+--
+-- This is the piece that makes the whole exercise verifiable. The item link carries only the numeric
+-- id, and a bare number can't be checked against anything — which is how a table of invented ids got
+-- shipped in the first place. The name can: it maps straight onto a published list of the tier's
+-- enchants, so an id is only ever accepted once its name has been confirmed as one of them.
+local function EnchantNameForSlot(slot)
+    if not ENCHANTED_TOOLTIP then return nil end ---@diagnostic disable-line: undefined-global
+    -- ENCHANTED_TOOLTIP is Blizzard's own localized "Enchanted: %s" template. Escaping it and then
+    -- turning its %s into a capture keeps this working on a German client ("Verzaubert: %s") without
+    -- hardcoding either language.
+    local pattern = "^" .. ENCHANTED_TOOLTIP ---@diagnostic disable-line: undefined-global
+        :gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+        :gsub("%%%%s", "(.+)")
+    KART_GearScanTooltip:ClearLines()
+    KART_GearScanTooltip:SetInventoryItem("player", slot)
+    for i = 1, KART_GearScanTooltip:NumLines() do
+        local fs = _G["KART_GearScanTooltipTextLeft" .. i]
+        local text = fs and fs:GetText()
+        local name = text and text:match(pattern)
+        if name then return name end
+    end
+    return nil
+end
+
 function KART.PrintEnchantDump()
     print("|cff00ff00KART|r " .. KART.L.ENCH_DUMP_PERMANENT)
     for _, slot in ipairs(KART.ENCHANTABLE_SLOTS) do
@@ -1177,9 +1202,10 @@ function KART.PrintEnchantDump()
         else
             local enchant = link:match("item:%d+:(%d*):")
             local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
-            print(string.format("  slot %d: enchant=%s  equipLoc=%s  %s",
+            print(string.format("  slot %d: enchant=%s  [%s]  equipLoc=%s  %s",
                 slot,
                 (enchant and enchant ~= "" and enchant ~= "0") and enchant or "NONE",
+                EnchantNameForSlot(slot) or "?",
                 tostring(equipLoc),
                 C_Item.GetItemInfo(link) or "?"))
         end
