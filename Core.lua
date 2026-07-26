@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.0.0"
 local frame = CreateFrame("Frame")
@@ -488,7 +489,7 @@ function KART.ShowReadyCheckReasonDialog()
         })
         f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
         f:SetBackdropBorderColor(0, 0, 0, 1)
-        KART.ApplyRoundedMask(f, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(f, KART.CORNER_RADIUS_LG)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
@@ -509,17 +510,17 @@ function KART.ShowReadyCheckReasonDialog()
             f:Hide()
         end
 
-        local btnBio = KART.CreateModernButton(f, KART.L.RC_REASON_BIO)
+        local btnBio = KART.UI:CreateModernButton(f, KART.L.RC_REASON_BIO)
         btnBio:SetSize(75, 25)
         btnBio:SetPoint("TOPLEFT", 10, -35)
         btnBio:SetScript("OnClick", function() sendReason("RC_REASON_BIO") end)
 
-        local btnDrink = KART.CreateModernButton(f, KART.L.RC_REASON_DRINK)
+        local btnDrink = KART.UI:CreateModernButton(f, KART.L.RC_REASON_DRINK)
         btnDrink:SetSize(75, 25)
         btnDrink:SetPoint("TOP", 0, -35)
         btnDrink:SetScript("OnClick", function() sendReason("RC_REASON_DRINK") end)
 
-        local btn1Min = KART.CreateModernButton(f, KART.L.RC_REASON_1MIN)
+        local btn1Min = KART.UI:CreateModernButton(f, KART.L.RC_REASON_1MIN)
         btn1Min:SetSize(75, 25)
         btn1Min:SetPoint("TOPRIGHT", -10, -35)
         btn1Min:SetScript("OnClick", function() sendReason("RC_REASON_1MIN") end)
@@ -539,10 +540,10 @@ function KART.ShowReadyCheckReasonDialog()
         customInput:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
         customInput:SetTextInsets(5, 5, 0, 0)
         customInput:SetMaxLetters(30) -- Verhindert, dass Leute ganze Romane schreiben
-        KART.ApplyRoundedMask(customInput, KART.CORNER_RADIUS_SM)
+        KART.UI:ApplyRoundedMask(customInput, KAUI.CORNER_RADIUS_SM)
         KART.UI:RegisterEditBox(customInput)
-        
-        local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND)
+
+        local btnSend = KART.UI:CreateModernButton(f, KART.L.RC_REASON_SEND)
         btnSend:SetSize(70, 25)
         btnSend:SetPoint("LEFT", customInput, "RIGHT", 10, 0)
         btnSend:SetScript("OnClick", function()

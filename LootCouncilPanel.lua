@@ -435,7 +435,7 @@ local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCoun
 -- Confirm dialog for the "Close Session" button below, because it is destructive and raid-wide:
 -- every client drops its tabs, votes and rolls. Registered once at file scope rather than per panel
 -- build (the panel is created lazily).
-KART.RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
     text = "End the Loot Council session?", -- overwritten with KART.L.LC_CLOSE_SESSION_CONFIRM before each Show
     button1 = YES,
     button2 = NO,
@@ -470,7 +470,7 @@ function Council.CreateCouncilPanel()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop",  function(self)
         self:StopMovingOrSizing()
@@ -503,7 +503,7 @@ function Council.CreateCouncilPanel()
             KART_Settings.lcCouncilPanelPos = {x = f:GetLeft(), y = f:GetTop()}
         end
     end)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:CreateHeaderLine(f, -28)
 
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("LEFT", 16, 0)
@@ -517,13 +517,13 @@ function Council.CreateCouncilPanel()
     -- next time the panel is shown; this is a deliberate "get it out of my way for now", not a
     -- "discard" action. Use a tab's own "x" to actually dismiss an item, or the "-" button (below)
     -- to shrink the panel down to just its header instead of hiding it outright.
-    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
     closeBtn:SetPoint("RIGHT", -4, 0)
 
     -- Collapses the panel to just its title bar + item name, keeping it out of the way during
     -- normal raiding without losing track of what's being voted on (tabs/rows are hidden, not
     -- discarded — see LC.SetCouncilPanelMinimized). Sits left of the close button, same style.
-    local minimizeBtn = KART.CreateHeaderIconButton(hdr, "-", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
+    local minimizeBtn = KART.UI:CreateHeaderIconButton(hdr, "-", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
     minimizeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
     f.minimizeBtn = minimizeBtn
     f.timerText:SetPoint("RIGHT", minimizeBtn, "LEFT", -6, 0)
@@ -664,14 +664,14 @@ function Council.CreateCouncilPanel()
     scrollChild:SetSize(590, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
 
     f.scrollChild = scrollChild
     f.rows        = {}
 
     -- Bottom: No Winner / Close
-    local btnNoWinner = KART.CreateModernButton(f, KART.L.LC_BTN_NO_WINNER)
+    local btnNoWinner = KART.UI:CreateModernButton(f, KART.L.LC_BTN_NO_WINNER)
     btnNoWinner:SetSize(150, 28)
     btnNoWinner:SetPoint("BOTTOMLEFT", 10, 10)
     btnNoWinner:SetScript("OnClick", function()
@@ -693,7 +693,7 @@ function Council.CreateCouncilPanel()
     -- DoAssignWinner) — without it the only way to clear a finished raid's tabs would be closing each
     -- one by hand. Lootmaster-only, since it wipes state for every client in the raid; everyone else
     -- sees it greyed out and uses "Close" (or the header "×") to just put the window away.
-    local btnCloseSession = KART.CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
+    local btnCloseSession = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
     btnCloseSession:SetSize(150, 28)
     btnCloseSession:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
     btnCloseSession:SetScript("OnClick", function()
@@ -704,7 +704,7 @@ function Council.CreateCouncilPanel()
     f.btnCloseSession = btnCloseSession
 
     -- Plain window close: hides the panel, ends nothing. Same as the header "×".
-    local btnClose = KART.CreateModernButton(f, KART.L.LC_BTN_CANCEL)
+    local btnClose = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CANCEL)
     btnClose:SetSize(150, 28)
     btnClose:SetPoint("BOTTOMRIGHT", -10, 10)
     btnClose:SetScript("OnClick", function() f:Hide() end)

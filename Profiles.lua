@@ -80,7 +80,7 @@ function KART.ShowSaveProfileDialog()
     })
 end
 
-KART.RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
     text = "A profile named '%s' already exists. Overwrite it?", -- overwritten with KART.L.PROFILE_OVERWRITE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -90,7 +90,7 @@ KART.RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
     end,
 })
 
-KART.RegisterStaticPopup("KART_PROFILE_DELETE_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_PROFILE_DELETE_CONFIRM", {
     text = "Really delete profile '%s'?", -- overwritten with KART.L.PROFILE_DELETE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = YES,
     button2 = NO,

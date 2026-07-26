@@ -63,7 +63,7 @@ mainFrame.bg:SetAllPoints()
 
 KART.UI:RegisterStrataFrame(mainFrame)
 mainFrame:Hide()
-KART.AddShowFade(mainFrame)
+KART.UI:AddShowFade(mainFrame)
 
 -- Allows closing the whole KART window with the ESC key
 table.insert(UISpecialFrames, mainFrame:GetName())
@@ -105,30 +105,30 @@ end
 
 -- 3. Sidebar menu and tabs
 -- Tabs start below the baked logo/title/underline zone of the artwork.
-KART.BtnPromote = KART.CreateTabButton(clickArea, L.TAB_PROMOTE)
+KART.BtnPromote = KART.UI:CreateTabButton(clickArea, L.TAB_PROMOTE)
 KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 12, -75)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
-KART.BtnRaidlead = KART.CreateTabButton(clickArea, L.TAB_RAIDLEAD)
+KART.BtnRaidlead = KART.UI:CreateTabButton(clickArea, L.TAB_RAIDLEAD)
 KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
 KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
-KART.BtnBuffCheck = KART.CreateTabButton(clickArea, L.TAB_BUFFCHECK)
+KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnLootCouncil = KART.CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL)
+KART.BtnLootCouncil = KART.UI:CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL)
 KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
 
-KART.BtnWoWUtils = KART.CreateTabButton(clickArea, L.TAB_WOWUTILS)
+KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS)
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
 
 -- The Settings tab must always be the last entry in the sidebar. When adding a new tab
 -- button, anchor it above this one (i.e. insert it between the previous last tab and
 -- Settings, and re-anchor Settings to the new button).
-KART.BtnSettings = KART.CreateTabButton(clickArea, L.TAB_SETTINGS)
+KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS)
 KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
@@ -169,7 +169,7 @@ KART.WoWUtilsPanel:SetAllPoints()
 KART.WoWUtilsPanel:Hide()
 
 -- Scrollbar Thumb, accent-tinted via KART.UI's accent-texture registry
-local scrollThumb = KART.StripScrollbarTextures(scrollFrame)
+local scrollThumb = KART.UI:StripScrollbarTextures(scrollFrame)
 if scrollThumb then scrollThumb:SetSize(8, 30) end
 KART.UI:RegisterAccentTexture(scrollThumb, 0.6)
 
@@ -353,7 +353,7 @@ for i, action in ipairs(KART.KeybindActions) do
 
     -- KART_Settings doesn't exist yet at this point in addon load (see load-order note above) —
     -- use the static placeholder; Step 2 below syncs the real value once ADDON_LOADED fires.
-    local btn = KART.CreateModernButton(kbCard, L.KB_NOT_BOUND, L.DESC_KEYBINDS)
+    local btn = KART.UI:CreateModernButton(kbCard, L.KB_NOT_BOUND, L.DESC_KEYBINDS)
     btn:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 260, yOff + 6)
     btn:SetSize(150, 22)
     btn.actionKey = action.key
@@ -398,7 +398,7 @@ KART.CbShowBuffCheck.text:SetJustifyH("LEFT")
 
 KART.CbGrayOffline = KART.CreateSettingsCheckbox(bcCard, "KART_GrayOffline", L.SET_GRAY_OFFLINE, "grayOffline", -80, nil, L.DESC_GRAY_OFFLINE)
 
-KART.BtnBuffPreview = KART.CreateModernButton(bcCard, L.BTN_BUFF_PREVIEW)
+KART.BtnBuffPreview = KART.UI:CreateModernButton(bcCard, L.BTN_BUFF_PREVIEW)
 KART.BtnBuffPreview:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -115)
 KART.BtnBuffPreview:SetScript("OnClick", function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
@@ -538,7 +538,7 @@ KART.SldMenuSize = KART.CreateSettingsSlider(txtCard, L.LABEL_FONT_SIZE_MENU, 8,
 KART.SldContentSize = KART.CreateSettingsSlider(txtCard, L.LABEL_FONT_SIZE_CONTENT, 8, 20, "contentFontSize", -65, "KART_ContentSizeSlider", L.DESC_CONTENT_SIZE)
 
 -- Schriftart Button
-KART.BtnFont = KART.CreateModernButton(txtCard, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
+KART.BtnFont = KART.UI:CreateModernButton(txtCard, L.BTN_SELECT_FONT, L.DESC_SELECT_FONT)
 KART.BtnFont:SetPoint("TOPLEFT", txtCard, "TOPLEFT", 20, -125)
 KART.BtnFont:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
@@ -565,7 +565,7 @@ KART.BtnFont:SetScript("OnClick", function(self)
 end)
 
 -- Sprache Button
-KART.BtnLang = KART.CreateModernButton(txtCard, L.BTN_LANGUAGE_PREFIX .. L.LANG_AUTO, L.DESC_LANGUAGE)
+KART.BtnLang = KART.UI:CreateModernButton(txtCard, L.BTN_LANGUAGE_PREFIX .. L.LANG_AUTO, L.DESC_LANGUAGE)
 KART.BtnLang:SetPoint("TOPLEFT", KART.BtnFont, "BOTTOMLEFT", 0, -10)
 KART.BtnLang:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -591,7 +591,7 @@ colCard:SetSize(500, 150)
 KART.SettingsColorCard = colCard
 
 -- Color Buttons
-KART.BtnAccentColor = KART.CreateModernButton(colCard, L.BTN_ACCENT_COLOR, L.DESC_ACCENT_COLOR)
+KART.BtnAccentColor = KART.UI:CreateModernButton(colCard, L.BTN_ACCENT_COLOR, L.DESC_ACCENT_COLOR)
 KART.BtnAccentColor:SetPoint("TOPLEFT", colCard, "TOPLEFT", 20, -20)
 KART.BtnAccentColor:SetScript("OnClick", function() KART.OpenColorPicker("accentR", "accentG", "accentB") end)
 
@@ -605,12 +605,12 @@ KART.ColorPreview.bg:SetPoint("BOTTOMRIGHT", KART.ColorPreview, "BOTTOMRIGHT", 1
 KART.ColorPreview.bg:SetColorTexture(0, 0, 0, 1)
 
 -- Reset Button
-KART.BtnReset = KART.CreateModernButton(colCard, L.BTN_RESET, L.DESC_RESET)
+KART.BtnReset = KART.UI:CreateModernButton(colCard, L.BTN_RESET, L.DESC_RESET)
 KART.BtnReset:SetPoint("TOPLEFT", KART.BtnAccentColor, "BOTTOMLEFT", 0, -16)
 -- Confirmed, like every other destructive action in the addon (boss-list reset, profile delete):
 -- this discards every setting, window position and keybind with no undo, and the button sits one
 -- 16px gap below the accent-colour button.
-KART.RegisterStaticPopup("KART_RESET_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_RESET_CONFIRM", {
     text = "Really reset all settings?", -- overwritten with KART.L.DESC_RESET before each Show below
     button1 = YES,
     button2 = NO,
@@ -640,7 +640,7 @@ profTitle:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -14)
 profTitle:SetText(L.LABEL_PROFILES)
 KART.UI:RegisterLabel(profTitle)
 
-KART.BtnProfile = KART.CreateModernButton(profCard, L.PROFILE_LABEL_PREFIX .. L.PROFILE_NONE)
+KART.BtnProfile = KART.UI:CreateModernButton(profCard, L.PROFILE_LABEL_PREFIX .. L.PROFILE_NONE)
 KART.BtnProfile:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -34)
 KART.BtnProfile:SetSize(200, 25)
 KART.BtnProfile:SetScript("OnClick", function(self)
@@ -661,13 +661,13 @@ KART.BtnProfile:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.BtnProfileSaveNew = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE_NEW, L.DESC_PROFILE_SAVE_NEW)
+KART.BtnProfileSaveNew = KART.UI:CreateModernButton(profCard, L.BTN_PROFILE_SAVE_NEW, L.DESC_PROFILE_SAVE_NEW)
 KART.BtnProfileSaveNew:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -69)
 KART.BtnProfileSaveNew:SetScript("OnClick", function()
     KART.ShowSaveProfileDialog()
 end)
 
-KART.BtnProfileSave = KART.CreateModernButton(profCard, L.BTN_PROFILE_SAVE, L.DESC_PROFILE_SAVE)
+KART.BtnProfileSave = KART.UI:CreateModernButton(profCard, L.BTN_PROFILE_SAVE, L.DESC_PROFILE_SAVE)
 KART.BtnProfileSave:SetPoint("TOPLEFT", KART.BtnProfileSaveNew, "TOPRIGHT", 10, 0)
 KART.BtnProfileSave:SetScript("OnClick", function()
     local name = KART_Settings.activeProfile
@@ -676,7 +676,7 @@ KART.BtnProfileSave:SetScript("OnClick", function()
     KART.RefreshProfileButton()
 end)
 
-KART.BtnProfileDelete = KART.CreateModernButton(profCard, L.BTN_PROFILE_DELETE, L.DESC_PROFILE_DELETE)
+KART.BtnProfileDelete = KART.UI:CreateModernButton(profCard, L.BTN_PROFILE_DELETE, L.DESC_PROFILE_DELETE)
 KART.BtnProfileDelete:SetPoint("TOPLEFT", KART.BtnProfileSave, "TOPRIGHT", 10, 0)
 KART.BtnProfileDelete:SetScript("OnClick", function()
     local name = KART_Settings.activeProfile
@@ -702,7 +702,7 @@ mainFrame.closeBtn = closeBtn
 -- Positioned left of the close button, in the same header row as the active tab's title, well
 -- clear of the close button's hit area (closeBtn spans roughly x -45..-9, y -42..-6 from
 -- clickArea's TOPRIGHT) and of the baked logo/title zone above y -22.
-local searchBtn = KART.CreateModernButton(clickArea, L.BTN_SEARCH, L.DESC_SEARCH)
+local searchBtn = KART.UI:CreateModernButton(clickArea, L.BTN_SEARCH, L.DESC_SEARCH)
 searchBtn:SetSize(70, 22)
 searchBtn:SetPoint("TOPRIGHT", clickArea, "TOPRIGHT", -70, -20)
 
@@ -718,7 +718,7 @@ searchPopout:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
 searchPopout:SetBackdropBorderColor(0, 0, 0, 1)
 KART.UI:RegisterStrataFrame(searchPopout, true) -- one stratum above the windows, follows the setting
 searchPopout:Hide()
-KART.ApplyRoundedMask(searchPopout, KART.CORNER_RADIUS_SM)
+KART.UI:ApplyRoundedMask(searchPopout, KAUI.CORNER_RADIUS_SM)
 
 local searchBox = KART.CreateStyledEditBox(searchPopout, "KART_SearchBox")
 searchBox:SetSize(240, 26)

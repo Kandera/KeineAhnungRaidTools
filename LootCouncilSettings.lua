@@ -109,7 +109,7 @@ function LC.BuildSettingsPanel(parent)
     -- another checkbox row). Initial label is hardcoded to "full" — KART_Settings doesn't exist
     -- yet at file-load time, same reasoning as BtnMinQuality's own placeholder-text comment below;
     -- Core.lua's ADDON_LOADED handler syncs the real saved value once settings are loaded.
-    KART.LC.BtnVotedItemDisplay = KART.CreateModernButton(
+    KART.LC.BtnVotedItemDisplay = KART.UI:CreateModernButton(
         prefsCard, LC.VotedItemDisplayLabel("full"), L.LC_DESC_VOTED_DISPLAY)
     KART.LC.BtnVotedItemDisplay:SetPoint("TOPLEFT", 20, -175)
     KART.LC.BtnVotedItemDisplay:SetSize(460, 28)
@@ -309,7 +309,7 @@ function LC.BuildSettingsPanel(parent)
 
     -- Placeholder text only — KART_Settings doesn't exist yet at file-load time.
     -- Core.lua's ADDON_LOADED handler syncs the real value once settings are loaded.
-    KART.LC.BtnMinQuality = KART.CreateModernButton(raidBox, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
+    KART.LC.BtnMinQuality = KART.UI:CreateModernButton(raidBox, LC.QualityLabel(4), L.LC_DESC_MIN_QUALITY)
     KART.LC.BtnMinQuality:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnMinQuality:SetScript("OnClick", function(self)
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -326,7 +326,7 @@ function LC.BuildSettingsPanel(parent)
 
     -- Toggle session (full width) — functionally always leader-gated already; lives in the
     -- raid-wide box too since it only ever does anything for the raid leader.
-    KART.LC.BtnToggleSession = KART.CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
+    KART.LC.BtnToggleSession = KART.UI:CreateModernButton(raidBox, L.LC_BTN_TOGGLE, L.LC_DESC_TOGGLE)
     KART.LC.BtnToggleSession:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         -- Loot owner, not raid leader: the lootmaster runs the whole loot flow (see LC.IsLootOwner),
@@ -340,7 +340,7 @@ function LC.BuildSettingsPanel(parent)
         end
     end)
 
-    KART.LC.BtnSyncSettings = KART.CreateModernButton(raidBox, L.LC_BTN_SYNC_SETTINGS, L.LC_DESC_SYNC_SETTINGS)
+    KART.LC.BtnSyncSettings = KART.UI:CreateModernButton(raidBox, L.LC_BTN_SYNC_SETTINGS, L.LC_DESC_SYNC_SETTINGS)
     KART.LC.BtnSyncSettings:SetSize(CONTENT_WIDTH, 28)
     KART.LC.BtnSyncSettings:SetScript("OnClick", function()
         LC.ShowSyncTargetDialog()
@@ -415,7 +415,7 @@ function LC.BuildSettingsPanel(parent)
     end
 
     layoutRaidBox()
-    KART.ApplyRoundedMask(raidBox, KART.CORNER_RADIUS_LG)
+    KART.UI:ApplyRoundedMask(raidBox, KART.CORNER_RADIUS_LG)
     -- Exported entry point for every external caller (role-status change, pending-resolution retry,
     -- UpdateStyles). Two things the raw layoutRaidBox doesn't do:
     --  * Skip while off screen. IsVisible(), NOT IsShown(): tab switching hides the parent panel, so
@@ -443,18 +443,18 @@ function LC.BuildSettingsPanel(parent)
     -- Anchored to raidBox's own BOTTOMLEFT (not a fixed offset from parent) so they always sit
     -- right below the box regardless of how tall it ends up being — the box's height depends on
     -- wrapped label text, which can vary by locale and by the user's chosen font/size.
-    KART.LC.BtnTestLooter = KART.CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
+    KART.LC.BtnTestLooter = KART.UI:CreateModernButton(parent, L.LC_BTN_TEST_LOOTER, L.LC_DESC_TEST_LOOTER)
     KART.LC.BtnTestLooter:SetSize(242, 28)
     KART.LC.BtnTestLooter:SetPoint("TOPLEFT", raidBox, "BOTTOMLEFT", 0, -16)
     KART.LC.BtnTestLooter:SetScript("OnClick", function() LC.StartTest("looter") end)
 
-    KART.LC.BtnTestMaster = KART.CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
+    KART.LC.BtnTestMaster = KART.UI:CreateModernButton(parent, L.LC_BTN_TEST_MASTER, L.LC_DESC_TEST_MASTER)
     KART.LC.BtnTestMaster:SetSize(242, 28)
     KART.LC.BtnTestMaster:SetPoint("LEFT", KART.LC.BtnTestLooter, "RIGHT", 16, 0)
     KART.LC.BtnTestMaster:SetScript("OnClick", function() LC.StartTest("master") end)
 
     -- Loot history (full width) — anchored below the test buttons for the same reason.
-    KART.LC.BtnHistory = KART.CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
+    KART.LC.BtnHistory = KART.UI:CreateModernButton(parent, L.LC_BTN_HISTORY, L.LC_DESC_HISTORY)
     KART.LC.BtnHistory:SetSize(500, 28)
     KART.LC.BtnHistory:SetPoint("TOPLEFT", KART.LC.BtnTestLooter, "BOTTOMLEFT", 0, -8)
     KART.LC.BtnHistory:SetScript("OnClick", function()

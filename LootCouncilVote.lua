@@ -22,7 +22,7 @@ function Vote.CreateVoteList()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -35,11 +35,11 @@ function Vote.CreateVoteList()
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 16, -10)
     f.title:SetText(KART.L.LC_VOTE_TITLE)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:CreateHeaderLine(f, -28)
 
     -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
     -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
-    local closeBtn = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
     closeBtn:SetPoint("TOPRIGHT", -6, -6)
 
     local scrollFrame = CreateFrame("ScrollFrame", "KART_LCVoteListScroll", f, "UIPanelScrollFrameTemplate")
@@ -50,7 +50,7 @@ function Vote.CreateVoteList()
     scrollChild:SetSize(345, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
 
     f.scrollChild = scrollChild
@@ -500,8 +500,8 @@ function Vote.RefreshVoteListRows_Spacious(f)
 
                 local btn = row.voteButtons[bi]
                 if not btn then
-                    btn = KART.CreateModernButton(row.btnArea, def.label)
-                    btn.grad = KART.CreateGradientOverlay(btn)
+                    btn = KART.UI:CreateModernButton(row.btnArea, def.label)
+                    btn.grad = KART.UI:CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
                     btn.iconTex:SetSize(13, 13)
                     btn.iconTex:SetPoint("LEFT", 6, 0)
@@ -519,7 +519,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 -- Full-strength border (was 0.55) plus a tinted gradient fill behind the label, so
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 local capturedIdx    = bi
@@ -747,11 +747,11 @@ function Vote.RefreshVoteListRows_Compact(f)
                     btn:SetSize(CHIP, CHIP)
                     btn:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
                     -- Base fill, same as every other backdrop frame in this file (e.g. the row
-                    -- backdrops above, or KART.CreateModernButton's own vote buttons) — without
+                    -- backdrops above, or KART.UI:CreateModernButton's own vote buttons) — without
                     -- this the chip has no set background color, only the category-tinted border
                     -- set below, which at 24px is easy to mistake for "no button here at all".
                     btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-                    btn.grad = KART.CreateGradientOverlay(btn)
+                    btn.grad = KART.UI:CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
                     btn.iconTex:SetPoint("TOPLEFT", 4, -4)
                     btn.iconTex:SetPoint("BOTTOMRIGHT", -4, 4)
@@ -762,7 +762,7 @@ function Vote.RefreshVoteListRows_Compact(f)
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 btn:SetScript("OnEnter", function(self)

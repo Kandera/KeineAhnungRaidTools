@@ -260,7 +260,7 @@ function WU.RemoveForBoss(idx)
     print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, boss.name))
 end
 
-KART.RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
     text = "Really reset the boss list?", -- overwritten with KART.L.WU_RESET_CONFIRM_TEXT before every StaticPopup_Show call below
     button1 = YES,
     button2 = NO,
@@ -315,11 +315,11 @@ function WU.RefreshBossList()
             row.nameText:SetJustifyH("LEFT")
             KART.UI:RegisterLabel(row.nameText)
 
-            row.btnInvite = KART.CreateModernButton(row, KART.L.WU_BTN_INVITE)
+            row.btnInvite = KART.UI:CreateModernButton(row, KART.L.WU_BTN_INVITE)
             row.btnInvite:SetSize(70, 22)
             row.btnInvite:SetPoint("RIGHT", row, "RIGHT", -76, 0)
 
-            row.btnRemove = KART.CreateModernButton(row, KART.L.WU_BTN_REMOVE)
+            row.btnRemove = KART.UI:CreateModernButton(row, KART.L.WU_BTN_REMOVE)
             row.btnRemove:SetSize(70, 22)
             row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -2, 0)
 
@@ -393,13 +393,13 @@ function WU.BuildPanel(parent)
     -- so the focus accent is mirrored below via the inner EditBox's focus scripts.
     pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
     pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    KART.ApplyRoundedMask(pasteBG, KART.CORNER_RADIUS_LG)
+    KART.UI:ApplyRoundedMask(pasteBG, KART.CORNER_RADIUS_LG)
 
     local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
     pasteScroll:SetPoint("TOPLEFT", 4, -4)
     pasteScroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-    local pasteScrollThumb = KART.StripScrollbarTextures(pasteScroll)
+    local pasteScrollThumb = KART.UI:StripScrollbarTextures(pasteScroll)
     if pasteScrollThumb then pasteScrollThumb:SetSize(6, 16) end
     KART.UI:RegisterAccentTexture(pasteScrollThumb, 0.6)
 
@@ -428,7 +428,7 @@ function WU.BuildPanel(parent)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
     KART.UI:RegisterEditBox(WU.ImportEditBox)
 
-    WU.BtnImport = KART.CreateModernButton(importCard, L.WU_BTN_IMPORT)
+    WU.BtnImport = KART.UI:CreateModernButton(importCard, L.WU_BTN_IMPORT)
     WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
@@ -464,7 +464,7 @@ function WU.BuildPanel(parent)
         end
     end)
 
-    WU.BtnReset = KART.CreateModernButton(importCard, L.WU_BTN_RESET)
+    WU.BtnReset = KART.UI:CreateModernButton(importCard, L.WU_BTN_RESET)
     WU.BtnReset:SetSize(100, 26)
     WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()

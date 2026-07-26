@@ -688,7 +688,7 @@ function LC.HandleSyncDecline(senderShort)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_DECLINED_MSG, senderShort))
 end
 
-KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
+KART.UI:RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
     text = "Raidlead-Only Settings Sync from Player %s", -- overwritten with KART.L.LC_SYNC_REQUEST_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -783,7 +783,7 @@ function LC.ShowSessionPrompt()
     f:SetSize(310, 115)
     f:SetPoint("CENTER", 0, 120)
     KART.UI:RegisterStrataFrame(f, true)
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     table.insert(UISpecialFrames, f:GetName())
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -796,7 +796,7 @@ function LC.ShowSessionPrompt()
     f.desc:SetWidth(285)
     f.desc:SetWordWrap(true)
 
-    local btnYes = KART.CreateModernButton(f, KART.L.LC_PROMPT_YES)
+    local btnYes = KART.UI:CreateModernButton(f, KART.L.LC_PROMPT_YES)
     btnYes:SetSize(135, 28)
     btnYes:SetPoint("BOTTOMLEFT", 15, 12)
     btnYes:SetScript("OnClick", function()
@@ -804,7 +804,7 @@ function LC.ShowSessionPrompt()
         f:Hide()
     end)
 
-    local btnNo = KART.CreateModernButton(f, KART.L.LC_PROMPT_NO)
+    local btnNo = KART.UI:CreateModernButton(f, KART.L.LC_PROMPT_NO)
     btnNo:SetSize(135, 28)
     btnNo:SetPoint("BOTTOMRIGHT", -15, 12)
     btnNo:SetScript("OnClick", function()
@@ -1183,7 +1183,7 @@ LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed b
 -- double-assignment when the assign menu is used more than once for the same item).
 LC.assignedWinners = LC.assignedWinners or {}
 
-KART.RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
+KART.UI:RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
     text = "Already assigned.", -- unconditionally overwritten with KART.L.LC_REASSIGN_CONFIRM_TEXT in LC.Trade.AssignWinner below
     button1 = YES, ---@diagnostic disable-line: undefined-global
     button2 = NO,  ---@diagnostic disable-line: undefined-global

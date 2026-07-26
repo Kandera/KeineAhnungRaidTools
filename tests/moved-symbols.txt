@@ -38,3 +38,16 @@ Theme
 GetRowStripeColor
 GetFontPath
 IsSavedPosOnScreen
+ApplyPopupArtwork
+CreateHeaderLine
+CreateHeaderIconButton
+ApplyRoundedMask
+CreateModernButton
+RegisterStaticPopup
+CreateTabButton
+StripScrollbarTextures
+AddShowFade
+CreateGradientOverlay
+SetGradientOverlayColor
+CORNER_RADIUS_SM
+CORNER_RADIUS_MIN_SIZE

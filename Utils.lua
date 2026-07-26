@@ -12,56 +12,6 @@ KART.UI = KAUI:NewNamespace("KART")
 -- right after the locale values are copied into KART.L.
 KART.L = KART.L or {}
 
--- Shared setup for the popup windows' artwork background (kart-popup-bg-dark.png, 1024x768;
--- opaque art box 1002x746, transparent drop-shadow margin L12/R10/T12/B10). The frame is the
--- art area; the texture extends past the frame edges by the margin ratios so the baked shadow
--- stays visible, and the offsets re-scale whenever the frame's size changes (several of these
--- windows resize dynamically). Sublevel -8 keeps the ground under every other BACKGROUND
--- texture the window draws (row stripes, item borders).
-function KART.ApplyPopupArtwork(frame)
-    local bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-popup-bg-dark.png")
-    local function updateInsets()
-        local w, h = frame:GetWidth(), frame:GetHeight()
-        bg:ClearAllPoints()
-        bg:SetPoint("TOPLEFT", frame, "TOPLEFT", -w * 12 / 1002, h * 12 / 746)
-        bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", w * 10 / 1002, -h * 10 / 746)
-    end
-    updateInsets()
-    frame:HookScript("OnSizeChanged", updateInsets)
-    frame.bg = bg
-    return bg
-end
-
--- Accent-colored 1px header line, the code-drawn counterpart of the main window's baked
--- divider (popup windows resize, so it can't live in their artwork). Color applied by
--- KART.UpdateStyles via KART.UI's accent-line registry.
-function KART.CreateHeaderLine(frame, y)
-    local line = frame:CreateTexture(nil, "ARTWORK")
-    line:SetHeight(1)
-    line:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, y)
-    line:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -12, y)
-    KART.UI:RegisterAccentLine(line)
-    frame.headerLine = line
-    return line
-end
-
--- "×"/"-"/"+" header buttons used by every popup window. The glyph FontString registers with
--- KART.UI so KART.UpdateStyles keeps its font in sync with the chosen font.
-function KART.CreateHeaderIconButton(parent, glyph, onClick)
-    local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(22, 22)
-    btn.text = btn:CreateFontString(nil, "OVERLAY")
-    btn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-    btn.text:SetPoint("CENTER", 0, 1)
-    btn.text:SetText(glyph or "×")
-    KART.UI:RegisterCloseButtonText(btn.text)
-    btn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.UI:AccentColor()) end)
-    btn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
-    btn:SetScript("OnClick", onClick)
-    return btn
-end
-
 -- Standardeinstellungen
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",
@@ -150,220 +100,17 @@ function KART.GetNickname(unit)
     return KAUtil.CaseFold(nick), nick
 end
 
--- Corner radii and fixed status colors used by every UI factory function below. Kept as plain
--- data (no frame references) so KART.UpdateStyles() can call the factories fresh on every
--- settings change without caching stale colors. Font path, accent color, and the color-
--- derivation helpers (Lighten/Darken) moved to KAUI-1.0 (KART.UI:GetFontPath/AccentColor,
--- KAUI.Lighten/Darken) since they're generic enough for any consumer of that library.
-KART.CORNER_RADIUS_LG = 6        -- panels, cards, main window
-KART.CORNER_RADIUS_SM = 3        -- buttons, checkboxes, slider thumb
-KART.CORNER_RADIUS_MIN_SIZE = 16 -- elements smaller than this (either dimension) stay unrounded
+-- Fixed status colors, and the one corner radius that's still addon-owned (the other two --
+-- the small-button radius and the too-small-to-round floor -- moved to KAUI-1.0 along with
+-- ApplyRoundedMask, since only that moved function and the widget factories that moved with it
+-- ever read them; see KAUI.CORNER_RADIUS_SM). Kept as plain data (no frame references) so
+-- KART.UpdateStyles() can call the addon's own remaining factories fresh on every settings
+-- change without caching stale colors.
+KART.CORNER_RADIUS_LG = 6 -- panels, cards, main window
 
 KART.SUCCESS = {0.35, 0.75, 0.35}
 KART.WARNING = {0.90, 0.70, 0.20}
 KART.DANGER  = {0.85, 0.30, 0.30}
-
--- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
--- overlay, if any — see KART.CreateGradientOverlay). Uses four quarter-circle masks (one per corner)
--- instead of one full-region circle mask, producing proper rounded rectangles. Wrapped in pcall:
--- SetMask behavior varies across client versions, and a failure here must never break the frame's
--- layout or visibility, only skip the rounding.
-function KART.ApplyRoundedMask(frame, radius)
-    if not frame then return end
-    local w, h = frame:GetWidth(), frame:GetHeight()
-    if w < KART.CORNER_RADIUS_MIN_SIZE or h < KART.CORNER_RADIUS_MIN_SIZE then
-        return -- too small to round without looking broken
-    end
-    radius = radius or KART.CORNER_RADIUS_SM
-
-    -- One quarter-circle mask per corner, sized radius x radius and anchored to that corner, so
-    -- only the corners get cropped — pixels outside all four mask footprints (the flat edges and
-    -- interior) are untouched, since a region's masks only affect the pixels they geometrically
-    -- cover. Texture coordinates select one quadrant of the shared circle mask texture per corner.
-    local CORNERS = {
-        { point = "TOPLEFT",     coords = {0, 0.5, 0, 0.5} },
-        { point = "TOPRIGHT",    coords = {0.5, 1, 0, 0.5} },
-        { point = "BOTTOMLEFT",  coords = {0, 0.5, 0.5, 1} },
-        { point = "BOTTOMRIGHT", coords = {0.5, 1, 0.5, 1} },
-    }
-
-    local function maskRegion(region)
-        if not region then return end
-        -- Reuse the mask textures we already created for this region. WoW can't destroy mask
-        -- textures, so removing and recreating them on every call (e.g. every OnSizeChanged) would
-        -- orphan the old ones for the whole session — instead create the set once, then only
-        -- reposition/resize on later calls.
-        local existing = region.kartRoundedMasks
-        if existing and #existing == #CORNERS then
-            for i, corner in ipairs(CORNERS) do
-                local m = existing[i]
-                m:SetSize(radius, radius)
-                m:ClearAllPoints()
-                m:SetPoint(corner.point, region, corner.point)
-            end
-            return
-        end
-
-        local applied = {}
-        local ok = pcall(function()
-            for _, corner in ipairs(CORNERS) do
-                local m = frame:CreateMaskTexture(nil, "OVERLAY")
-                m:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-                m:SetTexCoord(unpack(corner.coords))
-                m:SetSize(radius, radius)
-                m:SetPoint(corner.point, region, corner.point)
-                region:AddMaskTexture(m)
-                table.insert(applied, m)
-            end
-        end)
-        if ok then
-            region.kartRoundedMasks = applied
-        else
-            -- Partial failure: remove whatever masks this call did manage to add, so the frame
-            -- ends up fully unrounded rather than half-rounded.
-            for _, m in ipairs(applied) do
-                region:RemoveMaskTexture(m)
-            end
-        end
-    end
-
-    if frame.backdropTexture then maskRegion(frame.backdropTexture) end
-    -- BackdropTemplate doesn't expose its background texture by name; fall back to scanning
-    -- regions for the backdrop's own artwork layer.
-    for i = 1, frame:GetNumRegions() do
-        local region = select(i, frame:GetRegions())
-        if region and region:IsObjectType("Texture") and region:GetDrawLayer() == "BACKGROUND" then
-            maskRegion(region)
-        end
-    end
-    if frame.gradientBg then maskRegion(frame.gradientBg) end
-end
-
--- UI Factory: Modern Button
-function KART.CreateModernButton(parent, text, tooltipText)
-    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    b:SetSize(130, 25)
-    b:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-    b:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(b, KART.CORNER_RADIUS_SM)
-
-    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.text:SetPoint("CENTER")
-    b.text:SetText(text)
-    KART.UI:RegisterButtonText(b.text)
-
-    -- Hover/leave color is derived from the user's accent color (KART_Settings.accentR/G/B) via
-    -- KAUI.Darken instead of a hard-coded gray, so custom accent colors are respected in
-    -- the hover state too.
-    local function hoverColor()
-        local r, g, bl = KART.UI:AccentColor()
-        return KAUI.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
-    end
-
-    -- Tooltip strings live on the button (not in this closure) so locale refreshers can
-    -- update them after the saved language is applied; the headline is the button's current
-    -- label so dynamic buttons (font/language pickers) always show their live text.
-    b.tooltipText = tooltipText
-    b:SetScript("OnEnter", function(self)
-        local r, g, bl = hoverColor()
-        self:SetBackdropColor(r, g, bl, 1)
-        if self.tooltipText then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
-            GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
-            GameTooltip:Show()
-        end
-    end)
-    b:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-        GameTooltip:Hide()
-    end)
-    return b
-end
-
--- Registers a StaticPopup with KART's shared modal defaults (no timeout, usable while dead, closable
--- with Escape, drawn above the default UI). Pass only the dialog-specific fields — these four were
--- copy-pasted identically across every KART popup.
-function KART.RegisterStaticPopup(name, def)
-    def.timeout        = 0
-    def.whileDead      = true
-    def.hideOnEscape   = true
-    def.preferredIndex = 3
-    StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
-end
-
--- UI Factory: Sidebar tab button, flat style for the PNG-artwork sidebar.
--- Transparent at rest so the baked artwork shows through; subtle white tint
--- on hover; active tab gets a translucent accent fill, a left accent bar and
--- full-white text. Standalone (not built on CreateModernButton) because that
--- factory's opaque backdrop and border would cover the artwork.
-function KART.CreateTabButton(parent, text)
-    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    b:SetSize(176, 28)
-    b:SetBackdrop({ bgFile = "Interface\\ChatFrame\\ChatFrameBackground" })
-    b:SetBackdropColor(0, 0, 0, 0)
-
-    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
-    b.text:SetText(text)
-    KART.UI:RegisterButtonText(b.text)
-
-    local accentBar = b:CreateTexture(nil, "OVERLAY")
-    accentBar:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
-    accentBar:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
-    accentBar:SetWidth(3)
-    accentBar:Hide()
-    KART.UI:RegisterSliderThumb(accentBar) -- reuse the accent-coloring loop in KART.UpdateStyles
-
-    local isActive = false
-
-    -- Translucent so the artwork stays visible beneath the active fill.
-    local function activeColor()
-        local r, g, bl = KART.UI:AccentColor()
-        local dr, dg, db = KAUI.Darken(r, g, bl, 0.45)
-        return dr, dg, db, 0.35
-    end
-
-    local function restingColor(self)
-        if isActive then
-            self:SetBackdropColor(activeColor())
-        else
-            self:SetBackdropColor(0, 0, 0, 0)
-        end
-        b.text:SetTextColor(isActive and 1 or 0.75, isActive and 1 or 0.75, isActive and 1 or 0.75)
-    end
-
-    b:SetScript("OnEnter", function(self)
-        if not isActive then self:SetBackdropColor(1, 1, 1, 0.06) end
-        b.text:SetTextColor(1, 1, 1)
-    end)
-    b:SetScript("OnLeave", function(self)
-        restingColor(self)
-    end)
-
-    function b:SetActive(active)
-        isActive = active
-        accentBar:SetShown(active)
-        restingColor(b)
-    end
-
-    -- Re-applies the current active/inactive color using the latest accent
-    -- color; called from KART.UpdateStyles() when the accent changes.
-    function b:RefreshActiveColor()
-        if not b:IsMouseOver() then
-            restingColor(b)
-        end
-    end
-
-    KART.UI:RegisterTabButton(b)
-    b:SetActive(false)
-    return b
-end
 
 -- Weitere UI-Hilfsfunktionen (Slider/Checkbox) hier implementieren...
 -- Toggle-switch style: a pill-shaped track (34x16) with a round dot that slides between left
@@ -384,7 +131,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     -- Pill track is fully rounded: half its own height, which is below CORNER_RADIUS_MIN_SIZE, so
     -- it needs its own mask call with a radius large enough to round the full end-caps rather than
     -- going through the generic small-corner path.
-    KART.ApplyRoundedMask(cb, 8)
+    KART.UI:ApplyRoundedMask(cb, 8)
 
     cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cb.text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
@@ -472,7 +219,7 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     })
     s:SetBackdropColor(0, 0, 0, 0.5)
     s:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
-    KART.ApplyRoundedMask(s, 2) -- track is only 4px tall; skips rounding via the min-size guard, kept for future-proofing if track height changes
+    KART.UI:ApplyRoundedMask(s, 2) -- track is only 4px tall; skips rounding via the min-size guard, kept for future-proofing if track height changes
 
     s.title = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     s.title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 4)
@@ -571,7 +318,7 @@ function KART.CreateCard(parent, title)
     card:SetBackdropBorderColor(0, 0, 0, 1)
 
     -- `card` has no size yet at this point (the caller sizes it after CreateCard returns), so
-    -- calling KART.ApplyRoundedMask here immediately would hit its min-size guard and silently
+    -- calling KART.UI:ApplyRoundedMask here immediately would hit its min-size guard and silently
     -- no-op, leaving the card permanently square. Re-apply on every OnSizeChanged instead —
     -- ApplyRoundedMask is documented as idempotent for exactly this reuse pattern — so the mask
     -- is (re)established once the caller gives the card real dimensions, and stays correct if
@@ -579,8 +326,8 @@ function KART.CreateCard(parent, title)
     -- its own OnSizeChanged fires in lockstep; re-mask it alongside card here rather than adding
     -- a second identical hook on shadow.
     card:HookScript("OnSizeChanged", function()
-        KART.ApplyRoundedMask(card, KART.CORNER_RADIUS_LG)
-        KART.ApplyRoundedMask(shadow, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(card, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(shadow, KART.CORNER_RADIUS_LG)
     end)
 
     -- shadow is a sibling of card (not its child, so it stays visually behind card without
@@ -618,7 +365,7 @@ function KART.CreateStyledEditBox(parent, name)
     eb:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     eb:SetTextInsets(10, 10, 0, 0)
     eb:HookScript("OnSizeChanged", function()
-        KART.ApplyRoundedMask(eb, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(eb, KART.CORNER_RADIUS_LG)
     end)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     eb:SetScript("OnEditFocusGained", function(self)
@@ -643,7 +390,7 @@ function KART.ShowInputDialog(opts)
         f:SetSize(300, 120)
         f:SetPoint("CENTER")
         KART.UI:RegisterStrataFrame(f, true)
-        KART.ApplyPopupArtwork(f)
+        KART.UI:ApplyPopupArtwork(f)
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
@@ -672,12 +419,12 @@ function KART.ShowInputDialog(opts)
             o.onAccept(text)
         end
 
-        f.btnOK = KART.CreateModernButton(f, KART.L.BTN_ACCEPT)
+        f.btnOK = KART.UI:CreateModernButton(f, KART.L.BTN_ACCEPT)
         f.btnOK:SetSize(120, 26)
         f.btnOK:SetPoint("BOTTOMLEFT", 15, 12)
         f.btnOK:SetScript("OnClick", accept)
 
-        f.btnCancel = KART.CreateModernButton(f, KART.L.BTN_CANCEL)
+        f.btnCancel = KART.UI:CreateModernButton(f, KART.L.BTN_CANCEL)
         f.btnCancel:SetSize(120, 26)
         f.btnCancel:SetPoint("BOTTOMRIGHT", -15, 12)
         f.btnCancel:SetScript("OnClick", function() f:Hide() end)
@@ -864,84 +611,6 @@ function KART.PrintEnchantScan()
             print(string.format("  %s: %s", tostring(slot), table.concat(parts, ", ")))
         end
     end
-end
-
--- Helper: Scrollbars bereinigen (verhindert Code-Duplizierung)
-function KART.StripScrollbarTextures(scrollFrame)
-    local sb = _G[scrollFrame:GetName().."ScrollBar"]
-    if not sb then return nil end
-    local up, down = _G[sb:GetName().."ScrollUpButton"], _G[sb:GetName().."ScrollDownButton"]
-    for _, btn in ipairs({up, down}) do
-        if btn then
-            btn:Hide() btn:SetSize(1, 1)
-            for i = 1, btn:GetNumRegions() do
-                local region = select(i, btn:GetRegions())
-                if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-            end
-        end
-    end
-    for i = 1, sb:GetNumRegions() do
-        local region = select(i, sb:GetRegions())
-        if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
-    end
-    local thumb = sb:GetThumbTexture()
-    if thumb then thumb:SetTexture("Interface\\Buttons\\WHITE8X8") end
-    return thumb
-end
-
--- Adds a short fade-in on every OnShow, so a window appearing feels less abrupt than an instant
--- pop-in. HookScript rather than replacing OnShow so it never interferes with a frame's own show
--- logic, and works no matter which of the frame's (possibly many) callers triggers the Show().
-function KART.AddShowFade(frame, duration)
-    local ag = frame:CreateAnimationGroup()
-    local alpha = ag:CreateAnimation("Alpha")
-    alpha:SetFromAlpha(0)
-    alpha:SetDuration(duration or 0.15)
-    alpha:SetSmoothing("OUT")
-
-    -- The target alpha is the frame's OWN resting alpha, sampled fresh on every show, not a
-    -- hard-coded 1: the main window's opacity is a user setting (KART.UpdateStyles calls SetAlpha on
-    -- it), so fading to full would flash the window opaque and then snap it back down.
-    --
-    -- restingAlpha is only held for the duration of one run and cleared when it finishes. Keeping it
-    -- across runs would mean re-applying a value the opacity slider has since changed, silently
-    -- reverting the user's setting the next time the window is opened.
-    local restingAlpha
-    ag:SetScript("OnFinished", function()
-        if restingAlpha then frame:SetAlpha(restingAlpha) end
-        restingAlpha = nil
-    end)
-    frame:HookScript("OnShow", function()
-        ag:Stop() -- Stop() fires OnStop, not OnFinished, so the restore below is still needed
-        if restingAlpha then frame:SetAlpha(restingAlpha) end -- undo a run cut short mid-fade
-        restingAlpha = frame:GetAlpha()
-        alpha:SetToAlpha(restingAlpha)
-        ag:Play()
-    end)
-end
-
--- Adds a subtle vertical gradient overlay on top of a frame's flat backdrop fill, so panels read
--- as less flat without abandoning the existing color-picker-driven backdrop system: the backdrop
--- itself stays the color/alpha source of truth (and remains a safe solid-color fallback everywhere
--- else), this only layers a soft brightness falloff on top of whatever color that resolves to.
--- Sits one sublevel above the backdrop's own BACKGROUND fill so it never covers the BORDER-layer
--- edge texture. Returns the texture so the caller can update its color via SetGradientOverlayColor
--- whenever KART.UpdateStyles() recomputes the frame's backdrop color.
-function KART.CreateGradientOverlay(frame)
-    local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
-    tex:SetPoint("TOPLEFT", 1, -1)
-    tex:SetPoint("BOTTOMRIGHT", -1, 1)
-    return tex
-end
-
--- SetGradient's exact signature has changed across WoW API versions, and this can't be tested
--- outside a live client — pcall so a mismatch just skips the visual flourish instead of breaking
--- the rest of KART.UpdateStyles() (fonts, colors, etc.) for every other frame in the same call.
-function KART.SetGradientOverlayColor(tex, r, g, b, alpha)
-    if not tex then return end
-    local top    = CreateColor(math.min(r + 0.06, 1), math.min(g + 0.06, 1), math.min(b + 0.06, 1), alpha)
-    local bottom = CreateColor(math.max(r - 0.06, 0), math.max(g - 0.06, 0), math.max(b - 0.06, 0), alpha)
-    pcall(tex.SetGradient, tex, "VERTICAL", top, bottom)
 end
 
 -- Keybind action list: shared between ApplyKeybinds and the settings-tab bind UI so both

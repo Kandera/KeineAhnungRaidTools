@@ -215,7 +215,7 @@ function LH.ShowExportDialog()
         f:SetSize(480, 320)
         f:SetPoint("CENTER")
         KART.UI:RegisterStrataFrame(f, true)
-        KART.ApplyPopupArtwork(f)
+        KART.UI:ApplyPopupArtwork(f)
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
@@ -242,13 +242,13 @@ function LH.ShowExportDialog()
         scrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         scrollBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
         scrollBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-        KART.ApplyRoundedMask(scrollBG, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(scrollBG, KART.CORNER_RADIUS_LG)
 
         local scroll = CreateFrame("ScrollFrame", "KART_LHExportScroll", scrollBG, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 4, -4)
         scroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-        local exportScrollThumb = KART.StripScrollbarTextures(scroll)
+        local exportScrollThumb = KART.UI:StripScrollbarTextures(scroll)
         if exportScrollThumb then exportScrollThumb:SetSize(6, 16) end
         KART.UI:RegisterAccentTexture(exportScrollThumb, 0.6)
 
@@ -275,7 +275,7 @@ function LH.ShowExportDialog()
         end)
         scroll:SetScrollChild(f.editBox)
 
-        local btnClose = KART.CreateModernButton(f, CLOSE) ---@diagnostic disable-line: undefined-global
+        local btnClose = KART.UI:CreateModernButton(f, CLOSE) ---@diagnostic disable-line: undefined-global
         btnClose:SetSize(120, 26)
         btnClose:SetPoint("BOTTOM", 0, 12)
         btnClose:SetScript("OnClick", function() f:Hide() end)
@@ -327,7 +327,7 @@ function LH.GetUniqueReasons()
     return list
 end
 
-KART.RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
     text = "Really clear loot history?", -- unconditionally overwritten with KART.L.LH_CLEAR_CONFIRM_TEXT below
     button1 = YES,
     button2 = NO,
@@ -349,7 +349,7 @@ function LH.CreateWindow()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -380,9 +380,9 @@ function LH.CreateWindow()
     f.title:SetPoint("LEFT", 16, 0)
     f.title:SetText(KART.L.LH_TITLE)
     KART.UI:RegisterLabel(f.title)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:CreateHeaderLine(f, -28)
 
-    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
     closeBtn:SetPoint("RIGHT", -4, 0)
 
     -- Filter row: item search + player filter + reason filter + reset
@@ -401,7 +401,7 @@ function LH.CreateWindow()
     searchBox:SetBackdropColor(0, 0, 0, 0.5)
     searchBox:SetTextInsets(5, 5, 0, 0)
     searchBox:SetMaxLetters(40)
-    KART.ApplyRoundedMask(searchBox, KART.CORNER_RADIUS_SM)
+    KART.UI:ApplyRoundedMask(searchBox, KAUI.CORNER_RADIUS_SM)
     KART.UI:RegisterEditBox(searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
@@ -410,7 +410,7 @@ function LH.CreateWindow()
     end)
     f.searchBox = searchBox
 
-    local btnPlayerFilter = KART.CreateModernButton(f, KART.L.LH_FILTER_ALL_PLAYERS)
+    local btnPlayerFilter = KART.UI:CreateModernButton(f, KART.L.LH_FILTER_ALL_PLAYERS)
     btnPlayerFilter:SetSize(105, 22)
     btnPlayerFilter:SetPoint("LEFT", searchBox, "RIGHT", 6, 0)
     btnPlayerFilter:SetScript("OnClick", function(self)
@@ -432,7 +432,7 @@ function LH.CreateWindow()
     end)
     f.btnPlayerFilter = btnPlayerFilter
 
-    local btnReasonFilter = KART.CreateModernButton(f, KART.L.LH_FILTER_ALL_REASONS)
+    local btnReasonFilter = KART.UI:CreateModernButton(f, KART.L.LH_FILTER_ALL_REASONS)
     btnReasonFilter:SetSize(105, 22)
     btnReasonFilter:SetPoint("LEFT", btnPlayerFilter, "RIGHT", 6, 0)
     btnReasonFilter:SetScript("OnClick", function(self)
@@ -455,7 +455,7 @@ function LH.CreateWindow()
     end)
     f.btnReasonFilter = btnReasonFilter
 
-    local btnReset = KART.CreateModernButton(f, KART.L.LH_BTN_RESET_FILTERS)
+    local btnReset = KART.UI:CreateModernButton(f, KART.L.LH_BTN_RESET_FILTERS)
     btnReset:SetSize(56, 22)
     btnReset:SetPoint("LEFT", btnReasonFilter, "RIGHT", 6, 0)
     btnReset:SetScript("OnClick", function()
@@ -515,7 +515,7 @@ function LH.CreateWindow()
     scrollChild:SetSize(520, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
     KART.UI:RegisterAccentTexture(thumb, 0.6)
 
@@ -537,7 +537,7 @@ function LH.CreateWindow()
     f.countText:SetTextColor(0.6, 0.6, 0.6)
     KART.UI:RegisterLabel(f.countText)
 
-    local btnClear = KART.CreateModernButton(f, KART.L.LH_BTN_CLEAR)
+    local btnClear = KART.UI:CreateModernButton(f, KART.L.LH_BTN_CLEAR)
     btnClear:SetSize(140, 24)
     btnClear:SetPoint("BOTTOMRIGHT", -10, 8)
     btnClear:SetScript("OnClick", function()
@@ -545,7 +545,7 @@ function LH.CreateWindow()
         StaticPopup_Show("KART_LH_CLEAR_CONFIRM")
     end)
 
-    local btnExport = KART.CreateModernButton(f, KART.L.LH_BTN_EXPORT_JSON, KART.L.LH_BTN_EXPORT_JSON_TIP)
+    local btnExport = KART.UI:CreateModernButton(f, KART.L.LH_BTN_EXPORT_JSON, KART.L.LH_BTN_EXPORT_JSON_TIP)
     btnExport:SetSize(150, 24)
     btnExport:SetPoint("BOTTOMRIGHT", btnClear, "BOTTOMLEFT", -6, 0)
     btnExport:SetScript("OnClick", function() LH.ShowExportDialog() end)
@@ -553,7 +553,7 @@ function LH.CreateWindow()
     -- Pagination controls, anchored just left of the export button and growing leftward, so they
     -- never collide with the right-hand buttons regardless of their localized widths. The list uses
     -- a fit-to-window page size (see LH.Refresh) and so never scrolls — Prev/Next page through it.
-    f.nextPageBtn = KART.CreateModernButton(f, ">")
+    f.nextPageBtn = KART.UI:CreateModernButton(f, ">")
     f.nextPageBtn:SetSize(24, 22)
     f.nextPageBtn:SetPoint("RIGHT", btnExport, "LEFT", -10, -1)
     f.nextPageBtn:SetScript("OnClick", function()
@@ -567,7 +567,7 @@ function LH.CreateWindow()
     f.pageIndicator:SetPoint("RIGHT", f.nextPageBtn, "LEFT", -6, 1)
     f.pageIndicator:SetTextColor(0.6, 0.6, 0.6)
 
-    f.prevPageBtn = KART.CreateModernButton(f, "<")
+    f.prevPageBtn = KART.UI:CreateModernButton(f, "<")
     f.prevPageBtn:SetSize(24, 22)
     f.prevPageBtn:SetPoint("RIGHT", f.pageIndicator, "LEFT", -6, -1)
     f.prevPageBtn:SetScript("OnClick", function()

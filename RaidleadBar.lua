@@ -44,7 +44,7 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     })
     b:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
     b:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(b, KART.CORNER_RADIUS_SM)
+    KART.UI:ApplyRoundedMask(b, KAUI.CORNER_RADIUS_SM)
 
     if texture then
         b.icon = b:CreateTexture(nil, "OVERLAY")
@@ -75,7 +75,7 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
         b:SetScript("OnClick", func)
     end
     -- Hover color now derives from the user's accent color (same KART.UI:AccentColor +
-    -- Darken pattern as KART.CreateModernButton) instead of a hard-coded blue, so this toolbar
+    -- Darken pattern as KART.UI:CreateModernButton) instead of a hard-coded blue, so this toolbar
     -- matches the rest of the modernized UI's hover feedback. Darken() returns only r, g, b (no
     -- alpha), so capture into locals and pass an explicit alpha to SetBackdropColor.
     b.tooltipText = tooltipText
@@ -133,7 +133,7 @@ rlBar:SetBackdrop({
 })
 rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
-KART.ApplyRoundedMask(rlBar, KART.CORNER_RADIUS_LG)
+KART.UI:ApplyRoundedMask(rlBar, KART.CORNER_RADIUS_LG)
 
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()

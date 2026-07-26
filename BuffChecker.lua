@@ -198,14 +198,14 @@ function KART.CreateBuffCheckFrame()
         KART_Settings.bcX = xOfs
         KART_Settings.bcY = yOfs
     end)
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     KART.UI:RegisterStrataFrame(f)
-    KART.AddShowFade(f)
+    KART.UI:AddShowFade(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 16, -12)
     f.title:SetText(L.BC_TITLE)
-    KART.CreateHeaderLine(f, -30)
+    KART.UI:CreateHeaderLine(f, -30)
 
     -- Header Labels
     local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
@@ -247,7 +247,7 @@ function KART.CreateBuffCheckFrame()
     sf:SetPoint("TOPLEFT", 10, -55)
     sf:SetPoint("BOTTOMRIGHT", -30, 40)
 
-    local buffScrollThumb = KART.StripScrollbarTextures(sf)
+    local buffScrollThumb = KART.UI:StripScrollbarTextures(sf)
     if buffScrollThumb then buffScrollThumb:SetSize(8, 30) end
     KART.UI:RegisterAccentTexture(buffScrollThumb, 0.6)
 
@@ -363,7 +363,7 @@ function KART.CreateBuffCheckFrame()
         f.rows[i] = row
     end
 
-    local close = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
+    local close = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
     close:SetPoint("TOPRIGHT", -5, -2)
     f.closeBtn = close
 
@@ -375,7 +375,7 @@ function KART.CreateBuffCheckFrame()
         end
     end
 
-    local modeBtn = KART.CreateModernButton(f, L.BTN_MODE_ADVANCED)
+    local modeBtn = KART.UI:CreateModernButton(f, L.BTN_MODE_ADVANCED)
     modeBtn:SetPoint("BOTTOMLEFT", 10, 10)
     modeBtn:SetSize(150, 22)
     modeBtn:SetScript("OnClick", function() 
@@ -392,7 +392,7 @@ function KART.CreateBuffCheckFrame()
     end)
     f.modeBtn = modeBtn
 
-    f.refreshBtn = KART.CreateModernButton(f, L.BTN_REFRESH)
+    f.refreshBtn = KART.UI:CreateModernButton(f, L.BTN_REFRESH)
     f.refreshBtn:SetPoint("BOTTOM", -45, 10)
     f.refreshBtn:SetSize(80, 22)
     f.refreshBtn:SetScript("OnClick", function() 
@@ -405,7 +405,7 @@ function KART.CreateBuffCheckFrame()
         end
     end)
 
-    f.reportBtn = KART.CreateModernButton(f, L.BTN_REPORT)
+    f.reportBtn = KART.UI:CreateModernButton(f, L.BTN_REPORT)
     f.reportBtn:SetPoint("BOTTOM", 45, 10)
     f.reportBtn:SetSize(80, 22)
     f.reportBtn:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
@@ -434,7 +434,7 @@ function KART.CreateBuffCheckFrame()
     end)
 
     -- Dynamisches Verschieben der Spalten, wenn das Fenster breiter gezogen wird.
-    -- HookScript, NOT SetScript: KART.ApplyPopupArtwork already hooked OnSizeChanged to re-scale the
+    -- HookScript, NOT SetScript: KART.UI:ApplyPopupArtwork already hooked OnSizeChanged to re-scale the
     -- background artwork's inset offsets, and SetScript would replace that whole handler chain. This
     -- is the only resizable KART window, i.e. the only one where that rescale actually matters.
     f:HookScript("OnSizeChanged", function(self, width, height)
