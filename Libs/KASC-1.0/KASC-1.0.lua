@@ -150,6 +150,11 @@ end
 
 -- Writes this player into every attached cache. After a split each addon attaches its own
 -- SavedVariable and they stay consistent automatically, with no question of ownership.
+-- A silent no-op if nothing is attached yet -- there is nowhere to write, and this deliberately
+-- does not create a fallback table to write into instead (a cache nothing persists would be worse
+-- than dropping the write). Every call site here runs from a live event, and the shipped load order
+-- always calls KASC:AttachCache before KASC:Init, so in practice this never fires with an empty
+-- cache list -- but that guarantee lives in the consumer's wiring, not in this function.
 local function RememberPlayer(guid, unit)
     local name = UnitName(unit)
     if not guid or not name then return end -- loading-screen edge: UnitGUID/UnitName can be nil
@@ -294,6 +299,12 @@ end
 --  Responders — the answering side. These must work in any KA client, including one that has no
 --  Buff Checker of its own and will never render what it reports.
 -- =====================================================================
+-- group = true on every one of these for a disclosure reason, not an authority one: the "KART"
+-- prefix is public and CHAT_MSG_ADDON also delivers WHISPER and GUILD, so literally any player can
+-- send REQ_OIL/REQ_ILVL/REQ_ENCH/REQ_GEAR, in or out of our group. Answering a request from outside
+-- the group would hand a stranger our own gear, enchant and item-level state. That's also why every
+-- reply below broadcasts to the group channel rather than replying to the sender directly — the
+-- point is never to single-source data back to an asker, only to keep it inside the group.
 
 KASC:RegisterMessage("REQ_OIL", { group = true }, function()
     local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()

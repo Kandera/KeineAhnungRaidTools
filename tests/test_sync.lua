@@ -12,6 +12,7 @@ KASC:RegisterMessage("TEST_PAY", { payload = true }, function(payload) hits[#hit
 
 KASC.Dispatch("TEST_EXACT", "RAID", "Ann-TarrenMill")
 T.eq(hits[1][1], "exact", "an exact token dispatches to its handler")
+T.eq(hits[1][2], nil, "an exact token's handler receives payload = nil, not the message or an empty string")
 
 hits = {}
 KASC.Dispatch("TEST_PAY:hello:world", "RAID", "Ann-TarrenMill")
