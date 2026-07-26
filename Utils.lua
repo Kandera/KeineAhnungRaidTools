@@ -922,9 +922,10 @@ KART.EnchantScan = KART.EnchantScan or {}
 -- Asks every KART user in the group for their enchant ids and prints the tally a few seconds later.
 --
 -- READ THIS BEFORE USING THE OUTPUT: the tally shows what the raid WEARS, which is not the same as
--- what is CORRECT. Pasting it into GOOD_ENCHANTS would bless whatever outdated enchant someone
--- happens to have — the list would then approve exactly the case the check is meant to catch. There
--- is no in-game API that ranks an enchantID, so correctness can only come from outside the game.
+-- what is CORRECT. Pasting it into GOOD_ENCHANTS (Libs/KAGS-1.0/KAGS-1.0.lua) would bless whatever
+-- outdated enchant someone happens to have — the list would then approve exactly the case the
+-- check is meant to catch. There is no in-game API that ranks an enchantID, so correctness can
+-- only come from outside the game.
 --
 -- What it is actually good for is spotting outliers by eye: when eighteen people share an id on a
 -- slot and one person has a different one, that one is worth a look. A human reads that; the code

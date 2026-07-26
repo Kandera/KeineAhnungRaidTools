@@ -34,12 +34,6 @@ files["tests/"] = {
 -- Task 1 vendors checks against unchanged code and must not edit addon files to satisfy them.
 files["MainFrame.lua"] = { ignore = { "431" } }
 
--- KAGS-1.0 declares its KAUtil handle per the shared-library skeleton (Task 3 brief), matching
--- every other library/consumer in this tree, but none of the gear-scan functions moved into it
--- so far actually call a KAUtil helper. Kept rather than removed for consistency with the rest
--- of the tree and left ready for the next function that needs it.
-files["Libs/KAGS-1.0/KAGS-1.0.lua"] = { ignore = { "211/KAUtil" } }
-
 globals = {
     -- SavedVariables
     "KART_Settings", "KART_LootHistory", "KART_LCOfficerNotes", "KART_WoWUtilsCache",

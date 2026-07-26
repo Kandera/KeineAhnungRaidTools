@@ -9,8 +9,6 @@ local MAJOR, MINOR = "KAGS-1.0", 1
 local KAGS = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAGS then return end
 
-local KAUtil = LibStub("KAUtil-1.0")
-
 -- Hidden scanning tooltip for KAGS.CountMissingGear's socket check below. C_Item.GetItemStats can
 -- report a stale EMPTY_SOCKET_* stat for an item that was already gemmed this session (its cached
 -- link predates the gem), so we read the socket state straight from the tooltip instead - that's
@@ -163,7 +161,7 @@ function KAGS.IsGoodEnchant(slot, enchantID)
     return false
 end
 
--- Funktion zum Zählen fehlender Verzauberungen und leerer Sockelplätze (Retail)
+-- Function to count missing enchants and empty socket slots (Retail)
 -- Both return values are slot lists: "0" for nothing missing, otherwise comma-separated entries of
 -- an inventory slot number, with a "w" suffix marking a slot that has the wrong enchant rather than
 -- none at all (e.g. "1,16w"). KARTSync sends these verbatim, so the format is protocol.
