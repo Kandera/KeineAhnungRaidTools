@@ -11,3 +11,8 @@ HasGroupPermissions
 EachGroupUnit
 DeepCopy
 MergeDefaults
+SlotNeedsOil
+CountMissingGear
+GetOwnEnchantIDs
+SerializeOwnEnchantIDs
+ENCHANTABLE_SLOTS

@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAGS = LibStub("KAGS-1.0")
 
 -- KARTSync: the addon-message networking layer. Owns the "KART" addon-message prefix, the
 -- outbound Send() wrapper (prefix + default raid/party channel), and the inbound CHAT_MSG_ADDON
@@ -50,7 +51,7 @@ local EQUIP_ANSWER_COOLDOWN = 5
 local lastEquipAnswer = {} -- [equipLoc] = GetTime() of our last reply; only written on an actual send,
                            -- so a bogus token from an unknown sender can't grow this table
 
--- Whether s is a well-formed missing-slot list as KART.CountMissingGear produces them: "0", or one
+-- Whether s is a well-formed missing-slot list as KAGS.CountMissingGear produces them: "0", or one
 -- or more comma-separated entries, each an inventory slot number optionally suffixed with "w" for
 -- "wrong enchant". Used to reject a malformed GEAR reply before it reaches the cache (see the GEAR
 -- handler below). Entries are validated one at a time because Lua patterns can't quantify a group,
@@ -123,8 +124,8 @@ local EXACT_HANDLERS = {
         local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
         -- "n" for a hand that takes no oil at all (empty, shield, caster off-hand), so the receiver can
         -- tell it apart from a weapon that is simply unoiled ("0"). Only we can see our own equipment.
-        local outMH = KART.SlotNeedsOil(16) and ((hasMH and mhID) and mhID or 0) or "n"
-        local outOH = KART.SlotNeedsOil(17) and ((hasOH and ohID) and ohID or 0) or "n"
+        local outMH = KAGS.SlotNeedsOil(16) and ((hasMH and mhID) and mhID or 0) or "n"
+        local outOH = KAGS.SlotNeedsOil(17) and ((hasOH and ohID) and ohID or 0) or "n"
         if IsInGroup() then
             Sync.Send("OIL:" .. outMH .. ":" .. outOH)
         end
@@ -138,11 +139,11 @@ local EXACT_HANDLERS = {
     REQ_ENCH = { group = true, fn = function(_, ctx)
         -- Maintenance scan (see KART.StartEnchantScan), not part of any display path — it exists so
         -- the accepted-enchant lists can be built from what the raid actually wears.
-        if IsInGroup() then Sync.Send("ENCH:" .. KART.SerializeOwnEnchantIDs()) end
+        if IsInGroup() then Sync.Send("ENCH:" .. KAGS.SerializeOwnEnchantIDs()) end
     end },
     REQ_GEAR = { group = true, fn = function(_, ctx)
         if IsInGroup() then
-            local e, g = KART.CountMissingGear()
+            local e, g = KAGS.CountMissingGear()
             Sync.Send("GEAR:" .. e .. ":" .. g)
         end
     end },
@@ -200,7 +201,7 @@ local PREFIX_HANDLERS = {
         local e, g = payload:match("^([^:]+):([^:]+)")
         -- Validate the shape before caching. Both fields are slot lists — "0" for "nothing missing",
         -- otherwise comma-separated inventory slot NUMBERS, optionally "w"-suffixed for a wrong
-        -- enchant (see KART.CountMissingGear) — but the
+        -- enchant (see KAGS.CountMissingGear) — but the
         -- captures above accept any colon-free text. BuffChecker renders an unrecognized slot through
         -- string.format(BC_SLOT_FALLBACK, s), whose "%d" throws a Lua error on non-numeric input, so a
         -- broken or hostile client could make the Advanced-view tooltip error on every hover. Rejecting

@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAGS = LibStub("KAGS-1.0")
 local L = KART.L
 
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
@@ -86,7 +87,7 @@ local function BuildSlotNames()
         -- Blizzard INVSLOT ids: 6 = Waist, 9 = Wrist, 10 = Hands (slot 10 was previously labelled
         -- "Waist", so an empty gem socket in gloves reported the wrong item and the belt fell through
         -- to the "Slot %d" fallback). Sockets only appear on head/neck/waist/wrist/rings, but
-        -- KART.CountMissingGear scans slots 1..17, so every slot it can report keeps a name.
+        -- KAGS.CountMissingGear scans slots 1..17, so every slot it can report keeps a name.
         ["6"] = L.SLOT_WAIST,
         ["9"] = L.SLOT_WRIST,
         ["10"] = L.SLOT_HANDS,
@@ -340,7 +341,7 @@ function KART.CreateBuffCheckFrame()
                         end
                         for _, s in ipairs(uniqueSlots) do
                             -- Entries are a slot number, "w"-suffixed when that slot carries the wrong
-                            -- enchant rather than none (see KART.CountMissingGear). Both variants of a
+                            -- enchant rather than none (see KAGS.CountMissingGear). Both variants of a
                             -- slot keep their own line, so the player can tell the two cases apart.
                             local id, wrong = s:match("^(%d+)(w?)$")
                             id = id or s
@@ -883,7 +884,7 @@ function KART.UpdateBuffCheck(isPreview)
             if buff.isOil then
                 -- Every hand holding a weapon is rated and the worst result wins, so a dual wielder
                 -- with oil on one weapon only still counts as missing it. Which hands take part is
-                -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's
+                -- decided by the equipped items (KAGS.SlotNeedsOil), not by spec: an Arms warrior's
                 -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
                 -- Ranks: 1 = weapon is bare, 2 = a KNOWN off-rank consumable, 3 = something we can't
                 -- judge, 4 = a current-quality consumable.
@@ -921,8 +922,8 @@ function KART.UpdateBuffCheck(isPreview)
 
                 if UnitIsUnit(unit, "player") then
                     local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
-                    if KART.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
-                    if KART.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
+                    if KAGS.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
+                    if KAGS.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
                 else
                     -- KART Addon Sync auslesen (für Spieler, die KART installiert haben). "n" is that
                     -- player's own verdict that the hand takes no oil at all.
@@ -957,7 +958,7 @@ function KART.UpdateBuffCheck(isPreview)
             local buff = KART.BuffData[k]
             if buff.isGearCheck then
                 if UnitIsUnit(unit, "player") then
-                    if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KART.CountMissingGear() end
+                    if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KAGS.CountMissingGear() end
                     KART.BuffStatesCache[buff.id] = (buff.isGearCheck == "enchants") and playerMissingEnchants or playerMissingGems
                 else
                     local shortName = nameStr:match("([^%-]+)")
