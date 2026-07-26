@@ -66,16 +66,37 @@ Nothing moves in this task. The point is to have the checks in place and **green
 **Interfaces:**
 - Produces: `bash tests/check-moved.sh` (exit 0 = clean), `luajit tests/run.lua` (exit 0 = all assertions passed), globals `T.eq / T.truthy / T.is_nil / T.deep_eq` for later test files, globals `KARTTEST.SetRaid / SetParty / SetNSAPI / ClearSent` and the mutable fields `KARTTEST.realm / inventory / weaponEnchant / equippedIlvl / now / sent`. Tests that need to assert a raised error use `pcall` directly rather than a helper.
 
-- [ ] **Step 1: Install the toolchain**
+- [x] **Step 1: Install the toolchain** — done 2026-07-26
+
+Already installed on this machine. Recorded here so the environment can be rebuilt:
+
+```powershell
+# LuaJIT is 5.1-compatible, which is what WoW runs. Do NOT use the Lua 5.4 that is also
+# installed -- see the verification below for why that matters.
+winget install --id DEVCOM.LuaJIT --exact --accept-package-agreements --accept-source-agreements
+
+# luacheck: use the prebuilt binary from the GitHub release, NOT luarocks. The luarocks route
+# needs to compile luafilesystem and there is no C toolchain here; luacheck.exe bundles it.
+$dir = "$env:LOCALAPPDATA\Programs\luacheck"
+New-Item -ItemType Directory -Force -Path $dir
+Invoke-WebRequest -Uri "https://github.com/lunarmodules/luacheck/releases/download/v1.2.0/luacheck.exe" -OutFile "$dir\luacheck.exe"
+[Environment]::SetEnvironmentVariable("Path",
+    ([Environment]::GetEnvironmentVariable("Path","User").TrimEnd(';') + ";" + $dir), "User")
+```
+
+Installed locations:
+- `C:\Users\max\AppData\Local\Programs\LuaJIT\bin\luajit.exe` — LuaJIT 2.1.1720049189
+- `C:\Users\max\AppData\Local\Programs\luacheck\luacheck.exe` — Luacheck 1.2.0
+
+Verification, which also demonstrates why LuaJIT rather than the installed Lua 5.4:
 
 ```bash
-# LuaJIT is 5.1-compatible, which is what WoW runs. Do NOT use the Lua 5.4 already installed.
-scoop install luajit
-# luacheck via luarocks; if luarocks is unavailable, scoop install luarocks first
-luarocks install luacheck
-luajit -v      # expect: LuaJIT 2.x ... -- compatible with Lua 5.1
-luacheck --version
+luajit -e 'print(_VERSION, tostring(3.0))'   # Lua 5.1   3
+lua    -e 'print(_VERSION, tostring(3.0))'   # Lua 5.4   3.0
 ```
+
+Values like `tostring(mhID)` in the OIL responder go straight onto the wire, so a test run
+under 5.4 could pass while the game serialises differently.
 
 - [ ] **Step 2: Vendor LibStub**
 
