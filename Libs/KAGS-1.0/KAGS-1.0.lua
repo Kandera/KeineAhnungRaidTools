@@ -164,7 +164,8 @@ end
 -- Function to count missing enchants and empty socket slots (Retail)
 -- Both return values are slot lists: "0" for nothing missing, otherwise comma-separated entries of
 -- an inventory slot number, with a "w" suffix marking a slot that has the wrong enchant rather than
--- none at all (e.g. "1,16w"). KARTSync sends these verbatim, so the format is protocol.
+-- none at all (e.g. "1,16w"). KASC-1.0's REQ_GEAR responder sends these verbatim in its "GEAR:"
+-- reply, so the format is protocol.
 function KAGS.CountMissingGear()
     local missingEnchants = {}
     local missingGems = {}

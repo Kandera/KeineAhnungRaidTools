@@ -90,7 +90,10 @@ end
 -- this applies another for the same saved index -- check the consumer's copy before changing
 -- this list.
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
-local DEFAULT_STRATA_INDEX = 4 -- HIGH; used before the consumer's first ApplyStyle call has set self.strata
+-- HIGH; used before the consumer's first ApplyStyle call has set self.strata. Mirrors
+-- Defaults.frameStrata = 4 in this addon's own Utils.lua -- the same "check the consumer's copy
+-- before changing this" caveat as STRATA_ORDER above applies here too.
+local DEFAULT_STRATA_INDEX = 4
 
 local function StrataIndex(self)
     local idx = self.strata
@@ -174,15 +177,21 @@ function nsProto:GetRowStripeColor()
     return KAUI.Lighten(self.background[1], self.background[2], self.background[3], 0.06)
 end
 
--- Shared setup for the popup windows' artwork background (kart-popup-bg-dark.png, 1024x768;
--- opaque art box 1002x746, transparent drop-shadow margin L12/R10/T12/B10). The frame is the
--- art area; the texture extends past the frame edges by the margin ratios so the baked shadow
--- stays visible, and the offsets re-scale whenever the frame's size changes (several of these
--- windows resize dynamically). Sublevel -8 keeps the ground under every other BACKGROUND
--- texture the window draws (row stripes, item borders).
+-- Shared setup for the popup windows' artwork background (1024x768; opaque art box 1002x746,
+-- transparent drop-shadow margin L12/R10/T12/B10). The path itself is per-namespace state
+-- (self.popupArtworkPath), set by the consumer next to its KAUI:NewNamespace call -- this
+-- library ships no addon's folder name, so a second addon sharing it supplies its own art or
+-- none at all. A namespace that never set one gets no texture: the frame is left with no `bg`
+-- field, which the popup renders as a plain (unthemed) window rather than throwing, and every
+-- existing reader of `.bg` (e.g. Core.lua's alpha refresh) already guards for it being absent.
+-- The frame is the art area; the texture extends past the frame edges by the margin ratios so
+-- the baked shadow stays visible, and the offsets re-scale whenever the frame's size changes
+-- (several of these windows resize dynamically). Sublevel -8 keeps the ground under every other
+-- BACKGROUND texture the window draws (row stripes, item borders).
 function nsProto:ApplyPopupArtwork(frame)
+    if not self.popupArtworkPath then return nil end
     local bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-popup-bg-dark.png")
+    bg:SetTexture(self.popupArtworkPath)
     local function updateInsets()
         local w, h = frame:GetWidth(), frame:GetHeight()
         bg:ClearAllPoints()

@@ -9,6 +9,12 @@
 --
 -- No user-visible strings live here. Version comparison, update warnings and chat output are
 -- consumer concerns, surfaced through OnPeer.
+--
+-- API style: colon (KASC:Foo) is every consumer-facing action -- Send, Init, the Register*
+-- calls, OnPeer, and the handshake senders. Dot (KASC.Foo) marks the three pure codec/dispatch
+-- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
+-- arguments, need no self, and are also handed out as bare function values (see Dispatch's
+-- "exposed for the offline harness" assignment below).
 local MAJOR, MINOR = "KASC-1.0", 1
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
@@ -242,7 +248,8 @@ end
 
 -- A resolved key looks like a WoW GUID ("Player-1234-XXXXXXXX"); pending config text (see
 -- ResolvePlayer) is just plain lowercased text and never matches this shape. Used by the
--- pending-resolution retry (Task 10) to tell the two apart without a separate boolean tracked
+-- pending-resolution retry (LootCouncil.lua's LC.RetryPendingResolutions) to tell the two apart
+-- without a separate boolean tracked
 -- alongside every stored key.
 function Identity.IsResolvedKey(key)
     return type(key) == "string" and key:match("^Player%-") ~= nil
@@ -291,6 +298,12 @@ frame:SetScript("OnEvent", function(_, event, msgPrefix, msg, ...)
 end)
 
 function KASC:Init(p)
+    -- prefix is the library's only single-valued consumer-supplied state -- everything else
+    -- (addons, capabilities, handlers, caches) fans out into an array or a registry keyed by
+    -- name, so two consumers coexist there for free. A second consumer calling Init with a
+    -- different prefix would silently repoint every future Send and every inbound filter onto
+    -- its own channel instead, so fail loudly rather than let that happen quietly.
+    assert(prefix == nil or prefix == p, "KASC: Init already called with a different prefix")
     prefix = p
     C_ChatInfo.RegisterAddonMessagePrefix(p)
 end

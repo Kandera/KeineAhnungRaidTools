@@ -4,6 +4,9 @@ local KASC = LibStub("KASC-1.0")
 
 local KAUI = LibStub("KAUI-1.0")
 KART.UI = KAUI:NewNamespace("KART")
+-- Popup artwork lives in this addon's own folder, so the path is supplied here rather than
+-- hardcoded in the library -- see KAUI-1.0's ApplyPopupArtwork for what happens if it's unset.
+KART.UI.popupArtworkPath = "Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-popup-bg-dark.png"
 
 -- KART.L itself is a STABLE table — its reference must never be replaced, only its values
 -- swapped (files capture `local L = KART.L` at load time and keep that reference). Locale

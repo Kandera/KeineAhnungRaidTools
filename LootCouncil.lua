@@ -492,7 +492,8 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
--- Applies a raid-config broadcast (called from KARTSync's dispatcher).
+-- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
+-- registered near the bottom of this file).
 --
 -- Authority is the configured LOOTMASTER, not the raid leader: the config is only accepted when the
 -- sender is the very player the payload names as lootmaster. That is self-validating — no prior

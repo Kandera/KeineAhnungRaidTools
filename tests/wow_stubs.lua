@@ -87,6 +87,25 @@ frameMeta = {
         return fn
     end,
 }
+-- KAGS creates one real GameTooltip-templated frame at load time, named "KART_GearScanTooltip",
+-- and reads its lines back out of _G["KART_GearScanTooltipTextLeft"<i>]:GetText(). Give that one
+-- frame real ClearLines/SetInventoryItem/NumLines behavior, driven by a settable table of lines
+-- per slot, so KAGS.CountMissingGear's socket check (and Utils.lua's enchant-name lookup) can
+-- actually be exercised. Deliberately narrow: SetInventoryItem's unit argument is ignored (every
+-- caller passes "player"), and a test asking for more lines than TOOLTIP_MAX_LINES fails loudly
+-- rather than silently truncating.
+KARTTEST.tooltipLines = {} -- [slot] = { "line 1", "line 2", ... }
+local TOOLTIP_MAX_LINES = 20
+local function InstallScanTooltip(f)
+    local lines = {}
+    function f:ClearLines() lines = {} end
+    function f:SetInventoryItem(_, slot) lines = KARTTEST.tooltipLines[slot] or {} end
+    function f:NumLines() return #lines end
+    for i = 1, TOOLTIP_MAX_LINES do
+        _G["KART_GearScanTooltipTextLeft" .. i] = { GetText = function() return lines[i] end }
+    end
+end
+
 function _G.CreateFrame(_, name, _, _)
     local f = setmetatable({}, frameMeta)
     if name then _G[name] = f end
@@ -101,6 +120,8 @@ function _G.CreateFrame(_, name, _, _)
 
     function f:GetWidth() return 0 end
     function f:GetHeight() return 0 end
+
+    if name == "KART_GearScanTooltip" then InstallScanTooltip(f) end
 
     return f
 end
@@ -123,7 +144,13 @@ function _G.GetInventoryItemLink(_, slot) return KARTTEST.inventory[slot] end
 KARTTEST.weaponEnchant = { false, 0, 0, 0, false, 0, 0, 0 }
 function _G.GetWeaponEnchantInfo() return unpack(KARTTEST.weaponEnchant) end
 function _G.GetAverageItemLevel() return 0, KARTTEST.equippedIlvl or 0 end
+-- [link] = equip location string (e.g. "INVTYPE_WEAPONMAINHAND"), so a test can give a fake
+-- item link a configurable equip location without a real client's item database.
+KARTTEST.equipLocs = {}
 _G.C_Item = {
-    GetItemInfo = function(link) return nil, link end,
-    GetItemStats = function() return {} end,
+    GetItemInfoInstant = function(link) return nil, nil, nil, KARTTEST.equipLocs[link] end,
 }
+
+-- Socket text globals: KAGS scans _G for every "EMPTY_SOCKET_*" string rather than hardcoding
+-- them, so the harness needs at least one to exercise that path.
+_G.EMPTY_SOCKET_PRISMATIC = "Prismatic Socket"

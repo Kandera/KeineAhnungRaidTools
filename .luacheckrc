@@ -52,7 +52,7 @@ read_globals = {
     -- Libraries
     "LibStub", "NSAPI",
     -- WoW string/table aliases
-    "strmatch", "strjoin", "strtrim", "wipe", "tContains", "time", "date",
+    "strmatch", "wipe", "time", "date",
     -- Core API
     "CreateFrame", "UIParent", "GameTooltip", "GameFontHighlightSmall", "Item",
     "InCombatLockdown", "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown",
