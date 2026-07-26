@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.0]
 ### Changed
 - **Version check rebuilt.** Clients on 2.9 or older no longer appear in the list until they update.
-- **Internal restructuring.** Shared code now lives in libraries; no settings, history or notes are affected.
+- **This release includes a large internal rework.** Everything you've saved carries over — settings, loot history, officer notes, profiles and outstanding trades.
 
 ## [2.9.0] - 2026-07-25
 ### Added

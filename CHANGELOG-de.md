@@ -9,7 +9,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [3.0.0]
 ### Geändert
 - **Versionsprüfung neu gebaut.** Clients mit 2.9 oder älter erscheinen erst nach einem Update wieder in der Liste.
-- **Interne Umstrukturierung.** Geteilter Code liegt jetzt in Libraries; Einstellungen, Historie und Notizen bleiben unberührt.
+- **Dieses Release enthält eine große interne Überarbeitung.** Alles, was du gespeichert hast, bleibt erhalten — Einstellungen, Loot-Historie, Officer-Notizen, Profile und ausstehende Trades.
 
 ## [2.9.0] - 2026-07-25
 ### Hinzugefügt
