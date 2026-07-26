@@ -1,8 +1,9 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 -- Saves (or overwrites) a profile with the current KART_Settings and makes it the active one.
 function KART.SaveProfile(name)
-    KART_Profiles[name] = KART.DeepCopy(KART_Settings)
+    KART_Profiles[name] = KAUtil.DeepCopy(KART_Settings)
     KART_Settings.activeProfile = name
 end
 
@@ -20,10 +21,10 @@ function KART.LoadProfile(name)
     -- changes are written into an orphaned table until the next reload.
     local minimapTbl = KART_Settings.minimap
     wipe(KART_Settings)
-    for k, v in pairs(KART.DeepCopy(snapshot)) do
+    for k, v in pairs(KAUtil.DeepCopy(snapshot)) do
         KART_Settings[k] = v
     end
-    KART.MergeDefaults(KART_Settings, KART.Defaults)
+    KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
     if minimapTbl then
         local loaded = KART_Settings.minimap
         wipe(minimapTbl)

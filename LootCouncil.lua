@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LC = KART.LC or {}
 local LC = KART.LC
@@ -141,10 +142,10 @@ function LC.GetButtonConfig()
     else
         raw = LC.raidConfig.buttonLabels
     end
-    local parts = KART.SplitString(raw, ";")
+    local parts = KAUtil.SplitString(raw, ";")
     local result = {}
     for _, label in ipairs(parts) do
-        local trimmed = KART.TrimString(label)
+        local trimmed = KAUtil.TrimString(label)
         if trimmed ~= "" and #result < 6 then
             -- Color by the COMPACTED position (#result+1), not the raw split index, so it matches the
             -- vote icon (chosen by the returned button's index). A whitespace-only label between real
@@ -155,7 +156,7 @@ function LC.GetButtonConfig()
         end
     end
     if #result == 0 then
-        for i, label in ipairs(KART.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
+        for i, label in ipairs(KAUtil.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
             local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
             table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
         end
@@ -292,7 +293,7 @@ end
 -- below (the leader's own local settings, resolved fresh on every read rather than cached,
 -- since the leader never receives its own broadcast to trigger HandleConfig).
 function LC.ResolveConfigName(text)
-    local trimmed = KART.TrimString(text or "")
+    local trimmed = KAUtil.TrimString(text or "")
     if trimmed == "" then return nil end
     return (KART.Identity.ResolvePlayer(trimmed))
 end
@@ -344,7 +345,7 @@ end
 function LC.GetLootOwnerKey()
     local lootmaster = LC.GetLootmaster()
     if lootmaster ~= "" then return lootmaster end
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         if UnitIsGroupLeader(unit) then return (KART.Identity.ResolvePlayer(unit)) end
     end
     return ""
@@ -450,7 +451,7 @@ function LC.ApplyOwnConfig()
     LC.raidConfig.fromSelf       = true
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(LC.raidConfig.councilMembers, ";")) do
+    for _, name in ipairs(KAUtil.SplitString(LC.raidConfig.councilMembers, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
@@ -470,7 +471,7 @@ function LC.BroadcastRaidConfig(target)
     -- Keep the full "Name-Realm" text (don't strip the realm): GetLootmaster resolves the same
     -- unstripped value on the leader, so stripping here would let a cross-realm lootmaster resolve
     -- to a different person (or a same-named local) on peers than on the leader.
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
+    local lootmaster = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
@@ -520,7 +521,7 @@ function LC.HandleConfig(payload, senderKey)
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(council, ";")) do
+    for _, name in ipairs(KAUtil.SplitString(council, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
@@ -625,7 +626,7 @@ function LC.SendSettingsSync(targetName)
     local rolls = KART_Settings.lcRollsEnabled and "1" or "0"
     -- Full "Name-Realm" text, not realm-stripped — same cross-realm consistency reason as
     -- LC.BroadcastRaidConfig above.
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
+    local lootmaster = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
     local voteSeconds = KART_Settings.lcVoteSeconds or 20
     local council = KART_Settings.lcCouncilMembers or ""
 
@@ -634,7 +635,7 @@ function LC.SendSettingsSync(targetName)
     -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
     -- messages are deliberately not group-gated — the whole feature targets someone outside the
     -- group — which without this would let anyone spam a line into our chat frame at will.
-    LC.syncRequestSentTo = KART.CaseFold(KART.TrimString(targetName or ""))
+    LC.syncRequestSentTo = KAUtil.CaseFold(KAUtil.TrimString(targetName or ""))
 end
 
 function LC.ShowSyncTargetDialog()
@@ -672,7 +673,7 @@ end
 local function IsExpectedSyncReply(senderShort)
     local expected = LC.syncRequestSentTo
     if not expected or not senderShort then return false end
-    return KART.CaseFold(expected:match("^([^%-]+)") or expected) == KART.CaseFold(senderShort)
+    return KAUtil.CaseFold(expected:match("^([^%-]+)") or expected) == KAUtil.CaseFold(senderShort)
 end
 
 function LC.HandleSyncAccept(senderShort)
@@ -706,7 +707,7 @@ KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
     end,
 })
 
-LC.IsRealItemLink = KART.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
+LC.IsRealItemLink = KAUtil.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
 -- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
 -- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's
@@ -1354,7 +1355,7 @@ function LC.StartManualRoll(itemsText)
         -- silently dropped, desyncing peers while the lootmaster's own windows still open below.
         -- Fall back to the compact item string, which HandleManualStart rebuilds into a full link.
         if #msg > 255 then
-            local itemStr = KART.GetItemString(itemLink)
+            local itemStr = KAUtil.GetItemString(itemLink)
             if itemStr then msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemStr end
         end
         LC.SendLC(msg)
@@ -1498,7 +1499,7 @@ function LC.StartTest(mode)
                 -- valid 1..#buttons range from the start — with fewer than TEST_ITEM_COUNT buttons a
                 -- bare itemIdx seed would be out of range and render as "-".
                 local voteIdx = ((itemIdx - 1) % #buttons) + 1
-                for unit in KART.EachGroupUnit() do
+                for unit in KAUtil.EachGroupUnit() do
                     local name = UnitName(unit)
                     if name then
                         local short = name:match("([^%-]+)")

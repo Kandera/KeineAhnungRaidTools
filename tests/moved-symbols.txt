@@ -1,3 +1,13 @@
 # Symbols that have moved out of the KART table into a library.
 # The gate asserts none of these still appears anywhere as KART.<name>.
 # One bare symbol name per line; blank lines and # comments are ignored.
+TrimString
+IsFullNameInGroup
+SplitString
+IsRealItemLink
+GetItemString
+CaseFold
+HasGroupPermissions
+EachGroupUnit
+DeepCopy
+MergeDefaults

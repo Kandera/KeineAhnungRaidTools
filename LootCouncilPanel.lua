@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LC.Council = KART.LC.Council or {}
 local Council = KART.LC.Council
@@ -894,7 +895,7 @@ function Council.RefreshCouncilRows()
     end
 
     local members = {}
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         local fullName = UnitName(unit)
         if fullName then
             local short    = fullName:match("([^%-]+)")
@@ -910,7 +911,7 @@ function Council.RefreshCouncilRows()
             -- version broadcast, so PlayerVersions never has an entry for "player"). PlayerVersions
             -- stays short-name keyed — out of scope for the identity rework, see the design doc.
             local kartStatus
-            -- UnitIsUnit, NOT unit ~= "player": KART.EachGroupUnit yields raid1..raidN in a raid and
+            -- UnitIsUnit, NOT unit ~= "player": KAUtil.EachGroupUnit yields raid1..raidN in a raid and
             -- never the literal "player" token, so the plain comparison failed to exclude our own raid
             -- slot — and since we never receive our own version broadcast, every raid showed a red
             -- "KART missing" warning on the viewer's own row. Same pitfall as in WU.RemoveForBoss.

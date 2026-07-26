@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 local L = KART.L
 
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
@@ -330,7 +331,7 @@ function KART.CreateBuffCheckFrame()
                         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                         GameTooltip:SetText(self.tooltipTitle, 1, 1, 1)
                         
-                        local slots = KART.SplitString(self.missingSlots, ",")
+                        local slots = KAUtil.SplitString(self.missingSlots, ",")
                         local countMap = {}
                         local uniqueSlots = {}
                         for _, s in ipairs(slots) do

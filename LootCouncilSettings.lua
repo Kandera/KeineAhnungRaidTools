@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 -- Settings-panel UI for the Loot Council module (split out of LootCouncil.lua, which keeps
 -- the session/roll/config logic). Loads after LootCouncilPanel.lua and before Droptimizer.lua,
@@ -24,7 +25,7 @@ function LC.UpdateRoleStatusLabel()
     local text
     if isOwner then
         text = KART.L.LC_ROLE_STATUS_OWNER
-    elseif KART.TrimString((KART_Settings and KART_Settings.lcLootmaster) or "") ~= "" then
+    elseif KAUtil.TrimString((KART_Settings and KART_Settings.lcLootmaster) or "") ~= "" then
         -- Field names someone who isn't us. Everything in this box is then inert — not just for the
         -- raid, but locally too: LC.ApplyOwnConfig no-ops for a non-owner, so our own council list
         -- never gets built either, and LC.IsLootOwner still falls back to the raid leader because no

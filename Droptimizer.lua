@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.DT = KART.DT or {}
 local DT = KART.DT
@@ -28,7 +29,7 @@ local function NormalizeKey(name, realm)
     -- name starting with "Ö" would otherwise never match its lowercased "ö" cache key. The single
     -- "-" between name and realm is the ONLY hyphen left (realm hyphens are stripped above), so the
     -- short-name split in FindPlayerCandidates stays unambiguous.
-    return KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))
+    return KAUtil.CaseFold(name) .. "-" .. KAUtil.CaseFold(CanonicalizeRealm(realm))
 end
 
 function DT.RebuildIndex()
@@ -45,9 +46,9 @@ function DT.RebuildIndex()
             -- never contain one, so everything after it is the realm slug.
             local name, realm = key:match("^([^%-]+)%-(.+)$")
             if name and realm then
-                DT.index[KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))] = candidates
+                DT.index[KAUtil.CaseFold(name) .. "-" .. KAUtil.CaseFold(CanonicalizeRealm(realm))] = candidates
             else
-                DT.index[KART.CaseFold(key)] = candidates -- malformed / realm-less key: keep as-is
+                DT.index[KAUtil.CaseFold(key)] = candidates -- malformed / realm-less key: keep as-is
             end
         end
     end
@@ -61,7 +62,7 @@ local function FindPlayerCandidates(shortName)
     local ownRealmKey = NormalizeKey(shortName, GetRealmName())
     if ownRealmKey and DT.index[ownRealmKey] then return DT.index[ownRealmKey] end
 
-    local shortLower = KART.CaseFold(shortName)
+    local shortLower = KAUtil.CaseFold(shortName)
     local match, matchCount = nil, 0
     for key, candidates in pairs(DT.index) do
         if key:match("^([^%-]+)") == shortLower then

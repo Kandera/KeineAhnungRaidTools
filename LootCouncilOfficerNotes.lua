@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LC.OfficerNotes = KART.LC.OfficerNotes or {}
 local OfficerNotes = KART.LC.OfficerNotes
@@ -20,7 +21,7 @@ function OfficerNotes.SetOfficerNote(playerKey, noteText)
     -- row's tooltip AND persisted in KART_LCOfficerNotes forever, so a "|c"/"|H"/"|T" escape would
     -- inject coloured text, a fake hyperlink or a texture into every council member's UI for good.
     -- Both stripped before the local store and the broadcast, so every client keeps identical text.
-    noteText = (KART.TrimString(noteText or ""):gsub("[:|]", ""))
+    noteText = (KAUtil.TrimString(noteText or ""):gsub("[:|]", ""))
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
     LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     KART.LC.Council.RefreshCouncilRows()

@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 local L = KART.L
 local LSM = LibStub("LibSharedMedia-3.0", true)
 
@@ -617,7 +618,7 @@ KART.RegisterStaticPopup("KART_RESET_CONFIRM", {
         -- into (and later mutated through) KART_Settings.
         wipe(KART_Settings)
         for k, v in pairs(KART.Defaults) do
-            KART_Settings[k] = type(v) == "table" and KART.DeepCopy(v) or v
+            KART_Settings[k] = type(v) == "table" and KAUtil.DeepCopy(v) or v
         end
         ReloadUI() -- Einfachste Methode um alle UI Werte zurückzusetzen
     end,
@@ -758,12 +759,12 @@ KART.HideSearchPopout = CloseSearchPopout
 mainFrame:HookScript("OnHide", CloseSearchPopout)
 
 local function FilterSearch(query)
-    query = KART.CaseFold(query)
+    query = KAUtil.CaseFold(query)
     local shown = 0
     if query ~= "" then
         for _, entry in ipairs(searchIndex) do
             if shown >= RESULT_ROW_COUNT then break end
-            if KART.CaseFold(entry.text):find(query, 1, true) then
+            if KAUtil.CaseFold(entry.text):find(query, 1, true) then
                 shown = shown + 1
                 local row = resultRows[shown]
                 row.text:SetText(entry.text)

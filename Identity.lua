@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.Identity = KART.Identity or {}
 local Identity = KART.Identity
@@ -13,12 +14,12 @@ local Identity = KART.Identity
 -- that would need a failsafe can't occur. Do not re-flag the missing ambiguity guard.
 -- NOTE: because of that, resolution alone is NOT an authorization check — an out-of-group sender can
 -- resolve onto a same-short-named group member. Anything acting on a sender's authority gates on
--- KART.IsFullNameInGroup (see the `group` flag in KARTSync's dispatcher), which compares the realm too.
+-- KAUtil.IsFullNameInGroup (see the `group` flag in KARTSync's dispatcher), which compares the realm too.
 local function FindUnitForName(name)
     if not name or name == "" then return nil end
     -- CaseFold (not :lower()) so German umlaut names fold consistently — :lower() leaves
     -- Ö/Ä/Ü untouched, so a config name cased differently than the client returns wouldn't match.
-    local lowerName = KART.CaseFold(name)
+    local lowerName = KAUtil.CaseFold(name)
     -- Also try the realm-stripped form. Input reaches here in two shapes: free-typed config text
     -- (short name or NSRT nickname, no realm) and a realm-qualified sender from CHAT_MSG_ADDON
     -- ("Bob-TarrenMill"). UnitName's first return is always realm-free, so the qualified shape can
@@ -27,11 +28,11 @@ local function FindUnitForName(name)
     -- which drops the message entirely).
     -- Both forms are compared against both the character name and the NSRT nickname: a nickname
     -- containing a hyphen would otherwise be truncated by the split and stop matching.
-    local shortName = KART.CaseFold(name:match("^([^%-]+)") or name)
-    for unit in KART.EachGroupUnit() do
+    local shortName = KAUtil.CaseFold(name:match("^([^%-]+)") or name)
+    for unit in KAUtil.EachGroupUnit() do
         local unitName = UnitName(unit)
         if unitName then
-            local unitLower = KART.CaseFold(unitName)
+            local unitLower = KAUtil.CaseFold(unitName)
             if unitLower == lowerName or unitLower == shortName then return unit end
             local nick = KART.GetNickname(unit)
             if nick and (nick == lowerName or nick == shortName) then return unit end
@@ -45,7 +46,7 @@ end
 -- short name.
 function Identity.FindUnitForKey(key)
     if not key then return nil end
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         if UnitGUID(unit) == key then return unit end
     end
     return nil
@@ -101,18 +102,18 @@ function Identity.ResolvePlayer(input)
     -- Cache entries store the realm-free short name (UnitName), so normalize the input the same way
     -- — trimmed, realm stripped, case-folded — otherwise a realm-qualified sender ("Name-Realm" from
     -- CHAT_MSG_ADDON) never matches, and untrimmed input disagrees with the pending key below.
-    local trimmed = KART.TrimString(input)
-    local lowerInput = KART.CaseFold(trimmed:match("([^%-]+)") or trimmed)
+    local trimmed = KAUtil.TrimString(input)
+    local lowerInput = KAUtil.CaseFold(trimmed:match("([^%-]+)") or trimmed)
     if KART_PlayerCache then
         for guid, entry in pairs(KART_PlayerCache) do
-            if (entry.name and KART.CaseFold(entry.name) == lowerInput) or (entry.nickname and KART.CaseFold(entry.nickname) == lowerInput) then
+            if (entry.name and KAUtil.CaseFold(entry.name) == lowerInput) or (entry.nickname and KAUtil.CaseFold(entry.nickname) == lowerInput) then
                 return guid, false
             end
         end
     end
 
     -- Never seen — pending.
-    return KART.CaseFold(KART.TrimString(input)), true
+    return KAUtil.CaseFold(KAUtil.TrimString(input)), true
 end
 
 -- Inverse of ResolvePlayer, for rendering a stored key back to a human-readable name. Only needed

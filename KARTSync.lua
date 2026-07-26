@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 -- KARTSync: the addon-message networking layer. Owns the "KART" addon-message prefix, the
 -- outbound Send() wrapper (prefix + default raid/party channel), and the inbound CHAT_MSG_ADDON
@@ -26,7 +27,7 @@ end
 -- outside the group discloses our gear/enchant/ilvl state to a stranger. Every data-reply handler
 -- below gates on this; replies always go to the group channel, never back to the whisperer.
 local function SenderInGroup(ctx)
-    return KART.IsFullNameInGroup(ctx.sender)
+    return KAUtil.IsFullNameInGroup(ctx.sender)
 end
 
 -- CHAT_MSG_ADDON dispatch. A message is either a fixed token (EXACT_HANDLERS) or
@@ -225,7 +226,7 @@ local PREFIX_HANDLERS = {
             -- its trailing link truncated into garbage; fall back to the compact item string (the
             -- EQUIP receiver rebuilds it into a full link), same guard as the history sync.
             if #msg > 255 then
-                local itemStr = KART.GetItemString(link)
+                local itemStr = KAUtil.GetItemString(link)
                 if itemStr then msg = "EQUIP:" .. payload .. ":" .. itemStr end
             end
             -- Still over budget (or no item string to fall back to): drop the reply entirely rather
@@ -246,12 +247,12 @@ local PREFIX_HANDLERS = {
         -- tooltip (LootCouncilPanel) — so a "|Hspell:"/"|Hquest:" from a broken or hostile client
         -- would render a foreign tooltip in every council member's panel. Rejected at the network
         -- boundary, the same rule the GEAR handler follows.
-        if link and not (KART.IsRealItemLink(link) or link:match("^item:%d+")) then return end
+        if link and not (KAUtil.IsRealItemLink(link) or link:match("^item:%d+")) then return end
         if equipLoc and link then
             -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
             -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring
             -- the history-sync rebuild.
-            local itemStr = (not KART.IsRealItemLink(link)) and link:match("^item:%d+") and link or nil
+            local itemStr = (not KAUtil.IsRealItemLink(link)) and link:match("^item:%d+") and link or nil
             if itemStr then
                 link = select(2, C_Item.GetItemInfo(itemStr)) or link
             end
@@ -262,7 +263,7 @@ local PREFIX_HANDLERS = {
             -- Item not cached yet: nothing re-asks for it (Council.RequestEquipForRoll dedups per
             -- roll), so the bare string would stay in the cache all session and the Equipped column
             -- would keep showing a placeholder icon. Upgrade it in place once the item loads.
-            if itemStr and not KART.IsRealItemLink(link) then
+            if itemStr and not KAUtil.IsRealItemLink(link) then
                 local itemID = tonumber(itemStr:match("^item:(%d+)"))
                 if itemID then
                     Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()

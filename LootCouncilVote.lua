@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LC.Vote = KART.LC.Vote or {}
 local Vote = KART.LC.Vote
@@ -232,7 +233,7 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- otherwise let a raider inject coloured text, fake hyperlinks or textures there. Stripping (not
     -- escaping) at the source keeps the sender's own copy byte-identical to what the receivers store
     -- — HandleVote escapes on top of this, since a hostile client won't have stripped anything.
-    local note = (KART.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
+    local note = (KAUtil.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
     LC.votedNoteByMe[rollID] = note
 
     -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to

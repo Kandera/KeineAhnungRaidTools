@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LC.Trade = KART.LC.Trade or {}
 local Trade = KART.LC.Trade
@@ -488,7 +489,7 @@ end
 -- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
 -- only reliable moment to read them, since the trade frame may already be tearing down by the
 -- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
--- (bonus-ID aware, see KART.GetItemString), with a count rather than a plain boolean, so this composes
+-- (bonus-ID aware, see KAUtil.GetItemString), with a count rather than a plain boolean, so this composes
 -- correctly with Trade.OnTradeClosed below even when a duplicate drop puts two copies of the exact
 -- same item string in the trade window at once.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
@@ -497,7 +498,7 @@ function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
     for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
-        local itemString = KART.GetItemString(link)
+        local itemString = KAUtil.GetItemString(link)
         if itemString then
             LC.tradeWindowItemStrings[itemString] = (LC.tradeWindowItemStrings[itemString] or 0) + 1
         end
@@ -516,12 +517,12 @@ end
 -- skip (optional): a set keyed "bag:slot" of slots to ignore, so a caller placing several copies of
 -- the same item in one pass doesn't keep finding the same (now-locked) bag slot.
 local function FindItemInBags(itemLink, skip)
-    local wantString = KART.GetItemString(itemLink)
+    local wantString = KAUtil.GetItemString(itemLink)
     if not wantString then return nil end
     for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local bagLink = C_Container.GetContainerItemLink(bag, slot)
-            if bagLink and KART.GetItemString(bagLink) == wantString
+            if bagLink and KAUtil.GetItemString(bagLink) == wantString
                and not (skip and skip[bag .. ":" .. slot]) then
                 return bag, slot
             end
@@ -535,11 +536,11 @@ end
 -- included. Ordered by ascending rollID so every client's ordinal for the same physical drop
 -- agrees, since all clients see the same rollItems keys via the same broadcasts.
 function Trade.GetDuplicateOrdinal(rollID)
-    local myString = KART.GetItemString(LC.rollItems[rollID])
+    local myString = KAUtil.GetItemString(LC.rollItems[rollID])
     if not myString then return "" end
     local matches = {}
     for otherRollID, link in pairs(LC.rollItems) do
-        if KART.GetItemString(link) == myString then
+        if KAUtil.GetItemString(link) == myString then
             table.insert(matches, otherRollID)
         end
     end
@@ -624,7 +625,7 @@ function Trade.OnTradeClosed()
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         if entry.winnerKey == partnerKey then
-            local itemString = KART.GetItemString(entry.itemLink)
+            local itemString = KAUtil.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             local confirmedByTrade = tradeSucceeded and remaining and remaining > 0
             local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
@@ -647,7 +648,7 @@ function Trade.OnTradeClosed()
     local warnedItemStrings = {}
     for _, entry in ipairs(LC.pendingTrades) do -- read-only pass (only warns), no removal
         if entry.winnerKey ~= partnerKey then
-            local itemString = KART.GetItemString(entry.itemLink)
+            local itemString = KAUtil.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             if tradeSucceeded and remaining and remaining > 0 and not warnedItemStrings[itemString] then
                 warnedItemStrings[itemString] = true

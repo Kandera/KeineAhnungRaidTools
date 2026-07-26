@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.0.0"
 local frame = CreateFrame("Frame")
@@ -208,7 +209,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- let the live settings mutate KART.Defaults itself, which then made "Reset Defaults" a
         -- no-op for those keys within the same session — and merges sub-keys added by a later
         -- addon version into a settings blob saved before they existed.
-        KART.MergeDefaults(KART_Settings, KART.Defaults)
+        KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
 
         -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
         -- the Defaults merge above — Defaults.minimap = {}).
@@ -580,12 +581,12 @@ function KART.ShowReadyCheckReasonDialog()
         btnSend:SetSize(70, 25)
         btnSend:SetPoint("LEFT", customInput, "RIGHT", 10, 0)
         btnSend:SetScript("OnClick", function()
-            local text = KART.TrimString(customInput:GetText())
+            local text = KAUtil.TrimString(customInput:GetText())
             if text ~= "" then sendReason(nil, text) end
         end)
         
         customInput:SetScript("OnEnterPressed", function(self)
-            local text = KART.TrimString(self:GetText())
+            local text = KAUtil.TrimString(self:GetText())
             if text ~= "" then sendReason(nil, text) else self:ClearFocus() end
         end)
         customInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)

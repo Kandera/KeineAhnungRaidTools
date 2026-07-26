@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 KART.LH = KART.LH or {}
 local LH = KART.LH
@@ -29,7 +30,7 @@ local function GetFilteredEntries()
         local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
         local matchSearch = true
         if LH.filters.search ~= "" then
-            matchSearch = KART.CaseFold(GetItemNameFromLink(e.item)):find(LH.filters.search, 1, true) ~= nil
+            matchSearch = KAUtil.CaseFold(GetItemNameFromLink(e.item)):find(LH.filters.search, 1, true) ~= nil
         end
         if matchPlayer and matchReason and matchSearch then
             table.insert(filtered, e)
@@ -167,7 +168,7 @@ function LH.BuildRCLootCouncilJSON()
     local objects = {}
     for i, e in ipairs(entries) do
         local itemID, subType, equipLocToken = 0, "", ""
-        if KART.IsRealItemLink(e.item) then
+        if KAUtil.IsRealItemLink(e.item) then
             local id, _, _, eLoc, _, classID, subClassID = C_Item.GetItemInfoInstant(e.item)
             itemID = id or 0
             subType = SubTypeExport(classID, subClassID)
@@ -180,7 +181,7 @@ function LH.BuildRCLootCouncilJSON()
             JSONString("time", date("%H:%M:%S", e.time or 0)),
             JSONString("id", (e.time or 0) .. "-" .. i),
             JSONNumber("itemID", itemID),
-            JSONString("itemString", (KART.GetItemString(e.item) or "")),
+            JSONString("itemString", (KAUtil.GetItemString(e.item) or "")),
             JSONString("response", e.reason or ""),
             JSONNumber("votes", 0),
             JSONString("class", e.class or ""),
@@ -402,7 +403,7 @@ function LH.CreateWindow()
     table.insert(KART.EditBoxes, searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
-        LH.filters.search = KART.CaseFold(self:GetText())
+        LH.filters.search = KAUtil.CaseFold(self:GetText())
         LH.Refresh()
     end)
     f.searchBox = searchBox
@@ -680,7 +681,7 @@ function LH.Refresh()
 
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
-                if KART.IsRealItemLink(self.itemLink) then
+                if KAUtil.IsRealItemLink(self.itemLink) then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:SetHyperlink(self.itemLink)
                     GameTooltip:Show()
@@ -708,7 +709,7 @@ function LH.Refresh()
         row.playerText:SetTextColor(nr, ng, nb)
 
         row.itemLink = e.item
-        if KART.IsRealItemLink(e.item) then
+        if KAUtil.IsRealItemLink(e.item) then
             local itemID = C_Item.GetItemInfoInstant(e.item)
             local icon = itemID and C_Item.GetItemIconByID(itemID)
             row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -889,7 +890,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- back to the persistent cache, which matches on the realm-stripped short name — so an outsider
     -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
-    if not KART.IsFullNameInGroup(senderFullName) then return end
+    if not KAUtil.IsFullNameInGroup(senderFullName) then return end
     -- Rate-limit the reply burst per sender: each answered request queues up to
     -- HISTORY_SYNC_MAX_ENTRIES timers spanning ~8s, so a peer repeatedly leaving and rejoining would
     -- otherwise stack bursts until the outgoing messages hit the client's throttle and the server's
@@ -927,7 +928,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- Re-check membership at fire time, not just when the request arrived: the burst spans
             -- ~8 seconds, and whispers keep working after either side has left the group — so
             -- without this we'd keep streaming loot history to someone who is no longer authorized.
-            if not KART.IsFullNameInGroup(senderFullName) then return end
+            if not KAUtil.IsFullNameInGroup(senderFullName) then return end
             local colorPacked = ""
             if e.color then
                 colorPacked = string.format("%d,%d,%d",
@@ -950,7 +951,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- blow the 255-byte SendAddonMessage cap, fall back to the compact, locale-independent
             -- item string, which the receiver rebuilds into a full link.
             if #msg > 255 then
-                local itemStr = KART.GetItemString(e.item)
+                local itemStr = KAUtil.GetItemString(e.item)
                 if itemStr then
                     msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
                         e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
@@ -1003,7 +1004,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- The sender may have sent a bare item string (its full link was too long for one addon
     -- message). Rebuild a full, locally-localized link so display/tooltip/icon work; if the item
     -- isn't cached yet, store the string now and upgrade the entry in place once it loads.
-    local needsRebuild = item ~= "" and not KART.IsRealItemLink(item) and item:match("^item:") ~= nil
+    local needsRebuild = item ~= "" and not KAUtil.IsRealItemLink(item) and item:match("^item:") ~= nil
     local itemLink = item
     if needsRebuild then
         local rebuilt = select(2, C_Item.GetItemInfo(item))
@@ -1014,13 +1015,13 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Locale-independent item string (not the full link, which differs between DE/EN clients and
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
-    -- KART.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
+    -- KAUtil.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
     -- "item:12345:..." string the oversized-link fallback sends — which is also exactly the case
     -- where the local rebuild above can fail (item not in the client's cache yet). Fall back to the
     -- bare form so both sides still reduce to the same locale-independent key.
     local function ItemKey(link)
         if type(link) ~= "string" then return nil end
-        return KART.GetItemString(link) or link:match("^item:[%-%d:]+")
+        return KAUtil.GetItemString(link) or link:match("^item:[%-%d:]+")
     end
     local incomingStr = ItemKey(itemLink)
     -- The sender drops the item field entirely when even the compact item string won't fit the
@@ -1079,7 +1080,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     end
 
     -- Item wasn't cached — once it loads, swap the bare string for a real link in place.
-    if needsRebuild and not KART.IsRealItemLink(itemLink) then
+    if needsRebuild and not KAUtil.IsRealItemLink(itemLink) then
         local itemID = tonumber(item:match("^item:(%d+)"))
         if itemID then
             Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
