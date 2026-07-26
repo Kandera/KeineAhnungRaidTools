@@ -100,6 +100,8 @@ T.is_nil(KASC.ParseHello("KART=3.0.0+|Hitem:1|h").KART, "an escape in a capabili
 T.is_nil(KASC.ParseHello("KART=3.0.0+").KART, "a trailing plus with no capability drops the entry")
 T.is_nil(KASC.ParseHello("=3.0.0").KART, "an empty name drops the entry")
 T.is_nil(KASC.ParseHello("KART=").KART, "an empty version drops the entry")
+T.is_nil(KASC.ParseHello("KART=3.0.0=|cffff0000").KART, "a second = drops the entry instead of silently truncating the version")
+T.is_nil(KASC.ParseHello("KART=1=2+LC").KART, "text before the first + must not be silently swallowed")
 T.deep_eq(KASC.ParseHello(",,"), {}, "a payload of separators yields nothing")
 T.deep_eq(KASC.ParseHello(""), {}, "an empty payload yields nothing")
 T.deep_eq(KASC.ParseHello(nil), {}, "a nil payload yields nothing")
@@ -133,10 +135,15 @@ T.eq(KARTTEST.sent[1].channel, "RAID", "RequestHello uses the default channel")
 T.is_nil(KARTTEST.sent[1].target, "RequestHello is not targeted at anyone")
 
 -- A non-whisper request is answered on the same channel it arrived on, broadcast to the group.
+-- The expected payload is a LITERAL string, not KASC.SerializeHello() called again -- computing
+-- the expectation from the function under test would pass for any output, including garbage.
+-- Only TESTADDON (with its enabled CAP) and TESTOFF (with its disabled OFFCAP) have been
+-- registered by this point, in that order, so this also pins SerializeHello's entry ordering,
+-- which the earlier round-trip tests (going through a hash table) never verify.
 KARTTEST.ClearSent()
 KASC.Dispatch("KA_HELLO_REQ", "RAID", "Ann-TarrenMill")
-T.eq(KARTTEST.sent[1].msg, "KA_HELLO:" .. KASC.SerializeHello(),
-    "a KA_HELLO_REQ is answered with the current hello payload")
+T.eq(KARTTEST.sent[1].msg, "KA_HELLO:TESTADDON=9.9.9+CAP,TESTOFF=1.0.0",
+    "a KA_HELLO_REQ is answered with the exact hello payload, in registration order")
 T.eq(KARTTEST.sent[1].channel, "RAID", "a non-whisper request is answered on the same channel")
 T.is_nil(KARTTEST.sent[1].target, "a non-whisper reply is not targeted at anyone")
 

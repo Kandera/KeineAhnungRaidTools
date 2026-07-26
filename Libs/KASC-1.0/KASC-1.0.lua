@@ -366,7 +366,15 @@ function KASC.ParseHello(payload)
     if type(payload) ~= "string" or payload == "" then return result end
     for entry in payload:gmatch("[^,]+") do
         local name, version, rest = entry:match("^([^=+]+)=([^=+]+)(.*)$")
-        if name and version and name:match(ENTRY_CHARS) and version:match(ENTRY_CHARS) then
+        -- rest must be nothing but zero or more "+capability" suffixes -- not just "no unknown
+        -- characters in any capability we happen to find". Without this, a second "=" (e.g.
+        -- "KART=3.0.0=x") or stray text before the first "+" (e.g. "KART=1=2+LC") was silently
+        -- swallowed instead of rejecting the entry, because gmatch below only ever looks for
+        -- "+"-prefixed runs and never verifies that they account for the whole tail. Lua patterns
+        -- can't quantify a capture group, so this strips every well-formed "+xxx" chunk and
+        -- requires nothing to be left over, rather than trying to anchor a repeated group.
+        if name and version and rest and rest:gsub("%+[^+]*", "") == ""
+           and name:match(ENTRY_CHARS) and version:match(ENTRY_CHARS) then
             local caps, ok = {}, true
             for cap in rest:gmatch("%+([^+]*)") do
                 if cap:match(ENTRY_CHARS) then caps[cap] = true else ok = false end
@@ -379,15 +387,23 @@ function KASC.ParseHello(payload)
     return result
 end
 
-function KASC:RequestHello()
-    self:Send("KA_HELLO_REQ")
+-- channel/target default the same way KASC:Send does (nil -> DefaultChannel(), untargeted), so a
+-- caller that needs GUILD (or any other explicit channel) never has to know the wire token to get
+-- it -- both entry points below exist so the "KA_HELLO"/"KA_HELLO_REQ" strings stay inside this
+-- library and never need to be spelled out by a consumer.
+function KASC:RequestHello(channel, target)
+    self:Send("KA_HELLO_REQ", channel, target)
+end
+
+function KASC:AnnounceHello(channel, target)
+    self:Send("KA_HELLO:" .. KASC.SerializeHello(), channel, target)
 end
 
 KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)
     if ctx.channel == "WHISPER" then
-        KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), "WHISPER", ctx.sender)
+        KASC:AnnounceHello("WHISPER", ctx.sender)
     else
-        KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), ctx.channel)
+        KASC:AnnounceHello(ctx.channel)
     end
 end)
 

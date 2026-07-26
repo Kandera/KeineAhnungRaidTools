@@ -291,7 +291,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UpdateRaidleadBarVisibility()
 
         if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            KASC:Send("KA_HELLO:" .. KASC.SerializeHello())
+            KASC:AnnounceHello()
             KART.VersionAnnouncedToGroup = true
             -- Our own one-shot announce only tells the group about US — it does nothing for
             -- players who already announced before we joined, so also pull everyone else's
@@ -364,7 +364,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if arg1 or arg2 then
             C_Timer.After(5, function()
                 if IsInGuild() then
-                    KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), "GUILD")
+                    KASC:AnnounceHello("GUILD")
                 end
             end)
         end
@@ -655,7 +655,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print(KART.L.VERSION_CHECK_REQ)
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
-        KASC:Send("KA_HELLO_REQ", channel)
+        KASC:RequestHello(channel)
     elseif cmd == "add" or cmd:match("^add%s") then
         local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
         if KART.LC then KART.LC.StartManualRoll(itemsText) end
