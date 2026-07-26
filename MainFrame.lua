@@ -4,6 +4,12 @@ local KAUI = LibStub("KAUI-1.0")
 local L = KART.L
 local LSM = LibStub("LibSharedMedia-3.0", true)
 
+-- Every checkbox/slider below is built at file load time, before Core.lua's ADDON_LOADED handler
+-- has created KART_Settings -- passing the table directly here would freeze each widget onto nil
+-- forever. Passed as `store` instead of the table itself, so KAUI resolves the current global at
+-- click/drag time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
+
 -- 1. Tab-Wechsel Logik (wird in KART Tabelle gespeichert)
 function KART.ShowTab(tabIndex)
     local panels = {
@@ -239,7 +245,7 @@ rlCard:SetSize(500, 180)
 -- Checkbox zur Aktivierung
 KART.CbActivate = KART.UI:CreateSettingsCheckbox(rlCard, {
     name = "KART_RaidleadBarCheck", label = L.SET_RL_ACTIVATE,
-    store = KART_Settings, key = "showRaidleadBar", y = -20,
+    store = SettingsStore, key = "showRaidleadBar", y = -20,
     onChanged = function()
         KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
     end,
@@ -249,14 +255,14 @@ KART.CbActivate = KART.UI:CreateSettingsCheckbox(rlCard, {
 -- Checkbox zum Sperren
 KART.CbLock = KART.UI:CreateSettingsCheckbox(rlCard, {
     name = "KART_RaidleadBarLockCheck", label = L.SET_RL_LOCK,
-    store = KART_Settings, key = "lockRaidleadBar", y = -50,
+    store = SettingsStore, key = "lockRaidleadBar", y = -50,
     tooltip = L.DESC_RL_LOCK,
 })
 
 -- Checkbox für Auto-Hide
 KART.CbAutoHide = KART.UI:CreateSettingsCheckbox(rlCard, {
     name = "KART_RaidleadBarAutoHideCheck", label = L.SET_RL_AUTOHIDE,
-    store = KART_Settings, key = "autoHideRaidleadBar", y = -80,
+    store = SettingsStore, key = "autoHideRaidleadBar", y = -80,
     onChanged = function()
         KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
     end,
@@ -267,7 +273,7 @@ KART.CbAutoHide = KART.UI:CreateSettingsCheckbox(rlCard, {
 -- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.UI:CreateSettingsSlider(rlCard, {
     name = "KART_PullTimerSlider", label = L.SET_PULL_TIMER,
-    min = 5, max = 30, store = KART_Settings, key = "pullTimerDuration", y = -130,
+    min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -130,
     tooltip = L.DESC_PULL_TIMER, skipStyleRefresh = true,
 })
 
@@ -408,7 +414,7 @@ bcCard:SetSize(500, 160)
 -- Labels must not cross into the neighboring column / past the card edge (FontStrings don't clip).
 KART.CbBcModuleEnabled = KART.UI:CreateSettingsCheckbox(bcCard, {
     name = "KART_BcModuleEnabled", label = L.SET_BC_MODULE_ENABLED,
-    store = KART_Settings, key = "bcModuleEnabled", y = -20,
+    store = SettingsStore, key = "bcModuleEnabled", y = -20,
     tooltip = L.DESC_BC_MODULE_ENABLED,
 })
 KART.CbBcModuleEnabled.text:SetWidth(190)
@@ -416,7 +422,7 @@ KART.CbBcModuleEnabled.text:SetJustifyH("LEFT")
 
 KART.CbShowBuffCheck = KART.UI:CreateSettingsCheckbox(bcCard, {
     name = "KART_ShowBuffCheck", label = L.SET_BC_READYCHECK,
-    store = KART_Settings, key = "showBuffCheck", y = -50,
+    store = SettingsStore, key = "showBuffCheck", y = -50,
     tooltip = L.DESC_BC_READYCHECK,
 })
 KART.CbShowBuffCheck.text:SetWidth(190)
@@ -424,7 +430,7 @@ KART.CbShowBuffCheck.text:SetJustifyH("LEFT")
 
 KART.CbGrayOffline = KART.UI:CreateSettingsCheckbox(bcCard, {
     name = "KART_GrayOffline", label = L.SET_GRAY_OFFLINE,
-    store = KART_Settings, key = "grayOffline", y = -80,
+    store = SettingsStore, key = "grayOffline", y = -80,
     tooltip = L.DESC_GRAY_OFFLINE,
 })
 
@@ -441,7 +447,7 @@ end)
 
 KART.SldBuffCheckAlpha = KART.UI:CreateSettingsSlider(bcCard, {
     name = "KART_BuffCheckAlphaSlider", label = L.SET_BC_ALPHA,
-    min = 0, max = 100, store = KART_Settings, key = "buffCheckAlpha", y = -30,
+    min = 0, max = 100, store = SettingsStore, key = "buffCheckAlpha", y = -30,
     tooltip = L.DESC_BC_ALPHA,
     onChanged = function() KART.UpdateStyles() end,
 })
@@ -449,7 +455,7 @@ KART.SldBuffCheckAlpha:ClearAllPoints()
 KART.SldBuffCheckAlpha:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -46)
 KART.SldCombatDelay = KART.UI:CreateSettingsSlider(bcCard, {
     name = "KART_BuffCheckCombatDelaySlider", label = L.SET_BC_COMBAT_DELAY,
-    min = 0, max = 30, store = KART_Settings, key = "bcCombatDelay", y = -90,
+    min = 0, max = 30, store = SettingsStore, key = "bcCombatDelay", y = -90,
     tooltip = L.DESC_BC_COMBAT_DELAY, skipStyleRefresh = true,
 })
 KART.SldCombatDelay:ClearAllPoints()
@@ -490,14 +496,14 @@ end)
 
 KART.CbAutoRaid = KART.UI:CreateSettingsCheckbox(autoCard, {
     name = "KART_AutoRaidCheck", label = L.SET_AUTO_RAID,
-    store = KART_Settings, key = "autoConvertToRaid", y = -160,
+    store = SettingsStore, key = "autoConvertToRaid", y = -160,
     tooltip = L.DESC_AUTO_RAID,
 })
 KART.CbAutoRaid.text:SetWidth(190)
 KART.CbAutoRaid.text:SetJustifyH("LEFT")
 KART.CbInviteViaGuildChat = KART.UI:CreateSettingsCheckbox(autoCard, {
     name = "KART_InviteViaGuildChatCheck", label = L.SET_INVITE_VIA_GUILD_CHAT,
-    store = KART_Settings, key = "inviteViaGuildChat", y = -160,
+    store = SettingsStore, key = "inviteViaGuildChat", y = -160,
     tooltip = L.DESC_INVITE_VIA_GUILD_CHAT,
 })
 KART.CbInviteViaGuildChat:ClearAllPoints()
@@ -523,32 +529,32 @@ end
 
 KART.CbAlEnabled = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlEnabled", label = L.SET_AL_ENABLED,
-    store = KART_Settings, key = "autoLogEnabled", y = -20,
+    store = SettingsStore, key = "autoLogEnabled", y = -20,
     onChanged = AutoLogChanged, tooltip = L.DESC_AL_ENABLED,
 })
 KART.CbAlRaidLFR = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlRaidLFR", label = L.SET_AL_RAID_LFR,
-    store = KART_Settings, key = "autoLogRaidLFR", y = -50,
+    store = SettingsStore, key = "autoLogRaidLFR", y = -50,
     onChanged = AutoLogChanged,
 })
 KART.CbAlRaidNormal = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlRaidNormal", label = L.SET_AL_RAID_NORMAL,
-    store = KART_Settings, key = "autoLogRaidNormal", y = -80,
+    store = SettingsStore, key = "autoLogRaidNormal", y = -80,
     onChanged = AutoLogChanged,
 })
 KART.CbAlRaidHeroic = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlRaidHeroic", label = L.SET_AL_RAID_HEROIC,
-    store = KART_Settings, key = "autoLogRaidHeroic", y = -110,
+    store = SettingsStore, key = "autoLogRaidHeroic", y = -110,
     onChanged = AutoLogChanged,
 })
 KART.CbAlRaidMythic = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlRaidMythic", label = L.SET_AL_RAID_MYTHIC,
-    store = KART_Settings, key = "autoLogRaidMythic", y = -140,
+    store = SettingsStore, key = "autoLogRaidMythic", y = -140,
     onChanged = AutoLogChanged,
 })
 KART.CbAlMythicPlus = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlMythicPlus", label = L.SET_AL_MPLUS,
-    store = KART_Settings, key = "autoLogMythicPlus", y = -50,
+    store = SettingsStore, key = "autoLogMythicPlus", y = -50,
     onChanged = AutoLogChanged,
 })
 KART.CbAlMythicPlus:ClearAllPoints()
@@ -557,7 +563,7 @@ KART.CbAlMythicPlus.text:SetWidth(192)
 KART.CbAlMythicPlus.text:SetJustifyH("LEFT")
 KART.SldAlMinKey = KART.UI:CreateSettingsSlider(alCard, {
     name = "KART_AlMinKeySlider", label = L.SET_AL_MIN_KEY,
-    min = 2, max = 20, store = KART_Settings, key = "autoLogMinKey", y = -80,
+    min = 2, max = 20, store = SettingsStore, key = "autoLogMinKey", y = -80,
     tooltip = L.DESC_AL_MIN_KEY, skipStyleRefresh = true,
 })
 KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
@@ -565,7 +571,7 @@ KART.SldAlMinKey:ClearAllPoints()
 KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -96)
 KART.CbAlDungeons = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlDungeons", label = L.SET_AL_DUNGEONS,
-    store = KART_Settings, key = "autoLogDungeons", y = -140,
+    store = SettingsStore, key = "autoLogDungeons", y = -140,
     onChanged = AutoLogChanged,
 })
 KART.CbAlDungeons:ClearAllPoints()
@@ -574,7 +580,7 @@ KART.CbAlDungeons.text:SetWidth(192)
 KART.CbAlDungeons.text:SetJustifyH("LEFT")
 KART.CbAlDelves = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlDelves", label = L.SET_AL_DELVES,
-    store = KART_Settings, key = "autoLogDelves", y = -170,
+    store = SettingsStore, key = "autoLogDelves", y = -170,
     onChanged = AutoLogChanged,
 })
 KART.CbAlDelves:ClearAllPoints()
@@ -592,7 +598,7 @@ ifCard:SetSize(242, 215)
 
 KART.CbMinimap = KART.UI:CreateSettingsCheckbox(ifCard, {
     name = "KART_MinimapCheck", label = L.SET_MINIMAP,
-    store = KART_Settings, key = "showMinimapIcon", y = -20,
+    store = SettingsStore, key = "showMinimapIcon", y = -20,
     onChanged = function()
         KART.UpdateMinimapButton()
     end,
@@ -600,7 +606,7 @@ KART.CbMinimap = KART.UI:CreateSettingsCheckbox(ifCard, {
 })
 KART.SldUiScale = KART.UI:CreateSettingsSlider(ifCard, {
     name = "KART_UiScaleSlider", label = L.SET_UI_SCALE,
-    min = 50, max = 150, store = KART_Settings, key = "uiScale", y = -60,
+    min = 50, max = 150, store = SettingsStore, key = "uiScale", y = -60,
     tooltip = L.DESC_UI_SCALE,
     onChanged = function() KART.UpdateStyles() end,
 })
@@ -611,7 +617,7 @@ KART.SldUiScale = KART.UI:CreateSettingsSlider(ifCard, {
 KART.SldUiScale:HookScript("OnMouseUp", function() KART.UpdateStyles() end)
 KART.SldBgAlpha = KART.UI:CreateSettingsSlider(ifCard, {
     name = "KART_BgAlphaSlider", label = L.SET_BG_ALPHA,
-    min = 20, max = 100, store = KART_Settings, key = "bgAlpha", y = -105,
+    min = 20, max = 100, store = SettingsStore, key = "bgAlpha", y = -105,
     tooltip = L.DESC_BG_ALPHA,
     onChanged = function() KART.UpdateStyles() end,
 })
@@ -622,7 +628,7 @@ KART.SldBgAlpha = KART.UI:CreateSettingsSlider(ifCard, {
 -- because the saved value equals the slider's current one).
 KART.SldFrameStrata = KART.UI:CreateSettingsSlider(ifCard, {
     name = "KART_FrameStrataSlider", label = L.SET_FRAME_STRATA,
-    min = 1, max = #KART.StrataLevels, store = KART_Settings, key = "frameStrata", y = -150,
+    min = 1, max = #KART.StrataLevels, store = SettingsStore, key = "frameStrata", y = -150,
     tooltip = L.DESC_FRAME_STRATA,
     onChanged = function() KART.UpdateStyles() end,
 })
@@ -639,13 +645,13 @@ txtCard:SetSize(242, 215)
 
 KART.SldMenuSize = KART.UI:CreateSettingsSlider(txtCard, {
     name = "KART_MenuSizeSlider", label = L.LABEL_FONT_SIZE_MENU,
-    min = 8, max = 20, store = KART_Settings, key = "menuFontSize", y = -20,
+    min = 8, max = 20, store = SettingsStore, key = "menuFontSize", y = -20,
     tooltip = L.DESC_MENU_SIZE,
     onChanged = function() KART.UpdateStyles() end,
 })
 KART.SldContentSize = KART.UI:CreateSettingsSlider(txtCard, {
     name = "KART_ContentSizeSlider", label = L.LABEL_FONT_SIZE_CONTENT,
-    min = 8, max = 20, store = KART_Settings, key = "contentFontSize", y = -65,
+    min = 8, max = 20, store = SettingsStore, key = "contentFontSize", y = -65,
     tooltip = L.DESC_CONTENT_SIZE,
     onChanged = function() KART.UpdateStyles() end,
 })

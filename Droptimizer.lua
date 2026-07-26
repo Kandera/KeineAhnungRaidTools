@@ -1,6 +1,12 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 
+-- This file's checkbox is built at file load time, before Core.lua's ADDON_LOADED handler has
+-- created KART_Settings -- passing the table directly here would freeze it onto nil forever.
+-- Passed as `store` instead of the table itself, so KAUI resolves the current global at click
+-- time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
+
 KART.DT = KART.DT or {}
 local DT = KART.DT
 
@@ -170,7 +176,7 @@ function DT.BuildLootCouncilToggle(parent)
     -- which only hands data to us via KART_WoWUtilsCache.
     DT.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
         name = "KART_DTModuleEnabled", label = L.DT_SET_MODULE_ENABLED,
-        store = KART_Settings, key = "dtModuleEnabled", y = -75,
+        store = SettingsStore, key = "dtModuleEnabled", y = -75,
         onChanged = function()
             if KART.LC and KART.LC.Council and KART.LC.Council.RefreshCouncilRows then KART.LC.Council.RefreshCouncilRows() end
         end,

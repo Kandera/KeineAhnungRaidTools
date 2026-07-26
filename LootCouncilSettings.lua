@@ -2,6 +2,12 @@ local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAUI = LibStub("KAUI-1.0")
 
+-- This file's checkboxes/sliders are built at file load time, before Core.lua's ADDON_LOADED
+-- handler has created KART_Settings -- passing the table directly here would freeze each widget
+-- onto nil forever. Passed as `store` instead of the table itself, so KAUI resolves the current
+-- global at click/drag time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
+
 -- Settings-panel UI for the Loot Council module (split out of LootCouncil.lua, which keeps
 -- the session/roll/config logic). Loads after LootCouncilPanel.lua and before Droptimizer.lua,
 -- which anchors its toggle into KART.LC.SettingsCard created here.
@@ -75,14 +81,14 @@ function LC.BuildSettingsPanel(parent)
     -- another loot addon like RCLootCouncil). Nothing below still runs when this is off.
     KART.LC.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCModuleEnabled", label = L.LC_SET_MODULE_ENABLED,
-        store = KART_Settings, key = "lcModuleEnabled", y = -15,
+        store = SettingsStore, key = "lcModuleEnabled", y = -15,
         tooltip = L.LC_DESC_MODULE_ENABLED,
     })
 
     -- Personal preference — never overridden by the raid leader's settings.
     KART.LC.CbAutoPass = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCAutoPass", label = L.LC_SET_AUTOPASS,
-        store = KART_Settings, key = "lcAutoPass", y = -45,
+        store = SettingsStore, key = "lcAutoPass", y = -45,
         tooltip = L.LC_DESC_AUTOPASS,
     })
 
@@ -92,7 +98,7 @@ function LC.BuildSettingsPanel(parent)
     -- this card.
     KART.LC.CbCompactVoteLayout = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCCompactVoteLayout", label = L.LC_SET_COMPACT_VOTE_LAYOUT,
-        store = KART_Settings, key = "lcVoteLayoutCompact", y = -105,
+        store = SettingsStore, key = "lcVoteLayoutCompact", y = -105,
         onChanged = function() LC.Vote.RefreshVoteListRowsIfShown() end,
         tooltip = L.LC_DESC_COMPACT_VOTE_LAYOUT,
     })
@@ -104,7 +110,7 @@ function LC.BuildSettingsPanel(parent)
     -- CbCompactVoteLayout, inside this card.
     KART.LC.CbShowNickNames = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCShowNickNames", label = L.LC_SET_SHOW_NICKNAMES,
-        store = KART_Settings, key = "lcShowNickNames", y = -135,
+        store = SettingsStore, key = "lcShowNickNames", y = -135,
         onChanged = function()
             if LC.councilPanel and LC.councilPanel:IsShown() then KART.LC.Council.RefreshCouncilRows() end
         end,
@@ -174,7 +180,7 @@ function LC.BuildSettingsPanel(parent)
 
     KART.LC.SldVoteTimer = KART.UI:CreateSettingsSlider(raidBox, {
         name = "KART_LCVoteTimerSlider", label = L.LC_SET_VOTE_TIMER,
-        min = 5, max = 180, store = KART_Settings, key = "lcVoteSeconds", y = -52,
+        min = 5, max = 180, store = SettingsStore, key = "lcVoteSeconds", y = -52,
         tooltip = L.LC_DESC_VOTE_TIMER, skipStyleRefresh = true,
     })
 
@@ -185,7 +191,7 @@ function LC.BuildSettingsPanel(parent)
     -- LC.ApplyFontSize() itself (see Core.lua) as part of its own pass.
     KART.LC.SldFontSize = KART.UI:CreateSettingsSlider(raidBox, {
         name = "KART_LCFontSizeSlider", label = L.LC_SET_FONT_SIZE,
-        min = 8, max = 20, store = KART_Settings, key = "lcFontSize", y = -104,
+        min = 8, max = 20, store = SettingsStore, key = "lcFontSize", y = -104,
         tooltip = L.LC_DESC_FONT_SIZE,
         onChanged = function() KART.UpdateStyles() end,
     })
@@ -194,7 +200,7 @@ function LC.BuildSettingsPanel(parent)
     -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.Vote.HandleRoll).
     KART.LC.CbRollsEnabled = KART.UI:CreateSettingsCheckbox(raidBox, {
         name = "KART_LCRollsEnabled", label = L.LC_SET_ROLLS_ENABLED,
-        store = KART_Settings, key = "lcRollsEnabled", y = -140,
+        store = SettingsStore, key = "lcRollsEnabled", y = -140,
         onChanged = LC.BroadcastRaidConfig,
         tooltip = L.LC_DESC_ROLLS_ENABLED,
     })

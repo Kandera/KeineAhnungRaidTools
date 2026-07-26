@@ -2,6 +2,12 @@ local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAUI = LibStub("KAUI-1.0")
 
+-- This file's checkbox is built at file load time, before Core.lua's ADDON_LOADED handler has
+-- created KART_Settings -- passing the table directly here would freeze it onto nil forever.
+-- Passed as `store` instead of the table itself, so KAUI resolves the current global at click
+-- time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
+
 KART.WU = KART.WU or {}
 local WU = KART.WU
 
@@ -370,7 +376,7 @@ function WU.BuildPanel(parent)
     -- Master switch: fully disables the WoWUtils import/invite module.
     KART.WU.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
         name = "KART_WUModuleEnabled", label = L.WU_SET_MODULE_ENABLED,
-        store = KART_Settings, key = "wuModuleEnabled", y = -7,
+        store = SettingsStore, key = "wuModuleEnabled", y = -7,
         tooltip = L.WU_DESC_MODULE_ENABLED,
     })
 

@@ -695,10 +695,23 @@ function nsProto.ShowInputDialog(ns, opts)
     if (opts.initialText or "") ~= "" then f.editBox:HighlightText() end
 end
 
+-- opts.store may be the settings table itself, or a zero-argument function that returns it.
+-- Resolved fresh at every read/write instead of once at creation time: a consumer that builds
+-- its widgets at file load time (as this addon's do, before its own ADDON_LOADED handler has
+-- created the real SavedVariables table) would otherwise capture whatever opts.store was at that
+-- moment -- typically nil -- and every click/drag afterwards would write into that same stale
+-- capture forever. Passing a resolver function instead defers the lookup to callback time, which
+-- is what the old key-string API did implicitly by reading a global inside the handler; a
+-- consumer whose store already exists at creation time can keep passing the table directly.
+local function ResolveStore(store)
+    if type(store) == "function" then return store() end
+    return store
+end
+
 -- opts = {
 --   name             frame name, or nil for an anonymous frame
 --   label            visible text
---   store            the table holding the setting (the consumer's SavedVariables)
+--   store            the table holding the setting, or a function returning it -- see ResolveStore above
 --   key              the field inside store
 --   y                TOPLEFT y offset
 --   onChanged        called after the value changes; replaces the old direct UpdateStyles call
@@ -772,7 +785,7 @@ function nsProto.CreateSettingsCheckbox(ns, parent, opts)
     end
 
     cb:SetScript("OnClick", function(self)
-        opts.store[opts.key] = self:GetChecked()
+        ResolveStore(opts.store)[opts.key] = self:GetChecked()
         refreshVisual(self)
         if opts.onChanged then opts.onChanged() end
     end)
@@ -803,7 +816,7 @@ end
 --   name             frame name, or nil for an anonymous frame
 --   label            visible text
 --   min, max         value range
---   store            the table holding the setting (the consumer's SavedVariables)
+--   store            the table holding the setting, or a function returning it -- see ResolveStore above
 --   key              the field inside store
 --   y                TOPLEFT y offset (the label sits 16px above this)
 --   tooltip          tooltip body text
@@ -869,7 +882,7 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
 
     s:SetScript("OnValueChanged", function(self, value)
         local val = math.floor(value)
-        opts.store[opts.key] = val
+        ResolveStore(opts.store)[opts.key] = val
         self.valueText:SetText(val)
         positionGlow()
         -- skipStyleRefresh: sliders whose value doesn't need a restyle on every drag tick skip
