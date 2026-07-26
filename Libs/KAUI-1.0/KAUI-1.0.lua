@@ -625,10 +625,14 @@ end
 -- doesn't supply its own -- this library has no locale table of its own to fall back to instead.
 -- Defined dot-style with an explicit `ns` receiver for the same reason as CreateModernButton
 -- above: the drag callbacks below are conventionally named `self` for the dialog frame itself.
-local inputDialog
+-- The dialog itself is held on self.inputDialog, not a file-local: a file-local would be a single
+-- dialog shared by every namespace, so after a split whichever namespace opened it first would
+-- own its RegisterStrataFrame/RegisterEditBox registrations forever, and the second namespace's
+-- font and frame-strata settings would never reach a dialog it doesn't actually own. Frame names
+-- are derived from the namespace's own name for the same reason, rather than a hardcoded prefix.
 function nsProto.ShowInputDialog(ns, opts)
-    if not inputDialog then
-        local f = CreateFrame("Frame", "KART_InputDialog", UIParent, "BackdropTemplate")
+    if not ns.inputDialog then
+        local f = CreateFrame("Frame", ns.name .. "_InputDialog", UIParent, "BackdropTemplate")
         f:SetSize(300, 120)
         f:SetPoint("CENTER")
         ns:RegisterStrataFrame(f, true)
@@ -645,7 +649,7 @@ function nsProto.ShowInputDialog(ns, opts)
         f.title:SetWidth(270)
         f.title:SetWordWrap(true)
 
-        f.editBox = ns:CreateStyledEditBox(f, "KART_InputDialogEditBox")
+        f.editBox = ns:CreateStyledEditBox(f, ns.name .. "_InputDialogEditBox")
         f.editBox:SetSize(260, 26)
         f.editBox:SetPoint("TOP", 0, -46)
         f.editBox:SetFontObject("GameFontHighlightSmall")
@@ -673,14 +677,15 @@ function nsProto.ShowInputDialog(ns, opts)
 
         f.editBox:SetScript("OnEnterPressed", accept)
         f.editBox:SetScript("OnEscapePressed", function() f:Hide() end)
-        inputDialog = f
+        ns.inputDialog = f
     end
-    local f = inputDialog
+    local f = ns.inputDialog
     f.opts = opts
     f.title:SetText(opts.title)
-    -- Re-set both button captions each show so they follow the consumer's currently active
-    -- language (a language picker may reload to switch it), not whatever locale ACCEPT/CANCEL
-    -- happened to resolve to when the dialog was first built.
+    -- Re-set both button captions each show so they follow the consumer's own currently active
+    -- language -- this addon lets the user pick a language independent of their WoW client
+    -- locale, so a caption resolved from ACCEPT/CANCEL (the client's language) would show the
+    -- wrong one whenever the two differ.
     f.btnOK.text:SetText(opts.okLabel or ACCEPT)
     f.btnCancel.text:SetText(opts.cancelLabel or CANCEL)
     f.editBox:SetMaxLetters(opts.maxLetters or 64)
