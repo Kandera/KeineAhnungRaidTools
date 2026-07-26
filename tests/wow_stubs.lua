@@ -1,0 +1,107 @@
+-- Minimal WoW API surface for the offline harness. Deliberately incomplete: only what the
+-- libraries touch at load time or on the code paths under test. A test that reaches beyond
+-- this should fail loudly rather than pass against a convincing fake.
+
+_G.strmatch = string.match
+_G.strsplit = function(sep, str) return str:match("(.-)" .. sep .. "(.*)") end
+_G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+
+-- Group roster ------------------------------------------------------------------------
+-- Members are { name =, realm =, guid =, nickname = }. Unit tokens are generated to match
+-- KAUtil.EachGroupUnit's scheme exactly: raid1..raidN in a raid, party1..partyN-1 plus
+-- "player" in a party.
+local roster, isRaid, count = {}, false, 0
+
+_G.KARTTEST = {}
+
+function KARTTEST.SetRaid(members)
+    roster, isRaid, count = {}, true, #members
+    for i, m in ipairs(members) do roster["raid" .. i] = m end
+end
+
+function KARTTEST.SetParty(members)
+    roster, isRaid, count = {}, false, #members
+    for i, m in ipairs(members) do
+        roster[i == #members and "player" or ("party" .. i)] = m
+    end
+end
+
+function KARTTEST.SetNSAPI(enabled)
+    _G.NSAPI = enabled and {
+        GetName = function(_, unit)
+            local m = roster[unit]
+            return m and m.nickname or nil
+        end,
+    } or nil
+end
+
+KARTTEST.SetRaid({})
+KARTTEST.SetNSAPI(false)
+
+-- Unit API ----------------------------------------------------------------------------
+function _G.UnitExists(unit) return roster[unit] ~= nil end
+function _G.UnitName(unit)
+    local m = roster[unit]
+    if not m then return nil end
+    return m.name, m.realm
+end
+function _G.UnitGUID(unit) return roster[unit] and roster[unit].guid or nil end
+function _G.UnitIsGroupLeader(unit) return roster[unit] and roster[unit].leader or false end
+function _G.UnitIsGroupAssistant(unit) return roster[unit] and roster[unit].assist or false end
+function _G.IsInRaid() return isRaid end
+function _G.IsInGroup() return count > 0 end
+function _G.GetNumGroupMembers() return count end
+function _G.Ambiguate(name, mode)
+    if mode == "none" then return name end
+    return (name:match("^([^%-]+)")) or name
+end
+
+-- Realm -------------------------------------------------------------------------------
+KARTTEST.realm = "TarrenMill"
+function _G.GetRealmName() return KARTTEST.realm end
+function _G.GetNormalizedRealmName() return KARTTEST.realm end
+
+-- Time --------------------------------------------------------------------------------
+KARTTEST.now = 1000
+function _G.GetTime() return KARTTEST.now end
+_G.time = os.time
+
+-- Frames ------------------------------------------------------------------------------
+-- No-op frame: enough for a library that creates an event frame or a scanning tooltip at
+-- load time. Any method call returns the frame itself so chains do not blow up.
+local frameMeta
+frameMeta = {
+    __index = function(t, k)
+        local fn = function(...) return t end
+        rawset(t, k, fn)
+        return fn
+    end,
+}
+function _G.CreateFrame(_, name, _, _)
+    local f = setmetatable({}, frameMeta)
+    if name then _G[name] = f end
+    return f
+end
+_G.UIParent = setmetatable({}, frameMeta)
+
+-- Chat --------------------------------------------------------------------------------
+KARTTEST.sent = {}
+_G.C_ChatInfo = {
+    RegisterAddonMessagePrefix = function() return true end,
+    SendAddonMessage = function(prefix, msg, channel, target)
+        KARTTEST.sent[#KARTTEST.sent + 1] =
+            { prefix = prefix, msg = msg, channel = channel, target = target }
+    end,
+}
+function KARTTEST.ClearSent() KARTTEST.sent = {} end
+
+-- Items -------------------------------------------------------------------------------
+KARTTEST.inventory = {}   -- [slot] = itemLink
+function _G.GetInventoryItemLink(_, slot) return KARTTEST.inventory[slot] end
+KARTTEST.weaponEnchant = { false, 0, 0, 0, false, 0, 0, 0 }
+function _G.GetWeaponEnchantInfo() return unpack(KARTTEST.weaponEnchant) end
+function _G.GetAverageItemLevel() return 0, KARTTEST.equippedIlvl or 0 end
+_G.C_Item = {
+    GetItemInfo = function(link) return nil, link end,
+    GetItemStats = function() return {} end,
+}
