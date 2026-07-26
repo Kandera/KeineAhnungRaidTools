@@ -62,10 +62,12 @@ function KART.RefreshProfileButton()
 end
 
 function KART.ShowSaveProfileDialog()
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = KART.L.PROFILE_SAVE_NEW_TEXT,
         maxLetters = 32,
         emptyMessage = KART.L.PROFILE_NAME_EMPTY,
+        okLabel = KART.L.BTN_ACCEPT,
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(name)
             if KART_Profiles[name] then
                 local dlg = StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"]

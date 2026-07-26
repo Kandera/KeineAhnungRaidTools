@@ -133,7 +133,7 @@ rlBar:SetBackdrop({
 })
 rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
-KART.UI:ApplyRoundedMask(rlBar, KART.CORNER_RADIUS_LG)
+KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
 
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()

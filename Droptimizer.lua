@@ -168,11 +168,14 @@ function DT.BuildLootCouncilToggle(parent)
     -- Master switch: fully disables the gain% column in Loot Council. The addon never holds a
     -- WoWUtils credential itself — all networking happens in the external KART Companion app,
     -- which only hands data to us via KART_WoWUtilsCache.
-    DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        parent, "KART_DTModuleEnabled",
-        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -75, function()
+    DT.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
+        name = "KART_DTModuleEnabled", label = L.DT_SET_MODULE_ENABLED,
+        store = KART_Settings, key = "dtModuleEnabled", y = -75,
+        onChanged = function()
             if KART.LC and KART.LC.Council and KART.LC.Council.RefreshCouncilRows then KART.LC.Council.RefreshCouncilRows() end
-        end, L.DT_DESC_MODULE_ENABLED)
+        end,
+        tooltip = L.DT_DESC_MODULE_ENABLED,
+    })
 end
 
 -- Fills General Settings, anchored below the Reset button — sync status is about the companion

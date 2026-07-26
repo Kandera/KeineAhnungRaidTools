@@ -61,12 +61,13 @@ function OfficerNotes.MigrateOfficerNoteKey(oldKey)
 end
 
 function OfficerNotes.ShowOfficerNoteDialog(playerKey, playerDisplayName)
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = string.format(KART.L.LC_OFFICER_NOTE_PROMPT, playerDisplayName),
         maxLetters = 120,
         initialText = KART_LCOfficerNotes[playerKey] or "",
         allowEmpty = true, -- empty input clears the note (see SetOfficerNote)
         okLabel = OKAY, ---@diagnostic disable-line: undefined-global
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(text) OfficerNotes.SetOfficerNote(playerKey, text) end,
     })
 end

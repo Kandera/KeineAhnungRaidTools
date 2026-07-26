@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.WU = KART.WU or {}
 local WU = KART.WU
@@ -367,11 +368,13 @@ function WU.BuildPanel(parent)
     KART.CreateTabTitle(6, L.WU_TITLE)
 
     -- Master switch: fully disables the WoWUtils import/invite module.
-    KART.WU.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        parent, "KART_WUModuleEnabled",
-        L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -7, nil, L.WU_DESC_MODULE_ENABLED)
+    KART.WU.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
+        name = "KART_WUModuleEnabled", label = L.WU_SET_MODULE_ENABLED,
+        store = KART_Settings, key = "wuModuleEnabled", y = -7,
+        tooltip = L.WU_DESC_MODULE_ENABLED,
+    })
 
-    local importCard = KART.CreateCard(parent)
+    local importCard = KART.UI:CreateCard(parent)
     importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -47)
     importCard:SetSize(500, 190)
 
@@ -388,12 +391,12 @@ function WU.BuildPanel(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    -- Same inset/border colors as KART.CreateStyledEditBox; the multi-line box can't use that
+    -- Same inset/border colors as KART.UI:CreateStyledEditBox; the multi-line box can't use that
     -- factory directly (the EditBox lives inside a ScrollFrame, the visual box is this frame),
     -- so the focus accent is mirrored below via the inner EditBox's focus scripts.
     pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
     pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    KART.UI:ApplyRoundedMask(pasteBG, KART.CORNER_RADIUS_LG)
+    KART.UI:ApplyRoundedMask(pasteBG, KAUI.CORNER_RADIUS_LG)
 
     local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
     pasteScroll:SetPoint("TOPLEFT", 4, -4)

@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 -- Settings-panel UI for the Loot Council module (split out of LootCouncil.lua, which keeps
 -- the session/roll/config logic). Loads after LootCouncilPanel.lua and before Droptimizer.lua,
@@ -65,42 +66,50 @@ function LC.BuildSettingsPanel(parent)
 
     -- Personal preferences card (module toggle, autopass, Droptimizer slot at -75,
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
-    local prefsCard = KART.CreateCard(parent)
+    local prefsCard = KART.UI:CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
     prefsCard:SetSize(500, 215)
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
     -- another loot addon like RCLootCouncil). Nothing below still runs when this is off.
-    KART.LC.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        prefsCard, "KART_LCModuleEnabled",
-        L.LC_SET_MODULE_ENABLED, "lcModuleEnabled", -15, nil, L.LC_DESC_MODULE_ENABLED)
+    KART.LC.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCModuleEnabled", label = L.LC_SET_MODULE_ENABLED,
+        store = KART_Settings, key = "lcModuleEnabled", y = -15,
+        tooltip = L.LC_DESC_MODULE_ENABLED,
+    })
 
     -- Personal preference — never overridden by the raid leader's settings.
-    KART.LC.CbAutoPass = KART.CreateSettingsCheckbox(
-        prefsCard, "KART_LCAutoPass",
-        L.LC_SET_AUTOPASS, "lcAutoPass", -45, nil, L.LC_DESC_AUTOPASS)
+    KART.LC.CbAutoPass = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCAutoPass", label = L.LC_SET_AUTOPASS,
+        store = KART_Settings, key = "lcAutoPass", y = -45,
+        tooltip = L.LC_DESC_AUTOPASS,
+    })
 
     -- Personal preference, same reasoning as CbAutoPass above — the vote window's layout style
     -- is purely a display choice, so it's never synced from the raid leader. Slot -105: the next
     -- free step below the reserved Droptimizer slot at -75 (see Droptimizer.lua:128), inside
     -- this card.
-    KART.LC.CbCompactVoteLayout = KART.CreateSettingsCheckbox(
-        prefsCard, "KART_LCCompactVoteLayout",
-        L.LC_SET_COMPACT_VOTE_LAYOUT, "lcVoteLayoutCompact", -105,
-        function() LC.Vote.RefreshVoteListRowsIfShown() end, L.LC_DESC_COMPACT_VOTE_LAYOUT)
+    KART.LC.CbCompactVoteLayout = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCCompactVoteLayout", label = L.LC_SET_COMPACT_VOTE_LAYOUT,
+        store = KART_Settings, key = "lcVoteLayoutCompact", y = -105,
+        onChanged = function() LC.Vote.RefreshVoteListRowsIfShown() end,
+        tooltip = L.LC_DESC_COMPACT_VOTE_LAYOUT,
+    })
 
     -- Personal preference, same reasoning as CbCompactVoteLayout above — purely how names render
     -- on YOUR OWN council panel, never synced. Needs Northern Sky Raid Tools installed with a
     -- nickname set per character to have any visible effect (see KART.GetNickname); falls back to
     -- the character short name automatically otherwise. Slot -135: next free step below
     -- CbCompactVoteLayout, inside this card.
-    KART.LC.CbShowNickNames = KART.CreateSettingsCheckbox(
-        prefsCard, "KART_LCShowNickNames",
-        L.LC_SET_SHOW_NICKNAMES, "lcShowNickNames", -135,
-        function()
+    KART.LC.CbShowNickNames = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCShowNickNames", label = L.LC_SET_SHOW_NICKNAMES,
+        store = KART_Settings, key = "lcShowNickNames", y = -135,
+        onChanged = function()
             if LC.councilPanel and LC.councilPanel:IsShown() then KART.LC.Council.RefreshCouncilRows() end
-        end, L.LC_DESC_SHOW_NICKNAMES)
+        end,
+        tooltip = L.LC_DESC_SHOW_NICKNAMES,
+    })
 
     -- Personal preference, same reasoning as CbCompactVoteLayout above — controls whether an
     -- already-voted item stays full-size, shrinks, or disappears entirely from YOUR OWN vote
@@ -163,25 +172,32 @@ function LC.BuildSettingsPanel(parent)
     boxDivider:SetHeight(1)
     boxDivider:SetPoint("TOPRIGHT", -8, -38) -- Y overridden by layoutRaidBox(); X stays fixed
 
-    KART.LC.SldVoteTimer = KART.CreateSettingsSlider(
-        raidBox, L.LC_SET_VOTE_TIMER, 5, 180, "lcVoteSeconds",
-        -52, "KART_LCVoteTimerSlider", L.LC_DESC_VOTE_TIMER, true)
+    KART.LC.SldVoteTimer = KART.UI:CreateSettingsSlider(raidBox, {
+        name = "KART_LCVoteTimerSlider", label = L.LC_SET_VOTE_TIMER,
+        min = 5, max = 180, store = KART_Settings, key = "lcVoteSeconds", y = -52,
+        tooltip = L.LC_DESC_VOTE_TIMER, skipStyleRefresh = true,
+    })
 
     -- Independent from the main window's Content Font Size — the vote-list/council-panel grid
     -- layouts don't necessarily want the same size as the rest of the addon (see LC.ApplyFontSize).
-    KART.LC.SldFontSize = KART.CreateSettingsSlider(
-        raidBox, L.LC_SET_FONT_SIZE, 8, 20, "lcFontSize",
-        -104, "KART_LCFontSizeSlider", L.LC_DESC_FONT_SIZE)
-    -- No separate OnValueChanged hook needed: KART.CreateSettingsSlider's own OnValueChanged
-    -- (Utils.lua) already calls KART.UpdateStyles() live during drag, which already calls
-    -- LC.ApplyFontSize() (see Core.lua) — a second call here would just reapply the same sizes
-    -- again on every drag tick for no extra effect.
+    -- onChanged calls the full KART.UpdateStyles() (not just LC.ApplyFontSize directly) because
+    -- that's what every other visual slider on this tab does too, and UpdateStyles already calls
+    -- LC.ApplyFontSize() itself (see Core.lua) as part of its own pass.
+    KART.LC.SldFontSize = KART.UI:CreateSettingsSlider(raidBox, {
+        name = "KART_LCFontSizeSlider", label = L.LC_SET_FONT_SIZE,
+        min = 8, max = 20, store = KART_Settings, key = "lcFontSize", y = -104,
+        tooltip = L.LC_DESC_FONT_SIZE,
+        onChanged = function() KART.UpdateStyles() end,
+    })
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
     -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.Vote.HandleRoll).
-    KART.LC.CbRollsEnabled = KART.CreateSettingsCheckbox(
-        raidBox, "KART_LCRollsEnabled",
-        L.LC_SET_ROLLS_ENABLED, "lcRollsEnabled", -140, LC.BroadcastRaidConfig, L.LC_DESC_ROLLS_ENABLED)
+    KART.LC.CbRollsEnabled = KART.UI:CreateSettingsCheckbox(raidBox, {
+        name = "KART_LCRollsEnabled", label = L.LC_SET_ROLLS_ENABLED,
+        store = KART_Settings, key = "lcRollsEnabled", y = -140,
+        onChanged = LC.BroadcastRaidConfig,
+        tooltip = L.LC_DESC_ROLLS_ENABLED,
+    })
 
     -- From here on, labels can be longer than one line depending on locale (German text
     -- tends to run longer than English) AND depending on the user's chosen font/size in
@@ -198,7 +214,7 @@ function LC.BuildSettingsPanel(parent)
     lblButtons:SetText(L.LC_SET_BUTTONS)
     KART.UI:RegisterLabel(lblButtons)
 
-    KART.LC.ButtonLabelEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCButtonLabels")
+    KART.LC.ButtonLabelEditBox = KART.UI:CreateStyledEditBox(raidBox, "KART_LCButtonLabels")
     local eb = KART.LC.ButtonLabelEditBox
     eb:SetSize(CONTENT_WIDTH, 28)
     eb:SetMaxLetters(128)
@@ -222,7 +238,7 @@ function LC.BuildSettingsPanel(parent)
     lblCouncil:SetText(L.LC_SET_COUNCIL)
     KART.UI:RegisterLabel(lblCouncil)
 
-    KART.LC.CouncilMembersEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCCouncilMembers")
+    KART.LC.CouncilMembersEditBox = KART.UI:CreateStyledEditBox(raidBox, "KART_LCCouncilMembers")
     local ebC = KART.LC.CouncilMembersEditBox
     ebC:SetSize(CONTENT_WIDTH, 28)
     ebC:SetMaxLetters(255)
@@ -279,7 +295,7 @@ function LC.BuildSettingsPanel(parent)
     lblLootmaster:SetText(L.LC_SET_LOOTMASTER)
     KART.UI:RegisterLabel(lblLootmaster)
 
-    KART.LC.LootmasterEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCLootmaster")
+    KART.LC.LootmasterEditBox = KART.UI:CreateStyledEditBox(raidBox, "KART_LCLootmaster")
     local ebL = KART.LC.LootmasterEditBox
     ebL:SetSize(CONTENT_WIDTH, 28)
     ebL:SetMaxLetters(48)
@@ -415,7 +431,7 @@ function LC.BuildSettingsPanel(parent)
     end
 
     layoutRaidBox()
-    KART.UI:ApplyRoundedMask(raidBox, KART.CORNER_RADIUS_LG)
+    KART.UI:ApplyRoundedMask(raidBox, KAUI.CORNER_RADIUS_LG)
     -- Exported entry point for every external caller (role-status change, pending-resolution retry,
     -- UpdateStyles). Two things the raw layoutRaidBox doesn't do:
     --  * Skip while off screen. IsVisible(), NOT IsShown(): tab switching hides the parent panel, so

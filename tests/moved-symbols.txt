@@ -51,3 +51,10 @@ CreateGradientOverlay
 SetGradientOverlayColor
 CORNER_RADIUS_SM
 CORNER_RADIUS_MIN_SIZE
+CreateSettingsCheckbox
+CreateSettingsSlider
+CreateCard
+CreateStyledEditBox
+ShowInputDialog
+OpenColorPicker
+CORNER_RADIUS_LG

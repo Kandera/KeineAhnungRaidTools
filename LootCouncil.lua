@@ -639,10 +639,12 @@ function LC.SendSettingsSync(targetName)
 end
 
 function LC.ShowSyncTargetDialog()
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = KART.L.LC_SYNC_TARGET_PROMPT,
         maxLetters = 48,
         emptyMessage = KART.L.LC_SYNC_TARGET_EMPTY,
+        okLabel = KART.L.BTN_ACCEPT,
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(text) LC.SendSettingsSync(text) end,
     })
 end

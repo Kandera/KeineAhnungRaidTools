@@ -234,7 +234,7 @@ function LH.ShowExportDialog()
         f.hint:SetTextColor(0.6, 0.6, 0.6)
         KART.UI:RegisterLabel(f.hint)
 
-        -- Same inset/border colors as KART.CreateStyledEditBox (the multi-line export box lives
+        -- Same inset/border colors as KART.UI:CreateStyledEditBox (the multi-line export box lives
         -- inside a ScrollFrame, so the visual box is this frame); focus accent mirrored below.
         local scrollBG = CreateFrame("Frame", nil, f, "BackdropTemplate")
         scrollBG:SetPoint("TOPLEFT", 15, -52)
@@ -242,7 +242,7 @@ function LH.ShowExportDialog()
         scrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         scrollBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
         scrollBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-        KART.UI:ApplyRoundedMask(scrollBG, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(scrollBG, KAUI.CORNER_RADIUS_LG)
 
         local scroll = CreateFrame("ScrollFrame", "KART_LHExportScroll", scrollBG, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 4, -4)

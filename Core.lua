@@ -489,7 +489,7 @@ function KART.ShowReadyCheckReasonDialog()
         })
         f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
         f:SetBackdropBorderColor(0, 0, 0, 1)
-        KART.UI:ApplyRoundedMask(f, KART.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(f, KAUI.CORNER_RADIUS_LG)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
