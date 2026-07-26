@@ -3,7 +3,6 @@
 -- this should fail loudly rather than pass against a convincing fake.
 
 _G.strmatch = string.match
-_G.strsplit = function(sep, str) return str:match("(.-)" .. sep .. "(.*)") end
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 
 -- Group roster ------------------------------------------------------------------------

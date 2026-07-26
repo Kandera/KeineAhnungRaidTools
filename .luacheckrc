@@ -22,7 +22,7 @@ ignore = { "211/addonName", "611", "612" }
 -- without a require. Declared here rather than excluding tests/ from linting altogether.
 files["tests/"] = {
     globals = { "T", "KARTTEST", "NSAPI", "UIParent", "C_ChatInfo", "C_Item", "strmatch",
-                "strsplit", "wipe", "UnitExists", "UnitName", "UnitGUID", "UnitIsGroupLeader",
+                "wipe", "UnitExists", "UnitName", "UnitGUID", "UnitIsGroupLeader",
                 "UnitIsGroupAssistant", "IsInRaid", "IsInGroup", "GetNumGroupMembers",
                 "Ambiguate", "GetRealmName", "GetNormalizedRealmName", "GetTime",
                 "GetInventoryItemLink", "GetWeaponEnchantInfo", "GetAverageItemLevel",
@@ -52,7 +52,7 @@ read_globals = {
     -- Libraries
     "LibStub", "NSAPI",
     -- WoW string/table aliases
-    "strmatch", "strsplit", "strjoin", "strtrim", "wipe", "tContains", "time", "date",
+    "strmatch", "strjoin", "strtrim", "wipe", "tContains", "time", "date",
     -- Core API
     "CreateFrame", "UIParent", "GameTooltip", "GameFontHighlightSmall", "Item",
     "InCombatLockdown", "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown",
