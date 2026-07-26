@@ -160,8 +160,12 @@ local KASC = LibStub("KASC-1.0")
 
 KASC:AttachCache(KART_PlayerCache)
 KASC:RegisterAddon("KART", KART.Version)
-KASC:RegisterCapability("LC", function() return KART_Settings.lcModuleEnabled ~= false end)
+KASC:RegisterCapability("KART", "LC", function() return KART_Settings.lcModuleEnabled ~= false end)
 ```
+
+`RegisterCapability` takes the owning addon name as its first argument. Without it the
+handshake cannot tell which addon a capability belongs to once more than one is registered,
+which is exactly the case the format exists for.
 
 `AttachCache` keeps a list of tables. `RememberPlayer` writes to **all** attached tables; identity
 lookups scan **all** of them. After a split each addon attaches its own SavedVariable and the two
