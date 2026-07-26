@@ -13,4 +13,6 @@ ignore:
   - README-de.md
   - CHANGELOG-de.md
   - LICENSE
+  - tests
+  - .luacheckrc
   - docs

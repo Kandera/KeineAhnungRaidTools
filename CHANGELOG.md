@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0]
+### Changed
+- **Version check rebuilt.** Clients on 2.9 or older no longer appear in the list until they update.
+- **Internal restructuring.** Shared code now lives in libraries; no settings, history or notes are affected.
+
 ## [2.9.0] - 2026-07-25
 ### Added
 - **The whole UI now follows the language setting** — main window, settings and tooltips included.
