@@ -114,9 +114,9 @@ function KAUtil.GetItemString(link)
     return KAUtil.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
 end
 
--- Plain recursive table copy — KART_Settings only ever holds strings, numbers, booleans, and
--- nested plain tables (e.g. the keybinds/minimap sub-tables), so no metatable/function handling
--- is needed here.
+-- Plain recursive table copy — a settings blob like this only ever holds strings, numbers,
+-- booleans, and nested plain tables (e.g. keybinds/minimap-style sub-tables), so no metatable/
+-- function handling is needed here.
 function KAUtil.DeepCopy(t)
     local copy = {}
     for k, v in pairs(t) do

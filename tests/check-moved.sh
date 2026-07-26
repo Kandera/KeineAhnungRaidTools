@@ -3,7 +3,14 @@
 #   1. No symbol listed in moved-symbols.txt may still be referenced as KART.<name>.
 #      luacheck cannot catch this: KART is a defined global and field access on a known
 #      table is not validated, so a forgotten call site would pass every other check.
-#   2. No file under Libs/ may reference KART. at all -- that is the library boundary.
+#   2. No file under Libs/ may reference KART.<anything>, nor any of the addon's SavedVariables
+#      globals by name (KART_Settings and friends, from the .toc's SavedVariables lines) -- that
+#      is the library boundary. The SavedVariables names don't contain the literal "KART."
+#      substring, so a library function reading one straight out of the addon's own saved table
+#      would otherwise slip past this gate even though it's the same class of coupling a shared
+#      library must not have. Matched by exact name rather than a bare "KART_" prefix so this
+#      doesn't also flag unrelated KART_-prefixed globals a library legitimately owns (e.g.
+#      KAGS-1.0's own KART_GearScanTooltip frame).
 #   3. (Informational, does not affect the exit code) List every `local <name> = KART.<x>`
 #      alias declaration in the tree. The codebase aliases table members heavily (e.g.
 #      `local Sync = KART.Sync`) and then calls through the alias, never re-spelling
@@ -31,9 +38,10 @@ else
   echo "== Gate 1: skipped, no symbols listed yet =="
 fi
 
-echo "== Gate 2: KART. references inside Libs/ =="
-if [ -d Libs ] && grep -rn 'KART\.' --include='*.lua' Libs/ ; then
-  echo "FAIL: libraries must never reach back into the addon table." >&2
+echo "== Gate 2: KART. references, and SavedVariables globals by name, inside Libs/ =="
+savedvars='KART_Settings|KART_LootHistory|KART_LCOfficerNotes|KART_WoWUtilsCache|KART_Profiles|KART_PlayerCache|KART_LCTrades'
+if [ -d Libs ] && grep -rnE "KART\.|\b($savedvars)\b" --include='*.lua' Libs/ ; then
+  echo "FAIL: libraries must never reach back into the addon table or its SavedVariables." >&2
   fail=1
 else
   echo "clean"

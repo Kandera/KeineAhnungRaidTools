@@ -10,7 +10,14 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 
 KAUI.namespaces = KAUI.namespaces or {}
 
-local nsProto = {}
+-- Persisted on the library table (like KAUI.namespaces) rather than as a plain file-local: an
+-- existing namespace's metatable keeps pointing at this same table across a library upgrade, so
+-- a v2 method added here reaches namespaces created back under v1. A fresh file-local would
+-- leave any already-created namespace permanently stuck on the method set frozen at its own
+-- creation, since setmetatable captured that local's identity at NewNamespace time, not "whatever
+-- nsProto currently means."
+KAUI.nsProto = KAUI.nsProto or {}
+local nsProto = KAUI.nsProto
 local nsMeta = { __index = nsProto }
 
 -- Every registry is an array, never a hash: BuildSearchIndex walks the labels in insertion
@@ -25,7 +32,7 @@ local REGISTRIES = {
 function KAUI:NewNamespace(name)
     assert(type(name) == "string" and name ~= "", "KAUI: namespace name must be a non-empty string")
     if self.namespaces[name] then return self.namespaces[name] end
-    local ns = setmetatable({ name = name, accent = { 1, 1, 1 } }, nsMeta)
+    local ns = setmetatable({ name = name, accent = { 1, 1, 1 }, background = { 0.1, 0.1, 0.1 } }, nsMeta)
     for _, key in ipairs(REGISTRIES) do ns[key] = {} end
     self.namespaces[name] = ns
     return ns
@@ -76,6 +83,11 @@ end
 -- `strata` field) so users can decide whether other UI may cover the addon or not. Transient
 -- popups (confirm dialogs etc.) always sit one stratum above the windows so they can't get
 -- buried under them.
+-- Kept in sync by hand with an identical copy of this list a consumer's own Utils.lua keeps,
+-- which drives that consumer's settings slider (range + index-to-name display) since this list
+-- is intentionally not exported. If the two ever diverge, the slider names one stratum while
+-- this applies another for the same saved index -- check the consumer's copy before changing
+-- this list.
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
 local DEFAULT_STRATA_INDEX = 4 -- HIGH; used before the consumer's first ApplyStyle call has set self.strata
 
@@ -155,13 +167,10 @@ function nsProto:AccentColor()
 end
 
 -- Base color for alternating row stripes: the configured window background lightened a touch.
--- bgR/bgG/bgB have no settings UI anymore (the background color picker was removed with the
--- artwork rework) but are kept as tunable saved values; this helper is their only consumer.
+-- Reads self.background (set by ApplyStyle's `background` field), not any consumer-specific
+-- global -- two namespaces with different saved background colors get different stripe colors.
 function nsProto:GetRowStripeColor()
-    local br = (KART_Settings and KART_Settings.bgR or 10) / 100
-    local bg = (KART_Settings and KART_Settings.bgG or 10) / 100
-    local bb = (KART_Settings and KART_Settings.bgB or 10) / 100
-    return KAUI.Lighten(br, bg, bb, 0.06)
+    return KAUI.Lighten(self.background[1], self.background[2], self.background[3], 0.06)
 end
 
 -- Applies font and accent colour across every registered widget. Everything consumer-specific
@@ -174,6 +183,8 @@ function nsProto:ApplyStyle(spec)
 
     self.accent = spec.accent or self.accent
     local r, g, b = self.accent[1], self.accent[2], self.accent[3]
+
+    self.background = spec.background or self.background
 
     if spec.strata then
         self.strata = spec.strata

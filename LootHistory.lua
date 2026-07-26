@@ -248,9 +248,9 @@ function LH.ShowExportDialog()
         scroll:SetPoint("TOPLEFT", 4, -4)
         scroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-        KART.LHExportScrollThumb = KART.StripScrollbarTextures(scroll)
-        if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetSize(6, 16) end
-        KART.UI:RegisterAccentTexture(KART.LHExportScrollThumb, 0.6)
+        local exportScrollThumb = KART.StripScrollbarTextures(scroll)
+        if exportScrollThumb then exportScrollThumb:SetSize(6, 16) end
+        KART.UI:RegisterAccentTexture(exportScrollThumb, 0.6)
 
         f.editBox = CreateFrame("EditBox", "KART_LHExportEditBox", scroll)
         f.editBox:SetWidth(420)
@@ -517,8 +517,7 @@ function LH.CreateWindow()
 
     local thumb = KART.StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
-    KART.LHScrollThumb = thumb
-    KART.UI:RegisterAccentTexture(KART.LHScrollThumb, 0.6)
+    KART.UI:RegisterAccentTexture(thumb, 0.6)
 
     f.scrollChild = scrollChild
     f.scrollFrame = scrollFrame

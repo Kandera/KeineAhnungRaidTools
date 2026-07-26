@@ -399,9 +399,9 @@ function WU.BuildPanel(parent)
     pasteScroll:SetPoint("TOPLEFT", 4, -4)
     pasteScroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-    KART.WUPasteScrollThumb = KART.StripScrollbarTextures(pasteScroll)
-    if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetSize(6, 16) end
-    KART.UI:RegisterAccentTexture(KART.WUPasteScrollThumb, 0.6)
+    local pasteScrollThumb = KART.StripScrollbarTextures(pasteScroll)
+    if pasteScrollThumb then pasteScrollThumb:SetSize(6, 16) end
+    KART.UI:RegisterAccentTexture(pasteScrollThumb, 0.6)
 
     WU.ImportEditBox = CreateFrame("EditBox", "KART_WUImportEditBox", pasteScroll)
     WU.ImportEditBox:SetWidth(428)

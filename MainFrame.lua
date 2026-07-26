@@ -168,10 +168,10 @@ KART.WoWUtilsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.WoWUtilsPanel:SetAllPoints()
 KART.WoWUtilsPanel:Hide()
 
--- Scrollbar Thumb für KART.UpdateStyles() registrieren
-KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
-if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
-KART.UI:RegisterAccentTexture(KART.ScrollThumb, 0.6)
+-- Scrollbar Thumb, accent-tinted via KART.UI's accent-texture registry
+local scrollThumb = KART.StripScrollbarTextures(scrollFrame)
+if scrollThumb then scrollThumb:SetSize(8, 30) end
+KART.UI:RegisterAccentTexture(scrollThumb, 0.6)
 
 -- Re-anchor the scrollbar to span the full viewport (which itself starts below the baked
 -- divider line now); the hidden arrow buttons don't need the template's 16px reserves.

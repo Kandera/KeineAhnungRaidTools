@@ -387,6 +387,7 @@ function KART.UpdateStyles()
         contentSize = KART_Settings.contentFontSize,
         strata      = KART_Settings.frameStrata,
         accent      = { r, g, b },
+        background  = { KART_Settings.bgR/100, KART_Settings.bgG/100, KART_Settings.bgB/100 },
     })
 
     -- The main window is a baked PNG artwork: no backdrop/gradient to tint.

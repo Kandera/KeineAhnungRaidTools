@@ -247,9 +247,9 @@ function KART.CreateBuffCheckFrame()
     sf:SetPoint("TOPLEFT", 10, -55)
     sf:SetPoint("BOTTOMRIGHT", -30, 40)
 
-    KART.BuffScrollThumb = KART.StripScrollbarTextures(sf)
-    if KART.BuffScrollThumb then KART.BuffScrollThumb:SetSize(8, 30) end
-    KART.UI:RegisterAccentTexture(KART.BuffScrollThumb, 0.6)
+    local buffScrollThumb = KART.StripScrollbarTextures(sf)
+    if buffScrollThumb then buffScrollThumb:SetSize(8, 30) end
+    KART.UI:RegisterAccentTexture(buffScrollThumb, 0.6)
 
     local content = CreateFrame("Frame", nil, sf)
     content:SetSize(660, 1)
