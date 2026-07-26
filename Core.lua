@@ -291,14 +291,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UpdateRaidleadBarVisibility()
 
         if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-            KASC:Send("ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag)
+            KASC:Send("KA_HELLO:" .. KASC.SerializeHello())
             KART.VersionAnnouncedToGroup = true
             -- Our own one-shot announce only tells the group about US — it does nothing for
             -- players who already announced before we joined, so also pull everyone else's
             -- current version the same way /kart v already does, instead of only finding out
             -- about mismatches/missing-KART players whenever someone happens to run that manually.
-            KASC:Send("REQ_VERSION")
+            KASC:RequestHello()
         elseif not IsInGroup() then
             KART.VersionAnnouncedToGroup = false
         end
@@ -365,8 +364,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if arg1 or arg2 then
             C_Timer.After(5, function()
                 if IsInGuild() then
-                    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-                    KASC:Send("ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
+                    KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), "GUILD")
                 end
             end)
         end
@@ -380,66 +378,49 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 end)
 
 -- =====================================================================
---  Addon-message handlers -- version handshake and ready-check reasons
+--  Addon-message handlers -- peer bookkeeping and ready-check reasons
 -- =====================================================================
--- The handshake wire format stays byte-identical here; Task 8 replaces it wholesale. Moved from
--- KARTSync unchanged (still called from a KASC:RegisterMessage registration rather than a
--- hardcoded dispatch table), still reading KART.PlayerVersions, KART.PlayerLCEnabled,
--- KART.UpdateWarned, KART.Version and KART.L, all of which are consumer state.
-local function HandleVersionMessage(payload, ctx, isAnnounce)
-    local ver, lcFlag = payload:match("^([^:]+):?([01]?)$")
-    ver = ver or payload
-    -- Version strings are printed to chat and rendered in the council panel. This handler is
-    -- deliberately ungated (ANNOUNCE_VERSION travels over GUILD, so the sender need not be grouped),
-    -- which means the string is untrusted — double the pipes so it can't carry colour codes or
-    -- hyperlinks into either.
-    ver = ver:gsub("|", "||")
+-- Peer version bookkeeping. The comparison, the update warning and the chat output all live
+-- here rather than in KASC: they are locale-dependent and none of them is a networking
+-- concern.
+KASC:OnPeer(function(shortName, _, peers)
+    local kart = peers.KART
+    if not kart then return end
 
     KART.PlayerVersions = KART.PlayerVersions or {}
-    KART.PlayerVersions[ctx.shortName] = ver
-    if lcFlag == "1" or lcFlag == "0" then
-        KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
-        KART.PlayerLCEnabled[ctx.shortName] = (lcFlag == "1")
-    end
-    -- Throttled: a raid join answers one REQ_VERSION with one reply per raider, all at once.
+    KART.PlayerVersions[shortName] = kart.version
+    KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
+    KART.PlayerLCEnabled[shortName] = kart.caps.LC or false
+
+    -- Throttled: a raid join answers one request with one reply per raider, all at once.
     if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
         KART.LC.Council.RefreshCouncilRowsThrottled()
     end
 
-    if not KART.UpdateWarned and ver ~= KART.Version then
-        -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields usable
-        -- numbers (missing parts fall to 0 via the tonumber-or-0 below) instead of failing the
-        -- match outright and collapsing to 0.0.0, which would suppress the update warning entirely.
-        local nMaj, nMin, nPat = ver:match("(%d+)%.?(%d*)%.?(%d*)")
+    if not KART.UpdateWarned and kart.version ~= KART.Version then
+        -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
+        -- usable numbers instead of failing the match outright and collapsing to 0.0.0.
+        local nMaj, nMin, nPat = kart.version:match("(%d+)%.?(%d*)%.?(%d*)")
         local oMaj, oMin, oPat = KART.Version:match("(%d+)%.?(%d*)%.?(%d*)")
         nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
         oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
-        -- Sanity clamp before trusting the number. ANNOUNCE_VERSION also travels over GUILD and no
-        -- handler here authenticates its sender, so anyone can claim "VERSION:99" — and since
-        -- UpdateWarned latches after the first print, one bogus claim would suppress the real update
-        -- warning for the whole session. A genuine release never jumps more than a major ahead.
+        -- Sanity clamp before trusting the number: no handler authenticates a sender, so
+        -- anyone can claim a huge version, and UpdateWarned latches after the first print --
+        -- one bogus claim would suppress the real warning for the whole session. A genuine
+        -- release never jumps more than a major ahead.
         local plausible = nMaj <= oMaj + 1
-        if plausible and (nMaj > oMaj or (nMaj == oMaj and nMin > oMin) or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
+        if plausible and (nMaj > oMaj
+            or (nMaj == oMaj and nMin > oMin)
+            or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
             KART.UpdateWarned = true
-            print(string.format(KART.L.UPDATE_AVAILABLE, ver, KART.Version))
+            print(string.format(KART.L.UPDATE_AVAILABLE, kart.version, KART.Version))
         end
     end
 
-    if KART.VersionCheckActive and not isAnnounce then
-        print(string.format(KART.L.VERSION_CHECK_RES, ctx.shortName, ver))
-    end
-end
-
-KASC:RegisterMessage("REQ_VERSION", {}, function(_, ctx)
-    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-    if ctx.channel == "WHISPER" then
-        KASC:Send("VERSION:" .. KART.Version .. ":" .. lcFlag, "WHISPER", ctx.sender)
-    else
-        KASC:Send("VERSION:" .. KART.Version .. ":" .. lcFlag, ctx.channel)
+    if KART.VersionCheckActive then
+        print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
     end
 end)
-KASC:RegisterMessage("VERSION", { payload = true }, function(payload, ctx) HandleVersionMessage(payload, ctx, false) end)
-KASC:RegisterMessage("ANNOUNCE_VERSION", { payload = true }, function(payload, ctx) HandleVersionMessage(payload, ctx, true) end)
 
 -- RC_REASON: Core.lua owns the cache's lifecycle (READY_CHECK above wipes KART.ReadyCheckReasons)
 -- and the sending dialog (KART.ShowReadyCheckReasonDialog below), so the receiver lives here too.
@@ -674,7 +655,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print(KART.L.VERSION_CHECK_REQ)
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
-        KASC:Send("REQ_VERSION", channel)
+        KASC:Send("KA_HELLO_REQ", channel)
     elseif cmd == "add" or cmd:match("^add%s") then
         local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
         if KART.LC then KART.LC.StartManualRoll(itemsText) end

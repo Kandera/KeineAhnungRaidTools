@@ -299,8 +299,8 @@ end
 --  Responders — the answering side. These must work in any KA client, including one that has no
 --  Buff Checker of its own and will never render what it reports.
 -- =====================================================================
--- group = true on every one of these for a disclosure reason, not an authority one: the "KART"
--- prefix is public and CHAT_MSG_ADDON also delivers WHISPER and GUILD, so literally any player can
+-- group = true on every one of these for a disclosure reason, not an authority one: the addon-
+-- message prefix is public and CHAT_MSG_ADDON also delivers WHISPER and GUILD, so literally any player can
 -- send REQ_OIL/REQ_ILVL/REQ_ENCH/REQ_GEAR, in or out of our group. Answering a request from outside
 -- the group would hand a stranger our own gear, enchant and item-level state. That's also why every
 -- reply below broadcasts to the group channel rather than replying to the sender directly — the
@@ -333,4 +333,65 @@ KASC:RegisterMessage("REQ_GEAR", { group = true }, function()
         local e, g = KAGS.CountMissingGear()
         KASC:Send("GEAR:" .. e .. ":" .. g)
     end
+end)
+
+-- =====================================================================
+--  Handshake
+-- =====================================================================
+-- Grammar: entries separated by ",", each "name=version" with optional "+capability" suffixes.
+-- Name, version and capability are restricted to [%w%.%-_], so a colour escape or a hyperlink
+-- cannot reach the consumer's chat output or the council panel at all -- a whitelist rather than
+-- escaping after the fact.
+--
+-- Library versions are deliberately absent: nothing branches on them, so putting them on the
+-- wire would be speculative.
+local ENTRY_CHARS = "^[%w%.%-_]+$"
+
+function KASC.SerializeHello()
+    local out = {}
+    for _, addon in ipairs(addons) do
+        local entry = addon.name .. "=" .. addon.version
+        for _, cap in ipairs(capabilities) do
+            if cap.owner == addon.name and cap.fn() then
+                entry = entry .. "+" .. cap.name
+            end
+        end
+        out[#out + 1] = entry
+    end
+    return table.concat(out, ",")
+end
+
+function KASC.ParseHello(payload)
+    local result = {}
+    if type(payload) ~= "string" or payload == "" then return result end
+    for entry in payload:gmatch("[^,]+") do
+        local name, version, rest = entry:match("^([^=+]+)=([^=+]+)(.*)$")
+        if name and version and name:match(ENTRY_CHARS) and version:match(ENTRY_CHARS) then
+            local caps, ok = {}, true
+            for cap in rest:gmatch("%+([^+]*)") do
+                if cap:match(ENTRY_CHARS) then caps[cap] = true else ok = false end
+            end
+            -- One malformed capability drops the whole entry rather than silently reporting a
+            -- peer as having fewer capabilities than it claimed.
+            if ok then result[name] = { version = version, caps = caps } end
+        end
+    end
+    return result
+end
+
+function KASC:RequestHello()
+    self:Send("KA_HELLO_REQ")
+end
+
+KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)
+    if ctx.channel == "WHISPER" then
+        KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), "WHISPER", ctx.sender)
+    else
+        KASC:Send("KA_HELLO:" .. KASC.SerializeHello(), ctx.channel)
+    end
+end)
+
+KASC:RegisterMessage("KA_HELLO", { payload = true }, function(payload, ctx)
+    local peers = KASC.ParseHello(payload)
+    for _, fn in ipairs(peerCallbacks) do fn(ctx.shortName, ctx.sender, peers) end
 end)
