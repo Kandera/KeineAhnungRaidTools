@@ -150,12 +150,12 @@ function LC.BuildSettingsPanel(parent)
     local boxTitle = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     boxTitle:SetText(L.LC_RAIDWIDE_TITLE)
     boxTitle:SetTextColor(0.9, 0.75, 0.3)
-    table.insert(KART.DynamicLabels, boxTitle)
+    KART.UI:RegisterLabel(boxTitle)
 
     KART.LC.RoleStatusLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     KART.LC.RoleStatusLabel:SetWidth(460)
     KART.LC.RoleStatusLabel:SetJustifyH("LEFT")
-    table.insert(KART.DynamicLabels, KART.LC.RoleStatusLabel)
+    KART.UI:RegisterLabel(KART.LC.RoleStatusLabel)
     LC.UpdateRoleStatusLabel() -- sets the text before layoutRaidBox() first measures it
 
     local boxDivider = raidBox:CreateTexture(nil, "ARTWORK")
@@ -196,7 +196,7 @@ function LC.BuildSettingsPanel(parent)
     lblButtons:SetWidth(CONTENT_WIDTH)
     lblButtons:SetJustifyH("LEFT")
     lblButtons:SetText(L.LC_SET_BUTTONS)
-    table.insert(KART.DynamicLabels, lblButtons)
+    KART.UI:RegisterLabel(lblButtons)
 
     KART.LC.ButtonLabelEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCButtonLabels")
     local eb = KART.LC.ButtonLabelEditBox
@@ -213,14 +213,14 @@ function LC.BuildSettingsPanel(parent)
     hint:SetJustifyH("LEFT")
     hint:SetText(L.LC_SET_BUTTONS_HINT)
     hint:SetTextColor(0.55, 0.55, 0.55)
-    table.insert(KART.DynamicLabels, hint)
+    KART.UI:RegisterLabel(hint)
 
     -- Council member names
     local lblCouncil = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblCouncil:SetWidth(CONTENT_WIDTH)
     lblCouncil:SetJustifyH("LEFT")
     lblCouncil:SetText(L.LC_SET_COUNCIL)
-    table.insert(KART.DynamicLabels, lblCouncil)
+    KART.UI:RegisterLabel(lblCouncil)
 
     KART.LC.CouncilMembersEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCCouncilMembers")
     local ebC = KART.LC.CouncilMembersEditBox
@@ -237,7 +237,7 @@ function LC.BuildSettingsPanel(parent)
     hintCouncil:SetJustifyH("LEFT")
     hintCouncil:SetText(L.LC_SET_COUNCIL_HINT)
     hintCouncil:SetTextColor(0.55, 0.55, 0.55)
-    table.insert(KART.DynamicLabels, hintCouncil)
+    KART.UI:RegisterLabel(hintCouncil)
 
     -- Subdued indicator for council-list entries not yet matched to a live player (see
     -- KART.Identity.IsResolvedKey/LC.RetryPendingResolutions) — hidden entirely once nothing is
@@ -246,7 +246,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.CouncilPendingLabel:SetWidth(CONTENT_WIDTH)
     KART.LC.CouncilPendingLabel:SetJustifyH("LEFT")
     KART.LC.CouncilPendingLabel:SetTextColor(0.85, 0.65, 0.15)
-    table.insert(KART.DynamicLabels, KART.LC.CouncilPendingLabel)
+    KART.UI:RegisterLabel(KART.LC.CouncilPendingLabel)
 
     local function UpdateCouncilPendingLabel()
         local pendingCount = 0
@@ -277,7 +277,7 @@ function LC.BuildSettingsPanel(parent)
     lblLootmaster:SetWidth(CONTENT_WIDTH)
     lblLootmaster:SetJustifyH("LEFT")
     lblLootmaster:SetText(L.LC_SET_LOOTMASTER)
-    table.insert(KART.DynamicLabels, lblLootmaster)
+    KART.UI:RegisterLabel(lblLootmaster)
 
     KART.LC.LootmasterEditBox = KART.CreateStyledEditBox(raidBox, "KART_LCLootmaster")
     local ebL = KART.LC.LootmasterEditBox
@@ -298,14 +298,14 @@ function LC.BuildSettingsPanel(parent)
     hintLootmaster:SetJustifyH("LEFT")
     hintLootmaster:SetText(L.LC_SET_LOOTMASTER_HINT)
     hintLootmaster:SetTextColor(0.55, 0.55, 0.55)
-    table.insert(KART.DynamicLabels, hintLootmaster)
+    KART.UI:RegisterLabel(hintLootmaster)
 
     -- Minimum item quality that triggers the Loot Council flow (full width)
     local lblQuality = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lblQuality:SetWidth(CONTENT_WIDTH)
     lblQuality:SetJustifyH("LEFT")
     lblQuality:SetText(L.LC_SET_MIN_QUALITY)
-    table.insert(KART.DynamicLabels, lblQuality)
+    KART.UI:RegisterLabel(lblQuality)
 
     -- Placeholder text only — KART_Settings doesn't exist yet at file-load time.
     -- Core.lua's ADDON_LOADED handler syncs the real value once settings are loaded.
@@ -415,7 +415,7 @@ function LC.BuildSettingsPanel(parent)
     end
 
     layoutRaidBox()
-    KART.ApplyRoundedMask(raidBox, KART.Theme.CORNER_RADIUS_LG)
+    KART.ApplyRoundedMask(raidBox, KART.CORNER_RADIUS_LG)
     -- Exported entry point for every external caller (role-status change, pending-resolution retry,
     -- UpdateStyles). Two things the raw layoutRaidBox doesn't do:
     --  * Skip while off screen. IsVisible(), NOT IsShown(): tab switching hides the parent panel, so
@@ -461,7 +461,7 @@ function LC.BuildSettingsPanel(parent)
         if KART.LH then KART.LH.Toggle() end
     end)
 
-    KART.RegisterLocaleRefresher(function()
+    KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
         KART.TabTitles[5]:SetText(Lx.LC_SETTINGS_TITLE)
         KART.LC.CbModuleEnabled.text:SetText(Lx.LC_SET_MODULE_ENABLED)        KART.LC.CbModuleEnabled.tooltipText = Lx.LC_DESC_MODULE_ENABLED

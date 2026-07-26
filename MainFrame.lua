@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 local L = KART.L
 local LSM = LibStub("LibSharedMedia-3.0", true)
 
@@ -60,7 +61,7 @@ mainFrame.bg = mainFrame:CreateTexture(nil, "BACKGROUND")
 mainFrame.bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-bg-dark.png")
 mainFrame.bg:SetAllPoints()
 
-KART.RegisterStrataFrame(mainFrame)
+KART.UI:RegisterStrataFrame(mainFrame)
 mainFrame:Hide()
 KART.AddShowFade(mainFrame)
 
@@ -97,7 +98,7 @@ function KART.CreateTabTitle(tabIndex, text)
     fs:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 228, -22)
     fs:SetText(text)
     fs:Hide() -- ShowTab reveals the active tab's title
-    table.insert(KART.DynamicLabels, fs)
+    KART.UI:RegisterLabel(fs)
     KART.TabTitles[tabIndex] = fs
     return fs
 end
@@ -170,6 +171,7 @@ KART.WoWUtilsPanel:Hide()
 -- Scrollbar Thumb für KART.UpdateStyles() registrieren
 KART.ScrollThumb = KART.StripScrollbarTextures(scrollFrame)
 if KART.ScrollThumb then KART.ScrollThumb:SetSize(8, 30) end
+KART.UI:RegisterAccentTexture(KART.ScrollThumb, 0.6)
 
 -- Re-anchor the scrollbar to span the full viewport (which itself starts below the baked
 -- divider line now); the hidden arrow buttons don't need the template's 16px reserves.
@@ -259,7 +261,7 @@ kbCard:SetSize(500, 168)
 local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 kbTitle:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, -14)
 kbTitle:SetText(L.LABEL_RL_KEYBINDS)
-table.insert(KART.DynamicLabels, kbTitle)
+KART.UI:RegisterLabel(kbTitle)
 
 -- [actionKey] = its bind button. Read back by the locale refresher, by KART.SyncSettingsToUI (which
 -- repaints every caption after a profile load) and by StartCapture, which updates the caption of a
@@ -346,7 +348,7 @@ for i, action in ipairs(KART.KeybindActions) do
     local label = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, yOff)
     label:SetText(kbLabels[action.key])
-    table.insert(KART.DynamicLabels, label)
+    KART.UI:RegisterLabel(label)
     kbRowLabels[action.key] = label
 
     -- KART_Settings doesn't exist yet at this point in addon load (see load-order note above) —
@@ -424,7 +426,7 @@ autoCard:SetSize(500, 195)
 local promLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 promLabel:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 20, -15)
 promLabel:SetText(L.LABEL_PROMOTE_NAMES)
-table.insert(KART.DynamicLabels, promLabel)
+KART.UI:RegisterLabel(promLabel)
 
 KART.PromoteEditBox = KART.CreateStyledEditBox(autoCard, "KART_PromoteEditBox")
 KART.PromoteEditBox:SetSize(460, 28)
@@ -437,7 +439,7 @@ end) -- KART_Settings ist eine SavedVariable
 local invLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 invLabel:SetPoint("TOPLEFT", KART.PromoteEditBox, "BOTTOMLEFT", 0, -14)
 invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
-table.insert(KART.DynamicLabels, invLabel)
+KART.UI:RegisterLabel(invLabel)
 
 KART.InviteEditBox = KART.CreateStyledEditBox(autoCard, "KART_InviteEditBox")
 KART.InviteEditBox:SetSize(460, 28)
@@ -462,7 +464,7 @@ KART.CbInviteViaGuildChat.text:SetJustifyH("LEFT")
 local alTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 alTitle:SetPoint("TOPLEFT", autoCard, "BOTTOMLEFT", 0, -18)
 alTitle:SetText(L.LABEL_AUTOLOG)
-table.insert(KART.DynamicLabels, alTitle)
+KART.UI:RegisterLabel(alTitle)
 
 local alCard = KART.CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
@@ -636,7 +638,7 @@ profCard:SetSize(500, 100)
 local profTitle = profCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 profTitle:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -14)
 profTitle:SetText(L.LABEL_PROFILES)
-table.insert(KART.DynamicLabels, profTitle)
+KART.UI:RegisterLabel(profTitle)
 
 KART.BtnProfile = KART.CreateModernButton(profCard, L.PROFILE_LABEL_PREFIX .. L.PROFILE_NONE)
 KART.BtnProfile:SetPoint("TOPLEFT", profCard, "TOPLEFT", 20, -34)
@@ -714,9 +716,9 @@ searchPopout:SetBackdrop({
 })
 searchPopout:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
 searchPopout:SetBackdropBorderColor(0, 0, 0, 1)
-KART.RegisterStrataFrame(searchPopout, true) -- one stratum above the windows, follows the setting
+KART.UI:RegisterStrataFrame(searchPopout, true) -- one stratum above the windows, follows the setting
 searchPopout:Hide()
-KART.ApplyRoundedMask(searchPopout, KART.Theme.CORNER_RADIUS_SM)
+KART.ApplyRoundedMask(searchPopout, KART.CORNER_RADIUS_SM)
 
 local searchBox = KART.CreateStyledEditBox(searchPopout, "KART_SearchBox")
 searchBox:SetSize(240, 26)
@@ -737,8 +739,8 @@ for i = 1, RESULT_ROW_COUNT do
     row.text:SetPoint("LEFT", row, "LEFT", 6, 0)
     row.text:SetJustifyH("LEFT")
     row:SetScript("OnEnter", function(self)
-        local r, g, b = KART.Theme.AccentColor()
-        local dr, dg, db = KART.Theme.Darken(r, g, b, 0.45)
+        local r, g, b = KART.UI:AccentColor()
+        local dr, dg, db = KAUI.Darken(r, g, b, 0.45)
         self:SetBackdropColor(dr, dg, db, 0.5)
     end)
     row:SetScript("OnLeave", function(self) self:SetBackdropColor(0, 0, 0, 0) end)
@@ -830,7 +832,7 @@ function KART.JumpToSearchResult(entry)
     searchHighlight:SetPoint("TOPLEFT", widget, "TOPLEFT", -6, 6)
     searchHighlight:SetPoint("BOTTOMRIGHT", widget, "BOTTOMRIGHT", 6, -6)
     searchHighlight:SetFrameLevel(widget:GetParent():GetFrameLevel() + 10)
-    local r, g, b = KART.Theme.AccentColor()
+    local r, g, b = KART.UI:AccentColor()
     searchHighlight:SetBackdropColor(r, g, b, 0.35)
     searchHighlight:Show()
     -- Generation token so jumping to a second result within 1.5s doesn't get its highlight hidden
@@ -845,9 +847,9 @@ function KART.JumpToSearchResult(entry)
 end
 
 -- Re-applies every static text in this file from KART.L once the saved language is known
--- (see KART.RegisterLocaleRefresher in Utils.lua). Dynamic texts (BtnFont/BtnLang/BtnProfile
+-- (see KART.UI:RegisterLocaleRefresher in Utils.lua). Dynamic texts (BtnFont/BtnLang/BtnProfile
 -- labels, keybind button captions, strata slider value) are handled by KART.SyncSettingsToUI.
-KART.RegisterLocaleRefresher(function()
+KART.UI:RegisterLocaleRefresher(function()
     local L = KART.L
 
     -- Sidebar tabs + fixed header titles

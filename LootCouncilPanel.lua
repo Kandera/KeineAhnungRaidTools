@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.LC.Council = KART.LC.Council or {}
 local Council = KART.LC.Council
@@ -465,7 +466,7 @@ function Council.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
     f:SetSize(COUNCIL_PANEL_WIDTH, COUNCIL_PANEL_HEIGHT)
     f:SetPoint("CENTER", 220, 0)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -722,7 +723,7 @@ function Council.CreateCouncilPanel()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcCouncilPanelPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end

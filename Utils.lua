@@ -2,30 +2,15 @@ local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAGS = LibStub("KAGS-1.0")
 
-local LSM = LibStub("LibSharedMedia-3.0", true)
-KART.L = KART.L or {}
-KART.EditBoxes = {}
-KART.DynamicLabels = {}
-KART.SliderThumbs = {}
-KART.CheckVisuals = {}
-KART.TabButtons = {}
-KART.ToggleCheckboxes = {}
-KART.ButtonTexts = {}
-KART.CloseButtonTexts = {} -- "×" FontStrings on close buttons that aren't already covered by a per-frame UpdateStyles font update
-KART.AccentLines = {} -- 1px header lines on popup windows, recolored to the accent color in KART.UpdateStyles
+local KAUI = LibStub("KAUI-1.0")
+KART.UI = KAUI:NewNamespace("KART")
 
--- Locale refreshers: files that build UI text at load time (before the saved language is
--- known) register a function here that re-applies all their static texts from KART.L.
--- Core.lua runs them once at ADDON_LOADED, right after the locale values are copied in.
 -- KART.L itself is a STABLE table — its reference must never be replaced, only its values
--- swapped (files capture `local L = KART.L` at load time and keep that reference).
-KART.LocaleRefreshers = {}
-function KART.RegisterLocaleRefresher(fn)
-    table.insert(KART.LocaleRefreshers, fn)
-end
-function KART.ApplyLocaleRefreshers()
-    for _, fn in ipairs(KART.LocaleRefreshers) do fn() end
-end
+-- swapped (files capture `local L = KART.L` at load time and keep that reference). Locale
+-- refreshers (functions that re-apply static UI text once the saved language is known) are
+-- registered via KART.UI:RegisterLocaleRefresher; Core.lua runs them once at ADDON_LOADED,
+-- right after the locale values are copied into KART.L.
+KART.L = KART.L or {}
 
 -- Shared setup for the popup windows' artwork background (kart-popup-bg-dark.png, 1024x768;
 -- opaque art box 1002x746, transparent drop-shadow margin L12/R10/T12/B10). The frame is the
@@ -50,19 +35,19 @@ end
 
 -- Accent-colored 1px header line, the code-drawn counterpart of the main window's baked
 -- divider (popup windows resize, so it can't live in their artwork). Color applied by
--- KART.UpdateStyles via KART.AccentLines.
+-- KART.UpdateStyles via KART.UI's accent-line registry.
 function KART.CreateHeaderLine(frame, y)
     local line = frame:CreateTexture(nil, "ARTWORK")
     line:SetHeight(1)
     line:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, y)
     line:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -12, y)
-    table.insert(KART.AccentLines, line)
+    KART.UI:RegisterAccentLine(line)
     frame.headerLine = line
     return line
 end
 
--- "×"/"-"/"+" header buttons used by every popup window. The glyph FontString registers in
--- KART.CloseButtonTexts so KART.UpdateStyles keeps its font in sync with the chosen font.
+-- "×"/"-"/"+" header buttons used by every popup window. The glyph FontString registers with
+-- KART.UI so KART.UpdateStyles keeps its font in sync with the chosen font.
 function KART.CreateHeaderIconButton(parent, glyph, onClick)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(22, 22)
@@ -70,8 +55,8 @@ function KART.CreateHeaderIconButton(parent, glyph, onClick)
     btn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     btn.text:SetPoint("CENTER", 0, 1)
     btn.text:SetText(glyph or "×")
-    table.insert(KART.CloseButtonTexts, btn.text)
-    btn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.Theme.AccentColor()) end)
+    KART.UI:RegisterCloseButtonText(btn.text)
+    btn:SetScript("OnEnter", function(s) s.text:SetTextColor(KART.UI:AccentColor()) end)
     btn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 1, 1) end)
     btn:SetScript("OnClick", onClick)
     return btn
@@ -135,66 +120,11 @@ KART.Defaults = {
     autoLogOwned = false, -- hidden: whether the addon (not the player) started the current combat log
 }
 
--- Ordered list of WoW frame strata a KART window may sit on. All main windows share one
--- configurable stratum (KART_Settings.frameStrata, stored as an index into this list) so users
--- can decide whether other UI may cover the addon or not. Transient popups (confirm dialogs
--- etc.) always sit one stratum above the windows so they can't get buried under them.
+-- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside
+-- KAUI-1.0's own copy) purely so the settings-tab strata slider (MainFrame.lua) has a name list
+-- and count to build its range and value display from. The strata registries and the apply/
+-- register logic itself live in KAUI-1.0 now; see KART.UI:RegisterStrataFrame et al.
 KART.StrataLevels = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
-KART.StrataFrames = {}       -- main windows
-KART.StrataDialogFrames = {} -- popups shown above the windows
-
-local function StrataIndex()
-    local idx = KART_Settings and KART_Settings.frameStrata or KART.Defaults.frameStrata
-    if type(idx) ~= "number" or idx < 1 or idx > #KART.StrataLevels then idx = KART.Defaults.frameStrata end
-    return idx
-end
-
-function KART.GetWindowStrata()
-    return KART.StrataLevels[StrataIndex()]
-end
-
-function KART.GetDialogStrata()
-    local idx = StrataIndex()
-    -- TOOLTIP is deliberately not offered for windows, but serves as the "one above" stratum
-    -- when the windows themselves are maxed out at FULLSCREEN_DIALOG.
-    return KART.StrataLevels[idx + 1] or "TOOLTIP"
-end
-
--- Registers a top-level frame for the shared strata setting and applies the current value.
--- Called once per frame at creation time; KART.ApplyFrameStrata() re-applies on change.
-function KART.RegisterStrataFrame(frame, isDialog)
-    if isDialog then
-        table.insert(KART.StrataDialogFrames, frame)
-        frame:SetFrameStrata(KART.GetDialogStrata())
-    else
-        table.insert(KART.StrataFrames, frame)
-        frame:SetFrameStrata(KART.GetWindowStrata())
-    end
-end
-
-function KART.ApplyFrameStrata()
-    local windowStrata, dialogStrata = KART.GetWindowStrata(), KART.GetDialogStrata()
-    for _, f in ipairs(KART.StrataFrames) do f:SetFrameStrata(windowStrata) end
-    for _, f in ipairs(KART.StrataDialogFrames) do f:SetFrameStrata(dialogStrata) end
-end
-
--- Returns true if a saved window position (a TOPLEFT offset relative to UIParent's BOTTOMLEFT — the
--- anchor every KART popup restores with) still lands the window on screen. A position saved at a
--- larger resolution or UI scale can otherwise restore a window fully off-screen where it can't be
--- grabbed; callers keep their default anchor when this returns false.
--- The margins are deliberately loose and symmetric: the point is to catch a window stranded
--- entirely off screen (saved at a bigger resolution or UI scale), NOT to enforce that it sits fully
--- inside the viewport. These frames are freely movable and unclamped, and parking one slightly past
--- an edge is normal — the council panel's tab strip even lives 44px to the LEFT of the frame, so a
--- deliberate negative x is a legitimate saved layout. Rejecting those would silently reset the
--- user's window position on the next login.
-local POS_ON_SCREEN_MARGIN = 60 -- how much of the window must remain reachable, in pixels
-function KART.IsSavedPosOnScreen(x, y)
-    if type(x) ~= "number" or type(y) ~= "number" then return false end
-    local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
-    local m = POS_ON_SCREEN_MARGIN
-    return x <= sw - m and x >= -(sw - m) and y >= m and y <= sh + m
-end
 
 -- Resolves unit's Northern Sky Raid Tools nickname, or nil if NSRT isn't installed, has no
 -- nickname stored for that character, or its "Global Nicknames" master toggle is off. NSAPI is
@@ -220,57 +150,18 @@ function KART.GetNickname(unit)
     return KAUtil.CaseFold(nick), nick
 end
 
-function KART.GetFontPath(name)
-    if LSM then
-        return LSM:Fetch("font", name)
-    end
-    return "Fonts\\FRIZQT__.TTF"
-end
+-- Corner radii and fixed status colors used by every UI factory function below. Kept as plain
+-- data (no frame references) so KART.UpdateStyles() can call the factories fresh on every
+-- settings change without caching stale colors. Font path, accent color, and the color-
+-- derivation helpers (Lighten/Darken) moved to KAUI-1.0 (KART.UI:GetFontPath/AccentColor,
+-- KAUI.Lighten/Darken) since they're generic enough for any consumer of that library.
+KART.CORNER_RADIUS_LG = 6        -- panels, cards, main window
+KART.CORNER_RADIUS_SM = 3        -- buttons, checkboxes, slider thumb
+KART.CORNER_RADIUS_MIN_SIZE = 16 -- elements smaller than this (either dimension) stay unrounded
 
--- Central theme tokens: corner radii, fixed status colors, and color-derivation helpers used by
--- every UI factory function below. Kept as plain data + pure functions (no frame references) so
--- KART.UpdateStyles() can call these fresh on every settings change without caching stale colors.
-KART.Theme = {
-    CORNER_RADIUS_LG = 6,       -- panels, cards, main window
-    CORNER_RADIUS_SM = 3,       -- buttons, checkboxes, slider thumb
-    CORNER_RADIUS_MIN_SIZE = 16, -- elements smaller than this (either dimension) stay unrounded
-
-    SUCCESS = {0.35, 0.75, 0.35},
-    WARNING = {0.90, 0.70, 0.20},
-    DANGER  = {0.85, 0.30, 0.30},
-}
-
--- Lightens/darkens an RGB triple by `amount` (0-1), clamped to [0,1]. Used to derive hover/
--- pressed/disabled states from the user's chosen accent or background color instead of hard-
--- coding separate state colors that would drift out of sync with a custom accent.
-function KART.Theme.Lighten(r, g, b, amount)
-    return math.min(r + amount, 1), math.min(g + amount, 1), math.min(b + amount, 1)
-end
-
-function KART.Theme.Darken(r, g, b, amount)
-    return math.max(r - amount, 0), math.max(g - amount, 0), math.max(b - amount, 0)
-end
-
--- Fetches the user's accent color as a 0-1 RGB triple, falling back to the default accent
--- (0, 60, 100 out of 100) when KART_Settings isn't loaded yet. Centralizes the fetch-and-scale
--- pattern that was previously duplicated across CreateModernButton, CreateTabButton, and
--- CreateSettingsCheckbox.
-function KART.Theme.AccentColor()
-    local r = (KART_Settings and KART_Settings.accentR or 0) / 100
-    local g = (KART_Settings and KART_Settings.accentG or 60) / 100
-    local b = (KART_Settings and KART_Settings.accentB or 100) / 100
-    return r, g, b
-end
-
--- Base color for alternating row stripes: the configured window background lightened a touch.
--- bgR/bgG/bgB have no settings UI anymore (the background color picker was removed with the
--- artwork rework) but are kept as tunable saved values; this helper is their only consumer.
-function KART.GetRowStripeColor()
-    local br = (KART_Settings and KART_Settings.bgR or 10) / 100
-    local bg = (KART_Settings and KART_Settings.bgG or 10) / 100
-    local bb = (KART_Settings and KART_Settings.bgB or 10) / 100
-    return KART.Theme.Lighten(br, bg, bb, 0.06)
-end
+KART.SUCCESS = {0.35, 0.75, 0.35}
+KART.WARNING = {0.90, 0.70, 0.20}
+KART.DANGER  = {0.85, 0.30, 0.30}
 
 -- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
 -- overlay, if any — see KART.CreateGradientOverlay). Uses four quarter-circle masks (one per corner)
@@ -280,10 +171,10 @@ end
 function KART.ApplyRoundedMask(frame, radius)
     if not frame then return end
     local w, h = frame:GetWidth(), frame:GetHeight()
-    if w < KART.Theme.CORNER_RADIUS_MIN_SIZE or h < KART.Theme.CORNER_RADIUS_MIN_SIZE then
+    if w < KART.CORNER_RADIUS_MIN_SIZE or h < KART.CORNER_RADIUS_MIN_SIZE then
         return -- too small to round without looking broken
     end
-    radius = radius or KART.Theme.CORNER_RADIUS_SM
+    radius = radius or KART.CORNER_RADIUS_SM
 
     -- One quarter-circle mask per corner, sized radius x radius and anchored to that corner, so
     -- only the corners get cropped — pixels outside all four mask footprints (the flat edges and
@@ -359,19 +250,19 @@ function KART.CreateModernButton(parent, text, tooltipText)
     })
     b:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
     b:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(b, KART.Theme.CORNER_RADIUS_SM)
+    KART.ApplyRoundedMask(b, KART.CORNER_RADIUS_SM)
 
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     b.text:SetPoint("CENTER")
     b.text:SetText(text)
-    table.insert(KART.ButtonTexts, b.text)
+    KART.UI:RegisterButtonText(b.text)
 
     -- Hover/leave color is derived from the user's accent color (KART_Settings.accentR/G/B) via
-    -- KART.Theme.Darken instead of a hard-coded gray, so custom accent colors are respected in
+    -- KAUI.Darken instead of a hard-coded gray, so custom accent colors are respected in
     -- the hover state too.
     local function hoverColor()
-        local r, g, bl = KART.Theme.AccentColor()
-        return KART.Theme.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
+        local r, g, bl = KART.UI:AccentColor()
+        return KAUI.Darken(r, g, bl, 0.55) -- darkened accent, not full brightness, so text stays readable
     end
 
     -- Tooltip strings live on the button (not in this closure) so locale refreshers can
@@ -420,21 +311,21 @@ function KART.CreateTabButton(parent, text)
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
     b.text:SetText(text)
-    table.insert(KART.ButtonTexts, b.text)
+    KART.UI:RegisterButtonText(b.text)
 
     local accentBar = b:CreateTexture(nil, "OVERLAY")
     accentBar:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
     accentBar:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
     accentBar:SetWidth(3)
     accentBar:Hide()
-    table.insert(KART.SliderThumbs, accentBar) -- reuse the accent-coloring loop in KART.UpdateStyles
+    KART.UI:RegisterSliderThumb(accentBar) -- reuse the accent-coloring loop in KART.UpdateStyles
 
     local isActive = false
 
     -- Translucent so the artwork stays visible beneath the active fill.
     local function activeColor()
-        local r, g, bl = KART.Theme.AccentColor()
-        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.45)
+        local r, g, bl = KART.UI:AccentColor()
+        local dr, dg, db = KAUI.Darken(r, g, bl, 0.45)
         return dr, dg, db, 0.35
     end
 
@@ -469,7 +360,7 @@ function KART.CreateTabButton(parent, text)
         end
     end
 
-    table.insert(KART.TabButtons, b)
+    KART.UI:RegisterTabButton(b)
     b:SetActive(false)
     return b
 end
@@ -498,7 +389,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cb.text:SetPoint("LEFT", cb, "RIGHT", 8, 0)
     cb.text:SetText(labelText)
-    table.insert(KART.DynamicLabels, cb.text)
+    KART.UI:RegisterLabel(cb.text)
 
     -- Sliding dot: positioned left when unchecked, right when checked. Reused as the "checked
     -- texture" so WoW's own CheckButton show/hide-on-check logic still drives visibility, but its
@@ -508,7 +399,7 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     dot:SetSize(12, 12)
     dot:SetPoint("LEFT", cb, "LEFT", 2, 0)
     cb:SetCheckedTexture(dot)
-    table.insert(KART.CheckVisuals, dot)
+    KART.UI:RegisterCheckVisual(dot)
 
     -- Checked texture only shows/hides by default; here it must always render (the dot represents
     -- "off" position too) — track color communicates on/off state.
@@ -524,13 +415,13 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
         else
             dot:SetPoint("LEFT", self, "LEFT", 2, 0)
         end
-        local r, g, bl = KART.Theme.AccentColor()
+        local r, g, bl = KART.UI:AccentColor()
         if checked then
             -- Explicit alpha (matching the unchecked branch's 0.5) rather than relying on Darken's
             -- 3 return values expanding into SetBackdropColor's 4-arg call: that would leave alpha
             -- unset, and every other SetBackdropColor call site in this file passes alpha
             -- explicitly, so an implicit default here would be an inconsistent one-off.
-            local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.35)
+            local dr, dg, db = KAUI.Darken(r, g, bl, 0.35)
             self:SetBackdropColor(dr, dg, db, 0.5)
         else
             self:SetBackdropColor(0, 0, 0, 0.5)
@@ -548,10 +439,10 @@ function KART.CreateSettingsCheckbox(parent, name, labelText, settingKey, yOffse
     cb:HookScript("OnShow", function(self) refreshVisual(self) end)
 
     -- Exposes refreshVisual so KART.UpdateStyles() can re-sync this checkbox's track color to a
-    -- freshly-changed accent color, the same way it already does for the dot (via
-    -- KART.CheckVisuals) and slider thumbs/glows (via KART.SliderThumbs).
+    -- freshly-changed accent color, the same way it already does for the dot (via KART.UI's
+    -- check-visual registry) and slider thumbs/glows (via its slider-thumb registry).
     cb.RefreshVisual = function() refreshVisual(cb) end
-    table.insert(KART.ToggleCheckboxes, cb)
+    KART.UI:RegisterToggleCheckbox(cb)
 
     cb.tooltipText = tooltipText
     cb:SetScript("OnEnter", function(self)
@@ -586,7 +477,7 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     s.title = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     s.title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 4)
     s.title:SetText(labelText)
-    table.insert(KART.DynamicLabels, s.title)
+    KART.UI:RegisterLabel(s.title)
 
     s.valueText = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     s.valueText:SetPoint("BOTTOMRIGHT", s, "TOPRIGHT", 0, 4)
@@ -597,13 +488,13 @@ function KART.CreateSettingsSlider(parent, labelText, minV, maxV, settingKey, yO
     glow:SetSize(20, 20)
     glow:SetTexture("Interface\\Buttons\\WHITE8X8")
     glow:SetAlpha(0)
-    table.insert(KART.SliderThumbs, glow) -- colored alongside the thumb in KART.UpdateStyles
+    KART.UI:RegisterSliderThumb(glow) -- colored alongside the thumb in KART.UpdateStyles
 
     local thumb = s:CreateTexture(nil, "ARTWORK")
     thumb:SetSize(12, 12)
     thumb:SetTexture("Interface\\Buttons\\WHITE8X8")
     s:SetThumbTexture(thumb)
-    table.insert(KART.SliderThumbs, thumb)
+    KART.UI:RegisterSliderThumb(thumb)
     local thumbMask = s:CreateMaskTexture(nil, "OVERLAY")
     local maskOk = pcall(function()
         thumbMask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
@@ -688,8 +579,8 @@ function KART.CreateCard(parent, title)
     -- its own OnSizeChanged fires in lockstep; re-mask it alongside card here rather than adding
     -- a second identical hook on shadow.
     card:HookScript("OnSizeChanged", function()
-        KART.ApplyRoundedMask(card, KART.Theme.CORNER_RADIUS_LG)
-        KART.ApplyRoundedMask(shadow, KART.Theme.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(card, KART.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(shadow, KART.CORNER_RADIUS_LG)
     end)
 
     -- shadow is a sibling of card (not its child, so it stays visually behind card without
@@ -703,15 +594,15 @@ function KART.CreateCard(parent, title)
         card.titleText = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         card.titleText:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
         card.titleText:SetText(title)
-        table.insert(KART.DynamicLabels, card.titleText)
+        KART.UI:RegisterLabel(card.titleText)
     end
 
     return card
 end
 
 -- UI Factory: styled single-line EditBox matching the card look — dark inset fill, rounded
--- corners, subtle resting border, accent-colored border while focused. Registers the box in
--- KART.EditBoxes for font updates and wires the common OnEscapePressed=ClearFocus behavior.
+-- corners, subtle resting border, accent-colored border while focused. Registers the box with
+-- KART.UI for font updates and wires the common OnEscapePressed=ClearFocus behavior.
 -- Caller sets size/point and its own OnTextChanged (and SetMaxLetters where needed). The
 -- rounded mask is (re)applied on OnSizeChanged like KART.CreateCard does, because the box has
 -- no size yet at creation time and ApplyRoundedMask would silently no-op on it here.
@@ -727,17 +618,17 @@ function KART.CreateStyledEditBox(parent, name)
     eb:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     eb:SetTextInsets(10, 10, 0, 0)
     eb:HookScript("OnSizeChanged", function()
-        KART.ApplyRoundedMask(eb, KART.Theme.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(eb, KART.CORNER_RADIUS_LG)
     end)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     eb:SetScript("OnEditFocusGained", function(self)
-        local r, g, b = KART.Theme.AccentColor()
+        local r, g, b = KART.UI:AccentColor()
         self:SetBackdropBorderColor(r, g, b, 1)
     end)
     eb:SetScript("OnEditFocusLost", function(self)
         self:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     end)
-    table.insert(KART.EditBoxes, eb)
+    KART.UI:RegisterEditBox(eb)
     return eb
 end
 
@@ -751,7 +642,7 @@ function KART.ShowInputDialog(opts)
         local f = CreateFrame("Frame", "KART_InputDialog", UIParent, "BackdropTemplate")
         f:SetSize(300, 120)
         f:SetPoint("CENTER")
-        KART.RegisterStrataFrame(f, true)
+        KART.UI:RegisterStrataFrame(f, true)
         KART.ApplyPopupArtwork(f)
         f:SetMovable(true)
         f:EnableMouse(true)
@@ -1076,14 +967,14 @@ local SEARCH_TAB_PANELS = {
     { panel = "WoWUtilsPanel", tabIndex = 6 },
 }
 
--- Builds the settings search index by walking KART.DynamicLabels — every settings label already
--- gets inserted there by its creation site (checkboxes, sliders, card titles, hints, tab titles),
--- so no per-widget registration is needed here. A label whose parent chain never reaches one of
--- the 6 main tab panels (e.g. one that belongs to a popup window like Loot History) is silently
--- skipped, which is how "only the 6 main tabs are searchable" enforces itself.
+-- Builds the settings search index by walking KART.UI's label registry — every settings label
+-- already gets registered there by its creation site (checkboxes, sliders, card titles, hints,
+-- tab titles), so no per-widget registration is needed here. A label whose parent chain never
+-- reaches one of the 6 main tab panels (e.g. one that belongs to a popup window like Loot
+-- History) is silently skipped, which is how "only the 6 main tabs are searchable" enforces itself.
 function KART.BuildSearchIndex()
     local index = {}
-    for _, fs in ipairs(KART.DynamicLabels) do
+    for _, fs in ipairs(KART.UI:GetLabels()) do
         local text = fs:GetText()
         -- Skip hidden labels: a FontString keeps its text after :Hide(), so a conditionally-shown one
         -- (e.g. the council pending-resolution label) would stay searchable and its result row would

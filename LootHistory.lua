@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.LH = KART.LH or {}
 local LH = KART.LH
@@ -213,7 +214,7 @@ function LH.ShowExportDialog()
         local f = CreateFrame("Frame", "KART_LHExportDialog", UIParent, "BackdropTemplate")
         f:SetSize(480, 320)
         f:SetPoint("CENTER")
-        KART.RegisterStrataFrame(f, true)
+        KART.UI:RegisterStrataFrame(f, true)
         KART.ApplyPopupArtwork(f)
         f:SetMovable(true)
         f:EnableMouse(true)
@@ -225,13 +226,13 @@ function LH.ShowExportDialog()
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         f.title:SetPoint("TOP", 0, -14)
         f.title:SetText(KART.L.LH_EXPORT_TITLE)
-        table.insert(KART.DynamicLabels, f.title)
+        KART.UI:RegisterLabel(f.title)
 
         f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         f.hint:SetPoint("TOP", 0, -32)
         f.hint:SetText(KART.L.LH_EXPORT_HINT)
         f.hint:SetTextColor(0.6, 0.6, 0.6)
-        table.insert(KART.DynamicLabels, f.hint)
+        KART.UI:RegisterLabel(f.hint)
 
         -- Same inset/border colors as KART.CreateStyledEditBox (the multi-line export box lives
         -- inside a ScrollFrame, so the visual box is this frame); focus accent mirrored below.
@@ -241,7 +242,7 @@ function LH.ShowExportDialog()
         scrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         scrollBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
         scrollBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-        KART.ApplyRoundedMask(scrollBG, KART.Theme.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(scrollBG, KART.CORNER_RADIUS_LG)
 
         local scroll = CreateFrame("ScrollFrame", "KART_LHExportScroll", scrollBG, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 4, -4)
@@ -249,6 +250,7 @@ function LH.ShowExportDialog()
 
         KART.LHExportScrollThumb = KART.StripScrollbarTextures(scroll)
         if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetSize(6, 16) end
+        KART.UI:RegisterAccentTexture(KART.LHExportScrollThumb, 0.6)
 
         f.editBox = CreateFrame("EditBox", "KART_LHExportEditBox", scroll)
         f.editBox:SetWidth(420)
@@ -265,7 +267,7 @@ function LH.ShowExportDialog()
             end
         end)
         f.editBox:SetScript("OnEditFocusGained", function()
-            local r, g, b = KART.Theme.AccentColor()
+            local r, g, b = KART.UI:AccentColor()
             scrollBG:SetBackdropBorderColor(r, g, b, 1)
         end)
         f.editBox:SetScript("OnEditFocusLost", function()
@@ -343,7 +345,7 @@ function LH.CreateWindow()
     local f = CreateFrame("Frame", "KART_LootHistoryFrame", UIParent, "BackdropTemplate")
     f:SetSize(560, 430)
     f:SetPoint("CENTER")
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -377,7 +379,7 @@ function LH.CreateWindow()
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("LEFT", 16, 0)
     f.title:SetText(KART.L.LH_TITLE)
-    table.insert(KART.DynamicLabels, f.title)
+    KART.UI:RegisterLabel(f.title)
     KART.CreateHeaderLine(f, -28)
 
     local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
@@ -388,7 +390,7 @@ function LH.CreateWindow()
     searchHint:SetPoint("TOPLEFT", 10, -32)
     searchHint:SetText(KART.L.LH_SEARCH_LABEL)
     searchHint:SetTextColor(0.55, 0.55, 0.55)
-    table.insert(KART.DynamicLabels, searchHint)
+    KART.UI:RegisterLabel(searchHint)
 
     local searchBox = CreateFrame("EditBox", "KART_LHSearchBox", f, "BackdropTemplate")
     searchBox:SetSize(140, 22)
@@ -399,8 +401,8 @@ function LH.CreateWindow()
     searchBox:SetBackdropColor(0, 0, 0, 0.5)
     searchBox:SetTextInsets(5, 5, 0, 0)
     searchBox:SetMaxLetters(40)
-    KART.ApplyRoundedMask(searchBox, KART.Theme.CORNER_RADIUS_SM)
-    table.insert(KART.EditBoxes, searchBox)
+    KART.ApplyRoundedMask(searchBox, KART.CORNER_RADIUS_SM)
+    KART.UI:RegisterEditBox(searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
         LH.filters.search = KAUtil.CaseFold(self:GetText())
@@ -470,27 +472,27 @@ function LH.CreateWindow()
     local hDate = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hDate:SetPoint("TOPLEFT", 10, -78)
     hDate:SetText(KART.L.LH_COL_DATE)
-    table.insert(KART.DynamicLabels, hDate)
+    KART.UI:RegisterLabel(hDate)
 
     local hPlayer = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hPlayer:SetPoint("TOPLEFT", 80, -78)
     hPlayer:SetText(KART.L.LH_COL_PLAYER)
-    table.insert(KART.DynamicLabels, hPlayer)
+    KART.UI:RegisterLabel(hPlayer)
 
     local hItem = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hItem:SetPoint("TOPLEFT", 172, -78)
     hItem:SetText(KART.L.LH_COL_ITEM)
-    table.insert(KART.DynamicLabels, hItem)
+    KART.UI:RegisterLabel(hItem)
 
     local hDifficulty = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hDifficulty:SetPoint("TOPLEFT", 368, -78)
     hDifficulty:SetText(KART.L.LH_COL_DIFFICULTY)
-    table.insert(KART.DynamicLabels, hDifficulty)
+    KART.UI:RegisterLabel(hDifficulty)
 
     local hReason = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hReason:SetPoint("TOPLEFT", 440, -78)
     hReason:SetText(KART.L.LH_COL_REASON)
-    table.insert(KART.DynamicLabels, hReason)
+    KART.UI:RegisterLabel(hReason)
 
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.22, 0.22, 0.22, 1)
@@ -516,6 +518,7 @@ function LH.CreateWindow()
     local thumb = KART.StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
     KART.LHScrollThumb = thumb
+    KART.UI:RegisterAccentTexture(KART.LHScrollThumb, 0.6)
 
     f.scrollChild = scrollChild
     f.scrollFrame = scrollFrame
@@ -527,13 +530,13 @@ function LH.CreateWindow()
     f.emptyLabel:SetText(KART.L.LH_EMPTY)
     f.emptyLabel:SetTextColor(0.55, 0.55, 0.55)
     f.emptyLabel:Hide()
-    table.insert(KART.DynamicLabels, f.emptyLabel)
+    KART.UI:RegisterLabel(f.emptyLabel)
 
     -- Footer: entry count + clear button
     f.countText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.countText:SetPoint("BOTTOMLEFT", 10, 12)
     f.countText:SetTextColor(0.6, 0.6, 0.6)
-    table.insert(KART.DynamicLabels, f.countText)
+    KART.UI:RegisterLabel(f.countText)
 
     local btnClear = KART.CreateModernButton(f, KART.L.LH_BTN_CLEAR)
     btnClear:SetSize(140, 24)
@@ -577,7 +580,7 @@ function LH.CreateWindow()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcHistoryWindowPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -696,7 +699,7 @@ function LH.Refresh()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
-        local lr, lg, lb = KART.GetRowStripeColor()
+        local lr, lg, lb = KART.UI:GetRowStripeColor()
         row.bg:SetColorTexture(lr, lg, lb, i % 2 == 0 and 0.35 or 0.1)
 
         row.dateText:SetText(date("%d.%m %H:%M", e.time or 0))

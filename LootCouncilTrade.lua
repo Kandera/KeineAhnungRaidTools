@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.LC.Trade = KART.LC.Trade or {}
 local Trade = KART.LC.Trade
@@ -320,7 +321,7 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     local f = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
     f:SetSize(320, 40)
     f:SetPoint("CENTER", defaultX, 0)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -341,7 +342,7 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     f.rows = {}
 
     local pos = KART_Settings and KART_Settings[posKey]
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -381,7 +382,7 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
             row.nameBtn.text:SetPoint("LEFT")
             row.nameBtn.text:SetPoint("RIGHT")
             row.nameBtn.text:SetJustifyH("LEFT")
-            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
+            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.UI:AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
             row.doneBtn = CreateFrame("Button", nil, row) -- child of row so it hides with it
@@ -677,7 +678,7 @@ function Trade.ShowWinnerNotification(itemLink)
         local f = CreateFrame("Frame", "KART_LCWinnerFrame", UIParent, "BackdropTemplate")
         f:SetSize(290, 75)
         f:SetPoint("CENTER", 0, 160)
-        KART.RegisterStrataFrame(f, true)
+        KART.UI:RegisterStrataFrame(f, true)
         KART.ApplyPopupArtwork(f)
         -- The winner popup keeps its celebratory green identity: a static green header line
         -- (deliberately not in the accent-line registry) under the green title.

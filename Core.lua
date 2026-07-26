@@ -219,7 +219,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
 
         -- Re-apply every statically-built UI text with the now-selected language.
-        KART.ApplyLocaleRefreshers()
+        KART.UI:ApplyLocaleRefreshers()
 
         -- Outstanding BoP trade obligations from the previous session. After the locale refresh
         -- because the restored reminder windows render localized text.
@@ -375,13 +375,20 @@ end)
 -- Styles Update (Muss global zugänglich sein)
 function KART.UpdateStyles()
     if not KART_Settings or not KART.MainFrame then return end -- KART.MainFrame aus MainFrame.lua
-    KART.ApplyFrameStrata()
-    local fontPath = KART.GetFontPath(KART_Settings.fontName)
+
+    local fontPath = KART.UI:GetFontPath(KART_Settings.fontName)
     local r, g, b = KART_Settings.accentR/100, KART_Settings.accentG/100, KART_Settings.accentB/100
     local titleSize = KART_Settings.titleFontSize or 12 -- matches Defaults.titleFontSize
-    local menuSize = KART_Settings.menuFontSize or 11
-    local contentSize = KART_Settings.contentFontSize or 12
-    
+    local contentSize = KART_Settings.contentFontSize or 12 -- still needed below for the BuffChecker rows, which aren't part of KART.UI's generic registries
+
+    KART.UI:ApplyStyle({
+        font        = fontPath,
+        menuSize    = KART_Settings.menuFontSize,
+        contentSize = KART_Settings.contentFontSize,
+        strata      = KART_Settings.frameStrata,
+        accent      = { r, g, b },
+    })
+
     -- The main window is a baked PNG artwork: no backdrop/gradient to tint.
     -- bgAlpha now controls whole-window opacity; floor of 20 so the window
     -- can never become fully invisible while still blocking mouse input.
@@ -393,46 +400,9 @@ function KART.UpdateStyles()
         KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
     end
 
-    -- Sidebar Buttons
-    for _, btnText in ipairs(KART.ButtonTexts) do
-        btnText:SetFont(fontPath, menuSize, "")
-    end
-
-    -- Eingabefelder
-    for _, eb in ipairs(KART.EditBoxes) do
-        eb:SetFont(fontPath, contentSize, "")
-    end
-    
-    -- Alle registrierten Labels (Slider-Beschriftungen etc.) aktualisieren
-    for _, label in ipairs(KART.DynamicLabels) do
-        label:SetFont(fontPath, contentSize, "")
-    end
-
-    -- Close-button "×" glyphs not already covered by a per-frame update below (Loot History,
-    -- Loot Council's vote popup and council panel) — see KART.CloseButtonTexts in Utils.lua.
-    for _, t in ipairs(KART.CloseButtonTexts) do
-        t:SetFont(fontPath, 14, "OUTLINE")
-    end
-
     -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
     -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
     if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
-
-    -- Slider-Thumbs und Checkboxen färben
-    for _, thumb in ipairs(KART.SliderThumbs) do thumb:SetColorTexture(r, g, b, 1) end
-    for _, check in ipairs(KART.CheckVisuals) do check:SetColorTexture(r, g, b, 1) end
-    -- Header lines on popup windows (see KART.CreateHeaderLine)
-    for _, line in ipairs(KART.AccentLines or {}) do line:SetColorTexture(r, g, b, 0.6) end
-
-    -- Re-apply the active tab's background tint and each checked toggle's track color, since
-    -- those aren't simple SetColorTexture calls (they depend on Darken() with different amounts
-    -- and on current checked/active state) and so can't be folded into the loops above.
-    for _, btn in ipairs(KART.TabButtons or {}) do
-        if btn.RefreshActiveColor then btn:RefreshActiveColor() end
-    end
-    for _, cb in ipairs(KART.ToggleCheckboxes or {}) do
-        if cb.RefreshVisual then cb:RefreshVisual() end
-    end
 
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
@@ -445,12 +415,6 @@ function KART.UpdateStyles()
             iconButton.icon:SetVertexColor(r, g, b)
         end
     end
-
-    if KART.ScrollThumb then KART.ScrollThumb:SetColorTexture(r, g, b, 0.6) end -- KART.ScrollThumb aus MainFrame.lua
-    if KART.BuffScrollThumb then KART.BuffScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.LHScrollThumb then KART.LHScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetColorTexture(r, g, b, 0.6) end
 
     if KART.LH and KART.LH.historyWindow then
         local w = KART.LH.historyWindow
@@ -515,7 +479,7 @@ function KART.ShowReadyCheckReasonDialog()
         local f = CreateFrame("Frame", "KART_RCReasonFrame", UIParent, "BackdropTemplate")
         f:SetSize(260, 115)
         f:SetPoint("CENTER", 0, 150)
-        KART.RegisterStrataFrame(f, true)
+        KART.UI:RegisterStrataFrame(f, true)
         f:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -523,7 +487,7 @@ function KART.ShowReadyCheckReasonDialog()
         })
         f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
         f:SetBackdropBorderColor(0, 0, 0, 1)
-        KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+        KART.ApplyRoundedMask(f, KART.CORNER_RADIUS_LG)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
@@ -574,8 +538,8 @@ function KART.ShowReadyCheckReasonDialog()
         customInput:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
         customInput:SetTextInsets(5, 5, 0, 0)
         customInput:SetMaxLetters(30) -- Verhindert, dass Leute ganze Romane schreiben
-        KART.ApplyRoundedMask(customInput, KART.Theme.CORNER_RADIUS_SM)
-        table.insert(KART.EditBoxes, customInput)
+        KART.ApplyRoundedMask(customInput, KART.CORNER_RADIUS_SM)
+        KART.UI:RegisterEditBox(customInput)
         
         local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND)
         btnSend:SetSize(70, 25)
@@ -593,7 +557,7 @@ function KART.ShowReadyCheckReasonDialog()
 
         f.customInput = customInput
         KART.RCDialog = f
-        table.insert(KART.DynamicLabels, f.title)
+        KART.UI:RegisterLabel(f.title)
         KART.UpdateStyles()
     end
     if KART.RCDialog.customInput then KART.RCDialog.customInput:SetText("") end

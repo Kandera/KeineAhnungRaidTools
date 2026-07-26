@@ -184,7 +184,7 @@ function DT.BuildSyncStatus(parent)
     DT.statusLabel:SetPoint("TOPLEFT", KART.BtnReset, "BOTTOMLEFT", 0, -20)
     DT.statusLabel:SetWidth(460)
     DT.statusLabel:SetJustifyH("LEFT")
-    table.insert(KART.DynamicLabels, DT.statusLabel)
+    KART.UI:RegisterLabel(DT.statusLabel)
 
     local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", DT.statusLabel, "BOTTOMLEFT", 0, -6)
@@ -192,7 +192,7 @@ function DT.BuildSyncStatus(parent)
     hint:SetJustifyH("LEFT")
     hint:SetTextColor(0.6, 0.6, 0.6)
     hint:SetText(L.DT_HINT_COMPANION)
-    table.insert(KART.DynamicLabels, hint)
+    KART.UI:RegisterLabel(hint)
 
     DT.RefreshStatusLabel()
 
@@ -204,7 +204,7 @@ function DT.BuildSyncStatus(parent)
         end)
     end
 
-    KART.RegisterLocaleRefresher(function()
+    KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
         if DT.CbModuleEnabled then
             DT.CbModuleEnabled.text:SetText(Lx.DT_SET_MODULE_ENABLED)

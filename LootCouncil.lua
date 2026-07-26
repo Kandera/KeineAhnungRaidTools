@@ -231,7 +231,7 @@ end
 -- at all. Three tiers relative to the base size preserve the existing visual hierarchy (item name
 -- and window title bigger, column headers smaller) while making all of them move together.
 function LC.ApplyFontSize()
-    local fontPath = KART.GetFontPath(KART_Settings.fontName)
+    local fontPath = KART.UI:GetFontPath(KART_Settings.fontName)
     local base  = KART_Settings.lcFontSize or 12
     local big   = base + 2   -- item name / window title
     local small = math.max(8, base - 2) -- column headers
@@ -782,7 +782,7 @@ function LC.ShowSessionPrompt()
     local f = CreateFrame("Frame", "KART_LCSessionPrompt", UIParent, "BackdropTemplate")
     f:SetSize(310, 115)
     f:SetPoint("CENTER", 0, 120)
-    KART.RegisterStrataFrame(f, true)
+    KART.UI:RegisterStrataFrame(f, true)
     KART.ApplyPopupArtwork(f)
     table.insert(UISpecialFrames, f:GetName())
 

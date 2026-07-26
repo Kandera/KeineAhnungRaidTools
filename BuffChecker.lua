@@ -67,7 +67,7 @@ KART.BuffData = {
 }
 
 -- label/reportLabel are resolved from keys so a locale change (applied after file load,
--- see KART.RegisterLocaleRefresher) reaches the baked-at-load BuffData table too.
+-- see KART.UI:RegisterLocaleRefresher) reaches the baked-at-load BuffData table too.
 local function ResolveBuffDataLabels()
     for _, d in ipairs(KART.BuffData) do
         d.label = L[d.labelKey]
@@ -102,7 +102,7 @@ local function BuildSlotNames()
 end
 BuildSlotNames()
 
-KART.RegisterLocaleRefresher(function()
+KART.UI:RegisterLocaleRefresher(function()
     ResolveBuffDataLabels()
     BuildSlotNames()
     -- Window is built lazily (after the refreshers ran), so headers/buttons pick the fresh
@@ -177,7 +177,7 @@ function KART.CreateBuffCheckFrame()
     f:SetPoint(KART_Settings.bcPoint or "CENTER", UIParent, KART_Settings.bcRelativePoint or "CENTER", KART_Settings.bcX or 200, KART_Settings.bcY or 0)
     f:SetMovable(true)
     -- This window stores its position as point/relativePoint/offset (not the TOPLEFT-from-
-    -- BOTTOMLEFT pair the LC popups use, so KART.IsSavedPosOnScreen doesn't apply). Let WoW keep it
+    -- BOTTOMLEFT pair the LC popups use, so KAUI.IsSavedPosOnScreen doesn't apply). Let WoW keep it
     -- on screen instead: without this, a position saved on a wider monitor or at a different UI
     -- scale restores fully off screen, and since this frame isn't in UISpecialFrames and is only
     -- repositioned by dragging, the only way back is a full settings reset.
@@ -199,7 +199,7 @@ function KART.CreateBuffCheckFrame()
         KART_Settings.bcY = yOfs
     end)
     KART.ApplyPopupArtwork(f)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     KART.AddShowFade(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -249,6 +249,7 @@ function KART.CreateBuffCheckFrame()
 
     KART.BuffScrollThumb = KART.StripScrollbarTextures(sf)
     if KART.BuffScrollThumb then KART.BuffScrollThumb:SetSize(8, 30) end
+    KART.UI:RegisterAccentTexture(KART.BuffScrollThumb, 0.6)
 
     local content = CreateFrame("Frame", nil, sf)
     content:SetSize(660, 1)
@@ -521,9 +522,9 @@ local function setInd(row, idx, has, buffData, classes)
     if buffData.isRepair then
         local textObj = ind.text or ind
         textObj:SetText(math.floor(has) .. "%")
-        if has < 20 then textObj:SetTextColor(unpack(KART.Theme.DANGER))
-        elseif has < 50 then textObj:SetTextColor(unpack(KART.Theme.WARNING))
-        else textObj:SetTextColor(unpack(KART.Theme.SUCCESS)) end
+        if has < 20 then textObj:SetTextColor(unpack(KART.DANGER))
+        elseif has < 50 then textObj:SetTextColor(unpack(KART.WARNING))
+        else textObj:SetTextColor(unpack(KART.SUCCESS)) end
         ind.tooltipTitle = nil
         ind.missingSlots = nil
         return
@@ -537,12 +538,12 @@ local function setInd(row, idx, has, buffData, classes)
             ind.missingSlots = nil
         elseif has == "0" then
             textObj:SetText("OK") -- intentional: status glyph kept un-localized by design (review 2026-07-24)
-            textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
+            textObj:SetTextColor(unpack(KART.SUCCESS))
             ind.missingSlots = nil
         else
             local count = select(2, has:gsub(",", "")) + 1
             textObj:SetText("-" .. count)
-            textObj:SetTextColor(unpack(KART.Theme.DANGER))
+            textObj:SetTextColor(unpack(KART.DANGER))
             ind.missingSlots = has
             ind.tooltipTitle = buffData.reportLabel or buffData.label
         end
@@ -555,7 +556,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(1, 0.8, 0)
     elseif has == "best" then
         ind:SetAlpha(1.0)
-        ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
+        ind:SetVertexColor(unpack(KART.SUCCESS))
     elseif has == "wrong" then
         ind:SetAlpha(1.0)
         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
@@ -570,7 +571,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(0.5, 0.5, 0.5)
     else
         ind:SetAlpha(0.6)
-        ind:SetVertexColor(unpack(KART.Theme.DANGER))
+        ind:SetVertexColor(unpack(KART.DANGER))
     end
 end
 
@@ -691,7 +692,7 @@ function KART.UpdateBuffCheck(isPreview)
             local row = KART.BuffCheckFrame.rows[i]
             if row.stripeBg then
                 if i % 2 == 0 then
-                    local lr, lg, lb = KART.GetRowStripeColor()
+                    local lr, lg, lb = KART.UI:GetRowStripeColor()
                     row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                     row.stripeBg:Show()
                 else
@@ -736,8 +737,8 @@ function KART.UpdateBuffCheck(isPreview)
                 
                 if data.isGearCheck then
                     local textObj = ind.text or ind
-                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.Theme.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
-                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.Theme.SUCCESS)); ind.missingSlots = nil end
+                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
+                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.SUCCESS)); ind.missingSlots = nil end
                 elseif not data.isRepair then
                     ind:SetDesaturated(false)
                     if i == 1 and j == 7 then -- Beispiel für auslaufendes Food
@@ -745,13 +746,13 @@ function KART.UpdateBuffCheck(isPreview)
                         ind:SetVertexColor(1, 0.8, 0) -- Gelb
                     elseif (i + j) % 3 == 0 then
                         ind:SetAlpha(0.6)
-                        ind:SetVertexColor(unpack(KART.Theme.DANGER)) -- Fehlend (Rot)
+                        ind:SetVertexColor(unpack(KART.DANGER)) -- Fehlend (Rot)
                     elseif data.isOil and i == 2 then
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für Preview
                     elseif data.isOil then
                         ind:SetAlpha(1.0)
-                        ind:SetVertexColor(unpack(KART.Theme.SUCCESS)) -- best rank, matches setInd's "best" branch
+                        ind:SetVertexColor(unpack(KART.SUCCESS)) -- best rank, matches setInd's "best" branch
                     else
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(1, 1, 1) -- Vorhanden
@@ -759,7 +760,7 @@ function KART.UpdateBuffCheck(isPreview)
                 else
                     local textObj = ind.text or ind
                     textObj:SetText("85%")
-                    textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
+                    textObj:SetTextColor(unpack(KART.SUCCESS))
                 end
             end
             row:Show()
@@ -790,7 +791,7 @@ function KART.UpdateBuffCheck(isPreview)
         local row = KART.BuffCheckFrame.rows[i]
         if row.stripeBg then
             if i % 2 == 0 then
-                local lr, lg, lb = KART.GetRowStripeColor()
+                local lr, lg, lb = KART.UI:GetRowStripeColor()
                 row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                 row.stripeBg:Show()
             else

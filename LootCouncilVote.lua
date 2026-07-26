@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 
 KART.LC.Vote = KART.LC.Vote or {}
 local Vote = KART.LC.Vote
@@ -17,7 +18,7 @@ function Vote.CreateVoteList()
     local f = CreateFrame("Frame", "KART_LCVoteList", UIParent, "BackdropTemplate")
     f:SetSize(380, 200)
     f:SetPoint("CENTER", 0, -80)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -57,7 +58,7 @@ function Vote.CreateVoteList()
 
     -- Restore saved position (reuses the old single-popup setting name)
     local pos = KART_Settings and KART_Settings.lcVotePopupPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -373,7 +374,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.noteLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             row.noteLabel:SetText(KART.L.LC_NOTE_LABEL_SHORT)
             row.noteLabel:SetTextColor(0.6, 0.6, 0.6)
-            table.insert(KART.DynamicLabels, row.noteLabel)
+            KART.UI:RegisterLabel(row.noteLabel)
 
             row.noteBox = CreateFrame("EditBox", nil, row, "BackdropTemplate")
             row.noteBox:SetAutoFocus(false)
@@ -383,7 +384,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.noteBox:SetBackdropColor(0, 0, 0, 0.5)
             row.noteBox:SetTextInsets(6, 6, 0, 0)
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-            table.insert(KART.EditBoxes, row.noteBox)
+            KART.UI:RegisterEditBox(row.noteBox)
 
             f.rows[i] = row
         end
@@ -646,7 +647,7 @@ function Vote.RefreshVoteListRows_Compact(f)
             row.noteBox:SetPoint("RIGHT", row.chipArea, "RIGHT", 0, 0)
             row.noteBox:Hide()
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() self:Hide() end)
-            table.insert(KART.EditBoxes, row.noteBox)
+            KART.UI:RegisterEditBox(row.noteBox)
 
             row.notePencil:SetScript("OnClick", function()
                 if row.noteBox:IsShown() then
