@@ -1,6 +1,6 @@
 local addonName, KART = ...
-local KAUtil = LibStub("KAUtil-1.0")
 local KAGS = LibStub("KAGS-1.0")
+local KASC = LibStub("KASC-1.0")
 
 local KAUI = LibStub("KAUI-1.0")
 KART.UI = KAUI:NewNamespace("KART")
@@ -75,30 +75,6 @@ KART.Defaults = {
 -- and count to build its range and value display from. The strata registries and the apply/
 -- register logic itself live in KAUI-1.0 now; see KART.UI:RegisterStrataFrame et al.
 KART.StrataLevels = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
-
--- Resolves unit's Northern Sky Raid Tools nickname, or nil if NSRT isn't installed, has no
--- nickname stored for that character, or its "Global Nicknames" master toggle is off. NSAPI is
--- NSRT's own public API global (see its NickNames.lua) — calling GetName with no AddonName
--- argument makes it honor only that master toggle instead of a per-addon toggle KART was never
--- registered for (which would otherwise always read as disabled, see NSAPI:GetName's own "if no
--- AddonName is given we assume it's from an old WeakAura" comment). Wrapped in pcall since this
--- reaches into another addon's code, which KART never requires to be installed.
---
--- Returns two values: the lowercased nickname (for case-insensitive matching against configured
--- name lists — Auto-Promote, Loot Council members/lootmaster) and the nickname in its original
--- casing (for display, e.g. the council panel's name column). Extra return values are silently
--- dropped wherever a caller only wants the first one, so existing single-value call sites don't
--- need to change.
-function KART.GetNickname(unit)
-    if not (unit and NSAPI and NSAPI.GetName and UnitExists(unit)) then return nil end
-    local ok, nick = pcall(NSAPI.GetName, NSAPI, unit)
-    if not ok or not nick or nick == "" then return nil end
-    local realName = UnitName(unit)
-    if nick == realName then return nil end -- no nickname set, NSAPI just echoed the real name back
-    -- CaseFold (not :lower()) so an umlaut nickname folds the same way the promote/council
-    -- lists and Identity's name matching fold their side — otherwise umlaut nicks never match.
-    return KAUtil.CaseFold(nick), nick
-end
 
 -- Fixed status colors used by the addon's own remaining UI code (BuffChecker gear-check
 -- indicators). Kept as plain data (no frame references) so KART.UpdateStyles() and callers can
@@ -197,7 +173,7 @@ function KART.StartEnchantScan()
     wipe(KART.EnchantScan)
     -- Our own answer: SendAddonMessage never echoes back to its sender.
     KART.EnchantScan[UnitName("player") or "?"] = KAGS.GetOwnEnchantIDs()
-    KART.Sync.Send("REQ_ENCH")
+    KASC:Send("REQ_ENCH")
     print("|cff00ff00KART:|r " .. KART.L.ENCH_SCAN_START)
     C_Timer.After(5, KART.PrintEnchantScan)
 end

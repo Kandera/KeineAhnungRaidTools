@@ -1,6 +1,7 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
 
 -- This file's checkboxes/sliders are built at file load time, before Core.lua's ADDON_LOADED
 -- handler has created KART_Settings -- passing the table directly here would freeze each widget
@@ -105,7 +106,7 @@ function LC.BuildSettingsPanel(parent)
 
     -- Personal preference, same reasoning as CbCompactVoteLayout above — purely how names render
     -- on YOUR OWN council panel, never synced. Needs Northern Sky Raid Tools installed with a
-    -- nickname set per character to have any visible effect (see KART.GetNickname); falls back to
+    -- nickname set per character to have any visible effect (see KASC.Identity.GetNickname); falls back to
     -- the character short name automatically otherwise. Slot -135: next free step below
     -- CbCompactVoteLayout, inside this card.
     KART.LC.CbShowNickNames = KART.UI:CreateSettingsCheckbox(prefsCard, {
@@ -262,7 +263,7 @@ function LC.BuildSettingsPanel(parent)
     KART.UI:RegisterLabel(hintCouncil)
 
     -- Subdued indicator for council-list entries not yet matched to a live player (see
-    -- KART.Identity.IsResolvedKey/LC.RetryPendingResolutions) — hidden entirely once nothing is
+    -- KASC.Identity.IsResolvedKey/LC.RetryPendingResolutions) — hidden entirely once nothing is
     -- pending, so it never clutters the common case.
     KART.LC.CouncilPendingLabel = raidBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     KART.LC.CouncilPendingLabel:SetWidth(CONTENT_WIDTH)
@@ -273,7 +274,7 @@ function LC.BuildSettingsPanel(parent)
     local function UpdateCouncilPendingLabel()
         local pendingCount = 0
         for pendingText in pairs(LC.CouncilNamesTable) do
-            if not KART.Identity.IsResolvedKey(pendingText) then pendingCount = pendingCount + 1 end
+            if not KASC.Identity.IsResolvedKey(pendingText) then pendingCount = pendingCount + 1 end
         end
         if pendingCount > 0 then
             KART.LC.CouncilPendingLabel:SetText(string.format(L.LC_SET_COUNCIL_PENDING, pendingCount))

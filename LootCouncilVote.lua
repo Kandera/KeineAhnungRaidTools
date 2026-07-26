@@ -1,6 +1,8 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC.Vote = KART.LC.Vote or {}
 local Vote = KART.LC.Vote
@@ -240,7 +242,7 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
     -- its own sender, so without this our own progress counter reads one short and a council member
     -- voting on their own drop wouldn't see themselves listed.
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
 
@@ -816,7 +818,7 @@ end
 -- council member). Test rolls stay local like everywhere else; real rolls broadcast so every
 -- council member's tally stays in sync.
 function Vote.ToggleCouncilVote(rollID, candidateKey)
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     local retracting = (LC.councilVotes[rollID][myKey] == candidateKey)
     LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
@@ -831,7 +833,7 @@ end
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     -- payload = "rollID:buttonIndex:note"
     local rollID, idx = payload:match("^(%d+):(%d+)")
     rollID = tonumber(rollID)
@@ -861,7 +863,7 @@ end
 -- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
 -- anything automatically.
 function Vote.HandleRoll(payload, senderKey)
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, value = payload:match("^(%d+):(%d+)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
@@ -895,7 +897,7 @@ end
 function Vote.HandleCouncilVote(payload, senderKey)
     -- Council membership is intentionally trusted (see above), but the sender must at least be in
     -- our group — a bare whisper from outside must not land in the council straw-poll tally.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, candidateKey = payload:match("^(%d+):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
@@ -914,3 +916,13 @@ function Vote.HandleCouncilVote(payload, senderKey)
         KART.LC.Council.RefreshCouncilRows()
     end
 end
+
+-- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+KASC:RegisterMessage("LC_VOTE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleVote(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_ROLL", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleRoll(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_CVOTE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleCouncilVote(payload, ctx:Key()) end)

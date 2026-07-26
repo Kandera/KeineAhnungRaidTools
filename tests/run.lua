@@ -41,12 +41,15 @@ dofile("Libs/LibStub/LibStub.lua")
 -- (Task 2 adds KAUtil, Task 3 KAGS, Task 4 KAUI, Task 7 KASC.)
 dofile("Libs/KAUtil-1.0/KAUtil-1.0.lua")
 dofile("Libs/KAGS-1.0/KAGS-1.0.lua")
+dofile("Libs/KASC-1.0/KASC-1.0.lua")
 dofile("Libs/KAUI-1.0/KAUI-1.0.lua")
 
 -- Test files. Extended by each task that adds tests.
 dofile("tests/test_kautil.lua")
 dofile("tests/test_kags.lua")
 dofile("tests/test_kaui.lua")
+dofile("tests/test_identity.lua")
+dofile("tests/test_sync.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 os.exit(failures == 0 and 0 or 1)

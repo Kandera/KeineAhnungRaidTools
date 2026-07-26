@@ -1,12 +1,14 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC = KART.LC or {}
 local LC = KART.LC
 
 LC.sessionActive        = false
 LC.promptedThisSession  = false
-LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KART.Identity)
+LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
 LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
 LC.rollItems            = {}  -- [rollID] = itemLink
@@ -18,7 +20,7 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
-LC.CouncilNamesTable    = {}  -- resolved KART.Identity key -> true. Written by exactly two paths:
+LC.CouncilNamesTable    = {}  -- resolved KASC.Identity key -> true. Written by exactly two paths:
                                -- LC.HandleConfig (a received LC_CONFIG) and LC.ApplyOwnConfig (our own
                                -- settings, but only while WE own the config — see LC.IsConfigOwner).
                                -- Never from a non-owner's local settings, so a regular raider can't
@@ -174,7 +176,7 @@ end
 -- A leader who should sit on the council goes in the council-member list like everyone else.
 function LC.IsCouncil()
     if LC.IsLootOwner() then return true end
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     return LC.CouncilNamesTable[myKey] == true
 end
 
@@ -185,7 +187,7 @@ end
 -- key alone, matters because CHAT_MSG_ADDON also delivers whispers: someone not currently in our
 -- group is never authorized, even if their key happens to match an entry in CouncilNamesTable.
 function LC.IsSenderCouncil(senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     -- Mirrors LC.IsCouncil: the loot owner is council whether or not he's in the council-member
     -- list. Without this, peers rejected the LC_RESULT of an unlisted lootmaster — so his awards
@@ -210,9 +212,9 @@ end
 function LC.SendLC(msg, target)
     if not IsInGroup() then return end
     if target then
-        KART.Sync.Send(msg, "WHISPER", target)
+        KASC:Send(msg, "WHISPER", target)
     else
-        KART.Sync.Send(msg)
+        KASC:Send(msg)
     end
 end
 
@@ -288,14 +290,14 @@ end
 -- LC.IsMe (below) is what actually resolves it against the local player, trying both.
 
 -- Resolves free-typed config text (a council-list entry, or the lootmaster field) to a stable
--- key via KART.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
+-- key via KASC.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
 -- LC.HandleConfig (a received LC_CONFIG broadcast) and LC.GetLootmaster's raid-leader branch
 -- below (the leader's own local settings, resolved fresh on every read rather than cached,
 -- since the leader never receives its own broadcast to trigger HandleConfig).
 function LC.ResolveConfigName(text)
     local trimmed = KAUtil.TrimString(text or "")
     if trimmed == "" then return nil end
-    return (KART.Identity.ResolvePlayer(trimmed))
+    return (KASC.Identity.ResolvePlayer(trimmed))
 end
 
 function LC.GetLootmaster()
@@ -305,15 +307,15 @@ function LC.GetLootmaster()
     return LC.raidConfig.lootmaster or ""
 end
 
--- Whether configuredKey (a resolved KART.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
+-- Whether configuredKey (a resolved KASC.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
 -- identifies the local player. Resolution (character short name vs. Northern Sky Raid Tools
--- nickname, see KART.GetNickname in Utils.lua) already happened upstream when the key was
+-- nickname, see KASC.Identity.GetNickname) already happened upstream when the key was
 -- produced, so a raid leader can name a *person* once ("kandera") instead of re-typing the field
 -- whenever that person switches characters — every alt just needs the same NSRT nickname set,
 -- which raiders already do for the addon's other nickname-aware features.
 function LC.IsMe(configuredKey)
     if not configuredKey or configuredKey == "" then return false end
-    return (KART.Identity.ResolvePlayer("player")) == configuredKey
+    return (KASC.Identity.ResolvePlayer("player")) == configuredKey
 end
 
 -- =====================================================================
@@ -346,7 +348,7 @@ function LC.GetLootOwnerKey()
     local lootmaster = LC.GetLootmaster()
     if lootmaster ~= "" then return lootmaster end
     for unit in KAUtil.EachGroupUnit() do
-        if UnitIsGroupLeader(unit) then return (KART.Identity.ResolvePlayer(unit)) end
+        if UnitIsGroupLeader(unit) then return (KASC.Identity.ResolvePlayer(unit)) end
     end
     return ""
 end
@@ -356,10 +358,10 @@ end
 -- forces the pending-key migration before comparing — senderKey is always a GUID while the stored
 -- lootmaster can still be plain config text if they weren't in our roster when LC_CONFIG was parsed.
 function LC.IsSenderLootOwner(senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     local lootmaster = LC.GetLootmaster()
-    if lootmaster ~= "" and not KART.Identity.IsResolvedKey(lootmaster) then
+    if lootmaster ~= "" and not KASC.Identity.IsResolvedKey(lootmaster) then
         LC.RetryPendingResolutions()
         lootmaster = LC.GetLootmaster()
     end
@@ -502,7 +504,7 @@ end
 -- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
 -- lootmaster, and every client resolves that name against the live roster the same way.
 function LC.HandleConfig(payload, senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return end
 
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
@@ -541,7 +543,7 @@ function LC.RetryPendingResolutionsThrottled()
 end
 
 -- Re-attempts resolution for every council-list/lootmaster entry still stuck on plain text (see
--- KART.Identity.IsResolvedKey), and migrates any KART_LCOfficerNotes entry still under its legacy
+-- KASC.Identity.IsResolvedKey), and migrates any KART_LCOfficerNotes entry still under its legacy
 -- short-name key — both cases just mean "this person hadn't been seen yet" at the time they were
 -- first parsed. Promotes them to a real key in place; still-unresolvable entries are left alone
 -- and retried again next time the roster changes.
@@ -557,21 +559,21 @@ function LC.RetryPendingResolutions()
     -- below would otherwise do for every newly-resolved entry.
     local pendingCouncilEntries = {}
     for pendingText in pairs(LC.CouncilNamesTable) do
-        if not KART.Identity.IsResolvedKey(pendingText) then
+        if not KASC.Identity.IsResolvedKey(pendingText) then
             table.insert(pendingCouncilEntries, pendingText)
         end
     end
     for _, pendingText in ipairs(pendingCouncilEntries) do
         local key = LC.ResolveConfigName(pendingText)
-        if key and KART.Identity.IsResolvedKey(key) then
+        if key and KASC.Identity.IsResolvedKey(key) then
             LC.CouncilNamesTable[pendingText] = nil
             LC.CouncilNamesTable[key] = true
         end
     end
 
-    if LC.raidConfig.lootmaster and not KART.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
+    if LC.raidConfig.lootmaster and not KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
         local key = LC.ResolveConfigName(LC.raidConfig.lootmaster)
-        if key and KART.Identity.IsResolvedKey(key) then
+        if key and KASC.Identity.IsResolvedKey(key) then
             LC.raidConfig.lootmaster = key
         end
     end
@@ -631,7 +633,7 @@ function LC.SendSettingsSync(targetName)
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    KART.Sync.Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    KASC:Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
     -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
     -- messages are deliberately not group-gated — the whole feature targets someone outside the
     -- group — which without this would let anyone spam a line into our chat frame at will.
@@ -702,10 +704,10 @@ KART.UI:RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
         KART_Settings.lcVoteSeconds = data.voteSeconds
         KART_Settings.lcCouncilMembers = data.councilMembers
         KART.SyncSettingsToUI()
-        KART.Sync.Send("LC_SYNC_ACCEPT", "WHISPER", data.sender)
+        KASC:Send("LC_SYNC_ACCEPT", "WHISPER", data.sender)
     end,
     OnCancel = function(self, data)
-        KART.Sync.Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
+        KASC:Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
     end,
 })
 
@@ -1000,7 +1002,7 @@ local ROLL_ORPHAN_GRACE = 15
 -- back to the council in the first place.
 local function RollForSelf(rollID)
     if not LC.GetRollsEnabled() then return end
-    local myKey  = (KART.Identity.ResolvePlayer("player"))
+    local myKey  = (KASC.Identity.ResolvePlayer("player"))
     local myRoll = math.random(1, 100)
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][myKey] = myRoll
@@ -1429,6 +1431,33 @@ function LC.HandleManualStart(payload, senderKey)
 end
 
 -- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+-- group = true on every LC message that carries authority or writes tracked state. The sender's
+-- resolved key alone is NOT proof of membership: Identity resolution is short-name based (see
+-- KASC.Identity), so an out-of-group player sharing a short name with a council member would
+-- otherwise resolve onto their GUID and pass IsSenderCouncil/IsSenderGroupLeader. The three
+-- LC_SYNC_* messages are deliberately left ungated below — that feature is an explicit whisper to
+-- someone outside the group, and the receiver confirms it via popup before anything is applied.
+KASC:RegisterMessage("LC_ACTIVE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleActive(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_START", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleStart(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleManualStart(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
+    function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
+-- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.
+KASC:RegisterMessage("LC_SYNC_REQUEST", { payload = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end)
+-- LC_SYNC_ACCEPT/DECLINE carry neither gate: a decline must still print even if the receiver just
+-- disabled the module, and the sync feature is an explicit whisper to someone outside the group.
+KASC:RegisterMessage("LC_SYNC_ACCEPT", {}, function(_, ctx) LC.HandleSyncAccept(ctx.shortName) end)
+KASC:RegisterMessage("LC_SYNC_DECLINE", {}, function(_, ctx) LC.HandleSyncDecline(ctx.shortName) end)
+
+-- =====================================================================
 --  Test Function
 -- =====================================================================
 
@@ -1488,7 +1517,7 @@ function LC.StartTest(mode)
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
-            local myKey    = (KART.Identity.ResolvePlayer("player"))
+            local myKey    = (KASC.Identity.ResolvePlayer("player"))
             local rollsOn  = LC.GetRollsEnabled()
             if rollsOn and myShort ~= "" then
                 LC.rolls[testRollID][myKey] = math.random(1, 100)
@@ -1506,7 +1535,7 @@ function LC.StartTest(mode)
                     if name then
                         local short = name:match("([^%-]+)")
                         if short and short ~= myShort then
-                            local key = (KART.Identity.ResolvePlayer(unit))
+                            local key = (KASC.Identity.ResolvePlayer(unit))
                             LC.votes[testRollID][key] = {idx = voteIdx, note = ""}
                             voteIdx = (voteIdx % #buttons) + 1
                             if rollsOn then LC.rolls[testRollID][key] = math.random(1, 100) end

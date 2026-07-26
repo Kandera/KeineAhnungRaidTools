@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KASC = LibStub("KASC-1.0")
 
 -- Cache-Tabellen
 KART.InviteKeywordsTable = {}
@@ -79,7 +80,7 @@ function KART.HandleAutoPromote()
         if name then
             local shortName = name -- UnitName's first return is already realm-free
             -- Matches either the character's own short name (as always) or its Northern Sky Raid
-            -- Tools nickname (see KART.GetNickname), so a name in the promote list applies to
+            -- Tools nickname (see KASC.Identity.GetNickname), so a name in the promote list applies to
             -- every character sharing that nickname, not just one specific alt.
             local matches = shortName and KART.PromoteNamesTable[KAUtil.CaseFold(shortName)]
             if not matches and realm and realm ~= "" then
@@ -89,7 +90,7 @@ function KART.HandleAutoPromote()
                 matches = KART.PromoteNamesTable[KAUtil.CaseFold(name .. "-" .. realm)]
             end
             if not matches then
-                local nick = KART.GetNickname(unit)
+                local nick = KASC.Identity.GetNickname(unit)
                 matches = nick ~= nil and KART.PromoteNamesTable[nick]
             end
             if matches then

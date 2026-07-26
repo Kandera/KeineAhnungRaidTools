@@ -58,3 +58,6 @@ CreateStyledEditBox
 ShowInputDialog
 OpenColorPicker
 CORNER_RADIUS_LG
+Sync
+Identity
+GetNickname

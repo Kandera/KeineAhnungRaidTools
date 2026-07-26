@@ -1,6 +1,7 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAGS = LibStub("KAGS-1.0")
+local KASC = LibStub("KASC-1.0")
 local L = KART.L
 
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
@@ -369,9 +370,9 @@ function KART.CreateBuffCheckFrame()
 
     local function RequestAdvancedData()
         if IsInGroup() then
-            KART.Sync.Send("REQ_OIL")
-            KART.Sync.Send("REQ_ILVL")
-            KART.Sync.Send("REQ_GEAR")
+            KASC:Send("REQ_OIL")
+            KASC:Send("REQ_ILVL")
+            KASC:Send("REQ_GEAR")
         end
     end
 
@@ -1034,3 +1035,86 @@ function KART.UpdateBuffCheck(isPreview)
     end
     KART.BuffCheckFrame.scrollContent:SetHeight(math.min(iterMax, 40) * 26) -- render loop caps rows at 40 (Epic BGs)
 end
+
+-- =====================================================================
+--  Addon-message receivers -- the OIL/ILVL/GEAR/ENCH replies to KASC's REQ_* responders
+-- =====================================================================
+
+-- Whether s is a well-formed missing-slot list as KAGS.CountMissingGear produces them: "0", or one
+-- or more comma-separated entries, each an inventory slot number optionally suffixed with "w" for
+-- "wrong enchant". Used to reject a malformed GEAR reply before it reaches the cache (see the GEAR
+-- handler below). Entries are validated one at a time because Lua patterns can't quantify a group,
+-- so a single anchored "^%d+w?(,%d+w?)*$" would silently match nothing at all.
+local function IsSlotList(s)
+    if s == "" then return false end
+    if s:find(",,") or s:find("^,") or s:find(",$") then return false end -- no empty entries
+    for entry in s:gmatch("[^,]+") do
+        if not entry:match("^%d+w?$") then return false end
+    end
+    return true
+end
+
+-- One hand of an OIL payload: an enchantID, "0" for a weapon carrying nothing, or "n" for a hand that
+-- takes no oil at all (see the REQ_OIL responder). Returns nil for anything else, so a malformed or
+-- hostile reply is dropped instead of reaching the cache.
+local function ParseOilField(s)
+    if not s then return nil end
+    if s == "n" then return "n" end
+    if s:match("^%d+$") then return tonumber(s) end
+    return nil
+end
+
+KASC:RegisterMessage("OIL", { payload = true, group = true }, function(payload, ctx)
+    local mhStr, ohStr = payload:match("^([^:]+):([^:]+)$")
+    local mh, oh = ParseOilField(mhStr), ParseOilField(ohStr)
+    if mh and oh then
+        KART.OilCache = KART.OilCache or {}
+        KART.OilCache[ctx.shortName] = { mh = mh, oh = oh }
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)
+
+KASC:RegisterMessage("ILVL", { payload = true, group = true }, function(payload, ctx)
+    local ilvl = tonumber(payload)
+    if ilvl then
+        KART.ILvlCache = KART.ILvlCache or {}
+        KART.ILvlCache[ctx.shortName] = ilvl
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)
+
+KASC:RegisterMessage("ENCH", { payload = true, group = true }, function(payload, ctx)
+    -- Reply to REQ_ENCH: "slot=id" pairs, plus "oil=id" for the temporary weapon enchant. Purely
+    -- a maintenance tally (KART.PrintEnchantScan) — nothing renders it, so the only rule is that
+    -- one malformed entry drops the whole message rather than poisoning the counts.
+    local ids = {}
+    for entry in payload:gmatch("[^,]+") do
+        local k, v = entry:match("^(%w+)=(%d+)$")
+        if not k then return end
+        if k == "oil" then
+            ids.oil = v
+        elseif k:match("^%d+$") then
+            ids[tonumber(k)] = v
+        else
+            return
+        end
+    end
+    KART.EnchantScan = KART.EnchantScan or {}
+    KART.EnchantScan[ctx.shortName] = ids
+end)
+
+KASC:RegisterMessage("GEAR", { payload = true, group = true }, function(payload, ctx)
+    local e, g = payload:match("^([^:]+):([^:]+)")
+    -- Validate the shape before caching. Both fields are slot lists — "0" for "nothing missing",
+    -- otherwise comma-separated inventory slot NUMBERS, optionally "w"-suffixed for a wrong
+    -- enchant (see KAGS.CountMissingGear) — but the
+    -- captures above accept any colon-free text. BuffChecker renders an unrecognized slot through
+    -- string.format(BC_SLOT_FALLBACK, s), whose "%d" throws a Lua error on non-numeric input, so a
+    -- broken or hostile client could make the Advanced-view tooltip error on every hover. Rejecting
+    -- the whole message is also what keeps a bogus "-5 missing" count out of the cache.
+    if e and g and IsSlotList(e) and IsSlotList(g) then
+        KART.GearCache = KART.GearCache or {}
+        KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)

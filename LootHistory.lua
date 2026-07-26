@@ -1,6 +1,8 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
 local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LH = KART.LH or {}
 local LH = KART.LH
@@ -305,7 +307,7 @@ function LH.GetUniquePlayers()
             seen[id] = true
             local label = e.winner
             if e.winnerKey and e.winnerKey ~= "" then
-                label = KART.Identity.ResolveDisplayName(e.winnerKey) or e.winner
+                label = KASC.Identity.ResolveDisplayName(e.winnerKey) or e.winner
             end
             table.insert(list, { id = id, label = label })
         end
@@ -968,7 +970,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                     e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                     winnerKey, winnerSafe, reasonSafe, "")
             end
-            KART.Sync.Send(msg, "WHISPER", senderFullName)
+            KASC:Send(msg, "WHISPER", senderFullName)
         end)
     end
 end
@@ -977,7 +979,7 @@ end
 function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, item =
         payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
     t = tonumber(t)
@@ -1102,3 +1104,11 @@ function LH.HandleHistoryEntry(payload, senderKey)
         end
     end
 end
+
+-- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+KASC:RegisterMessage("LC_HIST_REQ", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender) end)
+KASC:RegisterMessage("LC_HIST_ENTRY", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LH.HandleHistoryEntry(payload, ctx:Key()) end)
