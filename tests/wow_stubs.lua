@@ -67,7 +67,18 @@ _G.time = os.time
 
 -- Frames ------------------------------------------------------------------------------
 -- No-op frame: enough for a library that creates an event frame or a scanning tooltip at
--- load time. Any method call returns the frame itself so chains do not blow up.
+-- load time. Any method call returns the frame itself so chains do not blow up. A few
+-- methods get real behavior on top of that, because the settings-widget store-binding tests
+-- need to drive them:
+--   SetScript/GetScript actually store and retrieve a handler, so a test can pull out the
+--   exact OnClick/OnValueChanged callback a factory registered and call it directly.
+--   SetChecked/GetChecked round-trip a real boolean, since a checkbox's OnClick handler reads
+--   self:GetChecked() to decide what value to write.
+--   GetWidth/GetHeight return 0, a freshly created frame's real starting size, so a size
+--   comparison (e.g. "skip rounding a frame this small") sees a number instead of the
+--   catch-all's frame-returning stub.
+-- HookScript is deliberately left on the catch-all: nothing under test invokes a hooked
+-- handler, only ordinary SetScript ones, so a real implementation isn't needed yet.
 local frameMeta
 frameMeta = {
     __index = function(t, k)
@@ -79,6 +90,18 @@ frameMeta = {
 function _G.CreateFrame(_, name, _, _)
     local f = setmetatable({}, frameMeta)
     if name then _G[name] = f end
+
+    local scripts = {}
+    function f:SetScript(scriptType, handler) scripts[scriptType] = handler; return f end
+    function f:GetScript(scriptType) return scripts[scriptType] end
+
+    local checked = false
+    function f:SetChecked(value) checked = not not value; return f end
+    function f:GetChecked() return checked end
+
+    function f:GetWidth() return 0 end
+    function f:GetHeight() return 0 end
+
     return f
 end
 _G.UIParent = setmetatable({}, frameMeta)

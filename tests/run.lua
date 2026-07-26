@@ -46,6 +46,7 @@ dofile("Libs/KAUI-1.0/KAUI-1.0.lua")
 -- Test files. Extended by each task that adds tests.
 dofile("tests/test_kautil.lua")
 dofile("tests/test_kags.lua")
+dofile("tests/test_kaui.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 os.exit(failures == 0 and 0 or 1)
