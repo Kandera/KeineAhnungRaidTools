@@ -149,6 +149,109 @@ before deciding whether it is worth changing.
 
 ---
 
+---
+
+## B11 — A raider with their own name in the Lootmaster field never sees a vote window
+
+**Symptom:** one specific raider silently receives no vote popup all evening. Invisible from the
+lootmaster's side — their council row just never fills in.
+
+**Cause:** `LC.IsConfigOwner` (`LootCouncil.lua:421`) reads *that client's own*
+`KART_Settings.lcLootmaster`. If it names themselves, `GetLootmaster()` returns their own key, so
+`LC.IsSenderLootOwner` compares the real lootmaster's key against their own and rejects every
+`LC_START`, `LC_MANUAL_START` and `LC_ACTIVE`.
+
+Anyone who once tried the addon solo is a candidate, because entering yourself is the natural thing
+to do when testing alone.
+
+**Fix direction:** the lootmaster identity that governs *incoming* authority should come from the
+raid config the lootmaster broadcasts, not from the receiver's own settings. Distinguish "who I
+think the lootmaster is" from "who this raid's lootmaster is".
+
+**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+
+---
+
+## B12 — A client that never accepts LC_CONFIG gets no council panel
+
+**Symptom:** a council member sees the vote popup but never the council panel, so their straw-poll
+vote never appears.
+
+**Cause:** `LC.HandleConfig` (`LootCouncil.lua:507`) accepts a config only when the payload's
+lootmaster field resolves, **on the receiver**, to the sender's own key. If the field holds an NSRT
+nickname and that peer has no NSRT installed, or has global nicknames switched off, resolution falls
+through to a pending-text key that can never equal a GUID. The config is dropped, that peer's
+`LC.CouncilNamesTable` stays empty, and `LC.IsCouncil()` is false for them.
+
+**Large mitigation:** if the lootmaster is *also* the raid leader, `IsSenderLootOwner` and
+`IsSenderCouncil` fall back to `UnitIsGroupLeader`, and this entire failure class cannot occur.
+
+**Fix direction:** accept a config from a sender who is already the established loot owner without
+requiring the payload to re-prove it, or resolve the lootmaster field against the sender rather than
+against the receiver's own view.
+
+**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+
+---
+
+## B13 — Two byte-identical items awarded to one player within five seconds record one history entry
+
+**Symptom:** the trade reminder correctly lists two items; the loot history shows one.
+
+**Cause:** `LH.LogHistory`'s duplicate guard (`LootHistory.lua:818-824`) suppresses a second call
+with the same item link, winner and reason inside five seconds. `DoAssignWinner` still creates the
+second pending trade, so the two disagree.
+
+Needs a genuine duplicate drop awarded twice to the same person back to back. Items differing in
+bonus IDs or item level produce different strings and are not affected. The result is at least
+consistent across all clients.
+
+**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+
+---
+
+## B14 — An oversized LC_CONFIG can leave the whole raid on stale config
+
+**Symptom:** nobody's configuration updates, indefinitely.
+
+**Cause:** `BuildCouncilPayload` (`LootCouncil.lua:403`) trims only the council list to fit the
+255-byte addon-message limit. If the fixed part alone — button labels up to 128 characters plus the
+lootmaster field — already exceeds the budget, the remaining budget goes negative, the council list
+becomes empty, and the still-oversized message is truncated by the transport. `HandleConfig`'s
+anchored pattern then fails on every client.
+
+**Early warning:** the `LC_CONFIG_TRUNCATED` line printed locally to the lootmaster.
+
+**Fix direction:** treat the fixed part as part of the budget and refuse to send, loudly, rather than
+sending something no client can parse.
+
+**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+
+---
+
+## Operational note — the Loot Council session does not survive a /reload
+
+Not a defect, but the single most likely way for loot distribution to silently stop working.
+
+`LC.sessionActive` resets to false on load. With the session off, `LC.OnStartLootRoll` returns
+immediately: the lootmaster does not auto-win Blizzard's roll, no `LC_START` is broadcast, and
+nobody sees a vote window. The item goes to whoever wins Blizzard's roll.
+
+The session prompt does return by itself, but only on the next `GROUP_ROSTER_UPDATE` and with a
+three-second delay, which is easy to miss mid-pull.
+
+**Recovery:** Loot Council settings tab, "Toggle Session".
+
+**Worth considering:** persisting the session state across a reload the way the combat-log ownership
+flag already is.
+
+---
+
+## Stale comment — `LC.assignedWinners`
+
+`LootCouncil.lua:1206-1207` documents the table as mapping rollID to a short name. It holds a
+resolved GUID. Every reader compares GUIDs, so only the comment is wrong.
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
