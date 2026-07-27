@@ -441,12 +441,21 @@ during a raid — are not covered by it, so a 1080p raider has no scale lever fo
 font-size settings. A per-window scale, or extending the existing slider to the Loot Council frames,
 is the fix worth designing.
 
-**Still open:** which panel actually overlaps. The vote window supplied as evidence shows no
-overlap — it starts at 380x200 and grows with its content, and its buttons wrap correctly. A
-screenshot of the overlapping panel is still needed, plus that raider's three font-size settings,
-since several panels compute column widths in fixed pixels while the font is user-configurable.
+**Ruled out: font settings overflowing fixed-width columns.** The affected raider runs every font
+size at its default (`titleFontSize` 12, `menuFontSize` 11, `contentFontSize` 12, `lcFontSize` 12).
 
-Reported 2026-07-27, mechanism established the same day.
+**No layout defect is involved.** With defaults everywhere and nothing sized from the screen, that
+client's geometry is identical to the maintainer's, pixel for pixel — only the canvas underneath is a
+third smaller. What reads as "overlapping" is KART windows intersecting each other and the rest of
+the interface because less room is left beside them, not text drawn over text. The vote window
+supplied as evidence bears that out: no overlap in it, buttons wrapping correctly, and it is not even
+a fixed size — it starts at 380x200 and grows with its content.
+
+So B18 reduces entirely to the missing scale lever above. Building that closes it; nothing else needs
+finding. A screenshot would still be worth having if overlap ever shows up *inside* one window rather
+than between two.
+
+Reported 2026-07-27, fully explained the same day.
 
 ---
 
