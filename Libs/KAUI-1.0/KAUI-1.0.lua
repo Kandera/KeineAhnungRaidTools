@@ -841,10 +841,11 @@ end
 --   key              the field inside store
 --   y                TOPLEFT y offset (the label sits 16px above this)
 --   tooltip          tooltip body text
---   skipStyleRefresh true for sliders whose value doesn't need a live restyle on every drag tick
---                    (e.g. a plain countdown timer); when true, onChanged below is never called
---   onChanged        called after the value changes, unless skipStyleRefresh is true; replaces
---                    the old direct UpdateStyles call
+--   onChanged        called after the value changes. A slider that needs no reaction simply omits
+--                    it -- there is no separate opt-out flag, and there must not be one: the
+--                    former skipStyleRefresh existed to suppress a hardcoded UpdateStyles call
+--                    that no longer exists, and had quietly become a switch that swallowed the
+--                    caller's own callback with no error and no symptom (B9).
 -- }
 -- Defined dot-style with an explicit `ns` receiver for the same reason as CreateModernButton
 -- above: the OnValueChanged/OnShow/OnEnter callbacks below are conventionally named `self` for
@@ -906,9 +907,7 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
         ResolveStore(opts.store)[opts.key] = val
         self.valueText:SetText(val)
         positionGlow()
-        -- skipStyleRefresh: sliders whose value doesn't need a restyle on every drag tick skip
-        -- the onChanged call entirely.
-        if not opts.skipStyleRefresh and opts.onChanged then opts.onChanged() end
+        if opts.onChanged then opts.onChanged() end
     end)
     s:SetScript("OnEnter", function() glow:SetAlpha(0.35) end)
     s:SetScript("OnLeave", function() if not s.isDragging then glow:SetAlpha(0) end end)

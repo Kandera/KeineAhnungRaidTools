@@ -22,7 +22,19 @@ function KART.UpdateCache()
             -- Trim each entry (like the keywords above) — an untrimmed " bar" from "Foo; Bar" would
             -- never match a short name or NSRT nickname in HandleAutoPromote.
             local trimmed = KAUtil.TrimString(name)
-            if trimmed ~= "" then KART.PromoteNamesTable[trimmed] = true end
+            if trimmed ~= "" then
+                KART.PromoteNamesTable[trimmed] = true
+                -- Also store a realm-canonicalized form of any "Name-Realm" entry. UnitName returns
+                -- a cross-realm unit's realm in its DISPLAY spelling ("Tarren Mill"), while a name
+                -- pasted from the WoWUtils export carries the normalized one ("TarrenMill") — so the
+                -- realm-qualified branch of HandleAutoPromote could never match for those players
+                -- and they were silently never promoted (B15). Same canonicalization
+                -- KAUtil.IsFullNameInGroup has always applied for the same reason.
+                local base, realm = trimmed:match("^(.-)%-(.+)$")
+                if base and realm then
+                    KART.PromoteNamesTable[base .. "-" .. KAUtil.CanonRealm(realm)] = true
+                end
+            end
         end
     end
 end
@@ -87,7 +99,14 @@ function KART.HandleAutoPromote()
                 -- Also accept a realm-qualified entry. "Name-Realm" is the format the WoWUtils
                 -- export uses and the format this function itself passes to PromoteToAssistant, so a
                 -- user copying a name from there would otherwise never get promoted.
-                matches = KART.PromoteNamesTable[KAUtil.CaseFold(name .. "-" .. realm)]
+                --
+                -- Both spellings, because the two sides disagree: UnitName gives a cross-realm unit
+                -- its display realm ("Tarren Mill") while the export gives the normalized one
+                -- ("TarrenMill"). UpdateCache stores a canonicalized key alongside the raw entry,
+                -- so checking the canonical form here closes the gap from the other end too (B15).
+                local folded = KAUtil.CaseFold(name)
+                matches = KART.PromoteNamesTable[folded .. "-" .. KAUtil.CaseFold(realm)]
+                       or KART.PromoteNamesTable[folded .. "-" .. KAUtil.CanonRealm(realm)]
             end
             if not matches then
                 local nick = KASC.Identity.GetNickname(unit)

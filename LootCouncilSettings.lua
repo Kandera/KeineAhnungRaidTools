@@ -294,7 +294,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.SldVoteTimer = KART.UI:CreateSettingsSlider(raidBox, {
         name = "KART_LCVoteTimerSlider", label = L.LC_SET_VOTE_TIMER,
         min = 5, max = 180, store = SettingsStore, key = "lcVoteSeconds", y = -52,
-        tooltip = L.LC_DESC_VOTE_TIMER, skipStyleRefresh = true,
+        tooltip = L.LC_DESC_VOTE_TIMER,
     })
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —

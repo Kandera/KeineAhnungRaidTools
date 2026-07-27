@@ -282,7 +282,7 @@ KART.CbRcReasonDialog = KART.UI:CreateSettingsCheckbox(rlCard, {
 KART.PullSlider = KART.UI:CreateSettingsSlider(rlCard, {
     name = "KART_PullTimerSlider", label = L.SET_PULL_TIMER,
     min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -160,
-    tooltip = L.DESC_PULL_TIMER, skipStyleRefresh = true,
+    tooltip = L.DESC_PULL_TIMER,
 })
 
 -- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
@@ -464,7 +464,7 @@ KART.SldBuffCheckAlpha:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -46)
 KART.SldCombatDelay = KART.UI:CreateSettingsSlider(bcCard, {
     name = "KART_BuffCheckCombatDelaySlider", label = L.SET_BC_COMBAT_DELAY,
     min = 0, max = 30, store = SettingsStore, key = "bcCombatDelay", y = -90,
-    tooltip = L.DESC_BC_COMBAT_DELAY, skipStyleRefresh = true,
+    tooltip = L.DESC_BC_COMBAT_DELAY,
 })
 KART.SldCombatDelay:ClearAllPoints()
 KART.SldCombatDelay:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 260, -106)
@@ -572,7 +572,7 @@ KART.CbAlMythicPlus.text:SetJustifyH("LEFT")
 KART.SldAlMinKey = KART.UI:CreateSettingsSlider(alCard, {
     name = "KART_AlMinKeySlider", label = L.SET_AL_MIN_KEY,
     min = 2, max = 20, store = SettingsStore, key = "autoLogMinKey", y = -80,
-    tooltip = L.DESC_AL_MIN_KEY, skipStyleRefresh = true,
+    tooltip = L.DESC_AL_MIN_KEY,
 })
 KART.SldAlMinKey:HookScript("OnValueChanged", AutoLogChanged)
 KART.SldAlMinKey:ClearAllPoints()
