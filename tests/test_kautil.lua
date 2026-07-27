@@ -57,6 +57,14 @@ units = {}
 for unit in KAUtil.EachGroupUnit() do units[#units + 1] = unit end
 T.deep_eq(units, { "party1", "party2", "player" }, "EachGroupUnit yields player last in a party")
 
+-- Solo. GetNumGroupMembers reports 0 here, which used to make the iterator yield nothing at all --
+-- see B7: the player's own name and nickname then resolved through nothing, so a lootmaster who had
+-- entered themselves stayed unresolvable and every loot-owner control stayed greyed out.
+KARTTEST.SetParty({})
+units = {}
+for unit in KAUtil.EachGroupUnit() do units[#units + 1] = unit end
+T.deep_eq(units, { "player" }, "EachGroupUnit yields the player alone when solo")
+
 -- CanonRealm ---------------------------------------------------------------------------
 -- Exported (not file-local) so other callers can reuse this exact realm-normalization (see
 -- docs/BACKLOG.md B15) — IsFullNameInGroup below already exercises it indirectly, this covers the

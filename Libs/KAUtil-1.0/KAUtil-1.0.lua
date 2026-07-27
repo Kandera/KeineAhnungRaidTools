@@ -1,6 +1,6 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 2
+local MAJOR, MINOR = "KAUtil-1.0", 3
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
 
@@ -37,14 +37,26 @@ function KAUtil.HasGroupPermissions()
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end
 
--- Iterates every current raid/party unit token, including the player. Returns (unit, index)
--- so callers that pool rows by position keep their index. Yields nothing when not in a group.
+-- Iterates every current raid/party unit token, including the player. Returns (unit, index) so
+-- callers that pool rows by position keep their index. Solo counts as a group of one.
+--
+-- GetNumGroupMembers reports 0 while solo rather than 1, so this used to yield nothing at all and
+-- "player" was never visited. Everything built on it then failed in ways that looked unrelated:
+-- Identity could not resolve the player's own name or nickname, so a lootmaster who had entered
+-- themselves stayed unresolvable and every loot-owner control was greyed out (B7); the council panel
+-- rendered no rows at all in solo test mode; and Invite.lua carries a hand-written workaround for
+-- the same gap. Solo is a group of one -- WoW's 0 is the anomaly, not the caller's expectation.
 function KAUtil.EachGroupUnit()
     local isRaid = IsInRaid()
     local numMem = GetNumGroupMembers()
+    local solo = numMem == 0
     local i = 0
     return function()
         i = i + 1
+        if solo then
+            if i > 1 then return nil end
+            return "player", 1
+        end
         if i > numMem then return nil end
         return (isRaid and ("raid" .. i) or (i == numMem and "player" or "party" .. i)), i
     end
