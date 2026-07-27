@@ -407,10 +407,22 @@ local ADDON_MSG_MAX_BYTES = 255
 -- Fits council (the ";"-separated, variable-length tail shared by LC_CONFIG and LC_SYNC_REQUEST)
 -- into the addon-message byte budget left after prefix — dropping whole trailing entries rather than
 -- splitting one mid-name, and warning the user locally when it had to. Returns the full payload.
+-- Returns nil when the fixed part alone cannot fit, in which case nothing must be sent.
+--
+-- Trimming the council list is only meaningful while there is a budget left to trim it into. Button
+-- labels run to 128 characters and the lootmaster field is unbounded, so the prefix on its own can
+-- exceed the limit -- and the old code then emptied the council list, still returned the oversized
+-- prefix, and let the transport chop it. Every client's anchored HandleConfig pattern fails on the
+-- result, so the whole raid silently stays on stale config: the exact failure this function's
+-- truncation exists to avoid, reached by trying to avoid it. Refuse instead, and say so.
 local function BuildCouncilPayload(prefix, council)
     local budget = ADDON_MSG_MAX_BYTES - #prefix
-    if #council > math.max(budget, 0) then
-        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
+    if budget <= 0 then
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TOO_LONG)
+        return nil
+    end
+    if #council > budget then
+        council = council:sub(1, budget):match("^(.*);") or ""
         print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
     end
     return prefix .. council
@@ -484,7 +496,8 @@ function LC.BroadcastRaidConfig(target)
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
-    LC.SendLC(BuildCouncilPayload(prefix, council), target)
+    local payload = BuildCouncilPayload(prefix, council)
+    if payload then LC.SendLC(payload, target) end
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
@@ -849,7 +862,9 @@ function LC.SendSettingsSync(targetName)
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    KASC:Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    local payload = BuildCouncilPayload(prefix, council)
+    if not payload then return end
+    KASC:Send(payload, "WHISPER", targetName)
     -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
     -- messages are deliberately not group-gated — the whole feature targets someone outside the
     -- group — which without this would let anyone spam a line into our chat frame at will.
