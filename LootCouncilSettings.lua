@@ -244,6 +244,7 @@ function LC.BuildSettingsPanel(parent)
         min = 1, max = #KART.StrataLevels, store = SettingsStore, key = "lcFrameStrata", y = -305,
         tooltip = L.LC_DESC_STRATA,
         onChanged = function() LC.ApplyWindowChrome() end,
+        valueIsText = true, -- shows the stratum NAME, so its value box stays read-only
     })
     -- Shows the stratum's NAME instead of the raw index, exactly as the main window's own layer
     -- slider does (see UpdateStrataSliderText in MainFrame.lua); OnShow covers the case where the

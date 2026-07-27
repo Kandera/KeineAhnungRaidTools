@@ -841,6 +841,8 @@ end
 --   key              the field inside store
 --   y                TOPLEFT y offset (the label sits 16px above this)
 --   tooltip          tooltip body text
+--   valueIsText      true for a slider whose value is displayed as a NAME rather than its number
+--                    (the window-layer sliders); its value box stays read-only
 --   onChanged        called after the value changes. A slider that needs no reaction simply omits
 --                    it -- there is no separate opt-out flag, and there must not be one: the
 --                    former skipStyleRefresh existed to suppress a hardcoded UpdateStyles call
@@ -873,8 +875,45 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     s.title:SetText(opts.label)
     ns:RegisterLabel(s.title)
 
-    s.valueText = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- An EditBox rather than a FontString, so the number can be TYPED instead of only dragged
+    -- (GitHub issue #6). Styled to look exactly like the label it replaces: no backdrop, no border,
+    -- same font -- it reads as text until clicked. Sits above the track, so it never intercepts a
+    -- drag on the slider itself.
+    --
+    -- opts.valueIsText is for the sliders that display a NAME rather than their raw number (the
+    -- window-layer ones, which show "HIGH" for 4). Typing into those is meaningless, so they keep
+    -- the old read-only behaviour; SetText from the caller's own hook still works either way.
+    s.valueText = CreateFrame("EditBox", nil, s)
     s.valueText:SetPoint("BOTTOMRIGHT", s, "TOPRIGHT", 0, 4)
+    s.valueText:SetSize(60, 16)
+    s.valueText:SetFontObject("GameFontHighlightSmall")
+    s.valueText:SetJustifyH("RIGHT")
+    s.valueText:SetAutoFocus(false)
+
+    if opts.valueIsText then
+        s.valueText:EnableMouse(false)
+        s.valueText:EnableKeyboard(false)
+    else
+        s.valueText:SetNumeric(true)
+        local function commit(self)
+            local typed = tonumber(self:GetText())
+            if typed then
+                -- Clamp rather than reject: someone typing 500 into a 50-150 slider means "as far
+                -- as it goes", and silently discarding the entry would just look broken.
+                s:SetValue(math.max(opts.min, math.min(opts.max, math.floor(typed))))
+            end
+            -- Always re-render from the slider's actual value, so a rejected or clamped entry can
+            -- never leave a number on screen that the setting does not hold.
+            self:SetText(math.floor(s:GetValue()))
+            self:ClearFocus()
+        end
+        s.valueText:SetScript("OnEnterPressed", commit)
+        s.valueText:SetScript("OnEditFocusLost", commit)
+        s.valueText:SetScript("OnEscapePressed", function(self)
+            self:SetText(math.floor(s:GetValue()))
+            self:ClearFocus()
+        end)
+    end
 
     -- Soft glow behind the thumb, hidden by default, faded in on hover/drag via alpha rather
     -- than Show/Hide so it never fights another script over the frame's visibility.

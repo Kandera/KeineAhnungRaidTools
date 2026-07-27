@@ -639,6 +639,7 @@ KART.SldFrameStrata = KART.UI:CreateSettingsSlider(ifCard, {
     min = 1, max = #KART.StrataLevels, store = SettingsStore, key = "frameStrata", y = -150,
     tooltip = L.DESC_FRAME_STRATA,
     onChanged = function() KART.UpdateStyles() end,
+    valueIsText = true, -- shows the stratum NAME, so its value box stays read-only
 })
 local function UpdateStrataSliderText(self)
     self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
