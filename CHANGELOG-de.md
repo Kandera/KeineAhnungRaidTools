@@ -6,7 +6,7 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0]
+## [3.0.0] - 2026-07-27
 ### Geändert
 - **Versionsprüfung neu gebaut.** Clients mit 2.9 oder älter erscheinen erst nach einem Update wieder in der Liste.
 - **Dieses Release enthält eine große interne Überarbeitung.** Alles, was du gespeichert hast, bleibt erhalten — Einstellungen, Loot-Historie, Officer-Notizen, Profile und ausstehende Trades.
