@@ -1,4 +1,12 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+
+-- This file's checkbox is built at file load time, before Core.lua's ADDON_LOADED handler has
+-- created KART_Settings -- passing the table directly here would freeze it onto nil forever.
+-- Passed as `store` instead of the table itself, so KAUI resolves the current global at click
+-- time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
 
 KART.WU = KART.WU or {}
 local WU = KART.WU
@@ -17,7 +25,7 @@ WU.bosses = {}  -- { encounterID, difficulty, name, players[] }
 -- difficulty, they're labeled "Boss Name A", "Boss Name B", ... in import
 -- order so they stay distinguishable. Use WU.ResetBosses() to clear everything.
 function WU.ParseImport(rawText)
-    if not rawText or KART.TrimString(rawText) == "" then return 0 end
+    if not rawText or KAUtil.TrimString(rawText) == "" then return 0 end
 
     local parsedCount = 0
     -- intentional: the invitelist capture [^;]+ is correct for the real WoWUtils export — each
@@ -27,9 +35,9 @@ function WU.ParseImport(rawText)
     for encounterID, difficulty, bossName, playerStr in rawText:gmatch(
             "EncounterID:(%d+);Difficulty:([^;]+);Name:([^\n\r]+)%s+invitelist:([^;]+)") do
 
-        bossName   = KART.TrimString(bossName)
-        difficulty = KART.TrimString(difficulty)
-        playerStr  = KART.TrimString(playerStr)
+        bossName   = KAUtil.TrimString(bossName)
+        difficulty = KAUtil.TrimString(difficulty)
+        playerStr  = KAUtil.TrimString(playerStr)
         encounterID = tonumber(encounterID)
 
         local players = {}
@@ -131,7 +139,7 @@ function WU.InviteBoss(idx)
     if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
-    if not KART.HasGroupPermissions() then
+    if not KAUtil.HasGroupPermissions() then
         print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
@@ -149,22 +157,22 @@ function WU.InviteBoss(idx)
     do
         local myName, myRealm = UnitName("player")
         if myName then
-            alreadyIn[KART.CaseFold(myName)] = true
-            if myRealm and myRealm ~= "" then alreadyIn[KART.CaseFold(myName.."-"..myRealm)] = true end
+            alreadyIn[KAUtil.CaseFold(myName)] = true
+            if myRealm and myRealm ~= "" then alreadyIn[KAUtil.CaseFold(myName.."-"..myRealm)] = true end
             local normalized = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
             if normalized and normalized ~= "" then
-                alreadyIn[KART.CaseFold(myName.."-"..normalized)] = true
+                alreadyIn[KAUtil.CaseFold(myName.."-"..normalized)] = true
             end
         end
     end
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
             local full = (realm and realm ~= "") and (name.."-"..realm) or name
             -- CaseFold (not :lower()) so DE-realm umlaut names fold consistently with the boss list
             -- below — :lower() is ASCII-only and leaves Ö/Ä/Ü untouched (see Utils.lua CaseFold).
-            alreadyIn[KART.CaseFold(full)] = true
-            alreadyIn[KART.CaseFold(name)] = true
+            alreadyIn[KAUtil.CaseFold(full)] = true
+            alreadyIn[KAUtil.CaseFold(name)] = true
         end
     end
 
@@ -177,7 +185,7 @@ function WU.InviteBoss(idx)
     local toInvite = 0
     for _, player in ipairs(boss.players) do
         local short = player:match("([^%-]+)") or player
-        if not (alreadyIn[KART.CaseFold(player)] or alreadyIn[KART.CaseFold(short)]) then toInvite = toInvite + 1 end
+        if not (alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)]) then toInvite = toInvite + 1 end
     end
     -- Solo counts too: UnitIsGroupLeader("player") is false when ungrouped, which would skip the
     -- else-branch that flags the deferred conversion — so gate on "solo OR party leader" instead.
@@ -198,7 +206,7 @@ function WU.InviteBoss(idx)
     local skipped = 0
     for _, player in ipairs(boss.players) do
         local short = player:match("([^%-]+)") or player
-        if alreadyIn[KART.CaseFold(player)] or alreadyIn[KART.CaseFold(short)] then
+        if alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)] then
             skipped = skipped + 1
         else
             C_PartyInfo.InviteUnit(player)
@@ -220,7 +228,7 @@ function WU.RemoveForBoss(idx)
     if not boss then return end
     -- Leader OR assistant may uninvite in-game, so gate the same way WU.InviteBoss does rather than
     -- being stricter (leader-only) for no reason.
-    if not KART.HasGroupPermissions() then
+    if not KAUtil.HasGroupPermissions() then
         print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
@@ -232,13 +240,13 @@ function WU.RemoveForBoss(idx)
     local keepSet = {}
     for _, p in ipairs(boss.players) do
         -- CaseFold (not :lower()) so umlaut names fold consistently with the roster check below.
-        keepSet[KART.CaseFold(p)] = true
+        keepSet[KAUtil.CaseFold(p)] = true
         local short = p:match("([^%-]+)")
-        if short then keepSet[KART.CaseFold(short)] = true end
+        if short then keepSet[KAUtil.CaseFold(short)] = true end
     end
 
     local removed = 0
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         -- Never uninvite yourself. EachGroupUnit yields raid1..raidN in a raid (never the literal
         -- "player" token), so a plain unit ~= "player" guard would fail to exclude your own raid
         -- slot — UnitIsUnit matches the player under whatever token currently represents them, so
@@ -247,7 +255,7 @@ function WU.RemoveForBoss(idx)
             local name, realm = UnitName(unit)
             if name then
                 local full = (realm and realm ~= "") and (name.."-"..realm) or name
-                if not keepSet[KART.CaseFold(full)] and not keepSet[KART.CaseFold(name)] then
+                if not keepSet[KAUtil.CaseFold(full)] and not keepSet[KAUtil.CaseFold(name)] then
                     -- Uninvite the specific character (full Name-Realm) — the realm-free short name
                     -- is ambiguous when a same-named cross-realm twin is in the group.
                     UninviteUnit(full)
@@ -259,7 +267,7 @@ function WU.RemoveForBoss(idx)
     print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, boss.name))
 end
 
-KART.RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
     text = "Really reset the boss list?", -- overwritten with KART.L.WU_RESET_CONFIRM_TEXT before every StaticPopup_Show call below
     button1 = YES,
     button2 = NO,
@@ -312,13 +320,13 @@ function WU.RefreshBossList()
             row.nameText:SetPoint("LEFT", 6, 0)
             row.nameText:SetWidth(140)
             row.nameText:SetJustifyH("LEFT")
-            table.insert(KART.DynamicLabels, row.nameText)
+            KART.UI:RegisterLabel(row.nameText)
 
-            row.btnInvite = KART.CreateModernButton(row, KART.L.WU_BTN_INVITE)
+            row.btnInvite = KART.UI:CreateModernButton(row, KART.L.WU_BTN_INVITE)
             row.btnInvite:SetSize(70, 22)
             row.btnInvite:SetPoint("RIGHT", row, "RIGHT", -76, 0)
 
-            row.btnRemove = KART.CreateModernButton(row, KART.L.WU_BTN_REMOVE)
+            row.btnRemove = KART.UI:CreateModernButton(row, KART.L.WU_BTN_REMOVE)
             row.btnRemove:SetSize(70, 22)
             row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -2, 0)
 
@@ -328,7 +336,7 @@ function WU.RefreshBossList()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i-1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT",   panel, "RIGHT",   0, 0)
-        local lr, lg, lb = KART.GetRowStripeColor()
+        local lr, lg, lb = KART.UI:GetRowStripeColor()
         row:SetBackdropColor(lr, lg, lb, i % 2 == 0 and 0.4 or 0.15)
         row:SetBackdropBorderColor(0.18, 0.18, 0.18, 1)
 
@@ -366,18 +374,20 @@ function WU.BuildPanel(parent)
     KART.CreateTabTitle(6, L.WU_TITLE)
 
     -- Master switch: fully disables the WoWUtils import/invite module.
-    KART.WU.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        parent, "KART_WUModuleEnabled",
-        L.WU_SET_MODULE_ENABLED, "wuModuleEnabled", -7, nil, L.WU_DESC_MODULE_ENABLED)
+    KART.WU.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
+        name = "KART_WUModuleEnabled", label = L.WU_SET_MODULE_ENABLED,
+        store = SettingsStore, key = "wuModuleEnabled", y = -7,
+        tooltip = L.WU_DESC_MODULE_ENABLED,
+    })
 
-    local importCard = KART.CreateCard(parent)
+    local importCard = KART.UI:CreateCard(parent)
     importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -47)
     importCard:SetSize(500, 190)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     pasteLabel:SetPoint("TOPLEFT", 20, -15)
     pasteLabel:SetText(L.WU_LABEL_PASTE)
-    table.insert(KART.DynamicLabels, pasteLabel)
+    KART.UI:RegisterLabel(pasteLabel)
 
     local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
     pasteBG:SetSize(460, 90)
@@ -387,19 +397,20 @@ function WU.BuildPanel(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    -- Same inset/border colors as KART.CreateStyledEditBox; the multi-line box can't use that
+    -- Same inset/border colors as KART.UI:CreateStyledEditBox; the multi-line box can't use that
     -- factory directly (the EditBox lives inside a ScrollFrame, the visual box is this frame),
     -- so the focus accent is mirrored below via the inner EditBox's focus scripts.
     pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
     pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    KART.ApplyRoundedMask(pasteBG, KART.Theme.CORNER_RADIUS_LG)
+    KART.UI:ApplyRoundedMask(pasteBG, KAUI.CORNER_RADIUS_LG)
 
     local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
     pasteScroll:SetPoint("TOPLEFT", 4, -4)
     pasteScroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-    KART.WUPasteScrollThumb = KART.StripScrollbarTextures(pasteScroll)
-    if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetSize(6, 16) end
+    local pasteScrollThumb = KART.UI:StripScrollbarTextures(pasteScroll)
+    if pasteScrollThumb then pasteScrollThumb:SetSize(6, 16) end
+    KART.UI:RegisterAccentTexture(pasteScrollThumb, 0.6)
 
     WU.ImportEditBox = CreateFrame("EditBox", "KART_WUImportEditBox", pasteScroll)
     WU.ImportEditBox:SetWidth(428)
@@ -417,22 +428,22 @@ function WU.BuildPanel(parent)
     end)
     WU.ImportEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     WU.ImportEditBox:SetScript("OnEditFocusGained", function()
-        local r, g, b = KART.Theme.AccentColor()
+        local r, g, b = KART.UI:AccentColor()
         pasteBG:SetBackdropBorderColor(r, g, b, 1)
     end)
     WU.ImportEditBox:SetScript("OnEditFocusLost", function()
         pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     end)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
-    table.insert(KART.EditBoxes, WU.ImportEditBox)
+    KART.UI:RegisterEditBox(WU.ImportEditBox)
 
-    WU.BtnImport = KART.CreateModernButton(importCard, L.WU_BTN_IMPORT)
+    WU.BtnImport = KART.UI:CreateModernButton(importCard, L.WU_BTN_IMPORT)
     WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
         if KART_Settings.wuModuleEnabled == false then return end
         local text = WU.ImportEditBox:GetText()
-        if KART.TrimString(text) ~= "" and text == WU.lastImportedText then
+        if KAUtil.TrimString(text) ~= "" and text == WU.lastImportedText then
             -- Identical to what's already loaded (e.g. auto-parsed from the saved text at login) —
             -- re-parsing would duplicate every boss. Report it as already loaded instead.
             WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, #WU.bosses))
@@ -462,7 +473,7 @@ function WU.BuildPanel(parent)
         end
     end)
 
-    WU.BtnReset = KART.CreateModernButton(importCard, L.WU_BTN_RESET)
+    WU.BtnReset = KART.UI:CreateModernButton(importCard, L.WU_BTN_RESET)
     WU.BtnReset:SetSize(100, 26)
     WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()
@@ -479,7 +490,7 @@ function WU.BuildPanel(parent)
     WU.statusLabel:SetPoint("TOPLEFT", 20, -168)
     WU.statusLabel:SetText(L.WU_STATUS_EMPTY)
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
-    table.insert(KART.DynamicLabels, WU.statusLabel)
+    KART.UI:RegisterLabel(WU.statusLabel)
 
     local sep = parent:CreateTexture(nil, "ARTWORK")
     sep:SetColorTexture(0.22, 0.22, 0.22, 1)
@@ -490,17 +501,17 @@ function WU.BuildPanel(parent)
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hBoss:SetPoint("TOPLEFT", 8, -262)
     hBoss:SetText("|cffaaaaaa" .. L.WU_COL_BOSS .. "|r")
-    table.insert(KART.DynamicLabels, hBoss)
+    KART.UI:RegisterLabel(hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hInvite:SetPoint("TOPRIGHT", -110, -262)
     hInvite:SetText("|cffaaaaaa" .. L.WU_BTN_INVITE .. "|r")
-    table.insert(KART.DynamicLabels, hInvite)
+    KART.UI:RegisterLabel(hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hRemove:SetPoint("TOPRIGHT", -38, -262)
     hRemove:SetText("|cffaaaaaa" .. L.WU_BTN_REMOVE .. "|r")
-    table.insert(KART.DynamicLabels, hRemove)
+    KART.UI:RegisterLabel(hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
     WU.bossListFrame:SetPoint("TOPLEFT",  5, -278)
@@ -512,9 +523,9 @@ function WU.BuildPanel(parent)
     WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 6, -6)
     WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY)
     WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
-    table.insert(KART.DynamicLabels, WU.bossListFrame.emptyLabel)
+    KART.UI:RegisterLabel(WU.bossListFrame.emptyLabel)
 
-    KART.RegisterLocaleRefresher(function()
+    KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
         KART.TabTitles[6]:SetText(Lx.WU_TITLE)
         KART.WU.CbModuleEnabled.text:SetText(Lx.WU_SET_MODULE_ENABLED)

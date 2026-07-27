@@ -1,4 +1,7 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC.OfficerNotes = KART.LC.OfficerNotes or {}
 local OfficerNotes = KART.LC.OfficerNotes
@@ -20,7 +23,7 @@ function OfficerNotes.SetOfficerNote(playerKey, noteText)
     -- row's tooltip AND persisted in KART_LCOfficerNotes forever, so a "|c"/"|H"/"|T" escape would
     -- inject coloured text, a fake hyperlink or a texture into every council member's UI for good.
     -- Both stripped before the local store and the broadcast, so every client keeps identical text.
-    noteText = (KART.TrimString(noteText or ""):gsub("[:|]", ""))
+    noteText = (KAUtil.TrimString(noteText or ""):gsub("[:|]", ""))
     KART_LCOfficerNotes[playerKey] = (noteText ~= "") and noteText or nil
     LC.SendLC("LC_ONOTE:" .. playerKey .. ":" .. noteText)
     KART.LC.Council.RefreshCouncilRows()
@@ -43,12 +46,12 @@ end
 
 -- Re-resolves one legacy (short-name-text-keyed) KART_LCOfficerNotes entry to a GUID-based key,
 -- if the named player can currently be resolved (live in the group, or previously cached — see
--- KART.Identity.ResolvePlayer). Returns true if it migrated the entry, false if it's still
+-- KASC.Identity.ResolvePlayer). Returns true if it migrated the entry, false if it's still
 -- unresolvable (left untouched, never deleted, so no note is ever silently lost — retried again
 -- next time this runs, see the GROUP_ROSTER_UPDATE hook that calls this).
 function OfficerNotes.MigrateOfficerNoteKey(oldKey)
-    if KART.Identity.IsResolvedKey(oldKey) then return false end -- already migrated
-    local newKey, isPending = KART.Identity.ResolvePlayer(oldKey)
+    if KASC.Identity.IsResolvedKey(oldKey) then return false end -- already migrated
+    local newKey, isPending = KASC.Identity.ResolvePlayer(oldKey)
     if isPending then return false end
     -- Don't clobber a note already written under the resolved GUID key (e.g. edited normally after
     -- the legacy entry went stale) with the older text-keyed one — keep the newer GUID note.
@@ -60,12 +63,16 @@ function OfficerNotes.MigrateOfficerNoteKey(oldKey)
 end
 
 function OfficerNotes.ShowOfficerNoteDialog(playerKey, playerDisplayName)
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = string.format(KART.L.LC_OFFICER_NOTE_PROMPT, playerDisplayName),
         maxLetters = 120,
         initialText = KART_LCOfficerNotes[playerKey] or "",
         allowEmpty = true, -- empty input clears the note (see SetOfficerNote)
         okLabel = OKAY, ---@diagnostic disable-line: undefined-global
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(text) OfficerNotes.SetOfficerNote(playerKey, text) end,
     })
 end
+
+KASC:RegisterMessage("LC_ONOTE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) OfficerNotes.HandleOfficerNote(payload, ctx:Key()) end)

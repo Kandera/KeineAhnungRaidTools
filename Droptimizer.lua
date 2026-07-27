@@ -1,4 +1,11 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+
+-- This file's checkbox is built at file load time, before Core.lua's ADDON_LOADED handler has
+-- created KART_Settings -- passing the table directly here would freeze it onto nil forever.
+-- Passed as `store` instead of the table itself, so KAUI resolves the current global at click
+-- time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
+local function SettingsStore() return KART_Settings end
 
 KART.DT = KART.DT or {}
 local DT = KART.DT
@@ -28,7 +35,7 @@ local function NormalizeKey(name, realm)
     -- name starting with "Ö" would otherwise never match its lowercased "ö" cache key. The single
     -- "-" between name and realm is the ONLY hyphen left (realm hyphens are stripped above), so the
     -- short-name split in FindPlayerCandidates stays unambiguous.
-    return KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))
+    return KAUtil.CaseFold(name) .. "-" .. KAUtil.CaseFold(CanonicalizeRealm(realm))
 end
 
 function DT.RebuildIndex()
@@ -45,9 +52,9 @@ function DT.RebuildIndex()
             -- never contain one, so everything after it is the realm slug.
             local name, realm = key:match("^([^%-]+)%-(.+)$")
             if name and realm then
-                DT.index[KART.CaseFold(name) .. "-" .. KART.CaseFold(CanonicalizeRealm(realm))] = candidates
+                DT.index[KAUtil.CaseFold(name) .. "-" .. KAUtil.CaseFold(CanonicalizeRealm(realm))] = candidates
             else
-                DT.index[KART.CaseFold(key)] = candidates -- malformed / realm-less key: keep as-is
+                DT.index[KAUtil.CaseFold(key)] = candidates -- malformed / realm-less key: keep as-is
             end
         end
     end
@@ -61,7 +68,7 @@ local function FindPlayerCandidates(shortName)
     local ownRealmKey = NormalizeKey(shortName, GetRealmName())
     if ownRealmKey and DT.index[ownRealmKey] then return DT.index[ownRealmKey] end
 
-    local shortLower = KART.CaseFold(shortName)
+    local shortLower = KAUtil.CaseFold(shortName)
     local match, matchCount = nil, 0
     for key, candidates in pairs(DT.index) do
         if key:match("^([^%-]+)") == shortLower then
@@ -167,11 +174,14 @@ function DT.BuildLootCouncilToggle(parent)
     -- Master switch: fully disables the gain% column in Loot Council. The addon never holds a
     -- WoWUtils credential itself — all networking happens in the external KART Companion app,
     -- which only hands data to us via KART_WoWUtilsCache.
-    DT.CbModuleEnabled = KART.CreateSettingsCheckbox(
-        parent, "KART_DTModuleEnabled",
-        L.DT_SET_MODULE_ENABLED, "dtModuleEnabled", -75, function()
+    DT.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
+        name = "KART_DTModuleEnabled", label = L.DT_SET_MODULE_ENABLED,
+        store = SettingsStore, key = "dtModuleEnabled", y = -75,
+        onChanged = function()
             if KART.LC and KART.LC.Council and KART.LC.Council.RefreshCouncilRows then KART.LC.Council.RefreshCouncilRows() end
-        end, L.DT_DESC_MODULE_ENABLED)
+        end,
+        tooltip = L.DT_DESC_MODULE_ENABLED,
+    })
 end
 
 -- Fills General Settings, anchored below the Reset button — sync status is about the companion
@@ -183,7 +193,7 @@ function DT.BuildSyncStatus(parent)
     DT.statusLabel:SetPoint("TOPLEFT", KART.BtnReset, "BOTTOMLEFT", 0, -20)
     DT.statusLabel:SetWidth(460)
     DT.statusLabel:SetJustifyH("LEFT")
-    table.insert(KART.DynamicLabels, DT.statusLabel)
+    KART.UI:RegisterLabel(DT.statusLabel)
 
     local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     hint:SetPoint("TOPLEFT", DT.statusLabel, "BOTTOMLEFT", 0, -6)
@@ -191,7 +201,7 @@ function DT.BuildSyncStatus(parent)
     hint:SetJustifyH("LEFT")
     hint:SetTextColor(0.6, 0.6, 0.6)
     hint:SetText(L.DT_HINT_COMPANION)
-    table.insert(KART.DynamicLabels, hint)
+    KART.UI:RegisterLabel(hint)
 
     DT.RefreshStatusLabel()
 
@@ -203,7 +213,7 @@ function DT.BuildSyncStatus(parent)
         end)
     end
 
-    KART.RegisterLocaleRefresher(function()
+    KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
         if DT.CbModuleEnabled then
             DT.CbModuleEnabled.text:SetText(Lx.DT_SET_MODULE_ENABLED)

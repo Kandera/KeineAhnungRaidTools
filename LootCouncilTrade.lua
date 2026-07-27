@@ -1,4 +1,8 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC.Trade = KART.LC.Trade or {}
 local Trade = KART.LC.Trade
@@ -33,7 +37,7 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef)
         LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. colorPacked .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
-            local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KART.Identity.ResolveDisplayName(winnerKey), link)
+            local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KASC.Identity.ResolveDisplayName(winnerKey), link)
             if reason and reason ~= "" then
                 msg = msg .. " (" .. reason .. ")"
             end
@@ -55,7 +59,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
     -- popup and accepting it — bail rather than logging a history entry with a nil item link.
     if not LC.rollItems[rollID] then return end
     local classFile
-    local unit = KART.Identity.FindUnitForKey(playerKey)
+    local unit = KASC.Identity.FindUnitForKey(playerKey)
     if unit then
         local _, cf = UnitClass(unit)
         classFile = cf
@@ -74,12 +78,12 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
         -- tester assigned the win to themselves, trigger the "you win" popup locally instead —
         -- and skip writing a fake entry into the real, persistent loot history.
-        local myKey = (KART.Identity.ResolvePlayer("player"))
+        local myKey = (KASC.Identity.ResolvePlayer("player"))
         if playerKey == myKey then
             Trade.ShowWinnerNotification(LC.rollItems[rollID])
         end
     else
-        KART.LH.LogHistory(LC.rollItems[rollID], KART.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
+        KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
         -- Only the client that actually holds the item (the loot owner, see
         -- LC.IsLootOwner/ForceWinRoll) needs a trade reminder — an assigner who isn't the loot owner
         -- never physically has the item to trade.
@@ -92,7 +96,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
     -- along with the tab. Tabs are cleared in bulk by "Close Session" (see the council panel).
 end
 
--- Awards the item to playerKey (a resolved player identity, see KART.Identity.ResolvePlayer) with
+-- Awards the item to playerKey (a resolved player identity, see KASC.Identity.ResolvePlayer) with
 -- the given reason (may be "" for no reason) and logs it. colorDef is the vote-button definition
 -- the reason was taken from (nil for "no reason"). If this rollID was already assigned, asks for
 -- confirmation first to avoid accidental double entries.
@@ -107,8 +111,8 @@ function Trade.AssignWinner(rollID, playerKey, reason, colorDef)
         -- wrong one).
         dialog.text = KART.L.LC_REASSIGN_CONFIRM_TEXT
         StaticPopup_Show("KART_LC_REASSIGN_CONFIRM", ---@diagnostic disable-line: undefined-global
-            KART.Identity.ResolveDisplayName(prevWinner),
-            KART.Identity.ResolveDisplayName(playerKey),
+            KASC.Identity.ResolveDisplayName(prevWinner),
+            KASC.Identity.ResolveDisplayName(playerKey),
             { rollID = rollID, playerKey = playerKey, reason = reason, colorDef = colorDef })
     else
         DoAssignWinner(rollID, playerKey, reason, colorDef)
@@ -135,7 +139,7 @@ end
 -- pointing at the previous winner.
 function Trade.AddPendingTrade(rollID, playerKey)
     if LC.IsTestRoll(rollID) then return end
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     Trade.RemovePendingTrade(rollID)
     if playerKey == myKey then return end
 
@@ -170,7 +174,7 @@ function Trade.CheckTradeTimeouts()
             entry.timeoutWarned = true
             local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
             print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
-                entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
+                entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
         end
     end
 end
@@ -319,11 +323,11 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     local f = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
     f:SetSize(320, 40)
     f:SetPoint("CENTER", defaultX, 0)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -340,7 +344,7 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     f.rows = {}
 
     local pos = KART_Settings and KART_Settings[posKey]
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -380,7 +384,7 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
             row.nameBtn.text:SetPoint("LEFT")
             row.nameBtn.text:SetPoint("RIGHT")
             row.nameBtn.text:SetJustifyH("LEFT")
-            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.Theme.AccentColor()) end)
+            row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.UI:AccentColor()) end)
             row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
 
             row.doneBtn = CreateFrame("Button", nil, row) -- child of row so it hides with it
@@ -401,20 +405,20 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
         row:SetPoint("RIGHT", -28, 0)
         row.text:SetText(entry.itemLink or "???")
         local targetKey = getTargetKey(entry)
-        row.nameBtn.text:SetText(KART.Identity.ResolveDisplayName(targetKey))
+        row.nameBtn.text:SetText(KASC.Identity.ResolveDisplayName(targetKey))
         local capturedRollID = entry.rollID
         row.doneBtn:SetScript("OnClick", function() removeByRollID(capturedRollID) end)
         row.nameBtn:SetScript("OnClick", function()
-            local unit = targetKey and KART.Identity.FindUnitForKey(targetKey)
+            local unit = targetKey and KASC.Identity.FindUnitForKey(targetKey)
             if not unit then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KART.Identity.ResolveDisplayName(targetKey)))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_TARGET_NOT_FOUND, KASC.Identity.ResolveDisplayName(targetKey)))
                 return
             end
             -- CheckInteractDistance is combat-restricted (returns nil in combat since 9.1), which
             -- would falsely report "out of range" even when standing on the winner — only gate on it
             -- out of combat; in combat just attempt the trade and let InitiateTrade fail if too far.
             if not InCombatLockdown() and not CheckInteractDistance(unit, 2) then
-                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KART.Identity.ResolveDisplayName(targetKey)))
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_TRADE_OUT_OF_RANGE, KASC.Identity.ResolveDisplayName(targetKey)))
                 return
             end
             -- InitiateTrade takes the unit token directly and needs no prior target; TargetUnit is
@@ -488,7 +492,7 @@ end
 -- What's currently sitting in *our own* trade slots, rebuilt on every TRADE_ACCEPT_UPDATE — the
 -- only reliable moment to read them, since the trade frame may already be tearing down by the
 -- time UI_INFO_MESSAGE's trade-complete fires (see Trade.OnTradeInfoMessage). Keyed by item string
--- (bonus-ID aware, see KART.GetItemString), with a count rather than a plain boolean, so this composes
+-- (bonus-ID aware, see KAUtil.GetItemString), with a count rather than a plain boolean, so this composes
 -- correctly with Trade.OnTradeClosed below even when a duplicate drop puts two copies of the exact
 -- same item string in the trade window at once.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
@@ -497,7 +501,7 @@ function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
     for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
-        local itemString = KART.GetItemString(link)
+        local itemString = KAUtil.GetItemString(link)
         if itemString then
             LC.tradeWindowItemStrings[itemString] = (LC.tradeWindowItemStrings[itemString] or 0) + 1
         end
@@ -516,12 +520,12 @@ end
 -- skip (optional): a set keyed "bag:slot" of slots to ignore, so a caller placing several copies of
 -- the same item in one pass doesn't keep finding the same (now-locked) bag slot.
 local function FindItemInBags(itemLink, skip)
-    local wantString = KART.GetItemString(itemLink)
+    local wantString = KAUtil.GetItemString(itemLink)
     if not wantString then return nil end
     for bag = 0, 4 do -- backpack (0) + 4 regular bag slots
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local bagLink = C_Container.GetContainerItemLink(bag, slot)
-            if bagLink and KART.GetItemString(bagLink) == wantString
+            if bagLink and KAUtil.GetItemString(bagLink) == wantString
                and not (skip and skip[bag .. ":" .. slot]) then
                 return bag, slot
             end
@@ -535,11 +539,11 @@ end
 -- included. Ordered by ascending rollID so every client's ordinal for the same physical drop
 -- agrees, since all clients see the same rollItems keys via the same broadcasts.
 function Trade.GetDuplicateOrdinal(rollID)
-    local myString = KART.GetItemString(LC.rollItems[rollID])
+    local myString = KAUtil.GetItemString(LC.rollItems[rollID])
     if not myString then return "" end
     local matches = {}
     for otherRollID, link in pairs(LC.rollItems) do
-        if KART.GetItemString(link) == myString then
+        if KAUtil.GetItemString(link) == myString then
             table.insert(matches, otherRollID)
         end
     end
@@ -563,7 +567,7 @@ function Trade.OnTradeShow()
     -- partners and needed a TradeFrameRecipientNameText "(*)" text-parse fallback. UnitExists/UnitGUID
     -- stay valid exactly where UnitName didn't, so that whole fallback is unnecessary.
     if not UnitExists("npc") then return end
-    local partnerKey = (KART.Identity.ResolvePlayer("npc"))
+    local partnerKey = (KASC.Identity.ResolvePlayer("npc"))
     -- Remembered for LC.OnTradeClosed, which fires after the trade frame (and UnitName("npc"))
     -- has already started tearing down, so the partner has to be captured here instead. Set
     -- unconditionally (not gated on #LC.pendingTrades, which is specifically this client's own
@@ -624,7 +628,7 @@ function Trade.OnTradeClosed()
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
         if entry.winnerKey == partnerKey then
-            local itemString = KART.GetItemString(entry.itemLink)
+            local itemString = KAUtil.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             local confirmedByTrade = tradeSucceeded and remaining and remaining > 0
             local confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)
@@ -647,12 +651,12 @@ function Trade.OnTradeClosed()
     local warnedItemStrings = {}
     for _, entry in ipairs(LC.pendingTrades) do -- read-only pass (only warns), no removal
         if entry.winnerKey ~= partnerKey then
-            local itemString = KART.GetItemString(entry.itemLink)
+            local itemString = KAUtil.GetItemString(entry.itemLink)
             local remaining = itemString and LC.tradeWindowItemStrings[itemString]
             if tradeSucceeded and remaining and remaining > 0 and not warnedItemStrings[itemString] then
                 warnedItemStrings[itemString] = true
                 print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADED_WRONG_PERSON,
-                    entry.itemLink or "?", KART.Identity.ResolveDisplayName(entry.winnerKey), KART.Identity.ResolveDisplayName(partnerKey)))
+                    entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), KASC.Identity.ResolveDisplayName(partnerKey)))
             end
         end
     end
@@ -676,8 +680,8 @@ function Trade.ShowWinnerNotification(itemLink)
         local f = CreateFrame("Frame", "KART_LCWinnerFrame", UIParent, "BackdropTemplate")
         f:SetSize(290, 75)
         f:SetPoint("CENTER", 0, 160)
-        KART.RegisterStrataFrame(f, true)
-        KART.ApplyPopupArtwork(f)
+        KART.UI:RegisterStrataFrame(f, true)
+        KART.UI:ApplyPopupArtwork(f)
         -- The winner popup keeps its celebratory green identity: a static green header line
         -- (deliberately not in the accent-line registry) under the green title.
         local winLine = f:CreateTexture(nil, "ARTWORK")
@@ -782,7 +786,7 @@ function Trade.HandleResult(payload, senderKey)
     LC.assignedWinners[rollID] = winnerKey
     LC.RefreshCouncilIfShown(rollID)
 
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
 
     if winnerKey == myKey then
         Trade.ShowWinnerNotification(LC.rollItems[rollID])
@@ -813,7 +817,7 @@ function Trade.HandleResult(payload, senderKey)
     -- without depending on the lootmaster being online later. The assigner already logged this
     -- locally (SendAddonMessage never echoes back to its own sender), so no duplicate here.
     local classFile
-    local unit = KART.Identity.FindUnitForKey(winnerKey)
+    local unit = KASC.Identity.FindUnitForKey(winnerKey)
     if unit then
         local _, cf = UnitClass(unit)
         classFile = cf
@@ -826,7 +830,7 @@ function Trade.HandleResult(payload, senderKey)
         if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
     end
     color = color or Trade.ResolveColorForReason(reason)
-    KART.LH.LogHistory(itemLink, KART.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
+    KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
     -- Same reasoning as DoAssignWinner: only the client physically holding the item (the loot
     -- owner) needs a pending-trade reminder, regardless of who assigned it.
@@ -841,3 +845,6 @@ function Trade.HandleResult(payload, senderKey)
     -- highlight from every OTHER council member, the lootmaster included. Tabs are cleared in bulk
     -- by "Close Session" (see the council panel). Do not re-add a close here.
 end
+
+KASC:RegisterMessage("LC_RESULT", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Trade.HandleResult(payload, ctx:Key()) end)

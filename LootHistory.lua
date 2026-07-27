@@ -1,4 +1,8 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LH = KART.LH or {}
 local LH = KART.LH
@@ -29,7 +33,7 @@ local function GetFilteredEntries()
         local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
         local matchSearch = true
         if LH.filters.search ~= "" then
-            matchSearch = KART.CaseFold(GetItemNameFromLink(e.item)):find(LH.filters.search, 1, true) ~= nil
+            matchSearch = KAUtil.CaseFold(GetItemNameFromLink(e.item)):find(LH.filters.search, 1, true) ~= nil
         end
         if matchPlayer and matchReason and matchSearch then
             table.insert(filtered, e)
@@ -167,7 +171,7 @@ function LH.BuildRCLootCouncilJSON()
     local objects = {}
     for i, e in ipairs(entries) do
         local itemID, subType, equipLocToken = 0, "", ""
-        if KART.IsRealItemLink(e.item) then
+        if KAUtil.IsRealItemLink(e.item) then
             local id, _, _, eLoc, _, classID, subClassID = C_Item.GetItemInfoInstant(e.item)
             itemID = id or 0
             subType = SubTypeExport(classID, subClassID)
@@ -180,7 +184,7 @@ function LH.BuildRCLootCouncilJSON()
             JSONString("time", date("%H:%M:%S", e.time or 0)),
             JSONString("id", (e.time or 0) .. "-" .. i),
             JSONNumber("itemID", itemID),
-            JSONString("itemString", (KART.GetItemString(e.item) or "")),
+            JSONString("itemString", (KAUtil.GetItemString(e.item) or "")),
             JSONString("response", e.reason or ""),
             JSONNumber("votes", 0),
             JSONString("class", e.class or ""),
@@ -212,8 +216,8 @@ function LH.ShowExportDialog()
         local f = CreateFrame("Frame", "KART_LHExportDialog", UIParent, "BackdropTemplate")
         f:SetSize(480, 320)
         f:SetPoint("CENTER")
-        KART.RegisterStrataFrame(f, true)
-        KART.ApplyPopupArtwork(f)
+        KART.UI:RegisterStrataFrame(f, true)
+        KART.UI:ApplyPopupArtwork(f)
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
@@ -224,15 +228,15 @@ function LH.ShowExportDialog()
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         f.title:SetPoint("TOP", 0, -14)
         f.title:SetText(KART.L.LH_EXPORT_TITLE)
-        table.insert(KART.DynamicLabels, f.title)
+        KART.UI:RegisterLabel(f.title)
 
         f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         f.hint:SetPoint("TOP", 0, -32)
         f.hint:SetText(KART.L.LH_EXPORT_HINT)
         f.hint:SetTextColor(0.6, 0.6, 0.6)
-        table.insert(KART.DynamicLabels, f.hint)
+        KART.UI:RegisterLabel(f.hint)
 
-        -- Same inset/border colors as KART.CreateStyledEditBox (the multi-line export box lives
+        -- Same inset/border colors as KART.UI:CreateStyledEditBox (the multi-line export box lives
         -- inside a ScrollFrame, so the visual box is this frame); focus accent mirrored below.
         local scrollBG = CreateFrame("Frame", nil, f, "BackdropTemplate")
         scrollBG:SetPoint("TOPLEFT", 15, -52)
@@ -240,14 +244,15 @@ function LH.ShowExportDialog()
         scrollBG:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         scrollBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
         scrollBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-        KART.ApplyRoundedMask(scrollBG, KART.Theme.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(scrollBG, KAUI.CORNER_RADIUS_LG)
 
         local scroll = CreateFrame("ScrollFrame", "KART_LHExportScroll", scrollBG, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 4, -4)
         scroll:SetPoint("BOTTOMRIGHT", -22, 4)
 
-        KART.LHExportScrollThumb = KART.StripScrollbarTextures(scroll)
-        if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetSize(6, 16) end
+        local exportScrollThumb = KART.UI:StripScrollbarTextures(scroll)
+        if exportScrollThumb then exportScrollThumb:SetSize(6, 16) end
+        KART.UI:RegisterAccentTexture(exportScrollThumb, 0.6)
 
         f.editBox = CreateFrame("EditBox", "KART_LHExportEditBox", scroll)
         f.editBox:SetWidth(420)
@@ -264,7 +269,7 @@ function LH.ShowExportDialog()
             end
         end)
         f.editBox:SetScript("OnEditFocusGained", function()
-            local r, g, b = KART.Theme.AccentColor()
+            local r, g, b = KART.UI:AccentColor()
             scrollBG:SetBackdropBorderColor(r, g, b, 1)
         end)
         f.editBox:SetScript("OnEditFocusLost", function()
@@ -272,7 +277,7 @@ function LH.ShowExportDialog()
         end)
         scroll:SetScrollChild(f.editBox)
 
-        local btnClose = KART.CreateModernButton(f, CLOSE) ---@diagnostic disable-line: undefined-global
+        local btnClose = KART.UI:CreateModernButton(f, CLOSE) ---@diagnostic disable-line: undefined-global
         btnClose:SetSize(120, 26)
         btnClose:SetPoint("BOTTOM", 0, 12)
         btnClose:SetScript("OnClick", function() f:Hide() end)
@@ -302,7 +307,7 @@ function LH.GetUniquePlayers()
             seen[id] = true
             local label = e.winner
             if e.winnerKey and e.winnerKey ~= "" then
-                label = KART.Identity.ResolveDisplayName(e.winnerKey) or e.winner
+                label = KASC.Identity.ResolveDisplayName(e.winnerKey) or e.winner
             end
             table.insert(list, { id = id, label = label })
         end
@@ -324,7 +329,7 @@ function LH.GetUniqueReasons()
     return list
 end
 
-KART.RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
     text = "Really clear loot history?", -- unconditionally overwritten with KART.L.LH_CLEAR_CONFIRM_TEXT below
     button1 = YES,
     button2 = NO,
@@ -342,11 +347,11 @@ function LH.CreateWindow()
     local f = CreateFrame("Frame", "KART_LootHistoryFrame", UIParent, "BackdropTemplate")
     f:SetSize(560, 430)
     f:SetPoint("CENTER")
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -376,10 +381,10 @@ function LH.CreateWindow()
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("LEFT", 16, 0)
     f.title:SetText(KART.L.LH_TITLE)
-    table.insert(KART.DynamicLabels, f.title)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:RegisterLabel(f.title)
+    KART.UI:CreateHeaderLine(f, -28)
 
-    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
     closeBtn:SetPoint("RIGHT", -4, 0)
 
     -- Filter row: item search + player filter + reason filter + reset
@@ -387,7 +392,7 @@ function LH.CreateWindow()
     searchHint:SetPoint("TOPLEFT", 10, -32)
     searchHint:SetText(KART.L.LH_SEARCH_LABEL)
     searchHint:SetTextColor(0.55, 0.55, 0.55)
-    table.insert(KART.DynamicLabels, searchHint)
+    KART.UI:RegisterLabel(searchHint)
 
     local searchBox = CreateFrame("EditBox", "KART_LHSearchBox", f, "BackdropTemplate")
     searchBox:SetSize(140, 22)
@@ -398,16 +403,16 @@ function LH.CreateWindow()
     searchBox:SetBackdropColor(0, 0, 0, 0.5)
     searchBox:SetTextInsets(5, 5, 0, 0)
     searchBox:SetMaxLetters(40)
-    KART.ApplyRoundedMask(searchBox, KART.Theme.CORNER_RADIUS_SM)
-    table.insert(KART.EditBoxes, searchBox)
+    KART.UI:ApplyRoundedMask(searchBox, KAUI.CORNER_RADIUS_SM)
+    KART.UI:RegisterEditBox(searchBox)
     searchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     searchBox:SetScript("OnTextChanged", function(self)
-        LH.filters.search = KART.CaseFold(self:GetText())
+        LH.filters.search = KAUtil.CaseFold(self:GetText())
         LH.Refresh()
     end)
     f.searchBox = searchBox
 
-    local btnPlayerFilter = KART.CreateModernButton(f, KART.L.LH_FILTER_ALL_PLAYERS)
+    local btnPlayerFilter = KART.UI:CreateModernButton(f, KART.L.LH_FILTER_ALL_PLAYERS)
     btnPlayerFilter:SetSize(105, 22)
     btnPlayerFilter:SetPoint("LEFT", searchBox, "RIGHT", 6, 0)
     btnPlayerFilter:SetScript("OnClick", function(self)
@@ -429,7 +434,7 @@ function LH.CreateWindow()
     end)
     f.btnPlayerFilter = btnPlayerFilter
 
-    local btnReasonFilter = KART.CreateModernButton(f, KART.L.LH_FILTER_ALL_REASONS)
+    local btnReasonFilter = KART.UI:CreateModernButton(f, KART.L.LH_FILTER_ALL_REASONS)
     btnReasonFilter:SetSize(105, 22)
     btnReasonFilter:SetPoint("LEFT", btnPlayerFilter, "RIGHT", 6, 0)
     btnReasonFilter:SetScript("OnClick", function(self)
@@ -452,7 +457,7 @@ function LH.CreateWindow()
     end)
     f.btnReasonFilter = btnReasonFilter
 
-    local btnReset = KART.CreateModernButton(f, KART.L.LH_BTN_RESET_FILTERS)
+    local btnReset = KART.UI:CreateModernButton(f, KART.L.LH_BTN_RESET_FILTERS)
     btnReset:SetSize(56, 22)
     btnReset:SetPoint("LEFT", btnReasonFilter, "RIGHT", 6, 0)
     btnReset:SetScript("OnClick", function()
@@ -469,27 +474,27 @@ function LH.CreateWindow()
     local hDate = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hDate:SetPoint("TOPLEFT", 10, -78)
     hDate:SetText(KART.L.LH_COL_DATE)
-    table.insert(KART.DynamicLabels, hDate)
+    KART.UI:RegisterLabel(hDate)
 
     local hPlayer = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hPlayer:SetPoint("TOPLEFT", 80, -78)
     hPlayer:SetText(KART.L.LH_COL_PLAYER)
-    table.insert(KART.DynamicLabels, hPlayer)
+    KART.UI:RegisterLabel(hPlayer)
 
     local hItem = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hItem:SetPoint("TOPLEFT", 172, -78)
     hItem:SetText(KART.L.LH_COL_ITEM)
-    table.insert(KART.DynamicLabels, hItem)
+    KART.UI:RegisterLabel(hItem)
 
     local hDifficulty = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hDifficulty:SetPoint("TOPLEFT", 368, -78)
     hDifficulty:SetText(KART.L.LH_COL_DIFFICULTY)
-    table.insert(KART.DynamicLabels, hDifficulty)
+    KART.UI:RegisterLabel(hDifficulty)
 
     local hReason = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hReason:SetPoint("TOPLEFT", 440, -78)
     hReason:SetText(KART.L.LH_COL_REASON)
-    table.insert(KART.DynamicLabels, hReason)
+    KART.UI:RegisterLabel(hReason)
 
     local divider = f:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(0.22, 0.22, 0.22, 1)
@@ -512,9 +517,9 @@ function LH.CreateWindow()
     scrollChild:SetSize(520, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
-    KART.LHScrollThumb = thumb
+    KART.UI:RegisterAccentTexture(thumb, 0.6)
 
     f.scrollChild = scrollChild
     f.scrollFrame = scrollFrame
@@ -526,15 +531,15 @@ function LH.CreateWindow()
     f.emptyLabel:SetText(KART.L.LH_EMPTY)
     f.emptyLabel:SetTextColor(0.55, 0.55, 0.55)
     f.emptyLabel:Hide()
-    table.insert(KART.DynamicLabels, f.emptyLabel)
+    KART.UI:RegisterLabel(f.emptyLabel)
 
     -- Footer: entry count + clear button
     f.countText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.countText:SetPoint("BOTTOMLEFT", 10, 12)
     f.countText:SetTextColor(0.6, 0.6, 0.6)
-    table.insert(KART.DynamicLabels, f.countText)
+    KART.UI:RegisterLabel(f.countText)
 
-    local btnClear = KART.CreateModernButton(f, KART.L.LH_BTN_CLEAR)
+    local btnClear = KART.UI:CreateModernButton(f, KART.L.LH_BTN_CLEAR)
     btnClear:SetSize(140, 24)
     btnClear:SetPoint("BOTTOMRIGHT", -10, 8)
     btnClear:SetScript("OnClick", function()
@@ -542,7 +547,7 @@ function LH.CreateWindow()
         StaticPopup_Show("KART_LH_CLEAR_CONFIRM")
     end)
 
-    local btnExport = KART.CreateModernButton(f, KART.L.LH_BTN_EXPORT_JSON, KART.L.LH_BTN_EXPORT_JSON_TIP)
+    local btnExport = KART.UI:CreateModernButton(f, KART.L.LH_BTN_EXPORT_JSON, KART.L.LH_BTN_EXPORT_JSON_TIP)
     btnExport:SetSize(150, 24)
     btnExport:SetPoint("BOTTOMRIGHT", btnClear, "BOTTOMLEFT", -6, 0)
     btnExport:SetScript("OnClick", function() LH.ShowExportDialog() end)
@@ -550,7 +555,7 @@ function LH.CreateWindow()
     -- Pagination controls, anchored just left of the export button and growing leftward, so they
     -- never collide with the right-hand buttons regardless of their localized widths. The list uses
     -- a fit-to-window page size (see LH.Refresh) and so never scrolls — Prev/Next page through it.
-    f.nextPageBtn = KART.CreateModernButton(f, ">")
+    f.nextPageBtn = KART.UI:CreateModernButton(f, ">")
     f.nextPageBtn:SetSize(24, 22)
     f.nextPageBtn:SetPoint("RIGHT", btnExport, "LEFT", -10, -1)
     f.nextPageBtn:SetScript("OnClick", function()
@@ -564,7 +569,7 @@ function LH.CreateWindow()
     f.pageIndicator:SetPoint("RIGHT", f.nextPageBtn, "LEFT", -6, 1)
     f.pageIndicator:SetTextColor(0.6, 0.6, 0.6)
 
-    f.prevPageBtn = KART.CreateModernButton(f, "<")
+    f.prevPageBtn = KART.UI:CreateModernButton(f, "<")
     f.prevPageBtn:SetSize(24, 22)
     f.prevPageBtn:SetPoint("RIGHT", f.pageIndicator, "LEFT", -6, -1)
     f.prevPageBtn:SetScript("OnClick", function()
@@ -576,7 +581,7 @@ function LH.CreateWindow()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcHistoryWindowPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -680,7 +685,7 @@ function LH.Refresh()
 
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
-                if KART.IsRealItemLink(self.itemLink) then
+                if KAUtil.IsRealItemLink(self.itemLink) then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:SetHyperlink(self.itemLink)
                     GameTooltip:Show()
@@ -695,7 +700,7 @@ function LH.Refresh()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
         row:SetPoint("RIGHT", f.scrollChild, "RIGHT", 0, 0)
-        local lr, lg, lb = KART.GetRowStripeColor()
+        local lr, lg, lb = KART.UI:GetRowStripeColor()
         row.bg:SetColorTexture(lr, lg, lb, i % 2 == 0 and 0.35 or 0.1)
 
         row.dateText:SetText(date("%d.%m %H:%M", e.time or 0))
@@ -708,7 +713,7 @@ function LH.Refresh()
         row.playerText:SetTextColor(nr, ng, nb)
 
         row.itemLink = e.item
-        if KART.IsRealItemLink(e.item) then
+        if KAUtil.IsRealItemLink(e.item) then
             local itemID = C_Item.GetItemInfoInstant(e.item)
             local icon = itemID and C_Item.GetItemIconByID(itemID)
             row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -889,7 +894,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- back to the persistent cache, which matches on the realm-stripped short name — so an outsider
     -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
-    if not KART.IsFullNameInGroup(senderFullName) then return end
+    if not KAUtil.IsFullNameInGroup(senderFullName) then return end
     -- Rate-limit the reply burst per sender: each answered request queues up to
     -- HISTORY_SYNC_MAX_ENTRIES timers spanning ~8s, so a peer repeatedly leaving and rejoining would
     -- otherwise stack bursts until the outgoing messages hit the client's throttle and the server's
@@ -927,7 +932,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- Re-check membership at fire time, not just when the request arrived: the burst spans
             -- ~8 seconds, and whispers keep working after either side has left the group — so
             -- without this we'd keep streaming loot history to someone who is no longer authorized.
-            if not KART.IsFullNameInGroup(senderFullName) then return end
+            if not KAUtil.IsFullNameInGroup(senderFullName) then return end
             local colorPacked = ""
             if e.color then
                 colorPacked = string.format("%d,%d,%d",
@@ -950,7 +955,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- blow the 255-byte SendAddonMessage cap, fall back to the compact, locale-independent
             -- item string, which the receiver rebuilds into a full link.
             if #msg > 255 then
-                local itemStr = KART.GetItemString(e.item)
+                local itemStr = KAUtil.GetItemString(e.item)
                 if itemStr then
                     msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
                         e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
@@ -965,7 +970,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                     e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                     winnerKey, winnerSafe, reasonSafe, "")
             end
-            KART.Sync.Send(msg, "WHISPER", senderFullName)
+            KASC:Send(msg, "WHISPER", senderFullName)
         end)
     end
 end
@@ -974,7 +979,7 @@ end
 function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, item =
         payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
     t = tonumber(t)
@@ -1003,7 +1008,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- The sender may have sent a bare item string (its full link was too long for one addon
     -- message). Rebuild a full, locally-localized link so display/tooltip/icon work; if the item
     -- isn't cached yet, store the string now and upgrade the entry in place once it loads.
-    local needsRebuild = item ~= "" and not KART.IsRealItemLink(item) and item:match("^item:") ~= nil
+    local needsRebuild = item ~= "" and not KAUtil.IsRealItemLink(item) and item:match("^item:") ~= nil
     local itemLink = item
     if needsRebuild then
         local rebuilt = select(2, C_Item.GetItemInfo(item))
@@ -1014,13 +1019,13 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Locale-independent item string (not the full link, which differs between DE/EN clients and
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
-    -- KART.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
+    -- KAUtil.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
     -- "item:12345:..." string the oversized-link fallback sends — which is also exactly the case
     -- where the local rebuild above can fail (item not in the client's cache yet). Fall back to the
     -- bare form so both sides still reduce to the same locale-independent key.
     local function ItemKey(link)
         if type(link) ~= "string" then return nil end
-        return KART.GetItemString(link) or link:match("^item:[%-%d:]+")
+        return KAUtil.GetItemString(link) or link:match("^item:[%-%d:]+")
     end
     local incomingStr = ItemKey(itemLink)
     -- The sender drops the item field entirely when even the compact item string won't fit the
@@ -1079,7 +1084,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     end
 
     -- Item wasn't cached — once it loads, swap the bare string for a real link in place.
-    if needsRebuild and not KART.IsRealItemLink(itemLink) then
+    if needsRebuild and not KAUtil.IsRealItemLink(itemLink) then
         local itemID = tonumber(item:match("^item:(%d+)"))
         if itemID then
             Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
@@ -1099,3 +1104,11 @@ function LH.HandleHistoryEntry(payload, senderKey)
         end
     end
 end
+
+-- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+KASC:RegisterMessage("LC_HIST_REQ", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender) end)
+KASC:RegisterMessage("LC_HIST_ENTRY", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LH.HandleHistoryEntry(payload, ctx:Key()) end)

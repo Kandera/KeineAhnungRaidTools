@@ -1,4 +1,8 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC.Vote = KART.LC.Vote or {}
 local Vote = KART.LC.Vote
@@ -16,11 +20,11 @@ function Vote.CreateVoteList()
     local f = CreateFrame("Frame", "KART_LCVoteList", UIParent, "BackdropTemplate")
     f:SetSize(380, 200)
     f:SetPoint("CENTER", 0, -80)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -33,11 +37,11 @@ function Vote.CreateVoteList()
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 16, -10)
     f.title:SetText(KART.L.LC_VOTE_TITLE)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:CreateHeaderLine(f, -28)
 
     -- Closing just hides the window — it doesn't discard anything, so it comes back on its own
     -- as soon as a new item starts rolling (or can be reopened via any still-active row source).
-    local closeBtn = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
     closeBtn:SetPoint("TOPRIGHT", -6, -6)
 
     local scrollFrame = CreateFrame("ScrollFrame", "KART_LCVoteListScroll", f, "UIPanelScrollFrameTemplate")
@@ -48,7 +52,7 @@ function Vote.CreateVoteList()
     scrollChild:SetSize(345, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
 
     f.scrollChild = scrollChild
@@ -56,7 +60,7 @@ function Vote.CreateVoteList()
 
     -- Restore saved position (reuses the old single-popup setting name)
     local pos = KART_Settings and KART_Settings.lcVotePopupPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -198,14 +202,34 @@ function Vote.RefreshVoteListRows()
     local f = LC.voteListFrame
 
     local compact = KART_Settings and KART_Settings.lcVoteLayoutCompact
+    local needsRestyle
     if compact then
         for _, row in ipairs(f.rows or {}) do row:Hide() end
-        Vote.RefreshVoteListRows_Compact(f)
+        needsRestyle = Vote.RefreshVoteListRows_Compact(f)
     else
         for _, row in ipairs(f.compactRows or {}) do row:Hide() end
-        Vote.RefreshVoteListRows_Spacious(f)
+        needsRestyle = Vote.RefreshVoteListRows_Spacious(f)
     end
     f:Show()
+
+    -- The window (on first build) and anything newly registered with KART.UI above (close
+    -- button, "Note" label, a newly pooled vote/chip button, note EditBox) registers *after* the
+    -- last KART.UpdateStyles() call that ran before this point in the session, since this whole
+    -- window is built lazily on first roll rather than at load (see B2 in BACKLOG.md). Re-applying
+    -- here is what reaches a widget created by a later, larger batch of simultaneous rolls, or a
+    -- vote-button set grown mid-session (LC.GetButtonConfig changing via a Settings-tab edit or an
+    -- accepted config sync), not just whatever existed on the very first build.
+    --
+    -- Gated on needsRestyle (true only when this pass actually registered something new — see the
+    -- flag of the same name inside RefreshVoteListRows_Spacious/_Compact, set both on a new row and
+    -- on a new vote button within an existing row) rather than called on every refresh: this
+    -- function runs on every new roll, every local vote, and every expiry sweep, which during
+    -- active looting can be several times a second, and a full KART.UpdateStyles() re-applies far
+    -- more than these widgets' font (main window scale/strata, every registered EditBox's font,
+    -- the minimap icon tint, a BuffCheck refresh if that window is open) — cheap in isolation, but
+    -- needless work on the refreshes where nothing new registered at all. A recycled/repositioned
+    -- row or button never needs this, only a freshly created one.
+    if needsRestyle and KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Vote.RefreshVoteListRows() always calls f:Show() when there's still a pending roll — deliberate
@@ -232,13 +256,13 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- otherwise let a raider inject coloured text, fake hyperlinks or textures there. Stripping (not
     -- escaping) at the source keeps the sender's own copy byte-identical to what the receivers store
     -- — HandleVote escapes on top of this, since a hostile client won't have stripped anything.
-    local note = (KART.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
+    local note = (KAUtil.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
     LC.votedNoteByMe[rollID] = note
 
     -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
     -- its own sender, so without this our own progress counter reads one short and a council member
     -- voting on their own drop wouldn't see themselves listed.
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
 
@@ -286,6 +310,14 @@ function Vote.RefreshVoteListRows_Spacious(f)
     local shrinkVoted = KART_Settings.lcVotedItemDisplay == "shrink"
     local ROW_GAP   = 22 -- gap between item blocks — was 12, still too tight for 2+ simultaneous rolls
 
+    -- Tracks whether this pass registered anything new with KART.UI (a brand-new row, or a
+    -- brand-new vote button within an existing row — LC.GetButtonConfig's category count can grow
+    -- mid-session from a Settings-tab edit or an accepted config sync), as opposed to only reusing/
+    -- repositioning pooled widgets already on screen. Returned to the caller
+    -- (Vote.RefreshVoteListRows) so it only pays for a full KART.UpdateStyles() re-apply on the
+    -- passes that actually register something new, not on every single vote/expiry refresh.
+    local needsRestyle = false
+
     -- Same short-name extraction the test-roll vote branch further below already uses — this is
     -- the local player's own Droptimizer gain% for the item, not a per-candidate column (a
     -- vote-list row represents one item, not one candidate, so "the player" here is whoever is
@@ -297,6 +329,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
     for i, rollID in ipairs(visibleRolls) do
         local row = f.rows[i]
         if not row then
+            needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
@@ -372,7 +405,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.noteLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             row.noteLabel:SetText(KART.L.LC_NOTE_LABEL_SHORT)
             row.noteLabel:SetTextColor(0.6, 0.6, 0.6)
-            table.insert(KART.DynamicLabels, row.noteLabel)
+            KART.UI:RegisterLabel(row.noteLabel)
 
             row.noteBox = CreateFrame("EditBox", nil, row, "BackdropTemplate")
             row.noteBox:SetAutoFocus(false)
@@ -382,7 +415,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.noteBox:SetBackdropColor(0, 0, 0, 0.5)
             row.noteBox:SetTextInsets(6, 6, 0, 0)
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-            table.insert(KART.EditBoxes, row.noteBox)
+            KART.UI:RegisterEditBox(row.noteBox)
 
             f.rows[i] = row
         end
@@ -498,8 +531,15 @@ function Vote.RefreshVoteListRows_Spacious(f)
 
                 local btn = row.voteButtons[bi]
                 if not btn then
-                    btn = KART.CreateModernButton(row.btnArea, def.label)
-                    btn.grad = KART.CreateGradientOverlay(btn)
+                    -- Pooled independently of the row itself: LC.GetButtonConfig's category count
+                    -- can grow mid-session (a Settings-tab edit, or an accepted LC_SYNC_ACCEPT
+                    -- config push), which adds a new button to an EXISTING row without that row
+                    -- itself being new — CreateModernButton self-registers this button's label
+                    -- with KART.UI just like a brand-new row's own widgets do, so this needs the
+                    -- same needsRestyle signal, not just the "if not row" branch above.
+                    needsRestyle = true
+                    btn = KART.UI:CreateModernButton(row.btnArea, def.label)
+                    btn.grad = KART.UI:CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
                     btn.iconTex:SetSize(13, 13)
                     btn.iconTex:SetPoint("LEFT", 6, 0)
@@ -517,7 +557,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 -- Full-strength border (was 0.55) plus a tinted gradient fill behind the label, so
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 local capturedIdx    = bi
@@ -537,6 +577,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
     f:SetHeight(math.min(32 + y + 12, 600))
 
     LC.ApplyFontSize()
+    return needsRestyle
 end
 
 -- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
@@ -564,10 +605,20 @@ function Vote.RefreshVoteListRows_Compact(f)
 
     f.compactRows = f.compactRows or {}
 
+    -- Same reasoning as the Spacious renderer's needsRestyle above — row.noteBox below registers
+    -- with KART.UI just like the Spacious "Note" label does, so this pass needs to report whether
+    -- it created anything new too. Unlike Spacious, the chip buttons created further down (see
+    -- row.chipButtons below) do NOT need the same treatment: they carry only a plain unregistered
+    -- gradient texture (KART.UI:CreateGradientOverlay, which never registers anything) and an icon
+    -- texture/tooltip, no registered FontString or EditBox of their own — confirmed by grepping
+    -- this whole function for every KART.UI:Register*/Create* call.
+    local needsRestyle = false
+
     local visibleRolls = Vote.GetVisibleRolls()
     for i, rollID in ipairs(visibleRolls) do
         local row = f.compactRows[i]
         if not row then
+            needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
@@ -645,7 +696,7 @@ function Vote.RefreshVoteListRows_Compact(f)
             row.noteBox:SetPoint("RIGHT", row.chipArea, "RIGHT", 0, 0)
             row.noteBox:Hide()
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() self:Hide() end)
-            table.insert(KART.EditBoxes, row.noteBox)
+            KART.UI:RegisterEditBox(row.noteBox)
 
             row.notePencil:SetScript("OnClick", function()
                 if row.noteBox:IsShown() then
@@ -745,11 +796,11 @@ function Vote.RefreshVoteListRows_Compact(f)
                     btn:SetSize(CHIP, CHIP)
                     btn:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
                     -- Base fill, same as every other backdrop frame in this file (e.g. the row
-                    -- backdrops above, or KART.CreateModernButton's own vote buttons) — without
+                    -- backdrops above, or KART.UI:CreateModernButton's own vote buttons) — without
                     -- this the chip has no set background color, only the category-tinted border
                     -- set below, which at 24px is easy to mistake for "no button here at all".
                     btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-                    btn.grad = KART.CreateGradientOverlay(btn)
+                    btn.grad = KART.UI:CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
                     btn.iconTex:SetPoint("TOPLEFT", 4, -4)
                     btn.iconTex:SetPoint("BOTTOMRIGHT", -4, 4)
@@ -760,7 +811,7 @@ function Vote.RefreshVoteListRows_Compact(f)
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
 
                 btn:SetScript("OnEnter", function(self)
@@ -794,6 +845,7 @@ function Vote.RefreshVoteListRows_Compact(f)
     f:SetHeight(math.min(32 + #visibleRolls * (rowH + ROW_GAP) + 12, 600))
 
     LC.ApplyFontSize()
+    return needsRestyle
 end
 
 --- Manually sets (overrides) a player's vote in the council panel — e.g. they voted verbally or
@@ -814,7 +866,7 @@ end
 -- council member). Test rolls stay local like everywhere else; real rolls broadcast so every
 -- council member's tally stays in sync.
 function Vote.ToggleCouncilVote(rollID, candidateKey)
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     local retracting = (LC.councilVotes[rollID][myKey] == candidateKey)
     LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
@@ -829,7 +881,7 @@ end
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     -- payload = "rollID:buttonIndex:note"
     local rollID, idx = payload:match("^(%d+):(%d+)")
     rollID = tonumber(rollID)
@@ -859,7 +911,7 @@ end
 -- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
 -- anything automatically.
 function Vote.HandleRoll(payload, senderKey)
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, value = payload:match("^(%d+):(%d+)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
@@ -893,7 +945,7 @@ end
 function Vote.HandleCouncilVote(payload, senderKey)
     -- Council membership is intentionally trusted (see above), but the sender must at least be in
     -- our group — a bare whisper from outside must not land in the council straw-poll tally.
-    if not (senderKey and KART.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local rollID, candidateKey = payload:match("^(%d+):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
@@ -912,3 +964,13 @@ function Vote.HandleCouncilVote(payload, senderKey)
         KART.LC.Council.RefreshCouncilRows()
     end
 end
+
+-- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+KASC:RegisterMessage("LC_VOTE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleVote(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_ROLL", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleRoll(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_CVOTE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleCouncilVote(payload, ctx:Key()) end)

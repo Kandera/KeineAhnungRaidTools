@@ -1,6 +1,12 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
 
 KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.0.0"
+KASC:RegisterAddon("KART", KART.Version)
+KASC:RegisterCapability("KART", "LC", function() return KART_Settings.lcModuleEnabled ~= false end)
+
 local frame = CreateFrame("Frame")
 
 frame:RegisterEvent("ADDON_LOADED")
@@ -158,6 +164,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_WoWUtilsCache = KART_WoWUtilsCache or {}
         KART_Profiles = KART_Profiles or {}
         KART_PlayerCache = KART_PlayerCache or {}
+        KASC:AttachCache(KART_PlayerCache)
+        KASC:Init("KART")
         -- Prune identity-cache entries not seen for 90+ days so the SavedVariable doesn't
         -- grow forever (it gains one entry per distinct group member ever encountered).
         local pruneCutoff = time() - 90 * 24 * 60 * 60
@@ -208,7 +216,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- let the live settings mutate KART.Defaults itself, which then made "Reset Defaults" a
         -- no-op for those keys within the same session — and merges sub-keys added by a later
         -- addon version into a settings blob saved before they existed.
-        KART.MergeDefaults(KART_Settings, KART.Defaults)
+        KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
 
         -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
         -- the Defaults merge above — Defaults.minimap = {}).
@@ -218,7 +226,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
 
         -- Re-apply every statically-built UI text with the now-selected language.
-        KART.ApplyLocaleRefreshers()
+        KART.UI:ApplyLocaleRefreshers()
 
         -- Outstanding BoP trade obligations from the previous session. After the locale refresh
         -- because the restored reminder windows render localized text.
@@ -283,14 +291,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UpdateRaidleadBarVisibility()
 
         if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-            KART.Sync.Send("ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag)
+            KASC:AnnounceHello()
             KART.VersionAnnouncedToGroup = true
             -- Our own one-shot announce only tells the group about US — it does nothing for
             -- players who already announced before we joined, so also pull everyone else's
             -- current version the same way /kart v already does, instead of only finding out
             -- about mismatches/missing-KART players whenever someone happens to run that manually.
-            KART.Sync.Send("REQ_VERSION")
+            KASC:RequestHello()
         elseif not IsInGroup() then
             KART.VersionAnnouncedToGroup = false
         end
@@ -357,8 +364,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if arg1 or arg2 then
             C_Timer.After(5, function()
                 if IsInGuild() then
-                    local lcFlag = (KART_Settings.lcModuleEnabled ~= false) and "1" or "0"
-                    KART.Sync.Send("ANNOUNCE_VERSION:" .. KART.Version .. ":" .. lcFlag, "GUILD")
+                    KASC:AnnounceHello("GUILD")
                 end
             end)
         end
@@ -371,16 +377,86 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     end
 end)
 
+-- =====================================================================
+--  Addon-message handlers -- peer bookkeeping and ready-check reasons
+-- =====================================================================
+-- Peer version bookkeeping. The comparison, the update warning and the chat output all live
+-- here rather than in KASC: they are locale-dependent and none of them is a networking
+-- concern.
+KASC:OnPeer(function(shortName, _, peers)
+    local kart = peers.KART
+    if not kart then return end
+
+    KART.PlayerVersions = KART.PlayerVersions or {}
+    KART.PlayerVersions[shortName] = kart.version
+    KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
+    KART.PlayerLCEnabled[shortName] = kart.caps.LC or false
+
+    -- Throttled: a raid join answers one request with one reply per raider, all at once.
+    if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+        KART.LC.Council.RefreshCouncilRowsThrottled()
+    end
+
+    if not KART.UpdateWarned and kart.version ~= KART.Version then
+        -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
+        -- usable numbers instead of failing the match outright and collapsing to 0.0.0.
+        local nMaj, nMin, nPat = kart.version:match("(%d+)%.?(%d*)%.?(%d*)")
+        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.?(%d*)%.?(%d*)")
+        nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
+        oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
+        -- Sanity clamp before trusting the number: no handler authenticates a sender, so
+        -- anyone can claim a huge version, and UpdateWarned latches after the first print --
+        -- one bogus claim would suppress the real warning for the whole session. A genuine
+        -- release never jumps more than a major ahead.
+        local plausible = nMaj <= oMaj + 1
+        if plausible and (nMaj > oMaj
+            or (nMaj == oMaj and nMin > oMin)
+            or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
+            KART.UpdateWarned = true
+            print(string.format(KART.L.UPDATE_AVAILABLE, kart.version, KART.Version))
+        end
+    end
+
+    if KART.VersionCheckActive then
+        print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
+    end
+end)
+
+-- RC_REASON: Core.lua owns the cache's lifecycle (READY_CHECK above wipes KART.ReadyCheckReasons)
+-- and the sending dialog (KART.ShowReadyCheckReasonDialog below), so the receiver lives here too.
+KASC:RegisterMessage("RC_REASON", { payload = true, group = true }, function(payload, ctx)
+    -- Free text from another client goes straight into a chat print and a tooltip, so strip the
+    -- UI escape sequences WoW would otherwise render: |c/|r recoloring and |H...|h hyperlinks
+    -- would let a raider inject fake colored text and clickable links into every officer's chat.
+    if payload == "" then return end -- "" is truthy in Lua: an empty reason would still show the
+                                     -- icon, with an empty tooltip behind it
+    payload = payload:gsub("|", "||")
+    KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
+    KART.ReadyCheckReasons[ctx.shortName] = payload
+    if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
+        print(string.format(KART.L.RC_REASON_RECEIVED, ctx.shortName, payload))
+    end
+    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+end)
+
 -- Styles Update (Muss global zugänglich sein)
 function KART.UpdateStyles()
     if not KART_Settings or not KART.MainFrame then return end -- KART.MainFrame aus MainFrame.lua
-    KART.ApplyFrameStrata()
-    local fontPath = KART.GetFontPath(KART_Settings.fontName)
+
+    local fontPath = KART.UI:GetFontPath(KART_Settings.fontName)
     local r, g, b = KART_Settings.accentR/100, KART_Settings.accentG/100, KART_Settings.accentB/100
     local titleSize = KART_Settings.titleFontSize or 12 -- matches Defaults.titleFontSize
-    local menuSize = KART_Settings.menuFontSize or 11
-    local contentSize = KART_Settings.contentFontSize or 12
-    
+    local contentSize = KART_Settings.contentFontSize or 12 -- still needed below for the BuffChecker rows, which aren't part of KART.UI's generic registries
+
+    KART.UI:ApplyStyle({
+        font        = fontPath,
+        menuSize    = KART_Settings.menuFontSize,
+        contentSize = KART_Settings.contentFontSize,
+        strata      = KART_Settings.frameStrata,
+        accent      = { r, g, b },
+        background  = { KART_Settings.bgR/100, KART_Settings.bgG/100, KART_Settings.bgB/100 },
+    })
+
     -- The main window is a baked PNG artwork: no backdrop/gradient to tint.
     -- bgAlpha now controls whole-window opacity; floor of 20 so the window
     -- can never become fully invisible while still blocking mouse input.
@@ -392,46 +468,9 @@ function KART.UpdateStyles()
         KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
     end
 
-    -- Sidebar Buttons
-    for _, btnText in ipairs(KART.ButtonTexts) do
-        btnText:SetFont(fontPath, menuSize, "")
-    end
-
-    -- Eingabefelder
-    for _, eb in ipairs(KART.EditBoxes) do
-        eb:SetFont(fontPath, contentSize, "")
-    end
-    
-    -- Alle registrierten Labels (Slider-Beschriftungen etc.) aktualisieren
-    for _, label in ipairs(KART.DynamicLabels) do
-        label:SetFont(fontPath, contentSize, "")
-    end
-
-    -- Close-button "×" glyphs not already covered by a per-frame update below (Loot History,
-    -- Loot Council's vote popup and council panel) — see KART.CloseButtonTexts in Utils.lua.
-    for _, t in ipairs(KART.CloseButtonTexts) do
-        t:SetFont(fontPath, 14, "OUTLINE")
-    end
-
     -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
     -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
     if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
-
-    -- Slider-Thumbs und Checkboxen färben
-    for _, thumb in ipairs(KART.SliderThumbs) do thumb:SetColorTexture(r, g, b, 1) end
-    for _, check in ipairs(KART.CheckVisuals) do check:SetColorTexture(r, g, b, 1) end
-    -- Header lines on popup windows (see KART.CreateHeaderLine)
-    for _, line in ipairs(KART.AccentLines or {}) do line:SetColorTexture(r, g, b, 0.6) end
-
-    -- Re-apply the active tab's background tint and each checked toggle's track color, since
-    -- those aren't simple SetColorTexture calls (they depend on Darken() with different amounts
-    -- and on current checked/active state) and so can't be folded into the loops above.
-    for _, btn in ipairs(KART.TabButtons or {}) do
-        if btn.RefreshActiveColor then btn:RefreshActiveColor() end
-    end
-    for _, cb in ipairs(KART.ToggleCheckboxes or {}) do
-        if cb.RefreshVisual then cb:RefreshVisual() end
-    end
 
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
@@ -444,12 +483,6 @@ function KART.UpdateStyles()
             iconButton.icon:SetVertexColor(r, g, b)
         end
     end
-
-    if KART.ScrollThumb then KART.ScrollThumb:SetColorTexture(r, g, b, 0.6) end -- KART.ScrollThumb aus MainFrame.lua
-    if KART.BuffScrollThumb then KART.BuffScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.WUPasteScrollThumb then KART.WUPasteScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.LHScrollThumb then KART.LHScrollThumb:SetColorTexture(r, g, b, 0.6) end
-    if KART.LHExportScrollThumb then KART.LHExportScrollThumb:SetColorTexture(r, g, b, 0.6) end
 
     if KART.LH and KART.LH.historyWindow then
         local w = KART.LH.historyWindow
@@ -514,7 +547,7 @@ function KART.ShowReadyCheckReasonDialog()
         local f = CreateFrame("Frame", "KART_RCReasonFrame", UIParent, "BackdropTemplate")
         f:SetSize(260, 115)
         f:SetPoint("CENTER", 0, 150)
-        KART.RegisterStrataFrame(f, true)
+        KART.UI:RegisterStrataFrame(f, true)
         f:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -522,7 +555,7 @@ function KART.ShowReadyCheckReasonDialog()
         })
         f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
         f:SetBackdropBorderColor(0, 0, 0, 1)
-        KART.ApplyRoundedMask(f, KART.Theme.CORNER_RADIUS_LG)
+        KART.UI:ApplyRoundedMask(f, KAUI.CORNER_RADIUS_LG)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         f.title:SetPoint("TOP", 0, -10)
@@ -538,22 +571,22 @@ function KART.ShowReadyCheckReasonDialog()
                 text = KART.L[reasonKey]
             end
             if IsInGroup() then
-                KART.Sync.Send("RC_REASON:" .. text)
+                KASC:Send("RC_REASON:" .. text)
             end
             f:Hide()
         end
 
-        local btnBio = KART.CreateModernButton(f, KART.L.RC_REASON_BIO)
+        local btnBio = KART.UI:CreateModernButton(f, KART.L.RC_REASON_BIO)
         btnBio:SetSize(75, 25)
         btnBio:SetPoint("TOPLEFT", 10, -35)
         btnBio:SetScript("OnClick", function() sendReason("RC_REASON_BIO") end)
 
-        local btnDrink = KART.CreateModernButton(f, KART.L.RC_REASON_DRINK)
+        local btnDrink = KART.UI:CreateModernButton(f, KART.L.RC_REASON_DRINK)
         btnDrink:SetSize(75, 25)
         btnDrink:SetPoint("TOP", 0, -35)
         btnDrink:SetScript("OnClick", function() sendReason("RC_REASON_DRINK") end)
 
-        local btn1Min = KART.CreateModernButton(f, KART.L.RC_REASON_1MIN)
+        local btn1Min = KART.UI:CreateModernButton(f, KART.L.RC_REASON_1MIN)
         btn1Min:SetSize(75, 25)
         btn1Min:SetPoint("TOPRIGHT", -10, -35)
         btn1Min:SetScript("OnClick", function() sendReason("RC_REASON_1MIN") end)
@@ -573,26 +606,26 @@ function KART.ShowReadyCheckReasonDialog()
         customInput:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
         customInput:SetTextInsets(5, 5, 0, 0)
         customInput:SetMaxLetters(30) -- Verhindert, dass Leute ganze Romane schreiben
-        KART.ApplyRoundedMask(customInput, KART.Theme.CORNER_RADIUS_SM)
-        table.insert(KART.EditBoxes, customInput)
-        
-        local btnSend = KART.CreateModernButton(f, KART.L.RC_REASON_SEND)
+        KART.UI:ApplyRoundedMask(customInput, KAUI.CORNER_RADIUS_SM)
+        KART.UI:RegisterEditBox(customInput)
+
+        local btnSend = KART.UI:CreateModernButton(f, KART.L.RC_REASON_SEND)
         btnSend:SetSize(70, 25)
         btnSend:SetPoint("LEFT", customInput, "RIGHT", 10, 0)
         btnSend:SetScript("OnClick", function()
-            local text = KART.TrimString(customInput:GetText())
+            local text = KAUtil.TrimString(customInput:GetText())
             if text ~= "" then sendReason(nil, text) end
         end)
         
         customInput:SetScript("OnEnterPressed", function(self)
-            local text = KART.TrimString(self:GetText())
+            local text = KAUtil.TrimString(self:GetText())
             if text ~= "" then sendReason(nil, text) else self:ClearFocus() end
         end)
         customInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
         f.customInput = customInput
         KART.RCDialog = f
-        table.insert(KART.DynamicLabels, f.title)
+        KART.UI:RegisterLabel(f.title)
         KART.UpdateStyles()
     end
     if KART.RCDialog.customInput then KART.RCDialog.customInput:SetText("") end
@@ -622,7 +655,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print(KART.L.VERSION_CHECK_REQ)
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
-        KART.Sync.Send("REQ_VERSION", channel)
+        KASC:RequestHello(channel)
     elseif cmd == "add" or cmd:match("^add%s") then
         local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
         if KART.LC then KART.LC.StartManualRoll(itemsText) end

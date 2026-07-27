@@ -1,4 +1,8 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC.Council = KART.LC.Council or {}
 local Council = KART.LC.Council
@@ -97,8 +101,8 @@ function Council.GetEquippedForUnit(unit, rollItemLink)
 
     local bestLink, bestIlvl = scanSlots(unit, slots, itemEquipLoc == "INVTYPE_WEAPON")
     -- GetInventoryItemLink only returns data for the player and currently-inspected units, so for
-    -- most raid members the local scan is nil. Fall back to the link they broadcast over the KART
-    -- sync (see REQ_EQUIP/EQUIP in Core.lua + Council.RequestEquipForRoll below).
+    -- most raid members the local scan is nil. Fall back to the link they broadcast over KASC
+    -- (see the REQ_EQUIP/EQUIP handlers + Council.RequestEquipForRoll below).
     if not bestLink then
         local short = UnitName(unit)
         short = short and short:match("([^%-]+)")
@@ -131,8 +135,97 @@ function Council.RequestEquipForRoll(rollID, rollItemLink)
     local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
     if not itemEquipLoc or itemEquipLoc == "" or not EQUIP_LOC_TO_SLOT[itemEquipLoc] then return end
     LC.equipRequestedRolls[rollID] = true
-    KART.Sync.Send("REQ_EQUIP:" .. itemEquipLoc)
+    KASC:Send("REQ_EQUIP:" .. itemEquipLoc)
 end
+
+-- Per-equipLoc cooldown for answering REQ_EQUIP. Council.RequestEquipForRoll dedups per REQUESTING
+-- client, so a 5-member council sends five identical requests for the same slot and we used to
+-- broadcast five identical replies to the whole raid — councilSize * raidSize messages per item,
+-- each one waking every open council panel. The answer is a raid-wide broadcast, so the first reply
+-- already served every requester; anything arriving inside this window is a duplicate. Well below a
+-- vote window, and our equipped item can't meaningfully change mid-loot anyway.
+local EQUIP_ANSWER_COOLDOWN = 5
+local lastEquipAnswer = {} -- [equipLoc] = GetTime() of our last reply; only written on an actual send,
+                           -- so a bogus token from an unknown sender can't grow this table
+
+KASC:RegisterMessage("REQ_EQUIP", { payload = true, group = true, enabled = lcEnabled }, function(payload)
+    -- A council member's open panel is asking what we've got equipped in the rolled item's
+    -- slot (payload = equipLoc token). Reply with our own link so they can show the comparison
+    -- for a raider they can't inspect locally. Modeled on REQ_GEAR, but carries a payload so it
+    -- lives here in a payload handler (unlike the payload-less REQ_OIL/REQ_ILVL/REQ_GEAR responders).
+    if not IsInGroup() then return end
+    local now = GetTime()
+    if now - (lastEquipAnswer[payload] or -EQUIP_ANSWER_COOLDOWN) < EQUIP_ANSWER_COOLDOWN then return end
+    local link = Council.GetOwnEquippedLink(payload)
+    if link then
+        local msg = "EQUIP:" .. payload .. ":" .. link
+        -- A max-crafted/heavily-bonused link can exceed the 255-byte addon-message cap and get
+        -- its trailing link truncated into garbage; fall back to the compact item string (the
+        -- EQUIP receiver rebuilds it into a full link), same guard as the history sync.
+        if #msg > 255 then
+            local itemStr = KAUtil.GetItemString(link)
+            if itemStr then msg = "EQUIP:" .. payload .. ":" .. itemStr end
+        end
+        -- Still over budget (or no item string to fall back to): drop the reply entirely rather
+        -- than let SendAddonMessage truncate the link into something the receiver would cache as
+        -- garbage. Missing data renders as "no comparison"; corrupt data renders as a wrong one.
+        if #msg > 255 then return end
+        lastEquipAnswer[payload] = now
+        KASC:Send(msg)
+    end
+end)
+
+KASC:RegisterMessage("EQUIP", { payload = true, group = true, enabled = lcEnabled }, function(payload, ctx)
+    -- Reply to our REQ_EQUIP: equipLoc token, then the sender's equipped link (which itself
+    -- contains colons, so it must be the rest of the payload). Cached per short name + slot,
+    -- read by Council.GetEquippedForUnit as the fallback for un-inspectable raid members.
+    local equipLoc, link = payload:match("^([^:]+):(.+)$")
+    -- Must actually be an item. The capture takes everything after the first colon, and what it
+    -- captures is cached and later handed straight to SetHyperlink by the council row's compare
+    -- tooltip (LootCouncilPanel) — so a "|Hspell:"/"|Hquest:" from a broken or hostile client
+    -- would render a foreign tooltip in every council member's panel. Rejected at the network
+    -- boundary, the same rule the GEAR handler follows.
+    if link and not (KAUtil.IsRealItemLink(link) or link:match("^item:%d+")) then return end
+    if equipLoc and link then
+        -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
+        -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring
+        -- the history-sync rebuild.
+        local itemStr = (not KAUtil.IsRealItemLink(link)) and link:match("^item:%d+") and link or nil
+        if itemStr then
+            link = select(2, C_Item.GetItemInfo(itemStr)) or link
+        end
+        KART.EquipCache = KART.EquipCache or {}
+        KART.EquipCache[ctx.shortName] = KART.EquipCache[ctx.shortName] or {}
+        local shortName = ctx.shortName
+        KART.EquipCache[shortName][equipLoc] = link
+        -- Item not cached yet: nothing re-asks for it (Council.RequestEquipForRoll dedups per
+        -- roll), so the bare string would stay in the cache all session and the Equipped column
+        -- would keep showing a placeholder icon. Upgrade it in place once the item loads.
+        if itemStr and not KAUtil.IsRealItemLink(link) then
+            local itemID = tonumber(itemStr:match("^item:(%d+)"))
+            if itemID then
+                Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
+                    local full = select(2, C_Item.GetItemInfo(itemStr))
+                    if not full then return end
+                    local slotCache = KART.EquipCache and KART.EquipCache[shortName]
+                    -- Only replace if it's still the same bare string (a newer reply may have
+                    -- landed for this slot in the meantime).
+                    if slotCache and slotCache[equipLoc] == itemStr then
+                        slotCache[equipLoc] = full
+                        if LC.councilPanel and LC.councilPanel:IsShown() then
+                            Council.RefreshCouncilRowsThrottled()
+                        end
+                    end
+                end)
+            end
+        end
+        -- Throttled: one item can draw councilSize * raidSize of these (see EQUIP_ANSWER_COOLDOWN
+        -- and Council.RefreshCouncilRowsThrottled), and they all land within the same second.
+        if LC.councilPanel and LC.councilPanel:IsShown() then
+            Council.RefreshCouncilRowsThrottled()
+        end
+    end
+end)
 
 -- =====================================================================
 --  Armor-type eligibility  (soft visual hint only — never blocks assignment)
@@ -370,7 +463,7 @@ function Council.RefreshCouncilTabs()
                 anyVotes = true
                 local idx = voteData.idx
                 local def = idx and buttons[tonumber(idx)]
-                GameTooltip:AddDoubleLine(KART.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
+                GameTooltip:AddDoubleLine(KASC.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
             end
             if not anyVotes then
                 GameTooltip:AddLine(KART.L.LC_TAB_NO_VOTES_YET, 0.6, 0.6, 0.6)
@@ -433,7 +526,7 @@ local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCoun
 -- Confirm dialog for the "Close Session" button below, because it is destructive and raid-wide:
 -- every client drops its tabs, votes and rolls. Registered once at file scope rather than per panel
 -- build (the panel is created lazily).
-KART.RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
     text = "End the Loot Council session?", -- overwritten with KART.L.LC_CLOSE_SESSION_CONFIRM before each Show
     button1 = YES,
     button2 = NO,
@@ -464,11 +557,11 @@ function Council.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
     f:SetSize(COUNCIL_PANEL_WIDTH, COUNCIL_PANEL_HEIGHT)
     f:SetPoint("CENTER", 220, 0)
-    KART.RegisterStrataFrame(f)
+    KART.UI:RegisterStrataFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    KART.ApplyPopupArtwork(f)
+    KART.UI:ApplyPopupArtwork(f)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop",  function(self)
         self:StopMovingOrSizing()
@@ -501,7 +594,7 @@ function Council.CreateCouncilPanel()
             KART_Settings.lcCouncilPanelPos = {x = f:GetLeft(), y = f:GetTop()}
         end
     end)
-    KART.CreateHeaderLine(f, -28)
+    KART.UI:CreateHeaderLine(f, -28)
 
     f.title = hdr:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("LEFT", 16, 0)
@@ -515,13 +608,13 @@ function Council.CreateCouncilPanel()
     -- next time the panel is shown; this is a deliberate "get it out of my way for now", not a
     -- "discard" action. Use a tab's own "x" to actually dismiss an item, or the "-" button (below)
     -- to shrink the panel down to just its header instead of hiding it outright.
-    local closeBtn = KART.CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
+    local closeBtn = KART.UI:CreateHeaderIconButton(hdr, "×", function() f:Hide() end)
     closeBtn:SetPoint("RIGHT", -4, 0)
 
     -- Collapses the panel to just its title bar + item name, keeping it out of the way during
     -- normal raiding without losing track of what's being voted on (tabs/rows are hidden, not
     -- discarded — see LC.SetCouncilPanelMinimized). Sits left of the close button, same style.
-    local minimizeBtn = KART.CreateHeaderIconButton(hdr, "-", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
+    local minimizeBtn = KART.UI:CreateHeaderIconButton(hdr, "-", function() Council.SetCouncilPanelMinimized(not f.isMinimized) end)
     minimizeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
     f.minimizeBtn = minimizeBtn
     f.timerText:SetPoint("RIGHT", minimizeBtn, "LEFT", -6, 0)
@@ -662,14 +755,14 @@ function Council.CreateCouncilPanel()
     scrollChild:SetSize(590, 800)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local thumb = KART.StripScrollbarTextures(scrollFrame)
+    local thumb = KART.UI:StripScrollbarTextures(scrollFrame)
     if thumb then thumb:SetSize(8, 20) end
 
     f.scrollChild = scrollChild
     f.rows        = {}
 
     -- Bottom: No Winner / Close
-    local btnNoWinner = KART.CreateModernButton(f, KART.L.LC_BTN_NO_WINNER)
+    local btnNoWinner = KART.UI:CreateModernButton(f, KART.L.LC_BTN_NO_WINNER)
     btnNoWinner:SetSize(150, 28)
     btnNoWinner:SetPoint("BOTTOMLEFT", 10, 10)
     btnNoWinner:SetScript("OnClick", function()
@@ -691,7 +784,7 @@ function Council.CreateCouncilPanel()
     -- DoAssignWinner) — without it the only way to clear a finished raid's tabs would be closing each
     -- one by hand. Lootmaster-only, since it wipes state for every client in the raid; everyone else
     -- sees it greyed out and uses "Close" (or the header "×") to just put the window away.
-    local btnCloseSession = KART.CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
+    local btnCloseSession = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
     btnCloseSession:SetSize(150, 28)
     btnCloseSession:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
     btnCloseSession:SetScript("OnClick", function()
@@ -702,7 +795,7 @@ function Council.CreateCouncilPanel()
     f.btnCloseSession = btnCloseSession
 
     -- Plain window close: hides the panel, ends nothing. Same as the header "×".
-    local btnClose = KART.CreateModernButton(f, KART.L.LC_BTN_CANCEL)
+    local btnClose = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CANCEL)
     btnClose:SetSize(150, 28)
     btnClose:SetPoint("BOTTOMRIGHT", -10, 10)
     btnClose:SetScript("OnClick", function() f:Hide() end)
@@ -721,7 +814,7 @@ function Council.CreateCouncilPanel()
 
     -- Restore saved position
     local pos = KART_Settings and KART_Settings.lcCouncilPanelPos
-    if pos and type(pos) == "table" and KART.IsSavedPosOnScreen(pos.x, pos.y) then
+    if pos and type(pos) == "table" and KAUI.IsSavedPosOnScreen(pos.x, pos.y) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
@@ -776,6 +869,16 @@ function Council.CreateCouncilPanel()
     -- addon's actual goal here — comparing a specific raid candidate's equipped item to the
     -- item being rolled. A fully separate frame sidesteps that collision entirely.
     LC.equipCompareTooltip = CreateFrame("GameTooltip", "KART_LCEquipCompareTooltip", UIParent, "GameTooltipTemplate")
+
+    -- Everything this builder registered with KART.UI above (title-bar close/minimize buttons,
+    -- the "No Winner"/"Close Session"/"Close" buttons) registered *after* the last
+    -- KART.UpdateStyles() call that ran before this panel first got built, since the panel is
+    -- built lazily on first Council.ShowCouncilPanel rather than at load (see B2 in BACKLOG.md).
+    -- Re-apply once, now that every one of them has registered, so they don't keep their
+    -- Blizzard-default creation-time font. Runs only this once per session (this whole function
+    -- is guarded by "if not LC.councilPanel" at the call site), so no need to repeat it on every
+    -- tab/row refresh the way the vote list does.
+    if KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Collapses/restores the council panel to just its header + item name (see f.collapsible, set up
@@ -894,11 +997,11 @@ function Council.RefreshCouncilRows()
     end
 
     local members = {}
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         local fullName = UnitName(unit)
         if fullName then
             local short    = fullName:match("([^%-]+)")
-            local key      = (KART.Identity.ResolvePlayer(unit))
+            local key      = (KASC.Identity.ResolvePlayer(unit))
             local voteData = votes[key] -- always {idx, note} — every writer produces tables
             local voteIdx  = voteData and voteData.idx
             local voteNote = (voteData and voteData.note) or ""
@@ -910,18 +1013,18 @@ function Council.RefreshCouncilRows()
             -- version broadcast, so PlayerVersions never has an entry for "player"). PlayerVersions
             -- stays short-name keyed — out of scope for the identity rework, see the design doc.
             local kartStatus
-            -- UnitIsUnit, NOT unit ~= "player": KART.EachGroupUnit yields raid1..raidN in a raid and
+            -- UnitIsUnit, NOT unit ~= "player": KAUtil.EachGroupUnit yields raid1..raidN in a raid and
             -- never the literal "player" token, so the plain comparison failed to exclude our own raid
             -- slot — and since we never receive our own version broadcast, every raid showed a red
             -- "KART missing" warning on the viewer's own row. Same pitfall as in WU.RemoveForBoss.
             if not UnitIsUnit(unit, "player") then
                 local ver = KART.PlayerVersions and KART.PlayerVersions[short]
-                local lcEnabled = KART.PlayerLCEnabled and KART.PlayerLCEnabled[short]
+                local peerLcEnabled = KART.PlayerLCEnabled and KART.PlayerLCEnabled[short]
                 if not ver then
                     kartStatus = KART.L.LC_STATUS_NO_KART
                 elseif IsOlderVersion(ver, KART.Version) then
                     kartStatus = string.format(KART.L.LC_STATUS_OLD_VERSION, ver)
-                elseif lcEnabled == false then
+                elseif peerLcEnabled == false then
                     kartStatus = KART.L.LC_STATUS_MODULE_DISABLED
                 end
             end
@@ -932,11 +1035,11 @@ function Council.RefreshCouncilRows()
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][key],
-                -- Nickname (see KART.GetNickname/lcShowNickNames) and guild rank are both purely
+                -- Nickname (see KASC.Identity.GetNickname/lcShowNickNames) and guild rank are both purely
                 -- display concerns, resolved once per refresh here rather than per-row-render.
                 -- Second return value is the nickname in its original casing — the first
                 -- (lowercased) is only for matching, never what should show up on screen.
-                nickname = select(2, KART.GetNickname(unit)),
+                nickname = select(2, KASC.Identity.GetNickname(unit)),
                 guildRank = select(2, GetGuildInfo(unit)),
             })
         end
@@ -947,7 +1050,7 @@ function Council.RefreshCouncilRows()
     -- row to vote on and assign to.
     if LC.IsTestRoll(rollID) then
         local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
-        local myKey    = (KART.Identity.ResolvePlayer("player"))
+        local myKey    = (KASC.Identity.ResolvePlayer("player"))
         local alreadyListed = false
         for _, m in ipairs(members) do
             if m.short == myShort then alreadyListed = true break end
@@ -964,7 +1067,7 @@ function Council.RefreshCouncilRows()
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = nil,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myKey],
-                nickname = select(2, KART.GetNickname("player")),
+                nickname = select(2, KASC.Identity.GetNickname("player")),
                 guildRank = select(2, GetGuildInfo("player")),
             })
         end
@@ -1269,7 +1372,7 @@ function Council.RefreshCouncilRows()
 
         -- Council straw-poll button: tally of how many council members (including possibly
         -- yourself) picked this candidate, and a toggle for your own pick.
-        local myKey        = (KART.Identity.ResolvePlayer("player"))
+        local myKey        = (KASC.Identity.ResolvePlayer("player"))
         local pollVotes    = (capturedRoll and LC.councilVotes[capturedRoll]) or {}
         local myPick       = pollVotes[myKey]
         local votedByMe    = (myPick == capturedKey)

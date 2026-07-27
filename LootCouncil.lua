@@ -1,11 +1,14 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KASC = LibStub("KASC-1.0")
+local function lcEnabled() return KART_Settings.lcModuleEnabled ~= false end
 
 KART.LC = KART.LC or {}
 local LC = KART.LC
 
 LC.sessionActive        = false
 LC.promptedThisSession  = false
-LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KART.Identity)
+LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
 LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
 LC.rollItems            = {}  -- [rollID] = itemLink
@@ -17,7 +20,7 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
-LC.CouncilNamesTable    = {}  -- resolved KART.Identity key -> true. Written by exactly two paths:
+LC.CouncilNamesTable    = {}  -- resolved KASC.Identity key -> true. Written by exactly two paths:
                                -- LC.HandleConfig (a received LC_CONFIG) and LC.ApplyOwnConfig (our own
                                -- settings, but only while WE own the config — see LC.IsConfigOwner).
                                -- Never from a non-owner's local settings, so a regular raider can't
@@ -141,10 +144,10 @@ function LC.GetButtonConfig()
     else
         raw = LC.raidConfig.buttonLabels
     end
-    local parts = KART.SplitString(raw, ";")
+    local parts = KAUtil.SplitString(raw, ";")
     local result = {}
     for _, label in ipairs(parts) do
-        local trimmed = KART.TrimString(label)
+        local trimmed = KAUtil.TrimString(label)
         if trimmed ~= "" and #result < 6 then
             -- Color by the COMPACTED position (#result+1), not the raw split index, so it matches the
             -- vote icon (chosen by the returned button's index). A whitespace-only label between real
@@ -155,7 +158,7 @@ function LC.GetButtonConfig()
         end
     end
     if #result == 0 then
-        for i, label in ipairs(KART.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
+        for i, label in ipairs(KAUtil.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
             local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
             table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
         end
@@ -173,7 +176,7 @@ end
 -- A leader who should sit on the council goes in the council-member list like everyone else.
 function LC.IsCouncil()
     if LC.IsLootOwner() then return true end
-    local myKey = (KART.Identity.ResolvePlayer("player"))
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
     return LC.CouncilNamesTable[myKey] == true
 end
 
@@ -184,7 +187,7 @@ end
 -- key alone, matters because CHAT_MSG_ADDON also delivers whispers: someone not currently in our
 -- group is never authorized, even if their key happens to match an entry in CouncilNamesTable.
 function LC.IsSenderCouncil(senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     -- Mirrors LC.IsCouncil: the loot owner is council whether or not he's in the council-member
     -- list. Without this, peers rejected the LC_RESULT of an unlisted lootmaster — so his awards
@@ -209,9 +212,9 @@ end
 function LC.SendLC(msg, target)
     if not IsInGroup() then return end
     if target then
-        KART.Sync.Send(msg, "WHISPER", target)
+        KASC:Send(msg, "WHISPER", target)
     else
-        KART.Sync.Send(msg)
+        KASC:Send(msg)
     end
 end
 
@@ -230,7 +233,7 @@ end
 -- at all. Three tiers relative to the base size preserve the existing visual hierarchy (item name
 -- and window title bigger, column headers smaller) while making all of them move together.
 function LC.ApplyFontSize()
-    local fontPath = KART.GetFontPath(KART_Settings.fontName)
+    local fontPath = KART.UI:GetFontPath(KART_Settings.fontName)
     local base  = KART_Settings.lcFontSize or 12
     local big   = base + 2   -- item name / window title
     local small = math.max(8, base - 2) -- column headers
@@ -287,14 +290,14 @@ end
 -- LC.IsMe (below) is what actually resolves it against the local player, trying both.
 
 -- Resolves free-typed config text (a council-list entry, or the lootmaster field) to a stable
--- key via KART.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
+-- key via KASC.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
 -- LC.HandleConfig (a received LC_CONFIG broadcast) and LC.GetLootmaster's raid-leader branch
 -- below (the leader's own local settings, resolved fresh on every read rather than cached,
 -- since the leader never receives its own broadcast to trigger HandleConfig).
 function LC.ResolveConfigName(text)
-    local trimmed = KART.TrimString(text or "")
+    local trimmed = KAUtil.TrimString(text or "")
     if trimmed == "" then return nil end
-    return (KART.Identity.ResolvePlayer(trimmed))
+    return (KASC.Identity.ResolvePlayer(trimmed))
 end
 
 function LC.GetLootmaster()
@@ -304,15 +307,15 @@ function LC.GetLootmaster()
     return LC.raidConfig.lootmaster or ""
 end
 
--- Whether configuredKey (a resolved KART.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
+-- Whether configuredKey (a resolved KASC.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
 -- identifies the local player. Resolution (character short name vs. Northern Sky Raid Tools
--- nickname, see KART.GetNickname in Utils.lua) already happened upstream when the key was
+-- nickname, see KASC.Identity.GetNickname) already happened upstream when the key was
 -- produced, so a raid leader can name a *person* once ("kandera") instead of re-typing the field
 -- whenever that person switches characters — every alt just needs the same NSRT nickname set,
 -- which raiders already do for the addon's other nickname-aware features.
 function LC.IsMe(configuredKey)
     if not configuredKey or configuredKey == "" then return false end
-    return (KART.Identity.ResolvePlayer("player")) == configuredKey
+    return (KASC.Identity.ResolvePlayer("player")) == configuredKey
 end
 
 -- =====================================================================
@@ -344,8 +347,8 @@ end
 function LC.GetLootOwnerKey()
     local lootmaster = LC.GetLootmaster()
     if lootmaster ~= "" then return lootmaster end
-    for unit in KART.EachGroupUnit() do
-        if UnitIsGroupLeader(unit) then return (KART.Identity.ResolvePlayer(unit)) end
+    for unit in KAUtil.EachGroupUnit() do
+        if UnitIsGroupLeader(unit) then return (KASC.Identity.ResolvePlayer(unit)) end
     end
     return ""
 end
@@ -355,10 +358,10 @@ end
 -- forces the pending-key migration before comparing — senderKey is always a GUID while the stored
 -- lootmaster can still be plain config text if they weren't in our roster when LC_CONFIG was parsed.
 function LC.IsSenderLootOwner(senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false end
     local lootmaster = LC.GetLootmaster()
-    if lootmaster ~= "" and not KART.Identity.IsResolvedKey(lootmaster) then
+    if lootmaster ~= "" and not KASC.Identity.IsResolvedKey(lootmaster) then
         LC.RetryPendingResolutions()
         lootmaster = LC.GetLootmaster()
     end
@@ -450,7 +453,7 @@ function LC.ApplyOwnConfig()
     LC.raidConfig.fromSelf       = true
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(LC.raidConfig.councilMembers, ";")) do
+    for _, name in ipairs(KAUtil.SplitString(LC.raidConfig.councilMembers, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
@@ -470,7 +473,7 @@ function LC.BroadcastRaidConfig(target)
     -- Keep the full "Name-Realm" text (don't strip the realm): GetLootmaster resolves the same
     -- unstripped value on the leader, so stripping here would let a cross-realm lootmaster resolve
     -- to a different person (or a same-named local) on peers than on the leader.
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
+    local lootmaster = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
@@ -489,7 +492,8 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
--- Applies a raid-config broadcast (called from KARTSync's dispatcher).
+-- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
+-- registered near the bottom of this file).
 --
 -- Authority is the configured LOOTMASTER, not the raid leader: the config is only accepted when the
 -- sender is the very player the payload names as lootmaster. That is self-validating — no prior
@@ -501,7 +505,7 @@ end
 -- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
 -- lootmaster, and every client resolves that name against the live roster the same way.
 function LC.HandleConfig(payload, senderKey)
-    local unit = senderKey and KART.Identity.FindUnitForKey(senderKey)
+    local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return end
 
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
@@ -520,7 +524,7 @@ function LC.HandleConfig(payload, senderKey)
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
 
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KART.SplitString(council, ";")) do
+    for _, name in ipairs(KAUtil.SplitString(council, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
@@ -540,7 +544,7 @@ function LC.RetryPendingResolutionsThrottled()
 end
 
 -- Re-attempts resolution for every council-list/lootmaster entry still stuck on plain text (see
--- KART.Identity.IsResolvedKey), and migrates any KART_LCOfficerNotes entry still under its legacy
+-- KASC.Identity.IsResolvedKey), and migrates any KART_LCOfficerNotes entry still under its legacy
 -- short-name key — both cases just mean "this person hadn't been seen yet" at the time they were
 -- first parsed. Promotes them to a real key in place; still-unresolvable entries are left alone
 -- and retried again next time the roster changes.
@@ -556,21 +560,21 @@ function LC.RetryPendingResolutions()
     -- below would otherwise do for every newly-resolved entry.
     local pendingCouncilEntries = {}
     for pendingText in pairs(LC.CouncilNamesTable) do
-        if not KART.Identity.IsResolvedKey(pendingText) then
+        if not KASC.Identity.IsResolvedKey(pendingText) then
             table.insert(pendingCouncilEntries, pendingText)
         end
     end
     for _, pendingText in ipairs(pendingCouncilEntries) do
         local key = LC.ResolveConfigName(pendingText)
-        if key and KART.Identity.IsResolvedKey(key) then
+        if key and KASC.Identity.IsResolvedKey(key) then
             LC.CouncilNamesTable[pendingText] = nil
             LC.CouncilNamesTable[key] = true
         end
     end
 
-    if LC.raidConfig.lootmaster and not KART.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
+    if LC.raidConfig.lootmaster and not KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster) then
         local key = LC.ResolveConfigName(LC.raidConfig.lootmaster)
-        if key and KART.Identity.IsResolvedKey(key) then
+        if key and KASC.Identity.IsResolvedKey(key) then
             LC.raidConfig.lootmaster = key
         end
     end
@@ -625,23 +629,25 @@ function LC.SendSettingsSync(targetName)
     local rolls = KART_Settings.lcRollsEnabled and "1" or "0"
     -- Full "Name-Realm" text, not realm-stripped — same cross-realm consistency reason as
     -- LC.BroadcastRaidConfig above.
-    local lootmaster = KART.TrimString(KART_Settings.lcLootmaster or "")
+    local lootmaster = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
     local voteSeconds = KART_Settings.lcVoteSeconds or 20
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    KART.Sync.Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    KASC:Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
     -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
     -- messages are deliberately not group-gated — the whole feature targets someone outside the
     -- group — which without this would let anyone spam a line into our chat frame at will.
-    LC.syncRequestSentTo = KART.CaseFold(KART.TrimString(targetName or ""))
+    LC.syncRequestSentTo = KAUtil.CaseFold(KAUtil.TrimString(targetName or ""))
 end
 
 function LC.ShowSyncTargetDialog()
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = KART.L.LC_SYNC_TARGET_PROMPT,
         maxLetters = 48,
         emptyMessage = KART.L.LC_SYNC_TARGET_EMPTY,
+        okLabel = KART.L.BTN_ACCEPT,
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(text) LC.SendSettingsSync(text) end,
     })
 end
@@ -672,7 +678,7 @@ end
 local function IsExpectedSyncReply(senderShort)
     local expected = LC.syncRequestSentTo
     if not expected or not senderShort then return false end
-    return KART.CaseFold(expected:match("^([^%-]+)") or expected) == KART.CaseFold(senderShort)
+    return KAUtil.CaseFold(expected:match("^([^%-]+)") or expected) == KAUtil.CaseFold(senderShort)
 end
 
 function LC.HandleSyncAccept(senderShort)
@@ -687,7 +693,7 @@ function LC.HandleSyncDecline(senderShort)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_SYNC_DECLINED_MSG, senderShort))
 end
 
-KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
+KART.UI:RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
     text = "Raidlead-Only Settings Sync from Player %s", -- overwritten with KART.L.LC_SYNC_REQUEST_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -699,22 +705,34 @@ KART.RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
         KART_Settings.lcVoteSeconds = data.voteSeconds
         KART_Settings.lcCouncilMembers = data.councilMembers
         KART.SyncSettingsToUI()
-        KART.Sync.Send("LC_SYNC_ACCEPT", "WHISPER", data.sender)
+        KASC:Send("LC_SYNC_ACCEPT", "WHISPER", data.sender)
     end,
     OnCancel = function(self, data)
-        KART.Sync.Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
+        KASC:Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
     end,
 })
 
-LC.IsRealItemLink = KART.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
+LC.IsRealItemLink = KAUtil.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
--- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
--- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's
--- fake coloured-string items, so tab swatches never need to special-case which kind it is.
+-- Pulls the (r,g,b) quality colour for an item link/coloured string. The leading colour escape is
+-- tried first (|cAARRGGBB, decoded directly) — this is the only form test mode's fake
+-- coloured-string items ever use, so that path alone still covers them. A real item link can
+-- instead carry a *named* escape (|cnIQ4:, see KAUtil.EachItemLink) that has no hex triple to
+-- decode at all; for that form, the item's actual quality is looked up via C_Item.GetItemInfo
+-- instead of trying to parse meaning out of the escape's name. Falls back to grey when neither
+-- resolves (a non-item test string, or a real item not yet in the client's item cache).
 function LC.ParseItemColor(link)
-    local hex = type(link) == "string" and link:match("|c(%x%x%x%x%x%x%x%x)")
-    if not hex then return 0.5, 0.5, 0.5 end
-    return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+    if type(link) ~= "string" then return 0.5, 0.5, 0.5 end
+    local hex = link:match("|c(%x%x%x%x%x%x%x%x)")
+    if hex then
+        return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+    end
+    if KAUtil.IsRealItemLink(link) then
+        local _, _, quality = C_Item.GetItemInfo(link)
+        local c = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality] ---@diagnostic disable-line: undefined-global
+        if c then return c.r, c.g, c.b end
+    end
+    return 0.5, 0.5, 0.5
 end
 
 -- Refresh the council panel after a vote/assignment mutation, but only when it's actually open: the
@@ -781,8 +799,8 @@ function LC.ShowSessionPrompt()
     local f = CreateFrame("Frame", "KART_LCSessionPrompt", UIParent, "BackdropTemplate")
     f:SetSize(310, 115)
     f:SetPoint("CENTER", 0, 120)
-    KART.RegisterStrataFrame(f, true)
-    KART.ApplyPopupArtwork(f)
+    KART.UI:RegisterStrataFrame(f, true)
+    KART.UI:ApplyPopupArtwork(f)
     table.insert(UISpecialFrames, f:GetName())
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -795,7 +813,7 @@ function LC.ShowSessionPrompt()
     f.desc:SetWidth(285)
     f.desc:SetWordWrap(true)
 
-    local btnYes = KART.CreateModernButton(f, KART.L.LC_PROMPT_YES)
+    local btnYes = KART.UI:CreateModernButton(f, KART.L.LC_PROMPT_YES)
     btnYes:SetSize(135, 28)
     btnYes:SetPoint("BOTTOMLEFT", 15, 12)
     btnYes:SetScript("OnClick", function()
@@ -803,7 +821,7 @@ function LC.ShowSessionPrompt()
         f:Hide()
     end)
 
-    local btnNo = KART.CreateModernButton(f, KART.L.LC_PROMPT_NO)
+    local btnNo = KART.UI:CreateModernButton(f, KART.L.LC_PROMPT_NO)
     btnNo:SetSize(135, 28)
     btnNo:SetPoint("BOTTOMRIGHT", -15, 12)
     btnNo:SetScript("OnClick", function()
@@ -812,6 +830,13 @@ function LC.ShowSessionPrompt()
     end)
 
     LC.sessionPromptFrame = f
+
+    -- Same reasoning as Council.CreateCouncilPanel (see B2 in BACKLOG.md): btnYes/btnNo just
+    -- registered above with KART.UI, but this prompt is built lazily on first login-time trigger,
+    -- after the last KART.UpdateStyles() call already ran. Re-apply once so they pick up the
+    -- chosen font instead of keeping their Blizzard-default creation-time one. One-shot is enough
+    -- here too — nothing else ever registers with this frame after this point.
+    if KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Forgets every tracked roll and closes both LC windows. Shared by the leader ending the session
@@ -997,7 +1022,7 @@ local ROLL_ORPHAN_GRACE = 15
 -- back to the council in the first place.
 local function RollForSelf(rollID)
     if not LC.GetRollsEnabled() then return end
-    local myKey  = (KART.Identity.ResolvePlayer("player"))
+    local myKey  = (KASC.Identity.ResolvePlayer("player"))
     local myRoll = math.random(1, 100)
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][myKey] = myRoll
@@ -1182,7 +1207,7 @@ LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed b
 -- double-assignment when the assign menu is used more than once for the same item).
 LC.assignedWinners = LC.assignedWinners or {}
 
-KART.RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
+KART.UI:RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
     text = "Already assigned.", -- unconditionally overwritten with KART.L.LC_REASSIGN_CONFIRM_TEXT in LC.Trade.AssignWinner below
     button1 = YES, ---@diagnostic disable-line: undefined-global
     button2 = NO,  ---@diagnostic disable-line: undefined-global
@@ -1328,10 +1353,12 @@ function LC.StartManualRoll(itemsText)
     local seconds = KART_Settings.lcVoteSeconds or 20
     local startedAny = false
 
-    -- Matches each complete item hyperlink (|cAARRGGBB|Hitem:...|h[Name]|h|r) regardless of how
-    -- many are pasted in one command or how much whitespace separates them — a plain word-split
-    -- would break apart item names that contain spaces (e.g. "[Sulfuras, Hand von Ragnaros]").
-    for itemLink in (itemsText or ""):gmatch("|c%x%x%x%x%x%x%x%x|Hitem:.-|h|r") do
+    -- Matches each complete item hyperlink (|Hitem:...|h[Name]|h|r, with either a hex or named
+    -- colour escape in front of it — different client versions shift-click different forms)
+    -- regardless of how many are pasted in one command or how much whitespace separates them — a
+    -- plain word-split would break apart item names that contain spaces (e.g.
+    -- "[Sulfuras, Hand von Ragnaros]").
+    for itemLink in KAUtil.EachItemLink(itemsText) do
         startedAny = true
         -- Before anything else: the item is being handed back for a new decision, so whatever was
         -- decided about it last time has to stop being true first.
@@ -1354,7 +1381,7 @@ function LC.StartManualRoll(itemsText)
         -- silently dropped, desyncing peers while the lootmaster's own windows still open below.
         -- Fall back to the compact item string, which HandleManualStart rebuilds into a full link.
         if #msg > 255 then
-            local itemStr = KART.GetItemString(itemLink)
+            local itemStr = KAUtil.GetItemString(itemLink)
             if itemStr then msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemStr end
         end
         LC.SendLC(msg)
@@ -1426,6 +1453,33 @@ function LC.HandleManualStart(payload, senderKey)
 end
 
 -- =====================================================================
+--  Addon-message registrations
+-- =====================================================================
+-- group = true on every LC message that carries authority or writes tracked state. The sender's
+-- resolved key alone is NOT proof of membership: Identity resolution is short-name based (see
+-- KASC.Identity), so an out-of-group player sharing a short name with a council member would
+-- otherwise resolve onto their GUID and pass IsSenderCouncil/IsSenderGroupLeader. The three
+-- LC_SYNC_* messages are deliberately left ungated below — that feature is an explicit whisper to
+-- someone outside the group, and the receiver confirms it via popup before anything is applied.
+KASC:RegisterMessage("LC_ACTIVE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleActive(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_START", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleStart(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleManualStart(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
+    function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
+-- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.
+KASC:RegisterMessage("LC_SYNC_REQUEST", { payload = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end)
+-- LC_SYNC_ACCEPT/DECLINE carry neither gate: a decline must still print even if the receiver just
+-- disabled the module, and the sync feature is an explicit whisper to someone outside the group.
+KASC:RegisterMessage("LC_SYNC_ACCEPT", {}, function(_, ctx) LC.HandleSyncAccept(ctx.shortName) end)
+KASC:RegisterMessage("LC_SYNC_DECLINE", {}, function(_, ctx) LC.HandleSyncDecline(ctx.shortName) end)
+
+-- =====================================================================
 --  Test Function
 -- =====================================================================
 
@@ -1485,7 +1539,7 @@ function LC.StartTest(mode)
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
-            local myKey    = (KART.Identity.ResolvePlayer("player"))
+            local myKey    = (KASC.Identity.ResolvePlayer("player"))
             local rollsOn  = LC.GetRollsEnabled()
             if rollsOn and myShort ~= "" then
                 LC.rolls[testRollID][myKey] = math.random(1, 100)
@@ -1498,12 +1552,12 @@ function LC.StartTest(mode)
                 -- valid 1..#buttons range from the start — with fewer than TEST_ITEM_COUNT buttons a
                 -- bare itemIdx seed would be out of range and render as "-".
                 local voteIdx = ((itemIdx - 1) % #buttons) + 1
-                for unit in KART.EachGroupUnit() do
+                for unit in KAUtil.EachGroupUnit() do
                     local name = UnitName(unit)
                     if name then
                         local short = name:match("([^%-]+)")
                         if short and short ~= myShort then
-                            local key = (KART.Identity.ResolvePlayer(unit))
+                            local key = (KASC.Identity.ResolvePlayer(unit))
                             LC.votes[testRollID][key] = {idx = voteIdx, note = ""}
                             voteIdx = (voteIdx % #buttons) + 1
                             if rollsOn then LC.rolls[testRollID][key] = math.random(1, 100) end

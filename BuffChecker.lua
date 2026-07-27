@@ -1,4 +1,7 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KAGS = LibStub("KAGS-1.0")
+local KASC = LibStub("KASC-1.0")
 local L = KART.L
 
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
@@ -65,7 +68,7 @@ KART.BuffData = {
 }
 
 -- label/reportLabel are resolved from keys so a locale change (applied after file load,
--- see KART.RegisterLocaleRefresher) reaches the baked-at-load BuffData table too.
+-- see KART.UI:RegisterLocaleRefresher) reaches the baked-at-load BuffData table too.
 local function ResolveBuffDataLabels()
     for _, d in ipairs(KART.BuffData) do
         d.label = L[d.labelKey]
@@ -85,7 +88,7 @@ local function BuildSlotNames()
         -- Blizzard INVSLOT ids: 6 = Waist, 9 = Wrist, 10 = Hands (slot 10 was previously labelled
         -- "Waist", so an empty gem socket in gloves reported the wrong item and the belt fell through
         -- to the "Slot %d" fallback). Sockets only appear on head/neck/waist/wrist/rings, but
-        -- KART.CountMissingGear scans slots 1..17, so every slot it can report keeps a name.
+        -- KAGS.CountMissingGear scans slots 1..17, so every slot it can report keeps a name.
         ["6"] = L.SLOT_WAIST,
         ["9"] = L.SLOT_WRIST,
         ["10"] = L.SLOT_HANDS,
@@ -100,7 +103,7 @@ local function BuildSlotNames()
 end
 BuildSlotNames()
 
-KART.RegisterLocaleRefresher(function()
+KART.UI:RegisterLocaleRefresher(function()
     ResolveBuffDataLabels()
     BuildSlotNames()
     -- Window is built lazily (after the refreshers ran), so headers/buttons pick the fresh
@@ -175,7 +178,7 @@ function KART.CreateBuffCheckFrame()
     f:SetPoint(KART_Settings.bcPoint or "CENTER", UIParent, KART_Settings.bcRelativePoint or "CENTER", KART_Settings.bcX or 200, KART_Settings.bcY or 0)
     f:SetMovable(true)
     -- This window stores its position as point/relativePoint/offset (not the TOPLEFT-from-
-    -- BOTTOMLEFT pair the LC popups use, so KART.IsSavedPosOnScreen doesn't apply). Let WoW keep it
+    -- BOTTOMLEFT pair the LC popups use, so KAUI.IsSavedPosOnScreen doesn't apply). Let WoW keep it
     -- on screen instead: without this, a position saved on a wider monitor or at a different UI
     -- scale restores fully off screen, and since this frame isn't in UISpecialFrames and is only
     -- repositioned by dragging, the only way back is a full settings reset.
@@ -196,14 +199,14 @@ function KART.CreateBuffCheckFrame()
         KART_Settings.bcX = xOfs
         KART_Settings.bcY = yOfs
     end)
-    KART.ApplyPopupArtwork(f)
-    KART.RegisterStrataFrame(f)
-    KART.AddShowFade(f)
+    KART.UI:ApplyPopupArtwork(f)
+    KART.UI:RegisterStrataFrame(f)
+    KART.UI:AddShowFade(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 16, -12)
     f.title:SetText(L.BC_TITLE)
-    KART.CreateHeaderLine(f, -30)
+    KART.UI:CreateHeaderLine(f, -30)
 
     -- Header Labels
     local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
@@ -245,8 +248,9 @@ function KART.CreateBuffCheckFrame()
     sf:SetPoint("TOPLEFT", 10, -55)
     sf:SetPoint("BOTTOMRIGHT", -30, 40)
 
-    KART.BuffScrollThumb = KART.StripScrollbarTextures(sf)
-    if KART.BuffScrollThumb then KART.BuffScrollThumb:SetSize(8, 30) end
+    local buffScrollThumb = KART.UI:StripScrollbarTextures(sf)
+    if buffScrollThumb then buffScrollThumb:SetSize(8, 30) end
+    KART.UI:RegisterAccentTexture(buffScrollThumb, 0.6)
 
     local content = CreateFrame("Frame", nil, sf)
     content:SetSize(660, 1)
@@ -330,7 +334,7 @@ function KART.CreateBuffCheckFrame()
                         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                         GameTooltip:SetText(self.tooltipTitle, 1, 1, 1)
                         
-                        local slots = KART.SplitString(self.missingSlots, ",")
+                        local slots = KAUtil.SplitString(self.missingSlots, ",")
                         local countMap = {}
                         local uniqueSlots = {}
                         for _, s in ipairs(slots) do
@@ -339,7 +343,7 @@ function KART.CreateBuffCheckFrame()
                         end
                         for _, s in ipairs(uniqueSlots) do
                             -- Entries are a slot number, "w"-suffixed when that slot carries the wrong
-                            -- enchant rather than none (see KART.CountMissingGear). Both variants of a
+                            -- enchant rather than none (see KAGS.CountMissingGear). Both variants of a
                             -- slot keep their own line, so the player can tell the two cases apart.
                             local id, wrong = s:match("^(%d+)(w?)$")
                             id = id or s
@@ -360,19 +364,19 @@ function KART.CreateBuffCheckFrame()
         f.rows[i] = row
     end
 
-    local close = KART.CreateHeaderIconButton(f, "×", function() f:Hide() end)
+    local close = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
     close:SetPoint("TOPRIGHT", -5, -2)
     f.closeBtn = close
 
     local function RequestAdvancedData()
         if IsInGroup() then
-            KART.Sync.Send("REQ_OIL")
-            KART.Sync.Send("REQ_ILVL")
-            KART.Sync.Send("REQ_GEAR")
+            KASC:Send("REQ_OIL")
+            KASC:Send("REQ_ILVL")
+            KASC:Send("REQ_GEAR")
         end
     end
 
-    local modeBtn = KART.CreateModernButton(f, L.BTN_MODE_ADVANCED)
+    local modeBtn = KART.UI:CreateModernButton(f, L.BTN_MODE_ADVANCED)
     modeBtn:SetPoint("BOTTOMLEFT", 10, 10)
     modeBtn:SetSize(150, 22)
     modeBtn:SetScript("OnClick", function() 
@@ -389,7 +393,7 @@ function KART.CreateBuffCheckFrame()
     end)
     f.modeBtn = modeBtn
 
-    f.refreshBtn = KART.CreateModernButton(f, L.BTN_REFRESH)
+    f.refreshBtn = KART.UI:CreateModernButton(f, L.BTN_REFRESH)
     f.refreshBtn:SetPoint("BOTTOM", -45, 10)
     f.refreshBtn:SetSize(80, 22)
     f.refreshBtn:SetScript("OnClick", function() 
@@ -402,7 +406,7 @@ function KART.CreateBuffCheckFrame()
         end
     end)
 
-    f.reportBtn = KART.CreateModernButton(f, L.BTN_REPORT)
+    f.reportBtn = KART.UI:CreateModernButton(f, L.BTN_REPORT)
     f.reportBtn:SetPoint("BOTTOM", 45, 10)
     f.reportBtn:SetSize(80, 22)
     f.reportBtn:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
@@ -431,7 +435,7 @@ function KART.CreateBuffCheckFrame()
     end)
 
     -- Dynamisches Verschieben der Spalten, wenn das Fenster breiter gezogen wird.
-    -- HookScript, NOT SetScript: KART.ApplyPopupArtwork already hooked OnSizeChanged to re-scale the
+    -- HookScript, NOT SetScript: KART.UI:ApplyPopupArtwork already hooked OnSizeChanged to re-scale the
     -- background artwork's inset offsets, and SetScript would replace that whole handler chain. This
     -- is the only resizable KART window, i.e. the only one where that rescale actually matters.
     f:HookScript("OnSizeChanged", function(self, width, height)
@@ -519,9 +523,9 @@ local function setInd(row, idx, has, buffData, classes)
     if buffData.isRepair then
         local textObj = ind.text or ind
         textObj:SetText(math.floor(has) .. "%")
-        if has < 20 then textObj:SetTextColor(unpack(KART.Theme.DANGER))
-        elseif has < 50 then textObj:SetTextColor(unpack(KART.Theme.WARNING))
-        else textObj:SetTextColor(unpack(KART.Theme.SUCCESS)) end
+        if has < 20 then textObj:SetTextColor(unpack(KART.DANGER))
+        elseif has < 50 then textObj:SetTextColor(unpack(KART.WARNING))
+        else textObj:SetTextColor(unpack(KART.SUCCESS)) end
         ind.tooltipTitle = nil
         ind.missingSlots = nil
         return
@@ -535,12 +539,12 @@ local function setInd(row, idx, has, buffData, classes)
             ind.missingSlots = nil
         elseif has == "0" then
             textObj:SetText("OK") -- intentional: status glyph kept un-localized by design (review 2026-07-24)
-            textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
+            textObj:SetTextColor(unpack(KART.SUCCESS))
             ind.missingSlots = nil
         else
             local count = select(2, has:gsub(",", "")) + 1
             textObj:SetText("-" .. count)
-            textObj:SetTextColor(unpack(KART.Theme.DANGER))
+            textObj:SetTextColor(unpack(KART.DANGER))
             ind.missingSlots = has
             ind.tooltipTitle = buffData.reportLabel or buffData.label
         end
@@ -553,7 +557,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(1, 0.8, 0)
     elseif has == "best" then
         ind:SetAlpha(1.0)
-        ind:SetVertexColor(unpack(KART.Theme.SUCCESS))
+        ind:SetVertexColor(unpack(KART.SUCCESS))
     elseif has == "wrong" then
         ind:SetAlpha(1.0)
         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für falschen Rang
@@ -568,7 +572,7 @@ local function setInd(row, idx, has, buffData, classes)
         ind:SetVertexColor(0.5, 0.5, 0.5)
     else
         ind:SetAlpha(0.6)
-        ind:SetVertexColor(unpack(KART.Theme.DANGER))
+        ind:SetVertexColor(unpack(KART.DANGER))
     end
 end
 
@@ -689,7 +693,7 @@ function KART.UpdateBuffCheck(isPreview)
             local row = KART.BuffCheckFrame.rows[i]
             if row.stripeBg then
                 if i % 2 == 0 then
-                    local lr, lg, lb = KART.GetRowStripeColor()
+                    local lr, lg, lb = KART.UI:GetRowStripeColor()
                     row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                     row.stripeBg:Show()
                 else
@@ -734,8 +738,8 @@ function KART.UpdateBuffCheck(isPreview)
                 
                 if data.isGearCheck then
                     local textObj = ind.text or ind
-                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.Theme.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
-                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.Theme.SUCCESS)); ind.missingSlots = nil end
+                    if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
+                    else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.SUCCESS)); ind.missingSlots = nil end
                 elseif not data.isRepair then
                     ind:SetDesaturated(false)
                     if i == 1 and j == 7 then -- Beispiel für auslaufendes Food
@@ -743,13 +747,13 @@ function KART.UpdateBuffCheck(isPreview)
                         ind:SetVertexColor(1, 0.8, 0) -- Gelb
                     elseif (i + j) % 3 == 0 then
                         ind:SetAlpha(0.6)
-                        ind:SetVertexColor(unpack(KART.Theme.DANGER)) -- Fehlend (Rot)
+                        ind:SetVertexColor(unpack(KART.DANGER)) -- Fehlend (Rot)
                     elseif data.isOil and i == 2 then
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(0.8, 0.3, 0.9) -- Lila für Preview
                     elseif data.isOil then
                         ind:SetAlpha(1.0)
-                        ind:SetVertexColor(unpack(KART.Theme.SUCCESS)) -- best rank, matches setInd's "best" branch
+                        ind:SetVertexColor(unpack(KART.SUCCESS)) -- best rank, matches setInd's "best" branch
                     else
                         ind:SetAlpha(1.0)
                         ind:SetVertexColor(1, 1, 1) -- Vorhanden
@@ -757,7 +761,7 @@ function KART.UpdateBuffCheck(isPreview)
                 else
                     local textObj = ind.text or ind
                     textObj:SetText("85%")
-                    textObj:SetTextColor(unpack(KART.Theme.SUCCESS))
+                    textObj:SetTextColor(unpack(KART.SUCCESS))
                 end
             end
             row:Show()
@@ -788,7 +792,7 @@ function KART.UpdateBuffCheck(isPreview)
         local row = KART.BuffCheckFrame.rows[i]
         if row.stripeBg then
             if i % 2 == 0 then
-                local lr, lg, lb = KART.GetRowStripeColor()
+                local lr, lg, lb = KART.UI:GetRowStripeColor()
                 row.stripeBg:SetColorTexture(lr, lg, lb, 0.5)
                 row.stripeBg:Show()
             else
@@ -882,7 +886,7 @@ function KART.UpdateBuffCheck(isPreview)
             if buff.isOil then
                 -- Every hand holding a weapon is rated and the worst result wins, so a dual wielder
                 -- with oil on one weapon only still counts as missing it. Which hands take part is
-                -- decided by the equipped items (KART.SlotNeedsOil), not by spec: an Arms warrior's
+                -- decided by the equipped items (KAGS.SlotNeedsOil), not by spec: an Arms warrior's
                 -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
                 -- Ranks: 1 = weapon is bare, 2 = a KNOWN off-rank consumable, 3 = something we can't
                 -- judge, 4 = a current-quality consumable.
@@ -920,8 +924,8 @@ function KART.UpdateBuffCheck(isPreview)
 
                 if UnitIsUnit(unit, "player") then
                     local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
-                    if KART.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
-                    if KART.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
+                    if KAGS.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
+                    if KAGS.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
                 else
                     -- KART Addon Sync auslesen (für Spieler, die KART installiert haben). "n" is that
                     -- player's own verdict that the hand takes no oil at all.
@@ -956,7 +960,7 @@ function KART.UpdateBuffCheck(isPreview)
             local buff = KART.BuffData[k]
             if buff.isGearCheck then
                 if UnitIsUnit(unit, "player") then
-                    if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KART.CountMissingGear() end
+                    if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KAGS.CountMissingGear() end
                     KART.BuffStatesCache[buff.id] = (buff.isGearCheck == "enchants") and playerMissingEnchants or playerMissingGems
                 else
                     local shortName = nameStr:match("([^%-]+)")
@@ -1031,3 +1035,86 @@ function KART.UpdateBuffCheck(isPreview)
     end
     KART.BuffCheckFrame.scrollContent:SetHeight(math.min(iterMax, 40) * 26) -- render loop caps rows at 40 (Epic BGs)
 end
+
+-- =====================================================================
+--  Addon-message receivers -- the OIL/ILVL/GEAR/ENCH replies to KASC's REQ_* responders
+-- =====================================================================
+
+-- Whether s is a well-formed missing-slot list as KAGS.CountMissingGear produces them: "0", or one
+-- or more comma-separated entries, each an inventory slot number optionally suffixed with "w" for
+-- "wrong enchant". Used to reject a malformed GEAR reply before it reaches the cache (see the GEAR
+-- handler below). Entries are validated one at a time because Lua patterns can't quantify a group,
+-- so a single anchored "^%d+w?(,%d+w?)*$" would silently match nothing at all.
+local function IsSlotList(s)
+    if s == "" then return false end
+    if s:find(",,") or s:find("^,") or s:find(",$") then return false end -- no empty entries
+    for entry in s:gmatch("[^,]+") do
+        if not entry:match("^%d+w?$") then return false end
+    end
+    return true
+end
+
+-- One hand of an OIL payload: an enchantID, "0" for a weapon carrying nothing, or "n" for a hand that
+-- takes no oil at all (see the REQ_OIL responder). Returns nil for anything else, so a malformed or
+-- hostile reply is dropped instead of reaching the cache.
+local function ParseOilField(s)
+    if not s then return nil end
+    if s == "n" then return "n" end
+    if s:match("^%d+$") then return tonumber(s) end
+    return nil
+end
+
+KASC:RegisterMessage("OIL", { payload = true, group = true }, function(payload, ctx)
+    local mhStr, ohStr = payload:match("^([^:]+):([^:]+)$")
+    local mh, oh = ParseOilField(mhStr), ParseOilField(ohStr)
+    if mh and oh then
+        KART.OilCache = KART.OilCache or {}
+        KART.OilCache[ctx.shortName] = { mh = mh, oh = oh }
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)
+
+KASC:RegisterMessage("ILVL", { payload = true, group = true }, function(payload, ctx)
+    local ilvl = tonumber(payload)
+    if ilvl then
+        KART.ILvlCache = KART.ILvlCache or {}
+        KART.ILvlCache[ctx.shortName] = ilvl
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)
+
+KASC:RegisterMessage("ENCH", { payload = true, group = true }, function(payload, ctx)
+    -- Reply to REQ_ENCH: "slot=id" pairs, plus "oil=id" for the temporary weapon enchant. Purely
+    -- a maintenance tally (KART.PrintEnchantScan) — nothing renders it, so the only rule is that
+    -- one malformed entry drops the whole message rather than poisoning the counts.
+    local ids = {}
+    for entry in payload:gmatch("[^,]+") do
+        local k, v = entry:match("^(%w+)=(%d+)$")
+        if not k then return end
+        if k == "oil" then
+            ids.oil = v
+        elseif k:match("^%d+$") then
+            ids[tonumber(k)] = v
+        else
+            return
+        end
+    end
+    KART.EnchantScan = KART.EnchantScan or {}
+    KART.EnchantScan[ctx.shortName] = ids
+end)
+
+KASC:RegisterMessage("GEAR", { payload = true, group = true }, function(payload, ctx)
+    local e, g = payload:match("^([^:]+):([^:]+)")
+    -- Validate the shape before caching. Both fields are slot lists — "0" for "nothing missing",
+    -- otherwise comma-separated inventory slot NUMBERS, optionally "w"-suffixed for a wrong
+    -- enchant (see KAGS.CountMissingGear) — but the
+    -- captures above accept any colon-free text. BuffChecker renders an unrecognized slot through
+    -- string.format(BC_SLOT_FALLBACK, s), whose "%d" throws a Lua error on non-numeric input, so a
+    -- broken or hostile client could make the Advanced-view tooltip error on every hover. Rejecting
+    -- the whole message is also what keeps a bogus "-5 missing" count out of the cache.
+    if e and g and IsSlotList(e) and IsSlotList(g) then
+        KART.GearCache = KART.GearCache or {}
+        KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
+        if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+    end
+end)

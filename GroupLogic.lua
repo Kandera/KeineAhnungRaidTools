@@ -1,4 +1,6 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
+local KASC = LibStub("KASC-1.0")
 
 -- Cache-Tabellen
 KART.InviteKeywordsTable = {}
@@ -7,19 +9,19 @@ KART.PromoteNamesTable = {}
 -- Aktualisiert die lokalen Such-Tabellen basierend auf den Einstellungen
 function KART.UpdateCache()
     if KART_Settings then
-        local keywords = KART.SplitString(KART.CaseFold(KART_Settings.inviteKeywords or ""), ";")
+        local keywords = KAUtil.SplitString(KAUtil.CaseFold(KART_Settings.inviteKeywords or ""), ";")
         KART.InviteKeywordsTable = {}
         for _, kw in ipairs(keywords) do 
-            local trimmed = KART.TrimString(kw)
+            local trimmed = KAUtil.TrimString(kw)
             if trimmed ~= "" then KART.InviteKeywordsTable[trimmed] = true end 
         end
 
-        local names = KART.SplitString(KART.CaseFold(KART_Settings.promoteNames or ""), ";")
+        local names = KAUtil.SplitString(KAUtil.CaseFold(KART_Settings.promoteNames or ""), ";")
         KART.PromoteNamesTable = {}
         for _, name in ipairs(names) do
             -- Trim each entry (like the keywords above) — an untrimmed " bar" from "Foo; Bar" would
             -- never match a short name or NSRT nickname in HandleAutoPromote.
-            local trimmed = KART.TrimString(name)
+            local trimmed = KAUtil.TrimString(name)
             if trimmed ~= "" then KART.PromoteNamesTable[trimmed] = true end
         end
     end
@@ -28,9 +30,9 @@ end
 -- Logik für Keyword-Einladungen
 function KART.HandleChatInvite(msg, sender, event, ...)
     if type(msg) ~= "string" then return end
-    local message = KART.TrimString(KART.CaseFold(msg))
+    local message = KAUtil.TrimString(KAUtil.CaseFold(msg))
 
-    if KART.InviteKeywordsTable[message] and (not IsInGroup() or KART.HasGroupPermissions()) then
+    if KART.InviteKeywordsTable[message] and (not IsInGroup() or KAUtil.HasGroupPermissions()) then
         if KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player") and IsInGroup() and not IsInRaid() and GetNumGroupMembers() >= 5 and not InCombatLockdown() then
             C_PartyInfo.ConvertToRaid()
         end
@@ -73,22 +75,22 @@ end
 -- Logik für Auto-Promote
 function KART.HandleAutoPromote()
     if not UnitIsGroupLeader("player") or not IsInGroup() then return end -- IsInRaid implies IsInGroup
-    for unit in KART.EachGroupUnit() do
+    for unit in KAUtil.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
             local shortName = name -- UnitName's first return is already realm-free
             -- Matches either the character's own short name (as always) or its Northern Sky Raid
-            -- Tools nickname (see KART.GetNickname), so a name in the promote list applies to
+            -- Tools nickname (see KASC.Identity.GetNickname), so a name in the promote list applies to
             -- every character sharing that nickname, not just one specific alt.
-            local matches = shortName and KART.PromoteNamesTable[KART.CaseFold(shortName)]
+            local matches = shortName and KART.PromoteNamesTable[KAUtil.CaseFold(shortName)]
             if not matches and realm and realm ~= "" then
                 -- Also accept a realm-qualified entry. "Name-Realm" is the format the WoWUtils
                 -- export uses and the format this function itself passes to PromoteToAssistant, so a
                 -- user copying a name from there would otherwise never get promoted.
-                matches = KART.PromoteNamesTable[KART.CaseFold(name .. "-" .. realm)]
+                matches = KART.PromoteNamesTable[KAUtil.CaseFold(name .. "-" .. realm)]
             end
             if not matches then
-                local nick = KART.GetNickname(unit)
+                local nick = KASC.Identity.GetNickname(unit)
                 matches = nick ~= nil and KART.PromoteNamesTable[nick]
             end
             if matches then

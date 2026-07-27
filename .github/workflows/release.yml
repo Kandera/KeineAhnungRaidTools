@@ -26,6 +26,9 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='dist' \
+            --exclude='tests' \
+            --exclude='.luacheckrc' \
+            --exclude='docs' \
             . dist/KeineAhnungRaidTools/
           cd dist
           zip -r "../KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip" KeineAhnungRaidTools/

@@ -1,4 +1,5 @@
 local addonName, KART = ...
+local KAUI = LibStub("KAUI-1.0")
 local L = KART.L
 
 -- 1. Icon-Koordinaten für Raid-Marker (4x2 Grid)
@@ -43,7 +44,7 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     })
     b:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
     b:SetBackdropBorderColor(0, 0, 0, 1)
-    KART.ApplyRoundedMask(b, KART.Theme.CORNER_RADIUS_SM)
+    KART.UI:ApplyRoundedMask(b, KAUI.CORNER_RADIUS_SM)
 
     if texture then
         b.icon = b:CreateTexture(nil, "OVERLAY")
@@ -73,14 +74,14 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
         b:RegisterForClicks("AnyDown")
         b:SetScript("OnClick", func)
     end
-    -- Hover color now derives from the user's accent color (same KART.Theme.AccentColor +
-    -- Darken pattern as KART.CreateModernButton) instead of a hard-coded blue, so this toolbar
+    -- Hover color now derives from the user's accent color (same KART.UI:AccentColor +
+    -- Darken pattern as KART.UI:CreateModernButton) instead of a hard-coded blue, so this toolbar
     -- matches the rest of the modernized UI's hover feedback. Darken() returns only r, g, b (no
     -- alpha), so capture into locals and pass an explicit alpha to SetBackdropColor.
     b.tooltipText = tooltipText
     b:SetScript("OnEnter", function(self)
-        local r, g, bl = KART.Theme.AccentColor()
-        local dr, dg, db = KART.Theme.Darken(r, g, bl, 0.35)
+        local r, g, bl = KART.UI:AccentColor()
+        local dr, dg, db = KAUI.Darken(r, g, bl, 0.35)
         self:SetBackdropColor(dr, dg, db, 1)
         if self.tooltipText then
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
@@ -111,7 +112,7 @@ rlBar:SetClampedToScreen(true)
 rlBar:EnableMouse(true)
 rlBar:RegisterForDrag("LeftButton")
 KART.RaidleadBar = rlBar
-KART.RegisterStrataFrame(rlBar)
+KART.UI:RegisterStrataFrame(rlBar)
 
 rlBar:SetScript("OnDragStart", function(self)
     if not KART_Settings.lockRaidleadBar then self:StartMoving() end
@@ -132,7 +133,7 @@ rlBar:SetBackdrop({
 })
 rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
-KART.ApplyRoundedMask(rlBar, KART.Theme.CORNER_RADIUS_LG)
+KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
 
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()
@@ -237,7 +238,7 @@ end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.R
 
 -- Bar buttons are created at file load with the pre-locale (English) tooltip strings;
 -- re-point them at the selected language once it's known.
-KART.RegisterLocaleRefresher(function()
+KART.UI:RegisterLocaleRefresher(function()
     local tips = {
         KART_RL_ClearWorldMarkersBtn = KART.L.RL_CLEAR_WM,
         KART_RL_ReadyCheckBtn        = KART.L.RL_READYCHECK,

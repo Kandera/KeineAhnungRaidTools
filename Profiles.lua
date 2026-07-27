@@ -1,8 +1,9 @@
 local addonName, KART = ...
+local KAUtil = LibStub("KAUtil-1.0")
 
 -- Saves (or overwrites) a profile with the current KART_Settings and makes it the active one.
 function KART.SaveProfile(name)
-    KART_Profiles[name] = KART.DeepCopy(KART_Settings)
+    KART_Profiles[name] = KAUtil.DeepCopy(KART_Settings)
     KART_Settings.activeProfile = name
 end
 
@@ -20,10 +21,10 @@ function KART.LoadProfile(name)
     -- changes are written into an orphaned table until the next reload.
     local minimapTbl = KART_Settings.minimap
     wipe(KART_Settings)
-    for k, v in pairs(KART.DeepCopy(snapshot)) do
+    for k, v in pairs(KAUtil.DeepCopy(snapshot)) do
         KART_Settings[k] = v
     end
-    KART.MergeDefaults(KART_Settings, KART.Defaults)
+    KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
     if minimapTbl then
         local loaded = KART_Settings.minimap
         wipe(minimapTbl)
@@ -61,10 +62,12 @@ function KART.RefreshProfileButton()
 end
 
 function KART.ShowSaveProfileDialog()
-    KART.ShowInputDialog({
+    KART.UI:ShowInputDialog({
         title = KART.L.PROFILE_SAVE_NEW_TEXT,
         maxLetters = 32,
         emptyMessage = KART.L.PROFILE_NAME_EMPTY,
+        okLabel = KART.L.BTN_ACCEPT,
+        cancelLabel = KART.L.BTN_CANCEL,
         onAccept = function(name)
             if KART_Profiles[name] then
                 local dlg = StaticPopupDialogs["KART_PROFILE_OVERWRITE_CONFIRM"]
@@ -79,7 +82,7 @@ function KART.ShowSaveProfileDialog()
     })
 end
 
-KART.RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
     text = "A profile named '%s' already exists. Overwrite it?", -- overwritten with KART.L.PROFILE_OVERWRITE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = ACCEPT,
     button2 = CANCEL,
@@ -89,7 +92,7 @@ KART.RegisterStaticPopup("KART_PROFILE_OVERWRITE_CONFIRM", {
     end,
 })
 
-KART.RegisterStaticPopup("KART_PROFILE_DELETE_CONFIRM", {
+KART.UI:RegisterStaticPopup("KART_PROFILE_DELETE_CONFIRM", {
     text = "Really delete profile '%s'?", -- overwritten with KART.L.PROFILE_DELETE_CONFIRM_TEXT before every StaticPopup_Show call
     button1 = YES,
     button2 = NO,
