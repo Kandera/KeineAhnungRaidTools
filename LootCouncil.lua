@@ -594,6 +594,58 @@ local function TryAcceptConfig(payload, senderKey)
     return true
 end
 
+-- Prints what THIS client actually believes about the Loot Council, for `/kart status`.
+--
+-- Exists because every value below was previously invisible from both ends. A raider could sit in a
+-- raid running entirely different vote buttons, no rolls and an empty council, while the lootmaster
+-- saw nothing wrong and the raider had no way to check — the evening of 2026-07-27 went that way
+-- for hours. One line each, so a raider can paste the output and the question is settled.
+--
+-- Reports the EFFECTIVE values (LC.GetButtonConfig, LC.GetRollsEnabled, LC.GetLootmaster), not the
+-- saved settings: the whole class of bug being diagnosed is the two disagreeing.
+function LC.PrintStatus()
+    local L = KART.L
+    print("|cff00ff00KART " .. (KART.Version or "?") .. "|r " .. L.LC_STATUS_HEADER)
+
+    local moduleOn = KART_Settings.lcModuleEnabled ~= false
+    print("  " .. L.LC_STATUS_MODULE .. ": " .. (moduleOn and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+    print("  " .. L.LC_STATUS_SESSION .. ": " .. (LC.sessionActive and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+
+    -- Where the config in force came from. "own" and "received" behave completely differently and
+    -- confusing them is what made the original reports so hard to read.
+    local source
+    if LC.IsConfigOwner() then
+        source = L.LC_STATUS_SRC_OWN
+    elseif LC.raidConfig and LC.raidConfig.lootmaster and LC.raidConfig.lootmaster ~= "" and not LC.raidConfig.fromSelf then
+        local unit = KASC.Identity.FindUnitForKey(LC.raidConfig.lootmaster)
+        source = string.format(L.LC_STATUS_SRC_RAID, (unit and UnitName(unit)) or "?")
+    else
+        source = L.LC_STATUS_SRC_NONE
+    end
+    print("  " .. L.LC_STATUS_CONFIG .. ": " .. source)
+
+    -- The button count is the number that decides whether this client's votes can be matched at all
+    -- (see B25) — spelled out rather than left to be counted off the list.
+    local buttons = LC.GetButtonConfig()
+    local labels = {}
+    for _, def in ipairs(buttons) do labels[#labels + 1] = def.label end
+    print("  " .. string.format(L.LC_STATUS_BUTTONS, #buttons) .. ": " .. table.concat(labels, ";"))
+
+    print("  " .. L.LC_STATUS_ROLLS .. ": " .. (LC.GetRollsEnabled() and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+
+    -- Resolved against pending: a name that never resolves is a member who silently isn't one.
+    local resolved, pending = 0, 0
+    for key in pairs(LC.CouncilNamesTable or {}) do
+        if KASC.Identity.IsResolvedKey(key) then resolved = resolved + 1 else pending = pending + 1 end
+    end
+    print("  " .. string.format(L.LC_STATUS_COUNCIL, resolved, pending))
+
+    local lm = LC.GetLootmaster()
+    local lmUnit = lm ~= "" and KASC.Identity.FindUnitForKey(lm)
+    print("  " .. L.LC_STATUS_LOOTMASTER .. ": " .. ((lmUnit and UnitName(lmUnit)) or (lm ~= "" and "?" or "-")))
+    print("  " .. L.LC_STATUS_IS_ME .. ": " .. (LC.IsLootOwner() and L.LC_STATUS_YES or L.LC_STATUS_NO))
+end
+
 -- ==========================================================================
 --  B12: retry a config rejected only because the sender wasn't resolvable yet
 -- ==========================================================================

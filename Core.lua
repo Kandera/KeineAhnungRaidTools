@@ -747,6 +747,8 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         -- from real data each tier instead of from memory. "raid" polls the whole group, since most
         -- slots accept several enchants and one character's dump can't show which.
         if cmd == "ench raid" then KART.StartEnchantScan() else KART.PrintEnchantDump() end
+    elseif cmd == "status" then
+        if KART.LC and KART.LC.PrintStatus then KART.LC.PrintStatus() end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
@@ -757,6 +759,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print("  /kart owed - " .. KART.L.HELP_OWED)
         print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
         print("  /kart showall - " .. KART.L.HELP_SHOWALL)
+        print("  /kart status - " .. KART.L.HELP_STATUS)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern
