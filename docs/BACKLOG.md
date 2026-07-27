@@ -362,6 +362,32 @@ dead state — `PLAYER_REGEN_ENABLED` re-applies keybinds unconditionally anyway
 omits the label options, which would show the client's language rather than the user's chosen one.
 All three current call sites pass them explicitly; the trap is for a future consumer.
 
+---
+
+## B18 — Cramped and overlapping layout at 1080p
+
+**Symptom:** a raider playing at 1920x1080 reports the interface is very tight and elements
+partially overlap. The maintainer plays at 2560x1440 and sees none of it.
+
+**Not yet diagnosed.** The addon's main window is a fixed 929x715 frame built around a baked PNG
+whose geometry is derived from measured pixel positions of the artwork (see the comment above the
+main frame in `MainFrame.lua`), and the window is deliberately not freely resizable because the
+artwork would distort. Users scale it through the Window Scale slider instead. Popup windows size
+themselves independently.
+
+Candidate causes, none confirmed:
+- WoW's own UI Scale differs between the two resolutions, so the same pixel layout occupies a
+  different share of the screen and text sized in points no longer fits its box.
+- Font size settings interacting with fixed-width columns — several panels compute column widths in
+  pixels while the font is user-configurable.
+- A popup sized from the screen dimensions landing smaller than its content.
+
+**What would pin it:** a screenshot from the affected raider, their WoW UI Scale setting, their KART
+Window Scale value, and their three font-size settings. Which panel overlaps matters too — the main
+window's tabs, the council panel and the vote list have independent layouts.
+
+Reported 2026-07-27.
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
