@@ -172,25 +172,44 @@ think the lootmaster is" from "who this raid's lootmaster is".
 
 ---
 
-## B12 — A client that never accepts LC_CONFIG gets no council panel
+## B12 — A client that cannot yet resolve the lootmaster drops the raid config, permanently
 
-**Symptom:** a council member sees the vote popup but never the council panel, so their straw-poll
-vote never appears.
+**Symptom:** the council is never extended with the configured members, and raiders keep their own
+local button labels instead of the raid's. A council member sees the vote popup but never the
+council panel, so their straw-poll vote never appears.
 
-**Cause:** `LC.HandleConfig` (`LootCouncil.lua:507`) accepts a config only when the payload's
-lootmaster field resolves, **on the receiver**, to the sender's own key. If the field holds an NSRT
-nickname and that peer has no NSRT installed, or has global nicknames switched off, resolution falls
-through to a pending-text key that can never equal a GUID. The config is dropped, that peer's
-`LC.CouncilNamesTable` stays empty, and `LC.IsCouncil()` is false for them.
+**Cause:** `LC.HandleConfig` accepts a config only when the payload's lootmaster field resolves,
+**on the receiver**, to the sender's key. When the field holds an NSRT nickname, the receiver needs
+NSRT to already know that nickname for that character.
 
-**Large mitigation:** if the lootmaster is *also* the raid leader, `IsSenderLootOwner` and
-`IsSenderCouncil` fall back to `UnitIsGroupLeader`, and this entire failure class cannot occur.
+**NSRT distributes nicknames between clients over time.** Start a session immediately after the raid
+forms and the peers have not received the lootmaster's nickname yet, so `NSAPI:GetName` gives them
+nothing, resolution fails, and the config is dropped **silently**. The lootmaster's own client
+resolves its own nickname fine, so the broadcast does go out — the failure is entirely on the
+receiving side. This is why it works on a second attempt: NSRT has caught up by then.
 
-**Fix direction:** accept a config from a sender who is already the established loot owner without
-requiring the payload to re-prove it, or resolve the lootmaster field against the sender rather than
-against the receiver's own view.
+(An earlier diagnosis blamed a cold `KART_PlayerCache`. That was wrong: `ResolvePlayer` scans the
+live roster first and calls `GetNickname` itself, reaching the cache only after that scan fails.)
 
-**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+**Why it does not self-heal:** the config *is* re-broadcast — on every roster change while the
+session is active (`LootCouncil.lua:964`) and in reply to `LC_STATE_REQ`. But that retry is tied to
+**roster events**, not to the receiver's resolution improving. Once the raid is stable, no further
+roster change occurs, so a peer whose NSRT syncs a minute later never gets another copy.
+
+**Large mitigation:** if the lootmaster is also the raid leader, `IsSenderLootOwner` and
+`IsSenderCouncil` fall back to `UnitIsGroupLeader` and this failure class cannot occur.
+
+**Workaround:** put the lootmaster's **character name** in the field rather than the NSRT nickname.
+Nothing then depends on NSRT having synced.
+
+**Fix direction:** a receiver that rejects a config because it could not resolve the declared
+lootmaster should not discard it silently. Either keep the raw payload and re-attempt resolution
+later, or send `LC_STATE_REQ` again after a delay so the owner re-sends. Note that a fix which
+merely changes *how* the name is compared does not help — a v3.0.1 attempt to compare against the
+sender's own name and nickname was reverted because it called the same NSRT lookup that had not
+synced yet, while additionally breaking connected realms.
+
+**Pre-existing.** Diagnosis corrected 2026-07-27 after a live raid test.
 
 ---
 
