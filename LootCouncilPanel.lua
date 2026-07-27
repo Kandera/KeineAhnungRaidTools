@@ -523,33 +523,19 @@ local COUNCIL_PANEL_WIDTH   = 625
 local COUNCIL_PANEL_HEIGHT  = 462
 local COUNCIL_PANEL_MIN_H   = 68 -- header + item icon/name only, see LC.SetCouncilPanelMinimized
 
--- Confirm dialog for the "Close Session" button below, because it is destructive and raid-wide:
--- every client drops its tabs, votes and rolls. Registered once at file scope rather than per panel
--- build (the panel is created lazily).
-KART.UI:RegisterStaticPopup("KART_LC_CLOSE_SESSION_CONFIRM", {
-    text = "End the Loot Council session?", -- overwritten with KART.L.LC_CLOSE_SESSION_CONFIRM before each Show
-    button1 = YES,
-    button2 = NO,
-    OnAccept = function()
-        -- Same call the raid leader's session toggle uses: clears our own state and broadcasts
-        -- LC_ACTIVE:0 so every peer converges to the same clean slate (see LC.HandleActive).
-        LC.SetSessionActive(false)
-    end,
-})
-
--- Keeps the "Close Session" button in step with who currently owns the session. Called from the
+-- Keeps the "End Round" button in step with who currently owns the session. Called from the
 -- panel's OnShow and from every row refresh, so a config change that hands the lootmaster role to
 -- someone else takes effect on an already-open panel too.
 function Council.UpdateSessionButton()
     local f = LC.councilPanel
-    if not f or not f.btnCloseSession then return end
+    if not f or not f.btnEndRound then return end
     local isOwner = LC.IsLootOwner()
     if isOwner then
-        f.btnCloseSession:Enable()
-        f.btnCloseSession.text:SetTextColor(1, 1, 1)
+        f.btnEndRound:Enable()
+        f.btnEndRound.text:SetTextColor(1, 1, 1)
     else
-        f.btnCloseSession:Disable()
-        f.btnCloseSession.text:SetTextColor(0.4, 0.4, 0.4)
+        f.btnEndRound:Disable()
+        f.btnEndRound.text:SetTextColor(0.4, 0.4, 0.4)
     end
 end
 
@@ -779,20 +765,23 @@ function Council.CreateCouncilPanel()
         end
     end)
 
-    -- Ends the whole session in one go, whatever is still open. This is the counterpart to tabs
-    -- deliberately NOT closing themselves on an award (reassigning has to stay possible, see
-    -- DoAssignWinner) — without it the only way to clear a finished raid's tabs would be closing each
-    -- one by hand. Lootmaster-only, since it wipes state for every client in the raid; everyone else
-    -- sees it greyed out and uses "Close" (or the header "×") to just put the window away.
-    local btnCloseSession = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CLOSE_SESSION, KART.L.LC_DESC_CLOSE_SESSION)
-    btnCloseSession:SetSize(150, 28)
-    btnCloseSession:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
-    btnCloseSession:SetScript("OnClick", function()
+    -- Ends the CURRENT distribution in one go, whatever is still open — clears every tracked
+    -- roll/tab/vote/winner-highlight for the whole raid (see LC.EndRound), but leaves the Loot
+    -- Council session itself active (that's LC.SetSessionActive, the settings-tab toggle). This is
+    -- the counterpart to tabs deliberately NOT closing themselves on an award (reassigning has to
+    -- stay possible, see DoAssignWinner) — without it the only way to clear a finished boss's tabs
+    -- would be closing each one by hand. Lootmaster-only, since it wipes state for every client in
+    -- the raid; everyone else sees it greyed out and uses "Close" (or the header "×") to just put
+    -- the window away. No confirmation popup: unlike the old "Close Session", this no longer turns
+    -- anything off, so it isn't destructive to the session.
+    local btnEndRound = KART.UI:CreateModernButton(f, KART.L.LC_BTN_END_ROUND, KART.L.LC_DESC_END_ROUND)
+    btnEndRound:SetSize(150, 28)
+    btnEndRound:SetPoint("LEFT", btnNoWinner, "RIGHT", 10, 0)
+    btnEndRound:SetScript("OnClick", function()
         if not LC.IsLootOwner() then return end -- belt-and-braces; the button is disabled
-        StaticPopupDialogs["KART_LC_CLOSE_SESSION_CONFIRM"].text = KART.L.LC_CLOSE_SESSION_CONFIRM ---@diagnostic disable-line: undefined-global
-        StaticPopup_Show("KART_LC_CLOSE_SESSION_CONFIRM") ---@diagnostic disable-line: undefined-global
+        LC.EndRound()
     end)
-    f.btnCloseSession = btnCloseSession
+    f.btnEndRound = btnEndRound
 
     -- Plain window close: hides the panel, ends nothing. Same as the header "×".
     local btnClose = KART.UI:CreateModernButton(f, KART.L.LC_BTN_CANCEL)
@@ -806,7 +795,7 @@ function Council.CreateCouncilPanel()
     -- so a minimized panel still tells you *something* is waiting on a decision.
     f.collapsible = {
         hName, hRank, hIlvl, hVote, hRoll, hCouncilVotes, hGain,
-        divider, scrollBG, btnNoWinner, btnCloseSession, btnClose, f.tabStrip,
+        divider, scrollBG, btnNoWinner, btnEndRound, btnClose, f.tabStrip,
         f.timeBar, f.timeBarBG,
     }
 
@@ -1198,6 +1187,15 @@ function Council.RefreshCouncilRows()
             row.warnIcon:SetWidth(14)
             row.warnIcon:SetJustifyH("CENTER")
 
+            -- FontStrings can't take mouse scripts directly (see row.noteHitbox above) — its own
+            -- dedicated hitbox so the status text shows on hovering the "!" marker itself, not just
+            -- somewhere else on the row (it was previously only on the row's own tooltip, see the
+            -- capturedKartStatus line further below).
+            row.warnHitbox = CreateFrame("Frame", nil, row)
+            row.warnHitbox:SetSize(18, 18)
+            row.warnHitbox:SetPoint("CENTER", row.warnIcon)
+            row.warnHitbox:EnableMouse(true)
+
             -- Persistent officer note about this player (see LC.SetOfficerNote) — a different
             -- colour from the per-vote note dot so the two aren't mistaken for one another.
             row.officerNoteIcon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1420,8 +1418,17 @@ function Council.RefreshCouncilRows()
         end)
         row.noteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        -- Warning indicator: missing/outdated KART or Loot Council disabled on their end
+        -- Warning indicator: missing/outdated KART or Loot Council disabled on their end. Same
+        -- text and colour as the row-wide tooltip's own capturedKartStatus line further below, just
+        -- also on its own dedicated hitbox so hovering the marker itself explains it directly.
         row.warnIcon:SetText(capturedKartStatus and "|cffff4444!|r" or "")
+        row.warnHitbox:SetScript("OnEnter", function(self)
+            if not capturedKartStatus then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(capturedKartStatus, 1, 0.4, 0.4, 1, true)
+            GameTooltip:Show()
+        end)
+        row.warnHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Persistent officer-note indicator — same bullet glyph as the per-vote note dot above
         -- (proven to render fine), just a different colour so the two aren't confused.

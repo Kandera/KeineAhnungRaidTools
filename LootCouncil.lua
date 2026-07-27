@@ -321,12 +321,19 @@ end
 -- =====================================================================
 --  Loot owner  (who drives the whole loot flow)
 -- =====================================================================
--- STANDING DECISION (maintainer, 2026-07-25): the LOOTMASTER owns the entire loot flow — starting
--- and ending the session, broadcasting every roll, adding items with /kart add, assigning winners,
--- and physically holding the items until they're traded. The raid leader has nothing to do with any
--- of it unless they ARE the lootmaster or are listed as a council member. The only exception is the
--- fallback below: while NO lootmaster is configured at all, the raid leader stands in, so a raid
--- that never filled the field keeps working exactly as before.
+-- STANDING DECISION (maintainer, 2026-07-25; revised 2026-07-27): the LOOTMASTER owns the entire
+-- loot flow — starting and ending the session, broadcasting every roll, adding items with
+-- /kart add, and physically holding the items until they're traded. The raid leader has nothing to
+-- do with any of it unless they ARE the lootmaster or are listed as a council member. The only
+-- exception is the fallback below: while NO lootmaster is configured at all, the raid leader stands
+-- in, so a raid that never filled the field keeps working exactly as before.
+--
+-- Assigning a winner is deliberately NOT on that exclusive list — it is open to the whole council,
+-- by design: Council.ShowAssignMenu is reached from an ungated row right-click, and an incoming
+-- assignment is accepted via LC.IsSenderCouncil, which admits any council member, not just the
+-- lootmaster. (This corrects the original 2026-07-25 wording, which listed "assigning winners"
+-- among the lootmaster's exclusive duties — the code never enforced that, and the maintainer has
+-- confirmed the code is right and the old text was wrong.)
 --
 -- Every authority check in this module goes through LC.IsLootOwner / LC.IsSenderLootOwner. Do not
 -- reintroduce a bare UnitIsGroupLeader test for anything loot-related — that is what made a raid
@@ -492,6 +499,45 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
+-- Whether text (the payload's lootmaster field) identifies unit's OWN player directly — their live
+-- character name or their NSRT nickname — rather than resolved through the global Identity cache.
+-- See LC.HandleConfig for why: resolving the declared name globally (LC.ResolveConfigName) depends
+-- on OUR OWN KART_PlayerCache being warm whenever the field holds a nickname, and on a cold cache
+-- that falls through to a pending-text key that can never equal senderKey, silently dropping a
+-- config from a legitimate lootmaster (race, not a hard failure — it "fixes itself" once the cache
+-- warms up, which is exactly what made it look intermittent in testing). Comparing directly against
+-- the sender we already hold a live unit for needs no cache at all.
+--
+-- Handles the realm-qualified "Name-Realm" form the character name can arrive in the same way
+-- KAUtil.IsFullNameInGroup does (case-folded, realm punctuation/spacing stripped via
+-- KAUtil.CanonRealm, blank realm on either side meaning "our own realm") — reusing that exact
+-- normalization rather than reimplementing it, since it already solves this same UnitName-realm-can-
+-- carry-a-display-spelling problem. A nickname is never realm-qualified, so it's compared as-is.
+function LC.SenderDeclaresSelf(unit, text)
+    local trimmed = KAUtil.TrimString(text or "")
+    if trimmed == "" or not unit then return false end
+
+    local unitName, unitRealmRaw = UnitName(unit)
+    if not unitName then return false end
+
+    local wantName, wantRealm = trimmed:match("^([^%-]+)%-?(.*)$")
+    if wantName then
+        local ownRealm  = KAUtil.CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+        local unitRealm = KAUtil.CanonRealm(unitRealmRaw)
+        if unitRealm == "" then unitRealm = ownRealm end
+        local canonWantRealm = KAUtil.CanonRealm(wantRealm)
+        if canonWantRealm == "" then canonWantRealm = ownRealm end
+        if KAUtil.CaseFold(wantName) == KAUtil.CaseFold(unitName) and canonWantRealm == unitRealm then
+            return true
+        end
+    end
+
+    local nick = KASC.Identity.GetNickname(unit)
+    if nick and nick == KAUtil.CaseFold(trimmed) then return true end
+
+    return false
+end
+
 -- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
 -- registered near the bottom of this file).
 --
@@ -503,7 +549,9 @@ end
 -- (LC_SYNC_REQUEST) first, which is confirmed by the receiver.
 --
 -- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
--- lootmaster, and every client resolves that name against the live roster the same way.
+-- lootmaster, and every client resolves that name against the live roster the same way — see
+-- LC.SenderDeclaresSelf, checked directly against the sender's own unit rather than through the
+-- global Identity cache (see its comment for why).
 function LC.HandleConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return end
@@ -512,13 +560,12 @@ function LC.HandleConfig(payload, senderKey)
     if not minQ then return end
 
     -- The payload must declare a lootmaster, and the sender must BE them.
-    local declaredKey = LC.ResolveConfigName(lootmaster)
-    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then return end
+    if not LC.SenderDeclaresSelf(unit, lootmaster) then return end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
+    LC.raidConfig.lootmaster    = senderKey -- resolved key, derived from the sender we just verified
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
@@ -907,6 +954,17 @@ function LC.SetSessionActive(active)
     print("|cff00ff00KART:|r " .. (active and KART.L.LC_SESSION_ON or KART.L.LC_SESSION_OFF))
 end
 
+-- Ends the CURRENT distribution only — clears every tracked roll/tab/vote/winner-highlight on
+-- every client (see LC.ClearAllRolls) but leaves LC.sessionActive untouched. This is what the
+-- council panel's "End Round" button does; turning the whole session off is what
+-- LC.SetSessionActive is for (the settings-tab toggle, and the leave-raid path in
+-- LC.CheckRaidJoin). Mirrors LC.SetSessionActive's broadcast-then-clear shape, minus the LC_ACTIVE
+-- flip and the config re-broadcast, since neither the session flag nor the config changes here.
+function LC.EndRound()
+    LC.SendLC("LC_END_ROUND")
+    LC.ClearAllRolls()
+end
+
 function LC.CheckRaidJoin()
     if not IsInRaid() then
         local wasActive = LC.sessionActive
@@ -1239,6 +1297,17 @@ function LC.HandleActive(value, senderKey)
     -- LC.SetSessionActive (sent before LC_ACTIVE) and LC.HandleStateRequest instead.
 end
 
+-- Peer side of LC.EndRound. Same authority as LC_ACTIVE (see LC.HandleActive) — only the loot
+-- owner may wipe every tracked roll/tab/vote/winner-highlight in the raid with one click.
+--
+-- A v3.0.0 client has no handler for this token at all: KASC's dispatcher silently drops an
+-- unrecognized token (see its handler lookup), so that client's cards simply never clear — it
+-- keeps showing whatever it was already tracking until its own session ends or it upgrades.
+function LC.HandleEndRound(senderKey)
+    if not LC.IsSenderLootOwner(senderKey) then return end
+    LC.ClearAllRolls()
+end
+
 function LC.HandleStart(payload, senderKey)
     -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
     -- would pop fake vote windows on every client.
@@ -1471,6 +1540,8 @@ KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEn
     function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
+KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
+    function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.
 KASC:RegisterMessage("LC_SYNC_REQUEST", { payload = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end)
