@@ -172,25 +172,63 @@ think the lootmaster is" from "who this raid's lootmaster is".
 
 ---
 
-## B12 — A client that never accepts LC_CONFIG gets no council panel
+## B12 — A client that cannot yet resolve the lootmaster drops the raid config, permanently
 
-**Symptom:** a council member sees the vote popup but never the council panel, so their straw-poll
-vote never appears.
+**Fixed in 3.0.1, for the config half of this.** `LC.HandleConfig` no longer drops a payload for
+good just because the declared lootmaster hasn't resolved to the sender yet — it keeps the one
+pending payload and retries the identical acceptance check every 10s (up to ~2 minutes) and on every
+roster change, until it succeeds, the sender leaves the group, or the budget runs out. Two gaps
+remain; see the bottom of this entry.
 
-**Cause:** `LC.HandleConfig` (`LootCouncil.lua:507`) accepts a config only when the payload's
-lootmaster field resolves, **on the receiver**, to the sender's own key. If the field holds an NSRT
-nickname and that peer has no NSRT installed, or has global nicknames switched off, resolution falls
-through to a pending-text key that can never equal a GUID. The config is dropped, that peer's
-`LC.CouncilNamesTable` stays empty, and `LC.IsCouncil()` is false for them.
+**Symptom (until the retry succeeds):** the council is not yet extended with the configured members,
+and raiders keep their own local button labels instead of the raid's.
 
-**Large mitigation:** if the lootmaster is *also* the raid leader, `IsSenderLootOwner` and
-`IsSenderCouncil` fall back to `UnitIsGroupLeader`, and this entire failure class cannot occur.
+**Cause:** `LC.HandleConfig` accepts a config only when the payload's lootmaster field resolves,
+**on the receiver**, to the sender's key. When the field holds an NSRT nickname, the receiver needs
+NSRT to already know that nickname for that character.
 
-**Fix direction:** accept a config from a sender who is already the established loot owner without
-requiring the payload to re-prove it, or resolve the lootmaster field against the sender rather than
-against the receiver's own view.
+**NSRT distributes nicknames between clients over time.** Start a session immediately after the raid
+forms and the peers have not received the lootmaster's nickname yet, so `NSAPI:GetName` gives them
+nothing and the first resolution attempt(s) fail. The lootmaster's own client resolves its own
+nickname fine, so the broadcast does go out — the failure is entirely on the receiving side.
 
-**Pre-existing.** Found by the loot-flow audit, 2026-07-27.
+(An earlier diagnosis blamed a cold `KART_PlayerCache`. That was wrong: `ResolvePlayer` scans the
+live roster first and calls `GetNickname` itself, reaching the cache only after that scan fails.)
+
+**Two paths back to a good config:** it *is* re-broadcast — on every roster change while the session
+is active (`LootCouncil.lua:1089`) and in reply to `LC_STATE_REQ` — and, since 3.0.1, a rejected
+payload also retries itself on a local timer. A roster change during an active session re-broadcasts
+the config too, and a fresh "lootmaster-unresolved" rejection replaces the pending payload and resets
+its attempt count back to 0, so the two mechanisms reinforce each other in practice.
+
+**Large mitigation:** if the lootmaster is also the raid leader, `IsSenderLootOwner` and
+`IsSenderCouncil` fall back to `UnitIsGroupLeader` and this failure class cannot occur — this also
+sidesteps the `LC_ACTIVE` gap below entirely.
+
+**Workaround, removes the dependency entirely:** put the lootmaster's **character name** in the
+field rather than the NSRT nickname. Nothing then depends on NSRT having synced, for the config or
+for `LC_ACTIVE` below.
+
+**Remaining gap 1 — the council panel lags a successful retry by one item.** Panel visibility is
+decided once, at the moment a roll starts (`LC.IsCouncil()`, checked in `LC.HandleStart` and
+friends). A council member who becomes eligible while the retry is still pending gets correct button
+labels and minimum quality immediately, but the item already rolling when the retry succeeds still
+only shows them the vote popup — the council panel appears starting with the *next* item.
+
+**Remaining gap 2 — `LC_ACTIVE` is not retried at all, and this is the more serious one.** A peer in
+the B12 window validates `LC_ACTIVE` through `LC.IsSenderLootOwner`, which falls back to
+`UnitIsGroupLeader` while it doesn't yet know the lootmaster. If the lootmaster is **not** the raid
+leader, that fallback rejects the sender, so a peer can end up with a correctly retried config while
+`LC.sessionActive` stays false. `LC.OnStartLootRoll` then returns early for them, so **their
+auto-pass never fires** — an item they should have silently passed on instead pops Blizzard's own
+Need/Greed roll window, which reads as a completely unrelated bug. `LC_ACTIVE` has no retry of its
+own (it's a one-shot broadcast at session start and a one-shot `LC_STATE_REQ` reply), so nothing
+currently re-delivers it once rejected. A `/reload` recovers, since it re-sends a fresh
+`LC_STATE_REQ`, by which point NSRT has usually caught up. Keeping the lootmaster as raid leader
+avoids this class entirely (see the large mitigation above).
+
+**Pre-existing.** Diagnosis corrected 2026-07-27 after a live raid test. Config-retry landed in
+3.0.1 the same day; the `LC_ACTIVE` gap above did not.
 
 ---
 

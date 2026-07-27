@@ -75,7 +75,7 @@ function LC.BuildSettingsPanel(parent)
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.UI:CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    prefsCard:SetSize(500, 215)
+    prefsCard:SetSize(500, 260) -- was 215; +45 to fit the font-size slider moved in from raidBox below
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
@@ -142,6 +142,19 @@ function LC.BuildSettingsPanel(parent)
         end)
     end)
 
+    -- Personal preference, moved here from the raid-wide box: font size is never part of the
+    -- synced raid config (LC.BroadcastRaidConfig only carries min quality, button labels, the
+    -- rolls toggle, the lootmaster and the council list) — it was sitting under the raid-wide
+    -- heading by mistake. Key/onChanged/behaviour unchanged (see LC.ApplyFontSize). Slot -215:
+    -- next free step below BtnVotedItemDisplay, inside this card (card height bumped 215 -> 260
+    -- above to fit it).
+    KART.LC.SldFontSize = KART.UI:CreateSettingsSlider(prefsCard, {
+        name = "KART_LCFontSizeSlider", label = L.LC_SET_FONT_SIZE,
+        min = 8, max = 20, store = SettingsStore, key = "lcFontSize", y = -215,
+        tooltip = L.LC_DESC_FONT_SIZE,
+        onChanged = function() KART.UpdateStyles() end,
+    })
+
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a
     -- different module, but it's a personal preference like CbAutoPass above, so it lives next
@@ -183,18 +196,6 @@ function LC.BuildSettingsPanel(parent)
         name = "KART_LCVoteTimerSlider", label = L.LC_SET_VOTE_TIMER,
         min = 5, max = 180, store = SettingsStore, key = "lcVoteSeconds", y = -52,
         tooltip = L.LC_DESC_VOTE_TIMER, skipStyleRefresh = true,
-    })
-
-    -- Independent from the main window's Content Font Size — the vote-list/council-panel grid
-    -- layouts don't necessarily want the same size as the rest of the addon (see LC.ApplyFontSize).
-    -- onChanged calls the full KART.UpdateStyles() (not just LC.ApplyFontSize directly) because
-    -- that's what every other visual slider on this tab does too, and UpdateStyles already calls
-    -- LC.ApplyFontSize() itself (see Core.lua) as part of its own pass.
-    KART.LC.SldFontSize = KART.UI:CreateSettingsSlider(raidBox, {
-        name = "KART_LCFontSizeSlider", label = L.LC_SET_FONT_SIZE,
-        min = 8, max = 20, store = SettingsStore, key = "lcFontSize", y = -104,
-        tooltip = L.LC_DESC_FONT_SIZE,
-        onChanged = function() KART.UpdateStyles() end,
     })
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
@@ -382,9 +383,6 @@ function LC.BuildSettingsPanel(parent)
         y = y - 1 - 14
 
         KART.LC.SldVoteTimer:SetPoint("TOPLEFT", 20, y - 16) -- -16: slider's own title sits above it
-        y = y - 16 - 14 - 18
-
-        KART.LC.SldFontSize:SetPoint("TOPLEFT", 20, y - 16) -- same slider spacing as SldVoteTimer above
         y = y - 16 - 14 - 18
 
         KART.LC.CbRollsEnabled:SetPoint("TOPLEFT", 20, y)

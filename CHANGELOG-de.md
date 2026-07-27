@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-07-27
+### Geändert
+- **"Session beenden" heißt jetzt "Runde beenden".** Es leert die aktuelle Runde bei allen, ohne die Loot-Council-Session insgesamt abzuschalten.
+- **Der Schriftgrößen-Regler für Loot Council ist jetzt in der persönlichen Einstellungskarte**, direkt bei den anderen persönlichen Anzeigeoptionen.
+
+### Behoben
+- **Das rote "!"-Warnsymbol bei einer Council-Zeile zeigt jetzt beim Hovern an, was es bedeutet.**
+- **Loot-Council-Einstellungen (Button-Beschriftungen, Mindestqualität, Council-Liste) erreichen jetzt jeden Spieler in einem gerade erst formierten Raid, noch bevor NSRT den Spitznamen des Lootmasters synchronisiert hat.**
+
 ## [3.0.0] - 2026-07-27
 ### Geändert
 - **Versionsprüfung neu gebaut.** Clients mit 2.9 oder älter erscheinen erst nach einem Update wieder in der Liste.

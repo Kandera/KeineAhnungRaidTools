@@ -1,6 +1,6 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 1
+local MAJOR, MINOR = "KAUtil-1.0", 2
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
 
@@ -69,7 +69,11 @@ end
 -- Deliberately not routed through Identity.ResolvePlayer: that falls back to a short-name cache
 -- lookup for anyone not currently in the group, which would map an outsider onto a same-short-named
 -- group member and wrongly authorize them. That is exactly what this function exists to prevent.
-local function CanonRealm(realm)
+--
+-- Exported (not file-local) so other callers needing this exact realm-normalization can reuse it
+-- instead of reimplementing it — see docs/BACKLOG.md B15 (Auto-Promote's realm-qualified match),
+-- which needs precisely this canonicalization and previously couldn't reach it.
+function KAUtil.CanonRealm(realm)
     return KAUtil.CaseFold(((realm or ""):gsub("[%s%-']", "")))
 end
 
@@ -77,15 +81,15 @@ function KAUtil.IsFullNameInGroup(fullName)
     if type(fullName) ~= "string" or fullName == "" then return false end
     local wantName, wantRealm = fullName:match("^([^%-]+)%-?(.*)$")
     if not wantName then return false end
-    local ownRealm = CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    local ownRealm = KAUtil.CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
     wantName  = KAUtil.CaseFold(wantName)
-    wantRealm = CanonRealm(wantRealm)
+    wantRealm = KAUtil.CanonRealm(wantRealm)
     if wantRealm == "" then wantRealm = ownRealm end
 
     for unit in KAUtil.EachGroupUnit() do
         local name, realm = UnitName(unit)
         if name then
-            local unitRealm = CanonRealm(realm)
+            local unitRealm = KAUtil.CanonRealm(realm)
             if unitRealm == "" then unitRealm = ownRealm end
             if KAUtil.CaseFold(name) == wantName and unitRealm == wantRealm then return true end
         end

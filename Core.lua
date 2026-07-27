@@ -288,6 +288,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC then KART.LC.CheckRaidJoin() end
         if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
         if KART.LC and KART.LC.RetryPendingResolutionsThrottled then KART.LC.RetryPendingResolutionsThrottled() end
+        if KART.LC and KART.LC.RetryPendingConfigThrottled then KART.LC.RetryPendingConfigThrottled() end
         KART.UpdateRaidleadBarVisibility()
 
         if IsInGroup() and not KART.VersionAnnouncedToGroup then

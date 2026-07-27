@@ -57,6 +57,15 @@ units = {}
 for unit in KAUtil.EachGroupUnit() do units[#units + 1] = unit end
 T.deep_eq(units, { "party1", "party2", "player" }, "EachGroupUnit yields player last in a party")
 
+-- CanonRealm ---------------------------------------------------------------------------
+-- Exported (not file-local) so other callers can reuse this exact realm-normalization (see
+-- docs/BACKLOG.md B15) — IsFullNameInGroup below already exercises it indirectly, this covers the
+-- primitive itself directly.
+T.eq(KAUtil.CanonRealm("Tarren Mill"), KAUtil.CanonRealm("TarrenMill"),
+    "CanonRealm folds the display spelling to the same value as the normalized one")
+T.eq(KAUtil.CanonRealm(nil), "", "CanonRealm treats a nil realm as blank")
+T.eq(KAUtil.CanonRealm("O'Realm"), "orealm", "CanonRealm strips apostrophes too, then case-folds")
+
 -- IsFullNameInGroup ------------------------------------------------------------------
 -- The security gate. Realm is compared canonically on both sides: the sender is always
 -- realm-qualified with the normalized spelling, while UnitName returns nil for a same-realm
