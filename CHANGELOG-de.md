@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unveröffentlicht]
+### Behoben
+- **Der erweiterte Ready-Check funktioniert wieder.** Wer ablehnt, bekommt die Grund-Buttons und das Textfeld.
+
 ## [3.0.1] - 2026-07-27
 ### Geändert
 - **"Session beenden" heißt jetzt "Runde beenden".** Es leert die aktuelle Runde bei allen, ohne die Loot-Council-Session insgesamt abzuschalten.
