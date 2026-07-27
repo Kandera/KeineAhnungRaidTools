@@ -560,6 +560,24 @@ local function TryAcceptConfig(payload, senderKey)
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
+
+    -- Two clients claiming to be lootmaster. Ours keeps precedence (LC.GetLootmaster prefers our
+    -- own settings while IsConfigOwner holds), which is what protects a genuine lootmaster from
+    -- being displaced by somebody else's stale entry -- but it is also exactly what leaves B11's
+    -- raider without a vote window all evening: their own name in that field makes every LC_START
+    -- from the real lootmaster fail LC.IsSenderLootOwner.
+    --
+    -- Deliberately not resolved by guessing. Nothing on the wire says which of the two is actually
+    -- handing out loot, and silently flipping loot authority to whoever broadcast last would be far
+    -- worse than saying so. One line, and the raider can clear their field in seconds.
+    if LC.IsConfigOwner() and senderKey ~= LC.ResolveConfigName(KART_Settings.lcLootmaster) then
+        local senderName = UnitName(unit) or "?"
+        if not LC.lootmasterClashWarned then
+            LC.lootmasterClashWarned = true
+            print("|cff00ff00KART:|r " .. string.format(KART.L.LC_LOOTMASTER_CLASH, senderName))
+        end
+    end
+
     return true
 end
 
