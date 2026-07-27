@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 1
+local MAJOR, MINOR = "KAUI-1.0", 2
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -115,6 +115,12 @@ end
 -- Registers a top-level frame for the shared strata setting and applies the current value.
 -- Called once per frame at creation time; ApplyFrameStrata() re-applies on change.
 function nsProto:RegisterStrataFrame(frame, isDialog)
+    -- Raise on click, like every movable window in the game. Without it a frame keeps whatever
+    -- level it was created at for the whole session, so where two of these overlap, the one in
+    -- front is decided by creation order and clicking the other does nothing at all -- there was no
+    -- way to bring it forward (GitHub issue #4, B24). SetToplevel does exactly this and nothing
+    -- else; it acts within the frame's own stratum, so it cannot lift a window over a dialog.
+    if frame.SetToplevel then frame:SetToplevel(true) end
     if isDialog then
         self.strataDialogFrames[#self.strataDialogFrames + 1] = frame
         frame:SetFrameStrata(self:GetDialogStrata())
