@@ -1189,12 +1189,14 @@ function Council.RefreshCouncilRows()
 
             -- FontStrings can't take mouse scripts directly (see row.noteHitbox above) — its own
             -- dedicated hitbox so the status text shows on hovering the "!" marker itself, not just
-            -- somewhere else on the row (it was previously only on the row's own tooltip, see the
-            -- capturedKartStatus line further below).
+            -- on the equip-icon hitbox's tooltip further below (the only place it showed before).
+            -- Mouse is enabled per-refresh below, only while there's actually a status to show —
+            -- left always-on here would add a permanent dead zone over every row (stacking with the
+            -- equip/note/officer-note hitboxes already there) that swallows right-clicks even on
+            -- rows with no warning to explain.
             row.warnHitbox = CreateFrame("Frame", nil, row)
             row.warnHitbox:SetSize(18, 18)
             row.warnHitbox:SetPoint("CENTER", row.warnIcon)
-            row.warnHitbox:EnableMouse(true)
 
             -- Persistent officer note about this player (see LC.SetOfficerNote) — a different
             -- colour from the per-vote note dot so the two aren't mistaken for one another.
@@ -1419,9 +1421,13 @@ function Council.RefreshCouncilRows()
         row.noteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Warning indicator: missing/outdated KART or Loot Council disabled on their end. Same
-        -- text and colour as the row-wide tooltip's own capturedKartStatus line further below, just
-        -- also on its own dedicated hitbox so hovering the marker itself explains it directly.
+        -- text and colour as the equip-icon hitbox's own tooltip's capturedKartStatus line further
+        -- below, just also on its own dedicated hitbox so hovering the marker itself explains it
+        -- directly. Mouse only enabled when there's actually a status to show — otherwise this
+        -- hitbox would sit on every row as a dead zone that swallows right-clicks (which open the
+        -- assign menu) even where there's no warning to explain.
         row.warnIcon:SetText(capturedKartStatus and "|cffff4444!|r" or "")
+        row.warnHitbox:EnableMouse(capturedKartStatus and true or false)
         row.warnHitbox:SetScript("OnEnter", function(self)
             if not capturedKartStatus then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")

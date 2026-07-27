@@ -499,45 +499,6 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
--- Whether text (the payload's lootmaster field) identifies unit's OWN player directly — their live
--- character name or their NSRT nickname — rather than resolved through the global Identity cache.
--- See LC.HandleConfig for why: resolving the declared name globally (LC.ResolveConfigName) depends
--- on OUR OWN KART_PlayerCache being warm whenever the field holds a nickname, and on a cold cache
--- that falls through to a pending-text key that can never equal senderKey, silently dropping a
--- config from a legitimate lootmaster (race, not a hard failure — it "fixes itself" once the cache
--- warms up, which is exactly what made it look intermittent in testing). Comparing directly against
--- the sender we already hold a live unit for needs no cache at all.
---
--- Handles the realm-qualified "Name-Realm" form the character name can arrive in the same way
--- KAUtil.IsFullNameInGroup does (case-folded, realm punctuation/spacing stripped via
--- KAUtil.CanonRealm, blank realm on either side meaning "our own realm") — reusing that exact
--- normalization rather than reimplementing it, since it already solves this same UnitName-realm-can-
--- carry-a-display-spelling problem. A nickname is never realm-qualified, so it's compared as-is.
-function LC.SenderDeclaresSelf(unit, text)
-    local trimmed = KAUtil.TrimString(text or "")
-    if trimmed == "" or not unit then return false end
-
-    local unitName, unitRealmRaw = UnitName(unit)
-    if not unitName then return false end
-
-    local wantName, wantRealm = trimmed:match("^([^%-]+)%-?(.*)$")
-    if wantName then
-        local ownRealm  = KAUtil.CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
-        local unitRealm = KAUtil.CanonRealm(unitRealmRaw)
-        if unitRealm == "" then unitRealm = ownRealm end
-        local canonWantRealm = KAUtil.CanonRealm(wantRealm)
-        if canonWantRealm == "" then canonWantRealm = ownRealm end
-        if KAUtil.CaseFold(wantName) == KAUtil.CaseFold(unitName) and canonWantRealm == unitRealm then
-            return true
-        end
-    end
-
-    local nick = KASC.Identity.GetNickname(unit)
-    if nick and nick == KAUtil.CaseFold(trimmed) then return true end
-
-    return false
-end
-
 -- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
 -- registered near the bottom of this file).
 --
@@ -549,9 +510,7 @@ end
 -- (LC_SYNC_REQUEST) first, which is confirmed by the receiver.
 --
 -- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
--- lootmaster, and every client resolves that name against the live roster the same way — see
--- LC.SenderDeclaresSelf, checked directly against the sender's own unit rather than through the
--- global Identity cache (see its comment for why).
+-- lootmaster, and every client resolves that name against the live roster the same way.
 function LC.HandleConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return end
@@ -560,12 +519,13 @@ function LC.HandleConfig(payload, senderKey)
     if not minQ then return end
 
     -- The payload must declare a lootmaster, and the sender must BE them.
-    if not LC.SenderDeclaresSelf(unit, lootmaster) then return end
+    local declaredKey = LC.ResolveConfigName(lootmaster)
+    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then return end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = senderKey -- resolved key, derived from the sender we just verified
+    LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)

@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Loot Council font-size slider moved to the personal-settings card**, next to the other personal display options.
 
 ### Fixed
-- **Fixed a rare case where raid-wide Loot Council settings failed to apply when the lootmaster was set by their nickname.**
 - **Hovering the red "!" warning icon on a council row now shows what it means.**
 
 ## [3.0.0] - 2026-07-27

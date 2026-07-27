@@ -1,6 +1,6 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 1
+local MAJOR, MINOR = "KAUtil-1.0", 2
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
 
@@ -70,8 +70,9 @@ end
 -- lookup for anyone not currently in the group, which would map an outsider onto a same-short-named
 -- group member and wrongly authorize them. That is exactly what this function exists to prevent.
 --
--- Exported (not file-local) so LootCouncil.lua's LC_CONFIG sender check can reuse this exact
--- realm-normalization instead of reimplementing it — see LC.SenderDeclaresSelf.
+-- Exported (not file-local) so other callers needing this exact realm-normalization can reuse it
+-- instead of reimplementing it — see docs/BACKLOG.md B15 (Auto-Promote's realm-qualified match),
+-- which needs precisely this canonicalization and previously couldn't reach it.
 function KAUtil.CanonRealm(realm)
     return KAUtil.CaseFold(((realm or ""):gsub("[%s%-']", "")))
 end

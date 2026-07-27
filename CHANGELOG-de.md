@@ -12,7 +12,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Schriftgrößen-Regler für Loot Council ist jetzt in der persönlichen Einstellungskarte**, direkt bei den anderen persönlichen Anzeigeoptionen.
 
 ### Behoben
-- **Einen seltenen Fall behoben, in dem raidweite Loot-Council-Einstellungen nicht griffen, wenn der Lootmaster über seinen Nickname eingetragen war.**
 - **Das rote "!"-Warnsymbol bei einer Council-Zeile zeigt jetzt beim Hovern an, was es bedeutet.**
 
 ## [3.0.0] - 2026-07-27
