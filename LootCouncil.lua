@@ -714,13 +714,25 @@ KART.UI:RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
 
 LC.IsRealItemLink = KAUtil.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
--- Pulls the (r,g,b) quality colour out of the leading |cAARRGGBB escape of an item link/coloured
--- string — works uniformly for real item hyperlinks (colour = actual item quality) and test mode's
--- fake coloured-string items, so tab swatches never need to special-case which kind it is.
+-- Pulls the (r,g,b) quality colour for an item link/coloured string. The leading colour escape is
+-- tried first (|cAARRGGBB, decoded directly) — this is the only form test mode's fake
+-- coloured-string items ever use, so that path alone still covers them. A real item link can
+-- instead carry a *named* escape (|cnIQ4:, see KAUtil.EachItemLink) that has no hex triple to
+-- decode at all; for that form, the item's actual quality is looked up via C_Item.GetItemInfo
+-- instead of trying to parse meaning out of the escape's name. Falls back to grey when neither
+-- resolves (a non-item test string, or a real item not yet in the client's item cache).
 function LC.ParseItemColor(link)
-    local hex = type(link) == "string" and link:match("|c(%x%x%x%x%x%x%x%x)")
-    if not hex then return 0.5, 0.5, 0.5 end
-    return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+    if type(link) ~= "string" then return 0.5, 0.5, 0.5 end
+    local hex = link:match("|c(%x%x%x%x%x%x%x%x)")
+    if hex then
+        return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+    end
+    if KAUtil.IsRealItemLink(link) then
+        local _, _, quality = C_Item.GetItemInfo(link)
+        local c = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality] ---@diagnostic disable-line: undefined-global
+        if c then return c.r, c.g, c.b end
+    end
+    return 0.5, 0.5, 0.5
 end
 
 -- Refresh the council panel after a vote/assignment mutation, but only when it's actually open: the

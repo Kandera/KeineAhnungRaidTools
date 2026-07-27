@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Version check rebuilt.** Clients on 2.9 or older no longer appear in the list until they update.
 - **This release includes a large internal rework.** Everything you've saved carries over — settings, loot history, officer notes, profiles and outstanding trades.
 
+### Fixed
+- **`/kart add` works with shift-clicked items again.**
+- **The window close button is bigger and easier to click.**
+- **Loot Council windows now follow the font setting.**
+
 ## [2.9.0] - 2026-07-25
 ### Added
 - **The whole UI now follows the language setting** — main window, settings and tooltips included.

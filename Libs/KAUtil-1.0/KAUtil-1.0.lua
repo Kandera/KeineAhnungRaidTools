@@ -115,15 +115,19 @@ function KAUtil.GetItemString(link)
 end
 
 -- Iterates every complete item hyperlink found in text, in the order they appear. Matches
--- |Hitem:...|h[Name]|h|r regardless of what colour escape (if any) precedes it — different client
--- versions shift-click different forms, e.g. hex "|cffa335ee" vs. named "|cnIQ4:" — so the escape
--- itself is deliberately not constrained, only that a |Hitem:...|h...|h|r bracket follows it. This
--- also naturally handles several links pasted in one string and item names that contain commas or
--- spaces, since matching stops only at the closing "|h|r" rather than at any separator character.
--- The colour escape is kept in the captured string: callers store/send/tooltip the same shape
--- GetLootRollItemLink returns, which always includes it.
+-- |c...|Hitem:...|h[Name]|h|r — a leading colour escape IS required (a real item link always
+-- carries one; GetLootRollItemLink never returns a bare |Hitem:...|h...|h|r), but its contents are
+-- deliberately not constrained beyond "no |", only that a |Hitem:...|h...|h|r bracket follows it —
+-- different client versions shift-click different forms, e.g. hex "|cffa335ee" vs. named "|cnIQ4:".
+-- "[^|]*" (not ".-") stops the escape at the first "|" so a coloured NON-item token earlier in the
+-- string (a spell/quest link, or plain coloured chat text) can never be swallowed into the escape
+-- and treated as part of this match — each match's own "|c" must be the one immediately in front
+-- of its own "|Hitem:". This also naturally handles several links pasted in one string and item
+-- names that contain commas or spaces, since matching stops only at the closing "|h|r" rather than
+-- at any separator character. The colour escape is kept in the captured string: callers store/
+-- send/tooltip the same shape GetLootRollItemLink returns, which always includes it.
 function KAUtil.EachItemLink(text)
-    return (text or ""):gmatch("|c.-|Hitem:.-|h|r")
+    return (text or ""):gmatch("|c[^|]*|Hitem:.-|h|r")
 end
 
 -- Plain recursive table copy — a settings blob like this only ever holds strings, numbers,

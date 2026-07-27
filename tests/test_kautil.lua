@@ -33,6 +33,7 @@ end
 
 local MODERN_LINK = "|cnIQ4:|Hitem:19019::::::::80:::::|h[Thunderfury]|h|r"
 local COMMA_LINK = "|cff0070dd|Hitem:19019:0:0:0:0:0:0:0:60:0:0:0|h[Thunderfury, Blessed Blade of the Windseeker]|h|r"
+local SPELL = "|cff71d5ff|Hspell:12345|h[Fireball]|h|r"
 
 T.deep_eq(collectLinks(MODERN_LINK), { MODERN_LINK },
     "EachItemLink accepts a modern named-colour-escape link")
@@ -42,6 +43,8 @@ T.deep_eq(collectLinks(LINK .. " " .. MODERN_LINK), { LINK, MODERN_LINK },
 T.deep_eq(collectLinks(COMMA_LINK), { COMMA_LINK },
     "EachItemLink keeps an item name containing a comma and spaces intact")
 T.deep_eq(collectLinks("no item link here"), {}, "EachItemLink yields nothing for text with no link")
+T.deep_eq(collectLinks(SPELL), {}, "EachItemLink ignores a spell link")
+T.deep_eq(collectLinks(SPELL .. " " .. LINK), { LINK }, "EachItemLink does not swallow a preceding spell link")
 
 -- EachGroupUnit ----------------------------------------------------------------------
 KARTTEST.SetRaid({ { name = "Ann" }, { name = "Bob" }, { name = "Cid" } })
