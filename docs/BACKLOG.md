@@ -252,6 +252,116 @@ flag already is.
 `LootCouncil.lua:1206-1207` documents the table as mapping rollID to a short name. It holds a
 resolved GUID. Every reader compares GUIDs, so only the comment is wrong.
 
+---
+
+## B15 — Auto-Promote's realm-qualified match can never fire for some cross-realm players
+
+**Symptom:** a specific raider is never promoted to assistant. No error, nothing happens.
+
+**Cause:** `GroupLogic.lua:86-91` builds its comparison key as `name .. "-" .. realm`, using the realm
+exactly as `UnitName` returns it. For a cross-realm unit that can be the *display* spelling with a
+space — "Tarren Mill". A promote-list entry pasted from the WoWUtils export carries the normalized
+form, "TarrenMill", so the two never match.
+
+This codebase already solves the same problem elsewhere: `KAUtil.IsFullNameInGroup` canonicalizes
+both sides, stripping spaces and hyphens, precisely because the two spellings differ. Auto-Promote's
+realm-qualified branch does not.
+
+The short-name branch still covers the common case, so this only bites on a deliberately
+realm-qualified entry.
+
+**Workaround:** enter that person by short name instead.
+
+**Fix direction:** canonicalize the realm on both sides, the way `IsFullNameInGroup` does. Note its
+`CanonRealm` is currently a file-local in KAUtil and would need exporting.
+
+**Pre-existing.** Found by the raid-lead audit, 2026-07-27.
+
+---
+
+## B16 — The four data responders have no answer cooldown, and Refresh is not debounced
+
+**Symptom:** after mashing the Buff Checker's Refresh button in a full raid, some rows keep showing
+`?` and grey oil for the rest of the session.
+
+**Cause:** `BuffChecker.lua:371-377` fires `REQ_OIL`, `REQ_ILVL` and `REQ_GEAR` back to back, and
+every KART client in the raid answers immediately. None of the four responders in
+`Libs/KASC-1.0/KASC-1.0.lua` carries an answer cooldown, and the Refresh button itself is not
+debounced. One click in a 20-man raid is 60 outbound answers; several clicks overrun Blizzard's chat
+rate limiter, which silently drops the overflow. **Nothing retries.**
+
+The addon already knows this pattern is dangerous — the structurally identical `REQ_EQUIP` responder
+carries `EQUIP_ANSWER_COOLDOWN = 5` for exactly this reason. These four never got one.
+
+**Workaround:** click Refresh once and wait, rather than clicking again when data does not appear
+immediately.
+
+**Fix direction:** the per-request cooldown `REQ_EQUIP` already uses, plus debouncing the button.
+
+**Pre-existing.** Found by the Buff Checker audit, 2026-07-27.
+
+---
+
+## B17 — Peer gear data never expires and staleness is invisible
+
+**Symptom:** the advanced page shows hour-old data for a peer, rendered identically to fresh data.
+
+**Cause:** `RequestAdvancedData` is a local closure inside the frame builder, reachable only from the
+mode button and the Refresh button. Neither `KART.ShowBuffCheck` nor the automatic open on
+`READY_CHECK` requests anything, and `GROUP_ROSTER_UPDATE` only refreshes the display. The caches
+carry no timestamp and are never purged on a roster change. `KART.BuffCheckMode` is not reset on
+close, so reopening straight into a stale advanced page is the normal case.
+
+Someone who re-oiled, re-gemmed or swapped weapons since the last Refresh still shows their old
+state. Someone who joined since then shows `?`, which is at least honest.
+
+Arguably deliberate — a comment says the one-shot fetch avoids constant spam — but the staleness is
+not signalled to the user in any way.
+
+**Pre-existing.** Found by the Buff Checker audit, 2026-07-27.
+
+---
+
+## Smaller items from the 2026-07-27 audits
+
+All pre-existing, all low impact, recorded so they are not rediscovered.
+
+**Sequential short-name reuse poisons the peer caches.** All six are short-name keyed and never
+cleared on a roster change. If `Bob-Silvermoon` leaves and `Bob-Ravencrest` joins mid-session, the
+new Bob inherits the old Bob's oil, gear, item level and durability until the next Refresh. This is
+*not* the accepted simultaneous-namesake decision in `REVIEW-DECISIONS.md`, which concerns two
+namesakes present at once.
+
+**`ILVL` is validated by `tonumber` and nothing else** (`BuffChecker.lua:1078`). A peer fully
+controls their own displayed item level: `ILVL:0x1F` caches 31, `ILVL:1e400` renders the literal
+string `inf`, `ILVL:-99` renders `-99.0`. The other three receivers do validate.
+
+**An empty `ENCH:` payload caches an empty table**, so `/kart ench raid` counts that player as a
+responder with zero enchants. Maintenance path only; nothing renders it.
+
+**`GetAverageItemLevel`'s second return is unguarded on the render side** (`BuffChecker.lua:993`)
+while the responder that sends the same value does guard it. A nil during a loading screen would
+throw inside `UpdateBuffCheck` and abort the row rebuild half-drawn.
+
+**Your own ready-check decline reason never reaches your own row.** `sendReason` broadcasts
+`RC_REASON` but never writes the local cache, and RAID/PARTY messages do not echo to their sender.
+Everyone else sees your reason; you do not.
+
+**The `GEAR` payload match is unanchored**, so trailing junk after the two slot lists is accepted.
+Harmless — both captured fields still pass through `IsSlotList` — but it is the one receiver whose
+pattern does not pin the whole payload.
+
+**The same realm-spelling inconsistency as B15 exists in `WU.InviteBoss` and `WU.RemoveForBoss`**,
+but is masked because both also check a plain short-name key. Only relevant if the project's
+no-namesake convention ever changes.
+
+**`KART.keybindsPending` is set and cleared but never read** (`RaidleadBar.lua:176-179`). Harmless
+dead state — `PLAYER_REGEN_ENABLED` re-applies keybinds unconditionally anyway.
+
+**`KAUI.ShowInputDialog` falls back to Blizzard's client-locale `ACCEPT`/`CANCEL`** when a caller
+omits the label options, which would show the client's language rather than the user's chosen one.
+All three current call sites pass them explicitly; the trap is for a future consumer.
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
