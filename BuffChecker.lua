@@ -801,6 +801,8 @@ function KART.UpdateBuffCheck(isPreview)
         end
         -- roster churn can briefly yield nil; UNKNOWN is Blizzard's own localized "Unknown" string
         local nameStr = UnitName(unit) or UNKNOWN ---@diagnostic disable-line: undefined-global
+        -- Hoisted: the ready-check status below needs it too, and both must key the same way.
+        local shortName = nameStr:match("([^%-]+)")
         local _, class = UnitClass(unit)
 
         -- Offline Check
@@ -811,8 +813,12 @@ function KART.UpdateBuffCheck(isPreview)
             row:SetAlpha(1.0)
         end
         
-        -- ReadyCheck Status
+        -- ReadyCheck Status. Blizzard clears its own status once the check resolves, which wipes the
+        -- whole column exactly when it becomes useful for chasing people up -- so fall back to
+        -- KART's own snapshot (KART.ReadyCheckStatus, filled in Core.lua and wiped on every new
+        -- check). Blizzard stays authoritative while a check is live.
         local rcStatus = GetReadyCheckStatus(unit)
+            or (KART.ReadyCheckStatus and shortName and KART.ReadyCheckStatus[shortName])
         KART.SetReadyCheckIcon(row.rcIcon, rcStatus)
 
         wipe(KART.BuffStatesCache) -- Vor jedem Spieler leeren
@@ -929,7 +935,6 @@ function KART.UpdateBuffCheck(isPreview)
                 else
                     -- KART Addon Sync auslesen (für Spieler, die KART installiert haben). "n" is that
                     -- player's own verdict that the hand takes no oil at all.
-                    local shortName = nameStr:match("([^%-]+)")
                     local o = KART.OilCache and shortName and KART.OilCache[shortName]
                     hasData = o ~= nil
                     if o then
@@ -963,7 +968,6 @@ function KART.UpdateBuffCheck(isPreview)
                     if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KAGS.CountMissingGear() end
                     KART.BuffStatesCache[buff.id] = (buff.isGearCheck == "enchants") and playerMissingEnchants or playerMissingGems
                 else
-                    local shortName = nameStr:match("([^%-]+)")
                     if KART.GearCache and shortName and KART.GearCache[shortName] then
                         KART.BuffStatesCache[buff.id] = KART.GearCache[shortName][buff.isGearCheck]
                     else
@@ -974,7 +978,6 @@ function KART.UpdateBuffCheck(isPreview)
         end
 
         -- Row Update
-        local shortName = nameStr:match("([^%-]+)")
         SetTruncatedName(row.name, nameStr, row.name:GetWidth())
         local c = RAID_CLASS_COLORS[class] or {r=1, g=1, b=1}
         row.name:SetTextColor(c.r, c.g, c.b)

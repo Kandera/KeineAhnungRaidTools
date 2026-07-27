@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - **The extended ready check works again.** Declining a ready check offers the reason buttons and the free-text box.
+- **The Buff Checker keeps the ready-check result and the reasons after the check ends**, instead of clearing both at the moment they become useful.
 
 ## [3.0.1] - 2026-07-27
 ### Changed

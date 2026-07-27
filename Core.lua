@@ -309,6 +309,18 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Arms the reason dialog for this check -- see READY_CHECK_CONFIRM below, which fires more
         -- than once for the same answer and would otherwise act on all of them.
         KART.rcSelfAnswered = false
+
+        -- KART's own copy of the ready-check result, because Blizzard's GetReadyCheckStatus is
+        -- cleared once the check resolves and the Buff Checker's Rdy column then goes blank -- which
+        -- is precisely when it is wanted, to chase up whoever was not ready. Seeded as "waiting" for
+        -- everyone so a player who never answers still reads as such afterwards, rather than as no
+        -- entry at all. arg1 is the initiator, who counts as ready without ever confirming.
+        KART.ReadyCheckStatus = wipe(KART.ReadyCheckStatus or {})
+        for unit in KAUtil.EachGroupUnit() do
+            local n = UnitName(unit)
+            if n then KART.ReadyCheckStatus[n] = "waiting" end
+        end
+        if arg1 then KART.ReadyCheckStatus[arg1:match("([^%-]+)") or arg1] = "ready" end
         -- Also gate on the module toggle: ShowBuffCheck itself refuses and prints
         -- BC_MODULE_DISABLED_MSG when the module is off, which would spam chat on every single ready
         -- check for anyone who enabled "show on ready check" without enabling the module.
@@ -335,12 +347,22 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- to one dialog per check; READY_CHECK above re-arms it.
         --
         -- READY_CHECK_FINISHED carries different arguments entirely, hence the event check.
+        -- 0 is not treated as ready either -- the replaced hook accepted that shape and nothing
+        -- documents which one this event uses.
+        local isReady = arg2 and arg2 ~= 0
+        if event == "READY_CHECK_CONFIRM" and arg1 then
+            -- Every confirmation, not just our own: this is the snapshot the Rdy column falls back
+            -- on once Blizzard clears its own status. Recording the same answer twice under two
+            -- tokens is harmless -- both resolve to the same name and the same value.
+            local n = UnitName(arg1)
+            if n and KART.ReadyCheckStatus then
+                KART.ReadyCheckStatus[n] = isReady and "ready" or "notready"
+            end
+        end
         if event == "READY_CHECK_CONFIRM" and not KART.rcSelfAnswered
            and arg1 and UnitIsUnit(arg1, "player") then
             KART.rcSelfAnswered = true
-            -- 0 is not treated as ready either -- the replaced hook accepted that shape and nothing
-            -- documents which one this event uses.
-            if arg2 and arg2 ~= 0 then
+            if isReady then
                 if KART.RCDialog then KART.RCDialog:Hide() end
             elseif IsInGroup() then
                 KART.ShowReadyCheckReasonDialog()

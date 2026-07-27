@@ -9,6 +9,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unveröffentlicht]
 ### Behoben
 - **Der erweiterte Ready-Check funktioniert wieder.** Wer ablehnt, bekommt die Grund-Buttons und das Textfeld.
+- **Der Buff-Checker behält Ready-Check-Ergebnis und Gründe nach dem Check**, statt beides genau dann zu leeren, wenn es gebraucht wird.
 
 ## [3.0.1] - 2026-07-27
 ### Geändert
