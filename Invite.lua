@@ -437,6 +437,25 @@ function WU.BuildPanel(parent)
     pasteScroll:SetScrollChild(WU.ImportEditBox)
     KART.UI:RegisterEditBox(WU.ImportEditBox)
 
+    -- Catches clicks on the empty part of the box and hands focus to the EditBox.
+    --
+    -- The SetHeight(300) above was the first attempt at this and does not hold: a multi-line EditBox
+    -- auto-sizes its height to its own text, so the forced height survives only until the first text
+    -- change. After that the frame is one line tall, everything below it is bare ScrollFrame, and
+    -- clicking there did nothing -- only the top of the visible box started editing (B6).
+    --
+    -- Deliberately a sibling BEHIND the scroll frame rather than an overlay: the EditBox keeps
+    -- receiving the clicks that land on it, so the caret still goes exactly where it is clicked, and
+    -- only clicks that would otherwise have hit nothing reach this.
+    local pasteClickCatcher = CreateFrame("Frame", nil, pasteBG)
+    pasteClickCatcher:SetAllPoints(pasteScroll)
+    pasteClickCatcher:SetFrameLevel(math.max(pasteScroll:GetFrameLevel() - 1, 0))
+    pasteClickCatcher:EnableMouse(true)
+    pasteClickCatcher:SetScript("OnMouseDown", function()
+        WU.ImportEditBox:SetFocus()
+        WU.ImportEditBox:SetCursorPosition(#WU.ImportEditBox:GetText())
+    end)
+
     WU.BtnImport = KART.UI:CreateModernButton(importCard, L.WU_BTN_IMPORT)
     WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)

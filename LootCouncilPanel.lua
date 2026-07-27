@@ -401,15 +401,26 @@ function Council.RefreshCouncilTabs()
 
             -- Hidden until the tab itself is hovered (see OnEnter/OnLeave below) so a normal
             -- click anywhere on the tab can never land on it by accident.
+            -- Anchored just OUTSIDE the tab's own hit area, not inside its corner. Inside, the two
+            -- requirements fought each other: big enough to hit deliberately meant big enough to hit
+            -- by accident, and closing a tab drops the roll entirely (Council.CloseCouncilTab).
+            -- Hiding it until hover never addressed that, because you have to hover a tab in order
+            -- to click it — the x appeared exactly when the pointer was already in its corner
+            -- (B27, issue #9). Outside, it can be comfortably large at no risk, which also settles
+            -- the second half of the report: at 14x14 with an 11pt glyph it was fiddly to hit on
+            -- purpose. 18 matches KAUI.CLOSE_BUTTON_GLYPH_SIZE, used by every window's own close.
             tab.closeBtn = CreateFrame("Button", nil, tab)
-            tab.closeBtn:SetSize(14, 14)
-            tab.closeBtn:SetPoint("TOPRIGHT", -1, -1)
+            tab.closeBtn:SetSize(18, 18)
+            -- To the LEFT of the tab, away from the panel: the strip is anchored outside the panel's
+            -- left edge (see f.tabStrip), so the tab's right side faces the panel body and an x
+            -- placed there would hover over the rows.
+            tab.closeBtn:SetPoint("RIGHT", tab, "LEFT", -2, 0)
             tab.closeBtn:Hide()
             tab.closeBtn.bg = tab.closeBtn:CreateTexture(nil, "BACKGROUND")
             tab.closeBtn.bg:SetAllPoints()
             tab.closeBtn.bg:SetColorTexture(0, 0, 0, 0.7)
             tab.closeBtn.text = tab.closeBtn:CreateFontString(nil, "OVERLAY")
-            tab.closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+            tab.closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
             tab.closeBtn.text:SetPoint("CENTER")
             tab.closeBtn.text:SetText("|cffff6666×|r")
 

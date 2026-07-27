@@ -383,7 +383,14 @@ function Vote.RefreshVoteListRows_Spacious(f)
             -- tooltip, spanning both the icon and the name so hovering either shows it.
             row.itemHover = CreateFrame("Frame", nil, row)
             row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
-            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:SetPoint("RIGHT", row.itemText, "RIGHT")
+            -- Height set explicitly, NOT by anchoring the bottom to the item name. A FontString's
+            -- box is its text's box: the name sits 4px below the icon's top and is ~17px tall for a
+            -- single line, so the region ended 21px down against a 46px icon -- the lower half of
+            -- the icon showed no tooltip at all, reported twice independently (B26, issues #7/#8).
+            -- The max() also covers the compact layout, whose icon is smaller than a wrapped
+            -- two-line name.
+            row.itemHover:SetHeight(math.max(ICON_SIZE, 36))
             row.itemHover:EnableMouse(true)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -655,7 +662,14 @@ function Vote.RefreshVoteListRows_Compact(f)
 
             row.itemHover = CreateFrame("Frame", nil, row)
             row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
-            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:SetPoint("RIGHT", row.itemText, "RIGHT")
+            -- Height set explicitly, NOT by anchoring the bottom to the item name. A FontString's
+            -- box is its text's box: the name sits 4px below the icon's top and is ~17px tall for a
+            -- single line, so the region ended 21px down against a 46px icon -- the lower half of
+            -- the icon showed no tooltip at all, reported twice independently (B26, issues #7/#8).
+            -- The max() also covers the compact layout, whose icon is smaller than a wrapped
+            -- two-line name.
+            row.itemHover:SetHeight(math.max(ICON_SIZE, 36))
             row.itemHover:EnableMouse(true)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
