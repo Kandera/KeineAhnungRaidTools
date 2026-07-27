@@ -228,6 +228,7 @@ KART.L_enUS = {
     LC_SET_LOOTMASTER      = "Lootmaster (always rolls Need/Greed/Disenchant, never passes):",
     LC_SET_LOOTMASTER_HINT = "This player wins every roll and trades each item to whoever the council picks. Overrides their own Auto-Pass setting. Character name OR Northern Sky Raid Tools nickname — with a nickname this applies to every character sharing it. Whoever is named here runs the whole loot flow: the raid-wide settings in this box, starting and ending the session, and every roll the raid votes on. Leave empty only if nobody is handing out loot this way — the raid leader then stands in.",
     LC_CONFIG_TRUNCATED    = "Council member list is too long to broadcast in full and was trimmed — shorten it in Loot Council settings so everyone stays in sync.",
+    LC_CONFIG_REJECTED     = "|cffffaa00The raid's Loot Council settings were not accepted (%s).|r Your own vote buttons, roll setting and council list are being used instead — tell your lootmaster.",
     LC_BTN_TOGGLE          = "Toggle session",
     LC_DESC_TOGGLE         = "Manually enable or disable Loot Council for the current raid session. Only works when you are the lootmaster.",
     LC_BTN_SYNC_SETTINGS   = "Sync Settings to Player...",

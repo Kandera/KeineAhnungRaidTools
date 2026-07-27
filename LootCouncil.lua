@@ -512,9 +512,10 @@ end
 -- Factored out of LC.HandleConfig so LC.RetryPendingConfig (below) can re-run the exact same
 -- acceptance predicate later, instead of a hand-rolled approximation of it — see B12 in
 -- docs/BACKLOG.md. Returns true on success. On failure returns false plus a reason: "no-sender" (the
--- sender isn't resolvable at all — e.g. they've since left the group), "parse-fail" (malformed
--- payload), or "lootmaster-unresolved" (the one B12 is about: the declared lootmaster doesn't yet
--- resolve, on this receiver, to the sender). Only the caller decides what to do with the reason.
+-- sender isn't resolvable at all — e.g. they've since left the group, or the raid is still forming;
+-- the only retryable one), "parse-fail" (malformed payload), or "lootmaster-mismatch" (the payload
+-- names a lootmaster who resolves to somebody other than the sender). Only the caller decides what
+-- to do with the reason.
 local function TryAcceptConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false, "no-sender" end
@@ -522,16 +523,34 @@ local function TryAcceptConfig(payload, senderKey)
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return false, "parse-fail" end
 
-    -- The payload must declare a lootmaster, and the sender must BE them.
+    -- The sender IS the lootmaster. Only a client whose own settings name it lootmaster broadcasts
+    -- at all (LC.IsConfigOwner gates LC.BroadcastRaidConfig), so the sender's identity already says
+    -- everything the declared name was ever consulted for -- and unlike the name, it always
+    -- resolves.
+    --
+    -- Requiring the NAME to resolve was a permanent dead end for anyone whose client cannot see the
+    -- lootmaster's Northern Sky nickname: without NSRT, or with its "Global Nicknames" master
+    -- toggle off, KASC.Identity.GetNickname returns nil for every unit forever. That client then
+    -- rejected every config for all time and silently fell back to its own settings -- its own vote
+    -- button labels (so its votes showed up under the WRONG label on the council panel, see B25),
+    -- its own rolls toggle (so it never rolled) and its own council list. Observed across a full
+    -- raid on 2026-07-27; session restarts did not help, because each re-broadcast was rejected
+    -- exactly the same way.
+    --
+    -- The declared name is still checked when it DOES resolve, which keeps the guard against a
+    -- misconfigured client broadcasting somebody else's name -- that case is a real error and stays
+    -- a rejection. It just no longer decides the common path.
     local declaredKey = LC.ResolveConfigName(lootmaster)
-    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then
-        return false, "lootmaster-unresolved"
+    if declaredKey and declaredKey ~= "" and declaredKey ~= senderKey then
+        return false, "lootmaster-mismatch"
     end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
+    -- The sender, not the declared text: senderKey is a resolved identity key by construction,
+    -- while declaredKey is nil for exactly the clients this whole path had to stop depending on.
+    LC.raidConfig.lootmaster    = senderKey
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
@@ -545,26 +564,43 @@ local function TryAcceptConfig(payload, senderKey)
 end
 
 -- ==========================================================================
---  B12: retry a config rejected only for an unresolved lootmaster
+--  B12: retry a config rejected only because the sender wasn't resolvable yet
 -- ==========================================================================
 --
--- NSRT distributes lootmaster nicknames between clients over time, so a raid that starts
--- distributing loot immediately after forming can have peers whose NSAPI:GetName doesn't know that
--- nickname yet — TryAcceptConfig's "lootmaster-unresolved" case. That resolves itself once NSRT
--- catches up or the roster changes, but nothing re-delivers the config on its own once the raid
--- settles (see B12 in docs/BACKLOG.md), so the one payload that failed for that reason is kept
--- around and retried — with the SAME predicate, never a relaxed one — until it succeeds or the
--- budget below runs out.
+-- A config can arrive before its sender is resolvable on this client — normal while a raid is still
+-- forming — and nothing re-delivers it on its own once the roster settles (see B12 in
+-- docs/BACKLOG.md), so the one payload that failed for that reason is kept around and retried, with
+-- the SAME predicate and never a relaxed one, until it succeeds or the budget below runs out.
+--
+-- This originally retried an unresolved lootmaster NAME, which was the far more common failure and
+-- for some clients a permanent one — see TryAcceptConfig, which no longer consults the name for the
+-- decision at all. That case cannot occur any more; this machinery now covers only the genuinely
+-- transient one it was always meant for.
 LC.pendingConfig = nil -- {payload, senderKey, attempts, timer} or nil while nothing is pending
 
--- Every 10s for up to 12 attempts (~2 minutes) between roster changes. NSRT's nickname sync is
--- normally a matter of seconds; this comfortably covers a slow sync without retrying all evening.
+-- A rejected config leaves this client quietly using its OWN vote button labels, rolls toggle and
+-- council list while it still takes part in the session — so its votes land under the wrong label
+-- on the council panel and it never rolls (see B25). That went unnoticed for a whole raid on
+-- 2026-07-27 because nothing said a word. Say something.
+--
+-- Latched: LC_CONFIG is re-broadcast on every roster change, so an unlatched print would repeat
+-- once per join during raid formation. Cleared on the next acceptance, which is exactly when the
+-- situation has actually changed.
+LC.configRejectWarned = false
+local function WarnConfigRejected(reason)
+    if LC.configRejectWarned then return end
+    LC.configRejectWarned = true
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_CONFIG_REJECTED, tostring(reason)))
+end
+
+-- Every 10s for up to 12 attempts (~2 minutes) between roster changes — comfortably longer than a
+-- raid takes to finish filling up, without retrying all evening.
 -- Roster changes (see LC.RetryPendingConfigThrottled) do NOT add attempts on top of this schedule —
 -- they consume one and re-arm the timer early, so sustained roster churn (the leading-edge throttle
 -- allows roughly one attempt per second) can collapse the effective window to as little as ~12
 -- seconds. This mostly self-corrects in practice: a roster change during an active session also
--- re-broadcasts the config (LootCouncil.lua:1089), and a fresh "lootmaster-unresolved" rejection
--- replaces the pending payload and resets attempts back to 0 (see LC.HandleConfig below).
+-- re-broadcasts the config (LootCouncil.lua:1089), and a fresh "no-sender" rejection replaces the
+-- pending payload and resets attempts back to 0 (see LC.HandleConfig below).
 local PENDING_CONFIG_RETRY_INTERVAL = 10
 local PENDING_CONFIG_MAX_ATTEMPTS   = 12
 
@@ -622,18 +658,24 @@ function LC.RetryPendingConfig()
     local accepted, reason = TryAcceptConfig(pending.payload, pending.senderKey)
     if accepted then
         LC.CancelPendingConfig()
+        LC.configRejectWarned = false
         RefreshCouncilPanelIfOpen()
         return
     end
 
-    if reason == "no-sender" then
+    -- "no-sender" is the reason we stored this payload for, so it is the one reason to keep
+    -- waiting on. Anything else appearing now means the payload became unusable for a different
+    -- reason entirely, and no further attempt will change that.
+    if reason ~= "no-sender" then
         LC.CancelPendingConfig()
+        WarnConfigRejected(reason)
         return
     end
 
     pending.attempts = pending.attempts + 1
     if pending.attempts >= PENDING_CONFIG_MAX_ATTEMPTS then
         LC.CancelPendingConfig()
+        WarnConfigRejected(reason) -- gave up: from here the user is on their own settings for good
         return
     end
     ScheduleNextPendingConfigAttempt()
@@ -660,22 +702,25 @@ function LC.HandleConfig(payload, senderKey)
     local accepted, reason = TryAcceptConfig(payload, senderKey)
     if accepted then
         LC.CancelPendingConfig()
+        LC.configRejectWarned = false
         return
     end
 
-    -- Only an unresolved lootmaster is worth remembering: a parse failure means a malformed
-    -- payload (retrying won't fix that), and "no-sender" means we can't even identify who sent it
-    -- (retrying re-checks that on every attempt anyway, via TryAcceptConfig). Storing on those too
-    -- would let unrelated noise clobber a legitimate pending payload from an earlier broadcast.
+    -- Warn straight away for the reasons that will never heal. "no-sender" gets the benefit of the
+    -- doubt instead: it is normal while a raid is still filling up, so the retry below is given its
+    -- budget first and only warns if it runs out (see LC.RetryPendingConfig).
+    if reason ~= "no-sender" then
+        WarnConfigRejected(reason)
+    end
+
+    -- Only "no-sender" is worth remembering. It means the sender isn't resolvable on this client
+    -- YET -- normal while a raid is still forming -- and resolves itself as the roster settles.
     --
-    -- "lootmaster-unresolved" itself bundles two cases TryAcceptConfig can't tell apart: the declared
-    -- name simply hasn't resolved YET (healable — the whole point of this retry) and the declared
-    -- name resolves to somebody other than the sender (never healable — a forged LC_CONFIG naming
-    -- someone else). Both land here, and the store below clobbers unconditionally, so a raider
-    -- spamming forged configs can evict a genuine pending payload with junk that will never resolve.
-    -- A v3.0.0 client already drops both cases the same way (silently, for good), so this is a missed
-    -- opportunity to also harden that, not a new hole introduced by the retry.
-    if reason == "lootmaster-unresolved" then
+    -- The other two are permanent by nature: "parse-fail" is a malformed payload that will never
+    -- parse, and "lootmaster-mismatch" means the sender broadcast somebody else's name, which is a
+    -- misconfiguration on their end that no amount of waiting on ours will change. Retrying either
+    -- would only let noise evict a legitimate pending payload.
+    if reason == "no-sender" then
         if LC.pendingConfig and LC.pendingConfig.timer then LC.pendingConfig.timer:Cancel() end
         LC.pendingConfig = { payload = payload, senderKey = senderKey, attempts = 0 }
         ScheduleNextPendingConfigAttempt()

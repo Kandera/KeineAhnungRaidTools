@@ -228,6 +228,7 @@ KART.L_deDE = {
     LC_SET_LOOTMASTER      = "Lootmaster (würfelt immer Need/Gier/Entzaubern, passt nie):",
     LC_SET_LOOTMASTER_HINT = "Dieser Spieler gewinnt jede Roll und tauscht jedes Item mit demjenigen, den das Council auswählt. Überschreibt dessen eigene Auto-Pass-Einstellung. Charaktername ODER Northern Sky Raid Tools Nickname — bei Nickname zählt das für alle Charaktere mit diesem Nickname. Wer hier steht, steuert den kompletten Loot-Ablauf: die raid-weiten Einstellungen in dieser Box, das Starten und Beenden der Session und jede Roll, über die der Raid abstimmt. Nur leer lassen, wenn niemand Loot auf diese Weise verteilt — dann springt der Raidleiter ein.",
     LC_CONFIG_TRUNCATED    = "Die Liste der Council-Mitglieder ist zu lang, um vollständig übertragen zu werden, und wurde gekürzt — kürze sie in den Loot-Council-Einstellungen, damit alle synchron bleiben.",
+    LC_CONFIG_REJECTED     = "|cffffaa00Die Loot-Council-Einstellungen des Raids wurden nicht übernommen (%s).|r Es gelten deine eigenen Vote-Buttons, Roll-Einstellung und Council-Liste — sag deinem Lootmaster Bescheid.",
     LC_BTN_TOGGLE          = "Session umschalten",
     LC_DESC_TOGGLE         = "Loot Council für die aktuelle Raid-Session manuell aktivieren oder deaktivieren. Funktioniert nur, wenn du Lootmaster bist.",
     LC_BTN_SYNC_SETTINGS   = "Settings an Spieler senden...",

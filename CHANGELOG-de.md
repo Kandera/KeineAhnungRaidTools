@@ -6,6 +6,11 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unveröffentlicht]
+### Behoben
+- **Die Loot-Council-Einstellungen des Raids kommen jetzt bei allen an.** Wessen Client den Nickname des Lootmasters nicht lesen konnte, behielt stillschweigend seine eigenen Vote-Buttons, Roll-Einstellung und Council-Liste — seine Stimmen erschienen unter dem falschen Label und er würfelte nie.
+- **Eine abgelehnte Raid-Config meldet sich**, statt lautlos zu scheitern.
+
 ## [3.0.2] - 2026-07-27
 ### Behoben
 - **Der erweiterte Ready-Check funktioniert wieder.** Wer ablehnt, bekommt die Grund-Buttons und das Textfeld.

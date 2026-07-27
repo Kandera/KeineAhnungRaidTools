@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- **The raid's Loot Council settings now reach everyone.** A raider whose client could not read the lootmaster's nickname silently kept their own vote buttons, roll setting and council list — so their votes showed up under the wrong label and they never rolled.
+- **A rejected raid config says so** instead of failing in silence.
+
 ## [3.0.2] - 2026-07-27
 ### Fixed
 - **The extended ready check works again.** Declining a ready check offers the reason buttons and the free-text box.

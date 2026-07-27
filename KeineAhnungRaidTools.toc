@@ -8,6 +8,7 @@
 ## SavedVariablesPerCharacter: KART_LCTrades
 ## OptionalDeps: NorthernSkyRaidTools
 ## X-Curse-Project-ID: 1603461
+## X-Wago-ID: QN53ZOKB
 
 Libs\LibStub\LibStub.lua
 Libs\KAUtil-1.0\KAUtil-1.0.lua
