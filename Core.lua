@@ -62,6 +62,7 @@ function KART.SyncSettingsToUI()
     if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
     if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
     if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
+    if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
     if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
@@ -364,7 +365,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.rcSelfAnswered = true
             if isReady then
                 if KART.RCDialog then KART.RCDialog:Hide() end
-            elseif IsInGroup() then
+            elseif IsInGroup() and KART_Settings.rcReasonDialog ~= false then
                 KART.ShowReadyCheckReasonDialog()
             end
         end
