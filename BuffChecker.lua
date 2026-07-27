@@ -979,7 +979,12 @@ function KART.UpdateBuffCheck(isPreview)
         local c = RAID_CLASS_COLORS[class] or {r=1, g=1, b=1}
         row.name:SetTextColor(c.r, c.g, c.b)
 
-        local reason = rcStatus == "notready" and shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName]
+        -- Deliberately NOT gated on rcStatus. A ready check resolves the moment everyone has
+        -- answered, which in a small group is the same moment the decliner is still picking a
+        -- reason -- so RC_REASON routinely arrives after GetReadyCheckStatus has already cleared,
+        -- and the reason never rendered at all. KART.ReadyCheckReasons is wiped on every
+        -- READY_CHECK (Core.lua), so an entry here always belongs to the most recent check.
+        local reason = shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName]
         if reason then
             row.reasonIcon.reasonText = reason
             row.reasonIcon:Show()
