@@ -50,7 +50,18 @@ local function appender(registry)
     end
 end
 
-nsProto.RegisterLabel           = appender("labels")
+-- Labels are the one registry whose members are routinely created after the consumer's last
+-- ApplyStyle -- pooled table rows, lazily built panels -- and those kept Blizzard's default font
+-- indefinitely, because registration alone only makes a widget eligible for the NEXT restyle
+-- (B2: the loot-history rows never followed the font setting at all). Registering now also styles,
+-- when a style has been applied at all; before the first ApplyStyle there is nothing to apply and
+-- the normal pass covers them.
+local registerLabel = appender("labels")
+function nsProto:RegisterLabel(fs)
+    registerLabel(self, fs)
+    if fs and self.lastFont then fs:SetFont(self.lastFont, self.lastContentSize, "") end
+    return fs
+end
 nsProto.RegisterEditBox         = appender("editBoxes")
 nsProto.RegisterButtonText      = appender("buttonTexts")
 nsProto.RegisterCloseButtonText = appender("closeButtonTexts")
@@ -1033,6 +1044,11 @@ function nsProto:ApplyStyle(spec)
         self.strata = spec.strata
         self:ApplyFrameStrata()
     end
+
+    -- Remembered so a widget created LATER can be styled the moment it registers -- see
+    -- RegisterLabel. Without this, anything built lazily (loot-history rows, for instance) keeps
+    -- Blizzard's default font until the next settings change happens to restyle it.
+    self.lastFont, self.lastMenuSize, self.lastContentSize = font, menuSize, contentSize
 
     for _, fs in ipairs(self.buttonTexts) do fs:SetFont(font, menuSize, "") end
     for _, eb in ipairs(self.editBoxes) do eb:SetFont(font, contentSize, "") end
