@@ -557,15 +557,24 @@ end
 -- budget below runs out.
 LC.pendingConfig = nil -- {payload, senderKey, attempts, timer} or nil while nothing is pending
 
--- Every 10s for up to 12 attempts (~2 minutes). NSRT's nickname sync is normally a matter of
--- seconds; this comfortably covers a slow sync without retrying all evening. Roster changes (see
--- LC.RetryPendingConfigThrottled) add extra attempts on top of this schedule for free.
+-- Every 10s for up to 12 attempts (~2 minutes) between roster changes. NSRT's nickname sync is
+-- normally a matter of seconds; this comfortably covers a slow sync without retrying all evening.
+-- Roster changes (see LC.RetryPendingConfigThrottled) do NOT add attempts on top of this schedule —
+-- they consume one and re-arm the timer early, so sustained roster churn (the leading-edge throttle
+-- allows roughly one attempt per second) can collapse the effective window to as little as ~12
+-- seconds. This mostly self-corrects in practice: a roster change during an active session also
+-- re-broadcasts the config (LootCouncil.lua:1089), and a fresh "lootmaster-unresolved" rejection
+-- replaces the pending payload and resets attempts back to 0 (see LC.HandleConfig below).
 local PENDING_CONFIG_RETRY_INTERVAL = 10
 local PENDING_CONFIG_MAX_ATTEMPTS   = 12
 
 -- (Re)arms the single retry timer for the current pending payload, cancelling any timer already
 -- running for it first — this is called from both the timer's own callback and the roster-change
--- hook, and only one may be in flight at a time.
+-- hook, and only one may be in flight at a time. Unlike LC.BroadcastRaidConfigThrottled's callback,
+-- this doesn't nil the handle as the callback's first line before doing anything else: Cancel()ing
+-- a timer that has already fired (which is what happens here and in LC.CancelPendingConfig below,
+-- whenever either runs from inside this timer's own callback) is a documented no-op, so there's
+-- nothing to guard against by nil-ing early.
 local function ScheduleNextPendingConfigAttempt()
     local pending = LC.pendingConfig
     if not pending then return end
@@ -576,6 +585,8 @@ end
 -- Cancels and clears the pending payload, if any. Called on successful acceptance, when the session
 -- ends (LC.SetSessionActive, LC.HandleActive) and when leaving the raid (LC.CheckRaidJoin) — a
 -- payload from a session/raid that's no longer current has nothing left to become relevant to.
+-- Also self-called from inside the retry timer's own callback on success (see
+-- ScheduleNextPendingConfigAttempt above for why cancelling that same timer here is still safe).
 function LC.CancelPendingConfig()
     if LC.pendingConfig and LC.pendingConfig.timer then
         LC.pendingConfig.timer:Cancel()
@@ -585,7 +596,8 @@ end
 
 -- CouncilNamesTable/raidConfig just changed, so a member who wasn't council before may be now —
 -- refresh the open panel the same way ResolveRollItemLink does for a late-arriving item link
--- (LootCouncil.lua ~992). The vote popup needs no equivalent: it doesn't show council-only info.
+-- (LootCouncil.lua:1110, refresh block at :1117-1120). The vote popup needs no equivalent: it
+-- doesn't show council-only info.
 local function RefreshCouncilPanelIfOpen()
     if LC.councilPanel and LC.councilPanel:IsShown() then
         KART.LC.Council.RefreshCouncilRows()
@@ -598,6 +610,11 @@ end
 -- failure can clear up. Re-running the WHOLE predicate (not just the lootmaster check) matters here:
 -- the stored sender may have left the group since, in which case TryAcceptConfig now fails with
 -- "no-sender" instead — and that can never resolve, so the payload is dropped instead of retried.
+--
+-- Not gated on lcEnabled the way the LC_CONFIG message handler is (see the KASC:RegisterMessage
+-- call near the bottom of this file) — that gate only guards message dispatch, HandleConfig itself
+-- never checks it either. So a payload stored while the module was enabled is still applied here if
+-- the raider disables Loot Council before the retry fires. Harmless, just not a uniform gate.
 function LC.RetryPendingConfig()
     local pending = LC.pendingConfig
     if not pending then return end
@@ -650,6 +667,14 @@ function LC.HandleConfig(payload, senderKey)
     -- payload (retrying won't fix that), and "no-sender" means we can't even identify who sent it
     -- (retrying re-checks that on every attempt anyway, via TryAcceptConfig). Storing on those too
     -- would let unrelated noise clobber a legitimate pending payload from an earlier broadcast.
+    --
+    -- "lootmaster-unresolved" itself bundles two cases TryAcceptConfig can't tell apart: the declared
+    -- name simply hasn't resolved YET (healable — the whole point of this retry) and the declared
+    -- name resolves to somebody other than the sender (never healable — a forged LC_CONFIG naming
+    -- someone else). Both land here, and the store below clobbers unconditionally, so a raider
+    -- spamming forged configs can evict a genuine pending payload with junk that will never resolve.
+    -- A v3.0.0 client already drops both cases the same way (silently, for good), so this is a missed
+    -- opportunity to also harden that, not a new hole introduced by the retry.
     if reason == "lootmaster-unresolved" then
         if LC.pendingConfig and LC.pendingConfig.timer then LC.pendingConfig.timer:Cancel() end
         LC.pendingConfig = { payload = payload, senderKey = senderKey, attempts = 0 }
