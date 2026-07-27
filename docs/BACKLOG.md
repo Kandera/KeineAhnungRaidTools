@@ -45,28 +45,24 @@ its number in the commit subject or body.
 come out incomplete. B18 was about everything being proportionally larger; this is about border
 pixels going missing.
 
-**The reporter states "WoW UI Scale ist 100%", which contradicts the Graphics screenshot supplied
-for B18** — there the "Use UI Scale" checkbox is clearly unticked, with the slider greyed at 100%.
-The two states predict opposite outcomes, so this has to be settled before anything is built:
+**2026-07-28 — the scale-rounding explanation is dead.** The reporter's text said "WoW UI Scale ist
+100%", which contradicted the Graphics screenshot supplied for B18, where the "Use UI Scale"
+checkbox is clearly unticked. Confirmed with the reporter directly: **the checkbox is not ticked.**
+WoW then uses the pixel-perfect automatic scale, `UIParent`'s effective scale is 1.0, one UI unit is
+exactly one physical pixel, and a 1-unit border is exactly one pixel. That holds at 1080p and at
+1440p alike, so the resolution difference cannot produce the symptom by rounding. Do not re-derive
+the 768/1.40625 argument — it only applies with the checkbox ticked, and it is not.
 
-- **Unticked:** WoW uses the pixel-perfect automatic scale. `UIParent`'s effective scale is 1.0, one
-  UI unit is exactly one physical pixel, and a 1-unit border is exactly one pixel. Borders should be
-  crisp — this setting cannot be the cause.
-- **Ticked at 100%:** `UIParent` is 768 units tall against 1080 physical pixels, an effective scale
-  of 1.40625. A 1-unit backdrop edge then lands on 1.40625 physical pixels and rounds inconsistently
-  along its own length, which is exactly how borders come out broken.
+**Still true and still the most likely lead once a cause is known:** every backdrop in the addon
+uses `edgeSize = 1` (`Libs/KAUI-1.0/KAUI-1.0.lua` five times, plus `Core.lua`, `Invite.lua`,
+`LootCouncilPanel.lua`), and **`PixelUtil` is used nowhere** — no border is snapped to the physical
+pixel grid. WoW provides `PixelUtil`/`GetPhysicalScreenSize` for exactly this class of problem.
 
-**Why the maintainer would not see it either way:** at 1440p the same ticked setting gives
-1440/768 = 1.875, which rounds a 1-unit edge up to a solid 2 pixels rather than down.
+**Waiting on measurements**, asked in the issue on 2026-07-28 rather than guessing again:
 
-**The lead, if it is the second case.** Every backdrop in the addon uses `edgeSize = 1`
-(`Libs/KAUI-1.0/KAUI-1.0.lua` five times, plus `Core.lua`, `Invite.lua`, `LootCouncilPanel.lua`),
-and **`PixelUtil` is used nowhere** — no border is snapped to the physical pixel grid. WoW provides
-`PixelUtil`/`GetPhysicalScreenSize` for precisely this problem.
-
-**What to ask the reporter:** whether the "Use UI Scale" checkbox is ticked or not, and whether the
-broken borders appear on the main window's buttons, the Loot Council windows, or both. Since 3.1.0
-there is a second question worth asking: whether setting the Loot Council scale to anything other
-than 100 changes the borders, which would confirm the rounding explanation outright.
+- `UIParent:GetEffectiveScale()`, `GetWidth`/`GetHeight` and `GetPhysicalScreenSize()`. Anything
+  other than an effective scale of 1.0 puts rounding back in play with real numbers.
+- Whether the Loot Council scale slider, new in 3.1.0, changes the borders at 90 and at 110.
+- Which windows are affected, and a zoomed screenshot of one broken border.
 
 Reported 2026-07-27.
