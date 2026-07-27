@@ -21,6 +21,17 @@ Colour/Reset Defaults/Profile buttons — was measured in-game and does not repr
 `GetFont()` across the whole `buttonTexts` registry under a deliberately distinctive font returned
 zero widgets differing from the reference. Do not re-open without a fresh reproduction.
 
+**2026-07-28:** B4 (the minimap toggle leaving the button behind) was fixed and removed. The cause
+was not the `Show`/`Hide` pair it was filed against: LibDBIcon keeps its own `hide` flag inside the
+saved table it is registered with, and both `Register` and `Refresh` decide visibility from that flag
+alone. KART never wrote it, so the `Refresh` call at the end of `KART.UpdateMinimapButton` undid the
+`Hide` two lines above it, and every login re-showed the icon regardless of the checkbox.
+
+Ruled out while diagnosing, and worth not re-deriving: the *invisible but still clickable* button
+reported alongside this is `EllesmereUIMinimap`, which reparents every LibDBIcon button into a flyout
+panel and holds it at alpha 0 while that panel is collapsed. Not a KART defect, and not fixable from
+our side.
+
 ---
 
 ## B3 — Background opacity never reaches the Loot Council windows
@@ -29,16 +40,6 @@ zero widgets differing from the reference. Do not re-open without a fresh reprod
 
 **Cause:** the `bgAlpha` block only ever wired the main window and the Loot History window. The two
 Loot Council windows' `.bg` textures were never connected to it.
-
-**Pre-existing.**
-
----
-
-## B4 — The minimap toggle leaves the button behind
-
-**Symptom:** turning the minimap icon off hides the icon texture but not the button frame.
-
-**Cause:** `KART.UpdateMinimapButton` calls LibDBIcon's `Show`/`Hide`. Untouched by the refactor.
 
 **Pre-existing.**
 

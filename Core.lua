@@ -227,6 +227,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         local dbIcon = LibStub("LibDBIcon-1.0", true)
         if dbIcon then
             dbIcon:Register("KeineAhnungRaidTools", ldb, KART_Settings.minimap)
+            -- Register decides visibility from the saved table's own `hide` flag, which settings
+            -- blobs written before that flag was maintained do not carry. Without this, a player
+            -- who had turned the icon off got it back on every login (B4).
+            KART.UpdateMinimapButton()
         end
 
         -- Re-apply every statically-built UI text with the now-selected language.

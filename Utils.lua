@@ -93,6 +93,12 @@ KART.DANGER  = {0.85, 0.30, 0.30}
 function KART.UpdateMinimapButton()
     local dbIcon = LibStub("LibDBIcon-1.0", true)
     if not dbIcon then return end
+    -- LibDBIcon keeps its own visibility flag inside the saved table it was registered with, and
+    -- both Register and Refresh decide whether to show the button from THAT flag alone -- not from
+    -- our checkbox. Leaving it unwritten meant the Refresh below immediately undid our own Hide,
+    -- and a fresh login re-showed the icon however the checkbox was set (B4). Write it first so
+    -- every path agrees.
+    KART_Settings.minimap.hide = not KART_Settings.showMinimapIcon
     if KART_Settings.showMinimapIcon then
         dbIcon:Show("KeineAhnungRaidTools")
     else
