@@ -506,7 +506,7 @@ Reported 2026-07-27.
 **Symptom:** a raider who declines a ready check is never given the KART reason dialog — neither the
 three preset buttons nor the free-text box. The receiving side is therefore never exercised either.
 
-**Not yet diagnosed.** The dialog itself (`KART.ShowReadyCheckReasonDialog`, `Core.lua:546`) has no
+**Where it is not.** The dialog itself (`KART.ShowReadyCheckReasonDialog`, `Core.lua:546`) has no
 settings gate at all — nothing in `KART_Settings` can switch the feature off, so a disabled module
 is ruled out. `RC_REASON` sends and receives normally (`Core.lua:428`, `Core.lua:575`).
 
@@ -524,26 +524,51 @@ hooksecurefunc("ConfirmReadyCheck", function(isReady) ... end)
   of the `ADDON_LOADED` branch — including the version text two lines below at `Core.lua:260`. That
   text renders correctly, so the global exists and the hook is attached.
 
-**What that leaves:** the hook is installed on a function Blizzard's ready-check frame no longer
-calls. Which function it uses instead does not need answering, because the trigger should not depend
+**Cause, confirmed in-game 2026-07-27.** The hook sits on a function Blizzard's ready-check frame no
+longer calls. Declining a check on a client whose `ConfirmReadyCheck` global demonstrably exists,
+and which therefore demonstrably has the hook attached, produced no hook call at all.
+
+Which function the frame uses instead never needs answering, because the trigger should not depend
 on it.
 
-**Fix direction.** `READY_CHECK_CONFIRM` carries `(unit, isReady)` and is already registered
-(`Core.lua:18`) and already handled (`Core.lua:335`, currently only refreshing the Buff Checker).
-Gated on `UnitIsUnit(unit, "player")` and a false `isReady`, it is the whole trigger — no hook, and
-no dependency on Blizzard's internal wiring. The `hooksecurefunc` block at `Core.lua:249` then goes
-away, including its `else` branch that hides the dialog on a late yes.
+**Fix.** `READY_CHECK_CONFIRM` carries `(unit, isReady)`, is already registered (`Core.lua:18`) and
+already handled (`Core.lua:335`, currently only refreshing the Buff Checker). Gated on
+`UnitIsUnit(unit, "player")` it is the whole trigger: a false `isReady` opens the dialog, a true one
+hides it, which is exactly what the hook's `else` branch did. The `hooksecurefunc` block at
+`Core.lua:249` then goes away entirely.
 
-**One assumption to confirm in-game first:** that `READY_CHECK_CONFIRM` fires for the player's *own*
-confirmation and not only for other group members. Probe, in a group of two, then decline a check:
+Three observations from the probe that the implementation has to respect:
+
+- **`unit` is a unit token, not a name** — seen as `player`, `raid1`, `party1`, `raid2`. Compare with
+  `UnitIsUnit`, never against `UnitName`.
+- **The event fires twice per confirmation**, once under the generic token and once under the group
+  token: `player` then `raid1` for the viewer's own decline, `party1` then `raid2` for a peer's. Only
+  one `READY_CHECK` preceded each pair, so that is one answer reported twice, not two checks.
+  Unguarded, the dialog is rebuilt and its auto-hide generation bumped twice.
+- **A ready check's initiator never gets a popup** — they count as ready automatically, so there is
+  no `READY_CHECK_CONFIRM` for them and nothing to decline. Not a defect, but it means whoever always
+  starts the check never sees the reason dialog, and it invalidates any solo test.
+
+The probe that established all of the above, run in a group of two before declining a check
+(255-character chat limit — this is two lines, not one):
 
 ```
-/run local f=CreateFrame("Frame") f:RegisterEvent("READY_CHECK_CONFIRM") f:SetScript("OnEvent",function(_,_,u,r) print("CONFIRM",u,tostring(r)) end) hooksecurefunc("ConfirmReadyCheck",function(r) print("HOOK",tostring(r)) end)
+/run KP=CreateFrame("Frame") KP:SetScript("OnEvent",function(_,e,a,b) print(e,tostring(a),tostring(b)) end) KP:RegisterEvent("READY_CHECK_CONFIRM")
+/run hooksecurefunc("ConfirmReadyCheck",function(r) print("HOOK",tostring(r)) end)
 ```
 
-Expected if the diagnosis holds: `CONFIRM <self> false` prints, `HOOK` does not.
+Observed: `READY_CHECK_CONFIRM player false` printed on the declining client, `HOOK` never did.
 
-Reported 2026-07-27. Pre-existing — untouched by the library extraction.
+**Alternative considered and rejected: KART running its own ready check.** The reason dialog is
+already KART's own frame — only the "somebody declined" signal comes from Blizzard, and the event
+supplies it. Replacing the check itself would cost the `GetReadyCheckStatus` integration the Buff
+Checker's Rdy column depends on (`BuffChecker.lua:815`), would miss every check started through
+`/readycheck`, a raid frame or another addon, and would only reach raiders running KART. Worth
+revisiting only if the reason buttons should live *inside* the ready-check popup, saving a click —
+that is the one thing Blizzard's window cannot do.
+
+Reported 2026-07-27, cause confirmed the same day. Pre-existing — untouched by the library
+extraction.
 
 ---
 
