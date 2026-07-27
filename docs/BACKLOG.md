@@ -603,6 +603,151 @@ extraction.
 
 ---
 
+## B22 — The Loot Council windows need their own scale and their own strata
+
+**Decided 2026-07-27, partly implemented.** `KART_Settings.uiScale` is applied to `KART.MainFrame`
+alone (`Core.lua:505`) and `frameStrata` is one value for the whole KAUI namespace
+(`Libs/KAUI-1.0/KAUI-1.0.lua:117-131`). The vote window and the council panel — the two a raider
+actually looks at mid-pull — therefore have no scale lever at all, which is what makes B18 bite at
+1080p, and they cannot be lifted above a boss mod independently either.
+
+**Read B24 before building the strata half.** The request for it came from issue #4, whose actual
+cause is that no KART window is ever raised on click. A separate Loot Council stratum would only
+separate Loot Council windows from the *main* window; two Loot Council windows overlapping each other
+— the likely case in that report — would be unchanged, because both move together. The scale half
+stands on its own regardless.
+
+**Scope, as chosen:** every window the Loot Council itself opens — vote list, council panel, trade
+reminders and their confirm dialogs. **Not** the loot history, which is read outside a raid where no
+space pressure exists. The scale slider is **absolute**, 100 meaning unscaled, exactly like the main
+window's — not a multiplier on top of it, so the number shown is the size.
+
+**Implementation, written but not committed** (stashed as *"wip: independent Loot Council scale +
+strata (B22)"*):
+
+- `LC.windowFrames` / `LC.windowDialogs` registries plus `LC.RegisterWindow(frame, isDialog)`, a
+  drop-in replacement for `KART.UI:RegisterStrataFrame` at the five Loot Council call sites
+  (`LootCouncil.lua`, `LootCouncilVote.lua`, `LootCouncilTrade.lua` twice, `LootCouncilPanel.lua`).
+- `LC.ApplyWindowChrome`, applying to one frame at registration and to all of them from
+  `KART.UpdateStyles`. Dialogs keep KAUI's rule of sitting one stratum above the windows.
+- `lcScale` (default 100) and `lcFrameStrata` (default 4 = HIGH) in `KART.Defaults`.
+- Two sliders in `prefsCard` (`LootCouncilSettings.lua`), the personal card — never the raid-wide
+  box, since neither belongs in the broadcast config. Card height 260 -> 350.
+- `settingsMap` entries so a profile switch carries them, and locale keys in both languages.
+
+Owning this in the Loot Council layer rather than in KAUI is also what keeps it separable for a
+future KALC split: the module takes its own window chrome with it.
+
+**Still to do:** the five call-site swaps, the sliders, the locales, the `settingsMap` entries, and
+the `KART.UpdateStyles` hook.
+
+---
+
+## B23 — Button borders render incomplete at 1080p (GitHub issue #5)
+
+**A different symptom from B18**, reported by Syks via Discord and filed as
+[issue #5](https://github.com/Kandera/KeineAhnungRaidTools/issues/5): the frames *around buttons*
+come out incomplete. B18 is about everything being proportionally larger; this is about border
+pixels going missing.
+
+**The reporter states "WoW UI Scale ist 100%", which contradicts the Graphics screenshot supplied
+for B18** — there the "Use UI Scale" checkbox is clearly unticked, with the slider greyed at 100%.
+The two states predict opposite outcomes, so this has to be settled before anything is built:
+
+- **Unticked:** WoW uses the pixel-perfect automatic scale. `UIParent`'s effective scale is 1.0, one
+  UI unit is exactly one physical pixel, and a 1-unit border is exactly one pixel. Borders should be
+  crisp — this setting cannot be the cause.
+- **Ticked at 100%:** `UIParent` is 768 units tall against 1080 physical pixels, an effective scale
+  of 1.40625. A 1-unit backdrop edge then lands on 1.40625 physical pixels and rounds inconsistently
+  along its own length, which is exactly how borders come out broken.
+
+**Why the maintainer would not see it either way:** at 1440p the same ticked setting gives
+1440/768 = 1.875, which rounds a 1-unit edge up to a solid 2 pixels rather than down.
+
+**The lead, if it is the second case.** Every backdrop in the addon uses `edgeSize = 1`
+(`Libs/KAUI-1.0/KAUI-1.0.lua` five times, plus `Core.lua`, `Invite.lua`, `LootCouncilPanel.lua`),
+and **`PixelUtil` is used nowhere** — no border is snapped to the physical pixel grid. WoW provides
+`PixelUtil`/`GetPhysicalScreenSize` for precisely this problem.
+
+**What to ask the reporter:** whether the "Use UI Scale" checkbox is ticked or not, and whether the
+broken borders appear on the main window's buttons, the Loot Council windows, or both.
+
+Reported 2026-07-27.
+
+---
+
+## B24 — Two overlapping KART windows can never be reordered (GitHub issue #4)
+
+**Symptom:** where two KART windows overlap, the one on top is not the one that was clicked last,
+and there is no way to bring the other forward.
+[Issue #4](https://github.com/Kandera/KeineAhnungRaidTools/issues/4), reported by Wuusch via Discord.
+
+**Cause, confirmed by absence.** `SetToplevel`, `Raise` and `SetFrameLevel` appear **nowhere in the
+addon** — zero occurrences across every file. Every window is therefore left at whatever frame level
+WoW assigned when it was created, and since they all share one stratum
+(`KART.UI:RegisterStrataFrame`), their z-order is fixed by creation order for the whole session.
+Clicking does nothing, because nothing listens.
+
+**Fix:** `frame:SetToplevel(true)` on each top-level window. WoW then raises that frame above others
+in its stratum when it is clicked, which is the behaviour every other movable window in the game
+has. The frames are already mouse-enabled and draggable, so nothing else is needed. One line per
+window, applied where each is created — the same set `KART.UI:RegisterStrataFrame` is already called
+on, which makes the registration functions the natural place to do it once rather than by hand at
+every site.
+
+**Why the B22 strata setting does not cover this.** A per-module stratum only separates Loot Council
+windows from the main window. Two Loot Council windows against each other — the vote window over the
+council panel, most likely what the screenshot shows — sit on the same stratum either way and stay
+frozen in creation order. Toplevel handling is the fix; a second stratum is at best a partial
+workaround for one pairing.
+
+Reported 2026-07-27, cause established the same day.
+
+---
+
+## B25 — A vote is a bare index, so divergent button lists mislabel it silently
+
+**Severity: this one changes who gets loot.** Every other entry here is cosmetic or an annoyance.
+Observed live 2026-07-27: five raiders shown as voting "Transmog" on one item, and at least one
+raider certain they pressed something else.
+
+**Cause.** `LC_VOTE` carries the button's *position* and nothing else
+(`LootCouncilVote.lua:271`), and the council panel resolves that position against **the viewer's own**
+list (`LootCouncilPanel.lua:997`, `buttons[tonumber(voteIdx)]` over `LC.GetButtonConfig()`). Nothing
+ties the number to the label the voter actually read.
+
+Clients diverge whenever the raid config has not arrived: `LC.GetButtonConfig` then falls back to the
+client's own `lcButtonLabels` (`LootCouncil.lua:142`). With a six-button list against the five-button
+default (`BIS;Upgrade;Offspec;Sonstiges;Pass`), every position from 4 up shifts by one — pressing
+**Sonstiges** displays as **Transmog**. That matches the observation: five "Transmog" votes on an item
+few would want for transmog, where "Sonstiges" is the plausible choice.
+
+**The same root explains the missing rolls** reported alongside it. Without a received config,
+`LC.GetRollsEnabled` falls back to the client's own `lcRollsEnabled` (`LootCouncil.lua:386`), whose
+default is `false` — so those clients never roll at all. Some rows show a number, others a dash.
+
+**Not introduced by the library extraction:** `git grep` confirms `LC_VOTE` already sent a bare index
+in `v2.9.0:LootCouncilVote.lua:247`. The extraction only made the config-delivery gaps (B12, B19)
+easier to hit, which is what exposes it.
+
+**Fix directions, in order of value:**
+1. **Make the mismatch visible instead of silent.** Send the voter's button count, or a short hash of
+   their list, alongside the index; render a vote whose list does not match as explicitly unknown
+   rather than as a confident wrong label. A loot council acting on a wrong label is worse than one
+   acting on a visible gap.
+2. **Close the delivery gaps** so divergence stops happening — B12's retry covers only an unresolved
+   lootmaster, and B19's one-shot announce leaves clients stale.
+3. Sending the label text instead of the index would be order-independent, but labels are
+   user-editable free text and the payload shares a 255-byte budget — see B14 on truncation.
+
+**Still open:** the maintainer's `lcButtonLabels` against an affected raider's, which settles whether
+the shift is exactly the five-versus-six case. One raider reported pressing "Offspec", position 3 in
+both lists, which the shift alone does not explain.
+
+Reported 2026-07-27 after a live raid.
+
+---
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
