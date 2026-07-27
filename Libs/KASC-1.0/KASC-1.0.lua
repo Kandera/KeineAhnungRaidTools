@@ -15,7 +15,7 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 1
+local MAJOR, MINOR = "KASC-1.0", 2
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
@@ -31,6 +31,7 @@ local caches = {}
 local addons = {}      -- array, insertion order, so the handshake is deterministic
 local capabilities = {} -- array of { owner, name, fn }
 local peerCallbacks = {}
+local lastAnnounced = {} -- channel -> the handshake string last sent there (see AnnounceHelloIfChanged)
 
 function KASC:DefaultChannel()
     return IsInRaid() and "RAID" or "PARTY"
@@ -409,7 +410,26 @@ function KASC:RequestHello(channel, target)
 end
 
 function KASC:AnnounceHello(channel, target)
-    self:Send("KA_HELLO:" .. KASC.SerializeHello(), channel, target)
+    local payload = KASC.SerializeHello()
+    lastAnnounced[channel or self:DefaultChannel()] = payload
+    self:Send("KA_HELLO:" .. payload, channel, target)
+end
+
+-- Announces only if what we would say has changed since we last said it on this channel, or if we
+-- have never said anything there.
+--
+-- Peers cache what a HELLO tells them (version, capabilities) until the next one arrives, so a
+-- capability that flips after the announce leaves every other client holding a stale answer for the
+-- rest of the session. That is not hypothetical: KART's Loot Council module defaults to OFF, so a
+-- user enabling it after login was recorded as having it disabled everywhere, and every council
+-- panel in the raid showed them as "Loot Council disabled on their end" while it plainly worked.
+--
+-- Per channel, because GUILD and the group channel are announced at different times and a peer on
+-- one is not necessarily on the other.
+function KASC:AnnounceHelloIfChanged(channel, target)
+    local ch = channel or self:DefaultChannel()
+    if lastAnnounced[ch] == KASC.SerializeHello() then return end
+    self:AnnounceHello(channel, target)
 end
 
 KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)

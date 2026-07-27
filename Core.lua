@@ -143,6 +143,7 @@ function KART.SyncSettingsToUI()
     -- itself before KART_Settings exists and can only render "not the owner" there; without this it
     -- would stay wrong until the next roster change or the next keystroke in the lootmaster field.
     if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
+    if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
@@ -277,20 +278,33 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
         if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
+        if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
         if KART.LC and KART.LC.RetryPendingResolutionsThrottled then KART.LC.RetryPendingResolutionsThrottled() end
         if KART.LC and KART.LC.RetryPendingConfigThrottled then KART.LC.RetryPendingConfigThrottled() end
         KART.UpdateRaidleadBarVisibility()
 
-        if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            KASC:AnnounceHello()
-            KART.VersionAnnouncedToGroup = true
-            -- Our own one-shot announce only tells the group about US — it does nothing for
-            -- players who already announced before we joined, so also pull everyone else's
-            -- current version the same way /kart v already does, instead of only finding out
-            -- about mismatches/missing-KART players whenever someone happens to run that manually.
-            KASC:RequestHello()
-        elseif not IsInGroup() then
-            KART.VersionAnnouncedToGroup = false
+        -- Announce whenever the CHANNEL changes, not once per group. The old one-shot latch meant a
+        -- party that converts to a raid never re-announced, and anyone who missed that single PARTY
+        -- packet was never told again — leaving a permanent "no KART detected" marker on a raider
+        -- who plainly had it (B19). Tracking the channel also covers rejoining a group of the same
+        -- kind, since leaving clears it below.
+        --
+        -- AnnounceHelloIfChanged on top: it also fires when our capabilities change (enabling the
+        -- Loot Council module, say) rather than only when the channel does.
+        if IsInGroup() then
+            local channel = KASC:DefaultChannel()
+            if KART.announcedChannel ~= channel then
+                KART.announcedChannel = channel
+                KASC:AnnounceHello()
+                -- Our own announce only tells the group about US — it does nothing for players who
+                -- already announced before we joined, so pull everyone else's current version too,
+                -- the same way /kart v does.
+                KASC:RequestHello()
+            else
+                KASC:AnnounceHelloIfChanged()
+            end
+        else
+            KART.announcedChannel = nil
         end
 
         -- Performance: Update BuffCheck nur wenn Fenster offen

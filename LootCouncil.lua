@@ -690,6 +690,7 @@ function LC.RetryPendingConfig()
     if accepted then
         LC.CancelPendingConfig()
         LC.configRejectWarned = false
+        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
         RefreshCouncilPanelIfOpen()
         return
     end
@@ -734,6 +735,7 @@ function LC.HandleConfig(payload, senderKey)
     if accepted then
         LC.CancelPendingConfig()
         LC.configRejectWarned = false
+        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
         return
     end
 
