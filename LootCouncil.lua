@@ -29,6 +29,67 @@ LC.raidConfig           = {}  -- the authoritative config: minQuality, buttonLab
                                -- lootmaster, councilMembers. Same two writers as CouncilNamesTable above;
                                -- raidConfig.fromSelf marks the ApplyOwnConfig case (see there).
 
+-- =====================================================================
+--  Window chrome: scale and frame strata, owned by Loot Council alone
+-- =====================================================================
+-- Every other KART window follows KART_Settings.uiScale/frameStrata through KART.UI. The Loot
+-- Council ones deliberately do not: they are the windows a raider stares at mid-pull, on a screen
+-- that may be a third smaller than the maintainer's (see B18 in docs/BACKLOG.md), and wanting them
+-- smaller than the main window — or on a different layer, above a boss mod — is the normal case
+-- rather than an edge one. KART.MainFrame's own scale never reached them anyway; it is applied to
+-- that one frame and nothing else.
+--
+-- Registering here rather than with KART.UI:RegisterStrataFrame is also what keeps this separable
+-- for a future KALC split: the Loot Council owns its own chrome and takes it with it.
+LC.windowFrames  = {} -- top-level Loot Council windows
+LC.windowDialogs = {} -- its transient popups, kept one stratum above the windows
+
+-- Drop-in replacement for KART.UI:RegisterStrataFrame at Loot Council call sites. Applies the
+-- current values immediately, exactly as that one does, so a frame built after login is not left
+-- unstyled until the next settings change.
+function LC.RegisterWindow(frame, isDialog)
+    local list = isDialog and LC.windowDialogs or LC.windowFrames
+    list[#list + 1] = frame
+    -- Raise on click, exactly as KAUI:RegisterStrataFrame does for every other KART window (B24).
+    -- These frames leave that path, so they have to carry it themselves — the vote window over the
+    -- council panel is the single most likely overlap in the whole addon.
+    if frame.SetToplevel then frame:SetToplevel(true) end
+    LC.ApplyWindowChrome(frame, isDialog)
+end
+
+-- Applies to one frame, or to every registered frame when called with no arguments (the path
+-- KART.UpdateStyles takes on any settings or profile change).
+function LC.ApplyWindowChrome(frame, isDialog)
+    local idx = KART_Settings and KART_Settings.lcFrameStrata
+    if type(idx) ~= "number" or idx < 1 or idx > #KART.StrataLevels then idx = 4 end
+    local windowStrata = KART.StrataLevels[idx]
+    -- Same rule KAUI applies to its own dialogs: one stratum above the windows, so a confirm
+    -- popup can never end up buried under the panel that opened it. TOOLTIP is the step above
+    -- the top entry, which is otherwise not offered for windows.
+    local dialogStrata = KART.StrataLevels[idx + 1] or "TOOLTIP"
+    local scale = ((KART_Settings and KART_Settings.lcScale) or 100) / 100
+
+    -- Background opacity is the addon-wide setting, not a Loot Council one -- but these windows
+    -- were simply never wired to it, so the slider did nothing to them at all (B3). Their artwork
+    -- texture is frame.bg, put there by KAUI:ApplyPopupArtwork; only that fades, exactly as the
+    -- main and history windows do it, so rows and text stay legible at any opacity. Applied here
+    -- because this is now the one place that knows every Loot Council window.
+    local alpha = math.max(20, (KART_Settings and KART_Settings.bgAlpha) or 85) / 100
+
+    local function apply(f, strata)
+        f:SetFrameStrata(strata)
+        f:SetScale(scale)
+        if f.bg then f.bg:SetAlpha(alpha) end
+    end
+
+    if frame then
+        apply(frame, isDialog and dialogStrata or windowStrata)
+        return
+    end
+    for _, f in ipairs(LC.windowFrames) do apply(f, windowStrata) end
+    for _, f in ipairs(LC.windowDialogs) do apply(f, dialogStrata) end
+end
+
 -- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel
 -- handling of multiple simultaneous rolls can actually be tested (multiple items dropping at
 -- once is the normal case in a real raid, not the exception). Real item links, not fake strings
@@ -407,10 +468,22 @@ local ADDON_MSG_MAX_BYTES = 255
 -- Fits council (the ";"-separated, variable-length tail shared by LC_CONFIG and LC_SYNC_REQUEST)
 -- into the addon-message byte budget left after prefix — dropping whole trailing entries rather than
 -- splitting one mid-name, and warning the user locally when it had to. Returns the full payload.
+-- Returns nil when the fixed part alone cannot fit, in which case nothing must be sent.
+--
+-- Trimming the council list is only meaningful while there is a budget left to trim it into. Button
+-- labels run to 128 characters and the lootmaster field is unbounded, so the prefix on its own can
+-- exceed the limit -- and the old code then emptied the council list, still returned the oversized
+-- prefix, and let the transport chop it. Every client's anchored HandleConfig pattern fails on the
+-- result, so the whole raid silently stays on stale config: the exact failure this function's
+-- truncation exists to avoid, reached by trying to avoid it. Refuse instead, and say so.
 local function BuildCouncilPayload(prefix, council)
     local budget = ADDON_MSG_MAX_BYTES - #prefix
-    if #council > math.max(budget, 0) then
-        council = (budget > 0 and council:sub(1, budget):match("^(.*);")) or ""
+    if budget <= 0 then
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TOO_LONG)
+        return nil
+    end
+    if #council > budget then
+        council = council:sub(1, budget):match("^(.*);") or ""
         print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_TRUNCATED)
     end
     return prefix .. council
@@ -484,7 +557,8 @@ function LC.BroadcastRaidConfig(target)
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
-    LC.SendLC(BuildCouncilPayload(prefix, council), target)
+    local payload = BuildCouncilPayload(prefix, council)
+    if payload then LC.SendLC(payload, target) end
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
@@ -512,9 +586,10 @@ end
 -- Factored out of LC.HandleConfig so LC.RetryPendingConfig (below) can re-run the exact same
 -- acceptance predicate later, instead of a hand-rolled approximation of it — see B12 in
 -- docs/BACKLOG.md. Returns true on success. On failure returns false plus a reason: "no-sender" (the
--- sender isn't resolvable at all — e.g. they've since left the group), "parse-fail" (malformed
--- payload), or "lootmaster-unresolved" (the one B12 is about: the declared lootmaster doesn't yet
--- resolve, on this receiver, to the sender). Only the caller decides what to do with the reason.
+-- sender isn't resolvable at all — e.g. they've since left the group, or the raid is still forming;
+-- the only retryable one), "parse-fail" (malformed payload), or "lootmaster-mismatch" (the payload
+-- names a lootmaster who resolves to somebody other than the sender). Only the caller decides what
+-- to do with the reason.
 local function TryAcceptConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false, "no-sender" end
@@ -522,16 +597,34 @@ local function TryAcceptConfig(payload, senderKey)
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return false, "parse-fail" end
 
-    -- The payload must declare a lootmaster, and the sender must BE them.
+    -- The sender IS the lootmaster. Only a client whose own settings name it lootmaster broadcasts
+    -- at all (LC.IsConfigOwner gates LC.BroadcastRaidConfig), so the sender's identity already says
+    -- everything the declared name was ever consulted for -- and unlike the name, it always
+    -- resolves.
+    --
+    -- Requiring the NAME to resolve was a permanent dead end for anyone whose client cannot see the
+    -- lootmaster's Northern Sky nickname: without NSRT, or with its "Global Nicknames" master
+    -- toggle off, KASC.Identity.GetNickname returns nil for every unit forever. That client then
+    -- rejected every config for all time and silently fell back to its own settings -- its own vote
+    -- button labels (so its votes showed up under the WRONG label on the council panel, see B25),
+    -- its own rolls toggle (so it never rolled) and its own council list. Observed across a full
+    -- raid on 2026-07-27; session restarts did not help, because each re-broadcast was rejected
+    -- exactly the same way.
+    --
+    -- The declared name is still checked when it DOES resolve, which keeps the guard against a
+    -- misconfigured client broadcasting somebody else's name -- that case is a real error and stays
+    -- a rejection. It just no longer decides the common path.
     local declaredKey = LC.ResolveConfigName(lootmaster)
-    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then
-        return false, "lootmaster-unresolved"
+    if declaredKey and declaredKey ~= "" and declaredKey ~= senderKey then
+        return false, "lootmaster-mismatch"
     end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    LC.raidConfig.lootmaster    = declaredKey -- already resolved for the sender check above
+    -- The sender, not the declared text: senderKey is a resolved identity key by construction,
+    -- while declaredKey is nil for exactly the clients this whole path had to stop depending on.
+    LC.raidConfig.lootmaster    = senderKey
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
@@ -541,30 +634,117 @@ local function TryAcceptConfig(payload, senderKey)
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end
+
+    -- Two clients claiming to be lootmaster. Ours keeps precedence (LC.GetLootmaster prefers our
+    -- own settings while IsConfigOwner holds), which is what protects a genuine lootmaster from
+    -- being displaced by somebody else's stale entry -- but it is also exactly what leaves B11's
+    -- raider without a vote window all evening: their own name in that field makes every LC_START
+    -- from the real lootmaster fail LC.IsSenderLootOwner.
+    --
+    -- Deliberately not resolved by guessing. Nothing on the wire says which of the two is actually
+    -- handing out loot, and silently flipping loot authority to whoever broadcast last would be far
+    -- worse than saying so. One line, and the raider can clear their field in seconds.
+    if LC.IsConfigOwner() and senderKey ~= LC.ResolveConfigName(KART_Settings.lcLootmaster) then
+        local senderName = UnitName(unit) or "?"
+        if not LC.lootmasterClashWarned then
+            LC.lootmasterClashWarned = true
+            print("|cff00ff00KART:|r " .. string.format(KART.L.LC_LOOTMASTER_CLASH, senderName))
+        end
+    end
+
     return true
 end
 
+-- Prints what THIS client actually believes about the Loot Council, for `/kart status`.
+--
+-- Exists because every value below was previously invisible from both ends. A raider could sit in a
+-- raid running entirely different vote buttons, no rolls and an empty council, while the lootmaster
+-- saw nothing wrong and the raider had no way to check — the evening of 2026-07-27 went that way
+-- for hours. One line each, so a raider can paste the output and the question is settled.
+--
+-- Reports the EFFECTIVE values (LC.GetButtonConfig, LC.GetRollsEnabled, LC.GetLootmaster), not the
+-- saved settings: the whole class of bug being diagnosed is the two disagreeing.
+function LC.PrintStatus()
+    local L = KART.L
+    print("|cff00ff00KART " .. (KART.Version or "?") .. "|r " .. L.LC_STATUS_HEADER)
+
+    local moduleOn = KART_Settings.lcModuleEnabled ~= false
+    print("  " .. L.LC_STATUS_MODULE .. ": " .. (moduleOn and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+    print("  " .. L.LC_STATUS_SESSION .. ": " .. (LC.sessionActive and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+
+    -- Where the config in force came from. "own" and "received" behave completely differently and
+    -- confusing them is what made the original reports so hard to read.
+    local source
+    if LC.IsConfigOwner() then
+        source = L.LC_STATUS_SRC_OWN
+    elseif LC.raidConfig and LC.raidConfig.lootmaster and LC.raidConfig.lootmaster ~= "" and not LC.raidConfig.fromSelf then
+        local unit = KASC.Identity.FindUnitForKey(LC.raidConfig.lootmaster)
+        source = string.format(L.LC_STATUS_SRC_RAID, (unit and UnitName(unit)) or "?")
+    else
+        source = L.LC_STATUS_SRC_NONE
+    end
+    print("  " .. L.LC_STATUS_CONFIG .. ": " .. source)
+
+    -- The button count is the number that decides whether this client's votes can be matched at all
+    -- (see B25) — spelled out rather than left to be counted off the list.
+    local buttons = LC.GetButtonConfig()
+    local labels = {}
+    for _, def in ipairs(buttons) do labels[#labels + 1] = def.label end
+    print("  " .. string.format(L.LC_STATUS_BUTTONS, #buttons) .. ": " .. table.concat(labels, ";"))
+
+    print("  " .. L.LC_STATUS_ROLLS .. ": " .. (LC.GetRollsEnabled() and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+
+    -- Resolved against pending: a name that never resolves is a member who silently isn't one.
+    local resolved, pending = 0, 0
+    for key in pairs(LC.CouncilNamesTable or {}) do
+        if KASC.Identity.IsResolvedKey(key) then resolved = resolved + 1 else pending = pending + 1 end
+    end
+    print("  " .. string.format(L.LC_STATUS_COUNCIL, resolved, pending))
+
+    local lm = LC.GetLootmaster()
+    local lmUnit = lm ~= "" and KASC.Identity.FindUnitForKey(lm)
+    print("  " .. L.LC_STATUS_LOOTMASTER .. ": " .. ((lmUnit and UnitName(lmUnit)) or (lm ~= "" and "?" or "-")))
+    print("  " .. L.LC_STATUS_IS_ME .. ": " .. (LC.IsLootOwner() and L.LC_STATUS_YES or L.LC_STATUS_NO))
+end
+
 -- ==========================================================================
---  B12: retry a config rejected only for an unresolved lootmaster
+--  B12: retry a config rejected only because the sender wasn't resolvable yet
 -- ==========================================================================
 --
--- NSRT distributes lootmaster nicknames between clients over time, so a raid that starts
--- distributing loot immediately after forming can have peers whose NSAPI:GetName doesn't know that
--- nickname yet — TryAcceptConfig's "lootmaster-unresolved" case. That resolves itself once NSRT
--- catches up or the roster changes, but nothing re-delivers the config on its own once the raid
--- settles (see B12 in docs/BACKLOG.md), so the one payload that failed for that reason is kept
--- around and retried — with the SAME predicate, never a relaxed one — until it succeeds or the
--- budget below runs out.
+-- A config can arrive before its sender is resolvable on this client — normal while a raid is still
+-- forming — and nothing re-delivers it on its own once the roster settles (see B12 in
+-- docs/BACKLOG.md), so the one payload that failed for that reason is kept around and retried, with
+-- the SAME predicate and never a relaxed one, until it succeeds or the budget below runs out.
+--
+-- This originally retried an unresolved lootmaster NAME, which was the far more common failure and
+-- for some clients a permanent one — see TryAcceptConfig, which no longer consults the name for the
+-- decision at all. That case cannot occur any more; this machinery now covers only the genuinely
+-- transient one it was always meant for.
 LC.pendingConfig = nil -- {payload, senderKey, attempts, timer} or nil while nothing is pending
 
--- Every 10s for up to 12 attempts (~2 minutes) between roster changes. NSRT's nickname sync is
--- normally a matter of seconds; this comfortably covers a slow sync without retrying all evening.
+-- A rejected config leaves this client quietly using its OWN vote button labels, rolls toggle and
+-- council list while it still takes part in the session — so its votes land under the wrong label
+-- on the council panel and it never rolls (see B25). That went unnoticed for a whole raid on
+-- 2026-07-27 because nothing said a word. Say something.
+--
+-- Latched: LC_CONFIG is re-broadcast on every roster change, so an unlatched print would repeat
+-- once per join during raid formation. Cleared on the next acceptance, which is exactly when the
+-- situation has actually changed.
+LC.configRejectWarned = false
+local function WarnConfigRejected(reason)
+    if LC.configRejectWarned then return end
+    LC.configRejectWarned = true
+    print("|cff00ff00KART:|r " .. string.format(KART.L.LC_CONFIG_REJECTED, tostring(reason)))
+end
+
+-- Every 10s for up to 12 attempts (~2 minutes) between roster changes — comfortably longer than a
+-- raid takes to finish filling up, without retrying all evening.
 -- Roster changes (see LC.RetryPendingConfigThrottled) do NOT add attempts on top of this schedule —
 -- they consume one and re-arm the timer early, so sustained roster churn (the leading-edge throttle
 -- allows roughly one attempt per second) can collapse the effective window to as little as ~12
 -- seconds. This mostly self-corrects in practice: a roster change during an active session also
--- re-broadcasts the config (LootCouncil.lua:1089), and a fresh "lootmaster-unresolved" rejection
--- replaces the pending payload and resets attempts back to 0 (see LC.HandleConfig below).
+-- re-broadcasts the config (LootCouncil.lua:1089), and a fresh "no-sender" rejection replaces the
+-- pending payload and resets attempts back to 0 (see LC.HandleConfig below).
 local PENDING_CONFIG_RETRY_INTERVAL = 10
 local PENDING_CONFIG_MAX_ATTEMPTS   = 12
 
@@ -622,18 +802,25 @@ function LC.RetryPendingConfig()
     local accepted, reason = TryAcceptConfig(pending.payload, pending.senderKey)
     if accepted then
         LC.CancelPendingConfig()
+        LC.configRejectWarned = false
+        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
         RefreshCouncilPanelIfOpen()
         return
     end
 
-    if reason == "no-sender" then
+    -- "no-sender" is the reason we stored this payload for, so it is the one reason to keep
+    -- waiting on. Anything else appearing now means the payload became unusable for a different
+    -- reason entirely, and no further attempt will change that.
+    if reason ~= "no-sender" then
         LC.CancelPendingConfig()
+        WarnConfigRejected(reason)
         return
     end
 
     pending.attempts = pending.attempts + 1
     if pending.attempts >= PENDING_CONFIG_MAX_ATTEMPTS then
         LC.CancelPendingConfig()
+        WarnConfigRejected(reason) -- gave up: from here the user is on their own settings for good
         return
     end
     ScheduleNextPendingConfigAttempt()
@@ -660,22 +847,26 @@ function LC.HandleConfig(payload, senderKey)
     local accepted, reason = TryAcceptConfig(payload, senderKey)
     if accepted then
         LC.CancelPendingConfig()
+        LC.configRejectWarned = false
+        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
         return
     end
 
-    -- Only an unresolved lootmaster is worth remembering: a parse failure means a malformed
-    -- payload (retrying won't fix that), and "no-sender" means we can't even identify who sent it
-    -- (retrying re-checks that on every attempt anyway, via TryAcceptConfig). Storing on those too
-    -- would let unrelated noise clobber a legitimate pending payload from an earlier broadcast.
+    -- Warn straight away for the reasons that will never heal. "no-sender" gets the benefit of the
+    -- doubt instead: it is normal while a raid is still filling up, so the retry below is given its
+    -- budget first and only warns if it runs out (see LC.RetryPendingConfig).
+    if reason ~= "no-sender" then
+        WarnConfigRejected(reason)
+    end
+
+    -- Only "no-sender" is worth remembering. It means the sender isn't resolvable on this client
+    -- YET -- normal while a raid is still forming -- and resolves itself as the roster settles.
     --
-    -- "lootmaster-unresolved" itself bundles two cases TryAcceptConfig can't tell apart: the declared
-    -- name simply hasn't resolved YET (healable — the whole point of this retry) and the declared
-    -- name resolves to somebody other than the sender (never healable — a forged LC_CONFIG naming
-    -- someone else). Both land here, and the store below clobbers unconditionally, so a raider
-    -- spamming forged configs can evict a genuine pending payload with junk that will never resolve.
-    -- A v3.0.0 client already drops both cases the same way (silently, for good), so this is a missed
-    -- opportunity to also harden that, not a new hole introduced by the retry.
-    if reason == "lootmaster-unresolved" then
+    -- The other two are permanent by nature: "parse-fail" is a malformed payload that will never
+    -- parse, and "lootmaster-mismatch" means the sender broadcast somebody else's name, which is a
+    -- misconfiguration on their end that no amount of waiting on ours will change. Retrying either
+    -- would only let noise evict a legitimate pending payload.
+    if reason == "no-sender" then
         if LC.pendingConfig and LC.pendingConfig.timer then LC.pendingConfig.timer:Cancel() end
         LC.pendingConfig = { payload = payload, senderKey = senderKey, attempts = 0 }
         ScheduleNextPendingConfigAttempt()
@@ -786,7 +977,9 @@ function LC.SendSettingsSync(targetName)
     local council = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_SYNC_REQUEST:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":" .. voteSeconds .. ":"
-    KASC:Send(BuildCouncilPayload(prefix, council), "WHISPER", targetName)
+    local payload = BuildCouncilPayload(prefix, council)
+    if not payload then return end
+    KASC:Send(payload, "WHISPER", targetName)
     -- Remember who we asked, so only their reply prints (see LC.HandleSyncAccept/Decline). These two
     -- messages are deliberately not group-gated — the whole feature targets someone outside the
     -- group — which without this would let anyone spam a line into our chat frame at will.
@@ -951,7 +1144,7 @@ function LC.ShowSessionPrompt()
     local f = CreateFrame("Frame", "KART_LCSessionPrompt", UIParent, "BackdropTemplate")
     f:SetSize(310, 115)
     f:SetPoint("CENTER", 0, 120)
-    KART.UI:RegisterStrataFrame(f, true)
+    LC.RegisterWindow(f, true)
     KART.UI:ApplyPopupArtwork(f)
     table.insert(UISpecialFrames, f:GetName())
 

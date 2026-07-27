@@ -401,15 +401,26 @@ function Council.RefreshCouncilTabs()
 
             -- Hidden until the tab itself is hovered (see OnEnter/OnLeave below) so a normal
             -- click anywhere on the tab can never land on it by accident.
+            -- Anchored just OUTSIDE the tab's own hit area, not inside its corner. Inside, the two
+            -- requirements fought each other: big enough to hit deliberately meant big enough to hit
+            -- by accident, and closing a tab drops the roll entirely (Council.CloseCouncilTab).
+            -- Hiding it until hover never addressed that, because you have to hover a tab in order
+            -- to click it — the x appeared exactly when the pointer was already in its corner
+            -- (B27, issue #9). Outside, it can be comfortably large at no risk, which also settles
+            -- the second half of the report: at 14x14 with an 11pt glyph it was fiddly to hit on
+            -- purpose. 18 matches KAUI.CLOSE_BUTTON_GLYPH_SIZE, used by every window's own close.
             tab.closeBtn = CreateFrame("Button", nil, tab)
-            tab.closeBtn:SetSize(14, 14)
-            tab.closeBtn:SetPoint("TOPRIGHT", -1, -1)
+            tab.closeBtn:SetSize(18, 18)
+            -- To the LEFT of the tab, away from the panel: the strip is anchored outside the panel's
+            -- left edge (see f.tabStrip), so the tab's right side faces the panel body and an x
+            -- placed there would hover over the rows.
+            tab.closeBtn:SetPoint("RIGHT", tab, "LEFT", -2, 0)
             tab.closeBtn:Hide()
             tab.closeBtn.bg = tab.closeBtn:CreateTexture(nil, "BACKGROUND")
             tab.closeBtn.bg:SetAllPoints()
             tab.closeBtn.bg:SetColorTexture(0, 0, 0, 0.7)
             tab.closeBtn.text = tab.closeBtn:CreateFontString(nil, "OVERLAY")
-            tab.closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+            tab.closeBtn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
             tab.closeBtn.text:SetPoint("CENTER")
             tab.closeBtn.text:SetText("|cffff6666×|r")
 
@@ -543,7 +554,7 @@ function Council.CreateCouncilPanel()
     local f = CreateFrame("Frame", "KART_LCCouncilPanel", UIParent, "BackdropTemplate")
     f:SetSize(COUNCIL_PANEL_WIDTH, COUNCIL_PANEL_HEIGHT)
     f:SetPoint("CENTER", 220, 0)
-    KART.UI:RegisterStrataFrame(f)
+    LC.RegisterWindow(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -994,7 +1005,14 @@ function Council.RefreshCouncilRows()
             local voteData = votes[key] -- always {idx, note} — every writer produces tables
             local voteIdx  = voteData and voteData.idx
             local voteNote = (voteData and voteData.note) or ""
-            local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
+            -- A vote is a bare position in the VOTER's button list (see B25). If their list is a
+            -- different length from ours, that position means a different label here than it did
+            -- there, and rendering it would state something false with full confidence -- on the
+            -- one screen that decides who gets the item. Withhold the label instead; voteMismatch
+            -- drives an explicit "cannot know" marker further down.
+            local voteCount = voteData and voteData.count
+            local voteMismatch = voteCount ~= nil and voteCount ~= #buttons
+            local voteDef  = (not voteMismatch) and voteIdx and buttons[tonumber(voteIdx)] or nil
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit(unit, rollItem)
 
             -- Flag raiders who are missing KART, running an outdated version, or have disabled
@@ -1020,7 +1038,7 @@ function Council.RefreshCouncilRows()
 
             table.insert(members, {
                 short = short, unit = unit, key = key,
-                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
+                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef, voteMismatch = voteMismatch,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][key],
@@ -1048,11 +1066,18 @@ function Council.RefreshCouncilRows()
             local voteData = votes[myKey] -- always {idx, note} — every writer produces tables
             local voteIdx  = voteData and voteData.idx
             local voteNote = (voteData and voteData.note) or ""
-            local voteDef  = voteIdx and buttons[tonumber(voteIdx)]
+            -- A vote is a bare position in the VOTER's button list (see B25). If their list is a
+            -- different length from ours, that position means a different label here than it did
+            -- there, and rendering it would state something false with full confidence -- on the
+            -- one screen that decides who gets the item. Withhold the label instead; voteMismatch
+            -- drives an explicit "cannot know" marker further down.
+            local voteCount = voteData and voteData.count
+            local voteMismatch = voteCount ~= nil and voteCount ~= #buttons
+            local voteDef  = (not voteMismatch) and voteIdx and buttons[tonumber(voteIdx)] or nil
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit("player", rollItem)
             table.insert(members, {
                 short = myShort, unit = "player", key = myKey,
-                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef,
+                voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef, voteMismatch = voteMismatch,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = nil,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][myKey],
@@ -1134,6 +1159,17 @@ function Council.RefreshCouncilRows()
             row.voteText:SetPoint("LEFT", row.voteIcon, "RIGHT", 3, 0)
             row.voteText:SetWidth(95)
             row.voteText:SetJustifyH("LEFT")
+
+            -- Explains the "?" a mismatched vote renders as. FontStrings can't take mouse scripts,
+            -- hence a frame over it; mouse is enabled per-refresh only while there IS a mismatch,
+            -- for the same reason row.warnHitbox does it that way -- an always-on hitbox here would
+            -- be a dead zone over every row that swallows the right-click opening the assign menu.
+            -- Explicit size rather than spanning icon-to-FontString: a FontString's box is its
+            -- text's box, which is exactly how the vote window's item tooltip ended up covering
+            -- only half its icon (B26).
+            row.voteHitbox = CreateFrame("Frame", nil, row)
+            row.voteHitbox:SetPoint("LEFT", row.voteIcon, "LEFT")
+            row.voteHitbox:SetSize(110, 16)
 
             -- Opt-in 1-100 roll (see lcRollsEnabled); hidden entirely when the raid has it off.
             row.rollText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1342,6 +1378,11 @@ function Council.RefreshCouncilRows()
                 m.voteDef.label))
             row.voteIcon:SetTexture(LC.GetVoteIconTexture(tonumber(m.voteIdx)))
             row.voteIcon:Show()
+        elseif m.voteMismatch then
+            -- They DID vote; we just cannot say what for. Deliberately not a dash: a dash reads as
+            -- "hasn't voted", which would be a second false statement in place of the first.
+            row.voteText:SetText("|cffffaa00" .. KART.L.LC_VOTE_UNKNOWN .. "|r")
+            row.voteIcon:Hide()
         else
             row.voteText:SetText("|cff666666-|r")
             row.voteIcon:Hide()
@@ -1435,6 +1476,16 @@ function Council.RefreshCouncilRows()
             GameTooltip:Show()
         end)
         row.warnHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        local capturedVoteMismatch = m.voteMismatch
+        row.voteHitbox:EnableMouse(capturedVoteMismatch and true or false)
+        row.voteHitbox:SetScript("OnEnter", function(self)
+            if not capturedVoteMismatch then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(KART.L.LC_VOTE_UNKNOWN_TIP, 1, 0.67, 0, 1, true)
+            GameTooltip:Show()
+        end)
+        row.voteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Persistent officer-note indicator — same bullet glyph as the per-vote note dot above
         -- (proven to render fine), just a different colour so the two aren't confused.

@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 1
+local MAJOR, MINOR = "KAUI-1.0", 3
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -50,7 +50,18 @@ local function appender(registry)
     end
 end
 
-nsProto.RegisterLabel           = appender("labels")
+-- Labels are the one registry whose members are routinely created after the consumer's last
+-- ApplyStyle -- pooled table rows, lazily built panels -- and those kept Blizzard's default font
+-- indefinitely, because registration alone only makes a widget eligible for the NEXT restyle
+-- (B2: the loot-history rows never followed the font setting at all). Registering now also styles,
+-- when a style has been applied at all; before the first ApplyStyle there is nothing to apply and
+-- the normal pass covers them.
+local registerLabel = appender("labels")
+function nsProto:RegisterLabel(fs)
+    registerLabel(self, fs)
+    if fs and self.lastFont then fs:SetFont(self.lastFont, self.lastContentSize, "") end
+    return fs
+end
 nsProto.RegisterEditBox         = appender("editBoxes")
 nsProto.RegisterButtonText      = appender("buttonTexts")
 nsProto.RegisterCloseButtonText = appender("closeButtonTexts")
@@ -115,6 +126,12 @@ end
 -- Registers a top-level frame for the shared strata setting and applies the current value.
 -- Called once per frame at creation time; ApplyFrameStrata() re-applies on change.
 function nsProto:RegisterStrataFrame(frame, isDialog)
+    -- Raise on click, like every movable window in the game. Without it a frame keeps whatever
+    -- level it was created at for the whole session, so where two of these overlap, the one in
+    -- front is decided by creation order and clicking the other does nothing at all -- there was no
+    -- way to bring it forward (GitHub issue #4, B24). SetToplevel does exactly this and nothing
+    -- else; it acts within the frame's own stratum, so it cannot lift a window over a dialog.
+    if frame.SetToplevel then frame:SetToplevel(true) end
     if isDialog then
         self.strataDialogFrames[#self.strataDialogFrames + 1] = frame
         frame:SetFrameStrata(self:GetDialogStrata())
@@ -384,6 +401,28 @@ function nsProto:RegisterStaticPopup(name, def)
     def.whileDead      = true
     def.hideOnEscape   = true
     def.preferredIndex = 3
+
+    -- Blizzard's popup frames are fixed at the DIALOG stratum, so a consumer whose windows sit at
+    -- DIALOG or above buries its own confirm dialog behind the window that raised it -- pressing
+    -- the button then looks like it did nothing at all (B8). TOOLTIP rather than GetDialogStrata()
+    -- because a consumer may give some of its windows their own stratum setting (KART's Loot
+    -- Council windows do), and one-above-the-shared-setting would still land under those. Put it
+    -- back on hide: these frames are shared, so a popup shown later by anyone else must be
+    -- unaffected.
+    local userOnShow, userOnHide = def.OnShow, def.OnHide
+    def.OnShow = function(popup, ...)
+        popup.kauiPrevStrata = popup:GetFrameStrata()
+        popup:SetFrameStrata("TOOLTIP")
+        if userOnShow then return userOnShow(popup, ...) end
+    end
+    def.OnHide = function(popup, ...)
+        if popup.kauiPrevStrata then
+            popup:SetFrameStrata(popup.kauiPrevStrata)
+            popup.kauiPrevStrata = nil
+        end
+        if userOnHide then return userOnHide(popup, ...) end
+    end
+
     StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
 end
 
@@ -835,10 +874,13 @@ end
 --   key              the field inside store
 --   y                TOPLEFT y offset (the label sits 16px above this)
 --   tooltip          tooltip body text
---   skipStyleRefresh true for sliders whose value doesn't need a live restyle on every drag tick
---                    (e.g. a plain countdown timer); when true, onChanged below is never called
---   onChanged        called after the value changes, unless skipStyleRefresh is true; replaces
---                    the old direct UpdateStyles call
+--   valueIsText      true for a slider whose value is displayed as a NAME rather than its number
+--                    (the window-layer sliders); its value box stays read-only
+--   onChanged        called after the value changes. A slider that needs no reaction simply omits
+--                    it -- there is no separate opt-out flag, and there must not be one: the
+--                    former skipStyleRefresh existed to suppress a hardcoded UpdateStyles call
+--                    that no longer exists, and had quietly become a switch that swallowed the
+--                    caller's own callback with no error and no symptom (B9).
 -- }
 -- Defined dot-style with an explicit `ns` receiver for the same reason as CreateModernButton
 -- above: the OnValueChanged/OnShow/OnEnter callbacks below are conventionally named `self` for
@@ -866,8 +908,45 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     s.title:SetText(opts.label)
     ns:RegisterLabel(s.title)
 
-    s.valueText = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- An EditBox rather than a FontString, so the number can be TYPED instead of only dragged
+    -- (GitHub issue #6). Styled to look exactly like the label it replaces: no backdrop, no border,
+    -- same font -- it reads as text until clicked. Sits above the track, so it never intercepts a
+    -- drag on the slider itself.
+    --
+    -- opts.valueIsText is for the sliders that display a NAME rather than their raw number (the
+    -- window-layer ones, which show "HIGH" for 4). Typing into those is meaningless, so they keep
+    -- the old read-only behaviour; SetText from the caller's own hook still works either way.
+    s.valueText = CreateFrame("EditBox", nil, s)
     s.valueText:SetPoint("BOTTOMRIGHT", s, "TOPRIGHT", 0, 4)
+    s.valueText:SetSize(60, 16)
+    s.valueText:SetFontObject("GameFontHighlightSmall")
+    s.valueText:SetJustifyH("RIGHT")
+    s.valueText:SetAutoFocus(false)
+
+    if opts.valueIsText then
+        s.valueText:EnableMouse(false)
+        s.valueText:EnableKeyboard(false)
+    else
+        s.valueText:SetNumeric(true)
+        local function commit(self)
+            local typed = tonumber(self:GetText())
+            if typed then
+                -- Clamp rather than reject: someone typing 500 into a 50-150 slider means "as far
+                -- as it goes", and silently discarding the entry would just look broken.
+                s:SetValue(math.max(opts.min, math.min(opts.max, math.floor(typed))))
+            end
+            -- Always re-render from the slider's actual value, so a rejected or clamped entry can
+            -- never leave a number on screen that the setting does not hold.
+            self:SetText(math.floor(s:GetValue()))
+            self:ClearFocus()
+        end
+        s.valueText:SetScript("OnEnterPressed", commit)
+        s.valueText:SetScript("OnEditFocusLost", commit)
+        s.valueText:SetScript("OnEscapePressed", function(self)
+            self:SetText(math.floor(s:GetValue()))
+            self:ClearFocus()
+        end)
+    end
 
     -- Soft glow behind the thumb, hidden by default, faded in on hover/drag via alpha rather
     -- than Show/Hide so it never fights another script over the frame's visibility.
@@ -900,9 +979,7 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
         ResolveStore(opts.store)[opts.key] = val
         self.valueText:SetText(val)
         positionGlow()
-        -- skipStyleRefresh: sliders whose value doesn't need a restyle on every drag tick skip
-        -- the onChanged call entirely.
-        if not opts.skipStyleRefresh and opts.onChanged then opts.onChanged() end
+        if opts.onChanged then opts.onChanged() end
     end)
     s:SetScript("OnEnter", function() glow:SetAlpha(0.35) end)
     s:SetScript("OnLeave", function() if not s.isDragging then glow:SetAlpha(0) end end)
@@ -989,6 +1066,11 @@ function nsProto:ApplyStyle(spec)
         self.strata = spec.strata
         self:ApplyFrameStrata()
     end
+
+    -- Remembered so a widget created LATER can be styled the moment it registers -- see
+    -- RegisterLabel. Without this, anything built lazily (loot-history rows, for instance) keeps
+    -- Blizzard's default font until the next settings change happens to restyle it.
+    self.lastFont, self.lastMenuSize, self.lastContentSize = font, menuSize, contentSize
 
     for _, fs in ipairs(self.buttonTexts) do fs:SetFont(font, menuSize, "") end
     for _, eb in ipairs(self.editBoxes) do eb:SetFont(font, contentSize, "") end

@@ -6,6 +6,38 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-07-28
+### Hinzugefügt
+- **`/kart status` zeigt den Loot-Council-Zustand, den der eigene Client wirklich benutzt** — Lootmaster, Council, Rolls und Vote-Buttons.
+- **Die Loot-Council-Fenster haben eine eigene Skalierung und Ebene**, unabhängig vom Rest des Addons.
+
+### Geändert
+- **Slider-Werte lassen sich eintippen**, nicht nur ziehen.
+- **Ein KART-Fenster kommt beim Anklicken nach vorn**, damit sich zwei überlappende Fenster umsortieren lassen.
+- **Die Nachfrage nach dem Ready-Check-Grund erscheint nur noch im Raid**, nicht vor jedem Mythisch+-Pull.
+
+### Behoben
+- **Die Loot-Council-Einstellungen des Raids kommen jetzt bei allen an.** Wessen Client den Nickname des Lootmasters nicht lesen konnte, behielt stillschweigend seine eigenen Vote-Buttons, Roll-Einstellung und Council-Liste — seine Stimmen erschienen unter dem falschen Label und er würfelte nie.
+- **Eine abgelehnte Raid-Config meldet sich**, statt lautlos zu scheitern.
+- **Eine Stimme trägt den Button mit, auf den sie abgegeben wurde.** Zwei Clients mit unterschiedlichen Button-Listen zeigen einander nicht mehr die falsche Wahl.
+- **Eine zu lange Council-Config wird abgelehnt statt abgeschnitten verschickt**, was vorher den ganzen Raid auf veralteten Einstellungen zurückließ.
+- **Allein kann man wieder sein eigener Lootmaster sein** — die Bedienelemente bleiben außerhalb einer Gruppe nutzbar.
+- **Raider sehen die tatsächlich geltenden Loot-Council-Einstellungen**, nicht ihre eigenen ungesendeten.
+- **Die Status-Markierung der Mitspieler aktualisiert sich**, statt auf ihrem ersten Stand einzufrieren.
+- **Ausrüstungs- und Haltbarkeitsdaten von Spielern, die die Gruppe verlassen haben, werden verworfen.**
+- **Zwei identische Items im Abstand von Sekunden ergeben zwei Verlaufseinträge**, nicht einen.
+- **Die Datenantworten sind gedrosselt und Aktualisieren entprellt**, ein Klick flutet den Raid nicht mehr.
+- **Die Hintergrund-Deckkraft erreicht die Loot-Council-Fenster.**
+- **Der Item-Tooltip deckt im Vote-Fenster das ganze Symbol ab.** (#7, #8)
+- **Ein Council-Tab schließt sich nicht mehr, wenn man zu ihm wechseln wollte.** (#9)
+- **Das WoW-Utils-Einfügefeld nimmt über die ganze Höhe den Fokus an.**
+- **Auto-Promote erkennt einen Realm-Namen in beiden Schreibweisen.**
+- **Das Minimap-Symbol bleibt ausgeschaltet** — über Reload und neue Sitzung hinweg.
+- **Ein Bestätigungsdialog öffnet sich immer vor dem Fenster, das ihn ausgelöst hat** — unabhängig von der eingestellten Ebene.
+- **Ein nach dem letzten Stilwechsel gebautes Element benutzt die gewählte Schrift** statt der Blizzard-Standardschrift.
+- **`/kart v` zählt nur Antworten**, keine stummen Clients.
+- **Eine per Profilwechsel geänderte Einstellung greift jetzt**, statt gespeichert und ignoriert zu werden.
+
 ## [3.0.2] - 2026-07-27
 ### Behoben
 - **Der erweiterte Ready-Check funktioniert wieder.** Wer ablehnt, bekommt die Grund-Buttons und das Textfeld.

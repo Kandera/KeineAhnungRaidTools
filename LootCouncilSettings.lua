@@ -54,6 +54,70 @@ function LC.UpdateRoleStatusLabel()
     if LC.RelayoutRaidBox then LC.RelayoutRaidBox() end
 end
 
+-- Shows the RAID's config in the raid-wide widgets while somebody else's is in force, instead of
+-- the viewer's own dormant settings.
+--
+-- Those widgets are bound to KART_Settings, but an accepted LC_CONFIG lands in LC.raidConfig and
+-- never touches KART_Settings — deliberately, so a raider's own setup survives for when they are
+-- the lootmaster themselves. The visible result was a peer staring at empty Council and Lootmaster
+-- boxes with "5 names not resolved yet" printed directly beneath them, because that counter reads
+-- the effective table while the boxes read the dormant one (B20).
+--
+-- The viewer's own values are never overwritten: they stay in KART_Settings and come back the
+-- moment no foreign config applies. LC.suppressFieldWrite exists for exactly that — SetText fires
+-- OnTextChanged, which would otherwise write the raid's values straight into the viewer's settings
+-- and broadcast them.
+LC.suppressFieldWrite = false
+function LC.RefreshRaidWideFields()
+    local cfg = LC.raidConfig
+    -- fromSelf marks a config we applied from our own settings (LC.ApplyOwnConfig); only a received
+    -- one is somebody else's, and only then is there anything to show that isn't already shown.
+    local foreign = not LC.IsConfigOwner() and cfg and not cfg.fromSelf and cfg.lootmaster and cfg.lootmaster ~= ""
+
+    local buttons, council, lootmaster, rolls, minQ
+    if foreign then
+        buttons    = cfg.buttonLabels or ""
+        council    = cfg.councilMembers or ""
+        -- raidConfig.lootmaster is a resolved identity key, not the text that was typed. Show the
+        -- name it resolves to; the key itself would be meaningless on screen.
+        local unit = KASC.Identity.FindUnitForKey(cfg.lootmaster)
+        lootmaster = (unit and UnitName(unit)) or "?"
+        rolls      = cfg.rollsEnabled == true
+        minQ       = cfg.minQuality or 4
+    else
+        buttons    = KART_Settings.lcButtonLabels or ""
+        council    = KART_Settings.lcCouncilMembers or ""
+        lootmaster = KART_Settings.lcLootmaster or ""
+        rolls      = KART_Settings.lcRollsEnabled == true
+        minQ       = KART_Settings.lcMinQuality or 4
+    end
+
+    -- Only when the text actually differs: SetText moves the caret to the end even when the content
+    -- is identical, and this runs on every roster change — a lootmaster typing their council list
+    -- while raiders trickle in would have the cursor jump out from under them.
+    local function setIfChanged(eb, text)
+        if eb and eb:GetText() ~= text then eb:SetText(text) end
+    end
+
+    LC.suppressFieldWrite = true
+    setIfChanged(KART.LC.ButtonLabelEditBox, buttons)
+    setIfChanged(KART.LC.CouncilMembersEditBox, council)
+    setIfChanged(KART.LC.LootmasterEditBox, lootmaster)
+    if KART.LC.CbRollsEnabled then KART.LC.CbRollsEnabled:SetChecked(rolls) end
+    if KART.LC.BtnMinQuality then KART.LC.BtnMinQuality.text:SetText(LC.QualityLabel(minQ)) end
+    LC.suppressFieldWrite = false
+
+    -- Read-only while they show someone else's values: editing them would change nothing for the
+    -- raid and would silently discard what the viewer had typed for themselves.
+    for _, eb in ipairs({ KART.LC.ButtonLabelEditBox, KART.LC.CouncilMembersEditBox, KART.LC.LootmasterEditBox }) do
+        if eb then
+            eb:EnableMouse(not foreign)
+            eb:EnableKeyboard(not foreign)
+            if foreign then eb:ClearFocus() end
+        end
+    end
+end
+
 -- Colons are the LC_CONFIG/LC_SYNC payload separator (see LC.BroadcastRaidConfig) — a colon
 -- inside any synced free-text field would make the receivers' payload pattern silently fail,
 -- leaving every other client stuck on stale config. Strip them at input time.
@@ -75,7 +139,7 @@ function LC.BuildSettingsPanel(parent)
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.UI:CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    prefsCard:SetSize(500, 260) -- was 215; +45 to fit the font-size slider moved in from raidBox below
+    prefsCard:SetSize(500, 350) -- 215 -> 260 for the font-size slider, -> 350 for the scale/layer pair
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
@@ -83,6 +147,15 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCModuleEnabled", label = L.LC_SET_MODULE_ENABLED,
         store = SettingsStore, key = "lcModuleEnabled", y = -15,
+        -- This flag rides along in the handshake as the "LC" capability, and peers cache what a
+        -- handshake told them until the next one. Announce again, or everyone keeps showing the old
+        -- answer for the rest of the session — with the default being OFF, switching it on after
+        -- login left a red "Loot Council disabled on their end" on every council panel in the raid
+        -- while it plainly worked (B19).
+        onChanged = function()
+            KASC:AnnounceHelloIfChanged()
+            if IsInGuild() then KASC:AnnounceHelloIfChanged("GUILD") end
+        end,
         tooltip = L.LC_DESC_MODULE_ENABLED,
     })
 
@@ -155,6 +228,33 @@ function LC.BuildSettingsPanel(parent)
         onChanged = function() KART.UpdateStyles() end,
     })
 
+    -- Scale and layer for the Loot Council windows alone. KART_Settings.uiScale reaches
+    -- KART.MainFrame and nothing else, so the two windows a raider actually stares at mid-pull had
+    -- no scale control at all -- which is what makes the fixed layout bite at 1080p, where the whole
+    -- interface is a third larger relative to the screen (B18/B22). Personal, never broadcast.
+    KART.LC.SldScale = KART.UI:CreateSettingsSlider(prefsCard, {
+        name = "KART_LCScaleSlider", label = L.LC_SET_SCALE,
+        min = 50, max = 150, store = SettingsStore, key = "lcScale", y = -260,
+        tooltip = L.LC_DESC_SCALE,
+        onChanged = function() LC.ApplyWindowChrome() end,
+    })
+
+    KART.LC.SldStrata = KART.UI:CreateSettingsSlider(prefsCard, {
+        name = "KART_LCStrataSlider", label = L.LC_SET_STRATA,
+        min = 1, max = #KART.StrataLevels, store = SettingsStore, key = "lcFrameStrata", y = -305,
+        tooltip = L.LC_DESC_STRATA,
+        onChanged = function() LC.ApplyWindowChrome() end,
+        valueIsText = true, -- shows the stratum NAME, so its value box stays read-only
+    })
+    -- Shows the stratum's NAME instead of the raw index, exactly as the main window's own layer
+    -- slider does (see UpdateStrataSliderText in MainFrame.lua); OnShow covers the case where the
+    -- initial SetValue doesn't fire because the saved value already equals the slider's.
+    local function UpdateLCStrataText(self)
+        self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+    end
+    KART.LC.SldStrata:HookScript("OnValueChanged", UpdateLCStrataText)
+    KART.LC.SldStrata:HookScript("OnShow", UpdateLCStrataText)
+
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a
     -- different module, but it's a personal preference like CbAutoPass above, so it lives next
@@ -195,7 +295,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.SldVoteTimer = KART.UI:CreateSettingsSlider(raidBox, {
         name = "KART_LCVoteTimerSlider", label = L.LC_SET_VOTE_TIMER,
         min = 5, max = 180, store = SettingsStore, key = "lcVoteSeconds", y = -52,
-        tooltip = L.LC_DESC_VOTE_TIMER, skipStyleRefresh = true,
+        tooltip = L.LC_DESC_VOTE_TIMER,
     })
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
@@ -227,6 +327,7 @@ function LC.BuildSettingsPanel(parent)
     eb:SetSize(CONTENT_WIDTH, 28)
     eb:SetMaxLetters(128)
     eb:SetScript("OnTextChanged", function(self)
+        if LC.suppressFieldWrite then return end -- programmatic fill (see LC.RefreshRaidWideFields)
         if StripColons(self) then return end
         KART_Settings.lcButtonLabels = self:GetText()
         LC.BroadcastRaidConfigThrottled()
@@ -251,6 +352,7 @@ function LC.BuildSettingsPanel(parent)
     ebC:SetSize(CONTENT_WIDTH, 28)
     ebC:SetMaxLetters(255)
     ebC:SetScript("OnTextChanged", function(self)
+        if LC.suppressFieldWrite then return end -- programmatic fill (see LC.RefreshRaidWideFields)
         if StripColons(self) then return end
         KART_Settings.lcCouncilMembers = self:GetText()
         LC.BroadcastRaidConfigThrottled()
@@ -308,6 +410,7 @@ function LC.BuildSettingsPanel(parent)
     ebL:SetSize(CONTENT_WIDTH, 28)
     ebL:SetMaxLetters(48)
     ebL:SetScript("OnTextChanged", function(self)
+        if LC.suppressFieldWrite then return end -- programmatic fill (see LC.RefreshRaidWideFields)
         if StripColons(self) then return end
         KART_Settings.lcLootmaster = self:GetText()
         -- This field decides config ownership (LC.IsConfigOwner), so the role-status line above can

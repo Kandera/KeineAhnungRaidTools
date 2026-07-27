@@ -15,7 +15,7 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 1
+local MAJOR, MINOR = "KASC-1.0", 2
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
@@ -31,6 +31,7 @@ local caches = {}
 local addons = {}      -- array, insertion order, so the handshake is deterministic
 local capabilities = {} -- array of { owner, name, fn }
 local peerCallbacks = {}
+local lastAnnounced = {} -- channel -> the handshake string last sent there (see AnnounceHelloIfChanged)
 
 function KASC:DefaultChannel()
     return IsInRaid() and "RAID" or "PARTY"
@@ -319,7 +320,26 @@ end
 -- reply below broadcasts to the group channel rather than replying to the sender directly — the
 -- point is never to single-source data back to an asker, only to keep it inside the group.
 
+-- Per-token answer cooldown. Every one of these is a raid-wide broadcast, so the first reply
+-- already served everyone who asked -- anything inside the window is a duplicate that only costs
+-- bandwidth. Without it, one Buff Checker refresh in a 20-man raid is 60 outbound answers, and a
+-- few impatient clicks overrun Blizzard's chat rate limiter, which drops the overflow SILENTLY.
+-- Nothing retries, so the rows that lost their answer stay empty for the rest of the session.
+--
+-- The same reasoning already carried REQ_EQUIP's own cooldown in the consumer (see
+-- EQUIP_ANSWER_COOLDOWN in LootCouncilPanel.lua); these four never got one.
+local ANSWER_COOLDOWN = 5
+local lastAnswer = {} -- [token] = GetTime() of our last reply, written only on an actual send
+
+local function OnAnswerCooldown(token)
+    local now = GetTime()
+    if now - (lastAnswer[token] or -ANSWER_COOLDOWN) < ANSWER_COOLDOWN then return true end
+    lastAnswer[token] = now
+    return false
+end
+
 KASC:RegisterMessage("REQ_OIL", { group = true }, function()
+    if OnAnswerCooldown("REQ_OIL") then return end
     local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
     -- "n" for a hand that takes no oil at all (empty, shield, caster off-hand), so the receiver
     -- can tell it apart from a weapon that is simply unoiled ("0"). Only we see our own gear.
@@ -329,6 +349,7 @@ KASC:RegisterMessage("REQ_OIL", { group = true }, function()
 end)
 
 KASC:RegisterMessage("REQ_ILVL", { group = true }, function()
+    if OnAnswerCooldown("REQ_ILVL") then return end
     local _, equipped = GetAverageItemLevel()
     if equipped and IsInGroup() then
         KASC:Send("ILVL:" .. string.format("%.1f", equipped))
@@ -336,12 +357,14 @@ KASC:RegisterMessage("REQ_ILVL", { group = true }, function()
 end)
 
 KASC:RegisterMessage("REQ_ENCH", { group = true }, function()
+    if OnAnswerCooldown("REQ_ENCH") then return end
     -- Maintenance scan, not part of any display path -- it exists so the accepted-enchant
     -- lists can be checked against what the raid actually wears.
     if IsInGroup() then KASC:Send("ENCH:" .. KAGS.SerializeOwnEnchantIDs()) end
 end)
 
 KASC:RegisterMessage("REQ_GEAR", { group = true }, function()
+    if OnAnswerCooldown("REQ_GEAR") then return end
     if IsInGroup() then
         local e, g = KAGS.CountMissingGear()
         KASC:Send("GEAR:" .. e .. ":" .. g)
@@ -408,19 +431,56 @@ function KASC:RequestHello(channel, target)
     self:Send("KA_HELLO_REQ", channel, target)
 end
 
-function KASC:AnnounceHello(channel, target)
-    self:Send("KA_HELLO:" .. KASC.SerializeHello(), channel, target)
+-- Marks a handshake sent in ANSWER to a request, so a consumer can tell a reply apart from an
+-- unsolicited announcement. /kart v prints one line per answer, and a passive announcement landing
+-- inside its window -- someone joining the group, or toggling a capability -- used to print a line
+-- of its own, for a request that person never received (B10).
+--
+-- Carried as an extra pseudo-addon entry rather than a new message token, deliberately: the wire
+-- grammar already accepts "name=version" entries and a 3.0.x client simply parses this one into a
+-- peers.ACK nobody reads. A separate token would have been invisible to those clients entirely,
+-- which would have broken cross-version version checks to fix a stray line of text.
+local ACK_ENTRY = "ACK=1"
+
+-- solicited: true when this answers a KA_HELLO_REQ (see the responder below). Only affects what
+-- the receiving consumer is told; the addon/capability content is identical either way.
+function KASC:AnnounceHello(channel, target, solicited)
+    local payload = KASC.SerializeHello()
+    -- Recorded WITHOUT the ack marker, so an unsolicited announce and a reply compare equal --
+    -- otherwise AnnounceHelloIfChanged would fire an extra announce after every version check.
+    lastAnnounced[channel or self:DefaultChannel()] = payload
+    if solicited then payload = payload .. "," .. ACK_ENTRY end
+    self:Send("KA_HELLO:" .. payload, channel, target)
+end
+
+-- Announces only if what we would say has changed since we last said it on this channel, or if we
+-- have never said anything there.
+--
+-- Peers cache what a HELLO tells them (version, capabilities) until the next one arrives, so a
+-- capability that flips after the announce leaves every other client holding a stale answer for the
+-- rest of the session. That is not hypothetical: KART's Loot Council module defaults to OFF, so a
+-- user enabling it after login was recorded as having it disabled everywhere, and every council
+-- panel in the raid showed them as "Loot Council disabled on their end" while it plainly worked.
+--
+-- Per channel, because GUILD and the group channel are announced at different times and a peer on
+-- one is not necessarily on the other.
+function KASC:AnnounceHelloIfChanged(channel, target)
+    local ch = channel or self:DefaultChannel()
+    if lastAnnounced[ch] == KASC.SerializeHello() then return end
+    self:AnnounceHello(channel, target)
 end
 
 KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)
     if ctx.channel == "WHISPER" then
-        KASC:AnnounceHello("WHISPER", ctx.sender)
+        KASC:AnnounceHello("WHISPER", ctx.sender, true)
     else
-        KASC:AnnounceHello(ctx.channel)
+        KASC:AnnounceHello(ctx.channel, nil, true)
     end
 end)
 
 KASC:RegisterMessage("KA_HELLO", { payload = true }, function(payload, ctx)
     local peers = KASC.ParseHello(payload)
-    for _, fn in ipairs(peerCallbacks) do fn(ctx.shortName, ctx.sender, peers) end
+    local solicited = peers.ACK ~= nil
+    peers.ACK = nil -- an internal marker, not a peer addon; consumers must never see it as one
+    for _, fn in ipairs(peerCallbacks) do fn(ctx.shortName, ctx.sender, peers, solicited) end
 end)

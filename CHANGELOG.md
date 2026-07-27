@@ -6,6 +6,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-07-28
+### Added
+- **`/kart status` prints the Loot Council state your own client is actually using** — lootmaster, council, rolls and vote buttons.
+- **The Loot Council windows have their own scale and layer setting**, independent of the rest of the addon.
+
+### Changed
+- **Slider values can be typed in**, not only dragged.
+- **A KART window comes to the front when you click it**, so two overlapping windows can be reordered.
+- **The ready-check reason prompt is offered in raids only**, no longer before every Mythic+ pull.
+
+### Fixed
+- **The raid's Loot Council settings now reach everyone.** A raider whose client could not read the lootmaster's nickname silently kept their own vote buttons, roll setting and council list — so their votes showed up under the wrong label and they never rolled.
+- **A rejected raid config says so** instead of failing in silence.
+- **A vote carries the button it was cast on.** Two clients with different button lists no longer show each other the wrong choice.
+- **An oversized council config is refused instead of sent truncated**, which used to leave the whole raid on stale settings.
+- **Alone, you can be your own lootmaster again** — the loot-owner controls stay usable outside a group.
+- **Raiders see the Loot Council settings actually in force**, not their own unsent ones.
+- **The peer status marker refreshes** instead of freezing on its first reading.
+- **Gear and durability data is dropped for players who left the group.**
+- **Two identical items awarded seconds apart record two history entries**, not one.
+- **The data responders are rate-limited and Refresh is debounced**, so one click no longer floods the raid.
+- **Background opacity reaches the Loot Council windows.**
+- **The item tooltip covers the whole icon in the vote window.** (#7, #8)
+- **A council tab no longer closes when you meant to switch to it.** (#9)
+- **The WoW Utils paste box takes focus over its whole height.**
+- **Auto-Promote matches a cross-realm name in either spelling.**
+- **The minimap icon stays switched off** across a reload and a new session.
+- **A confirm dialog always opens in front of the window that raised it**, whatever layer the windows are set to.
+- **A widget built after the last restyle uses the chosen font** instead of Blizzard's default.
+- **`/kart v` counts replies only**, not silent clients.
+- **A setting changed by a profile switch now takes effect** instead of being stored and ignored.
+
 ## [3.0.2] - 2026-07-27
 ### Fixed
 - **The extended ready check works again.** Declining a ready check offers the reason buttons and the free-text box.

@@ -20,7 +20,7 @@ function Vote.CreateVoteList()
     local f = CreateFrame("Frame", "KART_LCVoteList", UIParent, "BackdropTemplate")
     f:SetSize(380, 200)
     f:SetPoint("CENTER", 0, -80)
-    KART.UI:RegisterStrataFrame(f)
+    LC.RegisterWindow(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -262,13 +262,22 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
     -- its own sender, so without this our own progress counter reads one short and a council member
     -- voting on their own drop wouldn't see themselves listed.
+    -- How many buttons OUR list has. The index alone is meaningless to a receiver whose list is a
+    -- different length -- it would resolve to a different label and be displayed as a confident
+    -- fact (see B25 in docs/BACKLOG.md: a whole raid was scored against votes shifted by one).
+    -- Carrying the count lets the council panel tell "they voted Offspec" apart from "I cannot know
+    -- what they voted", which is the difference that matters when loot is being handed out.
+    local buttonCount = #LC.GetButtonConfig()
+
     local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][myKey] = {idx = buttonIdx, note = note}
+    LC.votes[rollID][myKey] = {idx = buttonIdx, note = note, count = buttonCount}
 
     -- Test rolls stay local (no group to broadcast to); real rolls broadcast.
     if not LC.IsTestRoll(rollID) then
-        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":" .. note)
+        -- "#" prefixes the count so a 3.0.x note that happens to start with digits and a colon
+        -- ("5:30 uhr") can't be mistaken for one by the receiver's optional-field parse below.
+        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":#" .. buttonCount .. ":" .. note)
     end
     -- Both branches: refresh the council panel too, so a council member sees their own vote appear
     -- in the panel (rows + tab badge), not just in the vote list.
@@ -374,7 +383,14 @@ function Vote.RefreshVoteListRows_Spacious(f)
             -- tooltip, spanning both the icon and the name so hovering either shows it.
             row.itemHover = CreateFrame("Frame", nil, row)
             row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
-            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:SetPoint("RIGHT", row.itemText, "RIGHT")
+            -- Height set explicitly, NOT by anchoring the bottom to the item name. A FontString's
+            -- box is its text's box: the name sits 4px below the icon's top and is ~17px tall for a
+            -- single line, so the region ended 21px down against a 46px icon -- the lower half of
+            -- the icon showed no tooltip at all, reported twice independently (B26, issues #7/#8).
+            -- The max() also covers the compact layout, whose icon is smaller than a wrapped
+            -- two-line name.
+            row.itemHover:SetHeight(math.max(ICON_SIZE, 36))
             row.itemHover:EnableMouse(true)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -646,7 +662,14 @@ function Vote.RefreshVoteListRows_Compact(f)
 
             row.itemHover = CreateFrame("Frame", nil, row)
             row.itemHover:SetPoint("TOPLEFT", row.itemIcon, "TOPLEFT")
-            row.itemHover:SetPoint("BOTTOMRIGHT", row.itemText, "BOTTOMRIGHT")
+            row.itemHover:SetPoint("RIGHT", row.itemText, "RIGHT")
+            -- Height set explicitly, NOT by anchoring the bottom to the item name. A FontString's
+            -- box is its text's box: the name sits 4px below the icon's top and is ~17px tall for a
+            -- single line, so the region ended 21px down against a 46px icon -- the lower half of
+            -- the icon showed no tooltip at all, reported twice independently (B26, issues #7/#8).
+            -- The max() also covers the compact layout, whose icon is smaller than a wrapped
+            -- two-line name.
+            row.itemHover:SetHeight(math.max(ICON_SIZE, 36))
             row.itemHover:EnableMouse(true)
 
             row.timerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -878,14 +901,36 @@ function Vote.ToggleCouncilVote(rollID, candidateKey)
     KART.LC.Council.RefreshCouncilRows()
 end
 
+-- Splits an LC_VOTE payload into rollID, button index, the sender's button COUNT and the note.
+--
+-- Two shapes on the wire: "rollID:idx:#count:note" from 3.1 onwards, and 3.0.x's "rollID:idx:note"
+-- without the count. The count stays optional so a mixed-version raid still registers every vote —
+-- an old client's simply arrives without the information needed to detect a mismatch, which is the
+-- 3.0.x situation regardless.
+--
+-- The "#" is what makes the optional field unambiguous. Notes are free text and colons are not
+-- stripped from them, so a plain numeric field would swallow the start of a note like "5:30 uhr"
+-- and read it as a count of 5. Covered by tests/test_lc_votewire.lua, which loads THIS function out
+-- of this file rather than a copy of it.
+--
+-- Returns nil for rollID/idx when the payload is malformed; the caller drops the message on that.
+local function ParseVotePayload(payload)
+    local rollID, idx, count = payload:match("^(%d+):(%d+):#(%d+):")
+    local note
+    if rollID then
+        note = payload:match("^%d+:%d+:#%d+:(.*)") or ""
+    else
+        rollID, idx = payload:match("^(%d+):(%d+)")
+        note = payload:match("^%d+:%d+:(.*)") or ""
+    end
+    return tonumber(rollID), tonumber(idx), tonumber(count), note
+end
+
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    -- payload = "rollID:buttonIndex:note"
-    local rollID, idx = payload:match("^(%d+):(%d+)")
-    rollID = tonumber(rollID)
-    idx    = tonumber(idx)
+    local rollID, idx, count, note = ParseVotePayload(payload)
     if not rollID or not idx then return end
     -- Ignore votes for a roll we're no longer tracking (already resolved/pruned): a late straggler
     -- would otherwise re-create LC.votes[rollID] as an orphan that no cleanup path ever frees. Every
@@ -897,10 +942,10 @@ function Vote.HandleVote(payload, senderKey)
     -- pipes so |c colour codes, |H hyperlinks and |T textures can't be injected there (same guard
     -- RC_REASON and LC_HIST_ENTRY already apply on their own receive side). Vote.CastVote strips
     -- them at input, so a well-behaved sender never has any left for this to escape.
-    local note = ((payload:match("^%d+:%d+:(.*)") or ""):gsub("|", "||"))
+    note = (note:gsub("|", "||"))
 
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][senderKey] = {idx = idx, note = note}
+    LC.votes[rollID][senderKey] = {idx = idx, note = note, count = count}
 
     -- Row list only matters for whichever roll is the active tab; the vote-count badge on every
     -- tab (including inactive ones) stays live regardless — see LC.RefreshCouncilIfShown.

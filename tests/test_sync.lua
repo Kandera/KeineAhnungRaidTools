@@ -142,8 +142,12 @@ T.is_nil(KARTTEST.sent[1].target, "RequestHello is not targeted at anyone")
 -- which the earlier round-trip tests (going through a hash table) never verify.
 KARTTEST.ClearSent()
 KASC.Dispatch("KA_HELLO_REQ", "RAID", "Ann-TarrenMill")
-T.eq(KARTTEST.sent[1].msg, "KA_HELLO:TESTADDON=9.9.9+CAP,TESTOFF=1.0.0",
-    "a KA_HELLO_REQ is answered with the exact hello payload, in registration order")
+-- The trailing ACK=1 marks this as an ANSWER rather than an unsolicited announcement, so a
+-- consumer's version check prints a line only for clients that actually received its request
+-- (B10). It rides in the normal entry grammar on purpose: a 3.0.x client parses it into a
+-- peers.ACK nobody reads, where a new message token would have been invisible to it entirely.
+T.eq(KARTTEST.sent[1].msg, "KA_HELLO:TESTADDON=9.9.9+CAP,TESTOFF=1.0.0,ACK=1",
+    "a KA_HELLO_REQ is answered with the exact hello payload, in registration order, marked as a reply")
 T.eq(KARTTEST.sent[1].channel, "RAID", "a non-whisper request is answered on the same channel")
 T.is_nil(KARTTEST.sent[1].target, "a non-whisper reply is not targeted at anyone")
 
@@ -160,3 +164,29 @@ KASC.Dispatch("KA_HELLO:HELLOTEST=1.2.3+X", "RAID", "Ann-TarrenMill")
 T.eq(peerCalls[1][1], "Ann", "OnPeer receives the sender's short name")
 T.eq(peerCalls[1][2], "Ann-TarrenMill", "OnPeer receives the sender's full realm-qualified name")
 T.eq(peerCalls[1][3].HELLOTEST.version, "1.2.3", "OnPeer receives the parsed peer table, not the raw payload")
+
+-- Solicited vs unsolicited, and that the marker never reaches a consumer -------------------------
+-- OnPeer's fourth argument is what lets /kart v print a line only for clients that answered it.
+local ackCalls = {}
+KASC:OnPeer(function(shortName, _, peers, solicited)
+    ackCalls[#ackCalls + 1] = { shortName = shortName, solicited = solicited, ack = peers.ACK, kart = peers.KART }
+end)
+
+KASC.Dispatch("KA_HELLO:KART=3.1.0,ACK=1", "RAID", "Ann-TarrenMill")
+T.eq(ackCalls[1].solicited, true, "a hello carrying the ack marker is reported as a reply")
+T.is_nil(ackCalls[1].ack, "the ack marker is stripped before consumers see the peer list")
+T.eq(ackCalls[1].kart.version, "3.1.0", "the real addon entry survives alongside the marker")
+
+KASC.Dispatch("KA_HELLO:KART=3.1.0", "RAID", "Ann-TarrenMill")
+T.eq(ackCalls[2].solicited, false, "a hello without the marker is reported as an announcement")
+
+-- An unsolicited announce must not record a different string than a reply does, or
+-- AnnounceHelloIfChanged would fire a spurious extra announce after every version check.
+KARTTEST.ClearSent()
+KASC:AnnounceHello()
+KASC:AnnounceHelloIfChanged()
+T.eq(#KARTTEST.sent, 1, "an unchanged handshake is not announced twice")
+KARTTEST.ClearSent()
+KASC.Dispatch("KA_HELLO_REQ", "RAID", "Ann-TarrenMill")
+KASC:AnnounceHelloIfChanged()
+T.eq(#KARTTEST.sent, 1, "answering a request does not make the next announce look changed")

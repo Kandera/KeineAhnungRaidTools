@@ -73,6 +73,8 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
     if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
     if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
+    if KART.LC and KART.LC.SldScale then settingsMap[KART.LC.SldScale] = "lcScale" end
+    if KART.LC and KART.LC.SldStrata then settingsMap[KART.LC.SldStrata] = "lcFrameStrata" end
     if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
     if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
     if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
@@ -143,6 +145,7 @@ function KART.SyncSettingsToUI()
     -- itself before KART_Settings exists and can only render "not the owner" there; without this it
     -- would stay wrong until the next roster change or the next keystroke in the lootmaster field.
     if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
+    if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
@@ -224,6 +227,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         local dbIcon = LibStub("LibDBIcon-1.0", true)
         if dbIcon then
             dbIcon:Register("KeineAhnungRaidTools", ldb, KART_Settings.minimap)
+            -- Register decides visibility from the saved table's own `hide` flag, which settings
+            -- blobs written before that flag was maintained do not carry. Without this, a player
+            -- who had turned the icon off got it back on every login (B4).
+            KART.UpdateMinimapButton()
         end
 
         -- Re-apply every statically-built UI text with the now-selected language.
@@ -277,22 +284,37 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "GROUP_ROSTER_UPDATE" then
         if KART.LC then KART.LC.CheckRaidJoin() end
         if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
+        if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
         if KART.LC and KART.LC.RetryPendingResolutionsThrottled then KART.LC.RetryPendingResolutionsThrottled() end
         if KART.LC and KART.LC.RetryPendingConfigThrottled then KART.LC.RetryPendingConfigThrottled() end
         KART.UpdateRaidleadBarVisibility()
 
-        if IsInGroup() and not KART.VersionAnnouncedToGroup then
-            KASC:AnnounceHello()
-            KART.VersionAnnouncedToGroup = true
-            -- Our own one-shot announce only tells the group about US — it does nothing for
-            -- players who already announced before we joined, so also pull everyone else's
-            -- current version the same way /kart v already does, instead of only finding out
-            -- about mismatches/missing-KART players whenever someone happens to run that manually.
-            KASC:RequestHello()
-        elseif not IsInGroup() then
-            KART.VersionAnnouncedToGroup = false
+        -- Announce whenever the CHANNEL changes, not once per group. The old one-shot latch meant a
+        -- party that converts to a raid never re-announced, and anyone who missed that single PARTY
+        -- packet was never told again — leaving a permanent "no KART detected" marker on a raider
+        -- who plainly had it (B19). Tracking the channel also covers rejoining a group of the same
+        -- kind, since leaving clears it below.
+        --
+        -- AnnounceHelloIfChanged on top: it also fires when our capabilities change (enabling the
+        -- Loot Council module, say) rather than only when the channel does.
+        if IsInGroup() then
+            local channel = KASC:DefaultChannel()
+            if KART.announcedChannel ~= channel then
+                KART.announcedChannel = channel
+                KASC:AnnounceHello()
+                -- Our own announce only tells the group about US — it does nothing for players who
+                -- already announced before we joined, so pull everyone else's current version too,
+                -- the same way /kart v does.
+                KASC:RequestHello()
+            else
+                KASC:AnnounceHelloIfChanged()
+            end
+        else
+            KART.announcedChannel = nil
         end
 
+        -- Before the refresh below, so a departed player's data is gone rather than redrawn.
+        KART.PruneDepartedPeers()
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
 
@@ -365,7 +387,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.rcSelfAnswered = true
             if isReady then
                 if KART.RCDialog then KART.RCDialog:Hide() end
-            elseif IsInGroup() and KART_Settings.rcReasonDialog ~= false then
+            -- Raids only, not any group. A Mythic+ party ready-checks before nearly every pull, so
+            -- in a five-man this asked for a written reason over and over for something the group
+            -- would just say out loud (GitHub issue #10). The reason travels to the raid to spare
+            -- twenty people a chat exchange; four people do not need it.
+            elseif IsInRaid() and KART_Settings.rcReasonDialog ~= false then
                 KART.ShowReadyCheckReasonDialog()
             end
         end
@@ -420,7 +446,7 @@ end)
 -- Peer version bookkeeping. The comparison, the update warning and the chat output all live
 -- here rather than in KASC: they are locale-dependent and none of them is a networking
 -- concern.
-KASC:OnPeer(function(shortName, _, peers)
+KASC:OnPeer(function(shortName, _, peers, solicited)
     local kart = peers.KART
     if not kart then return end
 
@@ -454,7 +480,10 @@ KASC:OnPeer(function(shortName, _, peers)
         end
     end
 
-    if KART.VersionCheckActive then
+    -- Only an actual ANSWER to our request prints a result line. A passive announcement -- someone
+    -- joining the group, or toggling the Loot Council module -- can land inside the same five-second
+    -- window and used to print a line for a request that person never received (B10).
+    if KART.VersionCheckActive and solicited then
         print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
     end
 end)
@@ -508,6 +537,9 @@ function KART.UpdateStyles()
     -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
     -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
     if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
+    -- Scale and strata for the Loot Council windows, which follow their own settings rather than
+    -- the addon-wide ones (B22) and so are not covered by KART.UI:ApplyStyle above.
+    if KART.LC and KART.LC.ApplyWindowChrome then KART.LC.ApplyWindowChrome() end
 
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
@@ -731,6 +763,8 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         -- from real data each tier instead of from memory. "raid" polls the whole group, since most
         -- slots accept several enchants and one character's dump can't show which.
         if cmd == "ench raid" then KART.StartEnchantScan() else KART.PrintEnchantDump() end
+    elseif cmd == "status" then
+        if KART.LC and KART.LC.PrintStatus then KART.LC.PrintStatus() end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
@@ -741,6 +775,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print("  /kart owed - " .. KART.L.HELP_OWED)
         print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
         print("  /kart showall - " .. KART.L.HELP_SHOWALL)
+        print("  /kart status - " .. KART.L.HELP_STATUS)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern

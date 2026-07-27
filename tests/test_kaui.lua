@@ -78,3 +78,49 @@ do
     onValueChanged(s, 42)
     T.eq(store.amount, 42, "slider: a plain table store still works")
 end
+
+-- RegisterStaticPopup: the popup outranks the windows while it is ours ------------------------
+-- Blizzard's popup frames sit at a fixed DIALOG stratum, so a consumer whose windows are set to
+-- DIALOG or above buried its own confirm dialog behind the window that raised it (B8). The
+-- registration now lifts the popup on show and restores it on hide, because those frames are
+-- shared with every other addon.
+local function FakePopup()
+    local p = { strata = "DIALOG" }
+    function p:GetFrameStrata() return self.strata end
+    function p:SetFrameStrata(s) self.strata = s end
+    return p
+end
+
+do
+    ns:RegisterStaticPopup("KAUITEST_PLAIN", { text = "x" })
+    local def = StaticPopupDialogs["KAUITEST_PLAIN"]
+    T.truthy(def, "RegisterStaticPopup stores the definition under its name")
+
+    local popup = FakePopup()
+    def.OnShow(popup)
+    T.eq(popup.strata, "TOOLTIP",
+        "popup is lifted above every window stratum while one of ours is showing")
+    def.OnHide(popup)
+    T.eq(popup.strata, "DIALOG",
+        "popup goes back to the stratum it had, since the frame is shared")
+end
+
+-- A consumer's own OnShow/OnHide must survive the wrapping.
+do
+    local shown, hidden = false, false
+    ns:RegisterStaticPopup("KAUITEST_HOOKED", {
+        text = "x",
+        OnShow = function() shown = true end,
+        OnHide = function() hidden = true end,
+    })
+    local def = StaticPopupDialogs["KAUITEST_HOOKED"]
+
+    local popup = FakePopup()
+    def.OnShow(popup)
+    T.truthy(shown, "the consumer's own OnShow still runs")
+    T.eq(popup.strata, "TOOLTIP", "and the lift happened anyway")
+
+    def.OnHide(popup)
+    T.truthy(hidden, "the consumer's own OnHide still runs")
+    T.eq(popup.strata, "DIALOG", "and the restore happened anyway")
+end
