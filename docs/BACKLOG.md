@@ -822,9 +822,17 @@ have to hover a tab in order to click it**, so the x appears exactly when the po
 there — hover-only prevents stray clicks from someone not interacting at all, which was never the
 failure. A pointer arriving in the top-right corner still closes instead of switching.
 
-**Fix directions:** anchor the x just outside the tab's own hit area so a tab click can never reach
-it; or reveal it only after a deliberate hover delay; or require a modifier. The first is the only
-one that makes the mistake structurally impossible.
+**And it is too small to hit on purpose** — 14x14 with an 11pt glyph. The two complaints are the
+same design fault seen from both ends: it is in the way when you want the tab, and fiddly when you
+want the x. Compare `KAUI.CLOSE_BUTTON_GLYPH_SIZE = 18`, which the windows' own close buttons use.
+
+**Fix:** move it just outside the tab's hit area and enlarge it. Outside the tab, a bigger target
+costs nothing — the two problems only traded against each other while it sat *inside*. Revealing it
+on a short hover delay rather than instantly is worth adding on top; a deliberate hover is a
+deliberate intent, unlike the hover that merely precedes every click.
+
+Related, and probably the same treatment: the vote window's own "x" was reported as very small
+during the 3.0.0 checkpoint.
 
 Reported 2026-07-27.
 
