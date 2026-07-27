@@ -49,7 +49,7 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
 -- Re-applies every current KART_Settings value to its UI widget and refreshes every
 -- settings-dependent module cache. Called once from ADDON_LOADED, and again after a profile
 -- switch (KART.LoadProfile, Profiles.lua) — must stay free of one-time initialization
--- (AddonCompartment registration, hooksecurefunc) since those must never run twice.
+-- (AddonCompartment registration, event handler setup) since those must never run twice.
 function KART.SyncSettingsToUI()
     KART.UpdateCache()
     if KART.LC and KART.LC.BroadcastRaidConfig then KART.LC.BroadcastRaidConfig() end
@@ -62,6 +62,7 @@ function KART.SyncSettingsToUI()
     if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
     if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
     if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
+    if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
     if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
@@ -245,17 +246,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end,
         })
         
-        -- Hook für den erweiterten Ready-Check
-        hooksecurefunc("ConfirmReadyCheck", function(isReady)
-            if not isReady or isReady == 0 then
-                if IsInGroup() then
-                    KART.ShowReadyCheckReasonDialog()
-                end
-            else
-                if KART.RCDialog then KART.RCDialog:Hide() end
-            end
-        end)
-
         -- Set the real version (KART.Version only becomes available here)
         if KART.MainFrame and KART.MainFrame.versionText then
             KART.MainFrame.versionText:SetText("v" .. KART.Version)
@@ -317,6 +307,21 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})
         if KART.RCDialog then KART.RCDialog:Hide() end
+        -- Arms the reason dialog for this check -- see READY_CHECK_CONFIRM below, which fires more
+        -- than once for the same answer and would otherwise act on all of them.
+        KART.rcSelfAnswered = false
+
+        -- KART's own copy of the ready-check result, because Blizzard's GetReadyCheckStatus is
+        -- cleared once the check resolves and the Buff Checker's Rdy column then goes blank -- which
+        -- is precisely when it is wanted, to chase up whoever was not ready. Seeded as "waiting" for
+        -- everyone so a player who never answers still reads as such afterwards, rather than as no
+        -- entry at all. arg1 is the initiator, who counts as ready without ever confirming.
+        KART.ReadyCheckStatus = wipe(KART.ReadyCheckStatus or {})
+        for unit in KAUtil.EachGroupUnit() do
+            local n = UnitName(unit)
+            if n then KART.ReadyCheckStatus[n] = "waiting" end
+        end
+        if arg1 then KART.ReadyCheckStatus[arg1:match("([^%-]+)") or arg1] = "ready" end
         -- Also gate on the module toggle: ShowBuffCheck itself refuses and prints
         -- BC_MODULE_DISABLED_MSG when the module is off, which would spam chat on every single ready
         -- check for anyone who enabled "show on ready check" without enabling the module.
@@ -333,6 +338,37 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.UpdateBuffCheckThrottled()
         end
     elseif event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
+        -- Our own answer is what opens the extended ready check's reason dialog. This replaced a
+        -- hooksecurefunc on the global ConfirmReadyCheck: that global still exists, and the hook
+        -- still attaches to it, but Blizzard's ready-check frame no longer calls it, so the dialog
+        -- never appeared for anyone (verified in-game 2026-07-27 -- declining printed no hook call).
+        --
+        -- arg1 is a UNIT TOKEN, not a name, and arrives as both "player" and the group token
+        -- ("raid1"/"party1") for one single answer, so both fire here. rcSelfAnswered collapses that
+        -- to one dialog per check; READY_CHECK above re-arms it.
+        --
+        -- READY_CHECK_FINISHED carries different arguments entirely, hence the event check.
+        -- 0 is not treated as ready either -- the replaced hook accepted that shape and nothing
+        -- documents which one this event uses.
+        local isReady = arg2 and arg2 ~= 0
+        if event == "READY_CHECK_CONFIRM" and arg1 then
+            -- Every confirmation, not just our own: this is the snapshot the Rdy column falls back
+            -- on once Blizzard clears its own status. Recording the same answer twice under two
+            -- tokens is harmless -- both resolve to the same name and the same value.
+            local n = UnitName(arg1)
+            if n and KART.ReadyCheckStatus then
+                KART.ReadyCheckStatus[n] = isReady and "ready" or "notready"
+            end
+        end
+        if event == "READY_CHECK_CONFIRM" and not KART.rcSelfAnswered
+           and arg1 and UnitIsUnit(arg1, "player") then
+            KART.rcSelfAnswered = true
+            if isReady then
+                if KART.RCDialog then KART.RCDialog:Hide() end
+            elseif IsInGroup() and KART_Settings.rcReasonDialog ~= false then
+                KART.ShowReadyCheckReasonDialog()
+            end
+        end
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
             KART.UpdateBuffCheckThrottled()
         end

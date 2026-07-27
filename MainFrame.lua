@@ -240,7 +240,7 @@ KART.CreateTabTitle(2, L.LABEL_RAIDLEAD_TOOLS)
 -- checkboxes/slider floating directly on the tab background.
 local rlCard = KART.UI:CreateCard(KART.RaidleadPanel)
 rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -12)
-rlCard:SetSize(500, 180)
+rlCard:SetSize(500, 210)
 
 -- Checkbox zur Aktivierung
 KART.CbActivate = KART.UI:CreateSettingsCheckbox(rlCard, {
@@ -269,11 +269,19 @@ KART.CbAutoHide = KART.UI:CreateSettingsCheckbox(rlCard, {
     tooltip = L.DESC_RL_AUTOHIDE,
 })
 
+-- Ready-check reason prompt. Sits on this tab because the ready check itself is a Raidlead Bar
+-- button; the dialog it controls lives in Core.lua (KART.ShowReadyCheckReasonDialog).
+KART.CbRcReasonDialog = KART.UI:CreateSettingsCheckbox(rlCard, {
+    name = "KART_RcReasonDialogCheck", label = L.SET_RL_RC_REASON,
+    store = SettingsStore, key = "rcReasonDialog", y = -110,
+    tooltip = L.DESC_RL_RC_REASON,
+})
+
 -- Pull-Timer Slider: the pull button (RaidleadBar.lua) reads pullTimerDuration
 -- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.UI:CreateSettingsSlider(rlCard, {
     name = "KART_PullTimerSlider", label = L.SET_PULL_TIMER,
-    min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -130,
+    min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -160,
     tooltip = L.DESC_PULL_TIMER, skipStyleRefresh = true,
 })
 
@@ -993,6 +1001,8 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.CbActivate.text:SetText(L.SET_RL_ACTIVATE)   KART.CbActivate.tooltipText = L.DESC_RL_ACTIVATE
     KART.CbLock.text:SetText(L.SET_RL_LOCK)           KART.CbLock.tooltipText = L.DESC_RL_LOCK
     KART.CbAutoHide.text:SetText(L.SET_RL_AUTOHIDE)   KART.CbAutoHide.tooltipText = L.DESC_RL_AUTOHIDE
+    KART.CbRcReasonDialog.text:SetText(L.SET_RL_RC_REASON)
+    KART.CbRcReasonDialog.tooltipText = L.DESC_RL_RC_REASON
     KART.PullSlider.title:SetText(L.SET_PULL_TIMER)   KART.PullSlider.tooltipText = L.DESC_PULL_TIMER
     kbTitle:SetText(L.LABEL_RL_KEYBINDS)
     local kbKeyByAction = {

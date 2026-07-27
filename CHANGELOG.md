@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-07-27
+### Fixed
+- **The extended ready check works again.** Declining a ready check offers the reason buttons and the free-text box.
+- **The Buff Checker keeps the ready-check result and the reasons after the check ends**, instead of clearing both at the moment they become useful.
+
+### Added
+- **The reason prompt can be switched off** under Raidlead Tools, for anyone who would rather just decline.
+
 ## [3.0.1] - 2026-07-27
 ### Changed
 - **"Close Session" is now "End Round".** It clears the current round for everyone without turning off the whole Loot Council session.
