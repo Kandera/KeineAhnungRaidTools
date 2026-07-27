@@ -431,9 +431,25 @@ function KASC:RequestHello(channel, target)
     self:Send("KA_HELLO_REQ", channel, target)
 end
 
-function KASC:AnnounceHello(channel, target)
+-- Marks a handshake sent in ANSWER to a request, so a consumer can tell a reply apart from an
+-- unsolicited announcement. /kart v prints one line per answer, and a passive announcement landing
+-- inside its window -- someone joining the group, or toggling a capability -- used to print a line
+-- of its own, for a request that person never received (B10).
+--
+-- Carried as an extra pseudo-addon entry rather than a new message token, deliberately: the wire
+-- grammar already accepts "name=version" entries and a 3.0.x client simply parses this one into a
+-- peers.ACK nobody reads. A separate token would have been invisible to those clients entirely,
+-- which would have broken cross-version version checks to fix a stray line of text.
+local ACK_ENTRY = "ACK=1"
+
+-- solicited: true when this answers a KA_HELLO_REQ (see the responder below). Only affects what
+-- the receiving consumer is told; the addon/capability content is identical either way.
+function KASC:AnnounceHello(channel, target, solicited)
     local payload = KASC.SerializeHello()
+    -- Recorded WITHOUT the ack marker, so an unsolicited announce and a reply compare equal --
+    -- otherwise AnnounceHelloIfChanged would fire an extra announce after every version check.
     lastAnnounced[channel or self:DefaultChannel()] = payload
+    if solicited then payload = payload .. "," .. ACK_ENTRY end
     self:Send("KA_HELLO:" .. payload, channel, target)
 end
 
@@ -456,13 +472,15 @@ end
 
 KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)
     if ctx.channel == "WHISPER" then
-        KASC:AnnounceHello("WHISPER", ctx.sender)
+        KASC:AnnounceHello("WHISPER", ctx.sender, true)
     else
-        KASC:AnnounceHello(ctx.channel)
+        KASC:AnnounceHello(ctx.channel, nil, true)
     end
 end)
 
 KASC:RegisterMessage("KA_HELLO", { payload = true }, function(payload, ctx)
     local peers = KASC.ParseHello(payload)
-    for _, fn in ipairs(peerCallbacks) do fn(ctx.shortName, ctx.sender, peers) end
+    local solicited = peers.ACK ~= nil
+    peers.ACK = nil -- an internal marker, not a peer addon; consumers must never see it as one
+    for _, fn in ipairs(peerCallbacks) do fn(ctx.shortName, ctx.sender, peers, solicited) end
 end)

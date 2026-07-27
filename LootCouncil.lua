@@ -69,19 +69,25 @@ function LC.ApplyWindowChrome(frame, isDialog)
     local dialogStrata = KART.StrataLevels[idx + 1] or "TOOLTIP"
     local scale = ((KART_Settings and KART_Settings.lcScale) or 100) / 100
 
+    -- Background opacity is the addon-wide setting, not a Loot Council one -- but these windows
+    -- were simply never wired to it, so the slider did nothing to them at all (B3). Their artwork
+    -- texture is frame.bg, put there by KAUI:ApplyPopupArtwork; only that fades, exactly as the
+    -- main and history windows do it, so rows and text stay legible at any opacity. Applied here
+    -- because this is now the one place that knows every Loot Council window.
+    local alpha = math.max(20, (KART_Settings and KART_Settings.bgAlpha) or 85) / 100
+
+    local function apply(f, strata)
+        f:SetFrameStrata(strata)
+        f:SetScale(scale)
+        if f.bg then f.bg:SetAlpha(alpha) end
+    end
+
     if frame then
-        frame:SetFrameStrata(isDialog and dialogStrata or windowStrata)
-        frame:SetScale(scale)
+        apply(frame, isDialog and dialogStrata or windowStrata)
         return
     end
-    for _, f in ipairs(LC.windowFrames) do
-        f:SetFrameStrata(windowStrata)
-        f:SetScale(scale)
-    end
-    for _, f in ipairs(LC.windowDialogs) do
-        f:SetFrameStrata(dialogStrata)
-        f:SetScale(scale)
-    end
+    for _, f in ipairs(LC.windowFrames) do apply(f, windowStrata) end
+    for _, f in ipairs(LC.windowDialogs) do apply(f, dialogStrata) end
 end
 
 -- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel

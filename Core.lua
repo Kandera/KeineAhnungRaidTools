@@ -438,7 +438,7 @@ end)
 -- Peer version bookkeeping. The comparison, the update warning and the chat output all live
 -- here rather than in KASC: they are locale-dependent and none of them is a networking
 -- concern.
-KASC:OnPeer(function(shortName, _, peers)
+KASC:OnPeer(function(shortName, _, peers, solicited)
     local kart = peers.KART
     if not kart then return end
 
@@ -472,7 +472,10 @@ KASC:OnPeer(function(shortName, _, peers)
         end
     end
 
-    if KART.VersionCheckActive then
+    -- Only an actual ANSWER to our request prints a result line. A passive announcement -- someone
+    -- joining the group, or toggling the Loot Council module -- can land inside the same five-second
+    -- window and used to print a line for a request that person never received (B10).
+    if KART.VersionCheckActive and solicited then
         print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
     end
 end)
