@@ -217,3 +217,19 @@ The maintainer chose to delete the history instead. **Caveat if that is done aga
 `RequestHistorySync` sends the newest timestamp it holds, which is `0` after a wipe, so peers who
 still hold the old rows replay all of them on the next raid join. Everyone has to clear, or clear
 after the last shared raid.
+
+---
+
+## Observation — GUILD addon messages do reach their own sender
+
+Observed 2026-07-27 on 3.0.0: `/kart v` while solo sends `KA_HELLO_REQ` on GUILD and the sending
+client receives its own `KA_HELLO` back, printing itself in the version-check results.
+
+This contradicts the common assumption — stated in `KART.StartEnchantScan`'s comment — that
+`SendAddonMessage` never echoes to its sender. That comment concerns the RAID/PARTY channel, where
+the assumption still appears to hold (the scan adds its own entry by hand and does not show a
+duplicate). Both can be true at once: no echo in the group channel, echo in the guild channel.
+
+Not a defect, and unchanged from 2.9 behaviour. Recorded because it invalidates a load-bearing
+assumption about one channel, and because it means a solo `/kart v` is **not** evidence that two
+separate clients interoperate — the round trip is entirely local.
