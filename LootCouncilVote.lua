@@ -202,32 +202,34 @@ function Vote.RefreshVoteListRows()
     local f = LC.voteListFrame
 
     local compact = KART_Settings and KART_Settings.lcVoteLayoutCompact
-    local builtNewRow
+    local needsRestyle
     if compact then
         for _, row in ipairs(f.rows or {}) do row:Hide() end
-        builtNewRow = Vote.RefreshVoteListRows_Compact(f)
+        needsRestyle = Vote.RefreshVoteListRows_Compact(f)
     else
         for _, row in ipairs(f.compactRows or {}) do row:Hide() end
-        builtNewRow = Vote.RefreshVoteListRows_Spacious(f)
+        needsRestyle = Vote.RefreshVoteListRows_Spacious(f)
     end
     f:Show()
 
-    -- The window (on first build) and any new row just created above (close button, "Note"
-    -- label, vote/chip button, note EditBox) register with KART.UI *after* the last
-    -- KART.UpdateStyles() call that ran before this point in the session, since this whole window
-    -- is built lazily on first roll rather than at load (see B2 in BACKLOG.md). Re-applying here
-    -- is what reaches a row created by a later, larger batch of simultaneous rolls than any seen
-    -- so far this session, not just the very first one.
+    -- The window (on first build) and anything newly registered with KART.UI above (close
+    -- button, "Note" label, a newly pooled vote/chip button, note EditBox) registers *after* the
+    -- last KART.UpdateStyles() call that ran before this point in the session, since this whole
+    -- window is built lazily on first roll rather than at load (see B2 in BACKLOG.md). Re-applying
+    -- here is what reaches a widget created by a later, larger batch of simultaneous rolls, or a
+    -- vote-button set grown mid-session (LC.GetButtonConfig changing via a Settings-tab edit or an
+    -- accepted config sync), not just whatever existed on the very first build.
     --
-    -- Gated on builtNewRow (true only when this pass actually created at least one new pooled row
-    -- — see the flag of the same name inside RefreshVoteListRows_Spacious/_Compact) rather than
-    -- called on every refresh: this function runs on every new roll, every local vote, and every
-    -- expiry sweep, which during active looting can be several times a second, and a full
-    -- KART.UpdateStyles() re-applies far more than these widgets' font (main window scale/strata,
-    -- every registered EditBox's font, the minimap icon tint, a BuffCheck refresh if that window
-    -- is open) — cheap in isolation, but needless work on the refreshes where nothing new
-    -- registered at all. A recycled/repositioned row never needs this, only a freshly created one.
-    if builtNewRow and KART.UpdateStyles then KART.UpdateStyles() end
+    -- Gated on needsRestyle (true only when this pass actually registered something new — see the
+    -- flag of the same name inside RefreshVoteListRows_Spacious/_Compact, set both on a new row and
+    -- on a new vote button within an existing row) rather than called on every refresh: this
+    -- function runs on every new roll, every local vote, and every expiry sweep, which during
+    -- active looting can be several times a second, and a full KART.UpdateStyles() re-applies far
+    -- more than these widgets' font (main window scale/strata, every registered EditBox's font,
+    -- the minimap icon tint, a BuffCheck refresh if that window is open) — cheap in isolation, but
+    -- needless work on the refreshes where nothing new registered at all. A recycled/repositioned
+    -- row or button never needs this, only a freshly created one.
+    if needsRestyle and KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Vote.RefreshVoteListRows() always calls f:Show() when there's still a pending roll — deliberate
@@ -308,11 +310,13 @@ function Vote.RefreshVoteListRows_Spacious(f)
     local shrinkVoted = KART_Settings.lcVotedItemDisplay == "shrink"
     local ROW_GAP   = 22 -- gap between item blocks — was 12, still too tight for 2+ simultaneous rolls
 
-    -- Tracks whether this pass created any brand-new row (as opposed to only reusing/repositioning
-    -- pooled ones already on screen) — returned to the caller (Vote.RefreshVoteListRows) so it only
-    -- pays for a full KART.UpdateStyles() re-apply on the passes that actually register something
-    -- new, not on every single vote/expiry refresh.
-    local builtNewRow = false
+    -- Tracks whether this pass registered anything new with KART.UI (a brand-new row, or a
+    -- brand-new vote button within an existing row — LC.GetButtonConfig's category count can grow
+    -- mid-session from a Settings-tab edit or an accepted config sync), as opposed to only reusing/
+    -- repositioning pooled widgets already on screen. Returned to the caller
+    -- (Vote.RefreshVoteListRows) so it only pays for a full KART.UpdateStyles() re-apply on the
+    -- passes that actually register something new, not on every single vote/expiry refresh.
+    local needsRestyle = false
 
     -- Same short-name extraction the test-roll vote branch further below already uses — this is
     -- the local player's own Droptimizer gain% for the item, not a per-candidate column (a
@@ -325,7 +329,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
     for i, rollID in ipairs(visibleRolls) do
         local row = f.rows[i]
         if not row then
-            builtNewRow = true
+            needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
@@ -527,6 +531,13 @@ function Vote.RefreshVoteListRows_Spacious(f)
 
                 local btn = row.voteButtons[bi]
                 if not btn then
+                    -- Pooled independently of the row itself: LC.GetButtonConfig's category count
+                    -- can grow mid-session (a Settings-tab edit, or an accepted LC_SYNC_ACCEPT
+                    -- config push), which adds a new button to an EXISTING row without that row
+                    -- itself being new — CreateModernButton self-registers this button's label
+                    -- with KART.UI just like a brand-new row's own widgets do, so this needs the
+                    -- same needsRestyle signal, not just the "if not row" branch above.
+                    needsRestyle = true
                     btn = KART.UI:CreateModernButton(row.btnArea, def.label)
                     btn.grad = KART.UI:CreateGradientOverlay(btn)
                     btn.iconTex = btn:CreateTexture(nil, "ARTWORK")
@@ -566,7 +577,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
     f:SetHeight(math.min(32 + y + 12, 600))
 
     LC.ApplyFontSize()
-    return builtNewRow
+    return needsRestyle
 end
 
 -- "Compact" style: one short single-line row per item, vote buttons shrunk to icon-only chips.
@@ -594,16 +605,20 @@ function Vote.RefreshVoteListRows_Compact(f)
 
     f.compactRows = f.compactRows or {}
 
-    -- Same reasoning as the Spacious renderer's builtNewRow above — row.noteBox below registers
+    -- Same reasoning as the Spacious renderer's needsRestyle above — row.noteBox below registers
     -- with KART.UI just like the Spacious "Note" label does, so this pass needs to report whether
-    -- it created anything new too.
-    local builtNewRow = false
+    -- it created anything new too. Unlike Spacious, the chip buttons created further down (see
+    -- row.chipButtons below) do NOT need the same treatment: they carry only a plain unregistered
+    -- gradient texture (KART.UI:CreateGradientOverlay, which never registers anything) and an icon
+    -- texture/tooltip, no registered FontString or EditBox of their own — confirmed by grepping
+    -- this whole function for every KART.UI:Register*/Create* call.
+    local needsRestyle = false
 
     local visibleRolls = Vote.GetVisibleRolls()
     for i, rollID in ipairs(visibleRolls) do
         local row = f.compactRows[i]
         if not row then
-            builtNewRow = true
+            needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
             row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
@@ -830,7 +845,7 @@ function Vote.RefreshVoteListRows_Compact(f)
     f:SetHeight(math.min(32 + #visibleRolls * (rowH + ROW_GAP) + 12, 600))
 
     LC.ApplyFontSize()
-    return builtNewRow
+    return needsRestyle
 end
 
 --- Manually sets (overrides) a player's vote in the council panel — e.g. they voted verbally or
