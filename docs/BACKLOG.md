@@ -426,6 +426,120 @@ window's tabs, the council panel and the vote list have independent layouts.
 
 Reported 2026-07-27.
 
+---
+
+## B19 — The peer status marker is a one-shot snapshot and never refreshes
+
+**Symptom:** two 3.0.1 clients in the same group, Loot Council demonstrably working in both
+directions, each showing a red `!` on the other's council row — with *different* reasons. One saw
+"Loot Council disabled on their end", the other "No KART detected" for a player who was plainly
+running it.
+
+**Cause.** `LootCouncilPanel.lua` renders the marker purely from `KART.PlayerVersions[short]` and
+`KART.PlayerLCEnabled[short]`, and both tables are only ever written by the `KA_HELLO` callback in
+`Core.lua`. A HELLO goes out in exactly three situations:
+
+- `PLAYER_ENTERING_WORLD` on login/reload, five seconds later, GUILD only
+- the first `GROUP_ROSTER_UPDATE` while in a group, latched by `KART.VersionAnnouncedToGroup`
+- as a reply to someone else's `KA_HELLO_REQ` (`/kart v`)
+
+So `caps.LC` is a snapshot taken at announce time. It comes from
+`KART_Settings.lcModuleEnabled ~= false`, and **the default for that setting is `false`**
+(`Utils.lua`). Nothing re-announces when the toggle changes — grep for `AnnounceHello` finds only
+the two call sites above. A peer who enables the module after their HELLO went out is recorded as
+`false` on every other client until someone runs `/kart v` or reloads.
+
+The missing-KART direction belongs to the same family. The group announce is one-shot per join and
+`AnnounceHello()` picks `DefaultChannel()`, which is `PARTY` until the group is a raid. A client
+that misses that single packet, or joins around a party-to-raid conversion, is never told again.
+
+**Confirmed 2026-07-27:** toggling the module and then running `/kart v` cleared the marker on both
+clients at once. That rules out the parser and pins the announce path.
+
+**Fix direction** (three parts, all in `KASC-1.0`/`Core.lua`):
+1. Remember the last serialized HELLO string; re-announce when `SerializeHello()` differs. Hook it
+   to the module toggle so a capability change propagates immediately.
+2. Replace the `VersionAnnouncedToGroup` boolean with the channel last announced to, so a
+   party-to-raid conversion re-announces and re-requests.
+3. Throttle both, leading-edge, like `KART.HandleAutoPromoteThrottled` — `GROUP_ROSTER_UPDATE`
+   fires in bursts during raid formation.
+
+**Workaround until then:** `/kart v` in the raid clears a stale marker for everyone.
+
+Reported 2026-07-27, cause confirmed the same day. Pre-existing — the one-shot announce predates
+the library extraction; only the capability field is new in 3.0.
+
+---
+
+## B20 — A non-lootmaster's raid-wide fields show their own config, not the one in force
+
+**Symptom:** a raider receiving the lootmaster's config correctly — loot distribution working, vote
+buttons correct — sees the "Additional council members" and "Lootmaster" boxes empty, while the
+line directly beneath them reads "5 name(s) not resolved yet".
+
+**Cause.** Two adjacent widgets read from two different sources:
+
+- the edit boxes are bound to `KART_Settings.lcCouncilMembers` / `.lcLootmaster` (`Core.lua:76-77`)
+  — the viewer's **own** saved config
+- the pending counter walks `LC.CouncilNamesTable` (`LootCouncilSettings.lua:277`) — the
+  **effective** table, which on a peer holds the received raid config
+
+An accepted `LC_CONFIG` lands in `LC.raidConfig` and `LC.CouncilNamesTable`, never in
+`KART_Settings`. That part is deliberate: a peer's own setup must survive intact for when they are
+the lootmaster themselves. The consequence is that a peer can never see what is actually in force,
+and the counter contradicts the empty box next to it.
+
+Not a data defect — the config arrives and applies. Display only.
+
+**Chosen direction** (decided 2026-07-27): while a raid config is in force and the viewer is not the
+config owner, the boxes show the **effective** values read-only. Own values stay stored untouched
+and reappear once no raid config applies. Requires care in two places: the settings-push in
+`Core.lua` must not write the displayed raid values back into `KART_Settings`, and the boxes must
+re-render when a config arrives, not only on show.
+
+Reported 2026-07-27.
+
+---
+
+## B21 — The extended ready check never offers the reason dialog to the other player
+
+**Symptom:** a raider who declines a ready check is never given the KART reason dialog — neither the
+three preset buttons nor the free-text box. The receiving side is therefore never exercised either.
+
+**Not yet diagnosed.** The dialog itself (`KART.ShowReadyCheckReasonDialog`, `Core.lua:546`) has no
+settings gate at all — nothing in `KART_Settings` can switch the feature off, so a disabled module
+is ruled out. `RC_REASON` sends and receives normally (`Core.lua:428`, `Core.lua:575`).
+
+Everything therefore hangs on the single trigger, `Core.lua:249`:
+
+```lua
+hooksecurefunc("ConfirmReadyCheck", function(isReady) ... end)
+```
+
+Candidate causes, none confirmed:
+- **The global is no longer on the path taken.** The hook only fires when that exact global is
+  called, which is Blizzard's own `ReadyCheckFrame` Yes/No buttons. A raider answering through a
+  replacement ready-check UI (ElvUI, MRT, a WeakAura) or letting the check time out never reaches
+  it. This would explain why it works for one player and not another on the same raid.
+- **The dialog opens behind something.** It shows at `CENTER, 0, 150` in KART's own strata
+  (`KART.UI:RegisterStrataFrame`). A ready check also opens the Buff Checker for anyone with
+  `showBuffCheck` on, and that window is large and centred. Same failure shape as B8 and as the End
+  Session window that opened behind the council panel.
+- **The 15-second auto-hide** (`Core.lua:638`) closing it before it is noticed, if the click and the
+  dialog are separated by a loading screen or combat.
+
+**What would pin it, in order:**
+1. Does the dialog appear for the *maintainer's own* client when declining a ready check? That
+   separates "trigger never fires" from "fires only on some clients".
+2. On the affected raider: does `/run print(ConfirmReadyCheck)` print a function, and do they run a
+   unit-frame or raid addon that replaces the ready-check popup?
+3. Have them decline with every KART window closed and the Buff Checker disabled — if the dialog
+   appears then, it is the strata case, not the hook.
+
+Reported 2026-07-27. Pre-existing — untouched by the library extraction.
+
+---
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
