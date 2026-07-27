@@ -781,6 +781,73 @@ Reported 2026-07-27 after a live raid, cause confirmed the same evening.
 
 ---
 
+## B26 — The vote window's item tooltip only covers the upper half of the icon (issues #7, #8)
+
+**Reported twice independently** — Wuusch and Shadowhuntr, the second explicitly on 1440p — which
+makes it confirmed rather than suspected.
+
+**Cause, arithmetic.** The hover frame spans from the icon's top-left to the **item name's**
+bottom-right (`LootCouncilVote.lua:376-377`). The name is anchored 4px below the icon's top edge and
+is roughly 17px tall for a single line at font size 14, so the hover region ends 21px down — against
+an icon that is **46px** tall in the spacious layout (`LootCouncilVote.lua:293`).
+
+21 of 46 is, precisely, the upper half.
+
+The compact layout uses a 26px icon (`LootCouncilVote.lua:594`), where the same 21px covers 81% and
+nobody notices. Both layouts build the hover identically (`:376` and `:648`).
+
+A two-line item name pushes the region to ~38px and hides the bug, which is why it can look
+intermittent.
+
+**Fix:** anchor the hover's bottom to the icon's bottom rather than the text's. In the spacious
+layout that covers everything, since 46px exceeds even a two-line name. In the compact layout a
+two-line name would extend ~8px below a 26px icon and lose its tooltip there — worth accepting, or
+worth sizing the frame to the taller of the two at refresh time.
+
+Reported 2026-07-27.
+
+---
+
+## B27 — A council tab closes when you meant to switch to it (issue #9)
+
+**Symptom:** "clicking an item can make them disappear" — härikini.
+
+**Cause.** Each tab is a 40x40 button carrying a 14x14 close button in its top-right corner, hidden
+until the tab is hovered (`LootCouncilPanel.lua:402-406`). `Council.CloseCouncilTab` then drops the
+roll entirely: the tab, the vote-list row and the trade state.
+
+The comment above `Council.RefreshCouncilTabs` says the hover-only reveal exists precisely because
+an always-visible x "made it very easy to close a tab by accident". It does not achieve that. **You
+have to hover a tab in order to click it**, so the x appears exactly when the pointer is already
+there — hover-only prevents stray clicks from someone not interacting at all, which was never the
+failure. A pointer arriving in the top-right corner still closes instead of switching.
+
+**Fix directions:** anchor the x just outside the tab's own hit area so a tab click can never reach
+it; or reveal it only after a deliberate hover delay; or require a modifier. The first is the only
+one that makes the mistake structurally impossible.
+
+Reported 2026-07-27.
+
+---
+
+## B28 — Slider values cannot be typed (issue #6)
+
+**Request** from Syks: every numeric setting is a slider only, and the number beside it is not
+editable. Typing an exact value would be easier than dragging for one.
+
+Affects every `KART.UI:CreateSettingsSlider` — window scale, background opacity, font sizes, vote
+timer, pull timer, and the strata slider, whose value renders as a name rather than a number and
+would need its own handling or exclusion.
+
+The factory lives in `KAUI-1.0`, so this is one change in the library rather than per call site. It
+needs care in two places: the strata slider overwrites its own value text through a hook
+(`MainFrame.lua`, `UpdateStrataSliderText`), and the scale slider defers applying while dragging
+(`isDragging`, see `Core.lua:504`) — a typed value has no drag to end, so it must apply on its own.
+
+Reported 2026-07-27.
+
+---
+
 ## Library-boundary items, relevant only if the Loot Council half is ever split out
 
 These do not affect the shipped addon at all. They are prerequisites for the split the libraries
