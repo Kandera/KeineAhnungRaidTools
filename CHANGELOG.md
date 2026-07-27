@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Hovering the red "!" warning icon on a council row now shows what it means.**
+- **Joining a freshly-formed raid no longer risks missing the Loot Council setup.** A council member who was affected would keep their own button labels and only see the vote popup, never the council panel.
 
 ## [3.0.0] - 2026-07-27
 ### Changed

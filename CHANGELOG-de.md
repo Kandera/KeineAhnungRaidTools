@@ -13,6 +13,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Behoben
 - **Das rote "!"-Warnsymbol bei einer Council-Zeile zeigt jetzt beim Hovern an, was es bedeutet.**
+- **Der Beitritt zu einem gerade erst formierten Raid gefährdet das Loot-Council-Setup nicht mehr.** Betroffene Council-Mitglieder behielten bisher ihre eigenen Button-Beschriftungen und sahen nur das Abstimmungsfenster, nie das Council-Panel.
 
 ## [3.0.0] - 2026-07-27
 ### Geändert

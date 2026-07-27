@@ -499,9 +499,6 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
--- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
--- registered near the bottom of this file).
---
 -- Authority is the configured LOOTMASTER, not the raid leader: the config is only accepted when the
 -- sender is the very player the payload names as lootmaster. That is self-validating — no prior
 -- state is needed, so it works for a client that has never seen a config — and it means handing raid
@@ -511,16 +508,25 @@ end
 --
 -- A forged LC_CONFIG therefore can't self-promote either: the sender would have to name themselves
 -- lootmaster, and every client resolves that name against the live roster the same way.
-function LC.HandleConfig(payload, senderKey)
+--
+-- Factored out of LC.HandleConfig so LC.RetryPendingConfig (below) can re-run the exact same
+-- acceptance predicate later, instead of a hand-rolled approximation of it — see B12 in
+-- docs/BACKLOG.md. Returns true on success. On failure returns false plus a reason: "no-sender" (the
+-- sender isn't resolvable at all — e.g. they've since left the group), "parse-fail" (malformed
+-- payload), or "lootmaster-unresolved" (the one B12 is about: the declared lootmaster doesn't yet
+-- resolve, on this receiver, to the sender). Only the caller decides what to do with the reason.
+local function TryAcceptConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
-    if not unit then return end
+    if not unit then return false, "no-sender" end
 
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
-    if not minQ then return end
+    if not minQ then return false, "parse-fail" end
 
     -- The payload must declare a lootmaster, and the sender must BE them.
     local declaredKey = LC.ResolveConfigName(lootmaster)
-    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then return end
+    if not declaredKey or declaredKey == "" or declaredKey ~= senderKey then
+        return false, "lootmaster-unresolved"
+    end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
@@ -534,6 +540,120 @@ function LC.HandleConfig(payload, senderKey)
     for _, name in ipairs(KAUtil.SplitString(council, ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
+    end
+    return true
+end
+
+-- ==========================================================================
+--  B12: retry a config rejected only for an unresolved lootmaster
+-- ==========================================================================
+--
+-- NSRT distributes lootmaster nicknames between clients over time, so a raid that starts
+-- distributing loot immediately after forming can have peers whose NSAPI:GetName doesn't know that
+-- nickname yet — TryAcceptConfig's "lootmaster-unresolved" case. That resolves itself once NSRT
+-- catches up or the roster changes, but nothing re-delivers the config on its own once the raid
+-- settles (see B12 in docs/BACKLOG.md), so the one payload that failed for that reason is kept
+-- around and retried — with the SAME predicate, never a relaxed one — until it succeeds or the
+-- budget below runs out.
+LC.pendingConfig = nil -- {payload, senderKey, attempts, timer} or nil while nothing is pending
+
+-- Every 10s for up to 12 attempts (~2 minutes). NSRT's nickname sync is normally a matter of
+-- seconds; this comfortably covers a slow sync without retrying all evening. Roster changes (see
+-- LC.RetryPendingConfigThrottled) add extra attempts on top of this schedule for free.
+local PENDING_CONFIG_RETRY_INTERVAL = 10
+local PENDING_CONFIG_MAX_ATTEMPTS   = 12
+
+-- (Re)arms the single retry timer for the current pending payload, cancelling any timer already
+-- running for it first — this is called from both the timer's own callback and the roster-change
+-- hook, and only one may be in flight at a time.
+local function ScheduleNextPendingConfigAttempt()
+    local pending = LC.pendingConfig
+    if not pending then return end
+    if pending.timer then pending.timer:Cancel() end
+    pending.timer = C_Timer.NewTimer(PENDING_CONFIG_RETRY_INTERVAL, LC.RetryPendingConfig)
+end
+
+-- Cancels and clears the pending payload, if any. Called on successful acceptance, when the session
+-- ends (LC.SetSessionActive, LC.HandleActive) and when leaving the raid (LC.CheckRaidJoin) — a
+-- payload from a session/raid that's no longer current has nothing left to become relevant to.
+function LC.CancelPendingConfig()
+    if LC.pendingConfig and LC.pendingConfig.timer then
+        LC.pendingConfig.timer:Cancel()
+    end
+    LC.pendingConfig = nil
+end
+
+-- CouncilNamesTable/raidConfig just changed, so a member who wasn't council before may be now —
+-- refresh the open panel the same way ResolveRollItemLink does for a late-arriving item link
+-- (LootCouncil.lua ~992). The vote popup needs no equivalent: it doesn't show council-only info.
+local function RefreshCouncilPanelIfOpen()
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        KART.LC.Council.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilTabs()
+    end
+end
+
+-- Re-runs TryAcceptConfig for the one stored payload, if any. Called by its own retry timer and by
+-- the roster-change hook (LC.RetryPendingConfigThrottled) — both are ways the lootmaster-resolution
+-- failure can clear up. Re-running the WHOLE predicate (not just the lootmaster check) matters here:
+-- the stored sender may have left the group since, in which case TryAcceptConfig now fails with
+-- "no-sender" instead — and that can never resolve, so the payload is dropped instead of retried.
+function LC.RetryPendingConfig()
+    local pending = LC.pendingConfig
+    if not pending then return end
+
+    local accepted, reason = TryAcceptConfig(pending.payload, pending.senderKey)
+    if accepted then
+        LC.CancelPendingConfig()
+        RefreshCouncilPanelIfOpen()
+        return
+    end
+
+    if reason == "no-sender" then
+        LC.CancelPendingConfig()
+        return
+    end
+
+    pending.attempts = pending.attempts + 1
+    if pending.attempts >= PENDING_CONFIG_MAX_ATTEMPTS then
+        LC.CancelPendingConfig()
+        return
+    end
+    ScheduleNextPendingConfigAttempt()
+end
+
+-- Leading-edge throttle, same pattern as LC.RetryPendingResolutionsThrottled right below — but a
+-- separate flag and a separate function. That one retries council-list/lootmaster entries already
+-- INSIDE an accepted config; this one retries a config that was never accepted in the first place.
+-- Different problem, same trigger (a roster change), so both get wired to it independently rather
+-- than merged into one path.
+local isPendingConfigThrottled = false
+function LC.RetryPendingConfigThrottled()
+    if isPendingConfigThrottled then return end
+    isPendingConfigThrottled = true
+    C_Timer.After(1, function()
+        isPendingConfigThrottled = false
+        LC.RetryPendingConfig()
+    end)
+end
+
+-- Applies a raid-config broadcast (called from KASC's dispatcher via the LC_CONFIG handler
+-- registered near the bottom of this file). See TryAcceptConfig above for the acceptance predicate.
+function LC.HandleConfig(payload, senderKey)
+    local accepted, reason = TryAcceptConfig(payload, senderKey)
+    if accepted then
+        LC.CancelPendingConfig()
+        return
+    end
+
+    -- Only an unresolved lootmaster is worth remembering: a parse failure means a malformed
+    -- payload (retrying won't fix that), and "no-sender" means we can't even identify who sent it
+    -- (retrying re-checks that on every attempt anyway, via TryAcceptConfig). Storing on those too
+    -- would let unrelated noise clobber a legitimate pending payload from an earlier broadcast.
+    if reason == "lootmaster-unresolved" then
+        if LC.pendingConfig and LC.pendingConfig.timer then LC.pendingConfig.timer:Cancel() end
+        LC.pendingConfig = { payload = payload, senderKey = senderKey, attempts = 0 }
+        ScheduleNextPendingConfigAttempt()
     end
 end
 
@@ -910,6 +1030,8 @@ function LC.SetSessionActive(active)
         -- Ending the session forgets every tracked roll so the next boss starts clean instead of
         -- showing leftover tabs/votes from this one (see LC.ClearAllRolls / LC.Trade.ClearRollState).
         LC.ClearAllRolls()
+        -- A pending B12 retry (see LC.RetryPendingConfig) belongs to the session that's ending.
+        LC.CancelPendingConfig()
     end
     print("|cff00ff00KART:|r " .. (active and KART.L.LC_SESSION_ON or KART.L.LC_SESSION_OFF))
 end
@@ -937,6 +1059,9 @@ function LC.CheckRaidJoin()
         -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are
         -- exactly the ones Blizzard hands out first in the next raid — an immediate collision.
         if wasActive then LC.ClearAllRolls() end
+        -- Any B12 retry (see LC.RetryPendingConfig) was for this raid's config; it's meaningless in
+        -- whatever we join next, regardless of whether a session was active.
+        LC.CancelPendingConfig()
         return
     end
     if KART_Settings.lcModuleEnabled == false then return end
@@ -1248,6 +1373,9 @@ function LC.HandleActive(value, senderKey)
     -- and a leftover /kart showall override survive into the next session.
     if wasActive and not LC.sessionActive then
         LC.ClearAllRolls()
+        -- Same reasoning as LC.SetSessionActive(false): a pending B12 retry belongs to the session
+        -- that just ended (see LC.RetryPendingConfig).
+        LC.CancelPendingConfig()
     end
     -- No "and if we own the config, broadcast it" branch here, deliberately: config ownership and
     -- loot ownership can never be split across two people. LC.IsConfigOwner() true means our own
