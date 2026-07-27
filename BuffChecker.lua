@@ -368,12 +368,20 @@ function KART.CreateBuffCheckFrame()
     close:SetPoint("TOPRIGHT", -5, -2)
     f.closeBtn = close
 
+    -- Debounced, and matching the responders' own answer cooldown in KASC. One click asks the whole
+    -- raid three questions and every KART client answers all three: 60 outbound messages in a 20-man
+    -- raid. A few impatient clicks used to overrun Blizzard's chat rate limiter, which drops the
+    -- overflow silently and without retry -- so clicking again to make the missing data appear was
+    -- precisely what stopped it from appearing (B16).
+    local REQUEST_COOLDOWN = 5
+    local lastRequest = -REQUEST_COOLDOWN
     local function RequestAdvancedData()
-        if IsInGroup() then
-            KASC:Send("REQ_OIL")
-            KASC:Send("REQ_ILVL")
-            KASC:Send("REQ_GEAR")
-        end
+        if not IsInGroup() then return end
+        if GetTime() - lastRequest < REQUEST_COOLDOWN then return end
+        lastRequest = GetTime()
+        KASC:Send("REQ_OIL")
+        KASC:Send("REQ_ILVL")
+        KASC:Send("REQ_GEAR")
     end
 
     local modeBtn = KART.UI:CreateModernButton(f, L.BTN_MODE_ADVANCED)

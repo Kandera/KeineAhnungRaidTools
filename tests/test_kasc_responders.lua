@@ -4,6 +4,15 @@
 -- was sent" -- exactly like tests/test_sync.lua already does for the handshake tokens.
 local KASC = LibStub("KASC-1.0")
 
+-- The four responders carry a 5s per-token answer cooldown (B16): one raid-wide broadcast already
+-- serves every requester, so a second identical request inside the window is a duplicate and gets
+-- no reply. Each case below is a fresh request, so step the clock past that window first --
+-- otherwise every block after the first would assert against an answer that was never sent.
+local function Dispatch(msg, channel, sender)
+    KARTTEST.now = KARTTEST.now + 10
+    KASC.Dispatch(msg, channel, sender)
+end
+
 -- Every block below resets the roster/realm and the whole gear-scan state first, since
 -- tests/run.lua shares one global environment across every test file (see wow_stubs.lua) and
 -- these responders read every one of KARTTEST.inventory, .equipLocs, .weaponEnchant,
@@ -33,7 +42,7 @@ KARTTEST.equipLocs["item:212030:0:"] = "INVTYPE_WEAPONMAINHAND"
 -- Slot 17 is left with no item link at all, so SlotNeedsOil(17) short-circuits to false.
 KARTTEST.weaponEnchant = { true, 0, 0, 8052, false, 0, 0, 0 }
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
 T.eq(#KARTTEST.sent, 1, "REQ_OIL from a group member produces exactly one reply")
 T.eq(KARTTEST.sent[1].msg, "OIL:8052:n",
     "an oiled main hand reports its enchant id, and an empty off hand reports the no-oil-possible marker")
@@ -49,7 +58,7 @@ KARTTEST.equipLocs[mh] = "INVTYPE_WEAPONMAINHAND"
 KARTTEST.equipLocs[oh] = "INVTYPE_WEAPONOFFHAND"
 KARTTEST.weaponEnchant = { false, 0, 0, 0, true, 0, 0, 9001 }
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "OIL:0:9001",
     "an unoiled main-hand weapon reports 0, distinct from the off hand's own oil id")
 
@@ -59,7 +68,7 @@ local shield = "item:212050:0:"
 KARTTEST.inventory[17] = shield
 KARTTEST.equipLocs[shield] = "INVTYPE_SHIELD"
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_OIL", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "OIL:n:n",
     "an empty main hand and a shielded off hand both report the no-oil-possible marker, not 0")
 
@@ -70,13 +79,13 @@ T.eq(KARTTEST.sent[1].msg, "OIL:n:n",
 ResetGearState()
 KARTTEST.equippedIlvl = 605.3
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "ILVL:605.3", "the item level reply keeps exactly one decimal place")
 
 ResetGearState()
 KARTTEST.equippedIlvl = 620
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "ILVL:620.0", "a whole-number item level still gets a trailing .0")
 
 -- =====================================================================================
@@ -88,7 +97,7 @@ KARTTEST.inventory[1] = "item:212000:7961:" -- head, a confirmed good enchant
 KARTTEST.inventory[3] = "item:212001:0:"    -- shoulders, no enchant applied
 KARTTEST.weaponEnchant = { true, 0, 0, 8052, false, 0, 0, 0 } -- main-hand oil, no off-hand oil
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ENCH", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_ENCH", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "ENCH:1=7961,oil=8052",
     "the ENCH reply serializes the enchanted slot and the temporary weapon oil, and omits the bare slot")
 
@@ -103,7 +112,7 @@ KARTTEST.inventory[3]  = "item:212001:0:"    -- shoulders, no enchant at all
 KARTTEST.inventory[11] = "item:212002:7965:" -- ring, a good enchant, but two empty sockets
 KARTTEST.tooltipLines[11] = { "Prismatic Socket", "Prismatic Socket" }
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_GEAR", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_GEAR", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "GEAR:1w,3:11,11",
     "a wrong enchant, a missing enchant and a doubly-socketed slot all reach the wire, in that list format")
 
@@ -123,7 +132,7 @@ KARTTEST.inventory = {
 KARTTEST.equipLocs["item:220016:7979:"] = "INVTYPE_WEAPONMAINHAND"
 KARTTEST.equipLocs["item:220017:7979:"] = "INVTYPE_WEAPONOFFHAND"
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_GEAR", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_GEAR", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1].msg, "GEAR:0:0", "fully enchanted gear with no empty sockets reports nothing missing")
 
 -- =====================================================================================
@@ -141,18 +150,43 @@ KARTTEST.equippedIlvl = 599.9
 -- rejections below prove the gate is closing a door that would otherwise be open, not that
 -- the responder is simply broken.
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
 T.eq(KARTTEST.sent[1] and KARTTEST.sent[1].msg, "ILVL:599.9",
     "a genuine group member's request is answered")
 
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ILVL", "WHISPER", "Stranger-Silvermoon")
+Dispatch("REQ_ILVL", "WHISPER", "Stranger-Silvermoon")
 T.eq(#KARTTEST.sent, 0, "a whispered request from a sender outside the group produces no reply at all")
 
 -- The realm is what makes this a real gate rather than a name check: identity resolution is
 -- short-name based, so without the realm comparison an out-of-group sender sharing a group
 -- member's short name would resolve onto that member's GUID and pass every authority check.
 KARTTEST.ClearSent()
-KASC.Dispatch("REQ_ILVL", "WHISPER", "Ann-Silvermoon")
+Dispatch("REQ_ILVL", "WHISPER", "Ann-Silvermoon")
 T.eq(#KARTTEST.sent, 0,
     "a same-short-name sender on a different realm is rejected, not resolved onto the real member")
+
+-- Answer cooldown (B16) ------------------------------------------------------------------------
+-- One click of the Buff Checker's Refresh asks the whole raid three questions and every KART client
+-- answers all three -- 60 outbound messages in a 20-man raid. A few impatient clicks overran
+-- Blizzard's chat rate limiter, which drops the overflow silently and without retry, so the rows
+-- that lost their answer stayed empty for the session. Each responder now answers a token at most
+-- once per 5 seconds; the reply is a raid-wide broadcast, so the first one already served everyone.
+KARTTEST.SetRaid({ { name = "Ann", guid = "Player-1-A" } })
+KARTTEST.realm = "TarrenMill"
+
+KARTTEST.now = KARTTEST.now + 10
+KARTTEST.ClearSent()
+KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+T.eq(#KARTTEST.sent, 1, "the first request is answered")
+
+KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+T.eq(#KARTTEST.sent, 1, "an immediate repeat of the same request is not answered again")
+
+-- A different token is a different question and has its own window.
+KASC.Dispatch("REQ_GEAR", "RAID", "Ann-TarrenMill")
+T.eq(#KARTTEST.sent, 2, "a different request token answers even inside another token's window")
+
+KARTTEST.now = KARTTEST.now + 6
+KASC.Dispatch("REQ_ILVL", "RAID", "Ann-TarrenMill")
+T.eq(#KARTTEST.sent, 3, "the same request answers again once the window has passed")

@@ -320,7 +320,26 @@ end
 -- reply below broadcasts to the group channel rather than replying to the sender directly — the
 -- point is never to single-source data back to an asker, only to keep it inside the group.
 
+-- Per-token answer cooldown. Every one of these is a raid-wide broadcast, so the first reply
+-- already served everyone who asked -- anything inside the window is a duplicate that only costs
+-- bandwidth. Without it, one Buff Checker refresh in a 20-man raid is 60 outbound answers, and a
+-- few impatient clicks overrun Blizzard's chat rate limiter, which drops the overflow SILENTLY.
+-- Nothing retries, so the rows that lost their answer stay empty for the rest of the session.
+--
+-- The same reasoning already carried REQ_EQUIP's own cooldown in the consumer (see
+-- EQUIP_ANSWER_COOLDOWN in LootCouncilPanel.lua); these four never got one.
+local ANSWER_COOLDOWN = 5
+local lastAnswer = {} -- [token] = GetTime() of our last reply, written only on an actual send
+
+local function OnAnswerCooldown(token)
+    local now = GetTime()
+    if now - (lastAnswer[token] or -ANSWER_COOLDOWN) < ANSWER_COOLDOWN then return true end
+    lastAnswer[token] = now
+    return false
+end
+
 KASC:RegisterMessage("REQ_OIL", { group = true }, function()
+    if OnAnswerCooldown("REQ_OIL") then return end
     local hasMH, _, _, mhID, hasOH, _, _, ohID = GetWeaponEnchantInfo()
     -- "n" for a hand that takes no oil at all (empty, shield, caster off-hand), so the receiver
     -- can tell it apart from a weapon that is simply unoiled ("0"). Only we see our own gear.
@@ -330,6 +349,7 @@ KASC:RegisterMessage("REQ_OIL", { group = true }, function()
 end)
 
 KASC:RegisterMessage("REQ_ILVL", { group = true }, function()
+    if OnAnswerCooldown("REQ_ILVL") then return end
     local _, equipped = GetAverageItemLevel()
     if equipped and IsInGroup() then
         KASC:Send("ILVL:" .. string.format("%.1f", equipped))
@@ -337,12 +357,14 @@ KASC:RegisterMessage("REQ_ILVL", { group = true }, function()
 end)
 
 KASC:RegisterMessage("REQ_ENCH", { group = true }, function()
+    if OnAnswerCooldown("REQ_ENCH") then return end
     -- Maintenance scan, not part of any display path -- it exists so the accepted-enchant
     -- lists can be checked against what the raid actually wears.
     if IsInGroup() then KASC:Send("ENCH:" .. KAGS.SerializeOwnEnchantIDs()) end
 end)
 
 KASC:RegisterMessage("REQ_GEAR", { group = true }, function()
+    if OnAnswerCooldown("REQ_GEAR") then return end
     if IsInGroup() then
         local e, g = KAGS.CountMissingGear()
         KASC:Send("GEAR:" .. e .. ":" .. g)

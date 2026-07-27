@@ -815,10 +815,25 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
     -- history catch-up sync path in HandleHistoryEntry below). Only checks the most recent entries
     -- within the last few seconds — a genuine duplicate would land back-to-back, whereas a real
     -- re-roll of the exact same item to the exact same winner minutes later is a separate event.
+    --
+    -- Matched on the rollID whenever there is one, because two identical drops awarded to the same
+    -- player back to back are indistinguishable from a redelivered message by item/winner/reason
+    -- alone -- and were being swallowed, leaving the trade reminder correctly listing two items
+    -- while the history showed one (B13). Different drops always carry different rollIDs; a
+    -- redelivered message carries the same one, so this tells them apart exactly instead of
+    -- guessing from a five-second window.
     for i = #KART_LootHistory, math.max(1, #KART_LootHistory - 3), -1 do
         local e = KART_LootHistory[i]
-        if e.item == (itemLink or "") and e.winner == (winnerDisplayName or "") and e.reason == (reason or "")
-           and now - (e.time or 0) < 5 then
+        local sameEvent
+        if rollID and e.rollID then
+            sameEvent = e.rollID == rollID
+        else
+            -- No rollID on one side (a manual entry, or one restored from an older version):
+            -- fall back to the original heuristic rather than logging a certain duplicate.
+            sameEvent = now - (e.time or 0) < 5
+        end
+        if sameEvent and e.item == (itemLink or "") and e.winner == (winnerDisplayName or "")
+           and e.reason == (reason or "") then
             return
         end
     end
