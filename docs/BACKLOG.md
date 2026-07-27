@@ -174,11 +174,24 @@ think the lootmaster is" from "who this raid's lootmaster is".
 
 ## B12 — A client that cannot yet resolve the lootmaster drops the raid config, permanently
 
-**Fixed in 3.0.1, for the config half of this.** `LC.HandleConfig` no longer drops a payload for
-good just because the declared lootmaster hasn't resolved to the sender yet — it keeps the one
-pending payload and retries the identical acceptance check every 10s (up to ~2 minutes) and on every
-roster change, until it succeeds, the sender leaves the group, or the budget runs out. Two gaps
-remain; see the bottom of this entry.
+**Properly fixed on `fix/config-acceptance`. The 3.0.1 retry treated a symptom and missed the
+disease.**
+
+The retry assumed the failure was *timing* — that NSRT would eventually deliver the nickname. For a
+client with Northern Sky's **"Global Nicknames" toggle off** (or without NSRT at all) the nickname
+never arrives, because `NSAPI:GetName` echoes the real name and `KASC.Identity.GetNickname` correctly
+reduces that to `nil`. Twelve attempts changed nothing, and the client then used its own settings for
+the rest of the raid. Confirmed 2026-07-27 with the affected raider.
+
+`TryAcceptConfig` now decides on the **sender's identity**, which always resolves, instead of on the
+declared name. Only a client whose own settings name it lootmaster broadcasts at all, so the sender's
+identity already carries what the name was consulted for. The name is still checked when it *does*
+resolve and still rejects a payload naming somebody else — the guard survives, the dead end does not.
+Two further consequences: the retry machinery was repointed at `no-sender`, the one genuinely
+transient reason left, and a rejection now prints its reason instead of failing silently.
+
+The rest of this entry documents the original, narrower diagnosis. Kept because the timing case is
+real and the retry still covers it.
 
 **Symptom (until the retry succeeds):** the council is not yet extended with the configured members,
 and raiders keep their own local button labels instead of the raid's.
@@ -740,11 +753,31 @@ easier to hit, which is what exposes it.
 3. Sending the label text instead of the index would be order-independent, but labels are
    user-editable free text and the payload shares a 255-byte budget — see B14 on truncation.
 
-**Still open:** the maintainer's `lcButtonLabels` against an affected raider's, which settles whether
-the shift is exactly the five-versus-six case. One raider reported pressing "Offspec", position 3 in
-both lists, which the shift alone does not explain.
+**Root cause confirmed 2026-07-27, and fixed on `fix/config-acceptance`.** The affected raider had
+Northern Sky's **"Global Nicknames" master toggle switched off**. `NSAPI:GetName` then echoes the
+character's real name back, `KASC.Identity.GetNickname` correctly turns that into `nil`
+(`Libs/KASC-1.0/KASC-1.0.lua:103`), and the lootmaster's nickname therefore never resolved on that
+client — not slowly, never. `TryAcceptConfig` rejected every broadcast for good, so the client fell
+back to its own settings for all three synced values at once:
 
-Reported 2026-07-27 after a live raid.
+| symptom | because it used its own |
+|---|---|
+| votes shown under the wrong label | vote button list — the index shifts against the panel's list |
+| no roll at all | `lcRollsEnabled`, whose default is `false` |
+| never in council | council list, which is empty |
+
+That also explains why the remedies failed: `/kart v` carries no config, and a session restart
+re-broadcasts one that is rejected identically.
+
+`TryAcceptConfig` now decides on the sender's identity, which always resolves — see the entry for
+B12. The label-shift hazard itself remains: a vote is still a bare index, so any future divergence
+would still mislabel silently rather than warn. Fix direction 1 above is still worth building.
+
+One detail unexplained: a raider reported pressing "Offspec", position 3 in both lists, where the
+shift alone predicts a match. Either a misremembering or a third list in play — not worth chasing
+now that the cause of the divergence is gone.
+
+Reported 2026-07-27 after a live raid, cause confirmed the same evening.
 
 ---
 
