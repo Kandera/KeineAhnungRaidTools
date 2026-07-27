@@ -29,6 +29,61 @@ LC.raidConfig           = {}  -- the authoritative config: minQuality, buttonLab
                                -- lootmaster, councilMembers. Same two writers as CouncilNamesTable above;
                                -- raidConfig.fromSelf marks the ApplyOwnConfig case (see there).
 
+-- =====================================================================
+--  Window chrome: scale and frame strata, owned by Loot Council alone
+-- =====================================================================
+-- Every other KART window follows KART_Settings.uiScale/frameStrata through KART.UI. The Loot
+-- Council ones deliberately do not: they are the windows a raider stares at mid-pull, on a screen
+-- that may be a third smaller than the maintainer's (see B18 in docs/BACKLOG.md), and wanting them
+-- smaller than the main window — or on a different layer, above a boss mod — is the normal case
+-- rather than an edge one. KART.MainFrame's own scale never reached them anyway; it is applied to
+-- that one frame and nothing else.
+--
+-- Registering here rather than with KART.UI:RegisterStrataFrame is also what keeps this separable
+-- for a future KALC split: the Loot Council owns its own chrome and takes it with it.
+LC.windowFrames  = {} -- top-level Loot Council windows
+LC.windowDialogs = {} -- its transient popups, kept one stratum above the windows
+
+-- Drop-in replacement for KART.UI:RegisterStrataFrame at Loot Council call sites. Applies the
+-- current values immediately, exactly as that one does, so a frame built after login is not left
+-- unstyled until the next settings change.
+function LC.RegisterWindow(frame, isDialog)
+    local list = isDialog and LC.windowDialogs or LC.windowFrames
+    list[#list + 1] = frame
+    -- Raise on click, exactly as KAUI:RegisterStrataFrame does for every other KART window (B24).
+    -- These frames leave that path, so they have to carry it themselves — the vote window over the
+    -- council panel is the single most likely overlap in the whole addon.
+    if frame.SetToplevel then frame:SetToplevel(true) end
+    LC.ApplyWindowChrome(frame, isDialog)
+end
+
+-- Applies to one frame, or to every registered frame when called with no arguments (the path
+-- KART.UpdateStyles takes on any settings or profile change).
+function LC.ApplyWindowChrome(frame, isDialog)
+    local idx = KART_Settings and KART_Settings.lcFrameStrata
+    if type(idx) ~= "number" or idx < 1 or idx > #KART.StrataLevels then idx = 4 end
+    local windowStrata = KART.StrataLevels[idx]
+    -- Same rule KAUI applies to its own dialogs: one stratum above the windows, so a confirm
+    -- popup can never end up buried under the panel that opened it. TOOLTIP is the step above
+    -- the top entry, which is otherwise not offered for windows.
+    local dialogStrata = KART.StrataLevels[idx + 1] or "TOOLTIP"
+    local scale = ((KART_Settings and KART_Settings.lcScale) or 100) / 100
+
+    if frame then
+        frame:SetFrameStrata(isDialog and dialogStrata or windowStrata)
+        frame:SetScale(scale)
+        return
+    end
+    for _, f in ipairs(LC.windowFrames) do
+        f:SetFrameStrata(windowStrata)
+        f:SetScale(scale)
+    end
+    for _, f in ipairs(LC.windowDialogs) do
+        f:SetFrameStrata(dialogStrata)
+        f:SetScale(scale)
+    end
+end
+
 -- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel
 -- handling of multiple simultaneous rolls can actually be tested (multiple items dropping at
 -- once is the normal case in a real raid, not the exception). Real item links, not fake strings
@@ -1083,7 +1138,7 @@ function LC.ShowSessionPrompt()
     local f = CreateFrame("Frame", "KART_LCSessionPrompt", UIParent, "BackdropTemplate")
     f:SetSize(310, 115)
     f:SetPoint("CENTER", 0, 120)
-    KART.UI:RegisterStrataFrame(f, true)
+    LC.RegisterWindow(f, true)
     KART.UI:ApplyPopupArtwork(f)
     table.insert(UISpecialFrames, f:GetName())
 

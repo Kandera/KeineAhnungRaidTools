@@ -52,6 +52,8 @@ KART.Defaults = {
     lcShowNickNames = false,
     lcVoteLayoutCompact = false,
     lcFontSize = 12,
+    lcScale = 100, -- percent, independent of uiScale (which only ever touches KART.MainFrame)
+    lcFrameStrata = 4, -- index into KART.StrataLevels (4 = HIGH), independent of frameStrata
     lcRollsEnabled = false,
     lcVotedItemDisplay = "full",
     wuModuleEnabled = false,

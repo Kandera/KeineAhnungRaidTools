@@ -139,7 +139,7 @@ function LC.BuildSettingsPanel(parent)
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.UI:CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    prefsCard:SetSize(500, 260) -- was 215; +45 to fit the font-size slider moved in from raidBox below
+    prefsCard:SetSize(500, 350) -- 215 -> 260 for the font-size slider, -> 350 for the scale/layer pair
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
@@ -227,6 +227,32 @@ function LC.BuildSettingsPanel(parent)
         tooltip = L.LC_DESC_FONT_SIZE,
         onChanged = function() KART.UpdateStyles() end,
     })
+
+    -- Scale and layer for the Loot Council windows alone. KART_Settings.uiScale reaches
+    -- KART.MainFrame and nothing else, so the two windows a raider actually stares at mid-pull had
+    -- no scale control at all -- which is what makes the fixed layout bite at 1080p, where the whole
+    -- interface is a third larger relative to the screen (B18/B22). Personal, never broadcast.
+    KART.LC.SldScale = KART.UI:CreateSettingsSlider(prefsCard, {
+        name = "KART_LCScaleSlider", label = L.LC_SET_SCALE,
+        min = 50, max = 150, store = SettingsStore, key = "lcScale", y = -260,
+        tooltip = L.LC_DESC_SCALE,
+        onChanged = function() LC.ApplyWindowChrome() end,
+    })
+
+    KART.LC.SldStrata = KART.UI:CreateSettingsSlider(prefsCard, {
+        name = "KART_LCStrataSlider", label = L.LC_SET_STRATA,
+        min = 1, max = #KART.StrataLevels, store = SettingsStore, key = "lcFrameStrata", y = -305,
+        tooltip = L.LC_DESC_STRATA,
+        onChanged = function() LC.ApplyWindowChrome() end,
+    })
+    -- Shows the stratum's NAME instead of the raw index, exactly as the main window's own layer
+    -- slider does (see UpdateStrataSliderText in MainFrame.lua); OnShow covers the case where the
+    -- initial SetValue doesn't fire because the saved value already equals the slider's.
+    local function UpdateLCStrataText(self)
+        self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+    end
+    KART.LC.SldStrata:HookScript("OnValueChanged", UpdateLCStrataText)
+    KART.LC.SldStrata:HookScript("OnShow", UpdateLCStrataText)
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a

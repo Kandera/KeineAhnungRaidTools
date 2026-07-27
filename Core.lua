@@ -73,6 +73,8 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
     if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
     if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
+    if KART.LC and KART.LC.SldScale then settingsMap[KART.LC.SldScale] = "lcScale" end
+    if KART.LC and KART.LC.SldStrata then settingsMap[KART.LC.SldStrata] = "lcFrameStrata" end
     if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
     if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
     if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
@@ -524,6 +526,9 @@ function KART.UpdateStyles()
     -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
     -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
     if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
+    -- Scale and strata for the Loot Council windows, which follow their own settings rather than
+    -- the addon-wide ones (B22) and so are not covered by KART.UI:ApplyStyle above.
+    if KART.LC and KART.LC.ApplyWindowChrome then KART.LC.ApplyWindowChrome() end
 
     -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
