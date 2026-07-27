@@ -33,6 +33,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das WoW-Utils-Einfügefeld nimmt über die ganze Höhe den Fokus an.**
 - **Auto-Promote erkennt einen Realm-Namen in beiden Schreibweisen.**
 - **Das Minimap-Symbol bleibt ausgeschaltet** — über Reload und neue Sitzung hinweg.
+- **Ein Bestätigungsdialog öffnet sich immer vor dem Fenster, das ihn ausgelöst hat** — unabhängig von der eingestellten Ebene.
 - **Ein nach dem letzten Stilwechsel gebautes Element benutzt die gewählte Schrift** statt der Blizzard-Standardschrift.
 - **`/kart v` zählt nur Antworten**, keine stummen Clients.
 - **Eine per Profilwechsel geänderte Einstellung greift jetzt**, statt gespeichert und ignoriert zu werden.

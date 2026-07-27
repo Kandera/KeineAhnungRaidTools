@@ -32,6 +32,11 @@ reported alongside this is `EllesmereUIMinimap`, which reparents every LibDBIcon
 panel and holds it at alpha 0 while that panel is collapsed. Not a KART defect, and not fixable from
 our side.
 
+**2026-07-28:** B8 (Blizzard confirm dialogs buried under KART windows) was fixed and removed.
+`RegisterStaticPopup` now lifts the popup frame on show and restores it on hide. It lifts to
+`TOOLTIP` rather than `GetDialogStrata()` on purpose: the Loot Council windows carry their own
+stratum setting since B22, so one-above-the-shared-setting would still land under them.
+
 ---
 
 ## B3 — Background opacity never reaches the Loot Council windows
@@ -79,27 +84,6 @@ decision, not a repair. Note that `KAUtil.EachGroupUnit` now lives in a library 
 so whichever way it is decided, `KARTTEST.SetParty({})` makes it a three-line regression test.
 
 **Pre-existing** — byte-for-byte identical to its pre-refactor form.
-
----
-
-## B8 — Blizzard confirm dialogs can be buried under KART windows
-
-**Symptom:** pressing "Close Session" appears to do nothing. The confirm dialog does open — behind
-the council panel.
-
-**Cause:** KART windows take their stratum from the user's frame-strata setting; Blizzard's
-`StaticPopup` frames are fixed at `DIALOG`. At the default `HIGH` the popups sit on top correctly,
-but any setting of `DIALOG` or above puts the window over them. Affects all four confirm dialogs:
-close-session, reassign, clear-history and sync-request.
-
-KART's *own* drawn dialogs are immune — they register with `isDialog = true`, and `GetDialogStrata`
-always returns one stratum above the windows. Only the Blizzard popups escape that system.
-
-**Fix directions:** clamp the window stratum below `DIALOG`; raise the popup frames after showing
-them; or replace the four with KART-drawn dialogs registered as dialogs. All four now go through a
-single `RegisterStaticPopup`, so there is one place to do it.
-
-**Pre-existing.**
 
 ---
 

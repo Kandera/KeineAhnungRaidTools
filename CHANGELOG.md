@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The WoW Utils paste box takes focus over its whole height.**
 - **Auto-Promote matches a cross-realm name in either spelling.**
 - **The minimap icon stays switched off** across a reload and a new session.
+- **A confirm dialog always opens in front of the window that raised it**, whatever layer the windows are set to.
 - **A widget built after the last restyle uses the chosen font** instead of Blizzard's default.
 - **`/kart v` counts replies only**, not silent clients.
 - **A setting changed by a profile switch now takes effect** instead of being stored and ignored.

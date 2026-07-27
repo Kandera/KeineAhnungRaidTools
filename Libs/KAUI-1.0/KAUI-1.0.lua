@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 2
+local MAJOR, MINOR = "KAUI-1.0", 3
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -401,6 +401,28 @@ function nsProto:RegisterStaticPopup(name, def)
     def.whileDead      = true
     def.hideOnEscape   = true
     def.preferredIndex = 3
+
+    -- Blizzard's popup frames are fixed at the DIALOG stratum, so a consumer whose windows sit at
+    -- DIALOG or above buries its own confirm dialog behind the window that raised it -- pressing
+    -- the button then looks like it did nothing at all (B8). TOOLTIP rather than GetDialogStrata()
+    -- because a consumer may give some of its windows their own stratum setting (KART's Loot
+    -- Council windows do), and one-above-the-shared-setting would still land under those. Put it
+    -- back on hide: these frames are shared, so a popup shown later by anyone else must be
+    -- unaffected.
+    local userOnShow, userOnHide = def.OnShow, def.OnHide
+    def.OnShow = function(popup, ...)
+        popup.kauiPrevStrata = popup:GetFrameStrata()
+        popup:SetFrameStrata("TOOLTIP")
+        if userOnShow then return userOnShow(popup, ...) end
+    end
+    def.OnHide = function(popup, ...)
+        if popup.kauiPrevStrata then
+            popup:SetFrameStrata(popup.kauiPrevStrata)
+            popup.kauiPrevStrata = nil
+        end
+        if userOnHide then return userOnHide(popup, ...) end
+    end
+
     StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
 end
 

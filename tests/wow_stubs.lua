@@ -154,3 +154,7 @@ _G.C_Item = {
 -- Socket text globals: KAGS scans _G for every "EMPTY_SOCKET_*" string rather than hardcoding
 -- them, so the harness needs at least one to exercise that path.
 _G.EMPTY_SOCKET_PRISMATIC = "Prismatic Socket"
+
+-- The table StaticPopupDialogs entries are registered into. Real WoW creates it; here it only
+-- needs to exist and hold whatever KAUI:RegisterStaticPopup puts in it.
+_G.StaticPopupDialogs = {}
