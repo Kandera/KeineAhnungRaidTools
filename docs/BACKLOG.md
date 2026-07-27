@@ -516,25 +516,32 @@ Everything therefore hangs on the single trigger, `Core.lua:249`:
 hooksecurefunc("ConfirmReadyCheck", function(isReady) ... end)
 ```
 
-Candidate causes, none confirmed:
-- **The global is no longer on the path taken.** The hook only fires when that exact global is
-  called, which is Blizzard's own `ReadyCheckFrame` Yes/No buttons. A raider answering through a
-  replacement ready-check UI (ElvUI, MRT, a WeakAura) or letting the check time out never reaches
-  it. This would explain why it works for one player and not another on the same raid.
-- **The dialog opens behind something.** It shows at `CENTER, 0, 150` in KART's own strata
-  (`KART.UI:RegisterStrataFrame`). A ready check also opens the Buff Checker for anyone with
-  `showBuffCheck` on, and that window is large and centred. Same failure shape as B8 and as the End
-  Session window that opened behind the council panel.
-- **The 15-second auto-hide** (`Core.lua:638`) closing it before it is noticed, if the click and the
-  dialog are separated by a loading screen or combat.
+**Ruled out 2026-07-27**, by testing:
+- *A replacement ready-check UI on the raider's client.* Everyone involved uses the stock Blizzard
+  popup, and it fails for the maintainer's own client too.
+- *The dialog opening behind another window* (the B8 shape). Checked, not it.
+- *The hook failing to install.* `hooksecurefunc` on a nil global raises, which would abort the rest
+  of the `ADDON_LOADED` branch — including the version text two lines below at `Core.lua:260`. That
+  text renders correctly, so the global exists and the hook is attached.
 
-**What would pin it, in order:**
-1. Does the dialog appear for the *maintainer's own* client when declining a ready check? That
-   separates "trigger never fires" from "fires only on some clients".
-2. On the affected raider: does `/run print(ConfirmReadyCheck)` print a function, and do they run a
-   unit-frame or raid addon that replaces the ready-check popup?
-3. Have them decline with every KART window closed and the Buff Checker disabled — if the dialog
-   appears then, it is the strata case, not the hook.
+**What that leaves:** the hook is installed on a function Blizzard's ready-check frame no longer
+calls. Which function it uses instead does not need answering, because the trigger should not depend
+on it.
+
+**Fix direction.** `READY_CHECK_CONFIRM` carries `(unit, isReady)` and is already registered
+(`Core.lua:18`) and already handled (`Core.lua:335`, currently only refreshing the Buff Checker).
+Gated on `UnitIsUnit(unit, "player")` and a false `isReady`, it is the whole trigger — no hook, and
+no dependency on Blizzard's internal wiring. The `hooksecurefunc` block at `Core.lua:249` then goes
+away, including its `else` branch that hides the dialog on a late yes.
+
+**One assumption to confirm in-game first:** that `READY_CHECK_CONFIRM` fires for the player's *own*
+confirmation and not only for other group members. Probe, in a group of two, then decline a check:
+
+```
+/run local f=CreateFrame("Frame") f:RegisterEvent("READY_CHECK_CONFIRM") f:SetScript("OnEvent",function(_,_,u,r) print("CONFIRM",u,tostring(r)) end) hooksecurefunc("ConfirmReadyCheck",function(r) print("HOOK",tostring(r)) end)
+```
+
+Expected if the diagnosis holds: `CONFIRM <self> false` prints, `HOOK` does not.
 
 Reported 2026-07-27. Pre-existing — untouched by the library extraction.
 
