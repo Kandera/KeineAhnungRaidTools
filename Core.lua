@@ -383,7 +383,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.rcSelfAnswered = true
             if isReady then
                 if KART.RCDialog then KART.RCDialog:Hide() end
-            elseif IsInGroup() and KART_Settings.rcReasonDialog ~= false then
+            -- Raids only, not any group. A Mythic+ party ready-checks before nearly every pull, so
+            -- in a five-man this asked for a written reason over and over for something the group
+            -- would just say out loud (GitHub issue #10). The reason travels to the raid to spare
+            -- twenty people a chat exchange; four people do not need it.
+            elseif IsInRaid() and KART_Settings.rcReasonDialog ~= false then
                 KART.ShowReadyCheckReasonDialog()
             end
         end
