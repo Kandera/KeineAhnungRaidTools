@@ -413,18 +413,40 @@ main frame in `MainFrame.lua`), and the window is deliberately not freely resiza
 artwork would distort. Users scale it through the Window Scale slider instead. Popup windows size
 themselves independently.
 
-Candidate causes, none confirmed:
-- WoW's own UI Scale differs between the two resolutions, so the same pixel layout occupies a
-  different share of the screen and text sized in points no longer fits its box.
-- Font size settings interacting with fixed-width columns — several panels compute column widths in
-  pixels while the font is user-configurable.
-- A popup sized from the screen dimensions landing smaller than its content.
+**Mechanism, established 2026-07-27** from the raider's Graphics and KART settings:
 
-**What would pin it:** a screenshot from the affected raider, their WoW UI Scale setting, their KART
-Window Scale value, and their three font-size settings. Which panel overlaps matters too — the main
-window's tabs, the council panel and the vote list have independent layouts.
+They run with **"Use UI Scale" switched off**, which makes one UI unit equal one physical pixel and
+therefore makes `UIParent` exactly as many units tall as the screen has pixels — 1080 for them, 1440
+for the maintainer. With identical settings their whole interface is **1.33x larger relative to the
+screen**. The main window is a fixed 929x715 units (`MainFrame.lua:62`), so:
 
-Reported 2026-07-27.
+| | UIParent height in units | window occupies |
+|---|---|---|
+| maintainer, 1440p | 1440 | 50% |
+| raider, 1080p | 1080 | 66% |
+
+They are already at their floor: with UI scale off WoW is showing the smallest interface it can, and
+enabling it only makes things larger. Nothing on the WoW side is left to turn.
+
+**Ruled out: a popup sized from the screen dimensions.** No window derives its size from the screen.
+The only place `UIParent`'s dimensions are read is `KAUI.IsSavedPosOnScreen`
+(`Libs/KAUI-1.0/KAUI-1.0.lua:145`), which validates a stored position rather than sizing anything.
+
+**Immediate workaround:** Window Scale 75 on the affected client. 1080/1440 = 0.75, which reproduces
+the maintainer's proportions exactly.
+
+**The real gap that leaves.** `KART_Settings.uiScale` is applied to `KART.MainFrame` alone
+(`Core.lua:505`). The Loot Council vote window and council panel — the two a raider actually looks at
+during a raid — are not covered by it, so a 1080p raider has no scale lever for them at all, only the
+font-size settings. A per-window scale, or extending the existing slider to the Loot Council frames,
+is the fix worth designing.
+
+**Still open:** which panel actually overlaps. The vote window supplied as evidence shows no
+overlap — it starts at 380x200 and grows with its content, and its buttons wrap correctly. A
+screenshot of the overlapping panel is still needed, plus that raider's three font-size settings,
+since several panels compute column widths in fixed pixels while the font is user-configurable.
+
+Reported 2026-07-27, mechanism established the same day.
 
 ---
 
