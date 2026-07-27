@@ -307,6 +307,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.announcedChannel = nil
         end
 
+        -- Before the refresh below, so a departed player's data is gone rather than redrawn.
+        KART.PruneDepartedPeers()
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
 

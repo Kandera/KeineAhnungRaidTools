@@ -138,6 +138,32 @@ KART.RegisterLibDurability()
 
 KART.BuffCheckMode = "default" -- Standardmodus: "default" oder "advanced"
 
+-- Drops peer data for anyone no longer in the group.
+--
+-- All of these are keyed by SHORT NAME and were never cleared, which made them wrong in two
+-- different ways. Data for someone who left lingered forever and was rendered exactly like fresh
+-- data (B17); worse, if Bob-Silvermoon left and Bob-Ravencrest joined, the new Bob silently
+-- inherited the old Bob's oil, gear, item level and durability. That is not the accepted
+-- simultaneous-namesake case in REVIEW-DECISIONS.md, which is about two namesakes present at once.
+--
+-- Only departures are purged, not everything: wiping on every GROUP_ROSTER_UPDATE would blank the
+-- window repeatedly while a raid fills up, and the data for people who are still here is still good.
+function KART.PruneDepartedPeers()
+    local present = {}
+    for unit in KAUtil.EachGroupUnit() do
+        local n = UnitName(unit)
+        if n then present[n] = true end
+    end
+    for _, cache in ipairs({ KART.OilCache, KART.ILvlCache, KART.GearCache,
+                             KART.DurabilityCache, KART.EnchantScan }) do
+        if type(cache) == "table" then
+            for name in pairs(cache) do
+                if not present[name] then cache[name] = nil end
+            end
+        end
+    end
+end
+
 -- ReadyCheck status -> its Blizzard ready-check icon; an unlisted/nil status hides the icon. Shared
 -- by the live buff-check rows and the settings preview so both stay identical.
 local READY_CHECK_ICONS = { ready = 136814, notready = 136813, waiting = 136815 }
