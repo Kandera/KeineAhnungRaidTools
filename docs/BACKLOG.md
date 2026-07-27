@@ -14,29 +14,12 @@ not drift into being treated as pre-existing.
 **2026-07-27:** B1 (shift-clicked items) and B5 (small close button) were fixed and removed from
 this file; see the commit that fixed them for details.
 
----
-
-## B2 — The font setting does not reach some widgets
-
-**Symptom:** changing the font leaves these unchanged: the sidebar tab buttons; the Language, Accent
-Colour, Reset Defaults and Profile buttons; and all Loot History table row content.
-
-**Cause:** not fully diagnosed for the sidebar tab buttons or the Language/Accent Colour/Reset
-Defaults/Profile buttons — unlike Loot History's rows (below), the sidebar tabs *are* registered via
-`CreateTabButton`'s self-registration, so an unregistered-widget explanation doesn't obviously fit;
-worth a fresh look rather than assuming the same cause. For Loot History specifically: its per-row
-FontStrings were never registered into a styling registry — only the column headers were.
-
-**Fix direction (Loot History rows):** register row FontStrings as they are created.
-
-**Pre-existing** — a task-4 investigation compared both commits and found zero regressions; the
-registration calls, registry membership and styling loops are mechanically identical. The refactor
-did centralise the registries, so this is now easier to fix than it was.
-
-**2026-07-27:** the Loot Council half of this entry (the vote frame's "Note" label, the council
-panel's "No Winner"/"Close Session"/"Close" buttons, and the session-invite prompt's Yes/No buttons —
-all built lazily, after the last `ApplyStyle`, and never re-styled afterwards) was fixed and removed
-from this entry's symptom list. This entry now covers only the three symptoms listed above.
+**2026-07-28:** B2 (the font setting not reaching some widgets) was removed. Its Loot Council and
+Loot History halves were fixed; the remaining half — the sidebar tabs and the Language/Accent
+Colour/Reset Defaults/Profile buttons — was measured in-game and does not reproduce. Wrapping
+`ApplyStyle` showed it receiving the newly chosen font path on every dropdown click, and comparing
+`GetFont()` across the whole `buttonTexts` registry under a deliberately distinctive font returned
+zero widgets differing from the reference. Do not re-open without a fresh reproduction.
 
 ---
 
