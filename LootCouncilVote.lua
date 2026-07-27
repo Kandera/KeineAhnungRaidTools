@@ -210,6 +210,16 @@ function Vote.RefreshVoteListRows()
         Vote.RefreshVoteListRows_Spacious(f)
     end
     f:Show()
+
+    -- The window (on first build) and any new row just created above (close button, "Note"
+    -- label, vote buttons) register with KART.UI *after* the last KART.UpdateStyles() call that
+    -- ran before this point in the session, since this whole window is built lazily on first
+    -- roll rather than at load (see B2 in BACKLOG.md). Re-applying here, every refresh rather
+    -- than only once, is what actually reaches a row created by a later, larger batch of
+    -- simultaneous rolls than any seen so far this session. Safe to call unconditionally:
+    -- KART.UpdateStyles only re-applies already-current settings (idempotent) and does not
+    -- build or show any window itself.
+    if KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Vote.RefreshVoteListRows() always calls f:Show() when there's still a pending roll — deliberate

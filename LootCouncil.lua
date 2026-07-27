@@ -818,6 +818,13 @@ function LC.ShowSessionPrompt()
     end)
 
     LC.sessionPromptFrame = f
+
+    -- Same reasoning as Council.CreateCouncilPanel (see B2 in BACKLOG.md): btnYes/btnNo just
+    -- registered above with KART.UI, but this prompt is built lazily on first login-time trigger,
+    -- after the last KART.UpdateStyles() call already ran. Re-apply once so they pick up the
+    -- chosen font instead of keeping their Blizzard-default creation-time one. One-shot is enough
+    -- here too — nothing else ever registers with this frame after this point.
+    if KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Forgets every tracked roll and closes both LC windows. Shared by the leader ending the session
@@ -1334,10 +1341,12 @@ function LC.StartManualRoll(itemsText)
     local seconds = KART_Settings.lcVoteSeconds or 20
     local startedAny = false
 
-    -- Matches each complete item hyperlink (|cAARRGGBB|Hitem:...|h[Name]|h|r) regardless of how
-    -- many are pasted in one command or how much whitespace separates them — a plain word-split
-    -- would break apart item names that contain spaces (e.g. "[Sulfuras, Hand von Ragnaros]").
-    for itemLink in (itemsText or ""):gmatch("|c%x%x%x%x%x%x%x%x|Hitem:.-|h|r") do
+    -- Matches each complete item hyperlink (|Hitem:...|h[Name]|h|r, with either a hex or named
+    -- colour escape in front of it — different client versions shift-click different forms)
+    -- regardless of how many are pasted in one command or how much whitespace separates them — a
+    -- plain word-split would break apart item names that contain spaces (e.g.
+    -- "[Sulfuras, Hand von Ragnaros]").
+    for itemLink in KAUtil.EachItemLink(itemsText) do
         startedAny = true
         -- Before anything else: the item is being handed back for a new decision, so whatever was
         -- decided about it last time has to stop being true first.

@@ -24,6 +24,25 @@ T.eq(KAUtil.IsRealItemLink(nil), false, "IsRealItemLink rejects nil")
 T.eq(KAUtil.GetItemString(LINK), "item:12345:7961::::::::80:::::", "GetItemString keeps every bonus id")
 T.is_nil(KAUtil.GetItemString("|cff00ff00Fake Item|r"), "GetItemString returns nil for a non-link")
 
+-- EachItemLink -------------------------------------------------------------------------
+local function collectLinks(text)
+    local out = {}
+    for link in KAUtil.EachItemLink(text) do out[#out + 1] = link end
+    return out
+end
+
+local MODERN_LINK = "|cnIQ4:|Hitem:19019::::::::80:::::|h[Thunderfury]|h|r"
+local COMMA_LINK = "|cff0070dd|Hitem:19019:0:0:0:0:0:0:0:60:0:0:0|h[Thunderfury, Blessed Blade of the Windseeker]|h|r"
+
+T.deep_eq(collectLinks(MODERN_LINK), { MODERN_LINK },
+    "EachItemLink accepts a modern named-colour-escape link")
+T.deep_eq(collectLinks(LINK), { LINK }, "EachItemLink accepts a legacy hex-colour-escape link")
+T.deep_eq(collectLinks(LINK .. " " .. MODERN_LINK), { LINK, MODERN_LINK },
+    "EachItemLink yields several links pasted in one string")
+T.deep_eq(collectLinks(COMMA_LINK), { COMMA_LINK },
+    "EachItemLink keeps an item name containing a comma and spaces intact")
+T.deep_eq(collectLinks("no item link here"), {}, "EachItemLink yields nothing for text with no link")
+
 -- EachGroupUnit ----------------------------------------------------------------------
 KARTTEST.SetRaid({ { name = "Ann" }, { name = "Bob" }, { name = "Cid" } })
 local units = {}

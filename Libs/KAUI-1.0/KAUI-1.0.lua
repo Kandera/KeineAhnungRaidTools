@@ -217,13 +217,19 @@ function nsProto:CreateHeaderLine(frame, y)
     return line
 end
 
+-- Single source for the header icon button's glyph size, read by both the factory below (initial
+-- font) and ApplyStyle (restyle font) so the two can't drift apart -- that drift is exactly what
+-- made this glyph small on every button before B5: the factory set one size and ApplyStyle
+-- silently re-fonted every button back to its own hardcoded copy on the next restyle.
+local CLOSE_BUTTON_GLYPH_SIZE = 18
+
 -- "×"/"-"/"+" header buttons used by every popup window. The glyph FontString registers with
 -- this namespace so ApplyStyle keeps its font in sync with the chosen font.
 function nsProto:CreateHeaderIconButton(parent, glyph, onClick)
     local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(22, 22)
+    btn:SetSize(26, 26)
     btn.text = btn:CreateFontString(nil, "OVERLAY")
-    btn.text:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    btn.text:SetFont("Fonts\\FRIZQT__.TTF", CLOSE_BUTTON_GLYPH_SIZE, "OUTLINE")
     btn.text:SetPoint("CENTER", 0, 1)
     btn.text:SetText(glyph or "×")
     self:RegisterCloseButtonText(btn.text)
@@ -987,7 +993,7 @@ function nsProto:ApplyStyle(spec)
     for _, fs in ipairs(self.buttonTexts) do fs:SetFont(font, menuSize, "") end
     for _, eb in ipairs(self.editBoxes) do eb:SetFont(font, contentSize, "") end
     for _, fs in ipairs(self.labels) do fs:SetFont(font, contentSize, "") end
-    for _, fs in ipairs(self.closeButtonTexts) do fs:SetFont(font, 14, "OUTLINE") end
+    for _, fs in ipairs(self.closeButtonTexts) do fs:SetFont(font, CLOSE_BUTTON_GLYPH_SIZE, "OUTLINE") end
 
     for _, tex in ipairs(self.sliderThumbs) do tex:SetColorTexture(r, g, b, 1) end
     for _, tex in ipairs(self.checkVisuals) do tex:SetColorTexture(r, g, b, 1) end

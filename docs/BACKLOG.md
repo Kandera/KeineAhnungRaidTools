@@ -7,51 +7,36 @@ Companion to `REVIEW-DECISIONS.md`, which records findings deliberately **not** 
 records findings that *should* change, eventually.
 
 Most of these surfaced because the addon was clicked through systematically for the first time
-during the v3.0.0 in-game checkpoints. **Eight of the ten pre-date the refactor** and were confirmed
-identical before and after it. Two were introduced by it and are marked as such — they must not
-drift into being treated as pre-existing.
+during the v3.0.0 in-game checkpoints. Six of the remaining eight pre-date the refactor and were
+confirmed identical before and after it. Two were introduced by it and are marked as such — they must
+not drift into being treated as pre-existing.
 
----
-
-## B1 — `/kart add` does not accept shift-clicked items
-
-**Symptom:** `/kart add` plus a shift-clicked item prints the usage message instead of starting a
-roll.
-
-**Cause:** `LootCouncil.lua:1335` matches item links with
-
-```lua
-for itemLink in (itemsText or ""):gmatch("|c%x%x%x%x%x%x%x%x|Hitem:.-|h|r") do
-```
-
-which assumes an eight-hex-digit colour escape. Modern clients shift-click a *named* colour escape
-(`|cnIQ4:`) instead, so nothing matches, `startedAny` stays false and the usage message prints.
-
-This is the only place in the tree that assumes that shape, and nothing anywhere handles `|cn`.
-
-**Fix direction:** match only the `|Hitem:…|h…|h` bracket and ignore the colour escape entirely.
-`KAUtil.IsRealItemLink` and `KAUtil.GetItemString` already do exactly that and are unaffected.
-
-**Pre-existing.**
+**2026-07-27:** B1 (shift-clicked items) and B5 (small close button) were fixed and removed from
+this file; see the commit that fixed them for details.
 
 ---
 
 ## B2 — The font setting does not reach some widgets
 
 **Symptom:** changing the font leaves these unchanged: the sidebar tab buttons; the Language, Accent
-Colour, Reset Defaults and Profile buttons; all Loot History table row content; the vote frame's
-"Note" label; and the Loot Council "No Winner" / "Close Session" / "Close" buttons.
+Colour, Reset Defaults and Profile buttons; and all Loot History table row content.
 
-**Cause:** not one cause. Loot History's per-row FontStrings were never registered into a styling
-registry — only the column headers were. The vote frame and council panel are built lazily, after
-the last `ApplyStyle`, and nothing re-applies afterwards.
+**Cause:** not fully diagnosed for the sidebar tab buttons or the Language/Accent Colour/Reset
+Defaults/Profile buttons — unlike Loot History's rows (below), the sidebar tabs *are* registered via
+`CreateTabButton`'s self-registration, so an unregistered-widget explanation doesn't obviously fit;
+worth a fresh look rather than assuming the same cause. For Loot History specifically: its per-row
+FontStrings were never registered into a styling registry — only the column headers were.
 
-**Fix direction:** register row FontStrings as they are created, and re-apply style after any lazy
-window is built.
+**Fix direction (Loot History rows):** register row FontStrings as they are created.
 
 **Pre-existing** — a task-4 investigation compared both commits and found zero regressions; the
 registration calls, registry membership and styling loops are mechanically identical. The refactor
 did centralise the registries, so this is now easier to fix than it was.
+
+**2026-07-27:** the Loot Council half of this entry (the vote frame's "Note" label, the council
+panel's "No Winner"/"Close Session"/"Close" buttons, and the session-invite prompt's Yes/No buttons —
+all built lazily, after the last `ApplyStyle`, and never re-styled afterwards) was fixed and removed
+from this entry's symptom list. This entry now covers only the three symptoms listed above.
 
 ---
 
@@ -73,12 +58,6 @@ Loot Council windows' `.bg` textures were never connected to it.
 **Cause:** `KART.UpdateMinimapButton` calls LibDBIcon's `Show`/`Hide`. Untouched by the refactor.
 
 **Pre-existing.**
-
----
-
-## B5 — The vote window's close "×" is very small
-
-**Pre-existing**, maintainer-confirmed. Cosmetic.
 
 ---
 

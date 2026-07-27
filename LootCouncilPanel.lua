@@ -869,6 +869,16 @@ function Council.CreateCouncilPanel()
     -- addon's actual goal here — comparing a specific raid candidate's equipped item to the
     -- item being rolled. A fully separate frame sidesteps that collision entirely.
     LC.equipCompareTooltip = CreateFrame("GameTooltip", "KART_LCEquipCompareTooltip", UIParent, "GameTooltipTemplate")
+
+    -- Everything this builder registered with KART.UI above (title-bar close/minimize buttons,
+    -- the "No Winner"/"Close Session"/"Close" buttons) registered *after* the last
+    -- KART.UpdateStyles() call that ran before this panel first got built, since the panel is
+    -- built lazily on first Council.ShowCouncilPanel rather than at load (see B2 in BACKLOG.md).
+    -- Re-apply once, now that every one of them has registered, so they don't keep their
+    -- Blizzard-default creation-time font. Runs only this once per session (this whole function
+    -- is guarded by "if not LC.councilPanel" at the call site), so no need to repeat it on every
+    -- tab/row refresh the way the vote list does.
+    if KART.UpdateStyles then KART.UpdateStyles() end
 end
 
 -- Collapses/restores the council panel to just its header + item name (see f.collapsible, set up

@@ -114,6 +114,18 @@ function KAUtil.GetItemString(link)
     return KAUtil.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
 end
 
+-- Iterates every complete item hyperlink found in text, in the order they appear. Matches
+-- |Hitem:...|h[Name]|h|r regardless of what colour escape (if any) precedes it — different client
+-- versions shift-click different forms, e.g. hex "|cffa335ee" vs. named "|cnIQ4:" — so the escape
+-- itself is deliberately not constrained, only that a |Hitem:...|h...|h|r bracket follows it. This
+-- also naturally handles several links pasted in one string and item names that contain commas or
+-- spaces, since matching stops only at the closing "|h|r" rather than at any separator character.
+-- The colour escape is kept in the captured string: callers store/send/tooltip the same shape
+-- GetLootRollItemLink returns, which always includes it.
+function KAUtil.EachItemLink(text)
+    return (text or ""):gmatch("|c.-|Hitem:.-|h|r")
+end
+
 -- Plain recursive table copy — a settings blob like this only ever holds strings, numbers,
 -- booleans, and nested plain tables (e.g. keybinds/minimap-style sub-tables), so no metatable/
 -- function handling is needed here.
