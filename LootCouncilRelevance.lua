@@ -40,16 +40,42 @@ LC.hiddenIrrelevant = LC.hiddenIrrelevant or {}
 -- Vote.CastVote lets an automatic vote be overridden once; a manual one still locks.
 LC.autoVotedByMe = LC.autoVotedByMe or {}
 
+-- Blizzard's own per-roll verdict, snapshotted the instant START_LOOT_ROLL fires -- reading
+-- GetLootRollItemInfo later, from inside ApplyToPendingRolls, is too late for the default
+-- configuration: lcAutoPass defaults to true, and LC.OnStartLootRoll (Core.lua's own dispatcher)
+-- calls RollOnLoot/ForceWinRoll on this client's behalf the moment the event fires -- before
+-- LC_START even goes out. GetLootRollItemInfo goes blank (texture nil) once THIS client's roll has
+-- been resolved, so by the time a vote-list refresh runs, the live call below already sees nothing
+-- for the common case, and both gatherers fall through to the armor path -- which cannot judge
+-- weapons at all. Capturing here, on our own frame, fixes that without touching Core.lua's
+-- dispatcher, RollOnLoot/ForceWinRoll or lcAutoPass -- Blizzard's own roll stays exactly as it was.
+--
+-- WoW dispatches an event to every registered frame in the order each one called RegisterEvent; the
+-- .toc loads this file BEFORE Core.lua, so this handler's RegisterEvent call always happens first
+-- and this handler always sees the roll before Core.lua's dispatcher can act on it.
+LC.relevanceSnapshot = LC.relevanceSnapshot or {}
+
+local relevanceRollFrame = CreateFrame("Frame")
+relevanceRollFrame:RegisterEvent("START_LOOT_ROLL")
+relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
+    local texture, _, _, _, _, canNeed, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
+    if not texture then return end -- nothing live under this ID; leave no snapshot, callers fall back
+    LC.relevanceSnapshot[rollID] = { irrelevant = not canNeed, needsAppearance = not not canTransmog }
+end)
+
 -- Can this player's class not equip the item at all?  true / false / nil when undecidable.
 --
--- GetLootRollItemInfo is the accurate answer -- it is Blizzard's own eligibility verdict and covers
--- weapons as well as armor, with no per-class table to maintain across expansions. It is only
--- available while a real roll is live on THIS client, which is the normal case: Blizzard fires
--- START_LOOT_ROLL even for an item the class cannot use (confirmed by the maintainer, 2026-07-28).
--- The armor fallback below exists for the rest: /kart add items, which never had a Blizzard roll at
+-- The snapshot above is the accurate answer -- it is Blizzard's own eligibility verdict and covers
+-- weapons as well as armor, with no per-class table to maintain across expansions. The live
+-- GetLootRollItemInfo call below is kept as a fallback for a roll that somehow has no snapshot (a
+-- START_LOOT_ROLL fired before our frame registered, e.g. mid-/reload), not as the primary path --
+-- see the snapshot's own comment for why reading it live here would usually be too late. The armor
+-- fallback beneath that exists for the rest: /kart add items, which never had a Blizzard roll at
 -- all, and clients that missed the roll through death or distance and only learned of the item
 -- through LC_START. That path cannot judge weapons, so it returns nil for them rather than guessing.
 local function IsIrrelevantForMe(rollID, itemLink)
+    local snap = rollID and LC.relevanceSnapshot[rollID]
+    if snap then return snap.irrelevant end
     if rollID and not LC.IsTestRoll(rollID) then
         local texture, _, _, _, _, canNeed = GetLootRollItemInfo(rollID)
         -- A nil texture means there is no live roll under this ID on our client, not that we are
@@ -65,11 +91,14 @@ end
 
 -- Does the player still need this item's appearance?  true / false / nil when undecidable.
 --
--- canTransmog from the live roll already means "collectible by me and not yet owned", so it is used
--- wherever it exists. Without a roll, C_TransmogCollection answers the same question in two steps:
--- an item with no appearance source (rings, necks, trinkets) can never be needed, and one with a
--- source is needed exactly while it is uncollected.
+-- The snapshot's canTransmog already means "collectible by me and not yet owned", so it is used
+-- wherever it exists; the live call below is only the fallback described above. Without either,
+-- C_TransmogCollection answers the same question in two steps: an item with no appearance source
+-- (rings, necks, trinkets) can never be needed, and one with a source is needed exactly while it is
+-- uncollected.
 local function NeedsAppearance(rollID, itemLink)
+    local snap = rollID and LC.relevanceSnapshot[rollID]
+    if snap then return snap.needsAppearance end
     if rollID and not LC.IsTestRoll(rollID) then
         local texture, _, _, _, _, _, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
         if texture then return not not canTransmog end

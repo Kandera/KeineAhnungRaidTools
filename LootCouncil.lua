@@ -1260,6 +1260,10 @@ function LC.ClearAllRolls()
     wipe(LC.rollDurations)
     wipe(LC.assignedWinners)
     wipe(LC.votedByMe)
+    wipe(LC.relevanceHandled)
+    wipe(LC.hiddenIrrelevant)
+    wipe(LC.autoVotedByMe)
+    wipe(LC.relevanceSnapshot)
     wipe(LC.votedNoteByMe)
     wipe(LC.councilTabsNew)
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
@@ -1953,9 +1957,10 @@ function LC.StartTest(mode)
             LC.councilVotes[testRollID]    = {}
             LC.assignedWinners[testRollID] = nil -- fresh test run, forget any winner assigned in a previous one
             LC.votedByMe[testRollID]       = nil -- forget our own vote from a previous test run too
-            LC.relevanceHandled[testRollID] = nil
-            LC.hiddenIrrelevant[testRollID] = nil
-            LC.autoVotedByMe[testRollID]    = nil
+            LC.relevanceHandled[testRollID]  = nil
+            LC.hiddenIrrelevant[testRollID]  = nil
+            LC.autoVotedByMe[testRollID]     = nil
+            LC.relevanceSnapshot[testRollID] = nil
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
