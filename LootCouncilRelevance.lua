@@ -171,9 +171,12 @@ function LC.Relevance.ApplyToPendingRolls()
                     local idx = (answer == "transmog") and LC.GetTransmogButtonIndex() or LC.GetPassButtonIndex()
                     if idx then
                         LC.relevanceHandled[rollID] = true
-                        LC.autoVotedByMe[rollID]    = true
                         if answer == "pass" then LC.hiddenIrrelevant[rollID] = true end
+                        -- Set after CastVote, not before: CastVote itself clears autoVotedByMe (the
+                        -- reset that lets a real click through next time), so setting it any earlier
+                        -- would just have it wiped again by the call that's supposed to install it.
                         LC.Vote.CastVote(rollID, idx, nil)
+                        LC.autoVotedByMe[rollID] = true
                     end
                 end
             end

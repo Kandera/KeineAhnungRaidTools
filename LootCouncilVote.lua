@@ -262,7 +262,12 @@ end
 -- Shared click path for both layouts' vote buttons. Test rolls stay local (no group to
 -- broadcast to — see the original comment in the Spacious handler); real rolls broadcast.
 function Vote.CastVote(rollID, buttonIdx, noteBox)
-    if LC.votedByMe[rollID] then return end
+    -- A vote the player clicked is final. One that LC.Relevance cast on their behalf is not: the
+    -- relevance check can be wrong, and the player's own correction has to win over it. HandleVote
+    -- stores per sender and overwrites, so the council simply sees the corrected vote -- no protocol
+    -- change and no double counting.
+    if LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID] then return end
+    LC.autoVotedByMe[rollID] = nil
     LC.votedByMe[rollID] = buttonIdx
     -- Strip pipes at input, the same way LootCouncilSettings strips colons from the synced fields:
     -- this note is rendered raw into every council member's tooltip, and "|c"/"|H"/"|T" escapes would
