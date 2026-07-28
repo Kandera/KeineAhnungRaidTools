@@ -2,7 +2,7 @@
 ## Title: Keine Ahnung Raid Tools
 ## Notes: Ein Tool für Invites, Auto-Promote und Buff-Checks.
 ## Author: Kandera
-## Version: 3.1.1
+## Version: 3.2.0
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
 ## SavedVariables: KART_Settings, KART_LootHistory, KART_LCOfficerNotes, KART_WoWUtilsCache, KART_Profiles, KART_PlayerCache
 ## SavedVariablesPerCharacter: KART_LCTrades

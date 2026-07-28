@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-28
+### Hinzugefügt
+- **Items, die deine Klasse nicht anlegen kann, lassen sich jetzt aus dem Vote-Fenster ausblenden.** Sie werden automatisch mit deiner letzten konfigurierten Antwort beantwortet, damit der Council nicht wartet.
+- **KART kann für dich Transmog wählen bei Items, die du nicht anlegen kannst, deren Aussehen dir aber fehlt.**
+- **Ein fester Transmog-Button ist jetzt immer die letzte Antwort.** Frei konfigurierbare Labels sinken von sechs auf fünf.
+
 ## [3.1.1] - 2026-07-28
 ### Behoben
 - **Fenster- und Buttonrahmen werden bei jeder UI-Skalierung durchgezogen**, statt auf einer für einen größeren Bildschirm skalierten Oberfläche stückweise wegzubrechen.
