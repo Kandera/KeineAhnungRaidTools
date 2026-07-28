@@ -58,9 +58,42 @@ LC.relevanceSnapshot = LC.relevanceSnapshot or {}
 local relevanceRollFrame = CreateFrame("Frame")
 relevanceRollFrame:RegisterEvent("START_LOOT_ROLL")
 relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
+    -- Same two cheap guards LC.OnStartLootRoll checks first -- NOT its councilEligible/councilEngages
+    -- logic below them, which stays exactly once, in that function, so the two copies can't drift.
+    -- Skipping module-off/no-session here just avoids snapshotting rolls this feature can never act
+    -- on anyway (the module disabled, or no Council session running at all).
+    if KART_Settings.lcModuleEnabled == false then return end
+    if not LC.sessionActive then return end
+
     local texture, _, _, _, _, canNeed, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
-    if not texture then return end -- nothing live under this ID; leave no snapshot, callers fall back
-    LC.relevanceSnapshot[rollID] = { irrelevant = not canNeed, needsAppearance = not not canTransmog }
+    if texture then
+        LC.relevanceSnapshot[rollID] = { irrelevant = not canNeed, needsAppearance = not not canTransmog }
+    end
+
+    -- Self-limiting sweep, run on every roll rather than tied to a session ending: most rolls never
+    -- reach Council (BoE, collectible, below the raid's rarity threshold -- see councilEngages in
+    -- LC.OnStartLootRoll) and so never reach Trade.ClearRollState, which would otherwise be the only
+    -- thing freeing this entry. Left unchecked, every such roll for the rest of the session would
+    -- leave its snapshot behind. A nil texture is the same "roll is gone" signal LC.OnStartLootRoll's
+    -- own retry loop already relies on -- cheap to reuse, needs no timestamp of our own.
+    --
+    -- Two entries must survive this sweep regardless: rollID itself (just written above, or a
+    -- same-tick edge case where GetLootRollItemInfo already went blank -- either way not ours to
+    -- judge here), and any roll still in LC.voteListRolls -- a roll reports no texture once IT has
+    -- been rolled while its vote row can still be open for minutes, which is the entire reason this
+    -- snapshot exists in the first place.
+    for id in pairs(LC.relevanceSnapshot) do
+        if id ~= rollID then
+            local stillVoting = false
+            for _, votingID in ipairs(LC.voteListRolls) do
+                if votingID == id then stillVoting = true break end
+            end
+            if not stillVoting then
+                local stillLive = GetLootRollItemInfo(id)
+                if not stillLive then LC.relevanceSnapshot[id] = nil end
+            end
+        end
+    end
 end)
 
 -- Can this player's class not equip the item at all?  true / false / nil when undecidable.
