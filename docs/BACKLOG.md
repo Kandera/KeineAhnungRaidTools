@@ -45,24 +45,29 @@ its number in the commit subject or body.
 come out incomplete. B18 was about everything being proportionally larger; this is about border
 pixels going missing.
 
-**2026-07-28 — the scale-rounding explanation is dead.** The reporter's text said "WoW UI Scale ist
-100%", which contradicted the Graphics screenshot supplied for B18, where the "Use UI Scale"
-checkbox is clearly unticked. Confirmed with the reporter directly: **the checkbox is not ticked.**
-WoW then uses the pixel-perfect automatic scale, `UIParent`'s effective scale is 1.0, one UI unit is
-exactly one physical pixel, and a 1-unit border is exactly one pixel. That holds at 1080p and at
-1440p alike, so the resolution difference cannot produce the symptom by rounding. Do not re-derive
-the 768/1.40625 argument — it only applies with the checkbox ticked, and it is not.
+**2026-07-28 — measured, and fixed.** The reporter's client returned:
 
-**Still true and still the most likely lead once a cause is known:** every backdrop in the addon
-uses `edgeSize = 1` (`Libs/KAUI-1.0/KAUI-1.0.lua` five times, plus `Core.lua`, `Invite.lua`,
-`LootCouncilPanel.lua`), and **`PixelUtil` is used nowhere** — no border is snapped to the physical
-pixel grid. WoW provides `PixelUtil`/`GetPhysicalScreenSize` for exactly this class of problem.
+    UIParent:GetEffectiveScale()  0.53333336
+    UIParent:GetWidth/GetHeight   2560 x 1440
+    GetPhysicalScreenSize()       1920 x 1080
 
-**Waiting on measurements**, asked in the issue on 2026-07-28 rather than guessing again:
+0.53333 is 768/1440: the interface is scaled for a 1440-line screen while WoW renders 1080 lines,
+so one UI unit is 1080/1440 = **0.75 physical pixels** and a 1-unit border cannot be drawn whole.
+WoW puts down 1 pixel along part of the edge and 0 along the rest, which is the reported symptom
+exactly; it also explains why the gap moves to a different side when the window is rescaled. With
+the "Use UI Scale" checkbox unticked WoW would have chosen 768/1080 itself, so something else on
+that client — a UI pack, most likely — sets UIParent's scale. Strictly this affects every hairline
+in that interface, not only ours.
 
-- `UIParent:GetEffectiveScale()`, `GetWidth`/`GetHeight` and `GetPhysicalScreenSize()`. Anything
-  other than an effective scale of 1.0 puts rounding back in play with real numbers.
-- Whether the Loot Council scale slider, new in 3.1.0, changes the borders at 90 and at 110.
-- Which windows are affected, and a zoomed screenshot of one broken border.
+Fixed by deriving `edgeSize` from each frame's effective scale via `PixelUtil.GetNearestPixelSize`
+(`KAUI:SetPixelBackdrop`, applied at all 25 backdrop sites), with `KAUI:RefreshPixelBorders`
+re-deriving after anything that changes a scale. On a client whose scale matches its resolution
+that call returns exactly 1 and nothing renders differently — verified in `tests/test_kaui.lua`.
 
-Reported 2026-07-27.
+**Not fixed, and worth knowing before this is re-opened:** only the border *width* is snapped, not
+child *positions*. At 0.75 pixels per unit an integer offset still lands between pixels, so an edge
+can read as soft rather than crisp. If the reporter still sees something after this, that is the
+next place to look — and the honest answer there may be that his UI scale wants correcting rather
+than our anchors.
+
+Reported 2026-07-27. Awaiting confirmation in-game.

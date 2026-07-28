@@ -26,6 +26,10 @@ frame:RegisterEvent("TRADE_SHOW")
 frame:RegisterEvent("TRADE_CLOSED")
 frame:RegisterEvent("TRADE_ACCEPT_UPDATE")
 frame:RegisterEvent("UI_INFO_MESSAGE")
+-- Border widths are in frame units, which stop being whole pixels when the UI scale or the
+-- resolution changes under us (B23). Both events fire without the addon touching anything.
+frame:RegisterEvent("UI_SCALE_CHANGED")
+frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
 
 -- DataBroker Object für Minimap und Compartment
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
@@ -437,6 +441,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
     elseif event == "CHALLENGE_MODE_START" then
         if KART.AutoLog then KART.AutoLog.Evaluate() end
+    elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+        KART.UI:RefreshPixelBorders()
     end
 end)
 
@@ -608,6 +614,11 @@ function KART.UpdateStyles()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() and KART.UpdateBuffCheckThrottled then
         KART.UpdateBuffCheckThrottled()
     end
+
+    -- Border widths are derived from each frame's effective scale (B23), and both size sliders
+    -- have been applied by now -- the addon-wide one above, the Loot Council one in
+    -- ApplyWindowChrome. Last in this function so nothing after it changes a scale again.
+    KART.UI:RefreshPixelBorders()
 end
 
 -- UI für den erweiterten Ready-Check Grund
@@ -617,7 +628,7 @@ function KART.ShowReadyCheckReasonDialog()
         f:SetSize(260, 115)
         f:SetPoint("CENTER", 0, 150)
         KART.UI:RegisterStrataFrame(f, true)
-        f:SetBackdrop({
+        KART.UI:SetPixelBackdrop(f, {
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
@@ -666,7 +677,7 @@ function KART.ShowReadyCheckReasonDialog()
         customInput:SetPoint("BOTTOMLEFT", 10, 15)
         customInput:SetAutoFocus(false)
         customInput:SetFontObject("GameFontHighlightSmall")
-        customInput:SetBackdrop({
+        KART.UI:SetPixelBackdrop(customInput, {
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,

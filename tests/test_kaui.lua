@@ -124,3 +124,68 @@ do
     T.truthy(hidden, "the consumer's own OnHide still runs")
     T.eq(popup.strata, "DIALOG", "and the restore happened anyway")
 end
+
+-- SetPixelBackdrop: a border is a whole physical pixel, whatever the UI scale ------------------
+-- Every backdrop in the addon asks for a 1-unit border. That is one physical pixel only while the
+-- UI scale matches the resolution. On the client that reported B23 the interface is scaled for
+-- 1440 lines but rendered on 1080, one unit is 0.75 pixels, and WoW draws such a border in
+-- patches. edgeSize is now derived from the frame's effective scale instead of hardcoded.
+local function ApproxEq(actual, expected, msg)
+    T.truthy(math.abs(actual - expected) < 1e-9,
+        msg .. " (expected " .. expected .. ", got " .. tostring(actual) .. ")")
+end
+
+do
+    KARTTEST.uiScale = 768 / 1080 -- what WoW picks itself: one unit is exactly one pixel
+    local f = CreateFrame("Frame")
+    ns:SetPixelBackdrop(f, { bgFile = "x", edgeFile = "y", edgeSize = 1 })
+    ApproxEq(f:GetBackdrop().edgeSize, 1,
+        "a scale matching the resolution leaves the border at exactly 1 unit -- nobody else changes")
+end
+
+do
+    KARTTEST.uiScale = 768 / 1440 -- scaled for 1440p, rendered on 1080p: 0.75 pixels per unit
+    local f = CreateFrame("Frame")
+    ns:SetPixelBackdrop(f, { bgFile = "x", edgeFile = "y", edgeSize = 1 })
+    ApproxEq(f:GetBackdrop().edgeSize, 4 / 3,
+        "a 0.75-pixel unit widens the border to 4/3 units, which is one whole pixel (B23)")
+
+    local thick = CreateFrame("Frame")
+    ns:SetPixelBackdrop(thick, { bgFile = "x", edgeFile = "y", edgeSize = 2 })
+    ApproxEq(thick:GetBackdrop().edgeSize, 8 / 3, "a 2-unit border scales the same way")
+end
+
+-- The frame's own scale counts too: the Loot Council windows carry one, set by their size slider.
+do
+    KARTTEST.uiScale = 768 / 1440
+    local f = CreateFrame("Frame")
+    f:SetScale(4 / 3) -- brings the effective scale back to pixel-perfect
+    ns:SetPixelBackdrop(f, { bgFile = "x", edgeFile = "y", edgeSize = 1 })
+    ApproxEq(f:GetBackdrop().edgeSize, 1,
+        "a window whose own scale restores pixel-perfection needs no correction")
+end
+
+-- RefreshPixelBorders: recompute after a scale change, and keep the colors -----------------------
+-- SetBackdrop drops the backdrop and border colors, so a refresh that only re-set the table would
+-- leave every registered frame black. The scale slider calls this on every drag.
+do
+    KARTTEST.uiScale = 768 / 1080
+    local f = CreateFrame("Frame")
+    ns:SetPixelBackdrop(f, { bgFile = "x", edgeFile = "y", edgeSize = 1 })
+    f:SetBackdropColor(0.1, 0.2, 0.3, 0.9)
+    f:SetBackdropBorderColor(0.4, 0.5, 0.6, 1)
+
+    f:SetScale(0.5)
+    ns:RefreshPixelBorders()
+    ApproxEq(f:GetBackdrop().edgeSize, 2, "a halved frame scale doubles the border in frame units")
+
+    local r, g, b, a = f:GetBackdropColor()
+    T.eq(r, 0.1, "refresh keeps the backdrop color")
+    T.eq(a, 0.9, "refresh keeps the backdrop alpha")
+    local er, eg, eb, ea = f:GetBackdropBorderColor()
+    T.eq(er, 0.4, "refresh keeps the border color")
+    T.eq(ea, 1, "refresh keeps the border alpha")
+    T.truthy(g and b and eg and eb, "all four components survive the refresh")
+end
+
+KARTTEST.uiScale = 768 / 1080 -- leave the scale as found, for whatever file runs next

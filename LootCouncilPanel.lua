@@ -369,7 +369,7 @@ function Council.RefreshCouncilTabs()
         if not tab then
             tab = CreateFrame("Button", nil, panel.tabStrip, "BackdropTemplate")
             tab:SetSize(40, 40)
-            tab:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2})
+            KART.UI:SetPixelBackdrop(tab, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2})
             tab:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
 
             -- Accent frame behind the active tab only — same crisp-border-instead-of-blur
@@ -1109,7 +1109,7 @@ function Council.RefreshCouncilRows()
             row:SetHeight(24)
             -- Left-click is intentionally inert; right-click opens the assign menu.
             row:RegisterForClicks("RightButtonUp")
-            row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row, {bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
             -- Round class icon (see SetClassIconTexture) so class reads at a glance without
             -- parsing the class-coloured name text next to it.
@@ -1185,7 +1185,7 @@ function Council.RefreshCouncilRows()
             row.councilVoteBtn = CreateFrame("Button", nil, row, "BackdropTemplate")
             row.councilVoteBtn:SetSize(40, 18)
             row.councilVoteBtn:SetPoint("LEFT", 433, 0)
-            row.councilVoteBtn:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row.councilVoteBtn, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.councilVoteBtn:SetBackdropColor(0, 0, 0, 0.4)
 
             -- Fill proportional to pollCount/councilSize, so the tally reads as a bar at a glance

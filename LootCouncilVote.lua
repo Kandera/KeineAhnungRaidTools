@@ -340,7 +340,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         if not row then
             needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
-            row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row, {bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
             row:SetBackdropBorderColor(0, 0, 0, 1)
 
@@ -413,7 +413,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.votedBadge = CreateFrame("Frame", nil, row, "BackdropTemplate")
             row.votedBadge:SetPoint("TOPLEFT", row.btnArea, "TOPLEFT", 0, -2)
             row.votedBadge:SetHeight(20)
-            row.votedBadge:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row.votedBadge, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
             row.votedText = row.votedBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.votedText:SetPoint("CENTER")
@@ -427,7 +427,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
             row.noteBox:SetAutoFocus(false)
             row.noteBox:SetMaxLetters(80)
             row.noteBox:SetFontObject("GameFontHighlightSmall")
-            row.noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row.noteBox, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.noteBox:SetBackdropColor(0, 0, 0, 0.5)
             row.noteBox:SetTextInsets(6, 6, 0, 0)
             row.noteBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -636,7 +636,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         if not row then
             needsRestyle = true
             row = CreateFrame("Frame", nil, f.scrollChild, "BackdropTemplate")
-            row:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row, {bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row:SetBackdropColor(0.12, 0.12, 0.12, 0.55)
             row:SetBackdropBorderColor(0, 0, 0, 1)
 
@@ -689,7 +689,7 @@ function Vote.RefreshVoteListRows_Compact(f)
             row.votedBadge = CreateFrame("Frame", nil, row, "BackdropTemplate")
             row.votedBadge:SetPoint("LEFT", row.chipArea, "LEFT")
             row.votedBadge:SetHeight(CHIP)
-            row.votedBadge:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row.votedBadge, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
 
             row.votedText = row.votedBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.votedText:SetPoint("CENTER")
@@ -712,7 +712,7 @@ function Vote.RefreshVoteListRows_Compact(f)
             row.noteBox:SetAutoFocus(false)
             row.noteBox:SetMaxLetters(80)
             row.noteBox:SetFontObject("GameFontHighlightSmall")
-            row.noteBox:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+            KART.UI:SetPixelBackdrop(row.noteBox, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
             row.noteBox:SetBackdropColor(0, 0, 0, 0.85)
             row.noteBox:SetTextInsets(6, 6, 0, 0)
             row.noteBox:SetPoint("LEFT", row.notePencil, "RIGHT", 6, 0)
@@ -817,7 +817,7 @@ function Vote.RefreshVoteListRows_Compact(f)
                 if not btn then
                     btn = CreateFrame("Button", nil, row.chipArea, "BackdropTemplate")
                     btn:SetSize(CHIP, CHIP)
-                    btn:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+                    KART.UI:SetPixelBackdrop(btn, {bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
                     -- Base fill, same as every other backdrop frame in this file (e.g. the row
                     -- backdrops above, or KART.UI:CreateModernButton's own vote buttons) — without
                     -- this the chip has no set background color, only the category-tinted border

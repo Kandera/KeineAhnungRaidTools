@@ -842,7 +842,7 @@ searchBtn:SetPoint("TOPRIGHT", clickArea, "TOPRIGHT", -70, -20)
 local searchPopout = CreateFrame("Frame", nil, clickArea, "BackdropTemplate")
 searchPopout:SetPoint("TOPRIGHT", searchBtn, "BOTTOMRIGHT", 0, -6)
 searchPopout:SetSize(260, 40)
-searchPopout:SetBackdrop({
+KART.UI:SetPixelBackdrop(searchPopout, {
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
     edgeFile = "Interface\\Buttons\\WHITE8X8",
     edgeSize = 1,

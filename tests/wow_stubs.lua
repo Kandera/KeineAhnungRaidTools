@@ -121,11 +121,60 @@ function _G.CreateFrame(_, name, _, _)
     function f:GetWidth() return 0 end
     function f:GetHeight() return 0 end
 
+    -- Scale and backdrop get real behavior for the pixel-border tests: SetPixelBackdrop reads the
+    -- frame's effective scale to size its border, and RefreshPixelBorders has to hand the colors
+    -- back over a SetBackdrop that drops them. Effective scale is the UI scale times the frame's
+    -- own, which is all the real parent chain amounts to here (KART sets a scale on top-level
+    -- windows only).
+    local scale = 1
+    function f:SetScale(value) scale = value; return f end
+    function f:GetScale() return scale end
+    function f:GetEffectiveScale() return KARTTEST.uiScale * scale end
+
+    local backdrop, bg, edge
+    function f:SetBackdrop(t) backdrop = t; return f end
+    function f:GetBackdrop() return backdrop end
+    -- `return bg and unpack(bg)` would truncate to a single value: these getters return all four
+    -- components or nothing at all, like the real ones.
+    function f:SetBackdropColor(...) bg = { ... }; return f end
+    function f:GetBackdropColor() if bg then return unpack(bg) end end
+    function f:SetBackdropBorderColor(...) edge = { ... }; return f end
+    function f:GetBackdropBorderColor() if edge then return unpack(edge) end end
+
     if name == "KART_GearScanTooltip" then InstallScanTooltip(f) end
 
     return f
 end
-_G.UIParent = setmetatable({}, frameMeta)
+_G.UIParent = _G.CreateFrame("Frame")
+
+-- Screen geometry -----------------------------------------------------------------------
+-- Two numbers drive every pixel-border test: the physical screen height, and the UI scale that
+-- WoW (or, in the reported case, some other addon) has put on UIParent. Their ratio decides how
+-- many physical pixels one UI unit is worth -- exactly 1 when the scale matches the resolution,
+-- 0.75 on the client that reported B23.
+KARTTEST.physW, KARTTEST.physH = 1920, 1080
+KARTTEST.uiScale = 768 / 1080 -- the value WoW picks itself, i.e. pixel-perfect
+
+function _G.GetPhysicalScreenSize() return KARTTEST.physW, KARTTEST.physH end
+
+-- Mirrors Blizzard's PixelUtil: the factor is 768 / physical height, set whenever the UI scale
+-- changes, and GetNearestPixelSize converts a size in one frame's units to the nearest whole
+-- number of physical pixels and back.
+_G.PixelUtil = {
+    GetPixelToUIUnitFactor = function() return 768 / KARTTEST.physH end,
+    GetNearestPixelSize = function(uiUnitSize, layoutScale, minPixels)
+        local factor = 768 / KARTTEST.physH
+        local numPixels = math.floor(uiUnitSize * layoutScale / factor + 0.5)
+        if minPixels then
+            if uiUnitSize < 0 then
+                if numPixels > -minPixels then numPixels = -minPixels end
+            elseif numPixels < minPixels then
+                numPixels = minPixels
+            end
+        end
+        return numPixels * factor / layoutScale
+    end,
+}
 
 -- Chat --------------------------------------------------------------------------------
 KARTTEST.sent = {}

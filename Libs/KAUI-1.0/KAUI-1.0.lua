@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 3
+local MAJOR, MINOR = "KAUI-1.0", 4
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -27,7 +27,7 @@ local REGISTRIES = {
     "labels", "editBoxes", "buttonTexts", "closeButtonTexts",
     "sliderThumbs", "checkVisuals", "accentLines", "accentTextures",
     "tabButtons", "toggleCheckboxes", "localeRefreshers",
-    "strataFrames", "strataDialogFrames",
+    "strataFrames", "strataDialogFrames", "pixelBackdrops",
 }
 
 function KAUI:NewNamespace(name)
@@ -145,6 +145,56 @@ function nsProto:ApplyFrameStrata()
     local windowStrata, dialogStrata = self:GetWindowStrata(), self:GetDialogStrata()
     for _, f in ipairs(self.strataFrames) do f:SetFrameStrata(windowStrata) end
     for _, f in ipairs(self.strataDialogFrames) do f:SetFrameStrata(dialogStrata) end
+end
+
+-- SetBackdrop with the border width snapped to whole physical pixels.
+--
+-- `edgeSize` is in the frame's own units, and a unit is only a whole pixel while the UI scale
+-- matches the resolution. Where it does not -- an interface scaled for 1440 lines rendered on
+-- 1080, which is what a UI pack carried onto a smaller screen produces -- one unit is 0.75 pixels
+-- and WoW draws a 1-unit border in patches: present along part of an edge, missing along the rest
+-- (GitHub issue #5, B23). PixelUtil converts the requested width to the nearest whole pixel and
+-- back, so the border comes out solid at any scale.
+--
+-- On a client whose scale does match, GetNearestPixelSize(1, scale, 1) returns exactly 1 and the
+-- frame renders identically to a hardcoded edgeSize -- a no-op for everyone whose borders were
+-- already clean.
+local function ApplyPixelBackdrop(frame, backdrop)
+    local edgeSize = backdrop.edgeSize
+    if edgeSize and PixelUtil then
+        local scale = frame:GetEffectiveScale()
+        if scale and scale > 0 then
+            -- Copied rather than mutated: the caller's table keeps the requested width, so a later
+            -- refresh derives from that instead of from the last corrected value.
+            local applied = {}
+            for k, v in pairs(backdrop) do applied[k] = v end
+            applied.edgeSize = PixelUtil.GetNearestPixelSize(edgeSize, scale, 1)
+            frame:SetBackdrop(applied)
+            return
+        end
+    end
+    frame:SetBackdrop(backdrop)
+end
+
+function nsProto:SetPixelBackdrop(frame, backdrop)
+    self.pixelBackdrops[#self.pixelBackdrops + 1] = { frame = frame, backdrop = backdrop }
+    ApplyPixelBackdrop(frame, backdrop)
+end
+
+-- Re-derives every registered border. Call after anything that changes a frame's effective scale:
+-- the window size sliders, and WoW's own UI_SCALE_CHANGED/DISPLAY_SIZE_CHANGED.
+function nsProto:RefreshPixelBorders()
+    for _, entry in ipairs(self.pixelBackdrops) do
+        local frame = entry.frame
+        -- SetBackdrop resets both colors to white, so they have to be carried across it. Read back
+        -- off the frame rather than stored at registration time, which would undo every later
+        -- SetBackdropColor call -- the hover and focus states change these constantly.
+        local r, g, b, a = frame:GetBackdropColor()
+        local er, eg, eb, ea = frame:GetBackdropBorderColor()
+        ApplyPixelBackdrop(frame, entry.backdrop)
+        if r then frame:SetBackdropColor(r, g, b, a) end
+        if er then frame:SetBackdropBorderColor(er, eg, eb, ea) end
+    end
 end
 
 -- Returns true if a saved window position (a TOPLEFT offset relative to UIParent's BOTTOMLEFT --
@@ -350,7 +400,7 @@ end
 function nsProto.CreateModernButton(ns, parent, text, tooltipText)
     local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
     b:SetSize(130, 25)
-    b:SetBackdrop({
+    ns:SetPixelBackdrop(b, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
@@ -599,7 +649,7 @@ function nsProto:CreateCard(parent, title)
     shadow:SetPoint("TOPLEFT", card, "TOPLEFT", -2, 2)
     shadow:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", 2, -2)
 
-    card:SetBackdrop({
+    self:SetPixelBackdrop(card, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
@@ -648,7 +698,7 @@ end
 function nsProto.CreateStyledEditBox(ns, parent, name)
     local eb = CreateFrame("EditBox", name, parent, "BackdropTemplate")
     eb:SetAutoFocus(false)
-    eb:SetBackdrop({
+    ns:SetPixelBackdrop(eb, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
@@ -784,7 +834,7 @@ function nsProto.CreateSettingsCheckbox(ns, parent, opts)
     cb:SetSize(34, 16)
     cb:SetPoint("TOPLEFT", 20, opts.y)
 
-    cb:SetBackdrop({
+    ns:SetPixelBackdrop(cb, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
@@ -894,7 +944,7 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     s:SetValueStep(1)
     s:SetObeyStepOnDrag(true)
 
-    s:SetBackdrop({
+    ns:SetPixelBackdrop(s, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,

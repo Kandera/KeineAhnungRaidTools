@@ -37,7 +37,7 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     b:SetSize(width or 22, height or 22)
     b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     b:SetFrameLevel(parent:GetFrameLevel() + 5)
-    b:SetBackdrop({
+    KART.UI:SetPixelBackdrop(b, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
@@ -126,7 +126,7 @@ rlBar:SetScript("OnDragStop", function(self)
     KART_Settings.rlBarY = yOfs
 end)
 
-rlBar:SetBackdrop({
+KART.UI:SetPixelBackdrop(rlBar, {
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
     edgeFile = "Interface\\Buttons\\WHITE8X8",
     edgeSize = 1,

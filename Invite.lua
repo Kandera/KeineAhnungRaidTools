@@ -310,7 +310,7 @@ function WU.RefreshBossList()
         if not row then
             row = CreateFrame("Frame", nil, panel, "BackdropTemplate")
             row:SetHeight(ROW_H)
-            row:SetBackdrop({
+            KART.UI:SetPixelBackdrop(row, {
                 bgFile   = "Interface\\ChatFrame\\ChatFrameBackground",
                 edgeFile = "Interface\\Buttons\\WHITE8X8",
                 edgeSize = 1,
@@ -392,7 +392,7 @@ function WU.BuildPanel(parent)
     local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
     pasteBG:SetSize(460, 90)
     pasteBG:SetPoint("TOPLEFT", 20, -35)
-    pasteBG:SetBackdrop({
+    KART.UI:SetPixelBackdrop(pasteBG, {
         bgFile   = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,

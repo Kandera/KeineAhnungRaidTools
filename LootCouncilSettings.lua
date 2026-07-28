@@ -269,7 +269,7 @@ function LC.BuildSettingsPanel(parent)
     local raidBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     raidBox:SetPoint("TOPLEFT", prefsCard, "BOTTOMLEFT", 0, -20)
     raidBox:SetWidth(500) -- height is set by layoutRaidBox() from the measured content
-    raidBox:SetBackdrop({bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
+    KART.UI:SetPixelBackdrop(raidBox, {bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
     raidBox:SetBackdropColor(0.5, 0.4, 0.05, 0.12)
     raidBox:SetBackdropBorderColor(0.5, 0.4, 0.05, 0.6)
 

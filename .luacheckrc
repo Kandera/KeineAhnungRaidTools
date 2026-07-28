@@ -26,7 +26,7 @@ files["tests/"] = {
                 "UnitIsGroupAssistant", "IsInRaid", "IsInGroup", "GetNumGroupMembers",
                 "Ambiguate", "GetRealmName", "GetNormalizedRealmName", "GetTime",
                 "GetInventoryItemLink", "GetWeaponEnchantInfo", "GetAverageItemLevel",
-                "CreateFrame", "time" },
+                "CreateFrame", "time", "PixelUtil", "GetPhysicalScreenSize" },
 }
 
 -- MainFrame.lua:850 shadows the upvalue `L` (the locale table) from line 2. Single occurrence
@@ -54,7 +54,7 @@ read_globals = {
     -- WoW string/table aliases
     "strmatch", "wipe", "time", "date",
     -- Core API
-    "CreateFrame", "UIParent", "GameTooltip", "GameFontHighlightSmall", "Item",
+    "CreateFrame", "UIParent", "GameTooltip", "GameFontHighlightSmall", "Item", "PixelUtil",
     "InCombatLockdown", "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown",
     "GetCursorInfo", "CreateColor", "ReloadUI", "SetCVar",
     "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras",
