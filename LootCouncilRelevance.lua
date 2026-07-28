@@ -1,4 +1,4 @@
-local _, KART = ...
+local addonName, KART = ...
 local LC = KART.LC
 
 -- =====================================================================
@@ -173,6 +173,10 @@ function LC.Relevance.ApplyToPendingRolls()
                 if answer then
                     local idx = (answer == "transmog") and LC.GetTransmogButtonIndex() or LC.GetPassButtonIndex()
                     if idx then
+                        -- Marked handled BEFORE the vote, and that order is load-bearing: CastVote
+                        -- ends in an unconditional RefreshVoteListRows, which calls this function
+                        -- again from inside itself. Without the guard already set, that re-entry
+                        -- would answer the same roll again and recurse until the stack gives out.
                         LC.relevanceHandled[rollID] = true
                         if answer == "pass" then LC.hiddenIrrelevant[rollID] = true end
                         -- Set after CastVote, not before: CastVote itself clears autoVotedByMe (the

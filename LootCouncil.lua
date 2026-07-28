@@ -1263,6 +1263,8 @@ function LC.ClearAllRolls()
     wipe(LC.relevanceHandled)
     wipe(LC.hiddenIrrelevant)
     wipe(LC.autoVotedByMe)
+    -- Wiped here even though Trade.ClearRollState deliberately leaves it alone per roll (see the
+    -- comment there): a session ending ends every roll at once, so nothing it still holds can be live.
     wipe(LC.relevanceSnapshot)
     wipe(LC.votedNoteByMe)
     wipe(LC.councilTabsNew)
