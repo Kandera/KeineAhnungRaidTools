@@ -1376,7 +1376,7 @@ function Council.RefreshCouncilRows()
                 math.floor(m.voteDef.g * 255),
                 math.floor(m.voteDef.b * 255),
                 m.voteDef.label))
-            row.voteIcon:SetTexture(LC.GetVoteIconTexture(tonumber(m.voteIdx)))
+            row.voteIcon:SetTexture(LC.GetVoteIconTexture(tonumber(m.voteIdx), m.voteDef))
             row.voteIcon:Show()
         elseif m.voteMismatch then
             -- They DID vote; we just cannot say what for. Deliberately not a dash: a dash reads as

@@ -574,7 +574,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
                 KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 local capturedIdx    = bi
                 local capturedRollID = rollID
@@ -835,7 +835,7 @@ function Vote.RefreshVoteListRows_Compact(f)
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
                 KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_TOP")
