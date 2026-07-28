@@ -56,6 +56,8 @@ KART.Defaults = {
     lcFrameStrata = 4, -- index into KART.StrataLevels (4 = HIGH), independent of frameStrata
     lcRollsEnabled = false,
     lcVotedItemDisplay = "full",
+    lcHideIrrelevant = false,
+    lcAutoTransmogVote = false,
     wuModuleEnabled = false,
     wuImportText = "",
     dtModuleEnabled = false,

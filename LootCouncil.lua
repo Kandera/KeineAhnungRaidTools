@@ -152,6 +152,13 @@ local BUTTON_COLORS = {
     {r=0.7,  g=0.3,  b=0.9 },
 }
 
+-- The fixed Transmog response is appended by GetButtonConfig as the LAST entry, so its position
+-- shifts with however many labels the raid leader configured. Colour and icon therefore travel
+-- with the entry itself instead of being looked up by index — otherwise the same response would
+-- render yellow in a raid with three labels and purple in one with five.
+local TRANSMOG_COLOR = {r = 0.85, g = 0.5, b = 1.0}
+local TRANSMOG_ICON  = "Interface\\MINIMAP\\TRACKING\\Transmogrifier"
+
 -- Native icon textures used as small chips on vote buttons/pills, one per button *position* (not
 -- tied to label text, since labels are leader-configurable free text — see GetButtonConfig). All
 -- five are Blizzard's own default group-loot icons, reused purely because they already ship with
@@ -165,10 +172,13 @@ local VOTE_ICON_TEXTURES = {
     "Interface\\COMMON\\help-i",                  -- 4: catch-all (Sonstiges)
     "Interface\\Buttons\\UI-GroupLoot-Pass-Up",   -- 5: Pass
 }
-function LC.GetVoteIconTexture(index)
-    -- Out-of-range index (labels allow up to 6 buttons, this list holds the 5 default semantics)
-    -- falls back to the neutral catch-all icon (4), NOT Pass (the last entry, 5) — otherwise a
-    -- configured 6th button would render with the green Pass chip.
+function LC.GetVoteIconTexture(index, def)
+    -- An entry that carries its own icon (the fixed Transmog response) wins: its position is not
+    -- fixed, so the position-keyed list below cannot describe it.
+    if def and def.icon then return def.icon end
+    -- Out-of-range index (labels allow up to 5 configurable buttons plus Transmog, this list holds
+    -- the 5 default semantics) falls back to the neutral catch-all icon (4), NOT Pass (the last
+    -- entry, 5) — otherwise a configured 5th button would render with the green Pass chip.
     return VOTE_ICON_TEXTURES[index] or VOTE_ICON_TEXTURES[4]
 end
 
@@ -209,7 +219,8 @@ function LC.GetButtonConfig()
     local result = {}
     for _, label in ipairs(parts) do
         local trimmed = KAUtil.TrimString(label)
-        if trimmed ~= "" and #result < 6 then
+        -- 5, not 6: the sixth slot is now permanently the fixed Transmog response appended below.
+        if trimmed ~= "" and #result < 5 then
             -- Color by the COMPACTED position (#result+1), not the raw split index, so it matches the
             -- vote icon (chosen by the returned button's index). A whitespace-only label between real
             -- ones is dropped from result but would otherwise advance the split index, desyncing the
@@ -220,11 +231,40 @@ function LC.GetButtonConfig()
     end
     if #result == 0 then
         for i, label in ipairs(KAUtil.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
-            local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
-            table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
+            if i <= 5 then
+                local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
+                table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
+            end
         end
     end
+    -- The Transmog response is not leader-configurable: the auto-transmog setting votes with it, and
+    -- a renamed or missing button would make that setting silently vote something else. Always last,
+    -- never the raid config's business.
+    table.insert(result, {
+        label    = KART.L.LC_BUTTON_TRANSMOG,
+        r        = TRANSMOG_COLOR.r, g = TRANSMOG_COLOR.g, b = TRANSMOG_COLOR.b,
+        transmog = true,
+        icon     = TRANSMOG_ICON,
+    })
     return result
+end
+
+-- Index of the fixed Transmog response. Always the last entry (see GetButtonConfig), so this is a
+-- length lookup rather than a search — but named, because callers should not encode "last" themselves.
+function LC.GetTransmogButtonIndex()
+    return #LC.GetButtonConfig()
+end
+
+-- Index of the last FREELY CONFIGURED label, which the hide-irrelevant setting votes with. That is
+-- "Pass" in the default configuration and in every configuration this guild has used. A raid leader
+-- who renames the last label to something that is not a pass makes that setting vote it instead —
+-- documented in the setting's own tooltip, deliberately not guessed at from the label text.
+-- nil when the config holds nothing but the appended Transmog entry, which cannot happen through the
+-- settings UI (an empty field falls back to the defaults) but is cheap to be honest about.
+function LC.GetPassButtonIndex()
+    local n = #LC.GetButtonConfig() - 1
+    if n < 1 then return nil end
+    return n
 end
 
 -- The loot owner counts as council without having to be listed in the council-member field. He is
@@ -1220,6 +1260,12 @@ function LC.ClearAllRolls()
     wipe(LC.rollDurations)
     wipe(LC.assignedWinners)
     wipe(LC.votedByMe)
+    wipe(LC.relevanceHandled)
+    wipe(LC.hiddenIrrelevant)
+    wipe(LC.autoVotedByMe)
+    -- Wiped here even though Trade.ClearRollState deliberately leaves it alone per roll (see the
+    -- comment there): a session ending ends every roll at once, so nothing it still holds can be live.
+    wipe(LC.relevanceSnapshot)
     wipe(LC.votedNoteByMe)
     wipe(LC.councilTabsNew)
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
@@ -1913,6 +1959,10 @@ function LC.StartTest(mode)
             LC.councilVotes[testRollID]    = {}
             LC.assignedWinners[testRollID] = nil -- fresh test run, forget any winner assigned in a previous one
             LC.votedByMe[testRollID]       = nil -- forget our own vote from a previous test run too
+            LC.relevanceHandled[testRollID]  = nil
+            LC.hiddenIrrelevant[testRollID]  = nil
+            LC.autoVotedByMe[testRollID]     = nil
+            LC.relevanceSnapshot[testRollID] = nil
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")

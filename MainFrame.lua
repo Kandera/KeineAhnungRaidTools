@@ -208,13 +208,14 @@ function KART.UpdateScrollRange()
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
     if tab == 5 then
-        -- 387 = everything around the raid box, which is the only variable-height part:
-        --   12 top inset + 260 prefs card + 20 gap  (= 292, the raid box's own top)
+        -- 552 = everything around the raid box, which is the only variable-height part:
+        --   12 top inset + 425 prefs card + 20 gap  (= 457, the raid box's own top)
         -- + 16 gap + 28 test buttons + 8 gap + 28 history button + 15 bottom padding.
-        -- (Was 342, left over from when the prefs card was 215 tall, before the font-size slider
-        -- moved into it from the raid box and grew it by 45px.)
+        -- (Was 342 while the prefs card was 215 tall, then 387 for 260 — and stayed at 387 while the
+        -- card grew to 350 for the scale/layer sliders and to 425 for the irrelevant-item switches,
+        -- which is why its bottom 165px had no scroll range to reach them by.)
         local rb = KART.LC and KART.LC.RaidBox
-        h = 387 + ((rb and rb:GetHeight()) or 420)
+        h = 552 + ((rb and rb:GetHeight()) or 420)
     elseif tab == 6 then
         -- 293 = import card block + separator/headers above the boss list + bottom padding
         local bl = KART.WU and KART.WU.bossListFrame

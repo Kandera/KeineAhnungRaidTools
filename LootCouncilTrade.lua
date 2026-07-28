@@ -305,6 +305,18 @@ function Trade.ClearRollState(rollID)
     LC.assignedWinners[rollID] = nil
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
+    LC.relevanceHandled[rollID]  = nil
+    LC.hiddenIrrelevant[rollID]  = nil
+    LC.autoVotedByMe[rollID]     = nil
+    -- LC.relevanceSnapshot is deliberately NOT cleared here, unlike the three above. On a reused
+    -- rollID this runs from PurgeStaleRoll AFTER the relevance frame has already snapshotted the new
+    -- item — that frame registers for START_LOOT_ROLL before Core.lua's dispatcher and therefore
+    -- always sees the roll first — and dropping that fresh entry blinded the feature for exactly the
+    -- case PurgeStaleRoll exists to handle: RollOnLoot has run by then, so the live
+    -- GetLootRollItemInfo fallback is blank too and the item falls through to the armor path, which
+    -- returns nil for weapons. The table's lifetime belongs to the self-sweep in
+    -- LootCouncilRelevance.lua (the only clear path that knows whether a roll is still live) and to
+    -- LC.ClearAllRolls' wipe.
     LC.councilTabsNew[rollID]  = nil
     -- LC.rollLootedAt[rollID] is deliberately NOT cleared here — see Trade.PruneExpiredLootStamps
     -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves.

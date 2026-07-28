@@ -139,7 +139,7 @@ function LC.BuildSettingsPanel(parent)
     -- compact vote layout, nicknames). Raid-wide settings live in the amber box below.
     local prefsCard = KART.UI:CreateCard(parent)
     prefsCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    prefsCard:SetSize(500, 350) -- 215 -> 260 for the font-size slider, -> 350 for the scale/layer pair
+    prefsCard:SetSize(500, 425) -- 215 -> 260 for the font-size slider, -> 350 for the scale/layer pair, -> 425 for the two irrelevant-item switches
     KART.LC.SettingsCard = prefsCard
 
     -- Master switch: fully disables the module (e.g. during testing, or to avoid clashing with
@@ -254,6 +254,37 @@ function LC.BuildSettingsPanel(parent)
     end
     KART.LC.SldStrata:HookScript("OnValueChanged", UpdateLCStrataText)
     KART.LC.SldStrata:HookScript("OnShow", UpdateLCStrataText)
+
+    -- Personal preferences, same reasoning as CbAutoPass above — which items YOUR OWN vote window
+    -- bothers you with is your call, never the raid leader's. Slots -350/-380: the next free steps
+    -- below SldStrata, inside this card (height bumped 350 -> 425 above to fit both).
+    KART.LC.CbHideIrrelevant = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCHideIrrelevant", label = L.LC_SET_HIDE_IRRELEVANT,
+        store = SettingsStore, key = "lcHideIrrelevant", y = -350,
+        onChanged = function()
+            -- ...IfShown alone would make this switch look dead exactly when it matters: if every
+            -- roll of the batch was hidden, RefreshVoteListRows already hid the window itself, and
+            -- the guard then refuses to reopen it. The rule it enforces (a display-only toggle must
+            -- never pop the window over stale rolls — see Vote.RefreshVoteListRowsIfShown) still
+            -- stands; this case is outside it, because a roll only carries the hide flag while it is
+            -- live and being voted on, and the player just asked to see those.
+            for _, rollID in ipairs(LC.voteListRolls) do
+                if LC.hiddenIrrelevant[rollID] then
+                    LC.Vote.RefreshVoteListRows()
+                    return
+                end
+            end
+            LC.Vote.RefreshVoteListRowsIfShown()
+        end,
+        tooltip = L.LC_DESC_HIDE_IRRELEVANT,
+    })
+
+    KART.LC.CbAutoTransmogVote = KART.UI:CreateSettingsCheckbox(prefsCard, {
+        name = "KART_LCAutoTransmogVote", label = L.LC_SET_AUTO_TRANSMOG,
+        store = SettingsStore, key = "lcAutoTransmogVote", y = -380,
+        onChanged = function() LC.Vote.RefreshVoteListRowsIfShown() end,
+        tooltip = L.LC_DESC_AUTO_TRANSMOG,
+    })
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a

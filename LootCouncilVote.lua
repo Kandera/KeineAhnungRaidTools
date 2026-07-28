@@ -161,28 +161,47 @@ function Vote.RemoveVoteListItem(rollID)
     if #LC.voteListRolls == 0 then LC.showAllOverride = nil end
 end
 
--- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
--- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
--- after a `/reload`) never leaves a stale row from the other layout visible underneath.
--- Personal display preference (KART_Settings.lcVotedItemDisplay, see the settings dropdown in
--- Task 5 of this plan) — when set to "hide", a roll the local player has already voted on is left
--- out of the rendered list entirely (card/row disappears, window shrinks) unless
--- LC.showAllOverride is set (see /kart showall, Task 6). Returns LC.voteListRolls itself (no copy)
--- whenever nothing is being filtered, so callers that don't need filtering pay no extra cost.
+-- Shared stand-in for LC.hiddenIrrelevant while the setting that fills it is off, so the filter
+-- below can stay one expression without allocating a throwaway table several times a second.
+local NO_HIDDEN = {}
+
+-- Which of LC.voteListRolls actually get drawn. Two independent, purely personal reasons a roll is
+-- left out, both lifted together by LC.showAllOverride (/kart showall):
+--   * the player has voted on it and set lcVotedItemDisplay == "hide" (card/row disappears, window
+--     shrinks);
+--   * their class cannot use it and lcHideIrrelevant answered it for them (LC.hiddenIrrelevant).
+-- The second reason is read through the LIVE setting rather than off the flag alone: switching
+-- lcHideIrrelevant off has to bring those rows back for the rolls still running, not only from the
+-- next batch on. The flag itself stays, so switching it on again re-hides exactly the same rolls.
+-- Returns LC.voteListRolls itself (no copy) whenever neither reason removes anything — which needs
+-- checking both, not just the voted one.
 function Vote.GetVisibleRolls()
-    if (KART_Settings and KART_Settings.lcVotedItemDisplay) ~= "hide" or LC.showAllOverride then
-        return LC.voteListRolls
+    local hideVoted = (KART_Settings and KART_Settings.lcVotedItemDisplay) == "hide"
+    if LC.showAllOverride then return LC.voteListRolls end
+    local hidden = (KART_Settings and KART_Settings.lcHideIrrelevant and LC.hiddenIrrelevant) or NO_HIDDEN
+    if not hideVoted then
+        local anyIrrelevant = false
+        for _, rollID in ipairs(LC.voteListRolls) do
+            if hidden[rollID] then anyIrrelevant = true break end
+        end
+        if not anyIrrelevant then return LC.voteListRolls end
     end
     local visible = {}
     for _, rollID in ipairs(LC.voteListRolls) do
-        if not LC.votedByMe[rollID] then
+        if not hidden[rollID] and not (hideVoted and LC.votedByMe[rollID]) then
             table.insert(visible, rollID)
         end
     end
     return visible
 end
 
+-- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
+-- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
+-- after a `/reload`) never leaves a stale row from the other layout visible underneath.
 function Vote.RefreshVoteListRows()
+    -- Before anything is measured or drawn: an item answered automatically here changes both the
+    -- visible-row set and the window height that follows from it.
+    LC.Relevance.ApplyToPendingRolls()
     if #LC.voteListRolls == 0 then
         -- Every roll this batch tracked has now expired or been removed — /kart showall's
         -- override only ever meant "for the rolls currently on screen"; the next fresh batch
@@ -192,9 +211,11 @@ function Vote.RefreshVoteListRows()
         return
     end
     if #Vote.GetVisibleRolls() == 0 then
-        -- Every remaining roll is voted-and-hidden (lcVotedItemDisplay == "hide") — the batch
-        -- itself isn't done (LC.voteListRolls is still non-empty, so showAllOverride must NOT
-        -- reset here), there's just nothing left to show unless/until /kart showall runs.
+        -- Every remaining roll is hidden — voted-and-hidden (lcVotedItemDisplay == "hide"),
+        -- irrelevant-and-hidden (lcHideIrrelevant), or a mix of both. The batch itself isn't done
+        -- (LC.voteListRolls is still non-empty, so showAllOverride must NOT reset here), there's
+        -- just nothing left to show unless/until /kart showall or one of those two settings
+        -- changing brings something back.
         if LC.voteListFrame then LC.voteListFrame:Hide() end
         return
     end
@@ -249,7 +270,17 @@ end
 -- Shared click path for both layouts' vote buttons. Test rolls stay local (no group to
 -- broadcast to — see the original comment in the Spacious handler); real rolls broadcast.
 function Vote.CastVote(rollID, buttonIdx, noteBox)
-    if LC.votedByMe[rollID] then return end
+    -- A vote the player clicked is final. One that LC.Relevance cast on their behalf is not: the
+    -- relevance check can be wrong, and the player's own correction has to win over it. HandleVote
+    -- stores per sender and overwrites, so the council simply sees the corrected vote -- no protocol
+    -- change and no double counting.
+    if LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID] then return end
+    -- A stored vote at this point can only be an automatic one being overridden. Drop the hide flag
+    -- with it: the row was hidden because the item looked useless to this player, the click just
+    -- said otherwise, and leaving the flag set would make the row vanish again the moment
+    -- /kart showall lapses (a new batch, or the last roll expiring).
+    if LC.votedByMe[rollID] then LC.hiddenIrrelevant[rollID] = nil end
+    LC.autoVotedByMe[rollID] = nil
     LC.votedByMe[rollID] = buttonIdx
     -- Strip pipes at input, the same way LootCouncilSettings strips colons from the synced fields:
     -- this note is rendered raw into every council member's tooltip, and "|c"/"|H"/"|T" escapes would
@@ -442,7 +473,12 @@ function Vote.RefreshVoteListRows_Spacious(f)
         -- shrunk to badge height while still showing the full button/note area inside it.
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
-        local hasVote  = votedDef ~= nil
+        -- An answer LC.Relevance cast on the player's behalf leaves the row OPEN: CastVote lets
+        -- exactly one automatic vote be overridden (see there), and the buttons that do the
+        -- overriding only exist while hasVote is false. Rendered as a finished "you voted X" badge,
+        -- the correction the tooltip promises would have nothing to click.
+        local isAuto   = LC.autoVotedByMe[rollID] ~= nil
+        local hasVote  = votedDef ~= nil and not isAuto
 
         local thisRowH = (shrinkVoted and hasVote) and votedRowH or rowH
         row:ClearAllPoints()
@@ -573,8 +609,14 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 -- Full-strength border (was 0.55) plus a tinted gradient fill behind the label, so
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
+                -- The only cue that KART already answered this row: its own answer's button burns
+                -- brighter than the others and says so on hover. Deliberately not the voted badge —
+                -- that shares row.btnArea's anchor, so showing both would stack them on top of each
+                -- other; moving it needs real layout work and is the maintainer's call in-game.
+                local autoPicked = isAuto and tonumber(voted) == bi
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, autoPicked and 0.55 or 0.22)
+                btn.tooltipText = autoPicked and KART.L.LC_AUTO_VOTED_HINT or nil
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 local capturedIdx    = bi
                 local capturedRollID = rollID
@@ -786,8 +828,11 @@ function Vote.RefreshVoteListRows_Compact(f)
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
         -- A stored vote index with no matching button (the leader shrank the label set after we
-        -- voted) reads as unvoted, so the vote chips come back instead of an empty badge.
-        local hasVote  = votedDef ~= nil
+        -- voted) reads as unvoted, so the vote chips come back instead of an empty badge. So does an
+        -- answer LC.Relevance cast on the player's behalf — same reasoning as the Spacious renderer:
+        -- the chips are the only way to take CastVote up on its one allowed override.
+        local isAuto   = LC.autoVotedByMe[rollID] ~= nil
+        local hasVote  = votedDef ~= nil and not isAuto
         row.chipArea:SetShown(not hasVote)
         row.votedText:SetShown(hasVote)
         row.votedBadge:SetShown(hasVote)
@@ -834,12 +879,17 @@ function Vote.RefreshVoteListRows_Compact(f)
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
-                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi))
+                -- Same cue as the Spacious card: the chip KART answered with burns brighter and
+                -- explains itself in its own tooltip, since a 24px chip row has nowhere to put a
+                -- badge next to it (see the Spacious comment for why the badge itself can't serve).
+                local autoPicked = isAuto and tonumber(voted) == bi
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, autoPicked and 0.55 or 0.22)
+                btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_TOP")
                     GameTooltip:SetText(def.label, def.r, def.g, def.b)
+                    if autoPicked then GameTooltip:AddLine(KART.L.LC_AUTO_VOTED_HINT, nil, nil, nil, true) end
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip:Hide() end)

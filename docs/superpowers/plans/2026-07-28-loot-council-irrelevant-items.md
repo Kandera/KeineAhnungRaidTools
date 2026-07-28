@@ -37,11 +37,11 @@
 | `Locales/enUS.lua`, `Locales/deDE.lua` | Neue Strings. |
 | `CHANGELOG.md`, `CHANGELOG-de.md` | Release-Einträge. |
 
-**Reihenfolge-Begründung:** Der Transmog-Button muss existieren, bevor irgendetwas automatisch auf ihn abstimmen kann (Aufgabe 1). Die Einstellungen müssen existieren, bevor die Logik sie liest (Aufgabe 2). Die reine Logik wird vor ihrer Verdrahtung getestet (Aufgabe 3 vor 4).
+**Reihenfolge-Begründung:** Der Transmog-Button muss existieren, bevor irgendetwas automatisch auf ihn abstimmen kann (Task 1). Die Einstellungen müssen existieren, bevor die Logik sie liest (Task 2). Die reine Logik wird vor ihrer Verdrahtung getestet (Task 3 vor 4).
 
 ---
 
-## Aufgabe 1: Fester Transmog-Button als letzte Antwort
+## Task 1: Fester Transmog-Button als letzte Antwort
 
 `LC.GetButtonConfig` ist die einzige Quelle für die Antwort-Buttons — Vote-Fenster, Council-Panel, Trade-Erinnerung und Historie lesen alle daraus. Ein dort angehängter Eintrag erscheint automatisch überall.
 
@@ -188,7 +188,7 @@ Erwartet: beide grün, unveränderte Assertion-Zahl.
 
 - [ ] **Step 8: Im Spiel prüfen**
 
-WoW neu starten (neue Datei-Inhalte in `LootCouncil.lua` reichen zwar ein `/reload`, aber Aufgabe 4 fügt später eine neue Datei hinzu — siehe `kart-wow-testing`). Dann `/kart test`:
+WoW neu starten (neue Datei-Inhalte in `LootCouncil.lua` reichen zwar ein `/reload`, aber Task 4 fügt später eine neue Datei hinzu — siehe `kart-wow-testing`). Dann `/kart test`:
 
 - Jede Vote-Karte zeigt einen zusätzlichen letzten Button „Transmog" in Violett.
 - Sein Icon rendert als Bild, **nicht** als grüner oder schwarzer Platzhalter. Rendert es falsch, ist `TRANSMOG_ICON` der falsche Pfad — dann auf `"Interface\\Icons\\INV_Misc_Cape_18"` ausweichen und den Kommentar entsprechend anpassen.
@@ -204,7 +204,7 @@ git commit -m "feat: add a fixed Transmog vote response as the last button (#11)
 
 ---
 
-## Aufgabe 2: Die zwei persönlichen Einstellungen
+## Task 2: Die zwei persönlichen Einstellungen
 
 **Files:**
 - Modify: `Utils.lua:46-66` (Defaults)
@@ -212,7 +212,7 @@ git commit -m "feat: add a fixed Transmog vote response as the last button (#11)
 - Modify: `Locales/enUS.lua`, `Locales/deDE.lua`
 
 **Interfaces:**
-- Consumes: nichts aus Aufgabe 1.
+- Consumes: nichts aus Task 1.
 - Produces: `KART_Settings.lcHideIrrelevant` (boolean), `KART_Settings.lcAutoTransmogVote` (boolean).
 
 **Platzierung, abweichend vom Spec-Wortlaut:** Der Spec sagt „direkt unter Auto-Pass". Die Slots dazwischen sind belegt und einer davon (`-75`) gehört Droptimizer in einer anderen Datei; ein Einschub würde sechs Positionswerte und fünf erklärende Kommentare verschieben. Die beiden Checkboxen kommen daher ans **Ende desselben persönlichen Cards**, unter die Skalierungs-Slider. Persönlich statt raid-weit — der eigentliche Punkt — bleibt gewahrt.
@@ -304,7 +304,7 @@ git commit -m "feat: add personal switches for hiding and auto-answering irrelev
 
 ---
 
-## Aufgabe 3: Reine Entscheidungsfunktion mit kopflosen Tests
+## Task 3: Reine Entscheidungsfunktion mit kopflosen Tests
 
 Nur dieser Teil ist ohne laufendes WoW testbar, deshalb steckt die gesamte Fallunterscheidung hier drin und die Fakten kommen als einfache Tabelle herein. Die Testdatei zieht die Funktion per Textextraktion aus der Quelle und kompiliert sie einzeln — dasselbe Verfahren wie `tests/test_lc_votewire.lua`, damit der Test nicht an einer Kopie vorbeiläuft, die später auseinanderdriftet.
 
@@ -320,7 +320,7 @@ Nur dieser Teil ist ohne laufendes WoW testbar, deshalb steckt die gesamte Fallu
   - `local function DecideAutoResponse(facts) -> "transmog" | "pass" | nil` — rein, extrahierbar.
     `facts = {irrelevant = boolean|nil, needsAppearance = boolean|nil, hideIrrelevant = boolean, autoTransmog = boolean}`.
     `nil` bei `irrelevant`/`needsAppearance` heißt „nicht ermittelbar".
-  - `LC.Relevance.DecideAutoResponse` — dieselbe Funktion, für Aufgabe 4 nach außen gereicht.
+  - `LC.Relevance.DecideAutoResponse` — dieselbe Funktion, für Task 4 nach außen gereicht.
 
 - [ ] **Step 1: Den fehlschlagenden Test schreiben**
 
@@ -432,7 +432,7 @@ end
 LC.Relevance.DecideAutoResponse = DecideAutoResponse
 ```
 
-`KeineAhnungRaidTools.toc:30` — die neue Datei **vor** `LootCouncilVote.lua` einhängen, weil dessen Refresh-Pfad sie in Aufgabe 4 aufruft:
+`KeineAhnungRaidTools.toc:30` — die neue Datei **vor** `LootCouncilVote.lua` einhängen, weil dessen Refresh-Pfad sie in Task 4 aufruft:
 
 ```
 LootCouncil.lua
@@ -459,18 +459,18 @@ git commit -m "feat: add the auto-response decision core for irrelevant vote ite
 
 ---
 
-## Aufgabe 4: Fakten beschaffen und im Vote-Fenster verdrahten
+## Task 4: Fakten beschaffen und im Vote-Fenster verdrahten
 
 **Files:**
 - Modify: `LootCouncilRelevance.lua` (Fakten-Beschaffer + Anwendung)
 - Modify: `LootCouncilVote.lua:172-183` (`GetVisibleRolls`), `LootCouncilVote.lua:185` (`RefreshVoteListRows`)
 
 **Interfaces:**
-- Consumes: `LC.Relevance.DecideAutoResponse(facts)` (Aufgabe 3), `LC.GetTransmogButtonIndex()` / `LC.GetPassButtonIndex()` (Aufgabe 1), `KART_Settings.lcHideIrrelevant` / `.lcAutoTransmogVote` (Aufgabe 2).
+- Consumes: `LC.Relevance.DecideAutoResponse(facts)` (Task 3), `LC.GetTransmogButtonIndex()` / `LC.GetPassButtonIndex()` (Task 1), `KART_Settings.lcHideIrrelevant` / `.lcAutoTransmogVote` (Task 2).
 - Produces:
   - `LC.Relevance.ApplyToPendingRolls()` — läuft über `LC.voteListRolls`, beantwortet jeden noch unbeantworteten Roll höchstens einmal.
   - `LC.hiddenIrrelevant` — `[rollID] = true`, zweiter Ausblendgrund für `GetVisibleRolls`.
-  - `LC.autoVotedByMe` — `[rollID] = true`, von Aufgabe 5 gelesen.
+  - `LC.autoVotedByMe` — `[rollID] = true`, von Task 5 gelesen.
 
 - [ ] **Step 1: Fakten-Beschaffer und Anwendung ergänzen**
 
@@ -637,7 +637,7 @@ luacheck .
 luajit tests/run.lua
 ```
 
-Erwartet: beide grün, Assertion-Zahl unverändert gegenüber Aufgabe 3.
+Erwartet: beide grün, Assertion-Zahl unverändert gegenüber Task 3.
 
 - [ ] **Step 6: Im Spiel prüfen**
 
@@ -658,7 +658,7 @@ git commit -m "feat: hide and auto-answer vote items the player's class cannot e
 
 ---
 
-## Aufgabe 5: Automatische Stimmen dürfen überschrieben werden
+## Task 5: Automatische Stimmen dürfen überschrieben werden
 
 Erkennt der Filter etwas falsch, muss der Spieler das korrigieren können. Ohne diese Aufgabe ist eine automatische Stimme so endgültig wie eine geklickte.
 
@@ -666,7 +666,7 @@ Erkennt der Filter etwas falsch, muss der Spieler das korrigieren können. Ohne 
 - Modify: `LootCouncilVote.lua:251-253` (`CastVote`)
 
 **Interfaces:**
-- Consumes: `LC.autoVotedByMe` (Aufgabe 4).
+- Consumes: `LC.autoVotedByMe` (Task 4).
 - Produces: keine neuen Namen.
 
 - [ ] **Step 1: Die Sperre für automatische Stimmen lösen**
@@ -720,7 +720,7 @@ git commit -m "feat: let a player override a vote KART cast for them (#11)"
 
 ---
 
-## Aufgabe 6: Release
+## Task 6: Release
 
 **Files:**
 - Modify: `KeineAhnungRaidTools.toc` (Version), `CHANGELOG.md`, `CHANGELOG-de.md`
@@ -776,4 +776,4 @@ Auf Deutsch, an Kevin gerichtet, zur Freigabe vorlegen bevor sie gepostet wird. 
 ## Offene Punkte für den Maintainer
 
 - Der eigene Transmog-Button auf Position 5 muss nach dem Update aus der raid-weiten Konfiguration entfernt werden, sonst stehen zwei nebeneinander. Der Maintainer erledigt das, sobald das Update testbar ist.
-- Der Icon-Pfad `Interface\MINIMAP\TRACKING\Transmogrifier` ist nicht verifiziert. Aufgabe 1, Step 8 prüft ihn und nennt den Ausweichpfad.
+- Der Icon-Pfad `Interface\MINIMAP\TRACKING\Transmogrifier` ist nicht verifiziert. Task 1, Step 8 prüft ihn und nennt den Ausweichpfad.

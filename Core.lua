@@ -761,9 +761,10 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
             KART.LC.owedReminderFrame:Show()
         end
     elseif cmd == "showall" then
-        -- Reveals every currently active roll in the vote-list window, including ones already
-        -- voted on and hidden by KART_Settings.lcVotedItemDisplay == "hide" (see
-        -- Vote.GetVisibleRolls). No-op if nothing is currently tracked, same as /kart lc / /kart trade.
+        -- Reveals every currently active roll in the vote-list window, whichever of the two personal
+        -- settings hid it: KART_Settings.lcVotedItemDisplay == "hide" (already voted on) or
+        -- lcHideIrrelevant (answered automatically because this class cannot use it) — see
+        -- Vote.GetVisibleRolls. No-op if nothing is currently tracked, same as /kart lc / /kart trade.
         if KART.LC and KART.LC.Vote then
             KART.LC.showAllOverride = true
             KART.LC.Vote.RefreshVoteListRows()
