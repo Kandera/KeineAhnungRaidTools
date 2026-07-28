@@ -267,6 +267,11 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- stores per sender and overwrites, so the council simply sees the corrected vote -- no protocol
     -- change and no double counting.
     if LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID] then return end
+    -- A stored vote at this point can only be an automatic one being overridden. Drop the hide flag
+    -- with it: the row was hidden because the item looked useless to this player, the click just
+    -- said otherwise, and leaving the flag set would make the row vanish again the moment
+    -- /kart showall lapses (a new batch, or the last roll expiring).
+    if LC.votedByMe[rollID] then LC.hiddenIrrelevant[rollID] = nil end
     LC.autoVotedByMe[rollID] = nil
     LC.votedByMe[rollID] = buttonIdx
     -- Strip pipes at input, the same way LootCouncilSettings strips colons from the synced fields:
@@ -460,7 +465,12 @@ function Vote.RefreshVoteListRows_Spacious(f)
         -- shrunk to badge height while still showing the full button/note area inside it.
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
-        local hasVote  = votedDef ~= nil
+        -- An answer LC.Relevance cast on the player's behalf leaves the row OPEN: CastVote lets
+        -- exactly one automatic vote be overridden (see there), and the buttons that do the
+        -- overriding only exist while hasVote is false. Rendered as a finished "you voted X" badge,
+        -- the correction the tooltip promises would have nothing to click.
+        local isAuto   = LC.autoVotedByMe[rollID] ~= nil
+        local hasVote  = votedDef ~= nil and not isAuto
 
         local thisRowH = (shrinkVoted and hasVote) and votedRowH or rowH
         row:ClearAllPoints()
@@ -591,7 +601,13 @@ function Vote.RefreshVoteListRows_Spacious(f)
                 -- Full-strength border (was 0.55) plus a tinted gradient fill behind the label, so
                 -- the category reads as the button's own material instead of just its outline.
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                -- The only cue that KART already answered this row: its own answer's button burns
+                -- brighter than the others and says so on hover. Deliberately not the voted badge —
+                -- that shares row.btnArea's anchor, so showing both would stack them on top of each
+                -- other; moving it needs real layout work and is the maintainer's call in-game.
+                local autoPicked = isAuto and tonumber(voted) == bi
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, autoPicked and 0.55 or 0.22)
+                btn.tooltipText = autoPicked and KART.L.LC_AUTO_VOTED_HINT or nil
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 local capturedIdx    = bi
@@ -804,8 +820,11 @@ function Vote.RefreshVoteListRows_Compact(f)
         local voted    = LC.votedByMe[rollID]
         local votedDef = voted and buttons[tonumber(voted)]
         -- A stored vote index with no matching button (the leader shrank the label set after we
-        -- voted) reads as unvoted, so the vote chips come back instead of an empty badge.
-        local hasVote  = votedDef ~= nil
+        -- voted) reads as unvoted, so the vote chips come back instead of an empty badge. So does an
+        -- answer LC.Relevance cast on the player's behalf — same reasoning as the Spacious renderer:
+        -- the chips are the only way to take CastVote up on its one allowed override.
+        local isAuto   = LC.autoVotedByMe[rollID] ~= nil
+        local hasVote  = votedDef ~= nil and not isAuto
         row.chipArea:SetShown(not hasVote)
         row.votedText:SetShown(hasVote)
         row.votedBadge:SetShown(hasVote)
@@ -852,12 +871,17 @@ function Vote.RefreshVoteListRows_Compact(f)
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", row.chipArea, "TOPLEFT", (bi - 1) * (CHIP + CHIP_GAP), 0)
                 btn:SetBackdropBorderColor(def.r, def.g, def.b, 1)
-                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, 0.22)
+                -- Same cue as the Spacious card: the chip KART answered with burns brighter and
+                -- explains itself in its own tooltip, since a 24px chip row has nowhere to put a
+                -- badge next to it (see the Spacious comment for why the badge itself can't serve).
+                local autoPicked = isAuto and tonumber(voted) == bi
+                KART.UI:SetGradientOverlayColor(btn.grad, def.r, def.g, def.b, autoPicked and 0.55 or 0.22)
                 btn.iconTex:SetTexture(LC.GetVoteIconTexture(bi, def))
 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_TOP")
                     GameTooltip:SetText(def.label, def.r, def.g, def.b)
+                    if autoPicked then GameTooltip:AddLine(KART.L.LC_AUTO_VOTED_HINT, nil, nil, nil, true) end
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip:Hide() end)

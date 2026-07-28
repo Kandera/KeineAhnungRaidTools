@@ -37,7 +37,10 @@ LC.relevanceHandled = LC.relevanceHandled or {}
 LC.hiddenIrrelevant = LC.hiddenIrrelevant or {}
 
 -- [rollID] = true when the vote on that roll was cast by this file rather than by the player.
--- Vote.CastVote lets an automatic vote be overridden once; a manual one still locks.
+-- Vote.CastVote lets an automatic vote be overridden once; a manual one still locks. Both vote-row
+-- renderers read this too and keep such a row's vote buttons on screen (highlighting the one this
+-- file answered with) instead of collapsing it to a "you voted X" badge -- without that the
+-- override would exist in CastVote and be unreachable from the UI.
 LC.autoVotedByMe = LC.autoVotedByMe or {}
 
 -- Blizzard's own per-roll verdict, snapshotted the instant START_LOOT_ROLL fires -- reading
