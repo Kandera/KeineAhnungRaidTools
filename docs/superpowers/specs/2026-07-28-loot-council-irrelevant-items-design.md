@@ -91,13 +91,13 @@ Roll hat. Auch `/kart add`-Items hatten nie einen Blizzard-Roll.
   **und** diese ist noch nicht gesammelt. Ringe, Hälse und Trinkets haben keine
   Quelle und fallen damit nie unter Schalter 2.
 
-### Offene Annahme
+### Reichweite der beiden Pfade
 
-Ob "ineligible" in Blizzards Sinn auch Rüstungsklassen-Ineligibilität einschließt —
-also ob Kevin für ein Plattenteil überhaupt ein `START_LOOT_ROLL` erhält — ist nicht
-kopflos beweisbar. Trifft es zu, greift der Rüstungs-Fallback statt `canNeed`, und
-Waffen werden für ihn nicht gefiltert. Das ist kein Fehlverhalten, nur weniger
-Filterung als möglich; eine `/run`-Sonde im nächsten Raid klärt es.
+Vom Maintainer bestätigt (2026-07-28): Blizzard schickt auch für ein nicht tragbares
+Item ein `START_LOOT_ROLL`. `canNeed` ist im Normalfall also vorhanden, und Waffen
+werden mitgefiltert — der Rüstungs-Fallback ist die Ausnahme, nicht der Regelfall.
+Er bleibt trotzdem nötig für `/kart add`-Items, die nie einen Blizzard-Roll hatten,
+und für Clients, die den Roll wegen Tod oder Entfernung verpasst haben.
 
 ## Buttons
 
@@ -184,8 +184,8 @@ Entscheidungstabelle:
 **Im Spiel:**
 - `/kart test` zeigt weiterhin alle Testitems, unabhängig von den Schaltern.
 - Mit beiden Schaltern aus verhält sich das Vote-Fenster exakt wie heute.
-- Ein echter Raid klärt die offene Annahme oben und bestätigt, dass Kevins
-  Plattenteile verschwinden bzw. als Transmog-Stimme durchgehen.
+- Ein echter Raid bestätigt, dass Kevins Plattenteile verschwinden bzw. als
+  Transmog-Stimme durchgehen.
 
 ## Auslieferung
 
