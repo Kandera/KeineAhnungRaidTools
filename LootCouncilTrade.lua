@@ -305,6 +305,9 @@ function Trade.ClearRollState(rollID)
     LC.assignedWinners[rollID] = nil
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
+    LC.relevanceHandled[rollID] = nil
+    LC.hiddenIrrelevant[rollID] = nil
+    LC.autoVotedByMe[rollID]    = nil
     LC.councilTabsNew[rollID]  = nil
     -- LC.rollLootedAt[rollID] is deliberately NOT cleared here — see Trade.PruneExpiredLootStamps
     -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves.

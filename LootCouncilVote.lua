@@ -170,12 +170,22 @@ end
 -- LC.showAllOverride is set (see /kart showall, Task 6). Returns LC.voteListRolls itself (no copy)
 -- whenever nothing is being filtered, so callers that don't need filtering pay no extra cost.
 function Vote.GetVisibleRolls()
-    if (KART_Settings and KART_Settings.lcVotedItemDisplay) ~= "hide" or LC.showAllOverride then
-        return LC.voteListRolls
+    local hideVoted = (KART_Settings and KART_Settings.lcVotedItemDisplay) == "hide"
+    if LC.showAllOverride then return LC.voteListRolls end
+    -- Two independent reasons a row can be missing: the player has voted on it and asked for voted
+    -- items to disappear, or they cannot use it at all and asked for those to disappear. Both are
+    -- lifted together by /kart showall.
+    local hidden = LC.hiddenIrrelevant or {}
+    if not hideVoted then
+        local anyIrrelevant = false
+        for _, rollID in ipairs(LC.voteListRolls) do
+            if hidden[rollID] then anyIrrelevant = true break end
+        end
+        if not anyIrrelevant then return LC.voteListRolls end
     end
     local visible = {}
     for _, rollID in ipairs(LC.voteListRolls) do
-        if not LC.votedByMe[rollID] then
+        if not hidden[rollID] and not (hideVoted and LC.votedByMe[rollID]) then
             table.insert(visible, rollID)
         end
     end
@@ -183,6 +193,9 @@ function Vote.GetVisibleRolls()
 end
 
 function Vote.RefreshVoteListRows()
+    -- Before anything is measured or drawn: an item answered automatically here changes both the
+    -- visible-row set and the window height that follows from it.
+    LC.Relevance.ApplyToPendingRolls()
     if #LC.voteListRolls == 0 then
         -- Every roll this batch tracked has now expired or been removed — /kart showall's
         -- override only ever meant "for the rolls currently on screen"; the next fresh batch

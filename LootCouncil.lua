@@ -1953,6 +1953,9 @@ function LC.StartTest(mode)
             LC.councilVotes[testRollID]    = {}
             LC.assignedWinners[testRollID] = nil -- fresh test run, forget any winner assigned in a previous one
             LC.votedByMe[testRollID]       = nil -- forget our own vote from a previous test run too
+            LC.relevanceHandled[testRollID] = nil
+            LC.hiddenIrrelevant[testRollID] = nil
+            LC.autoVotedByMe[testRollID]    = nil
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
