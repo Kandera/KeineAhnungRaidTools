@@ -161,21 +161,24 @@ function Vote.RemoveVoteListItem(rollID)
     if #LC.voteListRolls == 0 then LC.showAllOverride = nil end
 end
 
--- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
--- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
--- after a `/reload`) never leaves a stale row from the other layout visible underneath.
--- Personal display preference (KART_Settings.lcVotedItemDisplay, see the settings dropdown in
--- Task 5 of this plan) — when set to "hide", a roll the local player has already voted on is left
--- out of the rendered list entirely (card/row disappears, window shrinks) unless
--- LC.showAllOverride is set (see /kart showall, Task 6). Returns LC.voteListRolls itself (no copy)
--- whenever nothing is being filtered, so callers that don't need filtering pay no extra cost.
+-- Shared stand-in for LC.hiddenIrrelevant while the setting that fills it is off, so the filter
+-- below can stay one expression without allocating a throwaway table several times a second.
+local NO_HIDDEN = {}
+
+-- Which of LC.voteListRolls actually get drawn. Two independent, purely personal reasons a roll is
+-- left out, both lifted together by LC.showAllOverride (/kart showall):
+--   * the player has voted on it and set lcVotedItemDisplay == "hide" (card/row disappears, window
+--     shrinks);
+--   * their class cannot use it and lcHideIrrelevant answered it for them (LC.hiddenIrrelevant).
+-- The second reason is read through the LIVE setting rather than off the flag alone: switching
+-- lcHideIrrelevant off has to bring those rows back for the rolls still running, not only from the
+-- next batch on. The flag itself stays, so switching it on again re-hides exactly the same rolls.
+-- Returns LC.voteListRolls itself (no copy) whenever neither reason removes anything — which needs
+-- checking both, not just the voted one.
 function Vote.GetVisibleRolls()
     local hideVoted = (KART_Settings and KART_Settings.lcVotedItemDisplay) == "hide"
     if LC.showAllOverride then return LC.voteListRolls end
-    -- Two independent reasons a row can be missing: the player has voted on it and asked for voted
-    -- items to disappear, or they cannot use it at all and asked for those to disappear. Both are
-    -- lifted together by /kart showall.
-    local hidden = LC.hiddenIrrelevant or {}
+    local hidden = (KART_Settings and KART_Settings.lcHideIrrelevant and LC.hiddenIrrelevant) or NO_HIDDEN
     if not hideVoted then
         local anyIrrelevant = false
         for _, rollID in ipairs(LC.voteListRolls) do
@@ -192,6 +195,9 @@ function Vote.GetVisibleRolls()
     return visible
 end
 
+-- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
+-- Hides the *inactive* style's row pool first so switching styles (or the very first refresh
+-- after a `/reload`) never leaves a stale row from the other layout visible underneath.
 function Vote.RefreshVoteListRows()
     -- Before anything is measured or drawn: an item answered automatically here changes both the
     -- visible-row set and the window height that follows from it.
@@ -205,9 +211,11 @@ function Vote.RefreshVoteListRows()
         return
     end
     if #Vote.GetVisibleRolls() == 0 then
-        -- Every remaining roll is voted-and-hidden (lcVotedItemDisplay == "hide") — the batch
-        -- itself isn't done (LC.voteListRolls is still non-empty, so showAllOverride must NOT
-        -- reset here), there's just nothing left to show unless/until /kart showall runs.
+        -- Every remaining roll is hidden — voted-and-hidden (lcVotedItemDisplay == "hide"),
+        -- irrelevant-and-hidden (lcHideIrrelevant), or a mix of both. The batch itself isn't done
+        -- (LC.voteListRolls is still non-empty, so showAllOverride must NOT reset here), there's
+        -- just nothing left to show unless/until /kart showall or one of those two settings
+        -- changing brings something back.
         if LC.voteListFrame then LC.voteListFrame:Hide() end
         return
     end

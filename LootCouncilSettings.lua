@@ -261,7 +261,21 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.CbHideIrrelevant = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCHideIrrelevant", label = L.LC_SET_HIDE_IRRELEVANT,
         store = SettingsStore, key = "lcHideIrrelevant", y = -350,
-        onChanged = function() LC.Vote.RefreshVoteListRowsIfShown() end,
+        onChanged = function()
+            -- ...IfShown alone would make this switch look dead exactly when it matters: if every
+            -- roll of the batch was hidden, RefreshVoteListRows already hid the window itself, and
+            -- the guard then refuses to reopen it. The rule it enforces (a display-only toggle must
+            -- never pop the window over stale rolls — see Vote.RefreshVoteListRowsIfShown) still
+            -- stands; this case is outside it, because a roll only carries the hide flag while it is
+            -- live and being voted on, and the player just asked to see those.
+            for _, rollID in ipairs(LC.voteListRolls) do
+                if LC.hiddenIrrelevant[rollID] then
+                    LC.Vote.RefreshVoteListRows()
+                    return
+                end
+            end
+            LC.Vote.RefreshVoteListRowsIfShown()
+        end,
         tooltip = L.LC_DESC_HIDE_IRRELEVANT,
     })
 
