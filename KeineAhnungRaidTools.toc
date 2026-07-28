@@ -27,6 +27,7 @@ Profiles.lua
 BuffChecker.lua
 LootCouncil.lua
 LootCouncilOfficerNotes.lua
+LootCouncilRelevance.lua
 LootCouncilVote.lua
 LootCouncilTrade.lua
 LootCouncilPanel.lua

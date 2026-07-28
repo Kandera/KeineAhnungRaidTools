@@ -52,6 +52,7 @@ dofile("tests/test_identity.lua")
 dofile("tests/test_sync.lua")
 dofile("tests/test_kasc_responders.lua")
 dofile("tests/test_lc_votewire.lua")
+dofile("tests/test_lc_relevance.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 os.exit(failures == 0 and 0 or 1)
