@@ -624,6 +624,8 @@ function LC.BuildSettingsPanel(parent)
         KART.LC.CbCompactVoteLayout.text:SetText(Lx.LC_SET_COMPACT_VOTE_LAYOUT)
         KART.LC.CbCompactVoteLayout.tooltipText = Lx.LC_DESC_COMPACT_VOTE_LAYOUT
         KART.LC.CbShowNickNames.text:SetText(Lx.LC_SET_SHOW_NICKNAMES)        KART.LC.CbShowNickNames.tooltipText = Lx.LC_DESC_SHOW_NICKNAMES
+        KART.LC.CbHideIrrelevant.text:SetText(Lx.LC_SET_HIDE_IRRELEVANT)      KART.LC.CbHideIrrelevant.tooltipText = Lx.LC_DESC_HIDE_IRRELEVANT
+        KART.LC.CbAutoTransmogVote.text:SetText(Lx.LC_SET_AUTO_TRANSMOG)      KART.LC.CbAutoTransmogVote.tooltipText = Lx.LC_DESC_AUTO_TRANSMOG
         KART.LC.BtnVotedItemDisplay.tooltipText = Lx.LC_DESC_VOTED_DISPLAY -- label synced by SyncSettingsToUI
         boxTitle:SetText(Lx.LC_RAIDWIDE_TITLE)
         KART.LC.SldVoteTimer.title:SetText(Lx.LC_SET_VOTE_TIMER)              KART.LC.SldVoteTimer.tooltipText = Lx.LC_DESC_VOTE_TIMER
