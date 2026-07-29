@@ -75,6 +75,8 @@ read_globals = {
     "SendChatMessage", "GetTime", "LoggingCombat", "hooksecurefunc",
     "ColorPickerFrame", "StaticPopup_Show", "AddonCompartmentFrame", "MenuUtil",
     "C_ChatInfo", "C_Item", "C_AddOns", "C_ChallengeMode", "C_TransmogCollection",
+    "C_MountJournal", "C_PetJournal", "C_ToyBox",
+    "LE_PARTY_CATEGORY_HOME", "LE_PARTY_CATEGORY_INSTANCE",
     -- Global string/color constants
     "YES", "NO", "ACCEPT", "CANCEL", "OKAY", "CLOSE", "UNKNOWN", "ENCHANTED_TOOLTIP",
     "CLASS_ICON_TEXCOORDS", "RAID_CLASS_COLORS", "ITEM_QUALITY_COLORS",

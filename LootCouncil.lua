@@ -225,22 +225,35 @@ function LC.GetButtonConfig()
             -- vote icon (chosen by the returned button's index). A whitespace-only label between real
             -- ones is dropped from result but would otherwise advance the split index, desyncing the
             -- two.
+            -- Colour AND icon are stamped from the configured position and then travel with the
+            -- entry, because Transmog is inserted in front of the last label below and shifts it one
+            -- place along. Looked up by final index instead, the last label — "Pass" — would land
+            -- outside VOTE_ICON_TEXTURES and lose its green pass chip for the neutral catch-all.
             local col = BUTTON_COLORS[#result + 1] or BUTTON_COLORS[6]
-            table.insert(result, {label = trimmed, r = col.r, g = col.g, b = col.b})
+            table.insert(result, {label = trimmed, r = col.r, g = col.g, b = col.b,
+                                  icon = LC.GetVoteIconTexture(#result + 1)})
         end
     end
     if #result == 0 then
         for i, label in ipairs(KAUtil.SplitString(KART.L.LC_DEFAULT_BUTTONS, ";")) do
             if i <= 5 then
                 local col = BUTTON_COLORS[i] or BUTTON_COLORS[6]
-                table.insert(result, {label = label, r = col.r, g = col.g, b = col.b})
+                table.insert(result, {label = label, r = col.r, g = col.g, b = col.b,
+                                      icon = LC.GetVoteIconTexture(i)})
             end
         end
     end
     -- The Transmog response is not leader-configurable: the auto-transmog setting votes with it, and
-    -- a renamed or missing button would make that setting silently vote something else. Always last,
-    -- never the raid config's business.
-    table.insert(result, {
+    -- a renamed or missing button would make that setting silently vote something else.
+    --
+    -- SECOND TO LAST, not last. The council panel sorts candidates by vote index ascending (see the
+    -- table.sort in Council.RefreshCouncilRows), so the index order IS the priority order the council
+    -- reads top to bottom. Appended after the last configured label — "Pass" in every configuration
+    -- this guild has used — it sorted every Transmog voter BELOW the people who passed, which is
+    -- backwards: someone who wants the appearance ranks above someone who wants nothing. Reported
+    -- from a live raid. Slotting it in front of the last label also matches the manual Transmog
+    -- button the raid had configured there before this became a fixed response.
+    table.insert(result, math.max(#result, 1), {
         label    = KART.L.LC_BUTTON_TRANSMOG,
         r        = TRANSMOG_COLOR.r, g = TRANSMOG_COLOR.g, b = TRANSMOG_COLOR.b,
         transmog = true,
@@ -249,22 +262,49 @@ function LC.GetButtonConfig()
     return result
 end
 
--- Index of the fixed Transmog response. Always the last entry (see GetButtonConfig), so this is a
--- length lookup rather than a search — but named, because callers should not encode "last" themselves.
+-- Is this item a collectible — a mount, battle pet or toy — that must stay out of Loot Council
+-- entirely (see the standing rule quoted in LC.OnStartLootRoll)?
+--
+-- This used to read `classID == 15` and that was too blunt. classID 15 is "Miscellaneous", Blizzard's
+-- bucket for everything that fits nowhere else, and **tier tokens live in it too**: measured against
+-- the guild's own loot history, all sixteen Midnight Nullcore tokens are classID 15 / subclass 0,
+-- exactly like the Riftbloom tokens, while the raid's one mount is classID 15 / subclass 5. So the
+-- carve-out meant to keep mounts out was quietly keeping every tier token out as well — no
+-- ForceWinRoll for the lootmaster, no Auto-Pass for the raiders, the single most contested drop in
+-- the instance bypassing Council completely. Reported from a live raid.
+--
+-- Asking the journals directly is the honest question, and it cannot misclassify a token. The
+-- subclass check in front of it is a net for the case where an item is a mount Blizzard has not put
+-- in the journal (2 = Companion Pets, 5 = Mount, 6 = Mount Equipment); subclass 0 is deliberately
+-- NOT in it, because that is where the tokens are.
+--
+-- Every guard is nil-tolerant: an unknown answer means "not a collectible", so the item reaches
+-- Council. That direction is the safe one — a mount slipping into Council is a visible annoyance the
+-- lootmaster can end, while a token silently skipping it costs the raid an item nobody rolled on.
+function LC.IsCollectibleItem(itemID, classID, subclassID)
+    if classID ~= 15 then return false end
+    if subclassID == 2 or subclassID == 5 or subclassID == 6 then return true end
+    if not itemID then return false end
+    if C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID) then return true end
+    if C_PetJournal and C_PetJournal.GetPetInfoByItemID and C_PetJournal.GetPetInfoByItemID(itemID) then return true end
+    if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
+    return false
+end
+
+-- Index of the fixed Transmog response: second to last, directly in front of the last configured
+-- label (see GetButtonConfig). Named rather than open-coded so callers never encode the position
+-- themselves — it moved once already.
 function LC.GetTransmogButtonIndex()
-    return #LC.GetButtonConfig()
+    return math.max(#LC.GetButtonConfig() - 1, 1)
 end
 
 -- Index of the last FREELY CONFIGURED label, which the hide-irrelevant setting votes with. That is
 -- "Pass" in the default configuration and in every configuration this guild has used. A raid leader
 -- who renames the last label to something that is not a pass makes that setting vote it instead —
 -- documented in the setting's own tooltip, deliberately not guessed at from the label text.
--- nil when the config holds nothing but the appended Transmog entry, which cannot happen through the
--- settings UI (an empty field falls back to the defaults) but is cheap to be honest about.
+-- With Transmog sitting in front of it, the last configured label is also the last entry overall.
 function LC.GetPassButtonIndex()
-    local n = #LC.GetButtonConfig() - 1
-    if n < 1 then return nil end
-    return n
+    return #LC.GetButtonConfig()
 end
 
 -- The loot owner counts as council without having to be listed in the council-member field. He is
@@ -1311,23 +1351,53 @@ function LC.EndRound()
     LC.ClearAllRolls()
 end
 
+-- Bare IsInRaid() only reports the HOME party category, so a raid formed through the group finder
+-- reads as "no raid" the whole time. Ask both categories before believing it.
+local function InAnyRaid()
+    return IsInRaid(LE_PARTY_CATEGORY_HOME) or IsInRaid(LE_PARTY_CATEGORY_INSTANCE)
+end
+
+-- How long to wait before believing a negative raid check. A real raid exit is delayed by this and
+-- nothing else happens in between; a blip costs the session everything, so the trade is one-sided.
+local RAID_EXIT_CONFIRM_DELAY = 3
+
+local function TearDownForRaidExit()
+    local wasActive = LC.sessionActive
+    LC.promptedThisSession = false
+    LC.sessionActive = false
+    LC.historySyncRequested = false
+    LC.stateSyncRequested = false
+    -- Leaving the raid ends the session for us as well, so drop the tracked rolls the same way
+    -- SetSessionActive(false) and an incoming LC_ACTIVE:0 do. Without this the council panel and
+    -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are
+    -- exactly the ones Blizzard hands out first in the next raid — an immediate collision.
+    if wasActive then LC.ClearAllRolls() end
+    -- Any B12 retry (see LC.RetryPendingConfig) was for this raid's config; it's meaningless in
+    -- whatever we join next, regardless of whether a session was active.
+    LC.CancelPendingConfig()
+end
+
 function LC.CheckRaidJoin()
-    if not IsInRaid() then
-        local wasActive = LC.sessionActive
-        LC.promptedThisSession = false
-        LC.sessionActive = false
-        LC.historySyncRequested = false
-        LC.stateSyncRequested = false
-        -- Leaving the raid ends the session for us as well, so drop the tracked rolls the same way
-        -- SetSessionActive(false) and an incoming LC_ACTIVE:0 do. Without this the council panel and
-        -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are
-        -- exactly the ones Blizzard hands out first in the next raid — an immediate collision.
-        if wasActive then LC.ClearAllRolls() end
-        -- Any B12 retry (see LC.RetryPendingConfig) was for this raid's config; it's meaningless in
-        -- whatever we join next, regardless of whether a session was active.
-        LC.CancelPendingConfig()
+    if not InAnyRaid() then
+        -- NEVER tear down on a single negative reading. This runs on every GROUP_ROSTER_UPDATE, and
+        -- the group APIs report inconsistent state for a moment while a roster change is being
+        -- applied — one such blip used to end the session for the whole raid and wipe every tracked
+        -- roll mid-boss. It also re-armed the start prompt, because LC.promptedThisSession is reset
+        -- in here and nowhere else at runtime: that reappearing prompt is what identified this path
+        -- from a live raid report ("no session opened for the boss, and afterwards it asked again").
+        -- Confirm the departure once more before believing it.
+        if LC.raidExitPending then return end
+        LC.raidExitPending = true
+        C_Timer.After(RAID_EXIT_CONFIRM_DELAY, function()
+            LC.raidExitPending = false
+            if InAnyRaid() then return end -- it was a blip; the session was never in danger
+            TearDownForRaidExit()
+        end)
         return
     end
+    -- Back in (or never left) — any confirmation still in flight is moot. It re-checks before acting
+    -- anyway, so this only stops the flag from blocking a genuine exit later on.
+    LC.raidExitPending = false
     if KART_Settings.lcModuleEnabled == false then return end
 
     -- Ask peers (once per raid join) for any loot-history entries logged while we weren't around.
@@ -1504,9 +1574,12 @@ function LC.OnStartLootRoll(rollID, attempt)
         return
     end
 
-    local classID = LC.IsRealItemLink(itemLink) and select(6, C_Item.GetItemInfoInstant(itemLink))
-    -- Miscellaneous (classID 15): mounts, pets, toys, housing decor.
-    local isCollectible = (classID == 15)
+    local itemID, classID, subclassID
+    if LC.IsRealItemLink(itemLink) then
+        local iid, _, _, _, _, cid, scid = C_Item.GetItemInfoInstant(itemLink)
+        itemID, classID, subclassID = iid, cid, scid
+    end
+    local isCollectible = LC.IsCollectibleItem(itemID, classID, subclassID)
 
     -- Two tiers, and the outer one decides whether KART touches this roll AT ALL.
     --
