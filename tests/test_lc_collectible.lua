@@ -59,12 +59,18 @@ mounts[600] = 43 -- would say "mount" if it were ever asked
 T.eq(LC.IsCollectibleItem(600, 4, 0), false, "armor (classID 4) is never a collectible")
 T.eq(LC.IsCollectibleItem(600, 2, 0), false, "a weapon (classID 2) is never a collectible")
 
--- Unknowns resolve to "not a collectible", so the item reaches Council ---------------------------------
--- The safe direction: a mount slipping into Council is visible and recoverable, a token skipping it is
--- neither.
-T.eq(LC.IsCollectibleItem(nil, MISC, 0), false, "an unknown itemID is not treated as a collectible")
-T.eq(LC.IsCollectibleItem(nil, nil, nil), false, "an entirely unresolved item is not treated as a collectible")
-T.eq(LC.IsCollectibleItem(249364, MISC, nil), false, "a token with an unknown subclass still reaches Council")
+-- Anything else in Miscellaneous stays out without being enumerated ------------------------------------
+-- This is the property that matters: the rule must not need teaching about each new compartment
+-- Blizzard adds. Housing decor got force-won by the lootmaster when this was a deny-list.
+T.eq(LC.IsCollectibleItem(700, MISC, 7), true, "an unknown subclass 7 stays out of Council")
+T.eq(LC.IsCollectibleItem(701, MISC, 12), true, "so does an unknown subclass 12")
+T.eq(LC.IsCollectibleItem(nil, MISC, 5), true, "subclass 5 alone is enough to exclude a mount, no itemID needed")
 
--- A subclass that IS collectible still wins without an itemID, since it needs no lookup.
-T.eq(LC.IsCollectibleItem(nil, MISC, 5), true, "subclass 5 alone is enough to exclude a mount")
+-- Unresolved data stays out too, in this class alone ---------------------------------------------------
+-- GetItemInfoInstant answers from the client database for any real link, so this is close to
+-- unreachable -- but "out" is the direction that cannot force-win someone's furniture.
+T.eq(LC.IsCollectibleItem(nil, MISC, nil), true, "an unresolved Miscellaneous item stays out")
+T.eq(LC.IsCollectibleItem(249364, MISC, nil), true, "even a known token stays out while its subclass is unknown")
+T.eq(LC.IsCollectibleItem(nil, MISC, 0), true, "subclass 0 without an itemID cannot be told from a toy, so it stays out")
+-- Outside Miscellaneous nothing changes: unresolved still means "ordinary gear, let Council have it".
+T.eq(LC.IsCollectibleItem(nil, nil, nil), false, "an entirely unresolved item is not a collectible")

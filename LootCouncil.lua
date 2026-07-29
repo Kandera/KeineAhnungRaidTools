@@ -273,21 +273,27 @@ end
 -- ForceWinRoll for the lootmaster, no Auto-Pass for the raiders, the single most contested drop in
 -- the instance bypassing Council completely. Reported from a live raid.
 --
--- Asking the journals directly is the honest question, and it cannot misclassify a token. The
--- subclass check in front of it is a net for the case where an item is a mount Blizzard has not put
--- in the journal (2 = Companion Pets, 5 = Mount, 6 = Mount Equipment); subclass 0 is deliberately
--- NOT in it, because that is where the tokens are.
+-- This is an ALLOW-LIST, and it has to stay one. The first attempt at narrowing named the things to
+-- keep out — mounts, pets, toys — and let everything else in classID 15 through. Housing decor
+-- promptly walked through that gap and the lootmaster force-won it, which is exactly what the rule
+-- exists to prevent. Miscellaneous is Blizzard's junk drawer; new compartments appear with every
+-- expansion, and a rule that has to be taught about each one in turn is wrong by construction.
 --
--- Every guard is nil-tolerant: an unknown answer means "not a collectible", so the item reaches
--- Council. That direction is the safe one — a mount slipping into Council is a visible annoyance the
--- lootmaster can end, while a token silently skipping it costs the raid an item nobody rolled on.
+-- Subclass 0 is the only compartment measured to hold gear tokens (all sixteen Midnight Nullcores and
+-- the Riftblooms sit there). So subclass 0 is the only one Council may see. Everything else in 15 —
+-- pets (2), mounts (5), mount equipment (6), housing decor, and whatever comes next — stays out
+-- without needing to be enumerated. An unresolved subclass counts as "not 0" and therefore stays out
+-- too: GetItemInfoInstant answers from the client database for any real link, so that case barely
+-- exists, and staying out is the direction that cannot force-win someone's furniture.
+--
+-- The journals still run for subclass 0, because toys live there alongside the tokens.
 function LC.IsCollectibleItem(itemID, classID, subclassID)
     if classID ~= 15 then return false end
-    if subclassID == 2 or subclassID == 5 or subclassID == 6 then return true end
-    if not itemID then return false end
+    if subclassID ~= 0 then return true end
+    if not itemID then return true end
+    if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
     if C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID) then return true end
     if C_PetJournal and C_PetJournal.GetPetInfoByItemID and C_PetJournal.GetPetInfoByItemID(itemID) then return true end
-    if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
     return false
 end
 
