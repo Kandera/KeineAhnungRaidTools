@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-07-29
+### Fixed
+- **The two irrelevant-item switches keep their state after a reload**, instead of showing themselves as off while still taking effect.
+- **Both switches follow a language change** like every other setting.
+
 ## [3.2.0] - 2026-07-28
 ### Added
 - **Items your class cannot equip can now be hidden from the vote window.** They are answered with your last configured response automatically, so the council is not left waiting.
