@@ -52,6 +52,7 @@ dofile("tests/test_identity.lua")
 dofile("tests/test_sync.lua")
 dofile("tests/test_kasc_responders.lua")
 dofile("tests/test_lc_votewire.lua")
+dofile("tests/test_settings_sync.lua")
 dofile("tests/test_lc_relevance.lua")
 dofile("tests/test_lc_buttonconfig.lua")
 

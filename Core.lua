@@ -74,6 +74,8 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
     if KART.LC and KART.LC.CbCompactVoteLayout then settingsMap[KART.LC.CbCompactVoteLayout] = "lcVoteLayoutCompact" end
     if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
+    if KART.LC and KART.LC.CbHideIrrelevant then settingsMap[KART.LC.CbHideIrrelevant] = "lcHideIrrelevant" end
+    if KART.LC and KART.LC.CbAutoTransmogVote then settingsMap[KART.LC.CbAutoTransmogVote] = "lcAutoTransmogVote" end
     if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
     if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
     if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
