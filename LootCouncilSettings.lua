@@ -74,14 +74,25 @@ function LC.RefreshRaidWideFields()
     -- one is somebody else's, and only then is there anything to show that isn't already shown.
     local foreign = not LC.IsConfigOwner() and cfg and not cfg.fromSelf and cfg.lootmaster and cfg.lootmaster ~= ""
 
+    -- The configured lootmaster only has authority while they are actually in the group. Once they
+    -- leave, nobody satisfies LC.IsLootOwner any more: no force-win, no LC_START, and the session
+    -- cannot be ended by anyone. The only way out is for a replacement to name themselves in their
+    -- own field — which was impossible, because the field stayed locked behind the departed owner's
+    -- config and showed "?". raidConfig survives leaving the raid too, so that dead end used to
+    -- follow the client into the next raid, with /reload the only escape.
+    local ownerGone = foreign and not KASC.Identity.FindUnitForKey(cfg.lootmaster)
+
     local buttons, council, lootmaster, rolls, minQ
     if foreign then
         buttons    = cfg.buttonLabels or ""
         council    = cfg.councilMembers or ""
         -- raidConfig.lootmaster is a resolved identity key, not the text that was typed. Show the
-        -- name it resolves to; the key itself would be meaningless on screen.
+        -- name it resolves to; the key itself would be meaningless on screen. Once it resolves to
+        -- nobody, show this client's own value instead — the field is editable again below, and
+        -- forcing "?" back into it on every roster change would fight whoever is typing a
+        -- replacement into it.
         local unit = KASC.Identity.FindUnitForKey(cfg.lootmaster)
-        lootmaster = (unit and UnitName(unit)) or "?"
+        lootmaster = ownerGone and (KART_Settings.lcLootmaster or "") or ((unit and UnitName(unit)) or "?")
         rolls      = cfg.rollsEnabled == true
         minQ       = cfg.minQuality or 4
     else
@@ -109,12 +120,20 @@ function LC.RefreshRaidWideFields()
 
     -- Read-only while they show someone else's values: editing them would change nothing for the
     -- raid and would silently discard what the viewer had typed for themselves.
-    for _, eb in ipairs({ KART.LC.ButtonLabelEditBox, KART.LC.CouncilMembersEditBox, KART.LC.LootmasterEditBox }) do
+    for _, eb in ipairs({ KART.LC.ButtonLabelEditBox, KART.LC.CouncilMembersEditBox }) do
         if eb then
             eb:EnableMouse(not foreign)
             eb:EnableKeyboard(not foreign)
             if foreign then eb:ClearFocus() end
         end
+    end
+    -- The Lootmaster field is the exception: it stays editable when the configured owner is gone,
+    -- because naming a replacement is the only way the raid gets its loot flow back (see ownerGone).
+    local lockLootmaster = foreign and not ownerGone
+    if KART.LC.LootmasterEditBox then
+        KART.LC.LootmasterEditBox:EnableMouse(not lockLootmaster)
+        KART.LC.LootmasterEditBox:EnableKeyboard(not lockLootmaster)
+        if lockLootmaster then KART.LC.LootmasterEditBox:ClearFocus() end
     end
 end
 
@@ -489,7 +508,10 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         -- Loot owner, not raid leader: the lootmaster runs the whole loot flow (see LC.IsLootOwner),
         -- and while no lootmaster is configured that check falls back to the leader anyway.
-        if not IsInRaid() then
+        -- LC.InAnyRaid, not a bare IsInRaid: the bare form only reports the HOME party category, so
+        -- in a group-finder raid this refused to start a session at all — and this button is the
+        -- fallback for when the prompt did not appear, so it must not fail in the same case.
+        if not LC.InAnyRaid() then
             print("|cff00ff00KART:|r " .. KART.L.LC_RAID_ONLY)
         elseif LC.IsLootOwner() then
             LC.SetSessionActive(not LC.sessionActive)

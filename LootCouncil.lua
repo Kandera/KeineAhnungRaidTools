@@ -736,6 +736,12 @@ local function TryAcceptConfig(payload, senderKey)
             LC.lootmasterClashWarned = true
             print("|cff00ff00KART:|r " .. string.format(KART.L.LC_LOOTMASTER_CLASH, senderName))
         end
+    else
+        -- Cleared once the clash is gone, the same way LC.configRejectWarned is. Latched for the
+        -- whole session it silenced the warning for a recurrence — a profile switch or a pasted name
+        -- puts the raider back in the state where every LC_START from the real lootmaster is
+        -- rejected on their client, and without this they would lose every vote window in silence.
+        LC.lootmasterClashWarned = false
     end
 
     return true
@@ -1256,7 +1262,14 @@ function LC.ShowSessionPrompt()
     btnNo:SetSize(135, 28)
     btnNo:SetPoint("BOTTOMRIGHT", -15, 12)
     btnNo:SetScript("OnClick", function()
-        LC.SetSessionActive(false)
+        -- Declining only means "do not start one" — it must never END one. This used to call
+        -- SetSessionActive(false) unconditionally, which broadcasts LC_ACTIVE:0 and makes every
+        -- client in the raid drop its tabs, votes and winner highlights. The prompt no longer opens
+        -- over a live session (see LC.CheckRaidJoin), so there is nothing here left to turn off;
+        -- the guard stays because the cost of being wrong is the whole raid's loot round.
+        if not LC.sessionActive then
+            LC.promptedThisSession = true
+        end
         f:Hide()
     end)
 
@@ -1359,9 +1372,12 @@ end
 
 -- Bare IsInRaid() only reports the HOME party category, so a raid formed through the group finder
 -- reads as "no raid" the whole time. Ask both categories before believing it.
-local function InAnyRaid()
+-- Exposed as well as local: the settings tab's session toggle needs the same answer, and a bare
+-- IsInRaid() there refused to start a session at all in a group-finder raid.
+function LC.InAnyRaid()
     return IsInRaid(LE_PARTY_CATEGORY_HOME) or IsInRaid(LE_PARTY_CATEGORY_INSTANCE)
 end
+local InAnyRaid = LC.InAnyRaid
 
 -- How long to wait before believing a negative raid check. A real raid exit is delayed by this and
 -- nothing else happens in between; a blip costs the session everything, so the trade is one-sided.
@@ -1430,9 +1446,14 @@ function LC.CheckRaidJoin()
 
     if LC.promptedThisSession then return end
     LC.promptedThisSession = true
-    -- Small delay so the roster is fully settled before showing the prompt
+    -- Small delay so the roster is fully settled before showing the prompt.
+    -- InAnyRaid, not a bare IsInRaid: the latch above is already set, so a category the bare form
+    -- cannot see would swallow the prompt for the whole raid rather than postpone it. And never ask
+    -- while a session is already running — becoming loot owner mid-raid (the lootmaster field being
+    -- filled in later, or a leader change) used to pop this question over a live session, where
+    -- answering "no" ended it for everyone.
     C_Timer.After(3, function()
-        if IsInRaid() and LC.IsLootOwner() then
+        if InAnyRaid() and LC.IsLootOwner() and not LC.sessionActive then
             LC.ShowSessionPrompt()
         end
     end)
@@ -2042,6 +2063,9 @@ function LC.StartTest(mode)
             LC.hiddenIrrelevant[testRollID]  = nil
             LC.autoVotedByMe[testRollID]     = nil
             LC.relevanceSnapshot[testRollID] = nil
+            -- Cleared like the rest: Council.RequestEquipForRoll dedups per roll, so a second Test
+            -- run reused the first run's answers and kept showing gear the player had since swapped.
+            if LC.equipRequestedRolls then LC.equipRequestedRolls[testRollID] = nil end
             LC.councilTabsNew[testRollID]  = nil
 
             local myShort = ((UnitName("player") or ""):match("([^%-]+)") or "")
