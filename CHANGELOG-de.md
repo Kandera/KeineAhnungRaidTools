@@ -21,6 +21,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Zonenwechsel und Reload stellen die Session wieder her**, ohne auf einen Bei- oder Austritt warten zu müssen.
 - **Ein Raid mit leerem Lootmaster-Feld bekommt wieder eine raidweite Konfiguration**, damit niemand auf seinen eigenen Vote-Buttons und seiner eigenen Würfe-Einstellung sitzen bleibt.
 - **Die Raid-Konfiguration erreicht auch Spieler, deren Client keine Northern-Sky-Nicknames lesen kann.**
+- **Ein Lootmaster, der den Raid verlässt, blockiert die Lootverteilung nicht mehr für alle.** Der Raidleiter wird gefragt und übernimmt nach Bestätigung.
+- **Das Eintragen eines Nachfolgers im Lootmaster-Feld wird dem Raid mitgeteilt**, statt alle weiter auf den Abgebenden zeigen zu lassen.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

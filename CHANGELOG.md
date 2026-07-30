@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zoning in or reloading restores the session**, without waiting for someone to join or leave the raid first.
 - **A raid that leaves the Lootmaster field empty gets a raid-wide config again**, so nobody is left on their own vote buttons and roll setting.
 - **The raid config reaches players whose client cannot read Northern Sky nicknames.**
+- **A lootmaster who leaves the raid no longer blocks loot distribution for everyone.** The raid leader is offered the role and takes it over on confirmation.
+- **Naming a successor in the Lootmaster field is announced to the raid**, instead of leaving everyone pointed at the person who stepped down.
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

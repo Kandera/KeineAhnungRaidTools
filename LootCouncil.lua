@@ -477,11 +477,44 @@ function LC.ResolveConfigName(text)
     return (KASC.Identity.ResolvePlayer(trimmed))
 end
 
+-- The synced lootmaster key, or "" if that person is not in the raid any more.
+--
+-- Checked at the moment of use rather than by clearing the key on every path that could make it
+-- stale. That open-ended obligation is precisely what produced B29: `LC.raidConfig.lootmaster` was
+-- written when a config arrived and invalidated nowhere, so a lootmaster who left kept answering all
+-- evening — `IsLootOwner()` was then false for EVERYBODY, since the raid-leader fallback is
+-- unreachable while the string is non-empty. Nobody force-won anything, no `LC_START` went out, and
+-- the session could not be closed by anyone.
+--
+-- Presence means "in the roster", not "online": `FindUnitForKey` deliberately still finds someone who
+-- has dropped connection. A disconnect is temporary and their bags are still holding the loot;
+-- moving ownership on every connection hiccup would leave the stand-in's trade list ignorant of items
+-- somebody else is carrying. Leaving the raid is not temporary.
+--
+-- A pending text key is "we cannot place this person", not "they left" (see KASC.Identity), so it is
+-- never read as absence — that would hand ownership to the raid leader over a nickname the client
+-- simply cannot resolve yet.
+local function PresentLootmaster(key)
+    if not key or key == "" then return "" end
+    if not IsInGroup() then return key end
+    if not KASC.Identity.IsResolvedKey(key) then return key end
+    return KASC.Identity.FindUnitForKey(key) and key or ""
+end
+
+-- Whether a lootmaster IS named and is demonstrably no longer here — the one case that hands the
+-- role to the raid leader, and the only one that asks first (see LC.CheckStandIn).
+local function LootmasterAbsent()
+    local key = LC.raidConfig.lootmaster
+    if not key or key == "" or not IsInGroup() then return false end
+    if not KASC.Identity.IsResolvedKey(key) then return false end
+    return KASC.Identity.FindUnitForKey(key) == nil
+end
+
 function LC.GetLootmaster()
     if LC.IsConfigOwner() then
         return LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
     end
-    return LC.raidConfig.lootmaster or ""
+    return PresentLootmaster(LC.raidConfig.lootmaster)
 end
 
 -- Whether configuredKey (a resolved KASC.Identity key, see LC.GetLootmaster/LC.ResolveConfigName)
@@ -523,6 +556,12 @@ end
 function LC.IsLootOwner()
     local lootmaster = LC.GetLootmaster()
     if lootmaster ~= "" then return LC.IsMe(lootmaster) end
+    -- A named lootmaster who has left hands the role to the raid leader — but only once that leader
+    -- has said yes (see LC.CheckStandIn). Standing in means every council-eligible item is force-won
+    -- into their own bags from that moment on, which is not something to start doing to somebody and
+    -- mention afterwards. A raid that never named a lootmaster at all is a different case and is not
+    -- asked anything: that is the documented setup, and it has always worked this way.
+    if LootmasterAbsent() and not LC.standInAccepted then return false end
     return UnitIsGroupLeader("player")
 end
 
@@ -626,6 +665,13 @@ end
 -- an empty field cannot fight a named lootmaster over who broadcasts. Note this reads LC.raidConfig,
 -- which ApplyOwnConfig also writes — stable, because a config we applied ourselves names either us
 -- or nobody, and neither takes this branch.
+--
+-- Deliberately NOT presence-checked, unlike LC.GetLootmaster. A named lootmaster who has merely
+-- stepped out still owns the config: the vote labels, minimum quality, roll setting and council list
+-- the raid agreed on are theirs and are still the right ones. Letting a stand-in leader own them
+-- instead pushes that leader's own settings over the raid — erasing the name the lootmaster reclaims
+-- on the way back in, and taking the council list with it if that leader never filled one in.
+-- Standing in is about the loot flow (see LC.IsLootOwner), not about the settings.
 function LC.IsConfigOwner()
     local declaredKey = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
     if declaredKey then return LC.IsMe(declaredKey) end
@@ -651,6 +697,15 @@ function LC.ApplyOwnConfig()
         -- lootmaster until the new owner happens to broadcast. A config we RECEIVED is never touched
         -- here — that's what the fromSelf marker distinguishes.
         if LC.raidConfig.fromSelf then
+            -- Say so before erasing it. Nothing else on the wire can express "I am no longer the
+            -- lootmaster": a config broadcast is gated on owning the config, which we just stopped
+            -- doing, so handing the role over used to be completely silent — every peer went on
+            -- naming us while the successor's own field named nobody (B32).
+            --
+            -- Its own token rather than a config with an empty field: an older client would accept
+            -- that config and record the person STEPPING DOWN as lootmaster, which is worse than
+            -- doing nothing. An unrecognised token is dropped silently by KASC's dispatcher.
+            LC.SendLC("LC_RESIGN")
             wipe(LC.raidConfig)
             LC.CouncilNamesTable = {}
         end
@@ -761,13 +816,24 @@ local function TryAcceptConfig(payload, senderKey)
     if declaredKey and KASC.Identity.IsResolvedKey(declaredKey) and declaredKey ~= senderKey then
         return false, "lootmaster-mismatch"
     end
+    -- An EMPTY lootmaster field is the raid leader standing in (see LC.IsConfigOwner), so only the
+    -- current leader may send one. Checked against the live roster on our own side, so it needs no
+    -- stored state and follows a leader change by itself — the same fallback LC.IsSenderLootOwner
+    -- already uses.
+    if not declaredKey and not UnitIsGroupLeader(unit) then return false, "not-leader" end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
     -- The sender, not the declared text: senderKey is a resolved identity key by construction,
     -- while declaredKey is nil for exactly the clients this whole path had to stop depending on.
-    LC.raidConfig.lootmaster    = senderKey
+    --
+    -- Only a NON-EMPTY field pins ownership to a person. An empty-field config is accepted in full —
+    -- labels, minimum quality, rolls, council list all apply — but leaves ownership derived, so it
+    -- keeps following raid lead. Recording the sender here regardless would stick the role to
+    -- whoever happened to be leader when the config went out, and a later leader change would not
+    -- move it: a regression that does not exist today, and it hides inside this merge.
+    LC.raidConfig.lootmaster    = declaredKey and senderKey or ""
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
@@ -1004,7 +1070,10 @@ function LC.HandleConfig(payload, senderKey)
     -- Warn straight away for the reasons that will never heal. "no-sender" gets the benefit of the
     -- doubt instead: it is normal while a raid is still filling up, so the retry below is given its
     -- budget first and only warns if it runs out (see LC.RetryPendingConfig).
-    if reason ~= "no-sender" then
+    -- "not-leader" is silent too: it is a legitimate ignore, not a misconfiguration. Nobody but the
+    -- raid leader broadcasts an empty-field config in the first place, so it only shows up across a
+    -- leader change or from an older client, and neither is the receiver's problem to report.
+    if reason ~= "no-sender" and reason ~= "not-leader" then
         WarnConfigRejected(reason)
     end
 
@@ -1249,6 +1318,21 @@ KART.UI:RegisterStaticPopup("KART_LC_SYNC_REQUEST", {
     end,
     OnCancel = function(self, data)
         KASC:Send("LC_SYNC_DECLINE", "WHISPER", data.sender)
+    end,
+})
+
+-- Raised by LC.CheckStandIn when the configured lootmaster has left and we hold raid lead. Accepting
+-- is what actually moves ownership (see LC.IsLootOwner) — declining leaves everything as it was.
+KART.UI:RegisterStaticPopup("KART_LC_STAND_IN", {
+    text = "The lootmaster has left the raid. Take over loot distribution?", -- overwritten with KART.L.LC_STAND_IN_TEXT before every show
+    button1 = YES, ---@diagnostic disable-line: undefined-global
+    button2 = NO,  ---@diagnostic disable-line: undefined-global
+    -- Only the loot flow moves. Deliberately no config broadcast: the raid's settings still belong to
+    -- the absent lootmaster (see LC.IsConfigOwner), and pushing our own over them would erase the very
+    -- name that hands the role back when they walk in again.
+    OnAccept = function()
+        LC.standInAccepted = true
+        print("|cff00ff00KART:|r " .. KART.L.LC_STAND_IN_ACCEPTED)
     end,
 })
 
@@ -1552,6 +1636,15 @@ local function TearDownForRaidExit()
     local wasActive = LC.sessionActive
     LC.promptedThisSession = false
     LC.sessionActive = false
+    LC.sessionStateKnown = false
+    LC.standInAccepted = false
+    LC.standInAsked = false
+    -- The raid's config belongs to the raid we just left. It survived before, so the same client
+    -- walked into the next raid still naming a lootmaster who was never in it — the cross-raid half
+    -- of B29, and a config nobody could displace because that stale name made IsSenderLootOwner
+    -- reject the new raid's owner.
+    wipe(LC.raidConfig)
+    LC.CouncilNamesTable = {}
     LC.historySyncRequested = false
     LC.stateSyncRequested = false
     -- Leaving the raid ends the session for us as well, so drop the tracked rolls the same way
@@ -1562,6 +1655,26 @@ local function TearDownForRaidExit()
     -- Any B12 retry (see LC.RetryPendingConfig) was for this raid's config; it's meaningless in
     -- whatever we join next, regardless of whether a session was active.
     LC.CancelPendingConfig()
+end
+
+-- The configured lootmaster has left and we are the raid leader, so the role falls to us. Ask before
+-- it does (see LC.IsLootOwner for why): standing in means every council-eligible item is force-won
+-- into our own bags from the next drop onwards.
+--
+-- Both latches are cleared the moment the lootmaster is back, so this is not a one-way door — someone
+-- who ported out and came back takes their role with them, and a leader who declined is asked again
+-- the next time it genuinely happens.
+function LC.CheckStandIn()
+    if not LootmasterAbsent() then
+        LC.standInAccepted = false
+        LC.standInAsked    = false
+        return
+    end
+    if LC.standInAccepted or LC.standInAsked then return end
+    if not UnitIsGroupLeader("player") then return end
+    LC.standInAsked = true
+    StaticPopupDialogs["KART_LC_STAND_IN"].text = KART.L.LC_STAND_IN_TEXT
+    StaticPopup_Show("KART_LC_STAND_IN")
 end
 
 function LC.CheckRaidJoin()
@@ -1613,6 +1726,8 @@ function LC.CheckRaidJoin()
         LC.stateSyncRequested = true
         LC.SendLC("LC_STATE_REQ")
     end
+
+    LC.CheckStandIn()
 
     -- The loot owner, not the raid leader (see LC.IsLootOwner): they open and close the session, so
     -- they are also the one who gets asked whether to start one.
@@ -1964,6 +2079,16 @@ function LC.HandleActive(value, senderKey)
     -- LC.SetSessionActive (sent before LC_ACTIVE) and LC.HandleStateRequest instead.
 end
 
+-- Peer side of the handover above. Clears the lootmaster and nothing else: the labels, minimum
+-- quality, roll setting and council list the raid agreed on are still the right ones, and throwing
+-- them away would leave everybody on their own defaults until the successor gets round to
+-- broadcasting. With the name gone, every client falls back to the raid leader by derivation, so
+-- they all agree without a further message.
+function LC.HandleResign(senderKey)
+    if not LC.IsSenderLootOwner(senderKey) then return end
+    LC.raidConfig.lootmaster = ""
+end
+
 -- Peer side of LC.EndRound. Same authority as LC_ACTIVE (see LC.HandleActive) — only the loot
 -- owner may wipe every tracked roll/tab/vote/winner-highlight in the raid with one click.
 --
@@ -2223,6 +2348,8 @@ KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = 
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleSessionResume(ctx:Key()) end)
+KASC:RegisterMessage("LC_RESIGN", { payload = false, group = true, enabled = lcEnabled },
+    function(_, ctx) LC.HandleResign(ctx:Key()) end)
 KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.

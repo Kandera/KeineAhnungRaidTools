@@ -110,7 +110,7 @@ already backs every other window in the addon. Seven call sites use `RegisterSta
 B29 to B33 share one root: ownership and session state are distributed across clients with no single
 authoritative holder. They want one design pass, not five patches.
 
-## B29 — a departed lootmaster leaves the raid with no loot owner
+## B29 — a departed lootmaster leaves the raid with no loot owner — FIXED 2026-07-30
 
 `LC.raidConfig.lootmaster` is written only by `TryAcceptConfig`/`ApplyOwnConfig` and never
 invalidated; neither `TearDownForRaidExit` nor `ClearAllRolls` touch it, and nothing prunes it on a
@@ -121,6 +121,19 @@ by anyone. `raidConfig` survives leaving the raid, so the same client is still s
 
 Partially mitigated 2026-07-29: the Lootmaster field is editable again once the configured owner is
 absent, so a replacement can name themselves. The stale key itself is still never invalidated.
+
+**Fixed 2026-07-30.** The key is checked against the live roster at the moment of use rather than
+cleared on every path that could make it stale — the difference between an open-ended obligation and
+a closed one. Presence means "in the raid", not "online": a disconnected lootmaster keeps the role,
+since their bags still hold the loot. The role then falls to the raid leader, but not silently — they
+are asked first, because standing in means every council-eligible item is force-won into their own
+bags. The claim lapses by itself the moment the lootmaster is back in the roster. `raidConfig` is now
+wiped on a confirmed raid exit as well, which closes the cross-raid half. Covered by
+`tests/test_lc_churn.lua`.
+
+Deliberately NOT part of this: the stand-in does not become the CONFIG owner. Pushing their own
+settings over the raid would erase the name the lootmaster reclaims on the way back and take the
+council list with it if that leader never filled one in. See B58 for what that leaves open.
 
 ## B30 — a reloaded loot owner is answered by nobody, and their session stays off — FIXED 2026-07-30
 
@@ -169,12 +182,19 @@ so `LC_STATE_REQ`, the loot-history catch-up and the session prompt are all skip
 reload and a zone change always raise. Guarded by a source check in `tests/test_lc_churn.lua`, since
 the harness does not load `Core.lua`.
 
-## B32 — handing the lootmaster role over broadcasts nothing
+## B32 — handing the lootmaster role over broadcasts nothing — FIXED 2026-07-30
 
 Typing a successor's name makes `IsConfigOwner()` false on the outgoing owner's own client, so
 `ApplyOwnConfig` wipes `raidConfig` and `CouncilNamesTable` and returns, and `BroadcastRaidConfig`
 returns without sending. Peers still name the outgoing owner; the successor's own field does not name
 them either. Lands straight in B29.
+
+**Fixed 2026-07-30.** `LC_RESIGN`, sent before the outgoing owner erases its own copy — nothing else
+on the wire can express "I am no longer the lootmaster", since a config broadcast is gated on owning
+the config, which they have just stopped doing. Receivers clear `raidConfig.lootmaster` and nothing
+else, so everyone falls back to the raid leader by derivation until the successor's own config
+arrives. Its own token rather than a config with an empty field: an older client would accept that
+and record the person stepping DOWN as lootmaster. Covered by `tests/test_lc_churn.lua`.
 
 ## B33 — an empty Lootmaster field means no config owner at all — FIXED 2026-07-30
 
@@ -188,6 +208,19 @@ by another route. The role-status label meanwhile reports that all is well.
 `IsLootOwner` already did — the two derivations disagreeing was the bug. The fallback stands down as
 soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
 `tests/test_lc_baseflow.lua`.
+
+## B58 — nobody hands a late joiner the config while the lootmaster is away
+
+Follows from B29's fix, and is the price of not letting a stand-in rewrite the raid's settings.
+`LC.HandleStateRequest` sends the config only if `LC.IsConfigOwner()`, and while a named lootmaster is
+merely absent that is nobody: the stand-in leader owns the loot flow but not the settings, on purpose.
+Anyone joining in that window gets the session flag and no config, so they run their own vote-button
+labels, minimum quality and roll setting until the lootmaster returns or somebody names a successor.
+
+Narrower than what it replaced — B29 left the whole raid unable to distribute anything — and it only
+bites someone who joins during the gap. The fix is a way for the loot owner to forward the config
+they are holding, rather than broadcasting their own, which needs `TryAcceptConfig` to stop rewriting
+`raidConfig.lootmaster` to the sender. Not attempted while the base flow is still being proven.
 
 ---
 

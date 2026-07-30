@@ -249,6 +249,194 @@ do
 end
 
 -- ===================================================================================
+-- The LOOTMASTER ports out -- B29
+-- ===================================================================================
+-- `LC.raidConfig.lootmaster` is written when a config arrives and never invalidated, so the departed
+-- lootmaster's key kept answering for the rest of the evening. Everyone's `IsLootOwner()` was then
+-- false: nobody force-won anything, no LC_START went out, and the session could not even be closed.
+--
+-- Handing the role on is not silent. Whoever stands in starts force-winning every council-eligible
+-- item into their own bags, and that is not a side effect to mention in a chat line afterwards.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    local stand = RaidSim.Promote(sim, "Haerri")
+    RosterSettles(sim)
+
+    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+        "nobody takes over loot distribution without being asked first (B29)")
+    T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "the new raid leader is asked whether to take it over")
+    T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+        "and owns the loot flow once they accept")
+
+    -- The whole point: the raid can keep distributing.
+    Drop(sim, 92, F.GLOVES)
+    T.eq(KARTTEST.rolled[92] and KARTTEST.rolled[92][stand.unit], 1,
+        "the stand-in force-wins the next drop")
+    for _, c in ipairs(sim.clients) do
+        T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[92]),
+            c.name .. " sees the item the stand-in started")
+    end
+
+    local raider = sim.byName.Odin
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(92, 1) end)
+    T.truthy((stand.KART.LC.votes[92] or {})[raider.guid], "and votes reach the stand-in")
+    RaidSim.As(stand, function() stand.KART.LC.Trade.AssignWinner(92, raider.guid, "BIS") end)
+    T.eq(sim.byName.Nara.KART.LC.assignedWinners[92], raider.guid,
+        "and the stand-in can hand it out")
+end
+
+-- A raider is never asked, however long the lootmaster stays away.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    RaidSim.Promote(sim, "Haerri")
+    RosterSettles(sim)
+
+    local raider = sim.byName.Odin
+    T.truthy(not RaidSim.As(raider, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "a plain raider is not offered the loot flow")
+    T.truthy(not RaidSim.As(raider, raider.KART.LC.IsLootOwner), "and does not take it")
+end
+
+-- The other half of B29: the stale key survived leaving the raid entirely, so the same client walked
+-- into the next raid still believing a lootmaster who was never there.
+do
+    local sim, _, _, raider = NewRaid()
+    Drop(sim, 93, F.GLOVES)
+
+    KARTTEST.solo[raider.unit] = true
+    RaidSim.As(raider, function() raider.KART.LC.CheckRaidJoin() end)
+    KARTTEST.AdvanceTime(5)
+    KARTTEST.solo[raider.unit] = nil
+
+    T.truthy(not next(raider.KART.LC.raidConfig),
+        "leaving the raid forgets its config, so none of it leaks into the next one (B29)")
+end
+
+-- A raid that never named a lootmaster is not the same case, and must not be pestered about it.
+-- The raid leader standing in is the documented setup there, and it has always just worked.
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local lm = sim.byName.Kandera
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        lm.env.KART_Settings.lcRollsEnabled   = true
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.SetSessionActive(true)
+    end)
+    RosterSettles(sim)
+
+    T.truthy(not RaidSim.As(lm, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "a raid with an empty Lootmaster field is never asked about standing in")
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner), "the leader owns the loot flow as before")
+end
+
+-- Presence is "in the raid", not "online". A lootmaster who drops connection keeps the role: their
+-- bags still hold the loot, and moving ownership on every connection hiccup would leave the stand-in
+-- owing items somebody else is carrying.
+do
+    local sim, lm = NewRaid()
+    local stand = RaidSim.Promote(sim, "Haerri")
+    lm.member.offline = true
+    RosterSettles(sim)
+
+    T.truthy(not RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "a disconnected lootmaster is not treated as gone")
+    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner), "so the leader does not take over")
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner), "and the role is still theirs when they return")
+end
+
+-- The lootmaster comes back from the other split raid. The stand-in claim lapses with them, without
+-- anyone having to undo anything.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    local stand = RaidSim.Promote(sim, "Haerri")
+    RosterSettles(sim)
+    T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"), "the leader stands in")
+    T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "and owns the loot flow")
+
+    -- They come back as an ordinary raider -- Haerri kept raid lead -- carrying the settings that
+    -- name them lootmaster, exactly as their SavedVariables would.
+    local returning = {}
+    for k, v in pairs(F.MEMBERS[1]) do returning[k] = v end
+    returning.leader = nil
+    local back = RaidSim.Join(sim, returning)
+    back.env.KART_Settings.lcLootmaster = "Kandera"
+    RosterSettles(sim)
+
+    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+        "the stand-in steps back down the moment the lootmaster is in the raid again")
+    T.truthy(RaidSim.As(back, back.KART.LC.IsLootOwner), "and the lootmaster has their role back")
+end
+
+-- An empty-field config claims the raid leader's authority, so only the raid leader may send one.
+do
+    local sim, _, council = NewRaid()
+    local before = council.KART.LC.raidConfig.buttonLabels
+    RaidSim.As(council, function()
+        council.env.KART_Settings.lcButtonLabels = "A;B;C;D;E"
+        -- Straight onto the wire, bypassing the ownership gate a real client would hit first.
+        council.KART.LC.SendLC("LC_CONFIG:4:A;B;C;D;E:0::Haerri")
+    end)
+    T.eq(sim.byName.Odin.KART.LC.raidConfig.buttonLabels, before,
+        "a config with an empty Lootmaster field is ignored unless the raid leader sent it")
+end
+
+-- ===================================================================================
+-- Handing the lootmaster role over -- B32
+-- ===================================================================================
+-- Typing a successor's name made `IsConfigOwner()` false on the outgoing client, so `ApplyOwnConfig`
+-- wiped its own copy and returned and `BroadcastRaidConfig` sent nothing at all. The raid never heard
+-- about it: every peer kept naming the outgoing owner, and the successor's own field named nobody.
+do
+    local sim, lm, council = NewRaid()
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster = "Haerri"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+
+    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 1, "stepping down is announced to the raid (B32)")
+    for _, c in ipairs(sim.clients) do
+        if c ~= lm then
+            T.truthy((c.KART.LC.raidConfig.lootmaster or "") == "",
+                c.name .. " no longer names the outgoing lootmaster")
+        end
+    end
+
+    -- Until the successor configures themselves, ownership rests with the raid leader -- derived, so
+    -- every client agrees without another message.
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner),
+        "the raid leader carries the loot flow in the meantime")
+
+    -- The successor fills their own field in, and the raid follows.
+    RaidSim.As(council, function()
+        council.env.KART_Settings.lcLootmaster     = "Haerri"
+        council.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        council.env.KART_Settings.lcRollsEnabled   = true
+        council.KART.LC.ApplyOwnConfig()
+        council.KART.LC.BroadcastRaidConfig()
+    end)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.raidConfig.lootmaster, council.guid, c.name .. " names the successor")
+    end
+    T.truthy(RaidSim.As(council, council.KART.LC.IsLootOwner), "who owns the loot flow")
+    T.truthy(not RaidSim.As(lm, lm.KART.LC.IsLootOwner), "and the outgoing owner does not")
+
+    Drop(sim, 94, F.GLOVES)
+    T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][council.unit], 1,
+        "the successor force-wins from then on")
+    T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][lm.unit], 0,
+        "and the outgoing owner passes like any other raider")
+end
+
+-- ===================================================================================
 -- Zoning: the event that fires on a reload when the roster never changes again -- B31
 -- ===================================================================================
 -- A source check rather than a simulation, because the wiring under test lives in Core.lua's event

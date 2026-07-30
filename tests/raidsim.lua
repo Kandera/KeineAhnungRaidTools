@@ -70,7 +70,12 @@ local SAVED_VARIABLES = {
     "KART_LCOfficerNotes", "KART_Profiles", "KART_EquipCache",
 }
 
-local function NewClient(sim, m)
+-- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
+-- that promotes someone to raid leader would otherwise be editing the shared fixture and every later
+-- test would inherit it.
+local function NewClient(sim, def)
+    local m = {}
+    for k, v in pairs(def) do m[k] = v end
     return { name = m.name, realm = m.realm, guid = m.guid, sim = sim, member = m }
 end
 
@@ -187,6 +192,14 @@ function RaidSim.Leave(sim, name)
     sim.byName[name] = nil
     Reindex(sim)
     return client
+end
+
+-- Raid lead passes to someone else -- which is what happens the moment the leader ports out to the
+-- other split raid, and the moment ownership has to fall back to somebody.
+function RaidSim.Promote(sim, name)
+    for _, c in ipairs(sim.clients) do c.member.leader = (c.name == name) end
+    Reindex(sim)
+    return sim.byName[name]
 end
 
 -- /reload, a disconnect, or a character swap that keeps the same account settings. SavedVariables

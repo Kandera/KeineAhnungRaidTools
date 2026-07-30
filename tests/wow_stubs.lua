@@ -444,8 +444,12 @@ _G.UISpecialFrames = {}
 -- are load-bearing -- reassigning a winner routes THROUGH one -- and a stub that silently swallowed
 -- them made the addon look broken when it was doing exactly the right thing.
 KARTTEST.popups = {}
+-- `owner` is whichever client raised it. A dialog is one player's screen: without this, a test could
+-- accept a popup that was shown to somebody else entirely, and "the raid leader was asked" would be
+-- indistinguishable from "everyone was asked".
 function _G.StaticPopup_Show(which, a, b, data)
-    KARTTEST.popups[#KARTTEST.popups + 1] = { which = which, a = a, b = b, data = data }
+    KARTTEST.popups[#KARTTEST.popups + 1] =
+        { which = which, a = a, b = b, data = data, owner = KARTTEST.activeUnit }
     return { data = data }
 end
 function _G.StaticPopup_Hide(which)
@@ -457,7 +461,7 @@ end
 function KARTTEST.AcceptPopup(which)
     for i = #KARTTEST.popups, 1, -1 do
         local p = KARTTEST.popups[i]
-        if p.which == which then
+        if p.which == which and p.owner == KARTTEST.activeUnit then
             table.remove(KARTTEST.popups, i)
             -- The dialog table belongs to whichever client is executing (see raidsim), so this
             -- runs that client's handler and no one else's.
