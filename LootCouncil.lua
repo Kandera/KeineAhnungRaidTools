@@ -724,8 +724,19 @@ local function TryAcceptConfig(payload, senderKey)
     -- The declared name is still checked when it DOES resolve, which keeps the guard against a
     -- misconfigured client broadcasting somebody else's name -- that case is a real error and stays
     -- a rejection. It just no longer decides the common path.
+    -- RESOLVED, not merely non-empty. This is the half the 3.1.0 fix missed, and it is why a raid
+    -- still lost its rolls: KASC.Identity.ResolvePlayer does not return nil for a name it cannot
+    -- place, it returns a pending text key -- "Kandy" comes back as "kandy". That is non-empty, it
+    -- is never equal to the sender's GUID, and so every config was rejected exactly as before,
+    -- while LC_ACTIVE still arrived (it falls back to the raid-leader check). The raid then had a
+    -- session but no config: rolls off, own vote-button labels, empty council list, and nothing said
+    -- so. Found by tests/test_lc_baseflow.lua, which runs a nickname-blind client alongside the
+    -- others rather than describing one.
+    --
+    -- The guard itself stays: a client broadcasting a name that genuinely resolves to somebody else
+    -- is a real misconfiguration and must still be refused.
     local declaredKey = LC.ResolveConfigName(lootmaster)
-    if declaredKey and declaredKey ~= "" and declaredKey ~= senderKey then
+    if declaredKey and KASC.Identity.IsResolvedKey(declaredKey) and declaredKey ~= senderKey then
         return false, "lootmaster-mismatch"
     end
 

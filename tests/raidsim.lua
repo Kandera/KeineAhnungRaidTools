@@ -86,6 +86,12 @@ function RaidSim.New(members)
         -- into it under the same names. Shared, the last client to load would own every confirm
         -- dialog in the raid -- accepting a reassign would run somebody else's assignment.
         client.env.StaticPopupDialogs  = {}
+        -- Nickname support is per client, not per raid. `nsrt = false` on a member models the real
+        -- and common case of one person missing Northern Sky, or having its global nickname sharing
+        -- switched off: a false here shadows the shared NSAPI through this client's environment, so
+        -- only they go blind. That asymmetry is the whole point -- it is what silently cost a raid
+        -- its rolls before 3.1.0.
+        if m.nsrt == false then client.env.NSAPI = false end
 
         client.KART = { LC = {} }
         client.env.KART = client.KART

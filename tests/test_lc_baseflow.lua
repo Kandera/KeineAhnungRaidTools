@@ -477,3 +477,120 @@ do
     T.truthy(not Owes(lm.KART.LC.pendingTrades, 64),
         "the reminder clears once the item has been handed over")
 end
+
+-- ===================================================================================
+-- NSRT nicknames
+-- ===================================================================================
+-- The guild runs Northern Sky, so the lootmaster field and the council list are often filled in
+-- with nicknames rather than character names. Before 3.1.0 a client that could not read a nickname
+-- rejected EVERY raid config, silently and permanently -- which is how a whole raid ended up on its
+-- own vote buttons and never rolling. This is that path.
+do
+    KARTTEST.SetNSAPI(true)
+    local members = {}
+    for i, m in ipairs(MEMBERS) do
+        members[i] = {}
+        for k, v in pairs(m) do members[i][k] = v end
+    end
+    members[1].nickname = "Kandy"    -- the lootmaster is known by a nickname
+    members[2].nickname = "Haeri"
+
+    local sim = RaidSim.New(members)
+    RaidSim.Install(sim)
+    local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
+
+    RaidSim.As(lm, function()
+        -- Typed the way the raid leader actually types it: nicknames, not character names.
+        lm.env.KART_Settings.lcLootmaster     = "Kandy"
+        lm.env.KART_Settings.lcCouncilMembers = "Kandy;Haeri"
+        lm.env.KART_Settings.lcRollsEnabled   = true
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.SetSessionActive(true)
+    end)
+
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
+        "a lootmaster who typed their own NICKNAME still owns the config")
+    for _, c in ipairs({ council, raider }) do
+        T.eq(c.KART.LC.raidConfig.lootmaster, lm.guid,
+            c.name .. " resolved the nickname to the right player")
+        T.eq(c.KART.LC.sessionActive, true, c.name .. " got the session")
+    end
+    T.truthy(RaidSim.As(council, council.KART.LC.IsCouncil),
+        "a council member listed by nickname is council")
+
+    Drop(sim, 70, 249331)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(70, 1) end)
+    T.truthy((lm.KART.LC.votes[70] or {})[raider.guid],
+        "and the whole loot flow still works with nicknames in play")
+
+    KARTTEST.SetNSAPI(false)
+end
+
+-- ONE client in the raid cannot read nicknames -- Northern Sky missing, or its global sharing
+-- switched off. That client must still end up with the raid's config. Before 3.1.0 it rejected
+-- every config forever and silently fell back to its own vote buttons and its own roll setting,
+-- which is how a full raid stopped rolling without anyone being able to see why.
+do
+    KARTTEST.SetNSAPI(true)
+    local members = {}
+    for i, m in ipairs(MEMBERS) do
+        members[i] = {}
+        for k, v in pairs(m) do members[i][k] = v end
+    end
+    members[1].nickname = "Kandy"
+    members[4].nsrt = false          -- Odin, blind to nicknames
+
+    local sim = RaidSim.New(members)
+    RaidSim.Install(sim)
+    local lm, raider = sim.byName.Kandera, sim.byName.Odin
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster   = "Kandy"
+        lm.env.KART_Settings.lcRollsEnabled = true
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.SetSessionActive(true)
+    end)
+
+    T.eq(raider.KART.LC.sessionActive, true,
+        "a client that cannot read nicknames still joins the session")
+    T.eq(raider.KART.LC.raidConfig.lootmaster, lm.guid,
+        "and accepts the config on the sender's identity rather than the name it cannot resolve")
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), true,
+        "and uses the RAID's roll setting, not its own -- this is what broke before 3.1.0")
+
+    Drop(sim, 71, 249331)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(71, 1) end)
+    T.truthy((lm.KART.LC.votes[71] or {})[raider.guid],
+        "and votes normally for the rest of the evening")
+    KARTTEST.SetNSAPI(false)
+end
+
+-- The other half of the same problem, and the one that actually bit last night: the LOOTMASTER
+-- types a nickname their OWN client cannot resolve. Then nobody owns the config, nothing is
+-- broadcast, and the session starts anyway -- so every raider silently keeps their own roll setting,
+-- which defaults to off. This is why that state now prints a warning instead of passing in silence.
+do
+    KARTTEST.SetNSAPI(false)     -- nobody can resolve nicknames
+    local members = {}
+    for i, m in ipairs(MEMBERS) do
+        members[i] = {}
+        for k, v in pairs(m) do members[i][k] = v end
+    end
+    local sim = RaidSim.New(members)
+    RaidSim.Install(sim)
+    local lm, raider = sim.byName.Kandera, sim.byName.Odin
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster   = "Kandy"   -- resolves to nobody, not even themselves
+        lm.env.KART_Settings.lcRollsEnabled = true
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.SetSessionActive(true)
+    end)
+
+    T.truthy(not RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
+        "a lootmaster whose own nickname does not resolve does not own the config")
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 0, "so no config is broadcast at all")
+    T.eq(raider.KART.LC.sessionActive, true, "while the session starts regardless")
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), false,
+        "and every raider falls back to their own roll setting, which is off -- the missing rolls")
+end
