@@ -160,13 +160,16 @@ end
 
 -- What this client believes about the RAID (never about itself: the vote list, the council tabs,
 -- our own vote and our own pending trades are per client and SHOULD differ).
-local function fingerprint(client, rollID)
+local function fingerprint(client, rollID, rollFieldsOnly)
     local LC = client.KART.LC
-    local fp = { ["session"] = tostring(LC.sessionActive) }
-    for _, field in ipairs(SHARED_CFG) do
-        fp["config." .. field] = tostring(LC.raidConfig[field])
+    local fp = {}
+    if not rollFieldsOnly then
+        fp["session"] = tostring(LC.sessionActive)
+        for _, field in ipairs(SHARED_CFG) do
+            fp["config." .. field] = tostring(LC.raidConfig[field])
+        end
+        fp["council"] = mapText(LC.CouncilNamesTable, tostring)
     end
-    fp["council"] = mapText(LC.CouncilNamesTable, tostring)
     if rollID then
         fp["item"]    = tostring(LC.rollItems[rollID])
         fp["winner"]  = tostring(LC.assignedWinners[rollID])
@@ -180,13 +183,24 @@ end
 
 -- Every way the clients disagree, as readable lines. Empty means the raid is of one mind.
 -- Pass rollID to include the state belonging to one specific drop.
-function F.Disagreements(sim, rollID)
-    local base = sim.clients[1]
-    local baseFP = fingerprint(base, rollID)
+--
+-- `clients` narrows it to a subset, which per-roll checks need: someone who arrived (or reloaded)
+-- after an item dropped deliberately does NOT get pulled into that distribution, so they are
+-- entitled to know nothing about it. Everything that is not per-roll -- the session, the config,
+-- the council -- must still agree across the whole raid, always.
+-- `rollFieldsOnly` drops the session/config/council half. The two halves converge on different
+-- timescales: a client that just reloaded has the roll (LC_START reaches it immediately) long
+-- before it has the config back (that waits on a roster change or a state request). Comparing
+-- both at the moment an item drops would report a recovery still in flight as a disagreement.
+function F.Disagreements(sim, rollID, clients, rollFieldsOnly)
+    clients = clients or sim.clients
+    if #clients < 2 then return {} end
+    local base = clients[1]
+    local baseFP = fingerprint(base, rollID, rollFieldsOnly)
     local out = {}
-    for i = 2, #sim.clients do
-        local c = sim.clients[i]
-        local fp = fingerprint(c, rollID)
+    for i = 2, #clients do
+        local c = clients[i]
+        local fp = fingerprint(c, rollID, rollFieldsOnly)
         for key, want in pairs(baseFP) do
             if fp[key] ~= want then
                 out[#out + 1] = string.format("%s: %s has %s, %s has %s",
@@ -199,8 +213,9 @@ function F.Disagreements(sim, rollID)
 end
 
 -- Asserts it, with the actual disagreement as the failure text rather than a bare "false".
-function F.AssertAgreed(sim, rollID, what)
-    T.eq(table.concat(F.Disagreements(sim, rollID), " | "), "", "the whole raid agrees " .. what)
+function F.AssertAgreed(sim, rollID, what, clients)
+    T.eq(table.concat(F.Disagreements(sim, rollID, clients), " | "), "",
+         "the whole raid agrees " .. what)
 end
 
 KARTTEST.lcFixture = F

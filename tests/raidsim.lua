@@ -243,6 +243,18 @@ function RaidSim.Reload(sim, name)
     return Boot(client, saved)
 end
 
+-- PLAYER_ENTERING_WORLD, as Core.lua handles it (see its LC.CheckRaidJoin call). Kept apart from
+-- Reload rather than folded into it, because the two are separate moments and one test wants the
+-- gap between them -- but in the game a reload is ALWAYS followed by this, within a second. A test
+-- that reloads and then leaves the client sitting there is modelling a client that never announced
+-- itself, which cannot happen, and it will blame the addon for the silence.
+function RaidSim.EnterWorld(sim, name)
+    local client = sim.byName[name]
+    if not client then return nil end
+    RaidSim.As(client, function() client.KART.LC.CheckRaidJoin() end)
+    return client
+end
+
 -- GROUP_ROSTER_UPDATE, as Core.lua routes it: every client in the group runs its own handler, in no
 -- particular order. Everything Loot Council recovery hangs off is in here -- the state request, the
 -- config re-broadcast, the raid-exit confirmation -- so this is the single event a test uses to say
