@@ -1309,3 +1309,29 @@ do
     T.truthy(RaidSim.As(raider, function() return F.Owes(raider.KART.LC.owedToMe, 91) end),
         "the winner is still owed the item")
 end
+
+-- ...and the mark must not outlive the roll it was made for.
+-- Blizzard reuses rollIDs. PurgeStaleRoll clears the per-roll state when the ID comes back carrying
+-- a DIFFERENT item, and deliberately does nothing when the item is the same -- so a client that once
+-- heard about this ID from somebody else, and now force-wins it itself, has to drop the mark on the
+-- spot. Otherwise it would refuse the reminder for an item genuinely in its own bags.
+do
+    local sim, _, council, raider = NewRaid()   -- council = Merrit, not the loot owner yet
+    Drop(sim, 92, F.GLOVES)
+    T.truthy(council.KART.LC.rollNotInOurBags[92],
+        "a council member learns of the drop from the lootmaster, so it is not theirs to hand out")
+
+    RaidSim.Leave(sim, "Bramor")
+    RaidSim.Promote(sim, "Merrit")
+    RosterSettles(sim)
+    RaidSim.As(council, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+
+    Drop(sim, 92, F.GLOVES)                     -- same ID, same item, now won by the stand-in itself
+    T.is_nil(council.KART.LC.rollNotInOurBags[92],
+        "force-winning the same ID again makes it theirs, whatever the previous round left behind")
+
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(92, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(F.Owes(council.KART.LC.pendingTrades, 92),
+        "so the reminder is created for an item that really is in their bags")
+end

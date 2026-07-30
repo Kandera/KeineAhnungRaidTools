@@ -293,7 +293,7 @@ Not fixed by adding a chat warning on sight: the same condition is true, harmles
 for anyone whose Lootmaster field names a person who has not loaded in yet. Wants a rule that can
 tell "names me, unresolvable" apart from "names someone else, not here yet".
 
-## B60 — the lootmaster losing Blizzard's roll is undetected, and the obligation auto-confirms
+## B60 — the lootmaster losing Blizzard's roll is undetected — NARROWED 2026-07-30
 
 `ForceWinRoll` rolls and nothing checks the outcome. A raider not running KART can out-roll the
 lootmaster; the council still awards, and `Trade.AddPendingTrade` records an obligation for an item
@@ -301,6 +301,23 @@ the lootmaster does not have. `Trade.OnTradeClosed` then reads "not in my bags" 
 and clears the reminder the next time that same winner is traded with for anything at all. The
 reminder tidies itself away, the lootmaster believes it is done, the winner never receives anything,
 and the history says they won it.
+
+**Half of it is closed.** The obligation was created for whoever was loot owner at award time, and
+that is not the same client as the holder once the role moves — the lootmaster force-wins, ports out
+mid-distribution, the raid leader stands in, and the stand-in was handed a reminder for an item it
+had never had. `LC.rollNotInOurBags` now separates the two: set when a roll is learned from somebody
+else's `LC_START`, cleared when we force-win it ourselves, and the reminder follows it rather than
+the role. The loot owner is told when one is skipped (`LC_TRADE_NOT_HELD`) instead of it happening
+silently. Covered in `tests/test_lc_churn.lua`, including the stale-mark case on a reused rollID;
+three mutations, each red on its own assertions.
+
+**What remains is the original half:** the lootmaster force-wins, genuinely loses Blizzard's roll,
+and nothing notices. `rollNotInOurBags` cannot see that — from the client's point of view it did
+everything right. It wants the roll's actual outcome, which the addon does not currently read.
+
+Settling the holder question was also a precondition for B63: a fallback broadcaster would announce
+items the loot owner never won, and without this guard every one of them would have created exactly
+this obligation.
 
 ## B61 — council membership is only evaluated when the roll starts
 
