@@ -12,6 +12,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **KARTs eigene Bestätigungsdialoge sind wieder sichtbar**, statt hinter dem Fenster aufzugehen, das sie geöffnet hat.
 - **Set-Tokens laufen wieder über das Loot Council**, statt von niemandem normal ausgewürfelt zu werden.
 - **Spielzeuge bleiben aus dem Loot Council heraus**, statt vom Lootmaster einkassiert zu werden.
+- **Wer die Lootverteilung übernimmt, bekommt keine Handelserinnerungen mehr für Items, die er nie hatte.** KART sagt es an, statt die Erinnerung stillschweigend wegzulassen.
 - **Items zeigen ihr Symbol auch bei Spielern, deren Client keinen eigenen Loot-Roll hatte**, und ihren Namen sobald das Item bekannt ist, statt die ganze Abstimmung lang ein Fragezeichen.
 - **Ein Item verschwindet aus dem Vote-Fenster desjenigen, der es vergeben hat.**
 - **Transmog-Stimmen stehen über den Spielern, die gepasst haben.**

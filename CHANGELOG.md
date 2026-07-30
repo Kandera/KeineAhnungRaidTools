@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **KART's own confirmation dialogs are visible again**, instead of opening behind the window that raised them.
 - **Tier set tokens go through the Loot Council again**, instead of being rolled on the normal way by nobody.
 - **Toys stay out of the Loot Council**, instead of being force-won by the lootmaster.
+- **Taking over loot distribution no longer hands you trade reminders for items you never had.** KART says so instead of quietly dropping the reminder.
 - **Items show their icon for players whose client had no loot roll of its own**, and their name as soon as the item is known, instead of a question mark all vote long.
 - **An item disappears from the vote window of whoever decided it.**
 - **Transmog votes are listed above the players who passed.**
