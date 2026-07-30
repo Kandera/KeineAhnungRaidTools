@@ -170,7 +170,12 @@ local function runOne(seed)
             local by, winner = councilMember(), pick(sim.clients)
             if not by then return end
             if next(blackholed) ~= nil or KARTTEST.now < outageUntil then
+                -- Both, and for the same reason: a client that could not authorize the sender at
+                -- that instant (its council list had not arrived) rejects the LC_RESULT, so it has
+                -- neither the award in its history NOR the winner on the roll, and nothing
+                -- re-announces either. B66 -- the roll is behind from here on, permanently.
                 unreliableAward[id] = true
+                unreliable[id] = true
             end
             RaidSim.As(by, function() by.KART.LC.Trade.AssignWinner(id, winner.guid, "BIS") end)
             check(id, "an award")
