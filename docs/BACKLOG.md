@@ -146,9 +146,8 @@ in the stubs rather than a swallowed write. Five mutations were run — removing
 the subscription, counting instead of keying, and clamping windows that sit below `DIALOG` — and each
 turns its own assertions red.
 
-**Still needs a client.** What the harness can answer is whether the frames move and come back.
-Whether the dialog then actually renders on top, and whether nothing got tainted, cannot be seen
-offline.
+**Confirmed in a client by the maintainer, 2026-07-30**, which is the half the harness cannot
+answer: the dialog renders on top, and the windows come back where they were.
 
 The regression that caused all of this stays guarded separately: `tests/test_kaui.lua` observes the
 popup frame through `RegisterStaticPopup` and fails if anything writes its stratum, level or parent,
@@ -260,7 +259,7 @@ by another route. The role-status label meanwhile reports that all is well.
 soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
 `tests/test_lc_baseflow.lua`.
 
-## B58 — nobody hands a late joiner the config while the lootmaster is away
+## B58 — nobody hands a late joiner the config while the lootmaster is away — FIXED 2026-07-30
 
 Follows from B29's fix, and is the price of not letting a stand-in rewrite the raid's settings.
 `LC.HandleStateRequest` sends the config only if `LC.IsConfigOwner()`, and while a named lootmaster is
@@ -268,10 +267,17 @@ merely absent that is nobody: the stand-in leader owns the loot flow but not the
 Anyone joining in that window gets the session flag and no config, so they run their own vote-button
 labels, minimum quality and roll setting until the lootmaster returns or somebody names a successor.
 
-Narrower than what it replaced — B29 left the whole raid unable to distribute anything — and it only
-bites someone who joins during the gap. The fix is a way for the loot owner to forward the config
-they are holding, rather than broadcasting their own, which needs `TryAcceptConfig` to stop rewriting
-`raidConfig.lootmaster` to the sender. Not attempted while the base flow is still being proven.
+Fixed by the work done for B65, which asked for the same thing from the other end — a lootmaster gone
+for good rather than merely away — and built exactly the mechanism this entry asked for:
+`LC.RelayRaidConfig` forwards the config a client is holding instead of broadcasting its own, and
+`LC.HandleConfigRelay` accepts it without letting the relayer's name become the raid's lootmaster.
+`LC.HandleStateRequest` reaches it through the `elseif` branch that runs when nobody owns the config,
+which is precisely this state.
+
+Confirmed rather than assumed: `tests/test_lc_churn.lua` builds the state (named lootmaster leaves,
+raid leader stands in, all five clients assert they do NOT own the config), lets somebody join, and
+checks they end up on the raid's vote buttons, roll setting and council. Removing the `elseif` branch
+turns those three red, along with eleven other assertions and the soak.
 
 ## B59 — a lootmaster whose own field does not resolve owns nothing, and is never told
 

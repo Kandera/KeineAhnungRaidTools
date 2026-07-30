@@ -1224,3 +1224,45 @@ do
         T.eq(#c.KART.LC.voteListRolls, 0, c.name .. " has no vote rows left")
     end
 end
+
+-- Someone joins while the named lootmaster is merely ABSENT (backlog B58)
+-- ------------------------------------------------------------------------------------------------
+-- The narrower half of B29: the stand-in leader runs the loot flow but deliberately does NOT own the
+-- raid's settings, because the config still names the lootmaster who may walk back in. So while they
+-- are away nobody is the config owner, and the reply that hands a joiner the raid's settings is the
+-- config owner's to send. Anyone arriving in that window used to get the session flag and nothing
+-- else -- their own vote-button labels, their own minimum quality, their own roll setting, for as
+-- long as the lootmaster stayed away.
+--
+-- Whether the relay added for B65 already covers this is the point of the test. It was written for
+-- the lootmaster who is gone for good; this is the same shape with the lootmaster only away.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Bramor")                -- the named lootmaster steps out
+    local stand = RaidSim.Promote(sim, "Merrit")
+    RosterSettles(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+
+    -- Nobody owns the config in this state, which is what makes it B58 rather than an ordinary join.
+    for _, c in ipairs(sim.clients) do
+        T.eq(RaidSim.As(c, c.KART.LC.IsConfigOwner), false,
+            c.name .. " does not own the config while the lootmaster is merely away")
+    end
+
+    local alric = sim.byName.Alric
+    local labels = RaidSim.As(alric, alric.KART.LC.GetButtonConfig)
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(10)                    -- a plain raider's relay is jittered a few seconds
+
+    T.eq(torvi.KART.LC.sessionActive, true, "the joiner is in the session")
+    T.deep_eq(RaidSim.As(torvi, torvi.KART.LC.GetButtonConfig), labels,
+        "and runs the raid's vote buttons rather than its own")
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled),
+        RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), "and the raid's roll setting")
+    -- Minimum quality is deliberately not asserted here: the fixture leaves it at the default, so
+    -- a client running its OWN setting would answer the same number and the check could never fail.
+    T.truthy(RaidSim.As(torvi, function() return torvi.KART.LC.IsSenderCouncil(sim.byName.Corvin.guid) end),
+        "and knows who the council is")
+end
