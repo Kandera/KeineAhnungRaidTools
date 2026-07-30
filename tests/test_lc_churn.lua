@@ -69,6 +69,10 @@ do
     RaidSim.As(torvi, function() torvi.KART.LC.Vote.CastVote(81, 1) end)
     T.truthy((lm.KART.LC.votes[81] or {})[torvi.guid], "and their vote reaches the council")
     T.truthy((lm.KART.LC.rolls[81] or {})[torvi.guid], "and so does their 1-100 roll")
+
+    -- The joiner is now an equal member of the raid, so from the next item on there is nothing
+    -- about the raid they may see differently from anyone who was here all along.
+    F.AssertAgreed(sim, 81, "including the newcomer, from the item after they arrived")
 end
 
 -- The same arrival, with the lootmaster's own roster handler taken out of the picture. Only the
@@ -183,6 +187,7 @@ do
     Drop(sim, 86, F.WEAPON)
     RaidSim.As(odin, function() odin.KART.LC.Vote.CastVote(86, 1) end)
     T.truthy((lm.KART.LC.votes[86] or {})[odin.guid], "and they vote normally from then on")
+    F.AssertAgreed(sim, 86, "including the client that relogged, from the next item on")
 end
 
 -- ===================================================================================
@@ -218,6 +223,9 @@ do
     Drop(sim, 88, F.WEAPON)
     T.eq(KARTTEST.rolled[88] and KARTTEST.rolled[88][lm.unit], 1,
         "so they still force-win the next drop instead of letting it roll away (B30)")
+    -- The lootmaster is the client the whole raid reads its config from, so a lootmaster who came
+    -- back subtly different from the raid they rejoined is the worst shape this addon can be in.
+    F.AssertAgreed(sim, 88, "including the lootmaster that relogged")
 end
 
 -- The resume claim is only ever about the loot owner, so only the loot owner may act on it. It can

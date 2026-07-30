@@ -135,5 +135,73 @@ function F.HasVoteRow(client, rollID)
     return false
 end
 
+-- ===================================================================================
+-- Convergence: does the whole raid actually agree?
+-- ===================================================================================
+-- Every piece of shared state in Loot Council is written by TWO code paths -- a handler, for the
+-- clients that receive the message, and a hand-written local step next to the send, for the client
+-- that sent it. That split exists because a sender does not process its own message (KASC drops the
+-- echo; see its Dispatch). It is also the single most productive bug source in this addon: the two
+-- paths are free to drift, and when they do exactly one client in the raid disagrees with the rest
+-- -- which is what every failed raid night has looked like from the inside.
+--
+-- Individual assertions cannot catch that, because they check the client the test was thinking
+-- about. This checks all of them against each other.
+
+local SHARED_CFG = { "minQuality", "buttonLabels", "rollsEnabled", "lootmaster", "councilMembers" }
+
+-- Deterministic text for a [key] = value map, so two clients' copies compare as strings.
+local function mapText(map, valueText)
+    local parts = {}
+    for k, v in pairs(map or {}) do parts[#parts + 1] = tostring(k) .. "=" .. valueText(v) end
+    table.sort(parts)
+    return table.concat(parts, ",")
+end
+
+-- What this client believes about the RAID (never about itself: the vote list, the council tabs,
+-- our own vote and our own pending trades are per client and SHOULD differ).
+local function fingerprint(client, rollID)
+    local LC = client.KART.LC
+    local fp = { ["session"] = tostring(LC.sessionActive) }
+    for _, field in ipairs(SHARED_CFG) do
+        fp["config." .. field] = tostring(LC.raidConfig[field])
+    end
+    fp["council"] = mapText(LC.CouncilNamesTable, tostring)
+    if rollID then
+        fp["item"]    = tostring(LC.rollItems[rollID])
+        fp["winner"]  = tostring(LC.assignedWinners[rollID])
+        fp["rolls"]   = mapText(LC.rolls[rollID], tostring)
+        fp["cvotes"]  = mapText(LC.councilVotes[rollID], tostring)
+        fp["votes"]   = mapText(LC.votes[rollID],
+            function(v) return tostring(v.idx) .. "/" .. tostring(v.note) end)
+    end
+    return fp
+end
+
+-- Every way the clients disagree, as readable lines. Empty means the raid is of one mind.
+-- Pass rollID to include the state belonging to one specific drop.
+function F.Disagreements(sim, rollID)
+    local base = sim.clients[1]
+    local baseFP = fingerprint(base, rollID)
+    local out = {}
+    for i = 2, #sim.clients do
+        local c = sim.clients[i]
+        local fp = fingerprint(c, rollID)
+        for key, want in pairs(baseFP) do
+            if fp[key] ~= want then
+                out[#out + 1] = string.format("%s: %s has %s, %s has %s",
+                    key, base.name, want, c.name, tostring(fp[key]))
+            end
+        end
+    end
+    table.sort(out)
+    return out
+end
+
+-- Asserts it, with the actual disagreement as the failure text rather than a bare "false".
+function F.AssertAgreed(sim, rollID, what)
+    T.eq(table.concat(F.Disagreements(sim, rollID), " | "), "", "the whole raid agrees " .. what)
+end
+
 KARTTEST.lcFixture = F
 return F

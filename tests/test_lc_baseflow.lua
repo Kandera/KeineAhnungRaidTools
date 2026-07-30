@@ -806,3 +806,45 @@ do
     T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), false,
         "and every raider falls back to their own roll setting, which is off -- the missing rolls")
 end
+
+-- ===================================================================================
+-- Does the raid actually agree? (see F.Disagreements)
+-- ===================================================================================
+-- The assertions above each pick a client and check it. This one checks the clients against EACH
+-- OTHER, at every step of the full flow, which is the only way to catch the case that has cost
+-- every raid night so far: nineteen machines that agree and one that does not. It is deliberately
+-- the whole sentence in one go -- drop, vote, council pick, assign -- because the disagreements
+-- that matter appear between the steps, not inside them.
+do
+    local sim, lm, council, raider = NewRaid()
+    local nara = sim.byName.Nara
+    F.AssertAgreed(sim, nil, "about the session and the config before anything drops")
+
+    Drop(sim, 81, F.GLOVES)
+    F.AssertAgreed(sim, 81, "about the item that just dropped")
+
+    RaidSim.As(raider,  function() raider.KART.LC.Vote.CastVote(81, 1) end)
+    RaidSim.As(nara,    function() nara.KART.LC.Vote.CastVote(81, 2) end)
+    RaidSim.As(council, function() council.KART.LC.Vote.CastVote(81, 3) end)
+    F.AssertAgreed(sim, 81, "about who voted what")
+
+    -- Two council members disagreeing about the winner is the normal case, and both picks have to
+    -- be on every client's tally -- including on the client of whoever picked first.
+    RaidSim.As(council, function() council.KART.LC.Vote.ToggleCouncilVote(81, raider.guid) end)
+    RaidSim.As(lm,      function() lm.KART.LC.Vote.ToggleCouncilVote(81, nara.guid) end)
+    F.AssertAgreed(sim, 81, "about the council's own picks")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(81, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+    F.AssertAgreed(sim, 81, "about who won it")
+
+    -- And a second item, decided by the OTHER council member, on top of a raid that already has
+    -- history: an assignment coming from someone other than the lootmaster is the path where the
+    -- sender's own local step and everybody else's handler drift apart unnoticed.
+    Drop(sim, 82, F.WEAPON)
+    RaidSim.As(nara, function() nara.KART.LC.Vote.CastVote(82, 1) end)
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(82, nara.guid, "Upgrade") end)
+    KARTTEST.AdvanceTime(0)
+    F.AssertAgreed(sim, 82, "about an item a council member decided")
+    F.AssertAgreed(sim, 81, "about the first item, still, after a second one was decided")
+end
