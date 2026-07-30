@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A player joining or leaving no longer ends the session.**
 - **The start prompt can no longer end a session that is already running.**
 - **The Lootmaster field stays editable when the lootmaster has left the raid**, so a replacement can be named.
+- **Starting a session warns you when no Lootmaster is set**, instead of silently leaving every raider on their own vote buttons and roll setting.
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

@@ -1371,6 +1371,18 @@ function LC.SetSessionActive(active)
     -- means the lootmaster is known by the time LC_ACTIVE is evaluated.
     if active then
         LC.BroadcastRaidConfig()
+        -- BroadcastRaidConfig sends nothing unless IsConfigOwner() is true, and that reads OUR OWN
+        -- Lootmaster field and requires it to resolve to us. Leave that field empty -- a documented,
+        -- supported setup, since the raid leader stands in as loot owner -- and nobody owns the
+        -- config, so no client ever receives one. Every raider then falls back to their own local
+        -- values for settings that are supposed to be raid-wide: their own vote-button labels, their
+        -- own minimum quality, and their own roll setting, which defaults to off. That is a whole
+        -- raid silently not rolling while the person who started the session does, and it cost this
+        -- guild an evening before anyone worked out why (backlog B33; the real fix is the ownership
+        -- design, this is only the missing sentence). Say it out loud instead.
+        if not LC.IsConfigOwner() then
+            print("|cffff0000KART:|r " .. KART.L.LC_NO_CONFIG_OWNER)
+        end
     end
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
     if not active then

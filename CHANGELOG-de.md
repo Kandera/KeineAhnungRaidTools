@@ -17,6 +17,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Bei- oder Austritt beendet die Session nicht mehr.**
 - **Der Start-Prompt kann keine bereits laufende Session mehr beenden.**
 - **Das Lootmaster-Feld bleibt bearbeitbar, wenn der Lootmaster den Raid verlassen hat**, damit ein Ersatz eingetragen werden kann.
+- **Beim Start einer Session wird gewarnt, wenn kein Lootmaster eingetragen ist**, statt stillschweigend jeden Raider auf seinen eigenen Vote-Buttons und seiner eigenen Würfe-Einstellung sitzen zu lassen.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben
