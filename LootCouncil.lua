@@ -1848,6 +1848,7 @@ function LC.ClearAllRolls()
     wipe(LC.relevanceSnapshot)
     wipe(LC.votedNoteByMe)
     wipe(LC.councilTabsNew)
+    wipe(LC.rollNotInOurBags)
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
     if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
@@ -2370,6 +2371,9 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- The lootmaster physically wins everything Council decides on, so he can hand it over
         -- through Blizzard's BoP trade window afterwards.
         ForceWinRoll(rollID)
+        -- We rolled Need on it ourselves, so from here on this roll counts as ours to hand out even
+        -- if a previous round left a stale mark under the same rollID (Blizzard reuses them).
+        LC.rollNotInOurBags[rollID] = nil
     elseif isLootmaster and councilEligible then
         -- Council-eligible but below the rarity threshold: nothing for him to hand out, and it
         -- shouldn't pile up in his bags either. Always passes, deliberately independent of his own
@@ -2435,6 +2439,17 @@ function LC.OnStartLootRoll(rollID, attempt)
         LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs)
     end
 end
+
+-- [rollID] = true when we learned this roll existed from somebody else's LC_START rather than from
+-- our own force-win. It is the one thing that separates "I am the loot owner" from "I am holding
+-- this item", and those are not the same client as soon as the role moves mid-round -- which is the
+-- normal case here, not an edge one: the lootmaster ports out during distribution and the raid
+-- leader stands in. See the trade-obligation guards in LootCouncilTrade.lua.
+--
+-- Deliberately records the NEGATIVE. A table of "rolls I won" would be empty after a reload and the
+-- lootmaster would silently stop getting trade reminders for items genuinely in their bags; an empty
+-- table here means "assume held", which is exactly what the code did before this existed.
+LC.rollNotInOurBags = LC.rollNotInOurBags or {}
 
 LC.votedByMe = LC.votedByMe or {} -- [rollID] = the buttonIdx WE cast (truthy = voted; tracked by
                                    -- rollID, not by row, since rows get recycled/reindexed as items expire)
@@ -2535,6 +2550,12 @@ function LC.HandleStart(payload, senderKey)
     if not rollID then return end
 
     PurgeStaleRoll(rollID, itemID)
+
+    -- Somebody else announced this item, which means they are the one who force-won it, not us. If
+    -- the loot role later moves to this client -- the lootmaster ports out mid-distribution and the
+    -- raid leader stands in -- we must not then record a trade obligation for an item that is in
+    -- somebody else's bags. See LC.rollNotInOurBags.
+    LC.rollNotInOurBags[rollID] = true
 
     -- Same BoP trade clock as LC.OnStartLootRoll, for clients that never got their own
     -- START_LOOT_ROLL (dead, out of range, ineligible). LC_START goes out inside the owner's own

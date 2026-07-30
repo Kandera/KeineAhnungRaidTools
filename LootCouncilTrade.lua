@@ -84,11 +84,22 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
         end
     else
         KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
-        -- Only the client that actually holds the item (the loot owner, see
-        -- LC.IsLootOwner/ForceWinRoll) needs a trade reminder — an assigner who isn't the loot owner
-        -- never physically has the item to trade.
+        -- Only the client that actually holds the item needs a trade reminder — an assigner who
+        -- isn't the loot owner never physically has the item to trade.
+        --
+        -- Being the loot owner is not the same as holding it, and the two come apart in the ordinary
+        -- course of a raid night: the lootmaster force-wins an item, ports out, and the raid leader
+        -- stands in. The stand-in is the loot owner from that moment, but the item is in somebody
+        -- else's bags. Recording an obligation for it is worse than recording none —
+        -- Trade.OnTradeClosed reads "not in my bags" as "already traded" and clears the reminder the
+        -- next time that winner is traded with for anything at all, so it tidies itself away, the
+        -- raid believes the item was handed over, and the winner never receives it (backlog B60).
         if LC.IsLootOwner() then
-            Trade.AddPendingTrade(rollID, playerKey)
+            if LC.rollNotInOurBags[rollID] then
+                print("|cffff0000KART:|r " .. KART.L.LC_TRADE_NOT_HELD)
+            else
+                Trade.AddPendingTrade(rollID, playerKey)
+            end
         end
     end
     -- Take the decided item off our OWN vote list, the way Trade.HandleResult does for everybody
@@ -313,6 +324,7 @@ function Trade.ClearRollState(rollID)
     LC.assignedWinners[rollID] = nil
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
+    LC.rollNotInOurBags[rollID]  = nil
     LC.relevanceHandled[rollID]  = nil
     LC.hiddenIrrelevant[rollID]  = nil
     LC.autoVotedByMe[rollID]     = nil
@@ -852,10 +864,13 @@ function Trade.HandleResult(payload, senderKey)
     color = color or Trade.ResolveColorForReason(reason)
     KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
-    -- Same reasoning as DoAssignWinner: only the client physically holding the item (the loot
-    -- owner) needs a pending-trade reminder, regardless of who assigned it.
+    -- Same reasoning as DoAssignWinner, including the "loot owner is not the same as holder" case.
     if LC.IsLootOwner() then
-        Trade.AddPendingTrade(rollID, winnerKey)
+        if LC.rollNotInOurBags[rollID] then
+            print("|cffff0000KART:|r " .. KART.L.LC_TRADE_NOT_HELD)
+        else
+            Trade.AddPendingTrade(rollID, winnerKey)
+        end
     end
 
     -- The tab deliberately stays open here, exactly like on the assigner's own client (see

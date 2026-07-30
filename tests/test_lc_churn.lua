@@ -1266,3 +1266,46 @@ do
     T.truthy(RaidSim.As(torvi, function() return torvi.KART.LC.IsSenderCouncil(sim.byName.Corvin.guid) end),
         "and knows who the council is")
 end
+
+-- The loot owner is not always the one holding the item (backlog B60, and what B63 would need)
+-- ------------------------------------------------------------------------------------------------
+-- The lootmaster force-wins a drop and then ports out mid-distribution, which the maintainer
+-- describes as the normal shape of a raid night rather than an edge case. The raid leader stands in
+-- and is the loot owner from that moment -- but the item is in the departed lootmaster's bags.
+--
+-- The trade reminder used to be created for whoever was loot owner at award time, so the stand-in
+-- was told to hand over an item they had never had. That reminder does not merely sit there being
+-- wrong: Trade.OnTradeClosed reads "not in my bags" as "already traded" and clears it the next time
+-- that same winner is traded with for anything at all. It tidies itself away, the raid believes the
+-- item was handed over, and the winner never receives it.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 90, F.GLOVES)
+
+    -- Before anything moves: the client that force-won it is the one that owes it.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(90, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(F.Owes(lm.KART.LC.pendingTrades, 90),
+        "the lootmaster who force-won the item owes it after awarding")
+
+    -- Now the same item, decided after the role has moved.
+    Drop(sim, 91, F.WEAPON)
+    T.truthy(RaidSim.As(lm, function() return lm.KART.LC.rollItems[91] end),
+        "the lootmaster saw the second drop and force-won it too")
+
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
+    RosterSettles(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    T.eq(RaidSim.As(stand, stand.KART.LC.IsLootOwner), true,
+        "the stand-in is the loot owner once the lootmaster has gone")
+
+    RaidSim.As(stand, function() stand.KART.LC.Trade.AssignWinner(91, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(1)
+    T.is_nil(F.Owes(stand.KART.LC.pendingTrades, 91),
+        "but owes nothing for an item it never won -- that one is in the departed lootmaster's bags")
+
+    -- The award itself must still happen. Refusing the reminder may not cost the raid the decision.
+    T.truthy(RaidSim.As(raider, function() return F.Owes(raider.KART.LC.owedToMe, 91) end),
+        "the winner is still owed the item")
+end
