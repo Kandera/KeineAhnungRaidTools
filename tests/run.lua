@@ -3,6 +3,40 @@
 -- are loaded in dependency order; a library that fails to load is a hard failure here, which
 -- is itself a useful check.
 
+-- Line coverage is OPT-IN: KART_COVERAGE=1 luajit tests/run.lua
+--
+-- Off by default on purpose. This file is the gate that runs on every push, it has to stay fast, and
+-- it must not start failing on a machine where the luacov rock is missing. What coverage answers is
+-- a different question from "do the tests pass": which branches of a 176 KB LootCouncil.lua the 950
+-- assertions never reach at all. An untested branch is where a fix lands quietly wrong.
+--
+-- raidsim loads each addon file with an "@path" chunk name, so the counts land under the real source
+-- paths even though the files are loaded once per simulated client.
+local function LoadLuacov()
+    local ok, runner = pcall(require, "luacov.runner")
+    if ok then return runner end
+    -- LuaJIT does not look in luarocks' per-user tree on its own (it does on the CI image, which
+    -- installs system-wide), so try there before giving up.
+    local home = os.getenv("USERPROFILE") or os.getenv("HOME")
+    if home then
+        package.path = package.path
+            .. ";" .. home .. "/.luarocks/share/lua/5.1/?.lua"
+            .. ";" .. home .. "/.luarocks/share/lua/5.1/?/init.lua"
+        ok, runner = pcall(require, "luacov.runner")
+    end
+    return ok and runner or nil
+end
+
+local coverage
+if os.getenv("KART_COVERAGE") then
+    coverage = LoadLuacov()
+    if coverage then
+        coverage.init({ exclude = { "^tests/", "^luacov" } })
+    else
+        print("KART_COVERAGE is set but luacov is not installed -- running without coverage.")
+    end
+end
+
 local total, failures = 0, 0
 
 _G.T = {}
@@ -63,4 +97,12 @@ dofile("tests/test_lc_churn.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
+
+-- Written before os.exit, which luacov's own exit hook never sees from here.
+if coverage then
+    coverage.shutdown()
+    require("luacov.reporter").report()
+    print("Coverage written to luacov.report.out (summary at the end of that file).")
+end
+
 os.exit(failures == 0 and 0 or 1)

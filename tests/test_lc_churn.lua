@@ -1335,3 +1335,39 @@ do
     T.truthy(F.Owes(council.KART.LC.pendingTrades, 92),
         "so the reminder is created for an item that really is in their bags")
 end
+
+-- /kart status must survive every state it is meant to describe
+-- ------------------------------------------------------------------------------------------------
+-- It is the one diagnostic a raider can run mid-raid and paste into an issue, so it is also the one
+-- that must not be the thing that breaks. Its failure mode is not a crash in the loot flow but a
+-- concatenation against a nil -- a locale key added to one file and not the other, a table read
+-- before it exists -- and it would surface at exactly the moment somebody needs an answer.
+--
+-- Locale parity is covered separately (tests/test_locales.lua); this covers the code path.
+do
+    local sim = NewRaid()
+    local torvi = RaidSim.Join(sim, NEWCOMER)   -- has not been told anything yet
+
+    local realPrint = print
+    local function StatusRuns(client, when)
+        _G.print = function() end               -- the output itself is not what is under test
+        local ok, err = pcall(RaidSim.As, client, client.KART.LC.PrintStatus)
+        _G.print = realPrint
+        T.truthy(ok, "/kart status runs for " .. client.name .. " " .. when ..
+            (ok and "" or (": " .. tostring(err))))
+    end
+
+    -- Nothing tracked yet, and one client that has never been told the session state.
+    StatusRuns(sim.byName.Bramor, "with no rolls on the table")
+    StatusRuns(torvi, "before anyone has answered it")
+
+    RosterSettles(sim)
+    Drop(sim, 95, F.GLOVES)
+    for _, c in ipairs(sim.clients) do StatusRuns(c, "with an item on the table") end
+
+    -- And after the lootmaster has gone, which is the state people actually run it in.
+    RaidSim.Leave(sim, "Bramor")
+    RaidSim.Promote(sim, "Merrit")
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do StatusRuns(c, "with the lootmaster gone") end
+end

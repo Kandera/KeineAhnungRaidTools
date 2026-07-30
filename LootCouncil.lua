@@ -1055,7 +1055,13 @@ function LC.PrintStatus()
 
     local moduleOn = KART_Settings.lcModuleEnabled ~= false
     print("  " .. L.LC_STATUS_MODULE .. ": " .. (moduleOn and L.LC_STATUS_ON or L.LC_STATUS_OFF))
-    print("  " .. L.LC_STATUS_SESSION .. ": " .. (LC.sessionActive and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+    -- The session line says what this client BELIEVES; the qualifier says whether that belief is an
+    -- answer or merely a starting value (see LC.sessionStateKnown). The two look identical from the
+    -- outside and behave completely differently -- a client that has never been told is still
+    -- asking, one that has been told is not -- and every reload-shaped failure so far came down to
+    -- which of the two it was (B30, B31). Worth one word in the line a raider pastes into an issue.
+    print("  " .. L.LC_STATUS_SESSION .. ": " .. (LC.sessionActive and L.LC_STATUS_ON or L.LC_STATUS_OFF)
+        .. " (" .. (LC.sessionStateKnown and L.LC_STATUS_TOLD or L.LC_STATUS_UNTOLD) .. ")")
 
     -- Where the config in force came from. "own" and "received" behave completely differently and
     -- confusing them is what made the original reports so hard to read.
@@ -1090,6 +1096,21 @@ function LC.PrintStatus()
     local lmUnit = lm ~= "" and KASC.Identity.FindUnitForKey(lm)
     print("  " .. L.LC_STATUS_LOOTMASTER .. ": " .. ((lmUnit and UnitName(lmUnit)) or (lm ~= "" and "?" or "-")))
     print("  " .. L.LC_STATUS_IS_ME .. ": " .. (LC.IsLootOwner() and L.LC_STATUS_YES or L.LC_STATUS_NO))
+
+    -- What this client is actually tracking right now. "The item did not show up for me" is the most
+    -- common report there is, and it has three different causes this line tells apart: no rolls at
+    -- all (never heard about it), rolls listed but no vote row (heard, then hidden or pruned), or
+    -- the item present and only the window missing. Sorted, because pairs order would differ between
+    -- two people comparing their output side by side.
+    local ids = {}
+    for rollID in pairs(LC.rollItems or {}) do ids[#ids + 1] = rollID end
+    table.sort(ids)
+    local held = 0
+    for _, rollID in ipairs(ids) do
+        if not LC.rollNotInOurBags[rollID] then held = held + 1 end
+    end
+    print("  " .. string.format(L.LC_STATUS_TRACKED, #ids, held, #LC.voteListRolls, #LC.councilTabs)
+        .. (#ids > 0 and (": " .. table.concat(ids, ",")) or ""))
 end
 
 -- ==========================================================================

@@ -12,3 +12,7 @@
 
 # Interne Arbeitsnotizen (Plaene, Specs, Reviews) - bleiben lokal
 docs/superpowers/
+
+# Coverage output (KART_COVERAGE=1 luajit tests/run.lua)
+luacov.stats.out
+luacov.report.out
