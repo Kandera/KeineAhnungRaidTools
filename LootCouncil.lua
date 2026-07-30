@@ -246,14 +246,16 @@ function LC.GetButtonConfig()
     -- The Transmog response is not leader-configurable: the auto-transmog setting votes with it, and
     -- a renamed or missing button would make that setting silently vote something else.
     --
-    -- SECOND TO LAST, not last. The council panel sorts candidates by vote index ascending (see the
-    -- table.sort in Council.RefreshCouncilRows), so the index order IS the priority order the council
-    -- reads top to bottom. Appended after the last configured label — "Pass" in every configuration
-    -- this guild has used — it sorted every Transmog voter BELOW the people who passed, which is
-    -- backwards: someone who wants the appearance ranks above someone who wants nothing. Reported
-    -- from a live raid. Slotting it in front of the last label also matches the manual Transmog
-    -- button the raid had configured there before this became a fixed response.
-    table.insert(result, math.max(#result, 1), {
+    -- ALWAYS LAST, and it must stay last. It was briefly moved in front of the last configured label
+    -- to fix its position in the council panel's sort order, and that was the wrong lever: the vote
+    -- index is what travels over the wire, so moving it desynchronised every client that had not yet
+    -- updated. Both lists still had six entries, so the count guard in Vote.CastVote saw nothing
+    -- wrong, and a raider on the older build pressing "Pass" was displayed to the council as
+    -- "Transmog". A whole evening's votes were read wrong that way.
+    --
+    -- The panel's ordering is a display concern and is solved where it belongs, in
+    -- LC.GetVoteSortRank below. Never reorder this list to change how something looks.
+    table.insert(result, {
         label    = KART.L.LC_BUTTON_TRANSMOG,
         r        = TRANSMOG_COLOR.r, g = TRANSMOG_COLOR.g, b = TRANSMOG_COLOR.b,
         transmog = true,
@@ -297,20 +299,42 @@ function LC.IsCollectibleItem(itemID, classID, subclassID)
     return false
 end
 
--- Index of the fixed Transmog response: second to last, directly in front of the last configured
--- label (see GetButtonConfig). Named rather than open-coded so callers never encode the position
--- themselves — it moved once already.
+-- Index of the fixed Transmog response: always the last entry (see GetButtonConfig). Named rather
+-- than open-coded so callers never encode the position themselves.
 function LC.GetTransmogButtonIndex()
-    return math.max(#LC.GetButtonConfig() - 1, 1)
+    return #LC.GetButtonConfig()
+end
+
+-- Where a vote sorts on the council panel, which is NOT the same question as which index it carries
+-- on the wire. The panel lists candidates by rank ascending, so rank order is the priority order the
+-- council reads top to bottom, and the fixed Transmog response belongs directly in front of the last
+-- configured label — someone who wants the appearance ranks above someone who wants nothing at all.
+--
+-- Doing this here rather than by reordering the button list is deliberate and was learned the hard
+-- way: the index is a wire value shared with every other client, and moving it desynchronised the
+-- raid without tripping the count guard (see GetButtonConfig). A rank is local, so it can be
+-- whatever reads best without anyone else having to agree.
+--
+-- Half steps rather than a renumbering, so an index this client cannot resolve — a vote from a
+-- client with a different button set — still sorts by its raw value instead of collapsing to 0.
+function LC.GetVoteSortRank(idx)
+    idx = tonumber(idx)
+    if not idx then return math.huge end
+    local n = #LC.GetButtonConfig()
+    if idx == n and n >= 2 then return n - 1.5 end -- the Transmog entry, in front of the last label
+    return idx
 end
 
 -- Index of the last FREELY CONFIGURED label, which the hide-irrelevant setting votes with. That is
 -- "Pass" in the default configuration and in every configuration this guild has used. A raid leader
 -- who renames the last label to something that is not a pass makes that setting vote it instead —
 -- documented in the setting's own tooltip, deliberately not guessed at from the label text.
--- With Transmog sitting in front of it, the last configured label is also the last entry overall.
+-- nil when the config holds nothing but the appended Transmog entry, which cannot happen through the
+-- settings UI (an empty field falls back to the defaults) but is cheap to be honest about.
 function LC.GetPassButtonIndex()
-    return #LC.GetButtonConfig()
+    local n = #LC.GetButtonConfig() - 1
+    if n < 1 then return nil end
+    return n
 end
 
 -- The loot owner counts as council without having to be listed in the council-member field. He is

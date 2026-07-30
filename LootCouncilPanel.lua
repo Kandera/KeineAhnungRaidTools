@@ -1093,11 +1093,14 @@ function Council.RefreshCouncilRows()
     -- the leader shrinks the button set mid-roll, a vote whose index is now out of range renders as
     -- "-" (unvoted) but still sorts among the voted rows by its stale index. Purely cosmetic, and
     -- only after an uncommon mid-roll reconfig (~1 in 100 raids) — deliberately left as-is.
+    -- Ranked, not indexed: the fixed Transmog response is the last button but belongs above the
+    -- people who passed (see LC.GetVoteSortRank). Reordering the button list to achieve that is not
+    -- an option — the index is a wire value and moving it desynchronises the raid.
     table.sort(members, function(a, b)
         if a.voteIdx ~= b.voteIdx then
             if a.voteIdx == nil then return false end
             if b.voteIdx == nil then return true end
-            return tonumber(a.voteIdx) < tonumber(b.voteIdx)
+            return LC.GetVoteSortRank(a.voteIdx) < LC.GetVoteSortRank(b.voteIdx)
         end
         return (a.short or "") < (b.short or "")
     end)
