@@ -1202,13 +1202,35 @@ function LC.HandleStateRequest(requester, requesterKey)
     -- still in one: they force-win nothing, every Auto-Pass raider keeps passing, and the item goes
     -- to a green roll (backlog B30).
     --
-    -- Only council members and the raid leader answer, so a reload costs a handful of whispers rather
-    -- than one per raider. The claim is accepted only by the person it is about (see
-    -- LC.HandleSessionResume), which is what keeps it safe to send.
+    -- Council and the raid leader answer at once, so the usual reload costs a handful of whispers
+    -- rather than one per raider. EVERY other raider answers too, just a few seconds later.
+    --
+    -- Restricting it to council was a message-volume decision, and it failed on exactly the raid
+    -- that needs it most: two council members ported out and the third had reloaded a moment ago,
+    -- so its own sessionActive was false as well. The only clients that still KNEW the session was
+    -- running were ordinary raiders, and they were not allowed to say so -- the lootmaster stayed
+    -- outside the session for the rest of the evening, force-winning nothing while every Auto-Pass
+    -- raider kept passing. Found by tests/test_lc_soak.lua, seed 87.
+    --
+    -- Cheap, because none of this happens unless the requester IS the loot owner, which means a
+    -- lootmaster reload and nothing else. Safe to repeat, because the claim is accepted only by the
+    -- person it is about and only while their session is off (see LC.HandleSessionResume), so the
+    -- late whispers that arrive after a successful resume do nothing at all. Jittered so twenty
+    -- clients do not answer in the same instant and lose the lot to the chat throttle.
     if LC.sessionActive and requesterKey and not LC.IsLootOwner()
-        and (LC.IsCouncil() or UnitIsGroupLeader("player"))
         and requesterKey == LC.GetLootOwnerKey() then
-        LC.SendLC("LC_SESSION_RESUME", requester)
+        if LC.IsCouncil() or UnitIsGroupLeader("player") then
+            LC.SendLC("LC_SESSION_RESUME", requester)
+        else
+            C_Timer.After(3 + math.random() * 4, function()
+                -- Re-checked on arrival: we may have left, lost the session, or become the owner
+                -- ourselves in the meantime.
+                if LC.sessionActive and not LC.IsLootOwner()
+                    and requesterKey == LC.GetLootOwnerKey() then
+                    LC.SendLC("LC_SESSION_RESUME", requester)
+                end
+            end)
+        end
     end
     -- Two owners answer here: the session flag belongs to the loot owner (only they can toggle it,
     -- see LC.SetSessionActive/HandleActive), the config to whoever the lootmaster field names (see
@@ -1698,7 +1720,14 @@ local RAID_EXIT_CONFIRM_DELAY = 3
 
 -- Seconds between attempts to find out whether a session is running. Bounded and backing off: a raid
 -- where nobody can answer must not have twenty clients asking forever.
-local STATE_REQ_BACKOFF = { 5, 15, 45 }
+-- The first retry comes quickly on purpose. Everything between losing the state and getting it back
+-- is time this client spends believing there is no session -- and for the LOOTMASTER that is not a
+-- cosmetic gap: LC.OnStartLootRoll returns early, so a boss dying in that window is force-won by
+-- nobody and the item leaves on a normal roll. One request can be lost (Blizzard's chat throttle
+-- drops the overflow silently), so the interval that matters is the one before the second attempt.
+-- It stays a backoff after that: a raid where nobody can answer must not have twenty clients asking
+-- forever.
+local STATE_REQ_BACKOFF = { 2, 5, 15, 45 }
 
 -- Asks the raid for the session state, and keeps asking until we actually learn it.
 --
