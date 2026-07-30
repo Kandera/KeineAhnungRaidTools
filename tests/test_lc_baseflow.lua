@@ -95,10 +95,11 @@ do
         "the lootmaster is reminded to hand it over")
 
     -- Whoever decided it must not be left staring at a live vote row for an item already given out.
+    -- Asserted directly rather than by looping over the list: the list is empty by then, so a loop
+    -- body checking each entry ran zero times and proved nothing -- it would have passed just as
+    -- happily if the item had never been added in the first place.
     for _, c in ipairs(sim.clients) do
-        for _, id in ipairs(c.KART.LC.voteListRolls) do
-            T.truthy(id ~= 43, c.name .. " no longer has the decided item in their vote window")
-        end
+        T.truthy(not HasVoteRow(c, 43), c.name .. " no longer has the decided item in their vote window")
     end
 end
 
@@ -184,8 +185,12 @@ do
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(49, nara.guid, "Upgrade") end)
     T.eq(council.KART.LC.assignedWinners[47], raider.guid, "the first copy went to one player")
     T.eq(council.KART.LC.assignedWinners[49], nara.guid, "the second to another")
-    T.eq(#Owes(lm.KART.LC.pendingTrades, 47) and 1 or 0, 1, "and the lootmaster owes both")
-    T.truthy(Owes(lm.KART.LC.pendingTrades, 49), "-- the second one included")
+    -- Both, as two separate obligations. This read `#Owes(...) and 1 or 0 == 1` before, which is the
+    -- constant 1 in Lua -- `#entry` on a hash-keyed table is 0, and 0 is truthy. It asserted nothing
+    -- about the trade and could only ever fail by crashing.
+    T.truthy(Owes(lm.KART.LC.pendingTrades, 47), "the lootmaster owes the first copy")
+    T.truthy(Owes(lm.KART.LC.pendingTrades, 49), "and the second, as a separate obligation")
+    T.eq(#lm.KART.LC.pendingTrades, 2, "two items owed, not one collapsed entry")
 end
 
 -- ===================================================================================
@@ -250,6 +255,32 @@ do
 
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(rollID, raider.guid, "BIS") end)
     T.eq(council.KART.LC.assignedWinners[rollID], raider.guid, "and it can be handed out")
+end
+
+-- An item link long enough to blow the transport's 255-byte payload cap. A Midnight drop with a
+-- full bonus-ID list gets there, and an oversized message is dropped silently by the transport --
+-- so the lootmaster's own windows would open on an item nobody else ever heard about.
+do
+    local sim, lm, council, raider = NewRaid()
+    local long = KARTTEST.AddItem({ id = 249500, name = "Deathbound Shoulderguards of the Eternal Vigil",
+        quality = 4, ilvl = 285, classID = 4, subclassID = 4, equipLoc = "INVTYPE_SHOULDER", bind = 1,
+        link = "|cffa335ee|Hitem:249500::::::::80:268::14:19:11946,10390,12043,10255,1540,10879," ..
+               "11996,10336,12356,1485,10222,10395,11304,10874,12053,10260,1545,10884,12001,10401," ..
+               "11310,10880,12059:1:28:2462:::::|h[Deathbound Shoulderguards of the Eternal Vigil]|h|r" })
+    T.truthy(#long.link + #"LC_MANUAL_START:1000000:20:" > 255,
+        "the fixture link really is long enough to blow the payload cap")
+
+    RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(long.link) end)
+    KARTTEST.AdvanceTime(0)
+
+    T.truthy(not sim.oversized, "nothing the lootmaster sent exceeded the payload cap")
+    local rollID = lm.KART.LC.voteListRolls[1]
+    for _, c in ipairs(sim.clients) do
+        T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[rollID]),
+            c.name .. " received the long-linked item as a real link")
+    end
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(rollID, 1) end)
+    T.truthy((council.KART.LC.votes[rollID] or {})[raider.guid], "and it can be voted on")
 end
 
 -- A raider cannot put items in front of the council.
@@ -460,11 +491,11 @@ do
     Drop(sim, 58, 249331)
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(58, 1) end)
 
-    -- Past the raid's configured voting window (lcVoteSeconds, 20 by default).
+    -- Past the raid's configured voting window (lcVoteSeconds, 20 by default), and let the addon's
+    -- OWN ticker do the sweeping. Calling PruneExpiredRolls from here instead would assert about the
+    -- test's call rather than about the wiring -- the ticker could be severed entirely and this would
+    -- still pass.
     KARTTEST.AdvanceTime(lm.env.KART_Settings.lcVoteSeconds + 5)
-    for _, c in ipairs(sim.clients) do
-        RaidSim.As(c, function() c.KART.LC.Vote.PruneExpiredRolls() end)
-    end
 
     T.truthy(not HasVoteRow(raider, 58), "a raider's vote row closes when the timer runs out")
     T.truthy(council.KART.LC.councilTabs[1] == 58, "the council keeps the item on its panel")

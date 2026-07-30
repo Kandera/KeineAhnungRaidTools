@@ -96,10 +96,17 @@ end
 -- realistic case and also the awkward one (peers hear about the roll before their own event).
 function F.Drop(sim, rollID, itemID, opts)
     opts = opts or {}
-    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed,
-                                   canTransmog = opts.canTransmog, bop = opts.bop }
+    -- noRollFor marks the clients Blizzard never raised this roll on. It has to reach the API stub,
+    -- not just skip the call: on those clients GetLootRollItemLink answers nil forever, and that is
+    -- precisely the state LC.HandleStart's rebuild-from-payload exists for.
+    local notFor = {}
     for _, c in ipairs(sim.clients) do
-        if not (opts.noRollFor and opts.noRollFor[c.name]) then
+        if opts.noRollFor and opts.noRollFor[c.name] then notFor[c.unit] = true end
+    end
+    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed, canTransmog = opts.canTransmog,
+                                   bop = opts.bop, notFor = notFor, linkPending = opts.linkPending }
+    for _, c in ipairs(sim.clients) do
+        if not notFor[c.unit] then
             RaidSim.As(c, function() c.KART.LC.OnStartLootRoll(rollID) end)
         end
     end

@@ -102,9 +102,11 @@ do
     T.eq(#torvi.env.KART_LootHistory, 1, "and reaches someone who joined afterwards")
     T.eq(torvi.env.KART_LootHistory[1] and torvi.env.KART_LootHistory[1].winner,
          lm.env.KART_LootHistory[1].winner, "naming the same winner")
-    -- Several peers hold the same entry and all of them answer; the joiner must end up with one row,
-    -- not one per answerer.
-    T.eq(#torvi.env.KART_LootHistory, 1, "exactly once, however many peers answered")
+    -- Every peer holds that entry and every one of them answers, so the deduplication is the thing
+    -- worth asserting -- and it needs the number of answers to compare against, or "one row" says
+    -- nothing. (The previous version repeated the line above verbatim and called it a dedup check.)
+    T.truthy(#RaidSim.Sent(sim, "LC_HIST_ENTRY") > 1, "more than one peer answered the catch-up")
+    T.eq(#torvi.env.KART_LootHistory, 1, "and the joiner still ends up with exactly one row")
 end
 
 -- ===================================================================================
@@ -429,13 +431,18 @@ end
 -- An empty-field config claims the raid leader's authority, so only the raid leader may send one.
 do
     local sim, _, council = NewRaid()
-    local before = council.KART.LC.raidConfig.buttonLabels
+    local odin = sim.byName.Odin
+    -- The baseline has to come from the client being asserted on. Reading it off a different client
+    -- assumes the very thing this suite exists to disprove -- that two clients agree -- and goes
+    -- fully vacuous if the config ever stops arriving, since nil equals nil.
+    local before = odin.KART.LC.raidConfig.buttonLabels
+    T.truthy(before and before ~= "", "the raider has a real config to begin with")
     RaidSim.As(council, function()
         council.env.KART_Settings.lcButtonLabels = "A;B;C;D;E"
         -- Straight onto the wire, bypassing the ownership gate a real client would hit first.
         council.KART.LC.SendLC("LC_CONFIG:4:A;B;C;D;E:0::Haerri")
     end)
-    T.eq(sim.byName.Odin.KART.LC.raidConfig.buttonLabels, before,
+    T.eq(odin.KART.LC.raidConfig.buttonLabels, before,
         "a config with an empty Lootmaster field is ignored unless the raid leader sent it")
 end
 
@@ -501,7 +508,7 @@ end
 -- the evening and no second question -- which is verbatim the live report the raid-exit guard was
 -- written from ("no session opened for the boss, and afterwards it asked again").
 do
-    local sim, lm = NewRaid()
+    local _, lm = NewRaid()
     RaidSim.As(lm, function() lm.KART.LC.SetSessionActive(false) end)
 
     RaidSim.As(lm, function()

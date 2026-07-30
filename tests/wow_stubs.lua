@@ -44,6 +44,9 @@ KARTTEST.SetNSAPI(false)
 -- the unit token of whichever client's code is currently executing; with it unset (every other
 -- test file) "player" behaves as it always did.
 KARTTEST.activeUnit = nil
+-- Forward declaration: the group-API stubs further down define this, and the unit stubs above them
+-- need it. Same file, one chunk, so the upvalue is shared.
+local isSolo
 local function resolve(unit)
     if unit == "player" and KARTTEST.activeUnit then unit = KARTTEST.activeUnit end
     return roster[unit]
@@ -56,7 +59,15 @@ function _G.UnitName(unit)
     return m.name, m.realm
 end
 function _G.UnitGUID(unit) local m = resolve(unit) return m and m.guid or nil end
-function _G.UnitIsGroupLeader(unit) local m = resolve(unit) return m and m.leader or false end
+-- A client that reads itself as ungrouped is not a raid leader either. Leaving the leader flag on
+-- during a simulated blip produced a state the game cannot be in -- no group, no members, still
+-- leader -- and every raid-leader fallback in the addon took the wrong branch through it, in the
+-- very tests that defend against blips.
+function _G.UnitIsGroupLeader(unit)
+    if isSolo() and (unit == "player" or unit == KARTTEST.activeUnit) then return false end
+    local m = resolve(unit)
+    return m and m.leader or false
+end
 function _G.UnitIsGroupAssistant(unit) local m = resolve(unit) return m and m.assist or false end
 function _G.UnitIsConnected(unit) local m = resolve(unit) return m == nil or m.offline ~= true end
 function _G.UnitClass(unit)
@@ -91,7 +102,17 @@ _G.C_Timer = {
         KARTTEST.timers[#KARTTEST.timers + 1] =
             { at = KARTTEST.now + (delay or 0), fn = fn, ctx = captureContext() }
     end,
-    NewTicker = function(_, fn) return { Cancel = function() end, _fn = fn } end,
+    -- A ticker that actually ticks. It used to be a stub that never fired, which made every
+    -- countdown, sweep and timeout in the addon dead in tests: the vote window's own pruner, the
+    -- council panel's timer and the trade-timeout check. A test that then called the pruner itself
+    -- was asserting about its own call rather than about the addon's wiring -- cut the ticker out of
+    -- the addon entirely and the suite stayed green while no vote row ever closed in a raid.
+    NewTicker = function(interval, fn)
+        local entry = { at = KARTTEST.now + (interval or 1), fn = fn, every = interval or 1,
+                        ctx = captureContext() }
+        KARTTEST.timers[#KARTTEST.timers + 1] = entry
+        return { Cancel = function() entry.every = nil; entry.fn = function() end end }
+    end,
     NewTimer = function(delay, fn)
         local entry = { at = KARTTEST.now + (delay or 0), fn = fn, ctx = captureContext() }
         KARTTEST.timers[#KARTTEST.timers + 1] = entry
@@ -114,6 +135,11 @@ function KARTTEST.AdvanceTime(seconds)
         next_.fn()
         if restore then restore(prev) end
         ran = ran + 1
+        -- A ticker re-arms itself, unless it was cancelled while running.
+        if next_.every then
+            next_.at = KARTTEST.now + next_.every
+            KARTTEST.timers[#KARTTEST.timers + 1] = next_
+        end
     end
     KARTTEST.now = target
     return ran
@@ -123,7 +149,7 @@ end
 -- moment during any roster change where the APIs briefly report no group at all on ONE machine
 -- while everyone else reads normally. A shared flag cannot express either.
 KARTTEST.solo = {} -- [unitToken] = true: this client alone reads the world as ungrouped
-local function isSolo()
+function isSolo()
     return KARTTEST.activeUnit ~= nil and KARTTEST.solo[KARTTEST.activeUnit] == true
 end
 function _G.IsInRaid() if isSolo() then return false end return isRaid end
@@ -162,15 +188,26 @@ _G.time = os.time
 -- both ways: `f:SetPoint(...)` is a method, `f.bg:SetAlpha(...)` is a child region created earlier
 -- by a factory. A plain function covered the first and broke on the second. Calling one returns its
 -- first argument, which for a method call is the frame itself, so chains keep working.
+-- An unknown key answers nil, like a real frame -- with one exception: a PascalCase name is a
+-- Blizzard frame METHOD, and there are hundreds of those the addon may call. Those return a callable
+-- that hands back its first argument, so `f:SetPoint(...)` chains keep working.
+--
+-- The blanket "every unknown key is a truthy child table" this replaces was the single most
+-- expensive lie in the harness. Every `if f.ticker then return end` and `if not row.x then` took the
+-- wrong branch silently -- the vote window's own countdown ticker was NEVER created in any test
+-- because of exactly that line, so the expiry sweep it drives went untested while a test that called
+-- the sweep by hand reported it working. Lowercase keys are how this addon stores its own state on a
+-- frame, so the split is reliable here.
 local frameMeta
+local function methodStub() end
 frameMeta = {
-    __index = function(t, k)
-        local child = setmetatable({}, frameMeta)
-        rawset(t, k, child)
-        return child
+    __index = function(_, k)
+        if type(k) == "string" and k:match("^%u") then return methodStub end
+        return nil
     end,
     __call = function(_, first) return first end,
 }
+methodStub = function(first) return first end
 -- KAGS creates one real GameTooltip-templated frame at load time, named "KART_GearScanTooltip",
 -- and reads its lines back out of _G["KART_GearScanTooltipTextLeft"<i>]:GetText(). Give that one
 -- frame real ClearLines/SetInventoryItem/NumLines behavior, driven by a settable table of lines
@@ -329,14 +366,22 @@ KARTTEST.items = {} -- [itemID] = { name =, link =, quality =, ilvl =, classID =
 
 function KARTTEST.AddItem(def)
     KARTTEST.items[def.id] = def
-    def.link = def.link or ("|cffa335ee|Hitem:" .. def.id .. "::::::::80:::::|h[" .. def.name .. "]|h|r")
+    -- Shaped like a real Midnight drop, bonus IDs and all. The old skeleton link was ~55 bytes where
+    -- a live one is 100-200+, which meant no message the suite produced ever came close to the
+    -- transport's 255-byte cap and none of the addon's three guards against it was ever exercised.
+    def.link = def.link or ("|cffa335ee|Hitem:" .. def.id ..
+        "::::::::80:268::14:8:11946,10390,12043,10255,1540,10879,11996:::::|h[" .. def.name .. "]|h|r")
     return def
 end
 
+-- The real item API takes an ID, an "item:NNN" string or a full link interchangeably. A bare numeric
+-- STRING is the form the addon actually passes on the path that rebuilds an item from a message
+-- payload -- payload captures are strings -- and a stub that only understood numbers and links made
+-- that whole rebuild answer nil.
 local function itemIDOf(v)
     if type(v) == "number" then return v end
     if type(v) ~= "string" then return nil end
-    return tonumber(v:match("item:(%d+)"))
+    return tonumber(v:match("item:(%d+)")) or tonumber(v)
 end
 
 local function itemOf(v)
@@ -404,24 +449,53 @@ end
 KARTTEST.lootRolls = {}
 KARTTEST.rolled = {}   -- [rollID] = { [unitToken] = rollType }
 
-function _G.GetLootRollItemInfo(rollID)
+-- A loot roll exists PER CLIENT. Blizzard raises START_LOOT_ROLL only on clients eligible for that
+-- item, and on everyone else GetLootRollItemInfo/Link answer nil forever -- which is the entire
+-- reason LC.HandleStart has to rebuild the link from the message payload. A shared table answered
+-- every client with a full link, so that rebuild path was never executed by any test and three
+-- raiders' worth of "???" could have come straight back unnoticed.
+--
+-- `notFor` marks the clients this roll never reached; `rolledBy` closes it for whoever has answered
+-- it, because the real API goes blank the moment you roll and the addon uses exactly that as its
+-- "is this roll still live?" probe.
+local function rollFor(rollID)
     local r = KARTTEST.lootRolls[rollID]
     if not r or r.live == false then return nil end
+    local unit = KARTTEST.activeUnit or "player"
+    if r.notFor and r.notFor[unit] then return nil end
+    if r.rolledBy and r.rolledBy[unit] then return nil end
+    return r
+end
+
+function _G.GetLootRollItemInfo(rollID)
+    local r = rollFor(rollID)
+    if not r then return nil end
     local it = KARTTEST.items[r.itemID]
     return "Interface\\Icons\\texture", it and it.name, 1, it and it.quality, r.bop ~= false,
            r.canNeed ~= false, true, false, nil, nil, nil, nil, r.canTransmog == true
 end
 
 function _G.GetLootRollItemLink(rollID)
-    local r = KARTTEST.lootRolls[rollID]
-    if not r or r.live == false then return nil end
+    local r = rollFor(rollID)
+    if not r then return nil end
+    -- `linkPending` models the real transient the addon retries for: the roll exists and its texture
+    -- is there, but the link has not propagated to this client yet. Deliberately NOT tied to the
+    -- item cache -- GetLootRollItemLink comes with the roll and answers for items GetItemInfo still
+    -- knows nothing about, which is exactly why the addon can rebuild a name from an itemID at all.
+    if r.linkPending then return nil end
     local it = KARTTEST.items[r.itemID]
     return it and it.link or nil
 end
 
 function _G.RollOnLoot(rollID, rollType)
     KARTTEST.rolled[rollID] = KARTTEST.rolled[rollID] or {}
-    KARTTEST.rolled[rollID][KARTTEST.activeUnit or "player"] = rollType
+    local unit = KARTTEST.activeUnit or "player"
+    KARTTEST.rolled[rollID][unit] = rollType
+    local r = KARTTEST.lootRolls[rollID]
+    if r then
+        r.rolledBy = r.rolledBy or {}
+        r.rolledBy[unit] = true
+    end
 end
 
 -- Player info the council panel renders per candidate ------------------------------------

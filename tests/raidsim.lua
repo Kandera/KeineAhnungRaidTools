@@ -273,6 +273,14 @@ function RaidSim.Install(sim)
         local from = RaidSim.active
         if not from then error("raidsim: a message was sent with no active client", 0) end
         sim.log[#sim.log + 1] = { from = from.name, msg = msg, channel = channel, target = target }
+        -- The transport caps a payload at 255 bytes and drops anything longer without telling the
+        -- sender. The addon carries three separate guards against that cap; none of them was
+        -- reachable from a harness that delivered a message of any length.
+        if #msg > 255 then
+            sim.oversized = sim.oversized or {}
+            sim.oversized[#sim.oversized + 1] = { from = from.name, bytes = #msg, msg = msg }
+            return
+        end
         -- A message that leaves but never lands. Blizzard's chat rate limiter drops the overflow
         -- SILENTLY and SendAddonMessage's return code is discarded, so the sender cannot tell -- and
         -- an addon whose recovery depends on one unacknowledged message has no way back. Anything
@@ -282,7 +290,11 @@ function RaidSim.Install(sim)
         end
         local sender = from.name .. "-" .. from.realm
         for _, to in ipairs(sim.clients) do
-            if to ~= from and (channel ~= "WHISPER" or target == sender or target == to.name
+            -- A whisper reaches its target and nobody else. `target == sender` used to be accepted
+            -- here as well, which delivered a whisper addressed to the SENDER'S OWN name to every
+            -- peer -- so a reply sent to the wrong target still reached the right one, and a bug
+            -- where nobody in the game receives the answer looked like a pass.
+            if to ~= from and (channel ~= "WHISPER" or target == to.name
                                or target == to.name .. "-" .. to.realm) then
                 RaidSim.As(to, function() to.KASC.Dispatch(msg, channel, sender) end)
             end
