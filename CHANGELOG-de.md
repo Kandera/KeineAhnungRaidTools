@@ -30,6 +30,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Auf ein Item, dessen Daten spät eintreffen, wird gewartet**, statt es kommentarlos zu überspringen.
 - **Ein Raidleiter, der ohne eingetragenen Lootmaster verteilt, behält die Hoheit über die raidweiten Einstellungen**, statt sie im Moment des Sendens zu verlieren.
 - **Die Übergabe der Lootmaster-Rolle erreicht den Raid wieder.**
+- **Wer später dazukommt, bekommt die vollständige Loot-History** — bisher fehlte eines von zwei gleichen Items, die an dieselbe Person gingen.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

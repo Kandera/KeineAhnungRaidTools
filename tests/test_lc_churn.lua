@@ -757,3 +757,27 @@ do
     T.truthy(branch and branch:find("CheckRaidJoin", 1, true),
         "zoning in or reloading re-runs the Loot Council session recovery (B31)")
 end
+
+-- ===================================================================================
+-- The same item, twice, to the same person -- and someone turns up afterwards
+-- ===================================================================================
+-- A boss dropping two of the same token and the council handing both to the same raider is
+-- ordinary. Every client that was there logs two awards. The catch-up sync has to deliver two as
+-- well: it is what a council member who joins late reads to see who is already owed something,
+-- and one award silently missing there is a decision made on wrong information.
+--
+-- Found by tests/test_lc_soak.lua (seed 135), which is the whole reason that file exists.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 97, F.GLOVES)
+    Drop(sim, 98, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(97, raider.guid, "BIS") end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(98, raider.guid, "BIS") end)
+    T.eq(#lm.env.KART_LootHistory, 2, "both awards are in the lootmaster's own log")
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(15)
+
+    T.eq(#torvi.env.KART_LootHistory, 2, "and both reach someone who joined afterwards")
+end

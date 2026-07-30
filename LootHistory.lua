@@ -1086,7 +1086,17 @@ function LH.HandleHistoryEntry(payload, senderKey)
     for _, e in ipairs(KART_LootHistory) do
         local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
         local sameItem = SameItemAs(e)
-        if sameWinner and sameItem and math.abs((e.time or 0) - t) <= 5 then
+        -- The rollID is what tells two awards apart when nothing else does. A boss dropping the
+        -- same token twice and the council handing both to the same raider within a few seconds
+        -- matches on winner, item AND the clock-skew window — so without this the second award was
+        -- read as a re-send of the first and dropped. Everyone who was in the raid logged both
+        -- (LH.LogHistory keys on the rollID); only whoever caught up later ended up with one, and
+        -- the council reads exactly that list to see who is already owed something.
+        --
+        -- Only when BOTH sides have one: a manual or legacy entry without a rollID still falls back
+        -- to winner + item + the time window, which is all it has.
+        local sameRoll = rollID == nil or e.rollID == nil or e.rollID == rollID
+        if sameWinner and sameItem and sameRoll and math.abs((e.time or 0) - t) <= 5 then
             return -- already have it (e.g. another peer answered first)
         end
     end
