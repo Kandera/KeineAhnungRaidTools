@@ -38,15 +38,69 @@ KARTTEST.SetRaid({})
 KARTTEST.SetNSAPI(false)
 
 -- Unit API ----------------------------------------------------------------------------
-function _G.UnitExists(unit) return roster[unit] ~= nil end
+-- "player" is not a fixed row. tests/raidsim.lua runs several real clients in one process, and each
+-- of them has to see itself when it asks about "player" -- that is what makes an addon message
+-- sent by one and received by another mean different things on each side. KARTTEST.activeUnit is
+-- the unit token of whichever client's code is currently executing; with it unset (every other
+-- test file) "player" behaves as it always did.
+KARTTEST.activeUnit = nil
+local function resolve(unit)
+    if unit == "player" and KARTTEST.activeUnit then unit = KARTTEST.activeUnit end
+    return roster[unit]
+end
+
+function _G.UnitExists(unit) return resolve(unit) ~= nil end
 function _G.UnitName(unit)
-    local m = roster[unit]
+    local m = resolve(unit)
     if not m then return nil end
     return m.name, m.realm
 end
-function _G.UnitGUID(unit) return roster[unit] and roster[unit].guid or nil end
-function _G.UnitIsGroupLeader(unit) return roster[unit] and roster[unit].leader or false end
-function _G.UnitIsGroupAssistant(unit) return roster[unit] and roster[unit].assist or false end
+function _G.UnitGUID(unit) local m = resolve(unit) return m and m.guid or nil end
+function _G.UnitIsGroupLeader(unit) local m = resolve(unit) return m and m.leader or false end
+function _G.UnitIsGroupAssistant(unit) local m = resolve(unit) return m and m.assist or false end
+function _G.UnitIsConnected(unit) local m = resolve(unit) return m == nil or m.offline ~= true end
+function _G.UnitClass(unit)
+    local m = resolve(unit)
+    if not m then return nil end
+    return m.class or "WARRIOR", m.classFile or m.class or "WARRIOR"
+end
+function _G.UnitIsUnit(a, b)
+    local ma, mb = resolve(a), resolve(b)
+    return ma ~= nil and ma == mb
+end
+
+-- Timers ------------------------------------------------------------------------------
+-- Driven, not real: a test advances the clock deliberately so a retry or a confirmation delay can
+-- be observed instead of waited for. KARTTEST.now is the same clock GetTime() reports.
+KARTTEST.timers = {}
+_G.C_Timer = {
+    After = function(delay, fn)
+        KARTTEST.timers[#KARTTEST.timers + 1] = { at = KARTTEST.now + (delay or 0), fn = fn }
+    end,
+    NewTicker = function(_, fn) return { Cancel = function() end, _fn = fn } end,
+    NewTimer = function(delay, fn)
+        local entry = { at = KARTTEST.now + (delay or 0), fn = fn }
+        KARTTEST.timers[#KARTTEST.timers + 1] = entry
+        return { Cancel = function() entry.fn = function() end end }
+    end,
+}
+
+-- Advances the clock by `seconds` and fires everything due, in time order. Returns how many ran.
+function KARTTEST.AdvanceTime(seconds)
+    local target = KARTTEST.now + (seconds or 0)
+    local ran = 0
+    while true do
+        table.sort(KARTTEST.timers, function(a, b) return a.at < b.at end)
+        local next_ = KARTTEST.timers[1]
+        if not next_ or next_.at > target then break end
+        table.remove(KARTTEST.timers, 1)
+        KARTTEST.now = next_.at
+        next_.fn()
+        ran = ran + 1
+    end
+    KARTTEST.now = target
+    return ran
+end
 function _G.IsInRaid() return isRaid end
 function _G.IsInGroup() return count > 0 end
 function _G.GetNumGroupMembers() return count end
@@ -79,13 +133,18 @@ _G.time = os.time
 --   catch-all's frame-returning stub.
 -- HookScript is deliberately left on the catch-all: nothing under test invokes a hooked
 -- handler, only ordinary SetScript ones, so a real implementation isn't needed yet.
+-- Unknown keys return a value that is BOTH callable and indexable, because addon code uses frames
+-- both ways: `f:SetPoint(...)` is a method, `f.bg:SetAlpha(...)` is a child region created earlier
+-- by a factory. A plain function covered the first and broke on the second. Calling one returns its
+-- first argument, which for a method call is the frame itself, so chains keep working.
 local frameMeta
 frameMeta = {
     __index = function(t, k)
-        local fn = function(...) return t end
-        rawset(t, k, fn)
-        return fn
+        local child = setmetatable({}, frameMeta)
+        rawset(t, k, child)
+        return child
     end,
+    __call = function(_, first) return first end,
 }
 -- KAGS creates one real GameTooltip-templated frame at load time, named "KART_GearScanTooltip",
 -- and reads its lines back out of _G["KART_GearScanTooltipTextLeft"<i>]:GetText(). Give that one
@@ -120,6 +179,31 @@ function _G.CreateFrame(_, name, _, _)
 
     function f:GetWidth() return 0 end
     function f:GetHeight() return 0 end
+
+    -- Getters that must answer with something other than a frame, or callers that build strings and
+    -- run loops from them go wrong in ways that look nothing like their cause -- a name concatenated
+    -- into a lookup, a region count driving a for loop.
+    function f:GetName() return name end
+    function f:GetObjectType() return "Frame" end
+    function f:GetNumRegions() return 0 end
+    function f:GetNumPoints() return 0 end
+    function f:GetRegions() return nil end
+    function f:GetID() return 0 end
+
+    local shown = true
+    function f:Show() shown = true; return f end
+    function f:Hide() shown = false; return f end
+    function f:SetShown(v) shown = not not v; return f end
+    function f:IsShown() return shown end
+    function f:IsVisible() return shown end
+
+    local text = ""
+    function f:SetText(v) text = tostring(v or ""); return f end
+    function f:GetText() return text end
+    -- Layout code sizes badges and columns from measured text, so this has to be a number. Roughly
+    -- font-size-agnostic: enough that "wider text is wider" holds, which is all any caller asks.
+    function f:GetStringWidth() return #text * 6 end
+    function f:GetStringHeight() return 12 end
 
     -- Scale and backdrop get real behavior for the pixel-border tests: SetPixelBackdrop reads the
     -- frame's effective scale to size its border, and RefreshPixelBorders has to hand the colors
@@ -196,9 +280,150 @@ function _G.GetAverageItemLevel() return 0, KARTTEST.equippedIlvl or 0 end
 -- [link] = equip location string (e.g. "INVTYPE_WEAPONMAINHAND"), so a test can give a fake
 -- item link a configurable equip location without a real client's item database.
 KARTTEST.equipLocs = {}
+
+-- Item database ------------------------------------------------------------------------
+-- Registered by a test, keyed by itemID. Fixtures are taken from the guild's real loot history
+-- rather than invented, so classID/subclassID are the values the live client actually reports.
+KARTTEST.items = {} -- [itemID] = { name =, link =, quality =, ilvl =, classID =, subclassID =, equipLoc =, bind =, cached = }
+
+function KARTTEST.AddItem(def)
+    KARTTEST.items[def.id] = def
+    def.link = def.link or ("|cffa335ee|Hitem:" .. def.id .. "::::::::80:::::|h[" .. def.name .. "]|h|r")
+    return def
+end
+
+local function itemIDOf(v)
+    if type(v) == "number" then return v end
+    if type(v) ~= "string" then return nil end
+    return tonumber(v:match("item:(%d+)"))
+end
+
+local function itemOf(v)
+    local id = itemIDOf(v)
+    return id and KARTTEST.items[id] or nil
+end
+
+-- An uncached item answers nil from GetItemInfo, exactly as the live client does before the server
+-- has sent it -- which is the state the "???" bug lived in.
 _G.C_Item = {
-    GetItemInfoInstant = function(link) return nil, nil, nil, KARTTEST.equipLocs[link] end,
+    GetItemInfo = function(v)
+        local it = itemOf(v)
+        if not it or it.cached == false then return nil end
+        return it.name, it.link, it.quality, it.ilvl, nil, nil, nil, nil, it.equipLoc,
+               nil, nil, it.classID, it.subclassID, it.bind
+    end,
+    GetItemInfoInstant = function(v)
+        local it = itemOf(v)
+        -- Falls back to the flat equipLocs table the gear-scan tests drive, which predates the item
+        -- database and only ever needed the fourth return.
+        if not it then return nil, nil, nil, KARTTEST.equipLocs[v] end
+        return it.id, nil, nil, it.equipLoc, nil, it.classID, it.subclassID
+    end,
+    GetItemIconByID = function(v)
+        local it = itemOf(v)
+        return it and ("Interface\\Icons\\" .. it.name) or nil
+    end,
 }
+
+-- Item:CreateFromItemID():ContinueOnItemLoad(cb) -- the event-driven escape the addon uses when
+-- polling has given up. The callback fires when a test marks the item cached.
+KARTTEST.pendingItemLoads = {}
+local function itemLoader(id)
+    return {
+        ContinueOnItemLoad = function(_, cb)
+            local it = KARTTEST.items[id]
+            if it and it.cached ~= false then return cb() end
+            KARTTEST.pendingItemLoads[id] = KARTTEST.pendingItemLoads[id] or {}
+            table.insert(KARTTEST.pendingItemLoads[id], cb)
+        end,
+        GetItemID = function() return id end,
+    }
+end
+
+_G.Item = {
+    CreateFromItemID   = function(_, id) return itemLoader(type(id) == "number" and id or itemIDOf(id)) end,
+    CreateFromItemLink = function(_, link) return itemLoader(itemIDOf(link)) end,
+}
+-- Called both as Item:CreateFromItemID(id) and Item.CreateFromItemID(id) in the wild; accept either
+-- by ignoring a leading self that is the Item table itself.
+local rawCreateID, rawCreateLink = _G.Item.CreateFromItemID, _G.Item.CreateFromItemLink
+_G.Item.CreateFromItemID = function(a, b) if a == _G.Item then return rawCreateID(a, b) end return rawCreateID(nil, a) end
+_G.Item.CreateFromItemLink = function(a, b) if a == _G.Item then return rawCreateLink(a, b) end return rawCreateLink(nil, a) end
+
+function KARTTEST.CacheItem(id)
+    local it = KARTTEST.items[id]
+    if it then it.cached = true end
+    for _, cb in ipairs(KARTTEST.pendingItemLoads[id] or {}) do cb() end
+    KARTTEST.pendingItemLoads[id] = nil
+end
+
+-- Blizzard's group loot ------------------------------------------------------------------
+-- [rollID] = { itemID =, canNeed =, canTransmog =, live = }. `live` false models a roll this client
+-- never got or that has already been rolled -- the case LC.HandleStart exists for.
+KARTTEST.lootRolls = {}
+KARTTEST.rolled = {}   -- [rollID] = { [unitToken] = rollType }
+
+function _G.GetLootRollItemInfo(rollID)
+    local r = KARTTEST.lootRolls[rollID]
+    if not r or r.live == false then return nil end
+    local it = KARTTEST.items[r.itemID]
+    return "Interface\\Icons\\texture", it and it.name, 1, it and it.quality, r.bop ~= false,
+           r.canNeed ~= false, true, false, nil, nil, nil, nil, r.canTransmog == true
+end
+
+function _G.GetLootRollItemLink(rollID)
+    local r = KARTTEST.lootRolls[rollID]
+    if not r or r.live == false then return nil end
+    local it = KARTTEST.items[r.itemID]
+    return it and it.link or nil
+end
+
+function _G.RollOnLoot(rollID, rollType)
+    KARTTEST.rolled[rollID] = KARTTEST.rolled[rollID] or {}
+    KARTTEST.rolled[rollID][KARTTEST.activeUnit or "player"] = rollType
+end
+
+-- Player info the council panel renders per candidate ------------------------------------
+function _G.GetGuildInfo(unit)
+    local m = resolve(unit)
+    if not m or not m.guildRank then return nil end
+    return "Guild", m.guildRank, 1
+end
+function _G.UnitLevel() return 80 end
+function _G.GetItemQualityColor() return 1, 1, 1, "|cffffffff" end
+function _G.CanInspect() return false end
+function _G.NotifyInspect() end
+function _G.ClearInspectPlayer() end
+function _G.CheckInteractDistance() return false end
+function _G.InCombatLockdown() return false end
+function _G.IsShiftKeyDown() return false end
+function _G.IsControlKeyDown() return false end
+function _G.PlaySound() end
+KARTTEST.instance = { name = "The Voidspire", difficultyID = 16, difficultyName = "Mythic" }
+function _G.GetInstanceInfo()
+    local i = KARTTEST.instance
+    return i.name, "raid", i.difficultyID, i.difficultyName, 20, 0, false, 2912
+end
+function _G.CreateColor(r, g, b, a)
+    return { r = r, g = g, b = b, a = a,
+             GetRGB = function(s) return s.r, s.g, s.b end,
+             GetRGBA = function(s) return s.r, s.g, s.b, s.a end,
+             GenerateHexColor = function() return "ffffffff" end }
+end
+
+-- Chat / misc ---------------------------------------------------------------------------
+function _G.SendChatMessage() end
+function _G.IsInGuild() return false end
+_G.UISpecialFrames = {}
+function _G.StaticPopup_Show() end
+function _G.StaticPopup_Hide() end
+_G.MenuUtil = { CreateContextMenu = function() end }
+_G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = 1, 2
+_G.CLASS_ICON_TEXCOORDS = {}
+_G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
+_G.ITEM_QUALITY_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1, hex = "|cffffffff" } end })
+_G.YES, _G.NO, _G.ACCEPT, _G.CANCEL, _G.OKAY, _G.CLOSE, _G.UNKNOWN = "Yes", "No", "Accept", "Cancel", "Okay", "Close", "Unknown"
+_G.GameTooltip = _G.CreateFrame("Frame")
 
 -- Socket text globals: KAGS scans _G for every "EMPTY_SOCKET_*" string rather than hardcoding
 -- them, so the harness needs at least one to exercise that path.
