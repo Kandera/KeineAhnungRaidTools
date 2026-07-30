@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Blizzard's own confirmation dialogs work again.** Upgrading an item could be refused outright until you reloaded.
 - **Tier set tokens go through the Loot Council again**, instead of being rolled on the normal way by nobody.
+- **Toys stay out of the Loot Council**, instead of being force-won by the lootmaster.
 - **Items show their icon for players whose client had no loot roll of its own**, and their name as soon as the item is known, instead of a question mark all vote long.
 - **An item disappears from the vote window of whoever decided it.**
 - **Transmog votes are listed above the players who passed.**

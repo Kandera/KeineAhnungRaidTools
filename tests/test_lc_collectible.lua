@@ -54,10 +54,25 @@ T.eq(LC.IsCollectibleItem(502, MISC, 0), true, "an item the toy box claims is a 
 -- ...and none of those lookups may drag a token in with them.
 T.eq(LC.IsCollectibleItem(249364, MISC, 0), false, "a token is still not a collectible once the journals hold entries")
 
--- Everything outside Miscellaneous is decided before any journal is consulted -------------------------
-mounts[600] = 43 -- would say "mount" if it were ever asked
-T.eq(LC.IsCollectibleItem(600, 4, 0), false, "armor (classID 4) is never a collectible")
-T.eq(LC.IsCollectibleItem(600, 2, 0), false, "a weapon (classID 2) is never a collectible")
+-- Ordinary gear is never a collectible, whatever class it is in ---------------------------------------
+T.eq(LC.IsCollectibleItem(600, 4, 0), false, "armor (classID 4) is not a collectible")
+T.eq(LC.IsCollectibleItem(601, 2, 0), false, "a weapon (classID 2) is not a collectible")
+
+-- ...but a collectible OUTSIDE Miscellaneous is still a collectible -----------------------------------
+-- The journals used to sit behind a `classID == 15` gate, on the assumption that toys share the
+-- tokens' bucket. Measured in a live client 2026-07-30: of one player's 41 toys, 39 are classID 15
+-- and 2 are classID 0 (Consumable) -- 229828 is 0/8. Those two never reached the toy lookup, so a
+-- toy read as ordinary Bind-on-Pickup gear: force-won by the lootmaster, passed by every Auto-Pass
+-- raider. The journals answer first now, before the class is looked at.
+toys[229828] = 229828
+T.eq(LC.IsCollectibleItem(229828, 0, 8), true, "a real toy in Consumable (classID 0) is a collectible")
+toys[229828] = nil
+mounts[602] = 44
+T.eq(LC.IsCollectibleItem(602, 0, 8), true, "so is a mount the journal claims from outside Miscellaneous")
+mounts[602] = nil
+pets[603] = "Critter"
+T.eq(LC.IsCollectibleItem(603, 0, 8), true, "so is a pet the journal claims from outside Miscellaneous")
+pets[603] = nil
 
 -- Anything else in Miscellaneous stays out without being enumerated ------------------------------------
 -- This is the property that matters: the rule must not need teaching about each new compartment
@@ -75,29 +90,24 @@ T.eq(LC.IsCollectibleItem(nil, MISC, 0), true, "subclass 0 without an itemID can
 -- Outside Miscellaneous nothing changes: unresolved still means "ordinary gear, let Council have it".
 T.eq(LC.IsCollectibleItem(nil, nil, nil), false, "an entirely unresolved item is not a collectible")
 
--- KNOWN GAP (docs/BACKLOG.md B56): a toy is not recognised until the Toy Box has loaded
+-- B56 (docs/BACKLOG.md): the Toy Box is trustworthy, measured rather than assumed
 -- ----------------------------------------------------------------------------------------------
--- A toy is classID 15 / subclass 0 -- the same pair as every tier token -- so C_ToyBox.GetToyInfo is
--- the only thing keeping it out of Council. That call answers nil whenever the Toy Box data has not
--- loaded for the session, e.g. on a fresh login where Collections was never opened. The toy then
--- reads as "not a collectible", the lootmaster force-wins it and every Auto-Pass raider passes: the
--- standing rule that collectibles never enter Loot Council, broken.
+-- The entry claimed C_ToyBox.GetToyInfo answers nil until the Toy Box has loaded -- e.g. on a fresh
+-- login where Collections was never opened -- which would let a toy read as ordinary gear. Measured
+-- in a live client on 2026-07-30, immediately after a restart with Collections untouched: the box
+-- already held all 1144 toys, of which 425 were learned; GetToyInfo answered for an UNCOLLECTED toy
+-- (229828); and it answered while the box's own display filter was down to 41 entries. None of the
+-- three conditions the entry assumed hold, so the journals may be relied on as the discriminator.
 --
--- Pinned as it behaves TODAY, so the gap is visible and a fix cannot land without its own test.
---
--- Deliberately NOT fixed by flipping the unknown case to "collectible". That direction is worse: a
--- lootmaster whose Toy Box happens to read empty would then keep every TIER TOKEN out of Council,
--- on the most contested drop in the instance. Which way to jump depends on whether "the data is not
--- loaded" can be told apart from "this player owns no toys" at all, and that is a measurement in a
--- live client, not something to reason out here.
+-- The gap the measurement did find -- toys outside classID 15 -- is covered above.
 do
     local TOY = 198857
-    toys[TOY] = nil                       -- Toy Box not loaded: the API cannot answer
+    toys[TOY] = nil
     T.eq(LC.IsCollectibleItem(TOY, MISC, 0), false,
-        "an unrecognised toy reads as a normal item -- B56, this is the gap")
+        "a 15/0 item no journal claims is a tier token, and tier tokens must reach Council")
 
-    toys[TOY] = { TOY, "A Toy" }          -- once the data is there, it is recognised
-    T.eq(LC.IsCollectibleItem(TOY, MISC, 0), true, "and is kept out of Council once the Toy Box knows it")
+    toys[TOY] = { TOY, "A Toy" }
+    T.eq(LC.IsCollectibleItem(TOY, MISC, 0), true, "the same item is kept out once the Toy Box knows it")
     toys[TOY] = nil
 end
 

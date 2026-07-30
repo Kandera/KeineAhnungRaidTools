@@ -301,14 +301,29 @@ end
 -- too: GetItemInfoInstant answers from the client database for any real link, so that case barely
 -- exists, and staying out is the direction that cannot force-win someone's furniture.
 --
--- The journals still run for subclass 0, because toys live there alongside the tokens.
+-- The journals are asked FIRST, before the class is looked at at all. They used to sit behind the
+-- `classID == 15` gate, on the assumption that toys share the tokens' 15/0 bucket. Measured in a
+-- live client (2026-07-30, the 41 toys of one player's Toy Box): 39 are classID 15, but 2 are
+-- classID 0 — Consumable — e.g. 229828, classID 0 / subclass 8. Those never reached the toy lookup.
+-- A toy therefore read as ordinary Bind-on-Pickup gear: force-won by the lootmaster, passed by every
+-- Auto-Pass raider, the standing rule broken through a bucket nobody had looked in. An item the
+-- client itself identifies as a mount, pet or toy is one whatever compartment Blizzard filed it
+-- under, and no gear token appears in any of the three journals, so asking first cannot pull a token
+-- out of Council.
+--
+-- C_ToyBox.GetToyInfo is trustworthy enough to decide on. Measured in the same session: the Toy Box
+-- holds all 1144 toys on a fresh login without Collections ever being opened, it answers for toys
+-- the player has NOT collected (425 of the 1144 were learned), and it answers regardless of the
+-- box's own display filter, which on that client was showing 41 entries.
 function LC.IsCollectibleItem(itemID, classID, subclassID)
+    if itemID then
+        if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
+        if C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID) then return true end
+        if C_PetJournal and C_PetJournal.GetPetInfoByItemID and C_PetJournal.GetPetInfoByItemID(itemID) then return true end
+    end
     if classID ~= 15 then return false end
     if subclassID ~= 0 then return true end
     if not itemID then return true end
-    if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
-    if C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID) then return true end
-    if C_PetJournal and C_PetJournal.GetPetInfoByItemID and C_PetJournal.GetPetInfoByItemID(itemID) then return true end
     return false
 end
 

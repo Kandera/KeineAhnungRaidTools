@@ -54,19 +54,33 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
-## B56 — a toy can be force-won when the Toy Box has not been populated
+## B56 — a toy could be force-won — FIXED 2026-07-30, but not for the reason recorded
 
-`LC.IsCollectibleItem` keeps mounts, pets and mount equipment out by subclass, so `C_ToyBox.GetToyInfo`
-is the only thing keeping a toy out of Council — and toys share subclass 0 with the tier tokens the
-carve-out was narrowed for. `GetToyInfo` answers nil whenever the Toy Box data has not loaded for the
-session, e.g. on a fresh login where Collections was never opened. The item is then not a collectible,
-the lootmaster force-wins it, and every Auto-Pass raider passes: the standing "collectibles never
-enter Loot Council" rule broken in the same direction as the housing-decor incident of the same day.
+The entry described the cause as an unpopulated Toy Box: `C_ToyBox.GetToyInfo` would answer nil until
+Collections had been opened, so a toy read as ordinary gear. Measured in a live client rather than
+reasoned about, and **every part of that premise is false**. Fresh client restart, straight to the
+probe, Collections never opened:
 
-Deliberately not fixed by guessing at another discriminator. Item level and bind type would separate
-tokens from toys in every case checked, but neither was measured, and inventing an unmeasured rule is
-exactly what produced the housing regression. It wants either a reliable "is this a toy" answer that
-does not depend on Collections being loaded, or a measurement of what distinguishes the two.
+* `C_ToyBox.GetNumToys()` → 1144, `GetNumLearnedDisplayedToys()` → 425. The box is fully populated on
+  login, and it holds far more than what the player has collected.
+* `GetToyInfo(229828)` answers for a toy the player does **not** own.
+* It answers while the box's own display filter is down to 41 entries, so it is not filter-scoped.
+
+The real cause was one line above the toy lookup. `IsCollectibleItem` opened with
+`if classID ~= 15 then return false end`, on the assumption that toys share the tier tokens' bucket.
+Counting the classes of one player's 41 toys: **39 are classID 15, but 2 are classID 0 — Consumable**
+(229828 is 0/8). Those two never reached the toy lookup at all. A toy in Consumable read as ordinary
+Bind-on-Pickup gear: force-won by the lootmaster, passed by every Auto-Pass raider — the standing
+rule broken, exactly as the entry said, through a bucket nobody had looked in.
+
+The three journal lookups now run before the class is consulted. An item the client itself identifies
+as a mount, pet or toy is one whatever compartment Blizzard filed it under, and no gear token appears
+in any journal, so asking first cannot pull a token out of Council. The allow-list for Miscellaneous
+is untouched — that is the part keeping housing decor out, and it still decides everything the
+journals cannot name.
+
+Covered in `tests/test_lc_collectible.lua`; the three new assertions were verified by re-gating the
+journals behind `classID == 15` and confirming all three turn red.
 
 ## B57 — End Round cleared only the presser's own window (GitHub #15) — FIXED 2026-07-30
 
