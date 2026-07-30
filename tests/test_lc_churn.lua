@@ -849,3 +849,53 @@ do
     T.eq(KARTTEST.rolled[99] and KARTTEST.rolled[99][lm.unit], 1,
         "so the lootmaster still force-wins the next drop")
 end
+
+-- ===================================================================================
+-- Every state request is lost, and then things go back to normal
+-- ===================================================================================
+-- The state request is a bounded backoff on purpose: a raid where nobody can answer must not have
+-- twenty clients asking forever. But "bounded" has to mean "for now", not "for the evening".
+--
+-- Two ways the whole sequence used to be spent without a single answer arriving: Blizzard's chat
+-- throttle swallowing the messages, and this client reading itself as ungrouped for a moment --
+-- which returned out of RequestSessionState before it could schedule the next attempt, ending the
+-- chain on a blip that lasted two seconds. After either, LC.stateSyncRequested stayed latched and
+-- nothing ever asked again: session off here, on for everyone else, all evening.
+--
+-- Found by tests/test_lc_soak.lua (seed 1747).
+do
+    local sim = NewRaid()
+    RaidSim.Blackhole(sim, "LC_STATE_REQ")
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(90)          -- longer than the whole backoff: every attempt is lost
+    T.eq(torvi.KART.LC.sessionActive, false, "nothing got through, so they are still outside")
+
+    RaidSim.Deliver(sim, "LC_STATE_REQ")
+    RosterSettles(sim)
+
+    T.eq(torvi.KART.LC.sessionActive, true, "the next roster change asks again, and they are back in")
+end
+
+-- The same sequence, interrupted in the middle rather than before it starts: the chain is running,
+-- no answer has arrived yet, and this client reads as ungrouped for two seconds. That used to
+-- return out of RequestSessionState before it could schedule the next attempt, so the blip did not
+-- cost one try -- it cost every remaining one.
+do
+    local sim = NewRaid()
+    RaidSim.Blackhole(sim, "LC_ACTIVE")           -- the chain runs, but no answer comes back
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(3)                       -- past the first retry, chain still going
+
+    KARTTEST.solo[torvi.unit] = true              -- reads as ungrouped, right on an attempt
+    KARTTEST.AdvanceTime(5)
+    KARTTEST.solo[torvi.unit] = nil
+
+    RaidSim.Deliver(sim, "LC_ACTIVE")
+    KARTTEST.AdvanceTime(90)                      -- a later attempt in the SAME chain must fire
+
+    T.eq(torvi.KART.LC.sessionActive, true,
+        "a blip costs one attempt, not the whole retry sequence")
+end

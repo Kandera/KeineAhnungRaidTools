@@ -1742,11 +1742,22 @@ local STATE_REQ_BACKOFF = { 2, 5, 15, 45 }
 -- gate, so it still shows vote windows and everything LOOKS right — while LC.OnStartLootRoll returns
 -- early, so it never auto-passes and rolls Need in Blizzard's window against the lootmaster's forced
 -- win. An item can leave the loot flow entirely and the only visible trace is a dash in one column.
+-- True while a retry chain is still scheduled, so a roster change starts a new one instead of
+-- stacking a second on top of a live one. NOT a "we already asked once" latch: that is what
+-- LC.stateSyncRequested used to be, and it never came back off — see LC.CheckRaidJoin.
+local stateReqInFlight = false
+
 local function RequestSessionState(attempt)
-    if LC.sessionStateKnown or KART_Settings.lcModuleEnabled == false then return end
-    if not IsInRaid() then return end
-    LC.SendLC("LC_STATE_REQ")
+    if LC.sessionStateKnown or KART_Settings.lcModuleEnabled == false then
+        stateReqInFlight = false
+        return
+    end
+    -- Reading as ungrouped for a moment is exactly when this is needed, and returning here used to
+    -- end the whole sequence: a two-second blip on the wrong attempt cost every remaining one, and
+    -- nothing asked again for the rest of the evening. Skip the send, keep the chain.
+    if IsInRaid() then LC.SendLC("LC_STATE_REQ") end
     local delay = STATE_REQ_BACKOFF[attempt]
+    stateReqInFlight = delay ~= nil
     if delay then
         C_Timer.After(delay, function() RequestSessionState(attempt + 1) end)
     end
@@ -1849,12 +1860,18 @@ function LC.CheckRaidJoin()
         KART.LH.RequestHistorySync()
     end
 
-    -- Ask the raid leader (once per raid join/reload) for the current session-active flag and
-    -- raid-wide config, so a late joiner or a /reload'd client is never stuck on stale defaults
-    -- until the leader happens to notice a roster change (see LC.HandleStateRequest below) — same
-    -- request/response shape as the loot-history catch-up above.
-    if not LC.stateSyncRequested then
-        LC.stateSyncRequested = true
+    -- Ask the raid for the current session-active flag and raid-wide config, so a late joiner or a
+    -- /reload'd client is never stuck on stale defaults until somebody happens to notice a roster
+    -- change (see LC.HandleStateRequest below) — same request/response shape as the loot-history
+    -- catch-up above.
+    --
+    -- Gated on whether we still need the answer and whether a chain is already running, NOT on
+    -- "have we ever asked". LC.stateSyncRequested was that latch and it never came back off: a
+    -- client whose whole backoff was swallowed — Blizzard's chat throttle, or a blip on the wrong
+    -- attempt — never asked again, and sat outside a session the rest of the raid was in for the
+    -- whole evening. Every roster change is now another chance, which is what a roster change was
+    -- always meant to be.
+    if not LC.sessionStateKnown and not stateReqInFlight then
         RequestSessionState(1)
     end
 

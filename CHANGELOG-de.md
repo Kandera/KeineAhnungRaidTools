@@ -32,7 +32,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Übergabe der Lootmaster-Rolle erreicht den Raid wieder.**
 - **Wer später dazukommt, bekommt die vollständige Loot-History** — bisher fehlte eines von zwei gleichen Items, die an dieselbe Person gingen.
 - **Ein Lootmaster, der neu lädt, bekommt die Session auch dann zurück, wenn kein Council-Mitglied da ist, das es ihm sagen kann** — statt den Rest des Abends nichts mehr zu erzwingen.
-- **Ein Client, der die Session verloren hat, fragt schneller nach.**
+- **Ein Client, der die Session verloren hat, fragt schneller nach** — und bei jeder Rosteränderung erneut, statt nach der ersten Versuchsreihe endgültig aufzugeben.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben
