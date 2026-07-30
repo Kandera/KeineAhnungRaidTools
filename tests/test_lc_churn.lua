@@ -781,3 +781,71 @@ do
 
     T.eq(#torvi.env.KART_LootHistory, 2, "and both reach someone who joined afterwards")
 end
+
+-- ===================================================================================
+-- KNOWN GAP (docs/BACKLOG.md B65): the lootmaster leaves for good, then someone joins
+-- ===================================================================================
+-- Standing in deliberately moves only the LOOT FLOW, not the config -- so the departed
+-- lootmaster's name survives and they can pick the role back up when they return (see
+-- LC.HandleResign and LC.IsConfigOwner). The cost, pinned here rather than left to be
+-- rediscovered: while nobody owns the config, nobody re-broadcasts it, so anyone arriving
+-- afterwards runs on their OWN vote buttons and their own roll setting.
+--
+-- Everyone who was already there keeps the raid's config, so the raid does not come apart --
+-- but the newcomer's votes arrive under different labels than they clicked.
+--
+-- This test asserts what the addon does TODAY. It is here to make the gap visible and to fail
+-- loudly if it is ever fixed, so the fix gets its proper test instead of quietly landing.
+do
+    local sim, lm, council = NewRaid()
+    RaidSim.Leave(sim, lm.name)
+    RaidSim.Promote(sim, council.name)
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
+    KARTTEST.AdvanceTime(5)
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(90)
+
+    T.eq(council.KART.LC.raidConfig.buttonLabels, "BIS;Upgrade;Offspec;Sonstiges;Pass",
+        "everyone who was already there keeps the raid's config")
+    T.eq(torvi.KART.LC.sessionActive, true, "the newcomer is in the session")
+    T.is_nil(torvi.KART.LC.raidConfig.buttonLabels,
+        "but has no raid config at all -- B65, this is the gap")
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), false,
+        "so they fall back to their own roll setting, which is off -- B65")
+end
+
+-- ===================================================================================
+-- The lootmaster reloads and the only people left who know are plain raiders
+-- ===================================================================================
+-- LC.HandleStateRequest lets a peer tell a freshly reloaded loot owner "your session is still
+-- running" -- but only if that peer is council or the raid leader, to keep a reload down to a
+-- handful of whispers instead of one per raider.
+--
+-- That holds right up until the council is the part of the raid that is missing: two council
+-- members ported out, and the one still here reloaded a moment ago, so its own session flag is
+-- false too. Then the only clients that still KNOW the session is running are ordinary raiders --
+-- and they are not allowed to say so. The lootmaster comes back believing there is no session,
+-- force-wins nothing for the rest of the evening, and every Auto-Pass raider keeps passing.
+--
+-- Found by tests/test_lc_soak.lua (seed 87).
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Merrit")
+    RaidSim.Leave(sim, "Corvin")     -- the whole council except the lootmaster is gone
+    RosterSettles(sim)
+    T.eq(sim.byName.Alric.KART.LC.sessionActive, true, "the raiders left behind are in the session")
+
+    local lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    KARTTEST.AdvanceTime(30)
+
+    T.eq(lm.KART.LC.sessionActive, true,
+        "a plain raider tells the reloaded lootmaster the session is still running")
+
+    Drop(sim, 99, F.GLOVES)
+    T.eq(KARTTEST.rolled[99] and KARTTEST.rolled[99][lm.unit], 1,
+        "so the lootmaster still force-wins the next drop")
+end

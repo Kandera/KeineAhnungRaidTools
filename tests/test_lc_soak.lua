@@ -56,90 +56,232 @@ local function runOne(seed)
         for _, id in ipairs(rolls) do if live(id) then open[#open + 1] = id end end
         return #open > 0 and pick(open) or nil
     end
+    -- Rolls that started while messages were being dropped. LC_START is announced once and never
+    -- re-requested, so a client that was deaf at that instant has no way back to that item -- a
+    -- protocol limitation (docs/BACKLOG.md B66), not something a random walk should re-report four
+    -- times a run. The END state is still held to the full standard below: everything that carries
+    -- a retry must have arrived by then, outage or no outage.
+    local unreliable = {}
+    -- Awards made while messages were being dropped. LC_RESULT is announced once; a client that
+    -- could not authorize the sender at that instant (its council list had not arrived) never gets
+    -- that award, and the history catch-up only runs on JOIN, never again -- docs/BACKLOG.md B66.
+    local unreliableAward = {}
+    -- [name] = when this client can be held to the raid's view again. A reload is not instant: the
+    -- client comes back, asks for the state, and waits for an answer. An item announced inside that
+    -- window is announced to somebody who is not listening yet, and LC_START is never re-sent -- so
+    -- they are left out of THAT item's comparison and held to everything else (B66).
+    local recovering = {}
     local function check(id, what)
+        if unreliable[id] then return end
         for _, line in ipairs(F.Disagreements(sim, id, present[id], true)) do
             bad[#bad + 1] = string.format("roll %d after %s: %s", id, what, line)
         end
     end
 
+    -- The raid leader saying yes to "the lootmaster is gone, take over?". Nobody is left holding
+    -- the loot flow while a prompt sits unanswered, which is a state a real raid resolves in
+    -- seconds and a test would otherwise carry to the end and call a bug.
+    -- Every question the addon puts on screen, answered the way the raid answers it: yes to
+    -- standing in for a departed lootmaster, and yes to "your session is not running, start it?".
+    -- A prompt nobody ever clicks is not a state a raid stays in, and leaving them unanswered made
+    -- the harness report a lootmaster sitting in front of an open dialog as a lost session.
+    local function answerPrompts()
+        for _, c in ipairs(sim.clients) do
+            RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+            RaidSim.As(c, function()
+                local f = c.KART.LC.sessionPromptFrame
+                if f and f:IsShown() then          -- the prompt's own "Yes"
+                    c.KART.LC.sessionPromptAnswered = true
+                    c.KART.LC.SetSessionActive(true)
+                    f:Hide()
+                end
+            end)
+        end
+    end
+
+    -- Tokens whose loss the addon is supposed to survive on its own, because each has a retry
+    -- behind it. Deliberately excludes LC_VOTE and LC_RESULT: nothing acknowledges those, so
+    -- dropping one is a permanent hole by design, not a defect to hunt.
+    local RECOVERABLE = { "LC_CONFIG", "LC_ACTIVE", "LC_STATE_REQ" }
+    -- [token] = the simulated time it starts arriving again. A chat throttle is a burst that lasts
+    -- SECONDS, not a switch someone leaves off: modelled as an outage the addon's own retries
+    -- (LC_CONFIG's twelve attempts, the state request's 5/15/45 backoff) get a fair chance against.
+    -- An unbounded one defeats any finite retry policy, so it would only ever prove that.
+    local THROTTLE_SECONDS = 12
+    local blackholed = {}
+    -- How long an outage keeps hurting after it ends. A dropped request is only re-sent on the
+    -- backoff (see STATE_REQ_BACKOFF), so a client can still be waiting for its answer well after
+    -- messages started flowing again -- and an item announced in THAT window is announced to a
+    -- client that has no way to ask for it later.
+    local RECOVERY_HORIZON = 15
+    local outageUntil = 0
+    local function deliverExpired(force)
+        for token, until_ in pairs(blackholed) do
+            if force or KARTTEST.now >= until_ then
+                RaidSim.Deliver(sim, token)
+                blackholed[token] = nil
+                outageUntil = math.max(outageUntil, KARTTEST.now + RECOVERY_HORIZON)
+            end
+        end
+    end
+
     local actions = {
-        -- An item drops.
-        function()
+        { "drop", function()
             local id = nextRoll
             nextRoll = nextRoll + 1
             Drop(sim, id, pick(ITEMS))
             rolls[#rolls + 1] = id
             expiresAt[id] = KARTTEST.now + VOTE_WINDOW
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
             present[id] = {}
-            for i, c in ipairs(sim.clients) do present[id][i] = c end
+            for _, c in ipairs(sim.clients) do
+                if KARTTEST.now >= (recovering[c.name] or 0) then
+                    present[id][#present[id] + 1] = c
+                end
+            end
             check(id, "it dropped")
-        end,
-        -- Somebody answers.
-        function()
+        end },
+        { "vote", function()
             local id = openRoll()
             if not id then return end
             local c = pick(sim.clients)
             RaidSim.As(c, function() c.KART.LC.Vote.CastVote(id, math.random(1, 4)) end)
             check(id, "a vote")
-        end,
+        end },
         -- A council member picks a candidate. Non-binding, but every council member's tally has to
         -- show the same picks.
-        function()
+        { "cvote", function()
             local id = openRoll()
             if not id then return end
+            -- A council member may have left the raid by now; the list is by name on purpose.
             local voter, subject = councilMember(), pick(sim.clients)
+            if not voter then return end
             RaidSim.As(voter, function()
                 voter.KART.LC.Vote.ToggleCouncilVote(id, subject.guid)
             end)
             check(id, "a council pick")
-        end,
+        end },
         -- Someone decides it. Either the lootmaster or another council member -- a council member
         -- deciding is the path where the assigner's own local step and everybody else's handler
         -- have to end up in the same place.
-        function()
+        { "award", function()
             local id = openRoll()
             if not id then return end
             local by, winner = councilMember(), pick(sim.clients)
+            if not by then return end
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then
+                unreliableAward[id] = true
+            end
             RaidSim.As(by, function() by.KART.LC.Trade.AssignWinner(id, winner.guid, "BIS") end)
             check(id, "an award")
-        end,
+        end },
         -- Someone reloads. They lose every scrap of session state and have to get it back on their
         -- own; the rolls that were running without them stay theirs to not know about.
-        function()
+        { "reload", function()
             local victim = pick(sim.clients)
             RaidSim.Reload(sim, victim.name)
             RaidSim.EnterWorld(sim, victim.name)   -- always follows, in the game
+            recovering[victim.name] = KARTTEST.now + RECOVERY_HORIZON
             for _, id in ipairs(rolls) do
                 for i = #present[id], 1, -1 do
                     if present[id][i].name == victim.name then table.remove(present[id], i) end
                 end
             end
-        end,
+        end },
         -- Someone turns up.
-        function()
+        { "join", function()
             if joined then return end
             joined = true
             RaidSim.Join(sim, NEWCOMER)
             RaidSim.RosterUpdate(sim)   -- joining a raid is a roster change, on every client
-        end,
+        end },
         -- The raid lead changes hands. Every ownership check in the addon has a raid-leader
         -- fallback, so this moves authority around underneath everything above.
-        function()
+        { "promote", function()
             RaidSim.Promote(sim, pick(sim.clients).name)
-        end,
-        -- Time passes, and the roster settles.
-        function()
+        end },
+        -- Someone leaves. If it was the lootmaster, the raid leader is offered the role -- accepted
+        -- here, which is what a raid leader does when the prompt appears.
+        { "leave", function()
+            if #sim.clients <= 3 then return end
+            -- Never the configured lootmaster. Once they are gone for good nobody owns the config,
+            -- so nobody re-broadcasts it and a later arrival legitimately has none -- a known gap
+            -- (docs/BACKLOG.md B65) pinned by its own test in tests/test_lc_churn.lua. Letting the
+            -- random walk fall into it would bury every OTHER finding under hundreds of repeats of
+            -- one already-known one. They can still reload, which is the recoverable case.
+            local candidates = {}
+            for _, c in ipairs(sim.clients) do
+                if c.name ~= "Bramor" then candidates[#candidates + 1] = c end
+            end
+            if #candidates == 0 then return end
+            local victim = pick(candidates)
+            RaidSim.Leave(sim, victim.name)
+            for _, id in ipairs(rolls) do
+                for i = #present[id], 1, -1 do
+                    if present[id][i].name == victim.name then table.remove(present[id], i) end
+                end
+            end
+            RaidSim.RosterUpdate(sim)
+            KARTTEST.AdvanceTime(5)
+            answerPrompts()
+        end },
+        -- The blip: for a moment, ONE client's group APIs report no group at all while everyone
+        -- else reads normally. The maintainer has watched this cost a session mid-boss.
+        { "blip", function()
+            local c = pick(sim.clients)
+            KARTTEST.solo[c.unit] = true
+            KARTTEST.AdvanceTime(math.random(1, 2))
+            KARTTEST.solo[c.unit] = nil
+        end },
+        -- Messages go missing. Blizzard's chat throttle drops the overflow silently and the sender
+        -- cannot tell, so anything the addon depends on has to be re-askable. Only the tokens that
+        -- HAVE a retry are dropped here (the config retry, the state-request backoff) -- a lost
+        -- vote or result has no acknowledgement in the protocol and never claimed to.
+        { "throttle", function()
+            local token = pick(RECOVERABLE)
+            RaidSim.Blackhole(sim, token)
+            blackholed[token] = KARTTEST.now + THROTTLE_SECONDS
+            outageUntil = math.max(outageUntil, KARTTEST.now + THROTTLE_SECONDS + RECOVERY_HORIZON)
+        end },
+        -- Time passes, and the roster settles. Anything that was being dropped starts arriving
+        -- again -- a throttle is a moment, not a state.
+        { "settle", function()
+            deliverExpired(true)
             RaidSim.RosterUpdate(sim)
             KARTTEST.AdvanceTime(math.random(1, 10))
-        end,
+            answerPrompts()
+        end },
+        -- The council ends the round. Every tracked roll goes, everywhere.
+        { "endround", function()
+            local by = councilMember()
+            if not by then return end
+            RaidSim.As(by, by.KART.LC.EndRound)
+            for _, id in ipairs(rolls) do expiresAt[id] = 0 end
+        end },
     }
 
-    for _ = 1, EVENTS_PER_RUN do pick(actions)() end
+    -- The script itself, so a failure names the sequence that produced it instead of only the seed.
+    local script = {}
+    for _ = 1, EVENTS_PER_RUN do
+        -- Seconds pass between things happening in a raid. Without this the whole script ran inside
+        -- one instant, so nothing ever timed out, no retry ever came due, and a throttle modelled as
+        -- lasting seconds outlived the entire run.
+        KARTTEST.AdvanceTime(math.random(1, 5))
+        deliverExpired(false)
+        answerPrompts()   -- a person clicks the prompt in front of them within seconds
+        local a = pick(actions)
+        script[#script + 1] = a[1]
+        a[2]()
+    end
 
-    -- Settle: a raid that is mid-recovery is allowed to disagree, a settled one is not. Two roster
-    -- updates because the first one is what several recovery paths react TO.
+    -- Settle: a raid that is mid-recovery is allowed to disagree, a settled one is not. Nothing is
+    -- being dropped or blipped any more, and two roster updates because the first one is what
+    -- several recovery paths react TO.
+    deliverExpired(true)
+    KARTTEST.solo = {}
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(60)
+    answerPrompts()
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(60)
 
@@ -152,7 +294,9 @@ local function runOne(seed)
     local function awards(client)
         local parts = {}
         for _, e in ipairs(client.env.KART_LootHistory or {}) do
-            parts[#parts + 1] = tostring(e.rollID) .. "=" .. tostring(e.winner)
+            if not unreliableAward[e.rollID] then
+                parts[#parts + 1] = tostring(e.rollID) .. "=" .. tostring(e.winner)
+            end
         end
         table.sort(parts)
         return table.concat(parts, ",")
@@ -170,6 +314,25 @@ local function runOne(seed)
     if not RaidSim.As(sim.clients[1], sim.clients[1].KART.LC.GetLootmaster) then
         bad[#bad + 1] = "nobody is the lootmaster any more"
     end
+    -- KART_SOAK_DEBUG=<seed> dumps everything about one run. A seed reproduces exactly, so this is
+    -- the whole debugger: no separate script to keep in step with this one.
+    if os.getenv("KART_SOAK_DEBUG") == tostring(seed) then
+        print("=== seed " .. seed .. ": " .. table.concat(script, ">"))
+        for _, c in ipairs(sim.clients) do
+            print(string.format("  %-8s session=%-5s buttons=%-34s lm=%s", c.name,
+                tostring(c.KART.LC.sessionActive),
+                tostring(c.KART.LC.raidConfig.buttonLabels),
+                tostring(c.KART.LC.raidConfig.lootmaster)))
+        end
+        for _, token in ipairs({ "LC_CONFIG", "LC_ACTIVE", "LC_STATE_REQ", "LC_SESSION_RESUME", "LC_RESIGN" }) do
+            for _, e in ipairs(RaidSim.Sent(sim, token)) do
+                print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
+                    tostring(e.target or e.channel), e.msg:sub(1, 60)))
+            end
+        end
+        for _, l in ipairs(bad) do print("  BAD " .. l:sub(1, 160)) end
+    end
+    if #bad > 0 then bad[1] = table.concat(script, ">") .. "  ||  " .. bad[1] end
     return bad
 end
 

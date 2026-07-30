@@ -160,7 +160,7 @@ end
 
 -- What this client believes about the RAID (never about itself: the vote list, the council tabs,
 -- our own vote and our own pending trades are per client and SHOULD differ).
-local function fingerprint(client, rollID, rollFieldsOnly)
+local function fingerprint(sim, client, rollID, rollFieldsOnly)
     local LC = client.KART.LC
     local fp = {}
     if not rollFieldsOnly then
@@ -168,7 +168,18 @@ local function fingerprint(client, rollID, rollFieldsOnly)
         for _, field in ipairs(SHARED_CFG) do
             fp["config." .. field] = tostring(LC.raidConfig[field])
         end
-        fp["council"] = mapText(LC.CouncilNamesTable, tostring)
+        -- Who is council, asked about the people actually IN the raid -- not the raw table.
+        -- CouncilNamesTable legitimately differs between clients for anyone absent: a name a client
+        -- has never seen is parked under a lowercased TEXT key until that person shows up (see
+        -- LC.ResolveConfigName and the pending-key retry), so a client that joined after someone
+        -- left holds the pending form of a name an older client resolved long ago. That difference
+        -- is the design working. What must never differ is the answer for someone standing here.
+        local parts = {}
+        for _, c in ipairs(sim.clients) do
+            local isCouncil = RaidSim.As(client, function() return LC.IsSenderCouncil(c.guid) end)
+            parts[#parts + 1] = c.name .. "=" .. tostring(not not isCouncil)
+        end
+        fp["council"] = table.concat(parts, ",")
     end
     if rollID then
         fp["item"]    = tostring(LC.rollItems[rollID])
@@ -194,13 +205,24 @@ end
 -- both at the moment an item drops would report a recovery still in flight as a disagreement.
 function F.Disagreements(sim, rollID, clients, rollFieldsOnly)
     clients = clients or sim.clients
+    -- A client that auto-answered this item (it cannot equip it, or KART voted Transmog for it on
+    -- their behalf) stops tracking it -- they are done with it and it is off their screen. That is
+    -- a PERSONAL setting doing its job, so they are no longer party to what the raid thinks about
+    -- that item. Everything not tied to the roll still has to agree.
+    if rollID then
+        local still = {}
+        for _, c in ipairs(clients) do
+            if not (c.KART.LC.relevanceHandled or {})[rollID] then still[#still + 1] = c end
+        end
+        clients = still
+    end
     if #clients < 2 then return {} end
     local base = clients[1]
-    local baseFP = fingerprint(base, rollID, rollFieldsOnly)
+    local baseFP = fingerprint(sim, base, rollID, rollFieldsOnly)
     local out = {}
     for i = 2, #clients do
         local c = clients[i]
-        local fp = fingerprint(c, rollID, rollFieldsOnly)
+        local fp = fingerprint(sim, c, rollID, rollFieldsOnly)
         for key, want in pairs(baseFP) do
             if fp[key] ~= want then
                 out[#out + 1] = string.format("%s: %s has %s, %s has %s",

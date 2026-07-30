@@ -435,3 +435,40 @@ mismatch check.
 `ApplyToPendingRolls` runs at the top of `RefreshVoteListRows`, and `CastVote` ends in
 `RefreshVoteListRows`, so N simultaneous auto-answered drops produce N nested full rebuilds in one
 frame. Bounded and correct, but a visible hitch exactly when the window first appears.
+
+## B65 — once the lootmaster is gone for good, a later arrival gets no config at all
+
+Standing in deliberately moves only the LOOT FLOW, not the config: the departed lootmaster's name
+stays in `raidConfig.lootmaster` so they can pick the role back up when they return (see
+`LC.HandleResign` and `LC.IsConfigOwner`). Nobody owns the config while that is true, so nobody
+re-broadcasts it — and anyone joining afterwards has none. They still get the session, so they see
+vote windows and answer them, but with THEIR OWN button labels, their own minimum quality and their
+own roll setting. Their vote arrives at the council under a different label than they clicked.
+
+Everyone who was already there keeps the raid's config, so the raid does not come apart; it is the
+newcomer alone. Pinned by a test in `tests/test_lc_churn.lua` that asserts today's behaviour, so a
+fix cannot land silently.
+
+The obvious fix — let the stand-in relay the config they hold — is not a small change: a relayed
+`LC_CONFIG` names someone other than its sender in the lootmaster field, which is exactly what
+`TryAcceptConfig` rejects (B29/B33 hardened that on purpose). It needs its own token and its own
+precedence rule, and that is a design change rather than a patch.
+
+## B66 — an item announced while a client is deaf is lost to that client
+
+`LC_START` and `LC_RESULT` are announced once and never re-requested. A client is deaf for two
+ordinary reasons: it is still recovering from a reload (it has asked for the state and is waiting),
+or Blizzard's chat throttle dropped the message. It then has no way back to that item — the loot
+history catch-up runs on JOIN only, and there is no equivalent for rolls in flight.
+
+Bounded in practice: that raider does not vote on that one item, and the council sees no answer from
+them. The severe variant — the LOOTMASTER being the deaf one, so nobody force-wins — was narrowed by
+making the state request's first retry come at 2s instead of 5s, and by letting ordinary raiders
+answer a reloaded owner's request (see `LC.HandleStateRequest`). Narrowed, not closed.
+
+A real fix is a catch-up for rolls in flight: on learning the session is running, ask for the rolls
+currently open and rebuild them, the way `LH.RequestHistorySync` does for awards. That is a new
+message and a new path, worth doing deliberately rather than the night before a raid.
+
+`tests/test_lc_soak.lua` excludes exactly these two windows from its per-item comparison, and says so
+where it does it — everything with a retry behind it is still held to the full standard.
