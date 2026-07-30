@@ -1186,3 +1186,41 @@ do
     T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), true,
         "and someone arriving afterwards gets the raid's setting, not the leader's default")
 end
+
+-- End Round clears the round for the RAID, not just for whoever pressed it (B57, GitHub #15)
+-- ===================================================================================
+-- The two sides judged this differently and both stayed silent. The button is enabled by the
+-- presser's own LC.IsLootOwner, which falls back to the raid leader whenever their client holds no
+-- config naming somebody else -- normal after a reload while the config is slow. Their peers judged
+-- the incoming LC_END_ROUND with IsSenderLootOwner, and THEY had a config naming the real
+-- lootmaster, so they threw it away. The presser's window cleared, everyone else kept the previous
+-- boss's items, and nothing was printed on either side.
+--
+-- Reported from a live raid with a screenshot; no path in the code explained it until the two
+-- ownership answers were compared against each other rather than each on its own.
+do
+    local sim, lm = F.NewSplitRaid()          -- lootmaster Bramor, raid lead Corvin
+    RaidSim.Blackhole(sim, "LC_CONFIG")
+    RaidSim.Blackhole(sim, "LC_CONFIG_RELAY")
+    local leader = RaidSim.Reload(sim, "Corvin")
+    RaidSim.EnterWorld(sim, "Corvin")
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(30)
+
+    Drop(sim, 70, F.GLOVES)
+    Drop(sim, 71, F.WEAPON)
+
+    -- The disagreement itself, stated so a change to either side shows up here.
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), true,
+        "the raid leader's own client says it owns the loot flow -- this is what enables the button")
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.IsSenderLootOwner(leader.guid) end), false,
+        "while its peers do not agree, because they hold a config naming the real lootmaster")
+
+    RaidSim.As(leader, leader.KART.LC.EndRound)
+    KARTTEST.AdvanceTime(1)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(#c.KART.LC.councilTabs, 0, c.name .. " has no council tabs left")
+        T.eq(#c.KART.LC.voteListRolls, 0, c.name .. " has no vote rows left")
+    end
+end

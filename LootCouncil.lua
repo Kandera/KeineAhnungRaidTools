@@ -2463,8 +2463,21 @@ end
 -- A v3.0.0 client has no handler for this token at all: KASC's dispatcher silently drops an
 -- unrecognized token (see its handler lookup), so that client's cards simply never clear — it
 -- keeps showing whatever it was already tracking until its own session ends or it upgrades.
+-- Accepted from any COUNCIL member, not just the loot owner (B57, GitHub #15).
+--
+-- The two sides judged this differently and both stayed silent about it. The button is enabled by
+-- the presser's own LC.IsLootOwner, which falls back to the raid leader whenever their client has no
+-- config naming somebody else -- normal after a reload while the config is slow, or in a raid where
+-- it never reached them. Their peers judge the incoming message with IsSenderLootOwner, and THEY do
+-- have a config naming the real lootmaster, so they rejected it. The presser's own window cleared,
+-- every other window kept the previous boss's items, and nothing was printed anywhere.
+--
+-- Council rather than loot owner is the right width for what this does: it clears the current
+-- round's tabs and vote rows and does not touch the session, and a council member can already assign
+-- an item outright, which is far more authority than clearing a list. IsSenderCouncil accepts the
+-- loot owner too, so this is strictly wider than what it replaces.
 function LC.HandleEndRound(senderKey)
-    if not LC.IsSenderLootOwner(senderKey) then return end
+    if not LC.IsSenderCouncil(senderKey) then return end
     LC.ClearAllRolls()
 end
 

@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A raid leader who reloads no longer replaces the raid's settings with their own**, which used to leave half the raid on different vote buttons and no rolls.
 - **The session is confirmed by any raider who knows**, not only by the one client running the loot flow.
 - **An item that dropped while your client was reloading still reaches you**, so you can answer it and the council is not left waiting.
+- **End Round clears the round for the whole raid**, not just for whoever pressed it. (#15)
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

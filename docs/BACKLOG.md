@@ -68,18 +68,26 @@ tokens from toys in every case checked, but neither was measured, and inventing 
 exactly what produced the housing regression. It wants either a reliable "is this a toy" answer that
 does not depend on Collections being loaded, or a measurement of what distinguishes the two.
 
-## B57 — the council window kept every previous boss's items despite End Round (GitHub #15)
+## B57 — End Round cleared only the presser's own window (GitHub #15) — FIXED 2026-07-30
 
-Reported with a screenshot showing items from earlier bosses still listed. The maintainer confirms he
-pressed End Round and that he held raid lead, which means the sender check on the receiving side
-(`IsSenderLootOwner`, falling back to raid leader when no config has been distributed) should have
-passed, and `LC.ClearAllRolls` demonstrably clears the vote list and the tab strip and hides both
-windows. No path in the code explains the report.
+Reported with a screenshot of items from earlier bosses still listed, by a maintainer who had pressed
+End Round and held raid lead. No path in the code explained it, because each side of the exchange
+looks correct on its own. They only disagree when compared:
 
-That evening also had continuous session failures and manual restarts, so the state the message
-landed in is not reconstructable. Deferred to the next raid with a working session rather than fixed
-speculatively. If it reproduces there, the next thing to establish is whether the peers received
-`LC_END_ROUND` at all.
+* The button is enabled by the presser's own `LC.IsLootOwner`, which falls back to the raid leader
+  whenever their client holds no config naming somebody else — normal after a reload while the config
+  is slow to come back, or in a raid where it never reached them at all.
+* Their peers judge the incoming `LC_END_ROUND` with `IsSenderLootOwner`, and THEY do hold a config
+  naming the real lootmaster, so they threw it away.
+
+The presser's window cleared, every other window kept the round, and nothing was printed on either
+side. Reproduced in `tests/test_lc_churn.lua` by reloading the raid leader with `LC_CONFIG` and
+`LC_CONFIG_RELAY` blackholed, which is exactly that state.
+
+`LC.HandleEndRound` now accepts from any council member. That is the right width for what the action
+does — it clears the current round's tabs and vote rows and does not touch the session — and a
+council member can already assign an item outright, which is far more authority than clearing a
+list. `IsSenderCouncil` accepts the loot owner too, so it is strictly wider than what it replaced.
 
 ---
 

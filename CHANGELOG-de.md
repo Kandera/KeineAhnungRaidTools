@@ -37,6 +37,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Raidleiter, der neu lädt, überschreibt die Einstellungen des Raids nicht mehr mit seinen eigenen** — vorher saß danach die Hälfte des Raids auf anderen Vote-Buttons und ohne Würfe.
 - **Die Session bestätigt jeder Raider, der sie kennt** — nicht nur der eine Client, der die Lootverteilung führt.
 - **Ein Item, das während deines Reloads gedroppt ist, erreicht dich trotzdem** — du kannst noch abstimmen und das Council wartet nicht vergeblich.
+- **End Round räumt die Runde für den ganzen Raid**, nicht nur bei dem, der gedrückt hat. (#15)
 
 ## [3.2.1] - 2026-07-29
 ### Behoben
