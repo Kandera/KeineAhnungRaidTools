@@ -589,6 +589,11 @@ function LC.IsSenderLootOwner(senderKey)
         lootmaster = LC.GetLootmaster()
     end
     if lootmaster ~= "" then return senderKey == lootmaster end
+    -- Deliberately does NOT consult LC.standInAccepted, unlike LC.IsLootOwner. That flag lives on the
+    -- stand-in's own client and nobody else can see it, so a receiver has no way to ask. It does not
+    -- need to: a leader who has not accepted sends nothing, because their own IsLootOwner gates every
+    -- send. Being permissive here costs nothing and refusing would break the stand-in outright — do
+    -- not "fix" this asymmetry.
     return UnitIsGroupLeader(unit)
 end
 

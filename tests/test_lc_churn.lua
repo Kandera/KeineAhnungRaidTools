@@ -197,6 +197,38 @@ do
         "so they still force-win the next drop instead of letting it roll away (B30)")
 end
 
+-- The resume claim is only ever about the loot owner, so only the loot owner may act on it. It can
+-- turn a session ON and nothing else -- deliberately one-directional, because the two directions are
+-- nowhere near equal in what they cost.
+do
+    local _, _, council, raider = NewRaid()
+    -- A raider whose own session is off is told by a council member that it is running. They are not
+    -- the loot owner, so the claim is not about them.
+    raider.KART.LC.sessionActive = false
+    RaidSim.As(council, function() council.KART.LC.SendLC("LC_SESSION_RESUME", "Odin-Blackmoore") end)
+    T.eq(raider.KART.LC.sessionActive, false,
+        "a session-resume claim is ignored by anyone who does not own the loot flow")
+end
+
+-- Standing in follows raid lead. Someone who accepted, then lost the lead, stops being the owner
+-- without anyone having to tell them.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    local stand = RaidSim.Promote(sim, "Haerri")
+    RosterSettles(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "the stand-in owns the loot flow")
+
+    local next_ = RaidSim.Promote(sim, "Wuusch")
+    RosterSettles(sim)
+    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+        "and stops owning it when the raid lead moves on")
+    T.truthy(RaidSim.As(next_, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "the new raid leader is asked in turn")
+    T.truthy(RaidSim.As(next_, next_.KART.LC.IsLootOwner), "and takes it over")
+end
+
 -- ===================================================================================
 -- A roster-change blip must never cost the session
 -- ===================================================================================
