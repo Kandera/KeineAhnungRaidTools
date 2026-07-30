@@ -349,9 +349,42 @@ What is in place instead separates the two halves of "yes":
 The guard sits in `LC.BroadcastRaidConfig`, not only at the point the session starts: every roster
 change re-broadcasts, so a one-off check would be undone by the next person walking in.
 
-**Measured over the same 3000 scripts: 8 runs disagreed before, 3 after.** Across the whole day's
-work on this file the soak went 13 → 3. Both halves of the guard were mutation-checked: removing the
-check in the broadcast, and never setting the marker, each turn the bootstrap test red.
+**Measured over the same 3000 scripts: 8 runs disagreed before, 3 after.** Both halves of the guard
+were mutation-checked: removing the check in the broadcast, and never setting the marker, each turn
+the bootstrap test red.
+
+### The last three, and a guard that was already there
+
+Holding the config back stops a client from SENDING an invented one within the grace. It does not
+stop one that gets out anyway — seed 1377 is a reload whose replies were swallowed by a chat
+throttle, so the ten seconds expired in silence and the client concluded, wrongly, that the raid had
+nothing to tell it. "Nobody answered" and "nobody's answer got through" look identical from inside.
+
+`LC.TryAcceptConfig` already refused an unnamed config from a client holding one that named a
+resolved lootmaster ("weaker-claim"). That guard could not fire here, and the reason is worth
+keeping: a config that arrived through `LC.HandleConfigRelay` carries NO lootmaster, because the
+relayer must not write itself in (B65). Blanking that field also strips the thing the guard reads, so
+a perfectly good relayed config was overwritten by the first invented one that came along.
+
+The guard now also counts where a config CAME FROM: one we received outranks an unnamed one, name or
+no name. A client holding nothing still takes it, so the empty-field bootstrap (B33) keeps working,
+and a NAMED config never reaches this check at all — **handing the lootmaster role over is
+unaffected**, which is the case that matters most here.
+
+**With that, 0 of 3000.** Across the day the soak went 13 → 0.
+
+Both remaining candidates were then mutation-checked against each other, and the result changed what
+shipped: raising `CONFIG_CLAIM_GRACE` from 10 to 30 seconds (to outlast a throttle burst) and the
+weaker-claim widening turned out to be REDUNDANT — each alone closes all three cases. Only the
+widening shipped, because it addresses the cause and does not depend on a timing window. The grace
+stayed at 10, and the reason 30 was tried and rejected is recorded at the constant so nobody retunes
+it back on the same reasoning.
+
+**The cost, stated because it narrows a documented setup:** in a raid deliberately run with NOBODY in
+the Lootmaster field, the leader's later CHANGES no longer reach clients that already hold a config —
+only the first one does. Confirmed with the maintainer (2026-07-30) that this raid never runs that
+way: the field always names somebody, and the config is shared in advance with everyone who might
+take over.
 
 `tests/test_lc_baseflow.lua`'s B33 bootstrap changed with it, and deliberately: it now asserts that
 the config waits AND that it arrives afterwards. The old single assertion could not tell the

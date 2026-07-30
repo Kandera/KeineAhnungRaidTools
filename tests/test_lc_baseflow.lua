@@ -508,7 +508,12 @@ do
     -- had not heard yet, and there the broadcast pushes their own defaults over the raid's. Ten
     -- seconds tells the two apart, because a raid that is running answers in far less than that.
     T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 0, "the config waits for one round trip first")
-    KARTTEST.AdvanceTime(15)
+    -- Read out of the source rather than hardcoded: if the grace is retuned, this test must follow
+    -- it instead of quietly passing because it happened to wait long enough anyway.
+    local grace = tonumber(assert(io.open("LootCouncil.lua", "r")):read("*a")
+        :match("local CONFIG_CLAIM_GRACE = (%d+)"))
+    T.truthy(grace, "CONFIG_CLAIM_GRACE was found in LootCouncil.lua")
+    KARTTEST.AdvanceTime(grace + 5)
     T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1,
         "and nobody having answered, the empty-field leader's own settings ARE the raid's")
 

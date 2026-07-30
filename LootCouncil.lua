@@ -992,7 +992,26 @@ local function TryAcceptConfig(payload, senderKey)
     --
     -- Worst of all, the leader's own client heals itself seconds later from the whispered reply to
     -- its state request — so the one person anybody would ask sees nothing wrong.
-    if not declaredKey and KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster or "") then
+    --
+    -- The name is not the only thing worth protecting, and relying on it alone left a hole: a config
+    -- that reached us through LC.HandleConfigRelay carries NO lootmaster, because the relayer is not
+    -- the config owner and must not write itself in (B65). Blanking that field also strips the very
+    -- thing this guard reads, so a perfectly good relayed config was overwritten by the first
+    -- empty-field one that came along -- which is how a raider ends up on a roll setting nobody
+    -- chose (B69, seed 1377: the holder had a relayed config, the sender had reloaded seconds
+    -- earlier and invented one).
+    --
+    -- So a config we RECEIVED outranks an unnamed one too, name or no name. A client that holds
+    -- nothing still takes it, which is what keeps the empty-field bootstrap working (B33).
+    --
+    -- The cost, stated because it narrows a documented setup: in a raid deliberately run with NOBODY
+    -- in the Lootmaster field, the leader's later CHANGES to the raid config no longer propagate to
+    -- clients that already hold one -- only the first config does. Confirmed with the maintainer
+    -- (2026-07-30) that this raid never runs that way: the field always names somebody, and the
+    -- config is shared in advance with everyone who might take over. Handing the role over is
+    -- unaffected either way, because a NAMED config never reaches this check at all.
+    if not declaredKey and (KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster or "")
+            or (next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf)) then
         return false, "weaker-claim"
     end
 
@@ -1888,6 +1907,14 @@ end
 -- How long a session declared without an answer holds its config back (see below). One round trip:
 -- the loot owner's own reply to a state request is immediate, a peer's is jittered up to seven
 -- seconds, so ten covers both with room to spare.
+--
+-- Deliberately NOT longer. "Nobody answered" and "nobody's answer got through" are the same silence
+-- from in here, and the second one is a chat throttle, which is exactly what a pull produces -- so
+-- thirty seconds was tried, to outlast a throttle burst. It was then measured against the case it
+-- was meant for (soak seed 1377) with the weaker-claim guard in TryAcceptConfig in place, and it
+-- changed nothing: that guard already stops an invented config from displacing a real one, whenever
+-- it arrives. The longer wait bought no measurable safety and cost a raid genuinely starting with an
+-- empty Lootmaster field twenty more seconds without one, so it was taken back out.
 local CONFIG_CLAIM_GRACE = 10
 
 function LC.SetSessionActive(active)
