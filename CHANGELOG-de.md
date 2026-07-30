@@ -33,6 +33,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Wer später dazukommt, bekommt die vollständige Loot-History** — bisher fehlte eines von zwei gleichen Items, die an dieselbe Person gingen.
 - **Ein Lootmaster, der neu lädt, bekommt die Session auch dann zurück, wenn kein Council-Mitglied da ist, das es ihm sagen kann** — statt den Rest des Abends nichts mehr zu erzwingen.
 - **Ein Client, der die Session verloren hat, fragt schneller nach** — und bei jeder Rosteränderung erneut, statt nach der ersten Versuchsreihe endgültig aufzugeben.
+- **Wer dazukommt, nachdem der Lootmaster den Raid verlassen hat, bekommt trotzdem die Vote-Buttons, Mindestqualität und Würfe-Einstellung des Raids** — statt still auf seine eigenen zurückzufallen.
+- **Ein Raidleiter, der neu lädt, überschreibt die Einstellungen des Raids nicht mehr mit seinen eigenen.**
+- **Die Session bestätigt jeder Raider, der sie kennt** — nicht nur der eine Client, der die Lootverteilung führt.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

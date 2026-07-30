@@ -436,23 +436,27 @@ mismatch check.
 `RefreshVoteListRows`, so N simultaneous auto-answered drops produce N nested full rebuilds in one
 frame. Bounded and correct, but a visible hitch exactly when the window first appears.
 
-## B65 — once the lootmaster is gone for good, a later arrival gets no config at all
+## B65 — once the lootmaster is gone for good, a later arrival gets no config at all — FIXED 2026-07-30
 
 Standing in deliberately moves only the LOOT FLOW, not the config: the departed lootmaster's name
-stays in `raidConfig.lootmaster` so they can pick the role back up when they return (see
-`LC.HandleResign` and `LC.IsConfigOwner`). Nobody owns the config while that is true, so nobody
-re-broadcasts it — and anyone joining afterwards has none. They still get the session, so they see
-vote windows and answer them, but with THEIR OWN button labels, their own minimum quality and their
-own roll setting. Their vote arrives at the council under a different label than they clicked.
+stays in `raidConfig.lootmaster` so they can pick the role back up when they return. Nobody owned the
+config while that was true, so nobody re-broadcast it, and anyone joining afterwards ran the evening
+on their own vote buttons, minimum quality and roll setting — their vote reaching the council under a
+different label than they clicked.
 
-Everyone who was already there keeps the raid's config, so the raid does not come apart; it is the
-newcomer alone. Pinned by a test in `tests/test_lc_churn.lua` that asserts today's behaviour, so a
-fix cannot land silently.
+Fixed with `LC_CONFIG_RELAY`: whoever still holds the config the raid agreed hands it on, in reply to
+a state request, with the lootmaster field EMPTY — "here is what the raid settled on", not "and I am
+in charge of it", so ownership stays derived and the real lootmaster reclaims it by coming back. The
+receiver's rule is what makes it safe from any sender: it fills a void, or replaces a config the
+client invented from its own defaults (the raid leader after a reload, see below). It can never
+replace a config that was received or that its owner declared.
 
-The obvious fix — let the stand-in relay the config they hold — is not a small change: a relayed
-`LC_CONFIG` names someone other than its sender in the lootmaster field, which is exactly what
-`TryAcceptConfig` rejects (B29/B33 hardened that on purpose). It needs its own token and its own
-precedence rule, and that is a design change rather than a patch.
+Two things surfaced underneath it, both fixed here:
+* With the config owner gone, a reload cleared `raidConfig` and left `IsConfigOwner`'s `fromSelf`
+  guard nothing to bite on, so the raid leader silently became the config owner and wrote their own
+  defaults — usually rolls off and an empty council list — into the raid's config.
+* The state request stopped once the SESSION flag was known, so a client that learned the session and
+  missed the config never asked again. It now asks while either is missing.
 
 ## B66 — an item announced while a client is deaf is lost to that client
 

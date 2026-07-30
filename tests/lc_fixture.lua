@@ -148,8 +148,6 @@ end
 -- Individual assertions cannot catch that, because they check the client the test was thinking
 -- about. This checks all of them against each other.
 
-local SHARED_CFG = { "minQuality", "buttonLabels", "rollsEnabled", "lootmaster", "councilMembers" }
-
 -- Deterministic text for a [key] = value map, so two clients' copies compare as strings.
 local function mapText(map, valueText)
     local parts = {}
@@ -165,9 +163,25 @@ local function fingerprint(sim, client, rollID, rollFieldsOnly)
     local fp = {}
     if not rollFieldsOnly then
         fp["session"] = tostring(LC.sessionActive)
-        for _, field in ipairs(SHARED_CFG) do
-            fp["config." .. field] = tostring(LC.raidConfig[field])
-        end
+        -- The EFFECTIVE answers, not the stored fields. What the raid experiences is what
+        -- LC.GetLootmaster/GetButtonConfig/GetRaidMinQuality/GetRollsEnabled return, and those
+        -- deliberately differ from the raw table: a departed lootmaster is masked to "" by
+        -- everyone who watched them leave, while a client that arrived afterwards was handed a
+        -- config with that field already empty (LC.RelayRaidConfig). Same answer, different
+        -- spelling -- and comparing the spelling reports agreement as a disagreement.
+        RaidSim.As(client, function()
+            fp["config.lootmaster"]  = tostring(LC.GetLootmaster())
+            fp["config.rollsEnabled"] = tostring(LC.GetRollsEnabled())
+            fp["config.minQuality"]  = tostring(LC.GetRaidMinQuality())
+            -- The synced label STRING, plus how many buttons it produces -- not the rendered
+            -- labels. A raid that configured none leaves every client on its own localized
+            -- defaults, so a German client shows "Sonstiges" where an English one shows "Other":
+            -- the same button, in two languages, and comparing the text calls that a disagreement.
+            -- What must match is the string the raid agreed and the number of responses, because
+            -- that is what makes a vote index mean the same thing everywhere.
+            fp["config.buttons"] = tostring(LC.raidConfig.buttonLabels)
+                .. "#" .. #(LC.GetButtonConfig() or {})
+        end)
         -- Who is council, asked about the people actually IN the raid -- not the raw table.
         -- CouncilNamesTable legitimately differs between clients for anyone absent: a name a client
         -- has never seen is parked under a lowercased TEXT key until that person shows up (see

@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Someone joining later gets the whole loot history**, instead of losing one of two identical items awarded to the same player.
 - **A lootmaster who reloads gets the session back even when no council member is there to tell them**, instead of force-winning nothing for the rest of the evening.
 - **A client that lost the session asks for it back sooner**, and keeps asking on every roster change instead of giving up after the first round of tries.
+- **Anyone joining after the Lootmaster has left still gets the raid's vote buttons, minimum quality and roll setting**, instead of quietly falling back to their own.
+- **A raid leader who reloads no longer replaces the raid's settings with their own.**
+- **The session is confirmed by any raider who knows**, not only by the one client running the loot flow.
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

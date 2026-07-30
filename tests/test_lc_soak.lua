@@ -209,17 +209,11 @@ local function runOne(seed)
         -- here, which is what a raid leader does when the prompt appears.
         { "leave", function()
             if #sim.clients <= 3 then return end
-            -- Never the configured lootmaster. Once they are gone for good nobody owns the config,
-            -- so nobody re-broadcasts it and a later arrival legitimately has none -- a known gap
-            -- (docs/BACKLOG.md B65) pinned by its own test in tests/test_lc_churn.lua. Letting the
-            -- random walk fall into it would bury every OTHER finding under hundreds of repeats of
-            -- one already-known one. They can still reload, which is the recoverable case.
-            local candidates = {}
-            for _, c in ipairs(sim.clients) do
-                if c.name ~= "Bramor" then candidates[#candidates + 1] = c end
-            end
-            if #candidates == 0 then return end
-            local victim = pick(candidates)
+            -- Anyone, the configured lootmaster included. That used to be excluded because losing
+            -- them left nobody owning the config and every later arrival without one (B65), which
+            -- buried every other finding under repeats of one known gap. The stand-in hands the
+            -- config on now, so the walk is free to take the lootmaster out.
+            local victim = pick(sim.clients)
             RaidSim.Leave(sim, victim.name)
             for _, id in ipairs(rolls) do
                 for i = #present[id], 1, -1 do
@@ -329,7 +323,7 @@ local function runOne(seed)
                 tostring(c.KART.LC.raidConfig.buttonLabels),
                 tostring(c.KART.LC.raidConfig.lootmaster)))
         end
-        for _, token in ipairs({ "LC_CONFIG", "LC_ACTIVE", "LC_STATE_REQ", "LC_SESSION_RESUME", "LC_RESIGN" }) do
+        for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ", "LC_SESSION_RESUME", "LC_RESIGN" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
                     tostring(e.target or e.channel), e.msg:sub(1, 60)))

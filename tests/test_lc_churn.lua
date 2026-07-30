@@ -616,17 +616,49 @@ end
 -- lootmaster's forced win.
 do
     local sim, lm = NewRaid()
+    -- Both, because the owner's LC_ACTIVE is no longer the only way to find out: any raider who
+    -- knows answers a state request a few seconds behind it (LC.HandleStateRequest). Blackholing
+    -- only the first would prove nothing about the retry, since the backstop would cover it.
+    RaidSim.Blackhole(sim, "LC_ACTIVE")
+    RaidSim.Blackhole(sim, "LC_SESSION_RESUME")
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(10)
+    T.eq(torvi.KART.LC.sessionActive, false, "with every answer lost, the session flag really is lost")
+    T.eq(torvi.KART.LC.raidConfig.lootmaster, lm.guid, "while the config arrived normally")
+
+    RaidSim.Deliver(sim, "LC_ACTIVE")
+    RaidSim.Deliver(sim, "LC_SESSION_RESUME")
+    KARTTEST.AdvanceTime(60)            -- the state request's own retry budget
+    T.eq(torvi.KART.LC.sessionActive, true,
+        "a client that never learned the session state asks again until it does")
+end
+
+-- The backstop on its own: the owner's answer is lost, and an ordinary raider supplies it instead.
+-- Before this, the loot owner was the only client allowed to say the session was running AND the
+-- only one that could learn it -- so whenever the owner was the unstable part, a joiner could ask
+-- all evening and never find out there was a session at all.
+do
+    local sim = NewRaid()
     RaidSim.Blackhole(sim, "LC_ACTIVE")
 
     local torvi = RaidSim.Join(sim, NEWCOMER)
     RosterSettles(sim)
-    T.eq(torvi.KART.LC.sessionActive, false, "the lost session flag really is lost")
-    T.eq(torvi.KART.LC.raidConfig.lootmaster, lm.guid, "while the config arrived normally")
+    KARTTEST.AdvanceTime(10)            -- the peers' answers are jittered a few seconds
 
-    RaidSim.Deliver(sim, "LC_ACTIVE")
-    KARTTEST.AdvanceTime(60)            -- the state request's own retry budget
     T.eq(torvi.KART.LC.sessionActive, true,
-        "a client that never learned the session state asks again until it does")
+        "a raider who knows tells the joiner, when the owner's own answer never arrives")
+    -- Counting them would count the owner's own, which is legitimate. What must not happen is a
+    -- plain raider taking it upon itself to assert the flag after being told.
+    local fromRaiders = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ACTIVE:1")) do
+        if e.from == "Alric" or e.from == "Sinja" or e.from == "Torvi" then
+            fromRaiders = fromRaiders + 1
+        end
+    end
+    T.eq(fromRaiders, 0,
+        "and no plain raider starts asserting the flag itself -- they only learned something")
 end
 
 -- Two roster blips inside one confirmation window. The confirmation timer was never cancelled when
@@ -783,19 +815,17 @@ do
 end
 
 -- ===================================================================================
--- KNOWN GAP (docs/BACKLOG.md B65): the lootmaster leaves for good, then someone joins
+-- The lootmaster leaves for good, then someone joins (B65)
 -- ===================================================================================
--- Standing in deliberately moves only the LOOT FLOW, not the config -- so the departed
--- lootmaster's name survives and they can pick the role back up when they return (see
--- LC.HandleResign and LC.IsConfigOwner). The cost, pinned here rather than left to be
--- rediscovered: while nobody owns the config, nobody re-broadcasts it, so anyone arriving
--- afterwards runs on their OWN vote buttons and their own roll setting.
+-- Standing in deliberately moves only the LOOT FLOW, not the config -- the departed lootmaster's
+-- name survives so they can pick the role back up when they return (LC.HandleResign,
+-- LC.IsConfigOwner). Nobody owns the config while that is true, so nobody re-broadcasts it, and
+-- anyone arriving afterwards used to run the evening on their OWN vote buttons, their own minimum
+-- quality and their own roll setting -- their vote reaching the council under a different label
+-- than they clicked, with nothing to show for it on either side.
 --
--- Everyone who was already there keeps the raid's config, so the raid does not come apart --
--- but the newcomer's votes arrive under different labels than they clicked.
---
--- This test asserts what the addon does TODAY. It is here to make the gap visible and to fail
--- loudly if it is ever fixed, so the fix gets its proper test instead of quietly landing.
+-- The stand-in now hands on what the raid settled on (LC.RelayRaidConfig), with the lootmaster
+-- field empty: here is the config, not "and I am in charge of it".
 do
     local sim, lm, council = NewRaid()
     RaidSim.Leave(sim, lm.name)
@@ -811,10 +841,47 @@ do
     T.eq(council.KART.LC.raidConfig.buttonLabels, "BIS;Upgrade;Offspec;Sonstiges;Pass",
         "everyone who was already there keeps the raid's config")
     T.eq(torvi.KART.LC.sessionActive, true, "the newcomer is in the session")
-    T.is_nil(torvi.KART.LC.raidConfig.buttonLabels,
-        "but has no raid config at all -- B65, this is the gap")
-    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), false,
-        "so they fall back to their own roll setting, which is off -- B65")
+    T.eq(torvi.KART.LC.raidConfig.buttonLabels, "BIS;Upgrade;Offspec;Sonstiges;Pass",
+        "and gets the raid's vote buttons, not their own")
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), true,
+        "and the raid's roll setting, which their own default has off")
+    T.deep_eq(RaidSim.As(torvi, torvi.KART.LC.GetButtonConfig),
+              RaidSim.As(council, council.KART.LC.GetButtonConfig),
+        "so their vote reaches the council under the label they clicked")
+    -- The relay says nothing about who is in charge. Ownership stays derived, which is what lets
+    -- the real lootmaster reclaim it by simply coming back.
+    T.eq(torvi.KART.LC.raidConfig.lootmaster, "",
+        "the relay claims no lootmaster of its own")
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetLootmaster),
+         RaidSim.As(council, council.KART.LC.GetLootmaster),
+        "and the newcomer reads the same loot owner as everyone else")
+end
+
+-- The relay must never REPLACE a config, only fill a void -- otherwise it becomes a second
+-- authority, and a stale forwarded copy could undo the real lootmaster's own broadcast.
+do
+    local sim, lm, council, raider = NewRaid()
+    local lmKey = lm.guid
+    -- Same setup as above, so the stand-in really is the loot owner and its relay really goes out.
+    RaidSim.Leave(sim, lm.name)
+    RaidSim.Promote(sim, council.name)
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
+    KARTTEST.AdvanceTime(5)
+
+    local before = raider.KART.LC.raidConfig.buttonLabels
+    T.truthy(RaidSim.As(council, council.KART.LC.IsLootOwner),
+        "the stand-in holds the loot flow, so its relay is actually sent")
+
+    RaidSim.As(council, function()
+        council.KART.LC.raidConfig.buttonLabels = "Forged;Nonsense"
+        council.KART.LC.RelayRaidConfig(raider.name .. "-" .. raider.realm)
+    end)
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY") > 0, true, "and it did go out")
+    T.eq(raider.KART.LC.raidConfig.buttonLabels, before,
+        "but a relay aimed at someone who already has a config changes nothing")
+    T.eq(raider.KART.LC.raidConfig.lootmaster, lmKey,
+        "and cannot take the lootmaster off them either")
 end
 
 -- ===================================================================================
@@ -898,4 +965,43 @@ do
 
     T.eq(torvi.KART.LC.sessionActive, true,
         "a blip costs one attempt, not the whole retry sequence")
+end
+
+-- The raid leader reloads after the lootmaster is gone, and invents a config
+-- ===================================================================================
+-- With the lootmaster gone, LC.IsConfigOwner falls back to the raid leader -- guarded by fromSelf
+-- so a leader cannot push their own settings over a config the raid received. A reload clears
+-- raidConfig, which leaves that guard nothing to bite on: LC.ApplyOwnConfig then writes the
+-- LEADER'S defaults in (rolls off, empty council list) and marks them the owner, and the relay that
+-- would have restored the raid's config was refused because "a config is already there".
+--
+-- The relay now replaces a config that was self-invented from defaults while the client's own
+-- Lootmaster field is empty. A leader who typed their own name in that field owns their config on
+-- purpose and is left alone.
+--
+-- Found by tests/test_lc_soak.lua (seed 73).
+do
+    local sim, lm, council = NewRaid()
+    RaidSim.Leave(sim, lm.name)
+    -- The rest of the council goes too, on purpose: council and the loot owner relay IMMEDIATELY,
+    -- which would answer before the leader's own LC.ApplyOwnConfig could invent anything and the
+    -- test would pass whether the fix is there or not. With only ordinary raiders left to answer,
+    -- their reply is jittered a few seconds and lands on a config the leader has already made up --
+    -- which is the case that matters.
+    RaidSim.Leave(sim, "Corvin")
+    RaidSim.Promote(sim, council.name)
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
+    KARTTEST.AdvanceTime(5)
+
+    local leader = RaidSim.Reload(sim, council.name)
+    RaidSim.EnterWorld(sim, council.name)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(60)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled), true,
+        "the reloaded leader gets the RAID's roll setting back, not their own default")
+    T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled),
+         RaidSim.As(sim.byName.Alric, sim.byName.Alric.KART.LC.GetRollsEnabled),
+        "and agrees with the raiders who never reloaded")
 end

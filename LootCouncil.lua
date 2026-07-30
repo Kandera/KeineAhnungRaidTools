@@ -763,6 +763,77 @@ function LC.BroadcastRaidConfig(target)
     if payload then LC.SendLC(payload, target) end
 end
 
+-- Hands on the config the RAID agreed, to a client that has none (B65).
+--
+-- Once the named lootmaster is gone for good, nobody owns the config: standing in deliberately moves
+-- only the loot flow, so the departed name stays in raidConfig and they can pick the role back up
+-- when they return (see LC.HandleResign, LC.IsConfigOwner). Nothing re-broadcast it after that, so
+-- anyone arriving later ran the evening on their own vote buttons, their own minimum quality and
+-- their own roll setting -- and their vote reached the council under a different label than they
+-- clicked, with nothing to show for it on either side.
+--
+-- Three things keep this from becoming a second, competing authority:
+--   * It carries LC.raidConfig, never KART_Settings. A stand-in's own (usually empty) council list
+--     can no more overwrite the raid's here than it could through LC.BroadcastRaidConfig.
+--   * The lootmaster field goes out EMPTY. This says "here is what the raid settled on", not "and I
+--     am in charge of it": ownership stays derived, so the real lootmaster reclaims it simply by
+--     coming back and broadcasting (their own field names them, ours does not).
+--   * Only whoever is actually running the loot flow relays, and only to someone who asked.
+-- The receiving side adds the fourth: it fills a void and never replaces anything.
+function LC.RelayRaidConfig(target)
+    if not (IsInGroup() and target) then return end
+    if next(LC.raidConfig) == nil then return end
+    if LC.IsConfigOwner() then return end  -- the owner sends the real thing, with their name on it
+    -- No role test beyond that, deliberately. Restricting this to the loot owner, and then to the
+    -- council, kept covering the wrong half: after the lootmaster leaves and a few people reload,
+    -- the only client still holding the config the raid agreed can be an ordinary raider -- and
+    -- that is exactly the raid where somebody needs handing it. The receiver's rule is what makes
+    -- this safe from anyone: it fills a void and can never replace or clear an existing config, so
+    -- the worst a wrong sender achieves is giving settings to a client that had none.
+    local prefix = "LC_CONFIG_RELAY:" .. (LC.raidConfig.minQuality or 4) .. ":"
+        .. (LC.raidConfig.buttonLabels or "") .. ":"
+        .. (LC.raidConfig.rollsEnabled and "1" or "0") .. "::"
+    local payload = BuildCouncilPayload(prefix, LC.raidConfig.councilMembers or "")
+    if payload then LC.SendLC(payload, target) end
+end
+
+-- The other half. Accepted only into an EMPTY raidConfig, which is what makes it safe to send from
+-- someone who is not the config owner: it can give a client the raid's settings, and it can never
+-- take anything away or overwrite a real config with a forwarded copy. A returning lootmaster whose
+-- own ApplyOwnConfig has already run is therefore untouched by it.
+function LC.HandleConfigRelay(payload, senderKey)
+    -- A void, or a config nobody agreed. The second case is the raid leader after a reload: their
+    -- raidConfig came back empty, their own Lootmaster field is empty too, so LC.ApplyOwnConfig
+    -- makes them config owner by the raid-leader fallback and writes THEIR defaults into it --
+    -- usually rolls off and an empty council list. The fromSelf guard in LC.IsConfigOwner exists to
+    -- stop exactly that, and it has nothing to bite on once a reload has cleared the table. A
+    -- leader who typed their own name in the field is untouched: that is a config they own on
+    -- purpose, and declaredKey short-circuits the fallback long before this.
+    local ownField = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
+    local selfInvented = LC.raidConfig.fromSelf and not ownField
+    if next(LC.raidConfig) ~= nil and not selfInvented then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+    local minQ, buttons, rolls, _, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
+    if not minQ then return end
+
+    LC.raidConfig.minQuality     = tonumber(minQ) or 4
+    LC.raidConfig.buttonLabels   = buttons
+    LC.raidConfig.rollsEnabled   = (rolls == "1")
+    -- Left empty on purpose, matching what the sender put on the wire: nobody owns this config, so
+    -- LC.GetLootmaster falls back to raid lead here exactly as it already does on every client that
+    -- watched the lootmaster leave.
+    LC.raidConfig.lootmaster     = ""
+    LC.raidConfig.councilMembers = council
+    LC.raidConfig.fromSelf       = nil
+
+    LC.CouncilNamesTable = {}
+    for _, name in ipairs(KAUtil.SplitString(council, ";")) do
+        local key = LC.ResolveConfigName(name)
+        if key then LC.CouncilNamesTable[key] = true end
+    end
+    if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
+end
+
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
 -- the full raid config per letter floods the raid with addon messages. Coalesce edits into a single
 -- broadcast ~1s after typing stops (trailing edge, so the final complete text is what actually goes
@@ -1217,16 +1288,25 @@ function LC.HandleStateRequest(requester, requesterKey)
     -- person it is about and only while their session is off (see LC.HandleSessionResume), so the
     -- late whispers that arrive after a successful resume do nothing at all. Jittered so twenty
     -- clients do not answer in the same instant and lose the lot to the chat throttle.
-    if LC.sessionActive and requesterKey and not LC.IsLootOwner()
-        and requesterKey == LC.GetLootOwnerKey() then
-        if LC.IsCouncil() or UnitIsGroupLeader("player") then
+    --
+    -- Sent to ANY asker, not only to the loot owner. The owner's own LC_ACTIVE below is the fast,
+    -- authoritative answer and stays the normal path — but it is the only one, and when the owner
+    -- is the unstable part (gone, just arrived, mid-reload) a joiner asked and asked and never
+    -- learned there was a session at all. This is the backstop for that, and it is why the receiver
+    -- now accepts it from anyone who does not yet know (see LC.HandleSessionResume).
+    if LC.sessionActive and requesterKey and not LC.IsLootOwner() then
+        -- Council and the raid leader answer at once when the asker is the owner themselves; that
+        -- is the reload case, and it is the one that must not wait. Everyone else, and every other
+        -- asker, comes a few seconds behind, by which time the owner's own answer has usually made
+        -- this a no-op.
+        if (LC.IsCouncil() or UnitIsGroupLeader("player"))
+            and requesterKey == LC.GetLootOwnerKey() then
             LC.SendLC("LC_SESSION_RESUME", requester)
         else
             C_Timer.After(3 + math.random() * 4, function()
                 -- Re-checked on arrival: we may have left, lost the session, or become the owner
                 -- ourselves in the meantime.
-                if LC.sessionActive and not LC.IsLootOwner()
-                    and requesterKey == LC.GetLootOwnerKey() then
+                if LC.sessionActive and not LC.IsLootOwner() then
                     LC.SendLC("LC_SESSION_RESUME", requester)
                 end
             end)
@@ -1242,6 +1322,17 @@ function LC.HandleStateRequest(requester, requesterKey)
     -- their reply dropped and the joiner sat out the session.
     if LC.sessionActive and LC.IsConfigOwner() then
         LC.BroadcastRaidConfig(requester)
+    elseif LC.sessionActive then
+        -- Nobody owns the config -- the lootmaster left for good. Hand on what the raid settled on
+        -- rather than let the asker run the evening on their own vote buttons (B65). Whoever is
+        -- running the loot flow and the council answer at once; everyone else a few seconds behind,
+        -- by which time one of those has usually made it a no-op. Jittered so a raid full of
+        -- raiders does not answer in the same instant and lose the lot to the chat throttle.
+        if LC.IsLootOwner() or LC.IsCouncil() then
+            LC.RelayRaidConfig(requester)
+        else
+            C_Timer.After(3 + math.random() * 4, function() LC.RelayRaidConfig(requester) end)
+        end
     end
     -- Only when our flag is an answer rather than a starting value (see LC.sessionStateKnown). A
     -- freshly reloaded loot owner is still the loot owner, so without this they replied "session
@@ -1264,7 +1355,17 @@ function LC.HandleSessionResume(senderKey)
     if LC.sessionActive or not IsInGroup() then return end
     -- The sender has to be someone actually in our group, and the claim has to be about us.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    if not LC.IsLootOwner() then return end
+    -- Originally the loot owner and nobody else, because the loot owner is the only client that can
+    -- ASSERT the flag. But they are also the only client that could ever LEARN it: LC_ACTIVE is
+    -- answered by the owner alone, so when the owner is the unstable part -- gone, just arrived, or
+    -- reloading -- a joiner asked and asked and never found out there was a session at all.
+    --
+    -- Widened to anyone who does not yet know, which keeps the property that matters: this can only
+    -- ever turn a session ON. There is deliberately no resume that turns one off, because the damage
+    -- the two directions do is not remotely comparable. A client that already KNOWS the state (it
+    -- heard the owner) is not talked out of it by a peer's stale claim -- except the loot owner
+    -- itself, whose own knowledge after a reload is exactly what is missing.
+    if LC.sessionStateKnown and not LC.IsLootOwner() then return end
     -- No council-membership check on the sender, deliberately, and it was tried: the client
     -- receiving this has just reloaded, so its council list is empty and it cannot verify anybody.
     -- The check refused every legitimate resume and would not have caught the case that actually
@@ -1295,7 +1396,10 @@ function LC.HandleSessionResume(senderKey)
     -- one peer into something the whole raid converges on — and if the claim was stale, everybody
     -- gets a session that is visibly on and can be ended, instead of the owner quietly force-winning
     -- into their bags while nineteen clients have no session at all.
-    LC.SendLC("LC_ACTIVE:1")
+    -- Only the loot owner may assert the flag, and only their assertion is accepted (see
+    -- LC.HandleActive). An ordinary raider resumed by a peer has learned something, not become an
+    -- authority: it keeps the session for itself and says nothing.
+    if LC.IsLootOwner() then LC.SendLC("LC_ACTIVE:1") end
     print("|cff00ff00KART:|r " .. KART.L.LC_SESSION_RESUMED)
 end
 
@@ -1747,8 +1851,19 @@ local STATE_REQ_BACKOFF = { 2, 5, 15, 45 }
 -- LC.stateSyncRequested used to be, and it never came back off — see LC.CheckRaidJoin.
 local stateReqInFlight = false
 
+-- What a state request is still FOR. Two things travel in every reply and only one of them used to
+-- gate the asking: a client that learned the session flag and missed the config stopped asking, and
+-- spent the evening on its own vote buttons with no way to notice. A running session with no config
+-- at all is an anomaly by construction -- the config goes out before the flag, from
+-- LC.SetSessionActive and from every reply in LC.HandleStateRequest -- which is what keeps this from
+-- turning into a raid full of clients asking forever.
+local function StateStillNeeded()
+    if not LC.sessionStateKnown then return true end
+    return LC.sessionActive and next(LC.raidConfig) == nil
+end
+
 local function RequestSessionState(attempt)
-    if LC.sessionStateKnown or KART_Settings.lcModuleEnabled == false then
+    if not StateStillNeeded() or KART_Settings.lcModuleEnabled == false then
         stateReqInFlight = false
         return
     end
@@ -1871,7 +1986,7 @@ function LC.CheckRaidJoin()
     -- attempt — never asked again, and sat outside a session the rest of the raid was in for the
     -- whole evening. Every roster change is now another chance, which is what a roster change was
     -- always meant to be.
-    if not LC.sessionStateKnown and not stateReqInFlight then
+    if StateStillNeeded() and not stateReqInFlight then
         RequestSessionState(1)
     end
 
@@ -2513,6 +2628,8 @@ KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled 
     function(payload, ctx) LC.HandleManualStart(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_CONFIG_RELAY", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleConfigRelay(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },
