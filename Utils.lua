@@ -78,6 +78,39 @@ KART.Defaults = {
     autoLogOwned = false, -- hidden: whether the addon (not the player) started the current combat log
 }
 
+-- Settings held OFF, and greyed out in the options so they cannot be switched on by hand.
+--
+-- Both drive the relevance features, and ten open backlog entries hang off them: B36 to B39, B41,
+-- B42, B49 to B51 and B54. The worst contradicts what the switch itself promises -- "irrelevant"
+-- also covers wrong loot specialisation, level requirement and unique-equipped, so a Holy Paladin
+-- with hiding on never sees the plate chest they would have taken for off-spec (B36, GitHub issue
+-- #11). Maintainer's call, 2026-07-30: fix the rest of the addon first, and make sure nobody turns
+-- these on in the meantime.
+--
+-- Forced rather than merely defaulted off, because a default only covers a fresh install: anyone who
+-- already switched one on, or loads a profile that has it on, would still be exposed.
+--
+-- To re-enable, delete this list and its two uses -- KART.EnforceWithheldSettings (called from
+-- KART.SyncSettingsToUI) and KART.WithholdCheckbox (called in LootCouncilSettings.lua). Nothing else
+-- reads either.
+KART.WithheldSettings = { "lcHideIrrelevant", "lcAutoTransmogVote" }
+
+-- Called from KART.SyncSettingsToUI, which runs at login AND on every profile switch -- the two ways
+-- a value can arrive that this addon did not just write itself.
+function KART.EnforceWithheldSettings()
+    if not KART_Settings then return end
+    for _, key in ipairs(KART.WithheldSettings) do KART_Settings[key] = false end
+end
+
+-- Greys a settings checkbox out and stops it answering clicks. Alpha rather than a text colour: the
+-- label is registered with KAUI and every restyle rewrites its colour, which would quietly bring the
+-- control back to looking live.
+function KART.WithholdCheckbox(cb)
+    if not cb then return end
+    if cb.Disable then cb:Disable() end
+    cb:SetAlpha(0.4)
+end
+
 -- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside
 -- KAUI-1.0's own copy) purely so the settings-tab strata slider (MainFrame.lua) has a name list
 -- and count to build its range and value display from. The strata registries and the apply/

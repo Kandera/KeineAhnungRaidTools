@@ -280,6 +280,7 @@ KART.L_enUS = {
     LC_STATUS_TOLD         = "told",
     LC_STATUS_UNTOLD       = "never told",
     LC_STATUS_TRACKED      = "Rolls tracked: %d (%d mine to hand out), vote rows: %d, council tabs: %d",
+    SET_WITHHELD           = "Temporarily unavailable. Known defects in this feature are being fixed first -- it stays off until they are.",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
     LC_AUTO_VOTED_HINT     = "KART answered this item for you. Click any response to change it.",

@@ -280,6 +280,7 @@ KART.L_deDE = {
     LC_STATUS_TOLD         = "mitgeteilt",
     LC_STATUS_UNTOLD       = "nie mitgeteilt",
     LC_STATUS_TRACKED      = "Verfolgte Würfe: %d (%d davon meine zum Verteilen), Vote-Zeilen: %d, Council-Tabs: %d",
+    SET_WITHHELD           = "Vorübergehend nicht verfügbar. Bekannte Fehler in dieser Funktion werden zuerst behoben -- bis dahin bleibt sie aus.",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",
     LC_AUTO_VOTED_HINT     = "KART hat dieses Item für dich beantwortet. Klick eine beliebige Antwort, um das zu ändern.",
