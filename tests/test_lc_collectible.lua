@@ -74,3 +74,33 @@ T.eq(LC.IsCollectibleItem(249364, MISC, nil), true, "even a known token stays ou
 T.eq(LC.IsCollectibleItem(nil, MISC, 0), true, "subclass 0 without an itemID cannot be told from a toy, so it stays out")
 -- Outside Miscellaneous nothing changes: unresolved still means "ordinary gear, let Council have it".
 T.eq(LC.IsCollectibleItem(nil, nil, nil), false, "an entirely unresolved item is not a collectible")
+
+-- KNOWN GAP (docs/BACKLOG.md B56): a toy is not recognised until the Toy Box has loaded
+-- ----------------------------------------------------------------------------------------------
+-- A toy is classID 15 / subclass 0 -- the same pair as every tier token -- so C_ToyBox.GetToyInfo is
+-- the only thing keeping it out of Council. That call answers nil whenever the Toy Box data has not
+-- loaded for the session, e.g. on a fresh login where Collections was never opened. The toy then
+-- reads as "not a collectible", the lootmaster force-wins it and every Auto-Pass raider passes: the
+-- standing rule that collectibles never enter Loot Council, broken.
+--
+-- Pinned as it behaves TODAY, so the gap is visible and a fix cannot land without its own test.
+--
+-- Deliberately NOT fixed by flipping the unknown case to "collectible". That direction is worse: a
+-- lootmaster whose Toy Box happens to read empty would then keep every TIER TOKEN out of Council,
+-- on the most contested drop in the instance. Which way to jump depends on whether "the data is not
+-- loaded" can be told apart from "this player owns no toys" at all, and that is a measurement in a
+-- live client, not something to reason out here.
+do
+    local TOY = 198857
+    toys[TOY] = nil                       -- Toy Box not loaded: the API cannot answer
+    T.eq(LC.IsCollectibleItem(TOY, MISC, 0), false,
+        "an unrecognised toy reads as a normal item -- B56, this is the gap")
+
+    toys[TOY] = { TOY, "A Toy" }          -- once the data is there, it is recognised
+    T.eq(LC.IsCollectibleItem(TOY, MISC, 0), true, "and is kept out of Council once the Toy Box knows it")
+    toys[TOY] = nil
+end
+
+-- The one case where "unknown" is already treated as "keep out": no itemID at all.
+T.eq(LC.IsCollectibleItem(nil, MISC, 0), true,
+    "an item we cannot identify at all is kept out of Council rather than force-won")

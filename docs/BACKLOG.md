@@ -109,7 +109,21 @@ button looks like it did nothing.
 The fix has to stay on our side of the frame boundary. Two candidates, both taint-free because they
 only touch our own frames: lower the consumer's own windows while one of our popups is up, or stop
 using Blizzard's StaticPopup for our own confirms and build them from `KAUI:ApplyPopupArtwork`, which
-already backs every other window in the addon. Seven call sites use `RegisterStaticPopup` today.
+already backs every other window in the addon. Eight call sites use `RegisterStaticPopup` today.
+
+**Established 2026-07-30, so it is not re-derived:** the cheaper of the two is not as cheap as it
+looks. KAUI keeps its own registry of the frames it manages strata for (`strataFrames`,
+`strataDialogFrames`), but the Loot Council windows deliberately do NOT use it — they carry their own
+list and their own stratum setting (`LC.windowFrames` / `LC.windowDialogs`, see B22). Lowering "our
+windows" therefore has to reach both, which means a hook the library does not have yet rather than a
+few lines inside `RegisterStaticPopup`.
+
+Neither candidate is verifiable offline: the harness's frames are stubs and stratum, taint and
+"is it actually on top" are all invisible there. Whichever is built has to be checked in a client.
+
+What IS already guarded is the regression that caused this: `tests/test_kaui.lua` observes the popup
+frame through `RegisterStaticPopup` and fails if anything writes its stratum, level or parent, or
+leaves bookkeeping on it. That is a behavioural check on the real code path, not a comment.
 
 ---
 
