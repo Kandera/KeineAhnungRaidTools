@@ -26,17 +26,41 @@ local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1-T",
 local SEEDS = tonumber(os.getenv("KART_SOAK_SEEDS") or "") or 150
 local EVENTS_PER_RUN = 18
 
-local function pick(list) return list[math.random(#list)] end
+-- The script generator draws from its OWN stream, not from math.random.
+--
+-- It used to share math.random with the addon, and that quietly broke the one property this whole
+-- file rests on: "a seed reproduces exactly". The addon draws from the same stream for its jitter
+-- (LC.HandleStateRequest, RequestSessionState), so ANY change to how often the addon rolls a number
+-- shifts every later draw -- and the same seed then walks a completely different script. Measured:
+-- adding one timer to the join path changed seed 631 from
+--   leave>leave>endround>award>join>drop>...
+-- to
+--   leave>promote>vote>vote>settle>throttle>endround>...
+-- which makes a before/after comparison meaningless exactly when one is needed, and turns
+-- KART_SOAK_DEBUG=<seed> into a debugger that shows a different bug than the one that failed.
+--
+-- A plain 32-bit LCG (Numerical Recipes constants). Not good randomness, and it does not need to be:
+-- what it needs is to be OURS, so the script for seed N is the same script whatever the addon does.
+local rngState = 0
+local function rnd(n)
+    rngState = (1664525 * rngState + 1013904223) % 4294967296
+    return (math.floor(rngState / 65536) % n) + 1
+end
+
+local function pick(list) return list[rnd(#list)] end
 
 -- One random script. Returns a list of complaints; empty means this raid came out of it agreeing.
 local function runOne(seed)
+    rngState = seed
+    -- Still seeded, because the addon uses math.random itself and an unseeded run would differ
+    -- between invocations for reasons that have nothing to do with the script.
     math.randomseed(seed)
     local sim = NewRaid()
     -- Resolved fresh on every use, never captured: RaidSim.Reload REPLACES a client object, so a
     -- list held across one would drive a client that no longer exists -- and the test, not the
     -- addon, would be the thing that is out of sync.
     local COUNCIL = { "Bramor", "Merrit", "Corvin" }
-    local function councilMember() return sim.byName[COUNCIL[math.random(#COUNCIL)]] end
+    local function councilMember() return sim.byName[COUNCIL[rnd(#COUNCIL)]] end
     local nextRoll = 200
     -- [rollID] = the clients that were in the raid when it dropped. Anyone who joins later, or
     -- reloads afterwards, is deliberately left out of a distribution already running -- so they
@@ -145,7 +169,7 @@ local function runOne(seed)
             local id = openRoll()
             if not id then return end
             local c = pick(sim.clients)
-            RaidSim.As(c, function() c.KART.LC.Vote.CastVote(id, math.random(1, 4)) end)
+            RaidSim.As(c, function() c.KART.LC.Vote.CastVote(id, rnd(4)) end)
             check(id, "a vote")
         end },
         -- A council member picks a candidate. Non-binding, but every council member's tally has to
@@ -229,7 +253,7 @@ local function runOne(seed)
         { "blip", function()
             local c = pick(sim.clients)
             KARTTEST.solo[c.unit] = true
-            KARTTEST.AdvanceTime(math.random(1, 2))
+            KARTTEST.AdvanceTime(rnd(2))
             KARTTEST.solo[c.unit] = nil
         end },
         -- Messages go missing. Blizzard's chat throttle drops the overflow silently and the sender
@@ -247,7 +271,7 @@ local function runOne(seed)
         { "settle", function()
             deliverExpired(true)
             RaidSim.RosterUpdate(sim)
-            KARTTEST.AdvanceTime(math.random(1, 10))
+            KARTTEST.AdvanceTime(rnd(10))
             answerPrompts()
         end },
         -- The council ends the round. Every tracked roll goes, everywhere.
@@ -265,7 +289,7 @@ local function runOne(seed)
         -- Seconds pass between things happening in a raid. Without this the whole script ran inside
         -- one instant, so nothing ever timed out, no retry ever came due, and a throttle modelled as
         -- lasting seconds outlived the entire run.
-        KARTTEST.AdvanceTime(math.random(1, 5))
+        KARTTEST.AdvanceTime(rnd(5))
         deliverExpired(false)
         answerPrompts()   -- a person clicks the prompt in front of them within seconds
         local a = pick(actions)
@@ -323,7 +347,8 @@ local function runOne(seed)
                 tostring(c.KART.LC.raidConfig.buttonLabels),
                 tostring(c.KART.LC.raidConfig.lootmaster)))
         end
-        for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ", "LC_SESSION_RESUME", "LC_RESIGN" }) do
+        for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
+                                 "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLL_CATCHUP" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
                     tostring(e.target or e.channel), e.msg:sub(1, 60)))
@@ -335,17 +360,50 @@ local function runOne(seed)
     return bad
 end
 
+-- What KIND of disagreement this is, with the run-specific parts taken out: numbers become N and
+-- everything after the first colon (the two clients and their values) is dropped. "config.buttons"
+-- and "roll N after it dropped" are the two that have actually turned up.
+--
+-- Reporting only the FIRST break, which is all this did, is enough to know something is wrong and
+-- almost useless for deciding what to do about it: one line cannot say whether the thirteen breaks
+-- in three thousand runs are thirteen instances of one bug or one instance each of thirteen. The
+-- tally is what points the next piece of work at the right thing.
+local function Signature(line)
+    local body = line:match("||%s*(.*)") or line
+    return (body:gsub("%d+", "N"):match("^([^:]+)") or body):sub(1, 60)
+end
+
 local broken, firstSeed, firstWhy = 0, nil, nil
+local kinds, kindSeed = {}, {}
+local function Record(seed, why)
+    broken = broken + 1
+    firstSeed = firstSeed or seed
+    firstWhy = firstWhy or why
+    local sig = Signature(why)
+    kinds[sig] = (kinds[sig] or 0) + 1
+    kindSeed[sig] = kindSeed[sig] or seed
+end
+
 for seed = 1, SEEDS do
     local ok, res = pcall(runOne, seed)
     if not ok then
-        broken = broken + 1
-        firstSeed = firstSeed or seed
-        firstWhy = firstWhy or ("error: " .. tostring(res))
+        Record(seed, "error: " .. tostring(res))
     elseif #res > 0 then
-        broken = broken + 1
-        firstSeed = firstSeed or seed
-        firstWhy = firstWhy or res[1]
+        Record(seed, res[1])
+    end
+end
+
+if broken > 0 then
+    local sigs = {}
+    for sig in pairs(kinds) do sigs[#sigs + 1] = sig end
+    table.sort(sigs, function(a, b)
+        if kinds[a] ~= kinds[b] then return kinds[a] > kinds[b] end
+        return a < b
+    end)
+    print(string.format("soak: %d of %d runs disagreed, by kind:", broken, SEEDS))
+    for _, sig in ipairs(sigs) do
+        print(string.format("  %4d  %-40s (first at seed %d, KART_SOAK_DEBUG=%d)",
+            kinds[sig], sig, kindSeed[sig], kindSeed[sig]))
     end
 end
 

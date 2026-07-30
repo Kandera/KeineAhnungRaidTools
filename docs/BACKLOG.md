@@ -259,6 +259,46 @@ by another route. The role-status label meanwhile reports that all is well.
 soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
 `tests/test_lc_baseflow.lua`.
 
+## B68 — after the lootmaster leaves, the raid holds two incompatible answers to "who may announce loot"
+
+Measured, not reasoned: 10 of the 13 breaks in a 3000-run soak are this, and they surface as
+**items nobody ever sees**. Reproduce with `KART_SOAK_DEBUG=515`.
+
+The end state of that run, with Bramor (the configured lootmaster) gone:
+
+```
+Merrit   lm=              <- reloaded, got a CONFIG_RELAY
+Torvi    lm=              <- joined, got a CONFIG_RELAY
+Corvin   lm=Player-1-B    <- still holds Bramor's original LC_CONFIG
+Alric    lm=Player-1-B
+```
+
+`LC.RelayRaidConfig` blanks the lootmaster field on purpose (B65): the relayer is not the config
+owner and must not write its own name in. So every client that learns the config through a relay
+ends up with an empty field and falls back to the raid leader, while every client that still holds
+the ORIGINAL config keeps naming somebody who is no longer in the raid — and that name cannot be
+displaced, which is the same shape as B29.
+
+The two populations then disagree about ownership in both directions:
+
+* The clients with an empty field think the raid leader owns the loot flow, so the leader broadcasts.
+* The clients naming Bramor judge that broadcast with `IsSenderLootOwner`, do not agree, and drop it.
+* The clients naming Bramor find no loot owner at all, so they never broadcast either.
+
+In seed 515 the result is that **not one `LC_START` is sent for the whole run**. Corvin has the item
+from Blizzard's own roll and Torvi has nothing; no vote window, no council, no distribution, and
+nothing printed anywhere.
+
+Same crack as B57 — two ownership answers that are each correct on their own client — but costing
+items rather than a stuck End Round. B57 widened one receiver; this needs the departure of a named
+lootmaster to reach every client's config, not just the ones that happen to ask for a relay
+afterwards.
+
+Not attempted yet. The obvious move (have the relay carry the departed name too) re-creates B29:
+a name nobody can displace. The other direction — invalidate the name raid-wide when its holder
+leaves — is what `LC_RESIGN` already does for a voluntary hand-over and would have to be made to
+fire for an involuntary one.
+
 ## B58 — nobody hands a late joiner the config while the lootmaster is away — FIXED 2026-07-30
 
 Follows from B29's fix, and is the price of not letting a stand-in rewrite the raid's settings.
