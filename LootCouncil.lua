@@ -811,6 +811,10 @@ function LC.BroadcastRaidConfig(target)
     -- Config authority follows the lootmaster entry, NOT raid lead — see LC.HandleConfig. A promoted
     -- assistant with empty settings would otherwise push those over the whole raid's config.
     if not (IsInGroup() and LC.IsConfigOwner()) then return end
+    -- And not while our claim is a guess nobody has confirmed (see LC.SetSessionActive, B69). This
+    -- has to be checked HERE rather than only at the point the session starts: every roster change
+    -- re-broadcasts, so a one-off guard would be undone by the next person walking in.
+    if LC.configClaimUnverified then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
@@ -1516,6 +1520,8 @@ function LC.HandleSessionResume(senderKey)
     LC.sessionStateKnown = true
     -- Same as LC.HandleActive: learned, not decided.
     LC.sessionStartedByUs = false
+    -- Somebody answered, so nothing we are holding back is a guess any more (B69).
+    LC.configClaimUnverified = nil
     -- The session was never ours to be asked about: it is already running.
     LC.promptedThisSession = true
     LC.HideSessionPrompt()
@@ -1879,13 +1885,56 @@ function LC.ClearAllRolls()
     if LC.voteListFrame then LC.voteListFrame:Hide() end
 end
 
+-- How long a session declared without an answer holds its config back (see below). One round trip:
+-- the loot owner's own reply to a state request is immediate, a peer's is jittered up to seven
+-- seconds, so ten covers both with room to spare.
+local CONFIG_CLAIM_GRACE = 10
+
 function LC.SetSessionActive(active)
+    -- Captured before the line below flips it: had the raid ever told us what it was already doing?
+    local wasTold = LC.sessionStateKnown
     LC.sessionActive = active
     -- We decided it, so our flag is now an answer and may be quoted to peers (see LC.sessionStateKnown).
     LC.sessionStateKnown = true
     -- And we decided it, which is what entitles a raid leader with an empty Lootmaster field to
     -- distribute their own settings as the raid's (see LC.IsConfigOwner).
     LC.sessionStartedByUs = active and true or false
+
+    -- Did we declare this session without ever hearing what the raid was already doing, on a claim
+    -- that rests only on holding raid lead with an empty Lootmaster field?
+    --
+    -- That is the B69 shape, and it is a normal evening rather than an exotic one: the lootmaster
+    -- steps out, somebody else has raid lead, that stand-in reloads, and three seconds after the
+    -- roster settles they are asked "no session is running, start one?" -- which is true only
+    -- because nobody has answered them yet (the state-request backoff runs 2/5/15/45 seconds). They
+    -- say yes, and BroadcastRaidConfig puts THEIR settings on the wire as the raid's. A raider who
+    -- also reloaded around then takes that config and spends the rest of the evening on a roll
+    -- setting nobody chose -- which decides whether they roll at all, and is silent.
+    --
+    -- The session itself still starts at once; only the CONFIG waits, until either somebody tells us
+    -- what is going on (LC.HandleActive / LC.HandleSessionResume, and if a session really was
+    -- running we are not the config owner anyway) or the asking runs out of attempts, at which point
+    -- nobody is going to answer and our own settings are the raid's by default -- the documented
+    -- empty-field setup (B33). Holding it for that long costs an unconfigured minute at the very
+    -- start of a raid, before any boss has died.
+    if active and not wasTold
+        and not LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster) then
+        LC.configClaimUnverified = true
+        -- Released after one round trip rather than after the whole 2/5/15/45 backoff. A raid that
+        -- IS running answers within seconds -- the owner's own reply is immediate and a peer's is
+        -- jittered up to seven -- so anything still unanswered by now is a raid that has nothing to
+        -- tell us, and our settings are the raid's (B33). Waiting out the full backoff would leave a
+        -- genuinely fresh raid unconfigured for over a minute to catch a case that is decided in ten
+        -- seconds.
+        C_Timer.After(CONFIG_CLAIM_GRACE, function()
+            if not LC.configClaimUnverified then return end
+            LC.configClaimUnverified = nil
+            if LC.sessionActive then LC.BroadcastRaidConfig() end
+        end)
+    else
+        LC.configClaimUnverified = nil
+    end
+
     if active then LC.HideSessionPrompt() end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
@@ -2048,6 +2097,7 @@ local function TearDownForRaidExit()
     LC.sessionStartedByUs = false
     LC.standInAccepted = false
     LC.standInAsked = false
+    LC.configClaimUnverified = nil
     -- The raid's config belongs to the raid we just left. It survived before, so the same client
     -- walked into the next raid still naming a lootmaster who was never in it — the cross-raid half
     -- of B29, and a config nobody could displace because that stale name made IsSenderLootOwner
@@ -2520,6 +2570,10 @@ function LC.HandleActive(value, senderKey)
     LC.sessionActive = (value == "1")
     -- The owner told us, so our flag is an answer now (see LC.sessionStateKnown).
     LC.sessionStateKnown = true
+    -- ...and a config we were holding back for want of an answer is no longer a guess: either this
+    -- raid has an owner other than us, in which case IsConfigOwner says no anyway, or it does not
+    -- and ours stands (B69).
+    LC.configClaimUnverified = nil
     -- Told, not decided: this is somebody else's session, so the raid-leader fallback in
     -- LC.IsConfigOwner must not push our own settings over whatever the raid already agreed.
     LC.sessionStartedByUs = false

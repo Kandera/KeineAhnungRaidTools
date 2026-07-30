@@ -501,7 +501,16 @@ do
 
     T.truthy(RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
         "the raid leader owns the config when nobody is named")
-    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1, "so a config is broadcast after all")
+
+    -- Not instantly, though. A client that declares a session without ever having been told what the
+    -- raid was already running holds its config back for one round trip first (B69): the same three
+    -- clicks are made by a stand-in leader who reloaded into a raid that HAD a session and simply
+    -- had not heard yet, and there the broadcast pushes their own defaults over the raid's. Ten
+    -- seconds tells the two apart, because a raid that is running answers in far less than that.
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 0, "the config waits for one round trip first")
+    KARTTEST.AdvanceTime(15)
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1,
+        "and nobody having answered, the empty-field leader's own settings ARE the raid's")
 
     for _, c in ipairs(sim.clients) do
         T.eq(c.KART.LC.sessionActive, true, c.name .. " is in the session")

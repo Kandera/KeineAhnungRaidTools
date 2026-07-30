@@ -303,7 +303,7 @@ asking anybody about it.
   an empty field is the NORMAL state of a raid whose leader stands in. It now asserts that at least
   one client answers `IsLootOwner()`, which is what would have caught the leaderless raid at once.
 
-## B69 — a reloaded raid leader answers "start a session?" and pushes its own settings over the raid's
+## B69 — a reloaded raid leader answers "start a session?" and pushes its own settings over the raid's — FIXED 2026-07-30
 
 The residue of B68: 7 of 3000 soak runs, `KART_SOAK_DEBUG=878`. Traced end to end rather than
 guessed at — two guesses about this area were wrong first, and both are recorded below so they are
@@ -328,17 +328,34 @@ The chain, from the trace:
 `sessionStartedByUs` is asserting something untrue at step 4. Merrit did not start the session the
 raid is in; it declared a new one locally because it had not heard about the existing one yet.
 
-### What the fix has to decide
+### The fix: the session starts at once, the CONFIG waits
 
-Neither direction is obviously right, which is why nothing is implemented yet.
+Neither of the two obvious directions was taken. Gating the prompt on `LC.sessionStateKnown` is right
+in principle and costs the ordinary case — on a genuinely fresh raid nobody ever answers, so the
+prompt would wait out the whole backoff (~67 s) where today it appears after 3. Making a later,
+truer config win needs a precedence rule receivers cannot always evaluate.
 
-* **Do not ask while the answer is still outstanding.** Gate the prompt on `LC.sessionStateKnown`.
-  Correct in principle, and it costs the ordinary case: on a genuinely fresh raid nobody ever
-  answers, so the prompt would have to wait out the whole backoff (~67 s) before appearing. Today
-  the lootmaster is asked after 3 seconds.
-* **Let the later truth win.** Keep the prompt, but make a config from a client that turns out not to
-  own a running session lose to the real one. That needs a precedence rule receivers can actually
-  evaluate, and today they cannot always tell the two apart.
+What is in place instead separates the two halves of "yes":
+
+* The session starts immediately. Nothing about the prompt changed.
+* The CONFIG is held back, and only when BOTH are true: this client was never told what the raid was
+  already running, AND its own Lootmaster field is empty, so its claim rests purely on the raid-lead
+  fallback. A lootmaster who names themselves — the maintainer's own setup — is never affected.
+* It is released the moment anybody answers (`LC.HandleActive`, `LC.HandleSessionResume`), and
+  otherwise after `CONFIG_CLAIM_GRACE` (10 s), at which point the config goes out as normal. A raid
+  that IS running answers in under seven seconds; one that does not answer has nothing to say, and
+  then these settings ARE the raid's — the documented empty-field setup (B33).
+
+The guard sits in `LC.BroadcastRaidConfig`, not only at the point the session starts: every roster
+change re-broadcasts, so a one-off check would be undone by the next person walking in.
+
+**Measured over the same 3000 scripts: 8 runs disagreed before, 3 after.** Across the whole day's
+work on this file the soak went 13 → 3. Both halves of the guard were mutation-checked: removing the
+check in the broadcast, and never setting the marker, each turn the bootstrap test red.
+
+`tests/test_lc_baseflow.lua`'s B33 bootstrap changed with it, and deliberately: it now asserts that
+the config waits AND that it arrives afterwards. The old single assertion could not tell the
+difference.
 
 ### Two wrong turns, recorded so they are not repeated
 
