@@ -213,6 +213,20 @@ function RaidSim.Leave(sim, name)
         if c == client then table.remove(sim.clients, i) break end
     end
     sim.byName[name] = nil
+
+    -- A raid is never left without a leader. When the leader drops out the server hands the role to
+    -- somebody else immediately, and there is no moment in the game where a group has nobody in
+    -- charge -- so the harness must not produce one either.
+    --
+    -- It used to, and it cost real time: with no lootmaster configured the raid leader stands in
+    -- (see LC.IsLootOwner), so a leaderless raid has no loot owner at all, nobody broadcasts
+    -- LC_START, and every client sits there with an item Blizzard rolled and no vote window. That
+    -- looked exactly like a protocol bug and was written up as one -- it was this line missing.
+    -- Ten of the thirteen breaks in a 3000-run soak were this.
+    if client and client.member and client.member.leader and sim.clients[1] then
+        RaidSim.Promote(sim, sim.clients[1].name)
+    end
+
     Reindex(sim)
     return client
 end

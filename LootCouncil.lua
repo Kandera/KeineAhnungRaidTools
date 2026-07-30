@@ -2004,7 +2004,24 @@ local stateReqInFlight = false
 -- turning into a raid full of clients asking forever.
 local function StateStillNeeded()
     if not LC.sessionStateKnown then return true end
-    return LC.sessionActive and next(LC.raidConfig) == nil
+    if not LC.sessionActive then return false end
+    if next(LC.raidConfig) == nil then return true end
+    -- A config we INVENTED for ourselves is not an answer from the raid, and treating it as one is
+    -- how a client stops asking while running the wrong settings.
+    --
+    -- After a reload the table is empty, the raid-leader fallback in LC.IsConfigOwner goes live, and
+    -- LC.ApplyOwnConfig writes this client's OWN settings in with fromSelf set. From that moment
+    -- `next(LC.raidConfig) ~= nil` is true, so the question above answered "nothing left to ask" --
+    -- and nobody ever corrected it, because nothing else re-sends a config to a client that has not
+    -- asked. Measured in tests/test_lc_soak.lua: a raider who reloads late spends the rest of the
+    -- evening on their own roll setting while the raid is on the other one, which decides whether
+    -- they roll at all (B25's cost, arrived at from a different direction).
+    --
+    -- Same predicate LC.HandleConfigRelay uses to decide whether a relay may overwrite what we hold
+    -- (see there): fromSelf AND no lootmaster named in our own settings. A leader who typed their
+    -- own name in the field owns that config on purpose and is not asking anybody about it.
+    local ownField = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
+    return (LC.raidConfig.fromSelf and not ownField) or false
 end
 
 local function RequestSessionState(attempt)

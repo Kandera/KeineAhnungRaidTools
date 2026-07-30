@@ -259,45 +259,72 @@ by another route. The role-status label meanwhile reports that all is well.
 soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
 `tests/test_lc_baseflow.lua`.
 
-## B68 — after the lootmaster leaves, the raid holds two incompatible answers to "who may announce loot"
+## B68 — a config a client invented for itself counts as an answer, so it stops asking
 
-Measured, not reasoned: 10 of the 13 breaks in a 3000-run soak are this, and they surface as
-**items nobody ever sees**. Reproduce with `KART_SOAK_DEBUG=515`.
+`StateStillNeeded()` asked only WHETHER a config is present, never where it came from:
 
-The end state of that run, with Bramor (the configured lootmaster) gone:
-
-```
-Merrit   lm=              <- reloaded, got a CONFIG_RELAY
-Torvi    lm=              <- joined, got a CONFIG_RELAY
-Corvin   lm=Player-1-B    <- still holds Bramor's original LC_CONFIG
-Alric    lm=Player-1-B
+```lua
+return LC.sessionActive and next(LC.raidConfig) == nil
 ```
 
-`LC.RelayRaidConfig` blanks the lootmaster field on purpose (B65): the relayer is not the config
-owner and must not write its own name in. So every client that learns the config through a relay
-ends up with an empty field and falls back to the raid leader, while every client that still holds
-the ORIGINAL config keeps naming somebody who is no longer in the raid — and that name cannot be
-displaced, which is the same shape as B29.
+After a reload the table is empty, the raid-leader fallback in `LC.IsConfigOwner` goes live for a
+moment, and `LC.ApplyOwnConfig` writes this client's OWN settings in with `fromSelf` set. From then
+on `next(LC.raidConfig) ~= nil`, the question answers "nothing left to ask", and the retry chain
+stops for good — while nothing else re-sends a config to a client that has not asked for one.
 
-The two populations then disagree about ownership in both directions:
+The client then runs the whole evening on its own settings. The roll setting is the expensive half:
+it decides whether that raider rolls at all, so a raider who reloads late simply stops rolling and
+nobody, themselves included, has any way to see it. Same cost as B25, reached from a different
+direction.
 
-* The clients with an empty field think the raid leader owns the loot flow, so the leader broadcasts.
-* The clients naming Bramor judge that broadcast with `IsSenderLootOwner`, do not agree, and drop it.
-* The clients naming Bramor find no loot owner at all, so they never broadcast either.
+**Measured effect: 12 of 3000 runs disagreed before, 8 after** (the `rollsEnabled` family 9 -> 7,
+the `buttons` family 3 -> 1). It is a real improvement and it is NOT the whole story -- see B69.
 
-In seed 515 the result is that **not one `LC_START` is sent for the whole run**. Corvin has the item
-from Blizzard's own roll and Torvi has nothing; no vote window, no council, no distribution, and
-nothing printed anywhere.
+Found by `tests/test_lc_soak.lua`, which turned it up as 9 of 12 breaks in 3000 runs once two
+harness defects stopped hiding it — see the note below. `KART_SOAK_DEBUG=878`: Sinja reloads at the
+second-to-last step and ends with `rollsEnabled=false` while every config on the wire carries `1`,
+and the run's own settle gives it two roster updates and 120 seconds to correct itself.
 
-Same crack as B57 — two ownership answers that are each correct on their own client — but costing
-items rather than a stuck End Round. B57 widened one receiver; this needs the departure of a named
-lootmaster to reach every client's config, not just the ones that happen to ask for a relay
-afterwards.
+The guard now uses the same predicate `LC.HandleConfigRelay` already uses to decide whether an
+incoming relay may overwrite what a client holds: `fromSelf` AND no lootmaster named in its own
+settings. A leader who typed their own name in the field owns that config on purpose and is not
+asking anybody about it.
 
-Not attempted yet. The obvious move (have the relay carry the departed name too) re-creates B29:
-a name nobody can displace. The other direction — invalidate the name raid-wide when its holder
-leaves — is what `LC_RESIGN` already does for a voluntary hand-over and would have to be made to
-fire for an involuntary one.
+### Two harness defects were hiding this, and both are worth not re-deriving
+
+* `RaidSim.Leave` removed the client and never reassigned raid lead, so a raid whose leader left had
+  **nobody in charge** — a state WoW never produces. With no lootmaster configured the raid leader
+  stands in, so a leaderless raid had no loot owner at all, nobody broadcast `LC_START`, and every
+  client sat on an item Blizzard had rolled with no vote window. That looked exactly like a protocol
+  defect and was written up as one. It was 10 of the 13 breaks, and all of them vanished when the
+  harness started promoting somebody.
+* The soak's own "is anybody still the lootmaster" check read `if not GetLootmaster()`, which can
+  never fire: the function answers `""` and `""` is truthy in Lua. It was also the wrong question —
+  an empty field is the NORMAL state of a raid whose leader stands in. It now asserts that at least
+  one client answers `IsLootOwner()`, which is what would have caught the leaderless raid at once.
+
+## B69 — a client ends the raid on the wrong roll setting, and the config it holds was RECEIVED
+
+The residue of B68: 7 of 3000 soak runs, `KART_SOAK_DEBUG=878`. Same symptom, different route, and
+the route is not yet identified — written down at the point the evidence ran out rather than
+guessed at, because two guesses about this exact area were already wrong today.
+
+What is established:
+
+* Sinja ends the run with `raidConfig.rollsEnabled = false` while every other client has `true`.
+* Its config is **received, not self-invented** (`fromSelf` is nil), so B68's guard cannot apply.
+* Every `LC_CONFIG` and `LC_CONFIG_RELAY` in the run's wire log carries `:1:` — the correct value.
+* No client ever broadcast a wrong `LC_CONFIG`: the only sender of that token in the whole run is
+  the original lootmaster, before leaving. Everything else is a relay.
+* The run settles for two roster updates and 120 seconds afterwards, so it is not a timing artefact.
+
+So a client holds a received value that nothing on the wire appears to have sent. The next step is
+per-recipient wire tracing — logging what each client actually parsed out of each config it accepted
+and when, rather than what was put on the wire — because one of those two must be lying.
+
+Worth noting for whoever picks this up: the roll setting is the expensive half of a config. It
+decides whether that raider rolls at all, so this is silent for everyone including the person it
+happens to.
 
 ## B58 — nobody hands a late joiner the config while the lootmaster is away — FIXED 2026-07-30
 

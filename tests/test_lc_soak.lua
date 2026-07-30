@@ -332,19 +332,41 @@ local function runOne(seed)
         end
     end
 
-    -- And the lootmaster is still someone. A raid that agrees that nobody hands out loot agrees
-    -- about the wrong thing -- this is the failure the whole evening looks like from the inside.
-    if not RaidSim.As(sim.clients[1], sim.clients[1].KART.LC.GetLootmaster) then
-        bad[#bad + 1] = "nobody is the lootmaster any more"
+    -- And SOMEBODY still owns the loot flow. A raid that agrees nobody hands out loot agrees about
+    -- the wrong thing -- that is the failure the whole evening looks like from the inside.
+    --
+    -- This asked GetLootmaster and tested it with `not`, which could never fire: the function
+    -- answers "" when no lootmaster is configured, and "" is truthy in Lua. It was also asking the
+    -- wrong question -- an empty field is the NORMAL state of a raid whose leader stands in (see
+    -- LC.IsLootOwner), so a blank name is not a fault by itself. What must hold is that at least one
+    -- client in the raid answers "yes, I own this".
+    local anyOwner = false
+    for _, c in ipairs(sim.clients) do
+        if RaidSim.As(c, c.KART.LC.IsLootOwner) then anyOwner = true break end
+    end
+    if not anyOwner then
+        bad[#bad + 1] = "nobody owns the loot flow any more"
     end
     -- KART_SOAK_DEBUG=<seed> dumps everything about one run. A seed reproduces exactly, so this is
     -- the whole debugger: no separate script to keep in step with this one.
     if os.getenv("KART_SOAK_DEBUG") == tostring(seed) then
         print("=== seed " .. seed .. ": " .. table.concat(script, ">"))
         for _, c in ipairs(sim.clients) do
-            print(string.format("  %-8s session=%-5s buttons=%-34s lm=%s", c.name,
+            -- The RAW config field and the EFFECTIVE answer both, because they differ on purpose:
+            -- PresentLootmaster blanks a named lootmaster who is no longer in the group (B29), so
+            -- reading the raw field alone shows a disagreement that the code has already resolved.
+            print(string.format("  %-8s session=%-5s owner=%-5s cfgown=%-5s lead=%-5s startedByUs=%-5s rolls(eff)=%-5s rolls(cfg)=%-5s rolls(own)=%-5s fromSelf=%-5s lm(eff)=%-14s lm(raw)=%s",
+                c.name,
                 tostring(c.KART.LC.sessionActive),
-                tostring(c.KART.LC.raidConfig.buttonLabels),
+                tostring(RaidSim.As(c, c.KART.LC.IsLootOwner)),
+                tostring(RaidSim.As(c, c.KART.LC.IsConfigOwner)),
+                tostring(RaidSim.As(c, function() return UnitIsGroupLeader("player") end)),
+                tostring(c.KART.LC.sessionStartedByUs),
+                tostring(RaidSim.As(c, c.KART.LC.GetRollsEnabled)),
+                tostring(c.KART.LC.raidConfig.rollsEnabled),
+                tostring(c.env.KART_Settings.lcRollsEnabled),
+                tostring(c.KART.LC.raidConfig.fromSelf),
+                tostring(RaidSim.As(c, c.KART.LC.GetLootmaster)),
                 tostring(c.KART.LC.raidConfig.lootmaster)))
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
