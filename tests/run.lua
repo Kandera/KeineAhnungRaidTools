@@ -96,6 +96,7 @@ dofile("tests/test_lc_buttonconfig.lua")
 dofile("tests/test_lc_baseflow.lua")
 dofile("tests/test_lc_chrome.lua")
 dofile("tests/test_lc_version.lua")
+dofile("tests/test_lc_autopass.lua")
 dofile("tests/test_lc_churn.lua")
 dofile("tests/test_lc_soak.lua")
 

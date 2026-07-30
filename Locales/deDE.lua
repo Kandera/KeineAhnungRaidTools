@@ -280,6 +280,7 @@ KART.L_deDE = {
     LC_STATUS_TOLD         = "mitgeteilt",
     LC_STATUS_UNTOLD       = "nie mitgeteilt",
     LC_STATUS_TRACKED      = "Verfolgte Würfe: %d (%d davon meine zum Verteilen), Vote-Zeilen: %d, Council-Tabs: %d",
+    LC_ROLL_UNANNOUNCED    = "%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_OUTDATED_PEERS      = "Diese Raider haben ein KART älter als %s und können nicht am Loot Council teilnehmen -- sie müssen aktualisieren: %s",
     SET_WITHHELD           = "Vorübergehend nicht verfügbar. Bekannte Fehler in dieser Funktion werden zuerst behoben -- bis dahin bleibt sie aus.",

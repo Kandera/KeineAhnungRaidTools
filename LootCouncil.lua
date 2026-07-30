@@ -1902,6 +1902,8 @@ function LC.ClearAllRolls()
     wipe(LC.votedNoteByMe)
     wipe(LC.councilTabsNew)
     wipe(LC.rollNotInOurBags)
+    wipe(LC.rollAnnounced)
+    wipe(LC.rollSeenHere)
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
     if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
@@ -2481,6 +2483,74 @@ local START_ROLL_MAX_ATTEMPTS = 20
 local START_ROLL_RETRY_STEP   = 0.25
 local START_ROLL_RETRY_MAX    = 2
 
+-- ==========================================================================
+--  B63: one broadcaster, and Auto-Pass that did not depend on it
+-- ==========================================================================
+--
+-- LC_START for a real drop is sent from exactly one place, inside the loot owner's own
+-- START_LOOT_ROLL handler. The owner is subject to the same conditions as everyone else -- out of
+-- range, dead, released, ineligible -- and there is no second broadcaster. Auto-Pass, meanwhile, ran
+-- on every other client whether or not the owner had acted, so the whole raid passed on an item
+-- nobody had force-won: the item went to whichever raider is NOT running KART, or to nobody at all,
+-- and no vote window opened anywhere.
+--
+-- A fallback broadcaster was considered and rejected. Announcing an item the owner never rolled on
+-- produces a vote whose winner can never be handed the item -- a decision nobody can execute, which
+-- is the same trap the collectible carve-out exists to avoid. What is safe is the other direction:
+-- pass only once the council has actually taken the item up, and otherwise leave Blizzard's window
+-- alone so the raid can roll on it the way it would without this addon.
+--
+-- Known cost, accepted deliberately: a client whose LC_START was swallowed by the chat throttle now
+-- keeps its roll window instead of passing, so an Auto-Pass raider could in principle click Need on
+-- an item the lootmaster has already force-won. Bounded -- the owner rolled Need too, and an
+-- Auto-Pass raider is by definition someone who does not click loot windows -- and much smaller than
+-- an item silently lost by the whole raid passing at once. B66's catch-up covers the deaf client
+-- when a state request follows.
+LC.rollAnnounced = LC.rollAnnounced or {} -- [rollID] = true once the LOOT OWNER's LC_START landed here
+LC.rollSeenHere  = LC.rollSeenHere  or {} -- [rollID] = true once WE have processed our own START_LOOT_ROLL
+
+-- How long to wait for that announcement before saying it never came. Derived from the owner's own
+-- link retry above rather than picked: they can legitimately spend that whole budget before sending
+-- anything, and a message that fires on a raid which was merely slow is worse than no message.
+local ANNOUNCE_WAIT = START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5
+
+-- Passes Blizzard's roll for a council item, but only once the owner has announced it. Called from
+-- both roll-start paths: whichever of the two runs SECOND is the one that finds both halves true, so
+-- the order the event and the message arrive in does not matter.
+local function AutoPassAnnounced(rollID)
+    if not KART_Settings.lcAutoPass then return end
+    if not LC.rollAnnounced[rollID] then return end
+    -- The owner force-wins instead of passing, and never processes their own LC_START anyway.
+    if LC.IsLootOwner() then return end
+    -- Not before this client has run its OWN roll handler. Answering a roll makes Blizzard's API go
+    -- blank for it, so passing from a message that beat the local event -- which the harness produces
+    -- and the game may -- left OnStartLootRoll with no quality, no bind flag and no link, so it bailed
+    -- at the council-eligibility test and skipped the 1-100 roll entirely. Whichever path runs second
+    -- passes; this is what makes "second" mean second.
+    if not LC.rollSeenHere[rollID] then return end
+    -- No roll of our own to answer: this client was never eligible, or has already answered it.
+    -- GetLootRollItemInfo goes blank in both cases, which is what keeps this from passing twice.
+    if not GetLootRollItemInfo(rollID) then return end
+    RollOnLoot(rollID, 0)
+end
+
+-- Armed by a non-owner when a council item drops; says so if the announcement never arrives.
+-- Only for Auto-Pass users: they are exactly the people whose expectation -- "KART deals with loot
+-- windows for me" -- has quietly not been met, and who are now looking at a window they have to
+-- answer themselves. Anyone else was going to click it regardless and does not need the line.
+local function WaitForAnnouncement(rollID, link)
+    if not KART_Settings.lcAutoPass then return end
+    C_Timer.After(ANNOUNCE_WAIT, function()
+        if LC.rollAnnounced[rollID] then return end
+        -- Blizzard reuses rollIDs within seconds (see PurgeStaleRoll). Naming the wrong item is
+        -- worse than saying nothing.
+        if LC.rollItems[rollID] ~= link then return end
+        -- Gone: expired, or answered by hand in the meantime. Nothing left to explain.
+        if not GetLootRollItemInfo(rollID) then return end
+        print("|cffff0000KART:|r " .. string.format(KART.L.LC_ROLL_UNANNOUNCED, link or "?"))
+    end)
+end
+
 -- attempt is internal (see the link-retry block below); Core.lua's START_LOOT_ROLL handler passes
 -- only rollID.
 function LC.OnStartLootRoll(rollID, attempt)
@@ -2549,6 +2619,11 @@ function LC.OnStartLootRoll(rollID, attempt)
     local councilEligible = bindOnPickUp and not isCollectible
     local councilEngages  = councilEligible and not (quality and quality < LC.GetRaidMinQuality())
 
+    -- Set before the branch below, because the Auto-Pass arm consults it (see AutoPassAnnounced), and
+    -- only for rolls the council actually tracks -- those are the ones LC.Trade.ClearRollState and
+    -- LC.ClearAllRolls sweep, and an entry for anything else would never be collected.
+    if councilEngages then LC.rollSeenHere[rollID] = true end
+
     -- IsLootOwner, not a bare lootmaster test: while no lootmaster is configured the raid leader
     -- stands in and holds the items instead (see LC.IsLootOwner).
     local isLootmaster = LC.IsLootOwner()
@@ -2564,8 +2639,15 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- shouldn't pile up in his bags either. Always passes, deliberately independent of his own
         -- Auto-Pass setting.
         RollOnLoot(rollID, 0)
-    elseif KART_Settings.lcAutoPass and councilEligible then
+    elseif KART_Settings.lcAutoPass and councilEligible and not councilEngages then
+        -- Below the raid's rarity threshold: the council never announces these, so there is nothing
+        -- to wait for and the lootmaster passes on them too.
         RollOnLoot(rollID, 0)
+    elseif KART_Settings.lcAutoPass and councilEngages then
+        -- An item the council WILL take up -- but only once it demonstrably has (B63). If the owner's
+        -- announcement came in first this passes right here; if it has not arrived yet, HandleStart
+        -- does it when it does; if it never arrives, we deliberately never pass.
+        AutoPassAnnounced(rollID)
     end
 
     -- Not Council's business (collectible, BoE, or below the raid-wide minimum rarity): let
@@ -2608,6 +2690,10 @@ function LC.OnStartLootRoll(rollID, attempt)
     if isLootmaster then
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
     end
+
+    -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
+    -- "the announcement is still coming" and "it is never coming" except by waiting (B63).
+    if not isLootmaster then WaitForAnnouncement(rollID, LC.rollItems[rollID]) end
 
     -- Every eligible raider's client independently receives this same START_LOOT_ROLL event, so this
     -- is the one place that reliably rolls once per client for a real drop, council members included.
@@ -2777,8 +2863,13 @@ function LC.HandleStart(payload, senderKey)
     end
     LC.rollItems[rollID] = LC.rollItems[rollID] or "???"
     if not LC.IsRealItemLink(LC.rollItems[rollID]) then ResolveRollItemLink(rollID) end
-    -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
-    -- so there's nothing left to do here for that.
+
+    -- The council demonstrably has this item, which is the whole precondition for passing on it
+    -- (B63). Auto-Pass used to run only in OnStartLootRoll, unconditionally; it now runs from
+    -- whichever of the two paths completes the pair. A client with no roll of its own -- dead,
+    -- released, out of range -- has nothing to pass and AutoPassAnnounced returns without acting.
+    LC.rollAnnounced[rollID] = true
+    AutoPassAnnounced(rollID)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

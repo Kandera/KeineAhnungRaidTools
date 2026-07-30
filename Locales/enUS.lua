@@ -280,6 +280,7 @@ KART.L_enUS = {
     LC_STATUS_TOLD         = "told",
     LC_STATUS_UNTOLD       = "never told",
     LC_STATUS_TRACKED      = "Rolls tracked: %d (%d mine to hand out), vote rows: %d, council tabs: %d",
+    LC_ROLL_UNANNOUNCED    = "%s was never announced to the loot council, so it was not passed for you -- roll on Blizzard's window yourself if you want it.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     SET_WITHHELD           = "Temporarily unavailable. Known defects in this feature are being fixed first -- it stays off until they are.",
