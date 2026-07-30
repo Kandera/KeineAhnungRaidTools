@@ -6,6 +6,18 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-07-29
+### Behoben
+- **Blizzards eigene Bestätigungsdialoge funktionieren wieder.** Das Aufwerten eines Items konnte bis zum nächsten Reload komplett verweigert werden.
+- **Set-Tokens laufen wieder über das Loot Council**, statt von niemandem normal ausgewürfelt zu werden.
+- **Items zeigen Namen und Symbol auch bei Spielern, die beim Drop tot oder außer Reichweite waren**, statt eines Fragezeichens.
+- **Das Schließen eines Item-Tabs räumt ihn bei allen Council-Mitgliedern weg**, nicht nur beim Lootmaster.
+- **Ein Item verschwindet aus dem Vote-Fenster desjenigen, der es vergeben hat.**
+- **Transmog-Stimmen stehen über den Spielern, die gepasst haben.**
+- **Ein Bei- oder Austritt beendet die Session nicht mehr.**
+- **Der Start-Prompt kann keine bereits laufende Session mehr beenden.**
+- **Das Lootmaster-Feld bleibt bearbeitbar, wenn der Lootmaster den Raid verlassen hat**, damit ein Ersatz eingetragen werden kann.
+
 ## [3.2.1] - 2026-07-29
 ### Behoben
 - **Die beiden Schalter für irrelevante Items behalten ihren Zustand nach einem Reload**, statt sich als aus anzuzeigen und trotzdem zu greifen.
