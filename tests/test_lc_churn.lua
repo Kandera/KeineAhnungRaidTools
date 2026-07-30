@@ -1057,3 +1057,62 @@ do
         "but Blizzard never gave them that roll, so the catch-up leaves them out of it")
     T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[91]), "while the raid still has it")
 end
+
+-- A config a client invented for itself must not travel any further
+-- ===================================================================================
+-- The relay hands on what the raid agreed. A client that reloaded while nobody owned the config
+-- has, for a moment, a config it made up from its own defaults -- rolls off, empty council list.
+-- Passing THAT on is how one client's defaults become the raid's: the next client to ask stores it
+-- as the raid's config, and from there it is indistinguishable from the real thing to everybody
+-- downstream.
+--
+-- Found by tests/test_lc_soak.lua (seed 254), where exactly that happened: the reloaded raid leader
+-- handed rolls-off to a newcomer, who kept it.
+do
+    local sim, lm, council = NewRaid()
+    RaidSim.Leave(sim, lm.name)
+    RaidSim.Leave(sim, "Corvin")
+    RaidSim.Promote(sim, council.name)
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
+
+    -- The leader reloads and invents one; nothing has corrected it yet.
+    local leader = RaidSim.Reload(sim, council.name)
+    RaidSim.EnterWorld(sim, council.name)
+    RaidSim.ClearLog(sim)
+
+    -- Put it in the state that matters rather than hoping the run produced it: a COMPLETE config,
+    -- so nothing else in LC.RelayRaidConfig can be the reason nothing goes out, marked as one this
+    -- client applied from its own settings.
+    RaidSim.As(leader, function()
+        local cfg = leader.KART.LC.raidConfig
+        cfg.minQuality, cfg.buttonLabels = 4, "Made;Up"
+        cfg.rollsEnabled, cfg.lootmaster, cfg.councilMembers = false, "", ""
+        cfg.fromSelf = true
+    end)
+    -- Raid lead moves on, which is how the invented config gets out into the raid at all: while
+    -- they still HELD the lead, LC.IsConfigOwner answered true and LC.RelayRaidConfig stopped one
+    -- guard earlier. Hand it to someone else and the same client is suddenly an ordinary member
+    -- carrying a config it made up -- and, until this fix, willing to pass it on.
+    RaidSim.Promote(sim, "Alric")
+    RaidSim.As(leader, function() leader.KART.LC.RelayRaidConfig("Torvi-TarrenMill") end)
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY"), 0,
+        "a config the client made up for itself is never relayed onward")
+
+    -- The opposite, from a client holding a config it actually received, so the assertion above
+    -- cannot pass simply by the relay being broken outright.
+    local raider = sim.byName.Alric
+    T.is_nil(raider.KART.LC.raidConfig.fromSelf, "the raider's config is one it received")
+    RaidSim.As(raider, function() raider.KART.LC.RelayRaidConfig("Torvi-TarrenMill") end)
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY"), 1, "while a config it received is handed on")
+
+    -- And the raid still agrees about the roll setting once everything settles.
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(60)
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(60)
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled),
+         RaidSim.As(sim.byName.Alric, sim.byName.Alric.KART.LC.GetRollsEnabled),
+        "so a newcomer ends up on the raid's roll setting, not one client's default")
+end

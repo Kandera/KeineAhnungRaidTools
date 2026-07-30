@@ -784,6 +784,12 @@ function LC.RelayRaidConfig(target)
     if not (IsInGroup() and target) then return end
     if next(LC.raidConfig) == nil then return end
     if LC.IsConfigOwner() then return end  -- the owner sends the real thing, with their name on it
+    -- Only a config we RECEIVED. A fromSelf one is either ours by declaration -- in which case
+    -- IsConfigOwner just returned and this is unreachable -- or one this client invented from its
+    -- own defaults after a reload cleared raidConfig. Relaying that would spread it: the inventor
+    -- hands "rolls off, empty council" to the next client that asks, that client stores it as the
+    -- raid's, and from there it looks exactly like the real thing to everybody downstream.
+    if LC.raidConfig.fromSelf then return end
     -- No role test beyond that, deliberately. Restricting this to the loot owner, and then to the
     -- council, kept covering the wrong half: after the lootmaster leaves and a few people reload,
     -- the only client still holding the config the raid agreed can be an ordinary raider -- and

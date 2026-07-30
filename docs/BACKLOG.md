@@ -484,3 +484,33 @@ answered has no roll left either, so an item it has decided is not put back in f
 
 `tests/test_lc_soak.lua` excludes exactly these windows from its per-item comparison, and says so
 where it does it — everything with a retry behind it is still held to the full standard.
+
+## B67 — one client keeps its own roll setting after a reload, ~1 run in 300
+
+`tests/test_lc_soak.lua` seed 254 (stable, reproduce with `KART_SOAK_SEEDS=300`):
+
+```
+leave>reload>promote>endround>leave>settle>drop>drop>settle>promote>
+throttle>reload>join>join>cvote>blip>award>throttle
+```
+
+The lootmaster has left. The raid leader reloads, comes back with an empty `raidConfig`, and
+`LC.ApplyOwnConfig` writes its own defaults in — rolls off, where the raid had them on. Peers relay
+the raid's config to it and the trace shows the relay being ACCEPTED afterwards, yet the run ends
+with that client on `fromSelf = true` and rolls off, disagreeing with everyone else.
+
+What is established: the relay is sent, arrives, and is accepted at least once; the client is the
+raid leader; its own Lootmaster field is empty. What is NOT established is what puts `fromSelf` back
+afterwards — the instrumented run shows no further `ApplyOwnConfig` between the last accepted relay
+and the end of the run, which the final state contradicts. Something is either re-applying it or the
+reload boundary is hiding a second client object. Not guessed at further.
+
+Two real defects were found and fixed on the way to this and are NOT this entry:
+* the relay would pass a self-invented config on to the next client that asked, spreading one
+  client's defaults through the raid (fixed, `LC.RelayRaidConfig` refuses to relay `fromSelf`);
+* an incoming relay was refused by a client holding a config it had invented for itself (fixed,
+  `LC.HandleConfigRelay` accepts over a self-invented one).
+
+Visible cost of what remains: that client's 1-100 roll column stays empty for the rest of the raid,
+and its vote-button labels are its own rather than the raid's. It does not affect anyone else, and
+the raid keeps distributing.
