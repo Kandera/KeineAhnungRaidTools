@@ -111,7 +111,7 @@ end
 -- whole time, which is why the fix cannot depend on the reason.
 do
     local sim, _, _, raider = NewRaid()
-    Drop(sim, 44, 249293, { noRollFor = { Odin = true } })
+    Drop(sim, 44, 249293, { noRollFor = { Alric = true } })
 
     T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[44]),
         "a client with no loot roll of its own still ends up with a real link")
@@ -124,7 +124,7 @@ end
 do
     local sim, _, _, raider = NewRaid()
     KARTTEST.items[249293].cached = false
-    Drop(sim, 45, 249293, { noRollFor = { Odin = true } })
+    Drop(sim, 45, 249293, { noRollFor = { Alric = true } })
 
     local parked = raider.KART.LC.rollItems[45]
     T.truthy(tostring(parked):find("item:249293", 1, true),
@@ -181,10 +181,10 @@ do
     T.truthy(not lm.KART.LC.assignedWinners[49], "the second copy of the item is still undecided")
 
     -- And both copies can go to different people.
-    local nara = sim.byName.Nara
-    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(49, nara.guid, "Upgrade") end)
+    local sinja = sim.byName.Sinja
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(49, sinja.guid, "Upgrade") end)
     T.eq(council.KART.LC.assignedWinners[47], raider.guid, "the first copy went to one player")
-    T.eq(council.KART.LC.assignedWinners[49], nara.guid, "the second to another")
+    T.eq(council.KART.LC.assignedWinners[49], sinja.guid, "the second to another")
     -- Both, as two separate obligations. This read `#Owes(...) and 1 or 0 == 1` before, which is the
     -- constant 1 in Lua -- `#entry` on a hash-keyed table is 0, and 0 is truthy. It asserted nothing
     -- about the trade and could only ever fail by crashing.
@@ -226,7 +226,7 @@ end
 do
     local sim, lm, council, raider = NewRaid()
     KARTTEST.items[249293].cached = false
-    Drop(sim, 40, 249293, { noRollFor = { Odin = true } })
+    Drop(sim, 40, 249293, { noRollFor = { Alric = true } })
     T.eq(raider.KART.LC.rollItems[40], "item:249293", "the raider holds the item by ID, uncached")
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(40, 1) end)
     T.truthy((lm.KART.LC.votes[40] or {})[raider.guid], "and votes on it")
@@ -393,39 +393,39 @@ end
 -- ===================================================================================
 do
     local sim, _, _, raider = NewRaid()
-    local nara = sim.byName.Nara
+    local sinja = sim.byName.Sinja
     Drop(sim, 52, 249331)
 
     -- Both raiders declare an interest.
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(52, 1) end)
-    RaidSim.As(nara,   function() nara.KART.LC.Vote.CastVote(52, 2) end)
+    RaidSim.As(sinja,   function() sinja.KART.LC.Vote.CastVote(52, 2) end)
 
     -- Every council member sees both, identically. A council scoring different ballots is the
     -- failure that cannot be noticed from inside the game.
     for _, c in ipairs(CouncilOf(sim)) do
         local v = c.KART.LC.votes[52] or {}
-        T.eq(v[raider.guid] and v[raider.guid].idx, 1, c.name .. " sees Odin's vote")
-        T.eq(v[nara.guid] and v[nara.guid].idx, 2, c.name .. " sees Nara's vote")
+        T.eq(v[raider.guid] and v[raider.guid].idx, 1, c.name .. " sees Alric's vote")
+        T.eq(v[sinja.guid] and v[sinja.guid].idx, 2, c.name .. " sees Sinja's vote")
     end
 
-    -- The straw poll: two council members pick Odin, one picks Nara.
+    -- The straw poll: two council members pick Alric, one picks Sinja.
     local council = CouncilOf(sim)
     RaidSim.As(council[1], function() council[1].KART.LC.Vote.ToggleCouncilVote(52, raider.guid) end)
     RaidSim.As(council[2], function() council[2].KART.LC.Vote.ToggleCouncilVote(52, raider.guid) end)
-    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, nara.guid) end)
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, sinja.guid) end)
 
     for _, c in ipairs(council) do
         local poll = c.KART.LC.councilVotes[52] or {}
-        T.eq(poll[council[1].guid], raider.guid, c.name .. " sees Kandera's pick")
-        T.eq(poll[council[2].guid], raider.guid, c.name .. " sees Haerri's pick")
-        T.eq(poll[council[3].guid], nara.guid,   c.name .. " sees Wuusch's pick")
+        T.eq(poll[council[1].guid], raider.guid, c.name .. " sees Bramor's pick")
+        T.eq(poll[council[2].guid], raider.guid, c.name .. " sees Merrit's pick")
+        T.eq(poll[council[3].guid], sinja.guid,   c.name .. " sees Corvin's pick")
     end
 
     -- Clicking the same candidate again retracts, and that reaches everyone too.
-    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, nara.guid) end)
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, sinja.guid) end)
     for _, c in ipairs(council) do
         T.truthy(not (c.KART.LC.councilVotes[52] or {})[council[3].guid],
-            c.name .. " sees Wuusch's pick retracted")
+            c.name .. " sees Corvin's pick retracted")
     end
 end
 
@@ -455,7 +455,7 @@ end
 -- a raid where nobody distributes one is dangerous rather than merely degraded.
 do
     local sim, lm = NewRaid()
-    local de, en = sim.byName.Haerri, sim.byName.Wuusch
+    local de, en = sim.byName.Merrit, sim.byName.Corvin
     T.eq(de.locale, "deDE", "the raid really does contain a German client")
     T.eq(en.locale, "enUS", "and an English one")
 
@@ -489,11 +489,11 @@ end
 do
     local sim = RaidSim.New(MEMBERS)
     RaidSim.Install(sim)
-    local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
+    local lm, council, raider = sim.byName.Bramor, sim.byName.Merrit, sim.byName.Alric
 
     RaidSim.As(lm, function()
         lm.env.KART_Settings.lcLootmaster     = ""        -- deliberately blank
-        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        lm.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
         lm.env.KART_Settings.lcRollsEnabled   = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -525,7 +525,7 @@ end
 do
     local sim = RaidSim.New(MEMBERS)
     RaidSim.Install(sim)
-    local de, en = sim.byName.Haerri, sim.byName.Wuusch
+    local de, en = sim.byName.Merrit, sim.byName.Corvin
     local deLabels = RaidSim.As(de, de.KART.LC.GetButtonConfig)
     local enLabels = RaidSim.As(en, en.KART.LC.GetButtonConfig)
     T.truthy(deLabels[4].label ~= enLabels[4].label,
@@ -569,22 +569,22 @@ end
 -- clients can end up disagreeing. They are asserted from more than one client for that reason.
 do
     local sim, lm, _, raider = NewRaid()
-    local nara = sim.byName.Nara
+    local sinja = sim.byName.Sinja
     Drop(sim, 60, 249331)
 
     -- Award, then reassign to someone else. The second decision has to win everywhere, and the
     -- first winner's claim has to be gone -- not merely overwritten on the assigner's screen.
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(60, raider.guid, "BIS") end)
     -- Reassigning asks first, deliberately: it is how an accidental double award is caught.
-    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(60, nara.guid, "Upgrade") end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(60, sinja.guid, "Upgrade") end)
     T.truthy(RaidSim.As(lm, KARTTEST.AcceptPopup, "KART_LC_REASSIGN_CONFIRM"),
         "reassigning a winner asks for confirmation first")
 
     for _, c in ipairs(sim.clients) do
-        T.eq(c.KART.LC.assignedWinners[60], nara.guid, c.name .. " sees the reassigned winner")
+        T.eq(c.KART.LC.assignedWinners[60], sinja.guid, c.name .. " sees the reassigned winner")
     end
     T.truthy(not Owes(raider.KART.LC.owedToMe, 60), "the first winner is no longer owed the item")
-    T.truthy(Owes(nara.KART.LC.owedToMe, 60), "and the new winner is")
+    T.truthy(Owes(sinja.KART.LC.owedToMe, 60), "and the new winner is")
 end
 
 do
@@ -617,7 +617,7 @@ do
     local sim, lm, _, raider = NewRaid()
 
     RaidSim.As(lm, function()
-        lm.KART.LH.LogHistory(KARTTEST.items[249293].link, "Odin", "BIS", "MAGE", nil, 47, raider.guid)
+        lm.KART.LH.LogHistory(KARTTEST.items[249293].link, "Alric", "BIS", "MAGE", nil, 47, raider.guid)
     end)
     lm.env.KART_LootHistory[1].time = os.time() - 7 * 24 * 60 * 60   -- last Tuesday
     T.eq(#lm.env.KART_LootHistory, 1, "an award from a previous raid is on record")
@@ -633,7 +633,7 @@ do
     T.eq(#lm.env.KART_LootHistory, 2, "tonight's award is logged")
     RaidSim.As(lm, function() lm.KART.LH.RemoveHistoryForRoll(47) end)
     T.eq(#lm.env.KART_LootHistory, 1, "and revoking it removes exactly that entry")
-    T.eq(lm.env.KART_LootHistory[1].winner, "Odin", "the surviving entry is last week's")
+    T.eq(lm.env.KART_LootHistory[1].winner, "Alric", "the surviving entry is last week's")
 end
 
 do
@@ -704,17 +704,17 @@ do
         members[i] = {}
         for k, v in pairs(m) do members[i][k] = v end
     end
-    members[1].nickname = "Kandy"    -- the lootmaster is known by a nickname
-    members[2].nickname = "Haeri"
+    members[1].nickname = "Bram"    -- the lootmaster is known by a nickname
+    members[2].nickname = "Merri"
 
     local sim = RaidSim.New(members)
     RaidSim.Install(sim)
-    local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
+    local lm, council, raider = sim.byName.Bramor, sim.byName.Merrit, sim.byName.Alric
 
     RaidSim.As(lm, function()
         -- Typed the way the raid leader actually types it: nicknames, not character names.
-        lm.env.KART_Settings.lcLootmaster     = "Kandy"
-        lm.env.KART_Settings.lcCouncilMembers = "Kandy;Haeri"
+        lm.env.KART_Settings.lcLootmaster     = "Bram"
+        lm.env.KART_Settings.lcCouncilMembers = "Bram;Merri"
         lm.env.KART_Settings.lcRollsEnabled   = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -749,15 +749,15 @@ do
         members[i] = {}
         for k, v in pairs(m) do members[i][k] = v end
     end
-    members[1].nickname = "Kandy"
-    members[4].nsrt = false          -- Odin, blind to nicknames
+    members[1].nickname = "Bram"
+    members[4].nsrt = false          -- Alric, blind to nicknames
 
     local sim = RaidSim.New(members)
     RaidSim.Install(sim)
-    local lm, raider = sim.byName.Kandera, sim.byName.Odin
+    local lm, raider = sim.byName.Bramor, sim.byName.Alric
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster   = "Kandy"
+        lm.env.KART_Settings.lcLootmaster   = "Bram"
         lm.env.KART_Settings.lcRollsEnabled = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -790,10 +790,10 @@ do
     end
     local sim = RaidSim.New(members)
     RaidSim.Install(sim)
-    local lm, raider = sim.byName.Kandera, sim.byName.Odin
+    local lm, raider = sim.byName.Bramor, sim.byName.Alric
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster   = "Kandy"   -- resolves to nobody, not even themselves
+        lm.env.KART_Settings.lcLootmaster   = "Bram"   -- resolves to nobody, not even themselves
         lm.env.KART_Settings.lcRollsEnabled = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -817,21 +817,21 @@ end
 -- that matter appear between the steps, not inside them.
 do
     local sim, lm, council, raider = NewRaid()
-    local nara = sim.byName.Nara
+    local sinja = sim.byName.Sinja
     F.AssertAgreed(sim, nil, "about the session and the config before anything drops")
 
     Drop(sim, 81, F.GLOVES)
     F.AssertAgreed(sim, 81, "about the item that just dropped")
 
     RaidSim.As(raider,  function() raider.KART.LC.Vote.CastVote(81, 1) end)
-    RaidSim.As(nara,    function() nara.KART.LC.Vote.CastVote(81, 2) end)
+    RaidSim.As(sinja,    function() sinja.KART.LC.Vote.CastVote(81, 2) end)
     RaidSim.As(council, function() council.KART.LC.Vote.CastVote(81, 3) end)
     F.AssertAgreed(sim, 81, "about who voted what")
 
     -- Two council members disagreeing about the winner is the normal case, and both picks have to
     -- be on every client's tally -- including on the client of whoever picked first.
     RaidSim.As(council, function() council.KART.LC.Vote.ToggleCouncilVote(81, raider.guid) end)
-    RaidSim.As(lm,      function() lm.KART.LC.Vote.ToggleCouncilVote(81, nara.guid) end)
+    RaidSim.As(lm,      function() lm.KART.LC.Vote.ToggleCouncilVote(81, sinja.guid) end)
     F.AssertAgreed(sim, 81, "about the council's own picks")
 
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(81, raider.guid, "BIS") end)
@@ -842,8 +842,8 @@ do
     -- history: an assignment coming from someone other than the lootmaster is the path where the
     -- sender's own local step and everybody else's handler drift apart unnoticed.
     Drop(sim, 82, F.WEAPON)
-    RaidSim.As(nara, function() nara.KART.LC.Vote.CastVote(82, 1) end)
-    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(82, nara.guid, "Upgrade") end)
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(82, 1) end)
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(82, sinja.guid, "Upgrade") end)
     KARTTEST.AdvanceTime(0)
     F.AssertAgreed(sim, 82, "about an item a council member decided")
     F.AssertAgreed(sim, 81, "about the first item, still, after a second one was decided")

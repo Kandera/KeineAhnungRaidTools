@@ -368,7 +368,7 @@ function _G.GetAverageItemLevel() return 0, KARTTEST.equippedIlvl or 0 end
 KARTTEST.equipLocs = {}
 
 -- Item database ------------------------------------------------------------------------
--- Registered by a test, keyed by itemID. Fixtures are taken from the guild's real loot history
+-- Registered by a test, keyed by itemID. Fixtures are taken from a real loot history
 -- rather than invented, so classID/subclassID are the values the live client actually reports.
 KARTTEST.items = {} -- [itemID] = { name =, link =, quality =, ilvl =, classID =, subclassID =, equipLoc =, bind =, cached = }
 

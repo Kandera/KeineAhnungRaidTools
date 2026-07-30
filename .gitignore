@@ -9,3 +9,6 @@
 
 # VSCode Workspace Dateien
 *.code-workspace
+
+# Interne Arbeitsnotizen (Plaene, Specs, Reviews) - bleiben lokal
+docs/superpowers/

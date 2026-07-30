@@ -18,7 +18,7 @@ local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 local NewRaid, Drop, HasVoteRow = F.NewRaid, F.Drop, F.HasVoteRow
 
-local NEWCOMER = { name = "Torvi", realm = "Blackmoore", guid = "Player-1-T", class = "MAGE", locale = "enUS" }
+local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1-T", class = "MAGE", locale = "enUS" }
 
 -- Everything that recovers state hangs off GROUP_ROSTER_UPDATE, and two of the three paths are
 -- delayed (the state request's reply, the session prompt). Settle both.
@@ -115,7 +115,7 @@ end
 
 -- A cross-realm raider. Every message the addon accepts is gated on the sender being in our group,
 -- and that check has to handle both spellings: a same-realm player, whose realm the API reports as
--- empty, and a genuine cross-realm one, who is always fully qualified. The guild raids on one realm,
+-- empty, and a genuine cross-realm one, who is always fully qualified. A raid is normally all on one realm,
 -- so the second is the exception -- which is exactly why it needs its own test rather than being the
 -- accident the fixture used to be.
 do
@@ -143,8 +143,8 @@ do
     local sim, lm = NewRaid()
     Drop(sim, 83, F.GLOVES)
 
-    RaidSim.Leave(sim, "Nara")
-    local alt = RaidSim.Join(sim, { name = "Naraa", realm = "Blackmoore", guid = "Player-1-NA",
+    RaidSim.Leave(sim, "Sinja")
+    local alt = RaidSim.Join(sim, { name = "Sinjaa", realm = "TarrenMill", guid = "Player-1-SA",
                                     class = "PRIEST", locale = "deDE" })
     RosterSettles(sim)
 
@@ -172,21 +172,21 @@ do
     local sim, lm = NewRaid()
     Drop(sim, 85, F.GLOVES)
 
-    local odin = RaidSim.Reload(sim, "Odin")
-    T.eq(odin.KART.LC.sessionActive, false, "a client comes back from /reload knowing nothing")
-    T.eq(odin.env.KART_Settings.lcAutoTransmogVote, true, "though its own settings survived")
+    local alric = RaidSim.Reload(sim, "Alric")
+    T.eq(alric.KART.LC.sessionActive, false, "a client comes back from /reload knowing nothing")
+    T.eq(alric.env.KART_Settings.lcAutoTransmogVote, true, "though its own settings survived")
 
     RosterSettles(sim)
 
-    T.eq(odin.KART.LC.sessionActive, true, "and is back in the session on the next roster change")
-    T.eq(odin.KART.LC.raidConfig.lootmaster, lm.guid, "with the config back")
-    T.eq(RaidSim.As(odin, odin.KART.LC.GetRollsEnabled), true, "and the raid's roll setting back")
-    T.truthy(not HasVoteRow(odin, 85),
+    T.eq(alric.KART.LC.sessionActive, true, "and is back in the session on the next roster change")
+    T.eq(alric.KART.LC.raidConfig.lootmaster, lm.guid, "with the config back")
+    T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true, "and the raid's roll setting back")
+    T.truthy(not HasVoteRow(alric, 85),
         "the distribution already running is not restored to them -- same rule as a late joiner")
 
     Drop(sim, 86, F.WEAPON)
-    RaidSim.As(odin, function() odin.KART.LC.Vote.CastVote(86, 1) end)
-    T.truthy((lm.KART.LC.votes[86] or {})[odin.guid], "and they vote normally from then on")
+    RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(86, 1) end)
+    T.truthy((lm.KART.LC.votes[86] or {})[alric.guid], "and they vote normally from then on")
     F.AssertAgreed(sim, 86, "including the client that relogged, from the next item on")
 end
 
@@ -201,7 +201,7 @@ do
     local sim = NewRaid()
     Drop(sim, 87, F.GLOVES)
 
-    local lm = RaidSim.Reload(sim, "Kandera")
+    local lm = RaidSim.Reload(sim, "Bramor")
     RaidSim.ClearLog(sim)
     RosterSettles(sim)
 
@@ -236,7 +236,7 @@ do
     -- A raider whose own session is off is told by a council member that it is running. They are not
     -- the loot owner, so the claim is not about them.
     raider.KART.LC.sessionActive = false
-    RaidSim.As(council, function() council.KART.LC.SendLC("LC_SESSION_RESUME", "Odin-Blackmoore") end)
+    RaidSim.As(council, function() council.KART.LC.SendLC("LC_SESSION_RESUME", "Alric-TarrenMill") end)
     T.eq(raider.KART.LC.sessionActive, false,
         "a session-resume claim is ignored by anyone who does not own the loot flow")
 end
@@ -245,13 +245,13 @@ end
 -- without anyone having to tell them.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    local stand = RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
     RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
     T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "the stand-in owns the loot flow")
 
-    local next_ = RaidSim.Promote(sim, "Wuusch")
+    local next_ = RaidSim.Promote(sim, "Corvin")
     RosterSettles(sim)
     T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
         "and stops owning it when the raid lead moves on")
@@ -314,10 +314,10 @@ do
     local sim, lm, council, raider = NewRaid()
     Drop(sim, 91, F.GLOVES)
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(91, 1) end)
-    local nara = sim.byName.Nara
-    RaidSim.As(nara, function() nara.KART.LC.Vote.CastVote(91, 2) end)
+    local sinja = sim.byName.Sinja
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(91, 2) end)
 
-    RaidSim.Leave(sim, "Odin")
+    RaidSim.Leave(sim, "Alric")
     RosterSettles(sim)
 
     T.eq(lm.KART.LC.sessionActive, true, "the session survives someone porting out mid-distribution")
@@ -326,9 +326,9 @@ do
         "the departed player's vote is still on record for the council to weigh")
 
     -- And the council can still finish, awarding to someone who is actually there.
-    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(91, nara.guid, "BIS") end)
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(91, sinja.guid, "BIS") end)
     for _, c in ipairs(sim.clients) do
-        T.eq(c.KART.LC.assignedWinners[91], nara.guid, c.name .. " sees the item handed out anyway")
+        T.eq(c.KART.LC.assignedWinners[91], sinja.guid, c.name .. " sees the item handed out anyway")
     end
 end
 
@@ -343,8 +343,8 @@ end
 -- item into their own bags, and that is not a side effect to mention in a chat line afterwards.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    local stand = RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
 
     T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
@@ -363,22 +363,22 @@ do
             c.name .. " sees the item the stand-in started")
     end
 
-    local raider = sim.byName.Odin
+    local raider = sim.byName.Alric
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(92, 1) end)
     T.truthy((stand.KART.LC.votes[92] or {})[raider.guid], "and votes reach the stand-in")
     RaidSim.As(stand, function() stand.KART.LC.Trade.AssignWinner(92, raider.guid, "BIS") end)
-    T.eq(sim.byName.Nara.KART.LC.assignedWinners[92], raider.guid,
+    T.eq(sim.byName.Sinja.KART.LC.assignedWinners[92], raider.guid,
         "and the stand-in can hand it out")
 end
 
 -- A raider is never asked, however long the lootmaster stays away.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
 
-    local raider = sim.byName.Odin
+    local raider = sim.byName.Alric
     T.truthy(not RaidSim.As(raider, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
         "a plain raider is not offered the loot flow")
     T.truthy(not RaidSim.As(raider, raider.KART.LC.IsLootOwner), "and does not take it")
@@ -404,9 +404,9 @@ end
 do
     local sim = RaidSim.New(F.MEMBERS)
     RaidSim.Install(sim)
-    local lm = sim.byName.Kandera
+    local lm = sim.byName.Bramor
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        lm.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
         lm.env.KART_Settings.lcRollsEnabled   = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -423,7 +423,7 @@ end
 -- owing items somebody else is carrying.
 do
     local sim, lm = NewRaid()
-    local stand = RaidSim.Promote(sim, "Haerri")
+    local stand = RaidSim.Promote(sim, "Merrit")
     lm.member.offline = true
     RosterSettles(sim)
 
@@ -437,19 +437,19 @@ end
 -- anyone having to undo anything.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    local stand = RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
     T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"), "the leader stands in")
     T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "and owns the loot flow")
 
-    -- They come back as an ordinary raider -- Haerri kept raid lead -- carrying the settings that
+    -- They come back as an ordinary raider -- Merrit kept raid lead -- carrying the settings that
     -- name them lootmaster, exactly as their SavedVariables would.
     local returning = {}
     for k, v in pairs(F.MEMBERS[1]) do returning[k] = v end
     returning.leader = nil
     local back = RaidSim.Join(sim, returning)
-    back.env.KART_Settings.lcLootmaster = "Kandera"
+    back.env.KART_Settings.lcLootmaster = "Bramor"
     RosterSettles(sim)
 
     T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
@@ -460,18 +460,18 @@ end
 -- An empty-field config claims the raid leader's authority, so only the raid leader may send one.
 do
     local sim, _, council = NewRaid()
-    local odin = sim.byName.Odin
+    local alric = sim.byName.Alric
     -- The baseline has to come from the client being asserted on. Reading it off a different client
     -- assumes the very thing this suite exists to disprove -- that two clients agree -- and goes
     -- fully vacuous if the config ever stops arriving, since nil equals nil.
-    local before = odin.KART.LC.raidConfig.buttonLabels
+    local before = alric.KART.LC.raidConfig.buttonLabels
     T.truthy(before and before ~= "", "the raider has a real config to begin with")
     RaidSim.As(council, function()
         council.env.KART_Settings.lcButtonLabels = "A;B;C;D;E"
         -- Straight onto the wire, bypassing the ownership gate a real client would hit first.
-        council.KART.LC.SendLC("LC_CONFIG:4:A;B;C;D;E:0::Haerri")
+        council.KART.LC.SendLC("LC_CONFIG:4:A;B;C;D;E:0::Merrit")
     end)
-    T.eq(odin.KART.LC.raidConfig.buttonLabels, before,
+    T.eq(alric.KART.LC.raidConfig.buttonLabels, before,
         "a config with an empty Lootmaster field is ignored unless the raid leader sent it")
 end
 
@@ -485,7 +485,7 @@ do
     local sim, lm, council = NewRaid()
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster = "Haerri"
+        lm.env.KART_Settings.lcLootmaster = "Merrit"
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.BroadcastRaidConfig()
     end)
@@ -505,8 +505,8 @@ do
 
     -- The successor fills their own field in, and the raid follows.
     RaidSim.As(council, function()
-        council.env.KART_Settings.lcLootmaster     = "Haerri"
-        council.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        council.env.KART_Settings.lcLootmaster     = "Merrit"
+        council.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
         council.env.KART_Settings.lcRollsEnabled   = true
         council.KART.LC.ApplyOwnConfig()
         council.KART.LC.BroadcastRaidConfig()
@@ -567,11 +567,11 @@ end
 -- settings over the raid: council list gone, rolls off, vote labels changed mid-session.
 do
     local sim = NewRaid()
-    RaidSim.Promote(sim, "Wuusch")            -- the lootmaster is not the raid leader
-    local lm, odin, successor = sim.byName.Kandera, sim.byName.Odin, sim.byName.Haerri
+    RaidSim.Promote(sim, "Corvin")            -- the lootmaster is not the raid leader
+    local lm, alric, successor = sim.byName.Bramor, sim.byName.Alric, sim.byName.Merrit
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster = "Haerri"
+        lm.env.KART_Settings.lcLootmaster = "Merrit"
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.BroadcastRaidConfig()
     end)
@@ -579,9 +579,9 @@ do
 
     T.truthy(RaidSim.As(successor, successor.KART.LC.IsCouncil),
         "a council member is still council after the lootmaster steps down")
-    T.eq(RaidSim.As(odin, odin.KART.LC.GetRollsEnabled), true,
+    T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true,
         "and the raid keeps its roll setting")
-    T.deep_eq(RaidSim.As(odin, odin.KART.LC.GetButtonConfig),
+    T.deep_eq(RaidSim.As(alric, alric.KART.LC.GetButtonConfig),
               RaidSim.As(successor, successor.KART.LC.GetButtonConfig),
         "and everyone still reads the same vote buttons")
 end
@@ -591,21 +591,21 @@ end
 -- empty, which is the documented setup, so their config would carry an empty council list.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    local stand = RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
     RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
 
-    local odin = sim.byName.Odin
-    local labelsBefore = RaidSim.As(odin, odin.KART.LC.GetButtonConfig)
-    RaidSim.Reload(sim, "Haerri")
+    local alric = sim.byName.Alric
+    local labelsBefore = RaidSim.As(alric, alric.KART.LC.GetButtonConfig)
+    RaidSim.Reload(sim, "Merrit")
     RosterSettles(sim)
 
-    T.eq(sim.byName.Haerri.KART.LC.sessionActive, true, "the reloaded stand-in is back in the session")
-    T.eq(RaidSim.As(odin, odin.KART.LC.GetRollsEnabled), true, "and the raid kept its roll setting")
-    T.deep_eq(RaidSim.As(odin, odin.KART.LC.GetButtonConfig), labelsBefore,
+    T.eq(sim.byName.Merrit.KART.LC.sessionActive, true, "the reloaded stand-in is back in the session")
+    T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true, "and the raid kept its roll setting")
+    T.deep_eq(RaidSim.As(alric, alric.KART.LC.GetButtonConfig), labelsBefore,
         "and its vote buttons")
-    T.truthy(RaidSim.As(sim.byName.Wuusch, sim.byName.Wuusch.KART.LC.IsCouncil),
+    T.truthy(RaidSim.As(sim.byName.Corvin, sim.byName.Corvin.KART.LC.IsCouncil),
         "and its council")
 end
 
@@ -679,7 +679,7 @@ do
         T.eq(c.KART.LC.raidConfig.lootmaster, lm.guid, c.name .. " still names the real lootmaster")
         T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true, c.name .. " still has the raid's rolls")
     end
-    T.truthy(RaidSim.As(sim.byName.Haerri, sim.byName.Haerri.KART.LC.IsCouncil),
+    T.truthy(RaidSim.As(sim.byName.Merrit, sim.byName.Merrit.KART.LC.IsCouncil),
         "and the council is still the council")
 
     -- And the loot flow still works, which is the only thing that actually matters.
@@ -697,23 +697,23 @@ end
 do
     local sim = RaidSim.New(F.MEMBERS)
     RaidSim.Install(sim)
-    local first = sim.byName.Kandera
+    local first = sim.byName.Bramor
     RaidSim.As(first, function()
-        first.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        first.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
         first.env.KART_Settings.lcRollsEnabled   = true
         first.KART.LC.ApplyOwnConfig()
         first.KART.LC.SetSessionActive(true)
     end)
     RosterSettles(sim)
 
-    RaidSim.Promote(sim, "Nara")     -- somebody else takes raid lead
+    RaidSim.Promote(sim, "Sinja")     -- somebody else takes raid lead
     RosterSettles(sim)
 
     for _, c in ipairs(sim.clients) do
         T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true,
             c.name .. " keeps the raid's roll setting across a raid-lead change")
     end
-    T.truthy(RaidSim.As(sim.byName.Haerri, sim.byName.Haerri.KART.LC.IsCouncil),
+    T.truthy(RaidSim.As(sim.byName.Merrit, sim.byName.Merrit.KART.LC.IsCouncil),
         "and the council survives it")
 end
 
@@ -722,8 +722,8 @@ end
 -- with no loot owner at all and nothing on anyone's screen.
 do
     local sim = NewRaid()
-    RaidSim.Leave(sim, "Kandera")
-    local stand = RaidSim.Promote(sim, "Haerri")
+    RaidSim.Leave(sim, "Bramor")
+    local stand = RaidSim.Promote(sim, "Merrit")
 
     KARTTEST.popupsBlocked = true
     RosterSettles(sim)

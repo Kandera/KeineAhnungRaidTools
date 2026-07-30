@@ -148,13 +148,13 @@ session by hand after every reload.
 not merely fail to recover — they actively tear the session down for everyone else. They are still
 the loot owner, so `LC.HandleStateRequest` answers every incoming `LC_STATE_REQ` with `LC_ACTIVE:0`,
 one whisper per asker, and each recipient runs `LC.ClearAllRolls`. Message trace from the harness,
-after Kandera reloads mid-distribution and one roster change follows:
+after Bramor reloads mid-distribution and one roster change follows:
 
 ```
-Haerri   LC_STATE_REQ  -> RAID
-Kandera  LC_ACTIVE:0   -> Haerri-Blackmoore
-Wuusch   LC_STATE_REQ  -> RAID
-Kandera  LC_ACTIVE:0   -> Wuusch-Blackmoore
+Merrit   LC_STATE_REQ  -> RAID
+Bramor   LC_ACTIVE:0   -> Merrit-TarrenMill
+Corvin   LC_STATE_REQ  -> RAID
+Bramor   LC_ACTIVE:0   -> Corvin-TarrenMill
 ...
 ```
 

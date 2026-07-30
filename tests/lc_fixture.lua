@@ -9,8 +9,8 @@ if KARTTEST.lcFixture then return KARTTEST.lcFixture end
 local RaidSim = dofile("tests/raidsim.lua")
 local F = { RaidSim = RaidSim }
 
--- Real drops from the guild's own loot history, with the classID/subclassID the live client reports.
--- Invented IDs were what let the tier-token bug hide.
+-- Real current-tier drops, with the classID/subclassID the live client reports for them. Invented
+-- IDs were what let the tier-token bug hide.
 KARTTEST.AddItem({ id = 249331, name = "Ezzorak's Gloombind", quality = 4, ilvl = 285,
                    classID = 4, subclassID = 4, equipLoc = "INVTYPE_HAND", bind = 1 })
 KARTTEST.AddItem({ id = 249293, name = "Weight of Command", quality = 4, ilvl = 285,
@@ -38,36 +38,36 @@ F.MOUNT, F.BOE, F.RARE = 249400, 249401, 249402
 -- everyone is on defaults is a raid nobody has. The base flow has to hold for all of them at once:
 -- whatever someone has switched on for themselves, the council must still see their answer.
 F.SETTINGS = {
-    Kandera = {},                                                    -- lootmaster, defaults
-    Haerri  = { lcAutoPass = false },                                -- clicks Blizzard's roll himself
-    Wuusch  = { lcHideIrrelevant = true },                           -- hides what he cannot equip
-    Odin    = { lcAutoTransmogVote = true },                         -- wants the appearances
-    Nara    = { lcHideIrrelevant = true, lcAutoTransmogVote = true },-- both
+    Bramor = {},                                                     -- lootmaster, defaults
+    Merrit = { lcAutoPass = false },                                 -- clicks Blizzard's roll themselves
+    Corvin = { lcHideIrrelevant = true },                            -- hides what they cannot equip
+    Alric  = { lcAutoTransmogVote = true },                          -- wants the appearances
+    Sinja  = { lcHideIrrelevant = true, lcAutoTransmogVote = true }, -- both
 }
 
 F.MEMBERS = {
-    { name = "Kandera", realm = "Blackmoore", guid = "Player-1-K", class = "DEATHKNIGHT", leader = true, locale = "deDE" },
-    { name = "Haerri",  realm = "Blackmoore", guid = "Player-1-H", class = "DRUID",       locale = "deDE" },
-    { name = "Wuusch",  realm = "Blackmoore", guid = "Player-1-W", class = "PALADIN",     locale = "enUS" },
-    { name = "Odin",    realm = "Blackmoore", guid = "Player-1-O", class = "MAGE",        locale = "enUS" },
-    { name = "Nara",    realm = "Blackmoore", guid = "Player-1-N", class = "PRIEST",      locale = "deDE" },
+    { name = "Bramor", realm = "TarrenMill", guid = "Player-1-B", class = "DEATHKNIGHT", leader = true, locale = "deDE" },
+    { name = "Merrit", realm = "TarrenMill", guid = "Player-1-M", class = "DRUID",       locale = "deDE" },
+    { name = "Corvin", realm = "TarrenMill", guid = "Player-1-C", class = "PALADIN",     locale = "enUS" },
+    { name = "Alric",  realm = "TarrenMill", guid = "Player-1-A", class = "MAGE",        locale = "enUS" },
+    { name = "Sinja",  realm = "TarrenMill", guid = "Player-1-S", class = "PRIEST",      locale = "deDE" },
 }
 
--- Builds a raid whose lootmaster is Kandera and whose council is Kandera + Haerri + Wuusch, then
+-- Builds a raid whose lootmaster is Bramor and whose council is Bramor + Merrit + Corvin, then
 -- starts the session the way the settings toggle does. Returns the sim, the lootmaster, one council
--- member (Haerri) and one plain raider (Odin).
+-- member (Merrit) and one plain raider (Alric).
 function F.NewRaid()
-    -- The guild raids on one realm, so the client's own realm must match the fixture's -- otherwise
+    -- A raid is normally all on one realm, so the client's own realm must match the fixture's -- otherwise
     -- every member reads as cross-realm and the same-realm half of every group-membership check goes
     -- unexercised. Cross-realm members are worth testing too, but as the exception they are.
-    KARTTEST.realm = "Blackmoore"
+    KARTTEST.realm = "TarrenMill"
     KARTTEST.now = 1000
     KARTTEST.timers, KARTTEST.lootRolls, KARTTEST.rolled = {}, {}, {}
     KARTTEST.solo, KARTTEST.popups = {}, {}
     local sim = RaidSim.New(F.MEMBERS)
     RaidSim.Install(sim)
 
-    local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
+    local lm, council, raider = sim.byName.Bramor, sim.byName.Merrit, sim.byName.Alric
 
     for name, opts in pairs(F.SETTINGS) do
         local c = sim.byName[name]
@@ -75,8 +75,8 @@ function F.NewRaid()
     end
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster     = "Kandera"
-        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        lm.env.KART_Settings.lcLootmaster     = "Bramor"
+        lm.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
         lm.env.KART_Settings.lcRollsEnabled   = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
@@ -84,15 +84,15 @@ function F.NewRaid()
     return sim, lm, council, raider
 end
 
--- The same raid, with the two roles held by DIFFERENT people: Kandera hands out the loot, Wuusch
--- leads the raid. This is the normal shape in a guild where the tank leads and someone else has time
+-- The same raid, with the two roles held by DIFFERENT people: Bramor hands out the loot, Corvin
+-- leads the raid. This is the normal shape where the tank leads and someone else has time
 -- to distribute, and every authority check in the addon has a raid-leader fallback that the default
 -- fixture cannot tell apart from the real answer, because there both roles are the same person.
 -- A whole class of ownership bug is invisible without this.
 function F.NewSplitRaid()
     local sim, lm, council, raider = F.NewRaid()
-    RaidSim.Promote(sim, "Wuusch")
-    return sim, lm, council, raider, sim.byName.Wuusch
+    RaidSim.Promote(sim, "Corvin")
+    return sim, lm, council, raider, sim.byName.Corvin
 end
 
 -- One item drops. Blizzard raises START_LOOT_ROLL on every eligible client independently; the loot
@@ -126,7 +126,7 @@ end
 
 -- Every client the raid config lists as council.
 function F.CouncilOf(sim)
-    return { sim.byName.Kandera, sim.byName.Haerri, sim.byName.Wuusch }
+    return { sim.byName.Bramor, sim.byName.Merrit, sim.byName.Corvin }
 end
 
 -- True when this client holds the item and shows a vote row for it.

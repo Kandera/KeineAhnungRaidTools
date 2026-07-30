@@ -6,7 +6,7 @@
 -- What makes this worth testing: the rule used to be `classID == 15` and that silently excluded
 -- every tier token in the game from Loot Council -- no ForceWinRoll for the lootmaster, no Auto-Pass
 -- for the raiders, on the most contested drop in the instance. The fixtures below are real,
--- measured values from the guild's own RCLootCouncil history rather than invented ones: the sixteen
+-- measured values from a real RCLootCouncil history rather than invented ones: the sixteen
 -- Midnight Nullcore tokens are classID 15 / subclass 0, and the raid's mount (Ashes of Belo'ren,
 -- 246590) is classID 15 / subclass 5. A regression here is invisible in-game until a token drops.
 
