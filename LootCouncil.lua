@@ -470,7 +470,7 @@ end
 -- key via KASC.Identity.ResolvePlayer, trimming first. Returns nil for blank text. Shared by
 -- LC.HandleConfig (a received LC_CONFIG broadcast) and LC.GetLootmaster's raid-leader branch
 -- below (the leader's own local settings, resolved fresh on every read rather than cached,
--- since the leader never receives its own broadcast to trigger HandleConfig).
+-- since the leader does not process its own broadcast to trigger HandleConfig).
 function LC.ResolveConfigName(text)
     local trimmed = KAUtil.TrimString(text or "")
     if trimmed == "" then return nil end
@@ -695,8 +695,8 @@ function LC.IsConfigOwner()
     return UnitIsGroupLeader("player")
 end
 
--- Applies OUR OWN settings as the raid config, locally. SendAddonMessage never echoes back to its
--- own sender, so the config owner is the one client that never receives their own LC_CONFIG — which
+-- Applies OUR OWN settings as the raid config, locally. KASC drops our own message when it comes back, see Dispatch, so it never reaches its
+-- own sender, so the config owner is the one client that does not process their own LC_CONFIG — which
 -- left LC.raidConfig and LC.CouncilNamesTable empty on exactly the person the config is about. On a
 -- lootmaster who isn't also the raid leader that broke their entire role: GetLootmaster() read "",
 -- so they never force-won a roll (they auto-passed instead), "/kart add" refused, no pending-trade
@@ -1256,7 +1256,7 @@ function LC.HandleSessionResume(senderKey)
     LC.promptedThisSession = true
     LC.HideSessionPrompt()
     -- A reload left LC.raidConfig and LC.CouncilNamesTable empty — including on ourselves, since our
-    -- own broadcast never comes back to us. A NAMED lootmaster has to put that back or they come
+    -- own broadcast is not processed by us. A NAMED lootmaster has to put that back or they come
     -- home to no council list and no vote-button config, which is the silent half-session B33
     -- describes.
     --
@@ -1947,7 +1947,7 @@ local ROLL_ORPHAN_GRACE = 15
 -- Must run exactly once per client per roll, and which code path guarantees that differs by roll
 -- type: a real drop fires START_LOOT_ROLL on every eligible client, so LC.OnStartLootRoll covers
 -- everyone by itself; a manual roll only exists as an addon message, so the sender rolls in
--- LC.StartManualRoll and everyone else in LC.HandleManualStart (SendAddonMessage never echoes back).
+-- LC.StartManualRoll and everyone else in LC.HandleManualStart (KASC drops our own message when it comes back).
 -- Note the resulting difference in who takes part: a real roll is limited to players Blizzard deemed
 -- eligible, while a manually added item is open to the whole raid — which is the point of handing it
 -- back to the council in the first place.
@@ -2139,7 +2139,7 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- is the one place that reliably rolls once per client for a real drop, council members included.
     RollForSelf(rollID)
 
-    -- The broadcaster never receives their own LC_START, so they open their own windows here —
+    -- The broadcaster does not process their own LC_START, so they open their own windows here —
     -- same treatment HandleStart gives every other client, gated the same way (council gets the
     -- panel, everyone gets the vote popup), otherwise the loot owner would be the one council
     -- member who couldn't cast their own vote.
@@ -2197,7 +2197,7 @@ function LC.HandleActive(value, senderKey)
     -- No "and if we own the config, broadcast it" branch here, deliberately: config ownership and
     -- loot ownership can never be split across two people. LC.IsConfigOwner() true means our own
     -- lcLootmaster names US, which makes LC.GetLootmaster() return our own key, which makes the
-    -- IsSenderLootOwner check above reject every sender but ourselves — and we never receive our own
+    -- IsSenderLootOwner check above reject every sender but ourselves — and we do not process our own
     -- messages. So such a branch is unreachable by construction. The config reaches the raid from
     -- LC.SetSessionActive (sent before LC_ACTIVE) and LC.HandleStateRequest instead.
 end
@@ -2328,7 +2328,7 @@ local function RevokePriorAward(itemLink)
     end
 
     -- Same three steps the council panel's "No Winner" button runs: tell the raid, then do the peer
-    -- side's cleanup locally too, since we never receive our own broadcast.
+    -- side's cleanup locally too, since we do not process our own broadcast.
     local m = matches[1]
     -- Trade.AnnounceResult reads the link back out of LC.rollItems to carry the itemID peers use to
     -- reject a result for a stale rollID. After a relog that table is empty while the obligation is
@@ -2388,7 +2388,7 @@ function LC.StartManualRoll(itemsText)
         -- two halves are needed here while a real drop gets by with one.
         RollForSelf(rollID)
 
-        -- SendAddonMessage never echoes back to its own sender, so the lootmaster has to open
+        -- KASC drops our own message when it comes back (see Dispatch), so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
         if LC.IsCouncil() then
             KART.LC.Council.ShowCouncilPanel(rollID, seconds)

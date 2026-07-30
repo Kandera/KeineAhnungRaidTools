@@ -290,7 +290,7 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     local note = (KAUtil.TrimString(noteBox and noteBox:GetText() or ""):gsub("|", ""))
     LC.votedNoteByMe[rollID] = note
 
-    -- Record our own vote locally regardless of test/real: SendAddonMessage never echoes back to
+    -- Record our own vote locally regardless of test/real: KASC drops our own message when it comes back, see Dispatch, so it never reaches
     -- its own sender, so without this our own progress counter reads one short and a council member
     -- voting on their own drop wouldn't see themselves listed.
     -- How many buttons OUR list has. The index alone is meaningless to a receiver whose list is a

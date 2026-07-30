@@ -663,6 +663,12 @@ function KART.ShowReadyCheckReasonDialog()
             end
             if IsInGroup() then
                 KASC:Send("RC_REASON:" .. text)
+                -- Our own row, same as every receiver does for us. KASC drops our own message when
+                -- it comes back (see Dispatch), so without this the one person whose reason it is
+                -- is the one person whose buff-check row does not show it. Pipes escaped exactly
+                -- like the receiver escapes them, so our row reads the same as everybody else's.
+                KART.ReadyCheckReasons = KART.ReadyCheckReasons or {}
+                KART.ReadyCheckReasons[UnitName("player")] = (text:gsub("|", "||"))
             end
             f:Hide()
         end

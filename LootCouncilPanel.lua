@@ -766,7 +766,7 @@ function Council.CreateCouncilPanel()
         if LC.activeRollID then
             local rollID = LC.activeRollID
             LC.Trade.AnnounceResult(rollID, "NONE")
-            -- We never receive our own LC_RESULT, so the cleanup the peer side does in
+            -- We do not process our own LC_RESULT, so the cleanup the peer side does in
             -- Trade.HandleResult has to be run locally too — otherwise whoever revokes the winner is
             -- the one client left holding a pending trade / owed reminder, and the one client whose
             -- loot log still credits the revoked winner.
@@ -1016,13 +1016,13 @@ function Council.RefreshCouncilRows()
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit(unit, rollItem)
 
             -- Flag raiders who are missing KART, running an outdated version, or have disabled
-            -- their own Loot Council module locally (self excluded — we never receive our own
+            -- their own Loot Council module locally (self excluded — we do not process our own
             -- version broadcast, so PlayerVersions never has an entry for "player"). PlayerVersions
             -- stays short-name keyed — out of scope for the identity rework, see the design doc.
             local kartStatus
             -- UnitIsUnit, NOT unit ~= "player": KAUtil.EachGroupUnit yields raid1..raidN in a raid and
             -- never the literal "player" token, so the plain comparison failed to exclude our own raid
-            -- slot — and since we never receive our own version broadcast, every raid showed a red
+            -- slot — and since we do not process our own version broadcast, every raid showed a red
             -- "KART missing" warning on the viewer's own row. Same pitfall as in WU.RemoveForBoss.
             if not UnitIsUnit(unit, "player") then
                 local ver = KART.PlayerVersions and KART.PlayerVersions[short]

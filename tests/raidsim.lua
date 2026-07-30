@@ -8,9 +8,9 @@
 --
 -- So this loads the addon files the way WoW does -- as chunks called with (addonName, KART) -- once
 -- per simulated client, each in its own environment, and routes C_ChatInfo.SendAddonMessage between
--- them. A message never comes back to its sender, exactly as in the game. What the tests then assert
--- is the thing the maintainer actually cares about: an item drops, EVERY client can see it and vote,
--- and the council sees those votes.
+-- them -- including back to the sender, exactly as the game does it (see the wire below). What the
+-- tests then assert is the thing the maintainer actually cares about: an item drops, EVERY client
+-- can see it and vote, and the council sees those votes.
 --
 -- Deliberately not simulated: rendering, taint, and Blizzard's own loot roll. Those need a client.
 -- Every raid-night failure so far has been state and messages, which is what this covers.
@@ -278,20 +278,61 @@ function KARTTEST.RestoreContext(ctx)
 end
 
 -- Runs fn with `client` as the executing client, so the stubs resolve "player" to them.
+--
+-- Depth is tracked because the echo (see the wire below) must land AFTER the sending client has
+-- finished what it was doing, never in the middle of it -- so the queue is drained only when
+-- control comes back out to the test.
+local asDepth = 0
 function RaidSim.As(client, fn, ...)
     local prevClient, prevUnit = RaidSim.active, KARTTEST.activeUnit
     RaidSim.active, KARTTEST.activeUnit = client, client and client.unit or nil
+    asDepth = asDepth + 1
     local results = { pcall(fn, ...) }
+    asDepth = asDepth - 1
     RaidSim.active, KARTTEST.activeUnit = prevClient, prevUnit
+    if asDepth == 0 and KARTTEST.FlushEcho then KARTTEST.FlushEcho() end
     if not results[1] then error(results[2], 0) end
     return unpack(results, 2)
 end
 
--- The wire. One rule matters more than any other here and it is the source of a whole family of
--- real bugs: a sender never receives its own addon message. Anything the sender needs to do to its
--- own state, it must do itself -- and every time the addon forgot that, one client ended up
--- disagreeing with the other nineteen.
+-- The wire.
+--
+-- It used to encode the opposite of the truth: "a sender never receives its own addon message".
+-- Measured in a live client on 2026-07-30, on GUILD and on PARTY, the sender DOES receive it --
+-- CHAT_MSG_ADDON fires on the sender too, with their own realm-qualified name as the sender, and
+-- KASC's dispatcher has no self-filter, so the message runs through the sender's own handler like
+-- anybody else's. Every "the sender must also do this itself" compensation in the addon therefore
+-- runs a second time on the echo, and whatever is not repeatable breaks there.
+--
+-- The echo is queued rather than delivered inline: a real one comes back over the server, so it
+-- can never land in the middle of the sending function. Delivering it inline would let a handler
+-- observe its own sender's half-finished state, which is a failure mode the game cannot produce.
 function RaidSim.Install(sim)
+    sim.echoQueue = {}
+
+    -- Drains the echo queue. Delivering an echo can send more messages, which queue more echoes,
+    -- so this loops -- with a cap, because a handler that answers its own echo would otherwise
+    -- spin here forever, and that is a bug worth failing loudly on rather than hanging on.
+    local flushing = false
+    function KARTTEST.FlushEcho()
+        if flushing then return end
+        flushing = true
+        local rounds = 0
+        while #sim.echoQueue > 0 do
+            rounds = rounds + 1
+            if rounds > 200 then
+                flushing = false
+                error("raidsim: echo storm -- a handler keeps answering its own message", 0)
+            end
+            local pending = sim.echoQueue
+            sim.echoQueue = {}
+            for _, e in ipairs(pending) do
+                RaidSim.As(e.to, function() e.to.KASC.Dispatch(e.msg, e.channel, e.sender) end)
+            end
+        end
+        flushing = false
+    end
+
     _G.C_ChatInfo.SendAddonMessage = function(prefix, msg, channel, target)
         local from = RaidSim.active
         if not from then error("raidsim: a message was sent with no active client", 0) end
@@ -312,6 +353,13 @@ function RaidSim.Install(sim)
             if msg:sub(1, #token) == token then return end
         end
         local sender = from.name .. "-" .. from.realm
+        -- The sender's own copy. A whisper only comes back when it was addressed to the sender
+        -- themselves; anything sent to the group always does.
+        if channel ~= "WHISPER" or target == from.name
+                                or target == from.name .. "-" .. from.realm then
+            sim.echoQueue[#sim.echoQueue + 1] =
+                { to = from, msg = msg, channel = channel, sender = sender }
+        end
         for _, to in ipairs(sim.clients) do
             -- A whisper reaches its target and nobody else. `target == sender` used to be accepted
             -- here as well, which delivered a whisper addressed to the SENDER'S OWN name to every

@@ -788,12 +788,12 @@ function Trade.HandleResult(payload, senderKey)
     if winnerKey == "NONE" then
         -- The item ended up with nobody, so any history entry naming a winner for it is now wrong.
         -- Every client logs the same award locally, so every client has to drop it locally too —
-        -- the revoker does this itself (it never receives its own message, see the panel's No-Winner
+        -- the revoker does this itself (it does not process its own message, see the panel's No-Winner
         -- button and LC.StartManualRoll's re-decision path).
         KART.LH.RemoveHistoryForRoll(rollID)
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
-        -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab
+        -- (KASC drops our own message when it comes back). Without this, peers keep a ghost council tab
         -- with stale votes and a stale gold winner highlight from any prior assignment on this roll.
         KART.LC.Council.CloseCouncilTab(rollID)
         return
@@ -802,7 +802,7 @@ function Trade.HandleResult(payload, senderKey)
     -- Council peers must see the same assigned winner the assigner recorded locally — the gold
     -- winner highlight (see RefreshCouncilRows) and a correct prevWinner on any later reassignment
     -- both read from LC.assignedWinners. The result broadcast is a peer's only signal (the assigner
-    -- already set this in AssignWinner and never receives its own message), so mirror it here.
+    -- already set this in AssignWinner and does not process its own message), so mirror it here.
     LC.assignedWinners[rollID] = winnerKey
     LC.RefreshCouncilIfShown(rollID)
 
@@ -835,7 +835,7 @@ function Trade.HandleResult(payload, senderKey)
 
     -- Every KART user logs the same entry locally, so everyone's loot history stays in sync
     -- without depending on the lootmaster being online later. The assigner already logged this
-    -- locally (SendAddonMessage never echoes back to its own sender), so no duplicate here.
+    -- locally (KASC drops our own message when it comes back (see Dispatch)), so no duplicate here.
     local classFile
     local unit = KASC.Identity.FindUnitForKey(winnerKey)
     if unit then

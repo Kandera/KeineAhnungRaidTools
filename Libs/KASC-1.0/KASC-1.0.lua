@@ -274,6 +274,21 @@ local function Dispatch(msg, channel, sender)
     if not sender then return end
     local shortName = sender:match("([^%-]+)")
     if not shortName then return end
+    -- Our own message, coming back. CHAT_MSG_ADDON fires on the SENDER too for every group and
+    -- guild channel (measured in a live client, 2026-07-30, on PARTY and on GUILD) -- the server
+    -- reflects the message and nothing below this line can tell it apart from a peer's.
+    --
+    -- Every consumer is written the other way round: whatever the sender needs to do to its own
+    -- state, it does itself, right where it sends (LC.ApplyOwnConfig, OnStartLootRoll opening its
+    -- own windows, AssignWinner recording its own result). Letting the echo through runs all of
+    -- that a second time -- harmless where it is repeatable, and not harmless where it is not: the
+    -- echo of a raid leader's own LC_CONFIG marked their config as RECEIVED, which took the config
+    -- ownership away from them on the empty-lootmaster-field setup, and their handover
+    -- announcement with it.
+    --
+    -- Dropped here, once, rather than in twenty handlers: a self-check every handler has to
+    -- remember is a self-check some handler will forget.
+    if KAUtil.IsSelfFullName(sender) then return end
 
     local token, payload = msg:match("^([^:]+):(.*)$")
     local entry = (token and handlers.payload[token]) or handlers.exact[msg]

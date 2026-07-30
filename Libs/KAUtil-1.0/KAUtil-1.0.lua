@@ -89,6 +89,19 @@ function KAUtil.CanonRealm(realm)
     return KAUtil.CaseFold(((realm or ""):gsub("[%s%-']", "")))
 end
 
+-- Whether fullName (same shape as above) is US. Same name/realm canonicalization as
+-- IsFullNameInGroup, for the same reason: the sender side is always realm-qualified and normalized,
+-- our own side is not.
+function KAUtil.IsSelfFullName(fullName)
+    if type(fullName) ~= "string" or fullName == "" then return false end
+    local wantName, wantRealm = fullName:match("^([^%-]+)%-?(.*)$")
+    if not wantName then return false end
+    if KAUtil.CaseFold(wantName) ~= KAUtil.CaseFold(UnitName("player") or "") then return false end
+    wantRealm = KAUtil.CanonRealm(wantRealm)
+    local ownRealm = KAUtil.CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    return wantRealm == "" or wantRealm == ownRealm
+end
+
 function KAUtil.IsFullNameInGroup(fullName)
     if type(fullName) ~= "string" or fullName == "" then return false end
     local wantName, wantRealm = fullName:match("^([^%-]+)%-?(.*)$")

@@ -185,7 +185,7 @@ function KART.StartEnchantScan()
         return
     end
     wipe(KART.EnchantScan)
-    -- Our own answer: SendAddonMessage never echoes back to its sender.
+    -- Our own answer: KASC drops our own message when it comes back (see Dispatch).
     KART.EnchantScan[UnitName("player") or "?"] = KAGS.GetOwnEnchantIDs()
     KASC:Send("REQ_ENCH")
     print("|cff00ff00KART:|r " .. KART.L.ENCH_SCAN_START)

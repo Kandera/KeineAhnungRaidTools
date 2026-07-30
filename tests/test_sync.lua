@@ -77,6 +77,22 @@ KARTTEST.ClearSent()
 KASC:Send("HELLO")
 T.eq(KARTTEST.sent[1].channel, "PARTY", "Send defaults to PARTY outside a raid")
 
+-- The self gate ------------------------------------------------------------------------------
+-- CHAT_MSG_ADDON fires on the SENDER too for every group and guild channel, so our own message
+-- comes back looking exactly like a peer's. Every consumer already does its own side of the work
+-- where it sends, so the echo has to die here -- see the comment on Dispatch. Ann is "player" in
+-- the party set up just above.
+hits = {}
+KASC:RegisterMessage("TEST_ECHO", { payload = true }, function() hits[#hits + 1] = true end)
+KASC.Dispatch("TEST_ECHO:x", "PARTY", "Ann-TarrenMill")
+T.eq(#hits, 0, "our own message coming back is dropped")
+KASC.Dispatch("TEST_ECHO:x", "PARTY", "Ann")
+T.eq(#hits, 0, "the same, unqualified")
+-- Name alone must not be the test: a stranger who happens to share our short name is a different
+-- player, and silently swallowing their messages would be the same bug in the other direction.
+KASC.Dispatch("TEST_ECHO:x", "WHISPER", "Ann-Silvermoon")
+T.eq(#hits, 1, "our short name on another realm is somebody else, and still delivered")
+
 -- Handshake ---------------------------------------------------------------------------------
 -- Name, version and capability are restricted to [%w%.%-_]; anything else drops the entry.
 -- This replaces the old ver:gsub("|","||") defence with a whitelist, because the version

@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A session that never reached you is asked for again**, rather than once and never.
 - **Revoking an award no longer deletes an unrelated award from a previous raid.**
 - **An item whose data is slow to arrive is waited for**, instead of being skipped without a word.
+- **A raid leader who distributes loot without a named Lootmaster keeps control of the raid-wide settings**, instead of losing it the moment they send them.
+- **Handing the Lootmaster role over reaches the raid again.**
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

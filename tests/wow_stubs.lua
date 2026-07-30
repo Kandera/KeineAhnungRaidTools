@@ -140,6 +140,8 @@ function KARTTEST.AdvanceTime(seconds)
         local prev = restore and restore(next_.ctx)
         next_.fn()
         if restore then restore(prev) end
+        -- A timer that sends gets its own message back, same as any other send.
+        if KARTTEST.FlushEcho then KARTTEST.FlushEcho() end
         ran = ran + 1
         -- A ticker re-arms itself, unless it was cancelled while running.
         if next_.every then
