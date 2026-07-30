@@ -458,21 +458,29 @@ Two things surfaced underneath it, both fixed here:
 * The state request stopped once the SESSION flag was known, so a client that learned the session and
   missed the config never asked again. It now asks while either is missing.
 
-## B66 — an item announced while a client is deaf is lost to that client
+## B66 — an item announced while a client is deaf — NARROWED 2026-07-30
 
 `LC_START` and `LC_RESULT` are announced once and never re-requested. A client is deaf for two
 ordinary reasons: it is still recovering from a reload (it has asked for the state and is waiting),
-or Blizzard's chat throttle dropped the message. It then has no way back to that item — the loot
-history catch-up runs on JOIN only, and there is no equivalent for rolls in flight.
+or Blizzard's chat throttle dropped the message.
 
-Bounded in practice: that raider does not vote on that one item, and the council sees no answer from
-them. The severe variant — the LOOTMASTER being the deaf one, so nobody force-wins — was narrowed by
-making the state request's first retry come at 2s instead of 5s, and by letting ordinary raiders
-answer a reloaded owner's request (see `LC.HandleStateRequest`). Narrowed, not closed.
+**Rolls now have a catch-up.** The loot owner lists the rolls still open when it answers a state
+request (`LC.SendOpenRolls` / `LC_ROLL_CATCHUP`), so a client that was deaf gets its vote row back
+and the council gets an answer from it after all. What keeps that from breaking the rule about late
+arrivals is the receiving side: the roll is rebuilt only if Blizzard gave *this* client the same
+roll, which is its own proof of having been in the raid when the boss died. A client that already
+answered has no roll left either, so an item it has decided is not put back in front of it.
 
-A real fix is a catch-up for rolls in flight: on learning the session is running, ask for the rolls
-currently open and rebuild them, the way `LH.RequestHistorySync` does for awards. That is a new
-message and a new path, worth doing deliberately rather than the night before a raid.
+**Two halves remain open:**
 
-`tests/test_lc_soak.lua` excludes exactly these two windows from its per-item comparison, and says so
+* `LC_RESULT` has no equivalent. An award announced while a client could not authorise the sender
+  — its council list had not arrived — is missing from that client's loot history, and
+  `LH.RequestHistorySync` only runs on join. A history catch-up on *rejecting* a result would close
+  it.
+* The loot owner's own deafness cannot be repaired by anyone. Blizzard offers no way to enumerate
+  the rolls currently open, so a lootmaster that reloads and misses a drop cannot ask for it back —
+  it can only recover fast enough not to miss it. That is what the 2-second first retry and the
+  raider-supplied session resume are for. Narrowed, not closed.
+
+`tests/test_lc_soak.lua` excludes exactly these windows from its per-item comparison, and says so
 where it does it — everything with a retry behind it is still held to the full standard.

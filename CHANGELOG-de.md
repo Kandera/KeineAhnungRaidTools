@@ -36,6 +36,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Wer dazukommt, nachdem der Lootmaster den Raid verlassen hat, bekommt trotzdem die Vote-Buttons, Mindestqualität und Würfe-Einstellung des Raids** — statt still auf seine eigenen zurückzufallen.
 - **Ein Raidleiter, der neu lädt, überschreibt die Einstellungen des Raids nicht mehr mit seinen eigenen.**
 - **Die Session bestätigt jeder Raider, der sie kennt** — nicht nur der eine Client, der die Lootverteilung führt.
+- **Ein Item, das während deines Reloads gedroppt ist, erreicht dich trotzdem** — du kannst noch abstimmen und das Council wartet nicht vergeblich.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

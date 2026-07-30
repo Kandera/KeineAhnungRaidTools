@@ -181,8 +181,12 @@ do
     T.eq(alric.KART.LC.sessionActive, true, "and is back in the session on the next roster change")
     T.eq(alric.KART.LC.raidConfig.lootmaster, lm.guid, "with the config back")
     T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true, "and the raid's roll setting back")
+    -- They had already answered Blizzard's roll before reloading (Auto-Pass fires in
+    -- LC.OnStartLootRoll), so the roll is gone from their client and the catch-up has nothing to
+    -- hand back -- which is right: they answered, the council has their reply. The other case, a
+    -- client that was deaf BEFORE it could answer, is restored; see the B66 test further down.
     T.truthy(not HasVoteRow(alric, 85),
-        "the distribution already running is not restored to them -- same rule as a late joiner")
+        "an item they already answered is not put back in front of them")
 
     Drop(sim, 86, F.WEAPON)
     RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(86, 1) end)
@@ -1004,4 +1008,52 @@ do
     T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled),
          RaidSim.As(sim.byName.Alric, sim.byName.Alric.KART.LC.GetRollsEnabled),
         "and agrees with the raiders who never reloaded")
+end
+
+-- ===================================================================================
+-- An item announced while a client was deaf (B66)
+-- ===================================================================================
+-- LC_START is announced once and never re-requested. A client is deaf for two ordinary reasons: it
+-- is still coming back from a reload, or Blizzard's chat throttle swallowed the message. It then
+-- had no way back to that item -- no vote row, no answer from it, and the council waiting on
+-- somebody who never saw the thing.
+--
+-- The loot owner now lists the rolls still open when it answers a state request. What keeps this
+-- from breaking the maintainer's rule about late arrivals is the receiving side: the roll is
+-- rebuilt only if BLIZZARD gave this client that same roll, which is proof it was in the raid when
+-- the boss died. Someone who joined afterwards has no such roll and is not pulled in.
+do
+    local sim, lm = NewRaid()
+    RaidSim.Blackhole(sim, "LC_START")
+
+    -- Alric is here and eligible, but reloading at the moment the boss dies: no session, so its own
+    -- START_LOOT_ROLL does nothing, and the announcement never arrives either.
+    local alric = RaidSim.Reload(sim, "Alric")
+    Drop(sim, 90, F.GLOVES)
+    T.eq(alric.KART.LC.rollItems[90], nil, "the deaf client has no idea the item dropped")
+    T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[90]), "while the raid is voting on it")
+
+    RaidSim.Deliver(sim, "LC_START")
+    RaidSim.EnterWorld(sim, "Alric")
+    RosterSettles(sim)
+
+    T.truthy(alric.KART.LC.IsRealItemLink(alric.KART.LC.rollItems[90]),
+        "once it is back, the item it missed is handed to it")
+    T.truthy(HasVoteRow(alric, 90), "with a vote row, so it can still answer")
+    RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(90, 1) end)
+    T.truthy((lm.KART.LC.votes[90] or {})[alric.guid], "and the council gets the answer after all")
+end
+
+-- The same catch-up must NOT reach someone who was not there for that boss.
+do
+    local sim, lm = NewRaid()
+    Drop(sim, 91, F.GLOVES, { noRollFor = { Torvi = true } })
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(10)
+
+    T.eq(torvi.KART.LC.sessionActive, true, "the newcomer is in the session")
+    T.truthy(not HasVoteRow(torvi, 91),
+        "but Blizzard never gave them that roll, so the catch-up leaves them out of it")
+    T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[91]), "while the raid still has it")
 end

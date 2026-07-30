@@ -470,6 +470,18 @@ local function rollFor(rollID)
     local r = KARTTEST.lootRolls[rollID]
     if not r or r.live == false then return nil end
     local unit = KARTTEST.activeUnit or "player"
+    -- Who Blizzard actually raised this roll on, by NAME rather than unit token: a join or a leave
+    -- renumbers every token behind it (see RaidSim.Reindex), so a token recorded when the boss died
+    -- means somebody else ten seconds later.
+    --
+    -- The stub used to answer for anyone not explicitly excluded, which made GetLootRollItemLink
+    -- true for a player who joined AFTER the boss died -- something the game cannot do, and the
+    -- exact fact LC.HandleRollCatchup relies on to keep a late arrival out of a distribution
+    -- already running.
+    if r.forNames then
+        local m = roster[unit]
+        if not (m and r.forNames[m.name]) then return nil end
+    end
     if r.notFor and r.notFor[unit] then return nil end
     if r.rolledBy and r.rolledBy[unit] then return nil end
     return r

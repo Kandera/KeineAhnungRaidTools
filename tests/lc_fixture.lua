@@ -103,12 +103,21 @@ function F.Drop(sim, rollID, itemID, opts)
     -- noRollFor marks the clients Blizzard never raised this roll on. It has to reach the API stub,
     -- not just skip the call: on those clients GetLootRollItemLink answers nil forever, and that is
     -- precisely the state LC.HandleStart's rebuild-from-payload exists for.
-    local notFor = {}
+    local notFor, forNames = {}, {}
     for _, c in ipairs(sim.clients) do
-        if opts.noRollFor and opts.noRollFor[c.name] then notFor[c.unit] = true end
+        if opts.noRollFor and opts.noRollFor[c.name] then
+            notFor[c.unit] = true
+        else
+            -- Who Blizzard raised the roll on: everyone in the raid at this moment, and nobody
+            -- else. A player who joins later has no roll under this ID for the rest of its life,
+            -- which is what the game does and what keeps them out of a distribution they were not
+            -- there for.
+            forNames[c.name] = true
+        end
     end
     KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed, canTransmog = opts.canTransmog,
-                                   bop = opts.bop, notFor = notFor, linkPending = opts.linkPending }
+                                   bop = opts.bop, notFor = notFor, forNames = forNames,
+                                   linkPending = opts.linkPending }
     for _, c in ipairs(sim.clients) do
         if not notFor[c.unit] then
             RaidSim.As(c, function() c.KART.LC.OnStartLootRoll(rollID) end)

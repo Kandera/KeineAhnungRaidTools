@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Anyone joining after the Lootmaster has left still gets the raid's vote buttons, minimum quality and roll setting**, instead of quietly falling back to their own.
 - **A raid leader who reloads no longer replaces the raid's settings with their own.**
 - **The session is confirmed by any raider who knows**, not only by the one client running the loot flow.
+- **An item that dropped while your client was reloading still reaches you**, so you can answer it and the council is not left waiting.
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

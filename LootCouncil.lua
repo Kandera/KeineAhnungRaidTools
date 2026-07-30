@@ -1342,6 +1342,56 @@ function LC.HandleStateRequest(requester, requesterKey)
     if LC.IsLootOwner() and LC.sessionStateKnown then
         LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
     end
+    -- Last, and only from the loot owner: the items still on the table, for a client that was deaf
+    -- when they were announced (B66). After the session flag, because a client that does not know
+    -- there is a session has nothing to hang them on.
+    LC.SendOpenRolls(requester)
+end
+
+-- The rolls still open, listed to one client that has just asked for the raid's state (B66).
+--
+-- LC_START is announced once, inside the loot owner's own START_LOOT_ROLL handler, and never
+-- re-requested. A client is deaf at that instant for two ordinary reasons -- it is still coming back
+-- from a reload, or Blizzard's chat throttle swallowed the message -- and it then had no way back to
+-- that item at all: no vote row, no answer from it, and a council waiting on somebody who never saw
+-- the thing.
+--
+-- Capped, because this is a burst of whispers on top of the two replies already going out, and a
+-- raid decides a handful of items at a time, not thirty.
+local ROLL_CATCHUP_MAX = 5
+
+function LC.SendOpenRolls(target)
+    if not (IsInGroup() and target and LC.sessionActive and LC.IsLootOwner()) then return end
+    local now, sent = GetTime(), 0
+    for rollID, deadline in pairs(LC.rollDeadlines or {}) do
+        if sent >= ROLL_CATCHUP_MAX then break end
+        local link = LC.rollItems[rollID]
+        local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
+        -- Only rolls still open, and only once the item is actually known: an unresolved one would
+        -- arrive as a question mark the receiver could not repair, which is the state LC.HandleStart
+        -- exists to avoid.
+        if itemID and deadline > now and not LC.IsTestRoll(rollID) then
+            local secs = math.max(1, math.floor(deadline - now))
+            LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. secs .. ":" .. itemID, target)
+            sent = sent + 1
+        end
+    end
+end
+
+-- The receiving half, and the reason this does not break the rule that a late arrival stays out of a
+-- distribution already running: the roll is rebuilt only if BLIZZARD gave this client the same roll.
+-- That is its own proof of having been in the raid when the boss died -- someone who joined
+-- afterwards has no such roll, GetLootRollItemLink answers nil for them, and nothing happens.
+--
+-- Deliberately does NOT roll 1-100 on their behalf. The roll belongs to the moment the item dropped;
+-- inventing one now would put a number in the council's tally that never existed, and the column
+-- showing "-" for somebody who was disconnected is the honest reading.
+function LC.HandleRollCatchup(payload, senderKey)
+    local rollID = tonumber(payload:match("^(%d+):"))
+    if not rollID then return end
+    if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
+    if not GetLootRollItemLink(rollID) then return end
+    LC.HandleStart(payload, senderKey)
 end
 
 -- A council member (or the raid leader) telling us the session we own is still running, because we
@@ -2630,6 +2680,8 @@ KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEn
     function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CONFIG_RELAY", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleConfigRelay(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_ROLL_CATCHUP", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleRollCatchup(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },
