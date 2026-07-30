@@ -1211,7 +1211,7 @@ end
 -- question-mark placeholder tinted with the item's quality colour (r,g,b — pass what
 -- LC.ParseItemColor returned, which the caller usually also needs for the surrounding border/strip).
 function LC.SetItemIcon(icon, link, r, g, b)
-    -- GetItemIconByID answers from a bare item string as well as from a full link, and LC.HandleStart
+    -- GetItemIconByID answers from a plain itemID as well as from a full link, and LC.HandleStart
     -- rebuilds exactly such a string from the LC_START payload for clients that had no roll of their
     -- own. Accepting it here is what makes those rows show the real icon straight away instead of
     -- the question mark they were reported with (#12, #13, #16) — the icon needs only the ID, while
@@ -1258,7 +1258,18 @@ end
 --  Session Prompt  (shown to RL when joining a raid)
 -- =====================================================================
 
+-- Takes the prompt off screen whenever a session starts, from wherever. The frame is created once
+-- and reused, and only its own two buttons and Escape ever hid it — so it could sit there through a
+-- whole round waiting to be clicked by someone tidying their screen. The button handlers re-check
+-- their own preconditions anyway; this just stops the stale dialog being there in the first place.
+function LC.HideSessionPrompt()
+    if LC.sessionPromptFrame then LC.sessionPromptFrame:Hide() end
+end
+
 function LC.ShowSessionPrompt()
+    -- Asking whether to start a session that is already running is never right, and the caller's
+    -- own check happens up to three seconds before this runs.
+    if LC.sessionActive or not LC.IsLootOwner() then return end
     if LC.sessionPromptFrame then
         LC.sessionPromptFrame:Show()
         return
@@ -1293,13 +1304,20 @@ function LC.ShowSessionPrompt()
     btnNo:SetSize(135, 28)
     btnNo:SetPoint("BOTTOMRIGHT", -15, 12)
     btnNo:SetScript("OnClick", function()
-        -- Broadcasts LC_ACTIVE:0, and that is deliberate even though declining sounds passive. The
-        -- prompt only opens when our own session is off (see LC.CheckRaidJoin), so this cannot end a
-        -- session we knowingly started -- but it CAN end one the raid still believes in while we do
-        -- not, which is exactly the state a reloaded loot owner lands in. Removing the broadcast
-        -- took away the only in-UI way out of that split, leaving Auto-Pass raiders passing on every
-        -- item while nobody force-won it.
-        LC.SetSessionActive(false)
+        -- Re-checked HERE, not just where the prompt is opened. This frame is created once and
+        -- reused; nothing but these two buttons and Escape ever closes it, so a dialog left sitting
+        -- on screen can be clicked long after the state that justified it has gone. Without this
+        -- check, tidying away a forgotten prompt ran SetSessionActive(false) in the middle of a
+        -- running round -- locally wiping tabs, votes and winner highlights, and broadcasting
+        -- LC_ACTIVE:0 to a raid that was mid-boss.
+        --
+        -- Declining still broadcasts when it genuinely applies, and that is deliberate: it is what
+        -- resolves the split where the raid believes a session runs and this client does not. Not
+        -- the only way out -- "Yes" resolves it too, and non-destructively -- but the honest answer
+        -- for someone who does not want a session at all.
+        if LC.IsLootOwner() and not LC.sessionActive then
+            LC.SetSessionActive(false)
+        end
         f:Hide()
     end)
 
@@ -1368,6 +1386,7 @@ end
 
 function LC.SetSessionActive(active)
     LC.sessionActive = active
+    if active then LC.HideSessionPrompt() end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
     -- never received a config has lootmaster == "" and falls back to "is the sender the raid
@@ -1386,14 +1405,24 @@ function LC.SetSessionActive(active)
         -- raid silently not rolling while the person who started the session does, and it cost this
         -- guild an evening before anyone worked out why (backlog B33; the real fix is the ownership
         -- design, this is only the missing sentence). Say it out loud instead.
-        -- Two different causes, and telling someone to fill in a field they already filled in is
-        -- worse than saying nothing: an NSRT nickname that has not resolved yet fails IsConfigOwner
-        -- exactly like an empty field does, and that is the very case TryAcceptConfig was rewritten
-        -- for. Distinguish them by whether the field holds anything at all.
+        -- Three causes, not two, and each wants different advice. Getting this wrong is worse than
+        -- silence: the version that only asked "is the field empty?" told a raid leader whose field
+        -- names the actual lootmaster to put his own name there instead — which would take loot
+        -- ownership away from that lootmaster the moment they logged in.
+        --
+        -- Trimmed, because ResolveConfigName trims too: a field holding only spaces is empty as far
+        -- as ownership is concerned and must be reported that way.
         if not LC.IsConfigOwner() then
-            local named = KART_Settings.lcLootmaster and KART_Settings.lcLootmaster ~= ""
-            print("|cffff0000KART:|r " ..
-                (named and KART.L.LC_LOOTMASTER_UNRESOLVED or KART.L.LC_NO_CONFIG_OWNER))
+            local field = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
+            local msg
+            if field == "" then
+                msg = KART.L.LC_NO_CONFIG_OWNER            -- nobody is named at all
+            elseif LC.ResolveConfigName(field) then
+                msg = KART.L.LC_LOOTMASTER_OTHER           -- names someone else; their client sends
+            else
+                msg = KART.L.LC_LOOTMASTER_UNRESOLVED      -- names someone we cannot resolve yet
+            end
+            print("|cffff0000KART:|r " .. msg)
         end
     end
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
@@ -1832,6 +1861,9 @@ function LC.HandleActive(value, senderKey)
     if not LC.IsSenderLootOwner(senderKey) then return end
     local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
+    -- A session started elsewhere makes our own "start one?" question obsolete; leaving the dialog
+    -- up invites someone to answer a question that no longer applies.
+    if LC.sessionActive then LC.HideSessionPrompt() end
     -- A peer receiving the owner's session-end must also drop its tracked rolls and close its
     -- windows, exactly like the owner's own SetSessionActive(false) — otherwise stale tabs, votes
     -- and a leftover /kart showall override survive into the next session.

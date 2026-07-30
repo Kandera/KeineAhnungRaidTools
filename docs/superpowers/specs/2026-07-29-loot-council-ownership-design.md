@@ -134,7 +134,7 @@ sagt das auf seinem Client wie auf jedem anderen, weil er im Roster steht. Niema
 Die Wiederherstellung ist an drei Bedingungen geknüpft, die alle *abgeleitet* und keine gespeichert
 sind:
 
-1. `LC.InAnyRaid()` ist jetzt wahr, **und**
+1. `IsInRaid()` ist jetzt wahr, **und**
 2. `LC.IsLootOwner()` ist jetzt wahr, **und**
 3. `time() - at < 2h`.
 
