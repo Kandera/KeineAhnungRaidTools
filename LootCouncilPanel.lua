@@ -8,17 +8,7 @@ KART.LC.Council = KART.LC.Council or {}
 local Council = KART.LC.Council
 local LC = KART.LC
 
--- True only when semver `ver` is strictly OLDER than `current` — so a peer on a NEWER build isn't
--- mislabeled "outdated" (mirrors the update-check comparison in Core.lua's HandleVersionMessage).
-local function IsOlderVersion(ver, current)
-    local a1, a2, a3 = tostring(ver):match("(%d+)%.(%d+)%.(%d+)")
-    local b1, b2, b3 = tostring(current):match("(%d+)%.(%d+)%.(%d+)")
-    a1, a2, a3 = tonumber(a1) or 0, tonumber(a2) or 0, tonumber(a3) or 0
-    b1, b2, b3 = tonumber(b1) or 0, tonumber(b2) or 0, tonumber(b3) or 0
-    if a1 ~= b1 then return a1 < b1 end
-    if a2 ~= b2 then return a2 < b2 end
-    return a3 < b3
-end
+local IsOlderVersion = KART.IsOlderVersion
 
 -- =====================================================================
 --  Equipped-item helper for council panel

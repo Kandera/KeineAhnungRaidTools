@@ -1134,6 +1134,13 @@ function LC.PrintStatus()
     end
     print("  " .. string.format(L.LC_STATUS_TRACKED, #ids, held, #LC.voteListRolls, #LC.councilTabs)
         .. (#ids > 0 and (": " .. table.concat(ids, ",")) or ""))
+
+    -- Named even when this client is not the loot owner and therefore never printed the warning: the
+    -- person pasting this output is usually the one who cannot see an item, and "somebody in the raid
+    -- is on the old protocol" explains a whole evening of silence (B62).
+    local outdated = LC.OutdatedRaiders()
+    print("  " .. string.format(L.LC_STATUS_OUTDATED, LC.PROTOCOL_VERSION, #outdated)
+        .. (#outdated > 0 and (": " .. table.concat(outdated, ",")) or ""))
 end
 
 -- ==========================================================================
@@ -1904,6 +1911,63 @@ function LC.ClearAllRolls()
     if LC.voteListFrame then LC.voteListFrame:Hide() end
 end
 
+-- ==========================================================================
+--  B62: a raider on an older release cannot take part, and says nothing about it
+-- ==========================================================================
+--
+-- LC_RESIGN, LC_SESSION_RESUME, LC_CONFIG_RELAY and LC_ROLL_CATCHUP are new tokens, and an older
+-- client drops an unknown token without a word. So a 3.2.1 client keeps naming a lootmaster who has
+-- left or stepped down, and its LC.IsSenderLootOwner then rejects every LC_START, LC_ACTIVE and
+-- LC_END_ROUND from whoever actually took over: no vote window on any item, for the rest of the
+-- raid, silently on both sides.
+--
+-- Nothing here can repair that -- the broken half is running code we cannot change. What it can do
+-- is stop it being a mystery: name the raiders concerned, on the one screen that can act on it,
+-- before the first boss rather than during it.
+LC.PROTOCOL_VERSION = "3.2.2" -- release whose loot-council wire protocol this client requires of peers
+LC.outdatedWarned = LC.outdatedWarned or {} -- short name -> true, so a raid is named once, not per hello
+
+-- Group members whose KART is older than the protocol above, sorted. Skipped on purpose:
+--   * ourselves -- we never process our own version broadcast, so PlayerVersions has no entry
+--   * a member with no entry at all -- either no KART or simply no hello yet, both of which the
+--     council panel already marks per row and neither of which this warning can tell apart
+--   * a member whose Loot Council module is off -- their client neither sends nor rejects anything,
+--     so their version cannot break the flow for anybody
+function LC.OutdatedRaiders()
+    local out = {}
+    if not IsInGroup() then return out end
+    for unit in KAUtil.EachGroupUnit() do
+        local fullName = UnitName(unit)
+        if fullName and not UnitIsUnit(unit, "player") then
+            local short = fullName:match("([^%-]+)")
+            local ver = short and KART.PlayerVersions and KART.PlayerVersions[short]
+            local lcOn = not (KART.PlayerLCEnabled and KART.PlayerLCEnabled[short] == false)
+            if ver and lcOn and KART.IsOlderVersion(ver, LC.PROTOCOL_VERSION) then
+                out[#out + 1] = short
+            end
+        end
+    end
+    table.sort(out)
+    return out
+end
+
+-- Called when a session starts and again whenever a peer's version arrives (Core.lua's KASC:OnPeer
+-- handler) -- versions land asynchronously after a roster change, so the join itself is too early to
+-- ask. Only the loot owner is told: everyone else would be reading a warning they cannot act on.
+function LC.WarnOutdatedRaiders()
+    if not LC.IsLootOwner() then return end
+    local fresh = {}
+    for _, short in ipairs(LC.OutdatedRaiders()) do
+        if not LC.outdatedWarned[short] then
+            LC.outdatedWarned[short] = true
+            fresh[#fresh + 1] = short
+        end
+    end
+    if #fresh == 0 then return end
+    print("|cffff0000KART:|r " .. string.format(KART.L.LC_OUTDATED_PEERS,
+        LC.PROTOCOL_VERSION, table.concat(fresh, ", ")))
+end
+
 -- How long a session declared without an answer holds its config back (see below). One round trip:
 -- the loot owner's own reply to a state request is immediate, a peer's is jittered up to seven
 -- seconds, so ten covers both with room to spare.
@@ -1962,7 +2026,11 @@ function LC.SetSessionActive(active)
         LC.configClaimUnverified = nil
     end
 
-    if active then LC.HideSessionPrompt() end
+    if active then
+        LC.HideSessionPrompt()
+        -- Before the first item, while there is still time to tell them to update (B62).
+        LC.WarnOutdatedRaiders()
+    end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
     -- never received a config has lootmaster == "" and falls back to "is the sender the raid
@@ -2133,6 +2201,8 @@ local function TearDownForRaidExit()
     LC.CouncilNamesTable = {}
     LC.historySyncRequested = false
     LC.stateSyncRequested = false
+    -- Whoever was named was named for the raid we just left; the next one is a different roster (B62).
+    wipe(LC.outdatedWarned)
     -- Leaving the raid ends the session for us as well, so drop the tracked rolls the same way
     -- SetSessionActive(false) and an incoming LC_ACTIVE:0 do. Without this the council panel and
     -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are

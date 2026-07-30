@@ -480,6 +480,10 @@ KASC:OnPeer(function(shortName, _, peers, solicited)
         KART.LC.Council.RefreshCouncilRowsThrottled()
     end
 
+    -- Here rather than on the roster event: a version arrives asynchronously, well after the join
+    -- that asked for it, so GROUP_ROSTER_UPDATE is too early to know anything (B62). Latched inside.
+    if KART.LC and KART.LC.WarnOutdatedRaiders then KART.LC.WarnOutdatedRaiders() end
+
     if not KART.UpdateWarned and kart.version ~= KART.Version then
         -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
         -- usable numbers instead of failing the match outright and collapsing to 0.0.0.

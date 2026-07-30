@@ -111,6 +111,22 @@ function KART.WithholdCheckbox(cb)
     cb:SetAlpha(0.4)
 end
 
+-- True only when semver `ver` is strictly OLDER than `current` -- so a peer on a NEWER build is not
+-- mislabeled "outdated". Lenient about a missing part: a two-part "3.2" or a build suffix still
+-- yields usable numbers instead of failing the match outright and collapsing every field to 0.
+--
+-- Shared rather than per-file: the council panel's outdated marker and the Loot Council's protocol
+-- check must agree on what "older" means, and two copies of a comparison quietly drift.
+function KART.IsOlderVersion(ver, current)
+    local a1, a2, a3 = tostring(ver):match("(%d+)%.?(%d*)%.?(%d*)")
+    local b1, b2, b3 = tostring(current):match("(%d+)%.?(%d*)%.?(%d*)")
+    a1, a2, a3 = tonumber(a1) or 0, tonumber(a2) or 0, tonumber(a3) or 0
+    b1, b2, b3 = tonumber(b1) or 0, tonumber(b2) or 0, tonumber(b3) or 0
+    if a1 ~= b1 then return a1 < b1 end
+    if a2 ~= b2 then return a2 < b2 end
+    return a3 < b3
+end
+
 -- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside
 -- KAUI-1.0's own copy) purely so the settings-tab strata slider (MainFrame.lua) has a name list
 -- and count to build its range and value display from. The strata registries and the apply/
