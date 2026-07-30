@@ -34,7 +34,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Lootmaster, der neu lädt, bekommt die Session auch dann zurück, wenn kein Council-Mitglied da ist, das es ihm sagen kann** — statt den Rest des Abends nichts mehr zu erzwingen.
 - **Ein Client, der die Session verloren hat, fragt schneller nach** — und bei jeder Rosteränderung erneut, statt nach der ersten Versuchsreihe endgültig aufzugeben.
 - **Wer dazukommt, nachdem der Lootmaster den Raid verlassen hat, bekommt trotzdem die Vote-Buttons, Mindestqualität und Würfe-Einstellung des Raids** — statt still auf seine eigenen zurückzufallen.
-- **Ein Raidleiter, der neu lädt, überschreibt die Einstellungen des Raids nicht mehr mit seinen eigenen.**
+- **Ein Raidleiter, der neu lädt, überschreibt die Einstellungen des Raids nicht mehr mit seinen eigenen** — vorher saß danach die Hälfte des Raids auf anderen Vote-Buttons und ohne Würfe.
 - **Die Session bestätigt jeder Raider, der sie kennt** — nicht nur der eine Client, der die Lootverteilung führt.
 - **Ein Item, das während deines Reloads gedroppt ist, erreicht dich trotzdem** — du kannst noch abstimmen und das Council wartet nicht vergeblich.
 

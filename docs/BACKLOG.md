@@ -485,32 +485,27 @@ answered has no roll left either, so an item it has decided is not put back in f
 `tests/test_lc_soak.lua` excludes exactly these windows from its per-item comparison, and says so
 where it does it — everything with a retry behind it is still held to the full standard.
 
-## B67 — one client keeps its own roll setting after a reload, ~1 run in 300
+## B67 — a reloaded raid leader replaced the raid's settings with its own — FIXED 2026-07-30
 
-`tests/test_lc_soak.lua` seed 254 (stable, reproduce with `KART_SOAK_SEEDS=300`):
+Found by `tests/test_lc_soak.lua` seed 254. With the lootmaster gone for good nobody owns the config,
+and the raid leader reloads. Their `raidConfig` comes back empty, which leaves the `fromSelf` check in
+`LC.IsConfigOwner` nothing to look at, so the empty-field rule made them the config owner:
+`LC.ApplyOwnConfig` wrote their own defaults in — rolls off, empty council list — and
+`LC.BroadcastRaidConfig` sent those to the raid as the real thing.
 
-```
-leave>reload>promote>endround>leave>settle>drop>drop>settle>promote>
-throttle>reload>join>join>cvote>blip>award>throttle
-```
+It only half-landed, which is what made it expensive. Clients that still remembered the previous
+lootmaster rejected it as a weaker claim; anyone who had joined or reloaded since took it. The raid
+split down the middle over its own settings and the half holding the leader's defaults stopped
+rolling.
 
-The lootmaster has left. The raid leader reloads, comes back with an empty `raidConfig`, and
-`LC.ApplyOwnConfig` writes its own defaults in — rolls off, where the raid had them on. Peers relay
-the raid's config to it and the trace shows the relay being ACCEPTED afterwards, yet the run ends
-with that client on `fromSelf = true` and rolls off, disagreeing with everyone else.
+Fixed with the distinction `fromSelf` was reaching for and could not survive a reload: did we START
+this session, or did we walk into one. `LC.sessionStartedByUs` is set where the flag is decided
+(`LC.SetSessionActive`) and cleared where it is merely learned (`LC.HandleActive`,
+`LC.HandleSessionResume`, the raid-exit teardown). The raid-leader fallback claims the config only in
+the first case — which keeps B33's documented empty-field setup working, because there the flag is
+set one line before it is read.
 
-What is established: the relay is sent, arrives, and is accepted at least once; the client is the
-raid leader; its own Lootmaster field is empty. What is NOT established is what puts `fromSelf` back
-afterwards — the instrumented run shows no further `ApplyOwnConfig` between the last accepted relay
-and the end of the run, which the final state contradicts. Something is either re-applying it or the
-reload boundary is hiding a second client object. Not guessed at further.
-
-Two real defects were found and fixed on the way to this and are NOT this entry:
-* the relay would pass a self-invented config on to the next client that asked, spreading one
-  client's defaults through the raid (fixed, `LC.RelayRaidConfig` refuses to relay `fromSelf`);
-* an incoming relay was refused by a client holding a config it had invented for itself (fixed,
-  `LC.HandleConfigRelay` accepts over a self-invented one).
-
-Visible cost of what remains: that client's 1-100 roll column stays empty for the rest of the raid,
-and its vote-button labels are its own rather than the raid's. It does not affect anyone else, and
-the raid keeps distributing.
+Note for anyone re-deriving this: the guard looks inert in a hand-built scenario, because a council
+member relays the raid's config the instant it is asked and heals the leader before it can do damage.
+It is load-bearing only when the config is slow or lost, which is why its test forces that ordering
+by blackholing `LC_CONFIG_RELAY`. Removing the guard turns four assertions red.

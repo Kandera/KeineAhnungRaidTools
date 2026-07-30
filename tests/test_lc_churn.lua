@@ -1116,3 +1116,73 @@ do
          RaidSim.As(sim.byName.Alric, sim.byName.Alric.KART.LC.GetRollsEnabled),
         "so a newcomer ends up on the raid's roll setting, not one client's default")
 end
+
+-- The raid leader reloads into a session somebody else is running (B67)
+-- ===================================================================================
+-- The lootmaster has left for good, so nobody owns the config -- and the raid leader reloads. Their
+-- raidConfig comes back empty, which leaves the `fromSelf` check in LC.IsConfigOwner nothing to look
+-- at, so the empty-field rule made them the config owner: LC.ApplyOwnConfig wrote their own defaults
+-- in (rolls off, empty council list) and LC.BroadcastRaidConfig sent those to the raid as the real
+-- thing.
+--
+-- What made it expensive is that it only half-landed. Clients still remembering the previous
+-- lootmaster rejected it as a weaker claim; anyone who joined or reloaded since took it. The raid
+-- split down the middle over its own settings, and the half that took the leader's defaults stopped
+-- rolling.
+--
+-- The distinction that fixes it is the one `fromSelf` was reaching for and could not survive a
+-- reload: did WE start this session, or did we walk into one. Found by tests/test_lc_soak.lua,
+-- seed 254.
+do
+    local sim, lm, council = NewRaid()
+    local raider = sim.byName.Alric
+    RaidSim.Leave(sim, lm.name)
+    -- The rest of the council goes too. Council members relay the raid's config the instant they are
+    -- asked, which heals the reloaded leader before it can do any damage -- that is the ordering the
+    -- random walk happened to miss, and testing the lucky order proves nothing. With only ordinary
+    -- raiders left, their reply is jittered a few seconds and LC.ApplyOwnConfig gets there first.
+    RaidSim.Leave(sim, "Corvin")
+    RaidSim.Promote(sim, council.name)
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
+    KARTTEST.AdvanceTime(5)
+    RaidSim.ClearLog(sim)
+
+    -- The ordering is the whole bug, so it is forced rather than hoped for: the session is learned
+    -- FIRST and the config cannot arrive yet. That is the state a reloaded leader is in whenever the
+    -- relay is slow or lost -- empty raidConfig, session running, raid lead in hand -- and it is
+    -- where the empty-field rule used to hand them the config and let them broadcast their defaults.
+    RaidSim.Blackhole(sim, "LC_CONFIG_RELAY")
+    local leader = RaidSim.Reload(sim, council.name)
+    RaidSim.EnterWorld(sim, council.name)
+    RosterSettles(sim)
+    T.eq(leader.KART.LC.sessionActive, true, "the reloaded leader knows the session is running")
+    T.truthy(not RaidSim.As(leader, leader.KART.LC.IsConfigOwner),
+        "and does not take the config over just because it holds raid lead")
+    RosterSettles(sim)          -- the roster change that used to make it invent one
+    KARTTEST.AdvanceTime(10)
+
+    -- The relay is fine and expected; a full LC_CONFIG from this client is not, because that is the
+    -- one that claims to be the raid's own and displaces what everybody agreed.
+    local ownConfigs = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_CONFIG:")) do
+        if e.from == leader.name then ownConfigs = ownConfigs + 1 end
+    end
+    T.eq(ownConfigs, 0, "a reloaded leader does not distribute its own settings as the raid's")
+
+    RaidSim.Deliver(sim, "LC_CONFIG_RELAY")
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(60)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled), true,
+        "and gets the raid's roll setting back instead of keeping its own")
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), true,
+        "while the raiders who never reloaded are untouched")
+
+    -- The half of the raid that has nothing to compare against is where the damage used to land.
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(60)
+    T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), true,
+        "and someone arriving afterwards gets the raid's setting, not the leader's default")
+end

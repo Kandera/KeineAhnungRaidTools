@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A lootmaster who reloads gets the session back even when no council member is there to tell them**, instead of force-winning nothing for the rest of the evening.
 - **A client that lost the session asks for it back sooner**, and keeps asking on every roster change instead of giving up after the first round of tries.
 - **Anyone joining after the Lootmaster has left still gets the raid's vote buttons, minimum quality and roll setting**, instead of quietly falling back to their own.
-- **A raid leader who reloads no longer replaces the raid's settings with their own.**
+- **A raid leader who reloads no longer replaces the raid's settings with their own**, which used to leave half the raid on different vote buttons and no rolls.
 - **The session is confirmed by any raider who knows**, not only by the one client running the loot flow.
 - **An item that dropped while your client was reloading still reaches you**, so you can answer it and the council is not left waiting.
 

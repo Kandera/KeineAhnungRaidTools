@@ -13,6 +13,13 @@ LC.sessionActive        = false
 -- boolean, and the loot owner answering the second as though it were the first ended the session for
 -- everyone who asked them (see LC.HandleStateRequest, backlog B30).
 LC.sessionStateKnown    = false
+--- Whether the session currently running is one WE started, as opposed to one we were told about.
+--- Both look identical in LC.sessionActive, and the difference decides whether the raid-leader
+--- fallback in LC.IsConfigOwner may claim the config: starting a session with an empty Lootmaster
+--- field is the documented setup where the leader's own settings ARE the raid's, while walking into
+--- a session somebody else is running means the raid already agreed something and ours must not
+--- replace it. Reset by every reload, like the rest of the runtime state.
+LC.sessionStartedByUs   = false
 LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
@@ -692,6 +699,18 @@ function LC.IsConfigOwner()
     -- available (that is the empty-field setup working as documented), a config we RECEIVED means
     -- somebody else is the source and we do not get to overwrite it by being promoted.
     if next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf then return false end
+    -- And only into a session we started ourselves. `fromSelf` above cannot tell these apart after a
+    -- RELOAD, because a reload clears raidConfig and leaves the check nothing to look at: the leader
+    -- then claimed the config, LC.ApplyOwnConfig wrote its own defaults in — rolls off, empty council
+    -- list — and LC.BroadcastRaidConfig sent them to the raid as the real thing. Clients that still
+    -- remembered the previous lootmaster rejected it as a weaker claim; clients that did not (anyone
+    -- who joined or reloaded since) took it. The raid ended up split down the middle over its own
+    -- settings, and the half that took the leader's defaults stopped rolling.
+    --
+    -- Starting a session with an empty field is still the documented setup where the leader's own
+    -- settings ARE the raid's (B33): there we set the flag ourselves, one line earlier in
+    -- LC.SetSessionActive, before this is ever consulted.
+    if LC.sessionActive and not LC.sessionStartedByUs then return false end
     return UnitIsGroupLeader("player")
 end
 
@@ -1431,6 +1450,8 @@ function LC.HandleSessionResume(senderKey)
 
     LC.sessionActive     = true
     LC.sessionStateKnown = true
+    -- Same as LC.HandleActive: learned, not decided.
+    LC.sessionStartedByUs = false
     -- The session was never ours to be asked about: it is already running.
     LC.promptedThisSession = true
     LC.HideSessionPrompt()
@@ -1797,6 +1818,9 @@ function LC.SetSessionActive(active)
     LC.sessionActive = active
     -- We decided it, so our flag is now an answer and may be quoted to peers (see LC.sessionStateKnown).
     LC.sessionStateKnown = true
+    -- And we decided it, which is what entitles a raid leader with an empty Lootmaster field to
+    -- distribute their own settings as the raid's (see LC.IsConfigOwner).
+    LC.sessionStartedByUs = active and true or false
     if active then LC.HideSessionPrompt() end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
@@ -1939,6 +1963,7 @@ local function TearDownForRaidExit()
     LC.promptedThisSession = false
     LC.sessionActive = false
     LC.sessionStateKnown = false
+    LC.sessionStartedByUs = false
     LC.standInAccepted = false
     LC.standInAsked = false
     -- The raid's config belongs to the raid we just left. It survived before, so the same client
@@ -2399,6 +2424,9 @@ function LC.HandleActive(value, senderKey)
     LC.sessionActive = (value == "1")
     -- The owner told us, so our flag is an answer now (see LC.sessionStateKnown).
     LC.sessionStateKnown = true
+    -- Told, not decided: this is somebody else's session, so the raid-leader fallback in
+    -- LC.IsConfigOwner must not push our own settings over whatever the raid already agreed.
+    LC.sessionStartedByUs = false
     -- A session started elsewhere makes our own "start one?" question obsolete; leaving the dialog
     -- up invites someone to answer a question that no longer applies.
     if LC.sessionActive then LC.HideSessionPrompt() end
