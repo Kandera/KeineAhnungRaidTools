@@ -383,7 +383,7 @@ end
 -- Every one of these changes what other people see, so every one of them is a place where two
 -- clients can end up disagreeing. They are asserted from more than one client for that reason.
 do
-    local sim, lm, council, raider = NewRaid()
+    local sim, lm, _, raider = NewRaid()
     local nara = sim.byName.Nara
     Drop(sim, 60, 249331)
 
@@ -403,7 +403,7 @@ do
 end
 
 do
-    local sim, lm, council, raider = NewRaid()
+    local sim, lm, _, raider = NewRaid()
     Drop(sim, 61, 249331)
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(61, raider.guid, "BIS") end)
 
