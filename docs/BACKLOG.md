@@ -259,7 +259,7 @@ by another route. The role-status label meanwhile reports that all is well.
 soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
 `tests/test_lc_baseflow.lua`.
 
-## B68 — a config a client invented for itself counts as an answer, so it stops asking
+## B68 — a config a client invented for itself counts as an answer, so it stops asking — FIXED 2026-07-30
 
 `StateStillNeeded()` asked only WHETHER a config is present, never where it came from:
 
