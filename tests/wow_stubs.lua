@@ -507,8 +507,12 @@ function _G.GetLootRollItemInfo(rollID)
     local r = rollFor(rollID)
     if not r then return nil end
     local it = KARTTEST.items[r.itemID]
+    -- canGreed/canDisenchant were hardcoded true/false, which meant ForceWinRoll always found SOME
+    -- roll type available and the "the lootmaster cannot roll on this at all" shape -- a real one, the
+    -- game offers different subsets per item and per character -- could not be produced at all.
     return "Interface\\Icons\\texture", it and it.name, 1, it and it.quality, r.bop ~= false,
-           r.canNeed ~= false, true, false, nil, nil, nil, nil, r.canTransmog == true
+           r.canNeed ~= false, r.canGreed ~= false, r.canDisenchant == true,
+           nil, nil, nil, nil, r.canTransmog == true
 end
 
 function _G.GetLootRollItemLink(rollID)

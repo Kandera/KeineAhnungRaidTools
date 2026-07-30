@@ -115,7 +115,8 @@ function F.Drop(sim, rollID, itemID, opts)
             forNames[c.name] = true
         end
     end
-    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed, canTransmog = opts.canTransmog,
+    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed, canGreed = opts.canGreed,
+                                   canTransmog = opts.canTransmog,
                                    bop = opts.bop, notFor = notFor, forNames = forNames,
                                    linkPending = opts.linkPending }
     for _, c in ipairs(sim.clients) do

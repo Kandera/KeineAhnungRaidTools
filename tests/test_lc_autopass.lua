@@ -137,6 +137,23 @@ do
         "and a raider who answers their own loot windows is not told either")
 end
 
+-- The owner never waits for their own announcement ------------------------------------------------
+-- Normally invisible, because force-winning answers the roll and a client with no roll left says
+-- nothing. It becomes visible on an item the lootmaster cannot roll on at all -- no Need, no Greed,
+-- no Disenchant, no Transmog -- where ForceWinRoll has nothing to claim it with and the window stays
+-- open. Without the guard the owner is then told their own item was never announced.
+do
+    local sim, lm = NewRaid()
+    Drop(sim, 58, F.GLOVES, { canNeed = false, canGreed = false })
+
+    T.is_nil(PassedBy(sim, 58, "Bramor"), "the lootmaster had no roll type to claim it with")
+    T.truthy(RaidSim.As(lm, function() return GetLootRollItemLink(58) end),
+        "so their window is still open when the wait runs out")
+    local out = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
+    T.truthy(not out:find(KARTTEST.items[F.GLOVES].name, 1, true),
+        "and the client that did the announcing is not told nobody announced it")
+end
+
 -- Below the raid's rarity threshold: unchanged ----------------------------------------------------
 -- The council never announces these -- the lootmaster passes on them too -- so there is nothing to
 -- wait for, and making Auto-Pass wait would have left a rare sitting on everyone's screen forever.

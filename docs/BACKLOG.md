@@ -497,7 +497,7 @@ when a release genuinely changes the wire, never with every version bump — poi
 version would name every raider who simply has not updated a patch release yet, and the warning would
 stop being read.
 
-## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item
+## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item — NARROWED 2026-07-30
 
 `LC_START` for a real drop is sent from exactly one place, inside the loot owner's own
 `START_LOOT_ROLL` handler. The owner is subject to the same conditions as everyone else — out of
@@ -505,6 +505,37 @@ range, ineligible, released — and there is no fallback broadcaster. Meanwhile 
 Auto-Pass still fires, because that branch does not depend on the owner having acted. Visible outcome
 is identical to "nobody stood in": Blizzard's window opens, every KART user passes, no vote window
 anywhere.
+
+**Still one broadcaster.** A fallback broadcaster was designed and rejected: announcing an item the
+owner never rolled on produces a vote whose winner can never be handed the item — a decision nobody
+can execute, which is exactly the trap the collectible carve-out exists to avoid. So the item still
+does not reach the council when the owner misses the event.
+
+**What was fixed is the loss.** Auto-Pass no longer fires on faith. It passes only once the council
+demonstrably has the item, so when nothing is announced Blizzard's window is left alone and the raid
+rolls on the item the way it would without this addon — instead of every KART user passing at once
+and handing it to whoever is not running the addon.
+
+The pass now runs from whichever of the two paths completes the pair, so arrival order does not
+matter: `LC.rollAnnounced` (the owner's `LC_START` landed) and `LC.rollSeenHere` (we have processed
+our own roll event). The second is not bookkeeping for its own sake — answering a roll makes
+Blizzard's API go blank for it, so passing from a message that beat the local event left
+`OnStartLootRoll` with no quality, no bind flag and no link, and it returned before the 1-100 roll.
+The base-flow tests caught that during development; do not remove that condition.
+
+Below the raid's rarity threshold nothing changed: the council never announces those, so there is
+nothing to wait for and making Auto-Pass wait would leave a rare on everyone's screen forever.
+
+**Known cost, accepted deliberately.** A client whose `LC_START` was swallowed by the chat throttle
+now keeps its roll window instead of passing, so an Auto-Pass raider could in principle click Need on
+an item the lootmaster has already force-won. Bounded — the owner rolled Need too, and an Auto-Pass
+raider is by definition somebody who does not click loot windows — and much smaller than an item lost
+by the whole raid passing at once. B66's catch-up covers the deaf client when a state request follows.
+
+After a wait derived from the owner's own link-retry budget (not a hand-picked number: they can
+legitimately spend that whole budget before sending anything), a client that heard nothing says so
+and names the item. Only Auto-Pass users are told — they are the ones whose expectation was not met
+and who are now looking at a window they have to answer themselves.
 
 ## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow
 

@@ -10,6 +10,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Blizzards eigene Bestätigungsdialoge funktionieren wieder.** Das Aufwerten eines Items konnte bis zum nächsten Reload komplett verweigert werden.
 - **Wer die Lootverteilung macht, erfährt jetzt, welche Raider ein zu altes KART haben**, statt dass deren Clients die ganze Verteilung stillschweigend ignorieren.
+- **Ein Item, das das Loot Council nie aufgenommen hat, wird nicht mehr automatisch gepasst.** Blizzards Würfelfenster bleibt offen, damit der Raid darauf würfeln kann, und KART sagt Bescheid.
 - **KARTs eigene Bestätigungsdialoge sind wieder sichtbar**, statt hinter dem Fenster aufzugehen, das sie geöffnet hat.
 - **Set-Tokens laufen wieder über das Loot Council**, statt von niemandem normal ausgewürfelt zu werden.
 - **Spielzeuge bleiben aus dem Loot Council heraus**, statt vom Lootmaster einkassiert zu werden.
