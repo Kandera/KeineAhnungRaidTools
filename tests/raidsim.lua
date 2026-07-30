@@ -82,6 +82,10 @@ function RaidSim.New(members)
         client.env.KART_LCOfficerNotes = {}
         client.env.KART_Profiles       = {}
         client.env.KART_EquipCache     = {}
+        -- Blizzard's dialog registry is a global table, and every client registers its own handlers
+        -- into it under the same names. Shared, the last client to load would own every confirm
+        -- dialog in the raid -- accepting a reassign would run somebody else's assignment.
+        client.env.StaticPopupDialogs  = {}
 
         client.KART = { LC = {} }
         client.env.KART = client.KART
@@ -125,6 +129,12 @@ function RaidSim.New(members)
 
     RaidSim.active = nil
     return sim
+end
+
+-- The stubs reach back through this for anything that lives in a client's own environment rather
+-- than in the shared globals -- currently the dialog registry.
+function KARTTEST.PopupRegistry()
+    return RaidSim.active and RaidSim.active.env.StaticPopupDialogs or _G.StaticPopupDialogs
 end
 
 -- Runs fn with `client` as the executing client, so the stubs resolve "player" to them.

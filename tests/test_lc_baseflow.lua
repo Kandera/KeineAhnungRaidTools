@@ -67,6 +67,13 @@ local function NewRaid()
     return sim, lm, council, raider
 end
 
+-- pendingTrades and owedToMe are ordered lists of entries, not maps: an item can be owed twice over
+-- an evening and order is what the reminder window shows.
+local function Owes(list, rollID)
+    for _, e in ipairs(list or {}) do if e.rollID == rollID then return e end end
+    return nil
+end
+
 -- Every client the raid config lists as council.
 local function CouncilOf(sim)
     return { sim.byName.Kandera, sim.byName.Haerri, sim.byName.Wuusch }
@@ -272,7 +279,7 @@ end
 -- The council decides together
 -- ===================================================================================
 do
-    local sim, lm, _, raider = NewRaid()
+    local sim, _, _, raider = NewRaid()
     local nara = sim.byName.Nara
     Drop(sim, 52, 249331)
 
@@ -368,4 +375,105 @@ do
     local enLabels = RaidSim.As(en, en.KART.LC.GetButtonConfig)
     T.truthy(deLabels[4].label ~= enLabels[4].label,
         "with no config distributed, a German and an English client name the same index differently")
+end
+
+-- ===================================================================================
+-- The council's own controls: reassign, no winner, end round, notes
+-- ===================================================================================
+-- Every one of these changes what other people see, so every one of them is a place where two
+-- clients can end up disagreeing. They are asserted from more than one client for that reason.
+do
+    local sim, lm, council, raider = NewRaid()
+    local nara = sim.byName.Nara
+    Drop(sim, 60, 249331)
+
+    -- Award, then reassign to someone else. The second decision has to win everywhere, and the
+    -- first winner's claim has to be gone -- not merely overwritten on the assigner's screen.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(60, raider.guid, "BIS") end)
+    -- Reassigning asks first, deliberately: it is how an accidental double award is caught.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(60, nara.guid, "Upgrade") end)
+    T.truthy(RaidSim.As(lm, KARTTEST.AcceptPopup, "KART_LC_REASSIGN_CONFIRM"),
+        "reassigning a winner asks for confirmation first")
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.assignedWinners[60], nara.guid, c.name .. " sees the reassigned winner")
+    end
+    T.truthy(not Owes(raider.KART.LC.owedToMe, 60), "the first winner is no longer owed the item")
+    T.truthy(Owes(nara.KART.LC.owedToMe, 60), "and the new winner is")
+end
+
+do
+    local sim, lm, council, raider = NewRaid()
+    Drop(sim, 61, 249331)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(61, raider.guid, "BIS") end)
+
+    -- "No winner" revokes: nobody is owed it, nobody has to trade it, and the tab is gone for the
+    -- council too, since that decision is broadcast.
+    -- Exactly what the panel's "No Winner" button does, in its order. The assigner never receives
+    -- its own broadcast, so every step it performs for the raid it must also perform for itself.
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AnnounceResult(61, "NONE")
+        lm.KART.LH.RemoveHistoryForRoll(61)
+        lm.KART.LC.Trade.ClearWinnerObligations(61)
+        lm.KART.LC.Council.CloseCouncilTab(61)
+    end)
+
+    T.truthy(not Owes(raider.KART.LC.owedToMe, 61), "revoking clears the winner's claim")
+    for _, c in ipairs(sim.clients) do
+        T.truthy(not c.KART.LC.assignedWinners[61], c.name .. " no longer shows a winner")
+    end
+end
+
+do
+    local sim, lm, council = NewRaid()
+    Drop(sim, 62, 249331)
+    Drop(sim, 63, 249293)
+
+    -- End Round is the one bulk clear, and it has to reach everybody -- this is GitHub #15, where
+    -- previous bosses' items stayed on the council panel.
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(#c.KART.LC.councilTabs, 0, c.name .. " has no council tabs left after End Round")
+        T.eq(#c.KART.LC.voteListRolls, 0, c.name .. " has no vote rows left either")
+        T.truthy(not c.KART.LC.rollItems[62], c.name .. " forgot the first item")
+        T.truthy(not c.KART.LC.rollItems[63], c.name .. " forgot the second item")
+    end
+    -- The session itself keeps running: End Round ends a distribution, not the evening.
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.sessionActive, true, c.name .. " is still in the session")
+    end
+end
+
+do
+    local sim, _, council, raider = NewRaid()
+
+    -- An officer note is council-only information about a player, and it has to reach the other
+    -- council members without reaching the player it is about.
+    RaidSim.As(council, function()
+        council.KART.LC.OfficerNotes.SetOfficerNote(raider.guid, "hat letzte Woche BIS bekommen")
+    end)
+
+    for _, c in ipairs(CouncilOf(sim)) do
+        T.eq(c.env.KART_LCOfficerNotes[raider.guid], "hat letzte Woche BIS bekommen",
+            c.name .. " sees the officer note")
+    end
+end
+
+-- ===================================================================================
+-- Handing the item over
+-- ===================================================================================
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 64, 249331)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(64, 1) end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(64, raider.guid, "BIS") end)
+
+    T.truthy(Owes(lm.KART.LC.pendingTrades, 64), "the lootmaster owes the item")
+    T.truthy(Owes(raider.KART.LC.owedToMe, 64), "and the winner knows they are owed it")
+
+    -- The trade happens: the obligation goes with the item.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.RemovePendingTrade(64) end)
+    T.truthy(not Owes(lm.KART.LC.pendingTrades, 64),
+        "the reminder clears once the item has been handed over")
 end

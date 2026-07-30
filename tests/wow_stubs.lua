@@ -415,8 +415,35 @@ end
 function _G.SendChatMessage() end
 function _G.IsInGuild() return false end
 _G.UISpecialFrames = {}
-function _G.StaticPopup_Show() end
-function _G.StaticPopup_Hide() end
+-- Popups are recorded rather than shown, so a test can accept one deliberately. Several confirms
+-- are load-bearing -- reassigning a winner routes THROUGH one -- and a stub that silently swallowed
+-- them made the addon look broken when it was doing exactly the right thing.
+KARTTEST.popups = {}
+function _G.StaticPopup_Show(which, a, b, data)
+    KARTTEST.popups[#KARTTEST.popups + 1] = { which = which, a = a, b = b, data = data }
+    return { data = data }
+end
+function _G.StaticPopup_Hide(which)
+    for i = #KARTTEST.popups, 1, -1 do
+        if KARTTEST.popups[i].which == which then table.remove(KARTTEST.popups, i) end
+    end
+end
+-- Answers the most recent popup of that name the way a player clicking its accept button would.
+function KARTTEST.AcceptPopup(which)
+    for i = #KARTTEST.popups, 1, -1 do
+        local p = KARTTEST.popups[i]
+        if p.which == which then
+            table.remove(KARTTEST.popups, i)
+            -- The dialog table belongs to whichever client is executing (see raidsim), so this
+            -- runs that client's handler and no one else's.
+            local reg = (KARTTEST.PopupRegistry and KARTTEST.PopupRegistry()) or StaticPopupDialogs
+            local def = reg[which]
+            if def and def.OnAccept then def.OnAccept({ data = p.data }, p.data) end
+            return true
+        end
+    end
+    return false
+end
 _G.MenuUtil = { CreateContextMenu = function() end }
 _G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = 1, 2
 _G.CLASS_ICON_TEXCOORDS = {}
