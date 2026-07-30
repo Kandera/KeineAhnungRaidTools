@@ -468,14 +468,34 @@ success, a state-request reply — is council from that moment on but has no tab
 on the table, and cannot assign them. Narrow, because a client that late usually has no tracked items
 either, but real for one that already had them.
 
-## B62 — a client on the previous release rejects everything a stand-in or a successor sends
+## B62 — a client on the previous release rejects everything a stand-in or a successor sends — MITIGATED 2026-07-30
 
 `LC_RESIGN` and `LC_SESSION_RESUME` are new tokens, and an older client drops an unknown token
 silently. So a v3.2.1 client keeps naming a lootmaster who has left or stepped down, which makes
 `IsSenderLootOwner` reject every `LC_START`, `LC_ACTIVE` and `LC_END_ROUND` from whoever actually
 took over — no vote window on any item, for the rest of the raid, with nothing printed on either
-side. Not fixable from our side; the raid has to be on one version. Worth saying out loud in the
-release notes rather than discovering mid-boss.
+side.
+
+**Not fixed, and cannot be:** the broken half is running code we cannot change, so the raid still has
+to be on one version. What changed is that it is no longer a mystery. `LC.PROTOCOL_VERSION` names the
+release the wire protocol requires (3.2.2, where those four tokens landed), `LC.OutdatedRaiders`
+answers who in the group is below it, and the loot owner is told — once per name — when the session
+starts and again whenever a peer's version arrives. `/kart status` carries the same list for
+everybody, because the person pasting that output is usually the one who cannot see an item.
+
+Three deliberate omissions, each of which would otherwise produce a false alarm on a screen that has
+to stay worth reading: ourselves (we never process our own version broadcast, so there is no entry),
+anyone with no version entry at all (no KART, or simply no hello yet — the council panel already
+marks that per row and this warning cannot tell the two apart), and anyone whose Loot Council module
+is switched off, since their client neither sends nor rejects anything.
+
+The hook is Core.lua's `KASC:OnPeer` handler rather than `GROUP_ROSTER_UPDATE`: a version arrives
+asynchronously, well after the join that asked for it, so the roster event knows nothing yet.
+
+Watch when raising the floor: `LC.PROTOCOL_VERSION` is a hand-maintained constant and must move only
+when a release genuinely changes the wire, never with every version bump — pointing it at the current
+version would name every raider who simply has not updated a patch release yet, and the warning would
+stop being read.
 
 ## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item
 

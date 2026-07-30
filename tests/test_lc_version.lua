@@ -20,10 +20,13 @@ do
     T.truthy(not Older("3.2.2", "3.2.2"), "the same version is not")
     T.truthy(not Older("3.3.0", "3.2.2"), "and a newer build is never called outdated")
     T.truthy(Older("2.9.9", "3.0.0"), "a lower major is older regardless of the rest")
-    -- Lenient on shape: a two-part version or a build suffix must still compare, not collapse to
-    -- 0.0.0 and report every peer as ancient.
-    T.truthy(Older("3.2", "3.2.2"), "a two-part version compares on the parts it has")
-    T.truthy(not Older("3.2.2-beta", "3.2.2"), "and a build suffix does not make it older")
+    -- Lenient on shape, and the direction that matters is the FALSE ALARM: a strict three-part
+    -- match fails outright on "3.3", collapses every field to 0, and calls a peer who is AHEAD of us
+    -- outdated -- telling the loot owner to chase somebody who has nothing to update.
+    T.truthy(not Older("3.3", "3.2.2"), "a two-part version ahead of us is not called outdated")
+    T.truthy(Older("3.2", "3.2.2"), "while one behind us still is")
+    T.truthy(Older("3.1.0", "3.2"), "and the version compared against parses just as leniently")
+    T.truthy(not Older("3.2.2-beta", "3.2.2"), "a build suffix does not make a version older")
     T.eq(LC.PROTOCOL_VERSION, "3.2.2", "the protocol floor is the release that introduced the new tokens")
 
     T.deep_eq(RaidSim.As(lm, LC.OutdatedRaiders), {},
@@ -45,9 +48,11 @@ do
         "an outdated raider with the module switched off is not a problem")
     lm.KART.PlayerLCEnabled = { Merrit = true }
 
-    -- Sorted, so two people comparing their /kart status side by side read the same list.
-    lm.KART.PlayerVersions.Sinja = "3.1.0"
-    T.deep_eq(RaidSim.As(lm, LC.OutdatedRaiders), { "Merrit", "Sinja" }, "and the list is sorted")
+    -- Sorted, so two people comparing their /kart status side by side read the same list. Alric
+    -- stands behind Merrit in the raid and in front of them in the alphabet, which is what makes
+    -- this an assertion about sorting rather than about roster order.
+    lm.KART.PlayerVersions.Alric = "3.1.0"
+    T.deep_eq(RaidSim.As(lm, LC.OutdatedRaiders), { "Alric", "Merrit" }, "and the list is sorted")
 end
 
 -- The warning ------------------------------------------------------------------------------------

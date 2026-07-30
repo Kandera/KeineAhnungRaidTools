@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.2.2] - 2026-07-29
 ### Fixed
 - **Blizzard's own confirmation dialogs work again.** Upgrading an item could be refused outright until you reloaded.
+- **Whoever hands out the loot is told which raiders run a KART too old to take part**, instead of their clients ignoring the whole distribution in silence.
 - **KART's own confirmation dialogs are visible again**, instead of opening behind the window that raised them.
 - **Tier set tokens go through the Loot Council again**, instead of being rolled on the normal way by nobody.
 - **Toys stay out of the Loot Council**, instead of being force-won by the lootmaster.
