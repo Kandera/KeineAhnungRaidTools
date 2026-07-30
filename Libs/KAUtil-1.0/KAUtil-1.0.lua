@@ -1,8 +1,25 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 3
+local MAJOR, MINOR = "KAUtil-1.0", 4
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
+
+-- Is this value one the client refuses to let an addon read?
+--
+-- Blizzard hands some data to addons as a "secret value" — chat text written by players you have no
+-- relationship with is the case that reaches us. It looks like an ordinary string from the outside:
+-- `type()` answers "string", and every string operation on it throws
+--
+--     attempt to index local 's' (a secret string value, while execution tainted by '<addon>')
+--
+-- so a `type(s) ~= "string"` guard does not keep one out. Reported from a live client doing world
+-- content, 54 errors in one session, one per incoming whisper (GitHub #17).
+--
+-- issecretvalue is absent on older clients and in the offline harness, where nothing is secret and
+-- answering false is right.
+function KAUtil.IsSecret(value)
+    return issecretvalue ~= nil and issecretvalue(value) == true
+end
 
 function KAUtil.TrimString(s)
     return s:match("^%s*(.-)%s*$")

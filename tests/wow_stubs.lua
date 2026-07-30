@@ -540,6 +540,15 @@ function _G.NotifyInspect() end
 function _G.ClearInspectPlayer() end
 function _G.CheckInteractDistance() return false end
 function _G.InCombatLockdown() return false end
+
+-- Values the client refuses to let an addon read (see KAUtil.IsSecret). A real secret string throws
+-- on every string operation and cannot be built in plain Lua, so what is modelled here is the part
+-- that actually matters: it looks like an ordinary string to `type()`, and issecretvalue is the only
+-- way to tell. A test marks a string secret by putting it in this table.
+KARTTEST.secretValues = {}
+function _G.issecretvalue(value)
+    return KARTTEST.secretValues[value] == true
+end
 function _G.IsShiftKeyDown() return false end
 function _G.IsControlKeyDown() return false end
 function _G.PlaySound() end

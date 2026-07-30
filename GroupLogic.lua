@@ -42,6 +42,13 @@ end
 -- Logik für Keyword-Einladungen
 function KART.HandleChatInvite(msg, sender, event, ...)
     if type(msg) ~= "string" then return end
+    -- A message the client will not let us read cannot be checked against the invite keyword, so
+    -- there is nothing to decide here. The type check above does NOT cover this: a secret string
+    -- answers "string" and then throws on the first string operation, which is how this arrived --
+    -- 54 errors in one session of world content, one per incoming whisper (GitHub #17). Stopping
+    -- here rather than inside KAUtil.CaseFold is deliberate: the message is used again as a table
+    -- key below, and an unreadable message is not a missing keyword but a question we cannot ask.
+    if KAUtil.IsSecret(msg) then return end
     local message = KAUtil.TrimString(KAUtil.CaseFold(msg))
 
     if KART.InviteKeywordsTable[message] and (not IsInGroup() or KAUtil.HasGroupPermissions()) then
