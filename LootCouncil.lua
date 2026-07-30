@@ -1492,10 +1492,21 @@ end
 -- of times with backoff instead of permanently giving up — bails early if rollID's entry was
 -- resolved by some other path in the meantime, or cleared entirely (tab closed/session ended, see
 -- LC.Trade.ClearRollState), so a long-since-irrelevant timer never resurrects a forgotten roll.
+-- Two sources, because the two callers have different information available. OnStartLootRoll has a
+-- live Blizzard roll and no itemID; HandleStart has an itemID from the payload and no roll at all
+-- (that is the whole reason it exists). The bare "item:12345" string HandleStart leaves behind is
+-- therefore also a retry target, not a finished answer: it renders, but it is not a real link, and
+-- once the client caches the item this upgrades it to one. Reading the ID back out of that string
+-- avoids carrying yet another per-roll table that every cleanup path would have to remember.
 local function ResolveRollItemLink(rollID, attempt)
-    if LC.rollItems[rollID] ~= "???" then return end
+    local current = LC.rollItems[rollID]
+    if current == nil or LC.IsRealItemLink(current) then return end
     attempt = attempt or 1
     local link = GetLootRollItemLink(rollID)
+    if not link then
+        local itemID = tostring(current):match("item:(%d+)")
+        if itemID then link = select(2, C_Item.GetItemInfo(itemID)) end
+    end
     if link then
         LC.rollItems[rollID] = link
         LC.Vote.RefreshVoteListRows()
@@ -1811,8 +1822,22 @@ function LC.HandleStart(payload, senderKey)
     LC.rollLootedAt[rollID] = time()
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
-    LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID] or "???"
-    if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
+    -- GetLootRollItemLink answers only for a roll that exists on THIS client, and this handler is
+    -- specifically for clients where it does not: dead, released, out of range, or ineligible for
+    -- Blizzard's roll. Those clients used to park "???" here, retry the same nil-returning API eight
+    -- times and give up — leaving a question-mark icon and no name for the whole vote, reported from
+    -- a live raid by three people at once (GitHub #12, #13, #16), and worst on a boss that dropped
+    -- the same item twice, where two identical "???" rows cannot be told apart at all.
+    --
+    -- The payload carried the itemID the entire time; it was parsed above for PurgeStaleRoll and then
+    -- thrown away. Rebuild from it, exactly as Trade.HandleResult already does at award time — full
+    -- link once the item is cached, bare item string until then, which still renders a name and icon.
+    LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID]
+    if not LC.IsRealItemLink(LC.rollItems[rollID]) and itemID ~= "" then
+        LC.rollItems[rollID] = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
+    end
+    LC.rollItems[rollID] = LC.rollItems[rollID] or "???"
+    if not LC.IsRealItemLink(LC.rollItems[rollID]) then ResolveRollItemLink(rollID) end
     -- Auto-Pass already runs unconditionally in OnStartLootRoll for this player's own roll,
     -- so there's nothing left to do here for that.
 

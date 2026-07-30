@@ -91,6 +91,14 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
             Trade.AddPendingTrade(rollID, playerKey)
         end
     end
+    -- Take the decided item off our OWN vote list, the way Trade.HandleResult does for everybody
+    -- else. Addon messages never echo back to their sender, so the one client that actually made the
+    -- decision was the only one still looking at a live vote row for it — with buttons — long after
+    -- the item was handed out. The lootmaster sees this worst, because being council he gets a vote
+    -- row for every single drop, and closing the vote window stops the ticker that would eventually
+    -- have pruned them (see Vote.PruneExpiredRolls). Reported as "die Lootliste hakt sich nicht ab".
+    LC.Vote.RemoveVoteListItem(rollID)
+
     -- The tab deliberately stays open after an award: reassigning is a first-class feature, and
     -- Trade.AssignWinner's confirm dialog needs LC.assignedWinners, which ClearRollState would drop
     -- along with the tab. Tabs are cleared in bulk by "Close Session" (see the council panel).
