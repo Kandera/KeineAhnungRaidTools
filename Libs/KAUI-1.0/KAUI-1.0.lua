@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 4
+local MAJOR, MINOR = "KAUI-1.0", 5
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -27,7 +27,7 @@ local REGISTRIES = {
     "labels", "editBoxes", "buttonTexts", "closeButtonTexts",
     "sliderThumbs", "checkVisuals", "accentLines", "accentTextures",
     "tabButtons", "toggleCheckboxes", "localeRefreshers",
-    "strataFrames", "strataDialogFrames", "pixelBackdrops",
+    "strataFrames", "strataDialogFrames", "pixelBackdrops", "popupYielders",
 }
 
 function KAUI:NewNamespace(name)
@@ -106,6 +106,27 @@ local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCR
 -- before changing this" caveat as STRATA_ORDER above applies here too.
 local DEFAULT_STRATA_INDEX = 4
 
+-- Blizzard's StaticPopup frames sit at DIALOG and may not be moved off it -- moving one taints it
+-- for the session and breaks unrelated Blizzard dialogs, which is the whole story of B8/B55 (see
+-- RegisterStaticPopup). So a consumer whose windows are configured at DIALOG or above buries its own
+-- confirm dialog behind the window that raised it, and the button looks like it did nothing.
+--
+-- The frames that CAN be moved are ours. While one of our popups is up, every frame whose stratum
+-- this namespace owns is clamped to the stratum directly below DIALOG, and put back afterwards.
+-- Nothing of Blizzard's is touched, so nothing is tainted.
+local POPUP_CEILING = "HIGH"
+
+local STRATA_RANK = {}
+for i, name in ipairs(STRATA_ORDER) do STRATA_RANK[name] = i end
+
+-- A stratum that is not in the list at all counts as above the ceiling: GetDialogStrata answers
+-- "TOOLTIP" once the windows are maxed out, and TOOLTIP is exactly the case that has to come down.
+local function AtMost(strata, ceiling)
+    local rank = STRATA_RANK[strata]
+    if not rank or rank > STRATA_RANK[ceiling] then return ceiling end
+    return strata
+end
+
 local function StrataIndex(self)
     local idx = self.strata
     if type(idx) ~= "number" or idx < 1 or idx > #STRATA_ORDER then idx = DEFAULT_STRATA_INDEX end
@@ -134,17 +155,50 @@ function nsProto:RegisterStrataFrame(frame, isDialog)
     if frame.SetToplevel then frame:SetToplevel(true) end
     if isDialog then
         self.strataDialogFrames[#self.strataDialogFrames + 1] = frame
-        frame:SetFrameStrata(self:GetDialogStrata())
     else
         self.strataFrames[#self.strataFrames + 1] = frame
-        frame:SetFrameStrata(self:GetWindowStrata())
     end
+    frame:SetFrameStrata(self:CurrentStrata(isDialog))
+end
+
+-- The stratum a frame of this kind belongs on RIGHT NOW: the configured one, or the clamped one
+-- while a popup is up. Every path that sets a stratum goes through here, so a window built while a
+-- confirm dialog is open does not appear in front of it.
+function nsProto:CurrentStrata(isDialog)
+    local strata = isDialog and self:GetDialogStrata() or self:GetWindowStrata()
+    if self:IsPopupYielding() then return AtMost(strata, POPUP_CEILING) end
+    return strata
 end
 
 function nsProto:ApplyFrameStrata()
-    local windowStrata, dialogStrata = self:GetWindowStrata(), self:GetDialogStrata()
+    local windowStrata, dialogStrata = self:CurrentStrata(false), self:CurrentStrata(true)
     for _, f in ipairs(self.strataFrames) do f:SetFrameStrata(windowStrata) end
     for _, f in ipairs(self.strataDialogFrames) do f:SetFrameStrata(dialogStrata) end
+end
+
+function nsProto:IsPopupYielding()
+    return self.popupsUp ~= nil and next(self.popupsUp) ~= nil
+end
+
+-- A consumer that keeps strata frames of its own outside this namespace's registries registers a
+-- callback here and gets told when to step aside. KART's Loot Council windows are exactly that
+-- case: they carry their own list and their own stratum setting so the module stays separable.
+function nsProto:RegisterPopupYielder(fn)
+    self.popupYielders[#self.popupYielders + 1] = fn
+end
+
+-- Keyed by the popup frame rather than counted. StaticPopup_Show on a dialog that is already up
+-- reuses the same frame and fires OnShow again with no OnHide in between, which would leave a
+-- counter one too high forever -- the windows would stay lowered for the rest of the session.
+function nsProto:SetPopupUp(key, up)
+    key = key or "anonymous"
+    up = up or nil
+    self.popupsUp = self.popupsUp or {}
+    if self.popupsUp[key] == up then return end
+    self.popupsUp[key] = up
+    self:ApplyFrameStrata()
+    local yielding = self:IsPopupYielding()
+    for _, fn in ipairs(self.popupYielders) do fn(yielding) end
 end
 
 -- SetBackdrop with the border width snapped to whole physical pixels.
@@ -467,10 +521,24 @@ function nsProto:RegisterStaticPopup(name, def)
     -- with our addon blamed for a dialog it never registered. A player could not upgrade items at
     -- all until they reloaded. Whatever a buried confirm dialog costs, it is less than that.
     --
-    -- B8 is therefore open again, and the fix has to come from OUR side of the frame boundary --
-    -- either lowering the consumer's own windows while a popup is up, or building the dialog out of
-    -- our own frames the way KAUI:ApplyPopupArtwork already does everywhere else. Both are ours to
-    -- taint. Blizzard's frames are not.
+    -- What replaced it is the same outcome from the other direction: while this popup is up, OUR
+    -- windows step below DIALOG (see CurrentStrata) and come back when it closes. Only frames this
+    -- namespace or a registered yielder created are ever written to. Blizzard's are not.
+    --
+    -- The consumer's own handlers still run, and still receive the frame untouched.
+    local ns = self
+    local onShow, onHide = def.OnShow, def.OnHide
+    def.OnShow = function(popup, data)
+        ns:SetPopupUp(popup, true)
+        if onShow then onShow(popup, data) end
+    end
+    -- The yield is released AFTER the consumer's OnHide, so a handler that opens another window
+    -- from here builds it at the lowered stratum and is raised with everything else a moment later.
+    def.OnHide = function(popup, data)
+        if onHide then onHide(popup, data) end
+        ns:SetPopupUp(popup, false)
+    end
+
     StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
 end
 

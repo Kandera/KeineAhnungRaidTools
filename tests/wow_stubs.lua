@@ -250,6 +250,15 @@ function _G.CreateFrame(_, name, _, _)
     function f:GetWidth() return 0 end
     function f:GetHeight() return 0 end
 
+    -- Frame strata is real state rather than a no-op. KAUI moves every window it owns down below
+    -- Blizzard's DIALOG stratum while one of the addon's own confirm dialogs is up, and back
+    -- afterwards (B55) -- "did it actually move, and did it come back" is the whole assertion, and
+    -- a stub that swallowed the write would report a broken clamp as working. MEDIUM is what a
+    -- freshly created frame carries in the game.
+    local strata = "MEDIUM"
+    function f:SetFrameStrata(value) strata = value end
+    function f:GetFrameStrata() return strata end
+
     -- Getters that must answer with something other than a frame, or callers that build strings and
     -- run loops from them go wrong in ways that look nothing like their cause -- a name concatenated
     -- into a lookup, a region count driving a for loop.

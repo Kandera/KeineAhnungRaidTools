@@ -57,6 +57,17 @@ LC.raidConfig           = {}  -- the authoritative config: minQuality, buttonLab
 LC.windowFrames  = {} -- top-level Loot Council windows
 LC.windowDialogs = {} -- its transient popups, kept one stratum above the windows
 
+-- The stratum directly below Blizzard's DIALOG, where its StaticPopup frames live. A stratum that
+-- is not in the list counts as above it: ApplyWindowChrome answers "TOOLTIP" for its dialogs once
+-- the windows are maxed out, and that is exactly the case that has to come down.
+local POPUP_CEILING_INDEX = 4 -- HIGH, in KART.StrataLevels
+local function ClampBelowDialog(strata)
+    for i = 1, POPUP_CEILING_INDEX do
+        if KART.StrataLevels[i] == strata then return strata end
+    end
+    return KART.StrataLevels[POPUP_CEILING_INDEX]
+end
+
 -- Drop-in replacement for KART.UI:RegisterStrataFrame at Loot Council call sites. Applies the
 -- current values immediately, exactly as that one does, so a frame built after login is not left
 -- unstyled until the next settings change.
@@ -80,6 +91,14 @@ function LC.ApplyWindowChrome(frame, isDialog)
     -- popup can never end up buried under the panel that opened it. TOOLTIP is the step above
     -- the top entry, which is otherwise not offered for windows.
     local dialogStrata = KART.StrataLevels[idx + 1] or "TOOLTIP"
+
+    -- Blizzard's StaticPopup frames are stuck at DIALOG and moving one taints it (B8/B55), so while
+    -- one of ours is up these windows come down instead. Registered with KAUI below; these windows
+    -- keep their own list and their own setting, so KAUI's own clamp cannot reach them.
+    if LC.popupYield then
+        windowStrata = ClampBelowDialog(windowStrata)
+        dialogStrata = ClampBelowDialog(dialogStrata)
+    end
     local scale = ((KART_Settings and KART_Settings.lcScale) or 100) / 100
 
     -- Background opacity is the addon-wide setting, not a Loot Council one -- but these windows
@@ -102,6 +121,15 @@ function LC.ApplyWindowChrome(frame, isDialog)
     for _, f in ipairs(LC.windowFrames) do apply(f, windowStrata) end
     for _, f in ipairs(LC.windowDialogs) do apply(f, dialogStrata) end
 end
+
+-- KAUI clamps the frames it owns while one of our confirm dialogs is up; these windows are outside
+-- that registry on purpose, so they subscribe instead. The stand-in prompt is why it matters: it is
+-- raised while the council panel is open, and a raid whose lootmaster has left waits on somebody
+-- pressing a button they cannot see.
+KART.UI:RegisterPopupYielder(function(yielding)
+    LC.popupYield = yielding or nil
+    LC.ApplyWindowChrome()
+end)
 
 -- Items simulated by the Test buttons (StartTest) — several so the vote-list/council-panel
 -- handling of multiple simultaneous rolls can actually be tested (multiple items dropping at

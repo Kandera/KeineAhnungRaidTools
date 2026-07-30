@@ -187,4 +187,106 @@ do
     T.truthy(g and b and eg and eb, "all four components survive the refresh")
 end
 
+-- While one of our popups is up, OUR windows step below Blizzard's DIALOG stratum --------------
+-- B8's original symptom: a consumer whose windows sit at or above DIALOG buries its own confirm
+-- dialog behind the window that raised it, and the button looks like it did nothing. B8's fix
+-- raised the popup and tainted a shared Blizzard frame (see above), so the movement now happens on
+-- our side. What is assertable offline is exactly that: whether the frames we own actually move and
+-- actually come back. Whether the result then RENDERS on top needs a client.
+local popNS = KAUI:NewNamespace("KAUIPopupTest")
+
+local function Windows(strataIndex)
+    popNS.strata = strataIndex -- the field ApplyStyle sets from the consumer's saved setting
+    local window, dialog = CreateFrame("Frame"), CreateFrame("Frame")
+    popNS:RegisterStrataFrame(window)
+    popNS:RegisterStrataFrame(dialog, true)
+    return window, dialog
+end
+
+do
+    local window, dialog = Windows(5) -- DIALOG: the setting that produces the burial
+    T.eq(window:GetFrameStrata(), "DIALOG", "a window follows the configured stratum")
+    T.eq(dialog:GetFrameStrata(), "FULLSCREEN", "and its dialogs sit one above it")
+
+    popNS:RegisterStaticPopup("KAUIPOPUP_A", { text = "x" })
+    local a = StaticPopupDialogs["KAUIPOPUP_A"]
+    local frameA = FakePopup()
+
+    a.OnShow(frameA)
+    T.eq(window:GetFrameStrata(), "HIGH", "the window drops below DIALOG while a popup is up")
+    T.eq(dialog:GetFrameStrata(), "HIGH", "and so does a window registered as a dialog")
+    T.eq(frameA.strata, "DIALOG", "the popup frame itself is still never written to")
+
+    -- A settings change while the popup is up must not undo the clamp: the strata slider and every
+    -- profile switch call ApplyFrameStrata, and it would otherwise raise the windows back over the
+    -- dialog the player is currently looking at.
+    popNS:ApplyFrameStrata()
+    T.eq(window:GetFrameStrata(), "HIGH", "re-applying the styles while a popup is up keeps the clamp")
+
+    -- ...nor may a window built while the popup is up come back in front of it.
+    local late = CreateFrame("Frame")
+    popNS:RegisterStrataFrame(late)
+    T.eq(late:GetFrameStrata(), "HIGH", "a window created while a popup is up is clamped too")
+
+    a.OnHide(frameA)
+    T.eq(window:GetFrameStrata(), "DIALOG", "the configured stratum is restored on hide")
+    T.eq(dialog:GetFrameStrata(), "FULLSCREEN", "for dialogs as well")
+    T.eq(late:GetFrameStrata(), "DIALOG", "including the one built while the popup was up")
+end
+
+-- Windows maxed out: GetDialogStrata answers TOOLTIP, which is not in the ordered list at all -----
+do
+    local window, dialog = Windows(7) -- FULLSCREEN_DIALOG
+    T.eq(dialog:GetFrameStrata(), "TOOLTIP", "a maxed-out window's dialogs land on TOOLTIP")
+
+    local a = StaticPopupDialogs["KAUIPOPUP_A"]
+    local frameA = FakePopup()
+    a.OnShow(frameA)
+    T.eq(window:GetFrameStrata(), "HIGH", "FULLSCREEN_DIALOG comes down")
+    T.eq(dialog:GetFrameStrata(), "HIGH", "and so does TOOLTIP, which the list does not contain")
+    a.OnHide(frameA)
+    T.eq(dialog:GetFrameStrata(), "TOOLTIP", "and goes back up afterwards")
+end
+
+-- Two popups at once, and the same popup shown twice --------------------------------------------
+do
+    local window = Windows(5)
+    popNS:RegisterStaticPopup("KAUIPOPUP_B", { text = "x" })
+    local a, b = StaticPopupDialogs["KAUIPOPUP_A"], StaticPopupDialogs["KAUIPOPUP_B"]
+    local frameA, frameB = FakePopup(), FakePopup()
+
+    a.OnShow(frameA)
+    b.OnShow(frameB)
+    b.OnHide(frameB)
+    T.eq(window:GetFrameStrata(), "HIGH", "closing one popup while another is up keeps the windows down")
+    a.OnHide(frameA)
+    T.eq(window:GetFrameStrata(), "DIALOG", "and the last one closing puts them back")
+
+    -- StaticPopup_Show on a dialog that is already up reuses the same frame and fires OnShow again
+    -- with no OnHide in between. A counted implementation would be left one too high here and the
+    -- windows would stay lowered for the rest of the session.
+    a.OnShow(frameA)
+    a.OnShow(frameA)
+    a.OnHide(frameA)
+    T.eq(window:GetFrameStrata(), "DIALOG",
+        "showing the same popup twice still releases on a single hide")
+end
+
+-- A consumer that keeps strata frames outside this namespace subscribes instead -------------------
+-- KART's Loot Council windows are exactly that: their own list, their own stratum setting, so they
+-- stay separable. Without the callback they would be the ONLY windows left covering the dialog.
+do
+    Windows(5)
+    local seen = {}
+    popNS:RegisterPopupYielder(function(yielding) seen[#seen + 1] = yielding end)
+
+    local a = StaticPopupDialogs["KAUIPOPUP_A"]
+    local frameA = FakePopup()
+    a.OnShow(frameA)
+    a.OnHide(frameA)
+    T.eq(#seen, 2, "the yielder is told on the way in and on the way out")
+    T.eq(seen[1], true, "step aside")
+    T.eq(seen[2], false, "and come back")
+end
+
 KARTTEST.uiScale = 768 / 1080 -- leave the scale as found, for whatever file runs next

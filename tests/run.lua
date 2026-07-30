@@ -58,6 +58,7 @@ dofile("tests/test_lc_collectible.lua")
 dofile("tests/test_lc_relevance.lua")
 dofile("tests/test_lc_buttonconfig.lua")
 dofile("tests/test_lc_baseflow.lua")
+dofile("tests/test_lc_chrome.lua")
 dofile("tests/test_lc_churn.lua")
 dofile("tests/test_lc_soak.lua")
 
