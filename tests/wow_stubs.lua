@@ -429,6 +429,13 @@ function _G.GetInstanceInfo()
     local i = KARTTEST.instance
     return i.name, "raid", i.difficultyID, i.difficultyName, 20, 0, false, 2912
 end
+-- Loot history stamps every entry with the difficulty it was won on, and the catch-up sync resolves
+-- a received difficulty ID back to its name.
+function _G.GetDifficultyInfo(id)
+    local i = KARTTEST.instance
+    if id ~= i.difficultyID then return nil end
+    return i.difficultyName, "raid", false, false, false, false, id
+end
 function _G.CreateColor(r, g, b, a)
     return { r = r, g = g, b = b, a = a,
              GetRGB = function(s) return s.r, s.g, s.b end,

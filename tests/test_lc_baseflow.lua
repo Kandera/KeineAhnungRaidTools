@@ -11,7 +11,7 @@
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim, MEMBERS = F.RaidSim, F.MEMBERS
-local NewRaid, Drop, Owes, CouncilOf = F.NewRaid, F.Drop, F.Owes, F.CouncilOf
+local NewRaid, Drop, Owes, CouncilOf, HasVoteRow = F.NewRaid, F.Drop, F.Owes, F.CouncilOf, F.HasVoteRow
 
 -- ===================================================================================
 -- The session and the config reach everybody
@@ -147,6 +147,116 @@ do
         "the lootmaster force-wins a tier token (GitHub #14)")
     T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[46]),
         "and every raider gets to vote on it")
+end
+
+-- ===================================================================================
+-- A boss drops more than one item, and sometimes the same one twice
+-- ===================================================================================
+-- Both are ordinary, and both are places where one roll's state can leak into another's: the tracked
+-- tables are keyed by rollID, and two rolls of the SAME item differ in nothing else.
+do
+    local sim, lm, council, raider = NewRaid()
+    Drop(sim, 47, 249331)
+    Drop(sim, 48, 249293)
+    Drop(sim, 49, 249331)     -- the same item as roll 47, a second time
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(#c.KART.LC.voteListRolls, 3, c.name .. " has a row for each of the three drops")
+    end
+    T.eq(#council.KART.LC.councilTabs, 3, "and the council has a tab for each")
+
+    -- Votes have to land on the roll they were cast on, not on the other copy of the same item.
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(47, 1) end)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(49, 3) end)
+    T.eq((lm.KART.LC.votes[47] or {})[raider.guid].idx, 1, "the first copy carries its own vote")
+    T.eq((lm.KART.LC.votes[49] or {})[raider.guid].idx, 3, "and the second copy carries its own")
+    T.truthy(not (lm.KART.LC.votes[48] or {})[raider.guid], "and the other item has none")
+
+    -- Deciding one leaves the others alone.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(47, raider.guid, "BIS") end)
+    for _, c in ipairs(sim.clients) do
+        T.eq(#c.KART.LC.voteListRolls, 2, c.name .. " is left with exactly the two undecided items")
+    end
+    T.truthy(not lm.KART.LC.assignedWinners[49], "the second copy of the item is still undecided")
+
+    -- And both copies can go to different people.
+    local nara = sim.byName.Nara
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(49, nara.guid, "Upgrade") end)
+    T.eq(council.KART.LC.assignedWinners[47], raider.guid, "the first copy went to one player")
+    T.eq(council.KART.LC.assignedWinners[49], nara.guid, "the second to another")
+    T.eq(#Owes(lm.KART.LC.pendingTrades, 47) and 1 or 0, 1, "and the lootmaster owes both")
+    T.truthy(Owes(lm.KART.LC.pendingTrades, 49), "-- the second one included")
+end
+
+-- ===================================================================================
+-- What Council must never touch
+-- ===================================================================================
+-- STANDING DECISION: collectibles and Bind-on-Equip drops stay out entirely, at any rarity. The
+-- lootmaster cannot hand out through the BoP trade window what he never physically holds, so a
+-- council decision on one is a decision nobody can execute — and with Auto-Pass on by default,
+-- force-passing them would hand every mount to whichever raider is NOT running KART.
+--
+-- This has gone wrong in both directions already: once by force-winning housing decor, once by
+-- letting a tier token be treated as a collectible. The rule is asserted from both sides here.
+do
+    local sim, lm, _, raider = NewRaid()
+
+    Drop(sim, 55, 249400)                       -- a mount
+    Drop(sim, 56, 249401, { bop = false })      -- Bind-on-Equip
+    Drop(sim, 57, 249402)                       -- Bind-on-Pickup, but below the raid's minimum
+
+    for _, id in ipairs({ 55, 56, 57 }) do
+        T.truthy(not KARTTEST.rolled[id] or KARTTEST.rolled[id][lm.unit] ~= 1,
+            "the lootmaster does not force-win roll " .. id)
+        for _, c in ipairs(sim.clients) do
+            T.truthy(not c.KART.LC.rollItems[id],
+                c.name .. " never sees roll " .. id .. " in Loot Council")
+        end
+    end
+    -- Auto-Pass is the raider's own preference and applies to anything Council would have handled,
+    -- regardless of the raid's rarity threshold -- but never to a mount or a BoE.
+    T.eq(KARTTEST.rolled[57] and KARTTEST.rolled[57][raider.unit], 0,
+        "an Auto-Pass raider still passes on a low-rarity BoP drop")
+    T.truthy(not (KARTTEST.rolled[55] or {})[raider.unit], "but is left to roll on a mount themselves")
+    T.truthy(not (KARTTEST.rolled[56] or {})[raider.unit], "and on a Bind-on-Equip")
+    -- The lootmaster clears the low-rarity item out rather than hoarding it.
+    T.eq(KARTTEST.rolled[57] and KARTTEST.rolled[57][lm.unit], 0,
+        "and the lootmaster passes it too, whatever their own Auto-Pass says")
+end
+
+-- ===================================================================================
+-- /kart add — the path the maintainer used all evening
+-- ===================================================================================
+-- An item that never produced a loot roll on anyone's client, handed to the council by hand. It has
+-- to reach every raider exactly as a real drop does.
+do
+    local sim, lm, council, raider = NewRaid()
+    local link = KARTTEST.items[249331].link
+
+    RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(link) end)
+    KARTTEST.AdvanceTime(0)
+
+    local rollID = lm.KART.LC.voteListRolls[1]
+    T.truthy(rollID, "the lootmaster has a vote row for the item they added")
+    for _, c in ipairs(sim.clients) do
+        T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[rollID]),
+            c.name .. " received the manually added item")
+    end
+    T.truthy(council.KART.LC.councilTabs[1] == rollID, "and the council has a tab for it")
+
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(rollID, 1) end)
+    T.truthy((lm.KART.LC.votes[rollID] or {})[raider.guid], "votes come back on a manual item")
+    T.truthy((lm.KART.LC.rolls[rollID] or {})[raider.guid], "and so do the 1-100 rolls")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(rollID, raider.guid, "BIS") end)
+    T.eq(council.KART.LC.assignedWinners[rollID], raider.guid, "and it can be handed out")
+end
+
+-- A raider cannot put items in front of the council.
+do
+    local sim, _, _, raider = NewRaid()
+    RaidSim.As(raider, function() raider.KART.LC.StartManualRoll(KARTTEST.items[249293].link) end)
+    T.eq(#RaidSim.Sent(sim, "LC_MANUAL_START"), 0, "only the loot owner can add an item by hand")
 end
 
 -- ===================================================================================
@@ -337,6 +447,36 @@ do
     local enLabels = RaidSim.As(en, en.KART.LC.GetButtonConfig)
     T.truthy(deLabels[4].label ~= enLabels[4].label,
         "with no config distributed, a German and an English client name the same index differently")
+end
+
+-- ===================================================================================
+-- The vote timer runs out
+-- ===================================================================================
+-- Raiders get a bounded window to answer; the council does not. An item whose timer expired is still
+-- an item somebody has to receive, so it must stay on the council panel with every vote already cast
+-- -- losing it there would mean a drop nobody can hand out.
+do
+    local sim, lm, council, raider = NewRaid()
+    Drop(sim, 58, 249331)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(58, 1) end)
+
+    -- Past the raid's configured voting window (lcVoteSeconds, 20 by default).
+    KARTTEST.AdvanceTime(lm.env.KART_Settings.lcVoteSeconds + 5)
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function() c.KART.LC.Vote.PruneExpiredRolls() end)
+    end
+
+    T.truthy(not HasVoteRow(raider, 58), "a raider's vote row closes when the timer runs out")
+    T.truthy(council.KART.LC.councilTabs[1] == 58, "the council keeps the item on its panel")
+    T.truthy(council.KART.LC.IsRealItemLink(council.KART.LC.rollItems[58]),
+        "and still knows which item it is")
+    T.eq((council.KART.LC.votes[58] or {})[raider.guid].idx, 1,
+        "and still has the vote that was cast before it expired")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(58, raider.guid, "BIS") end)
+    T.eq(council.KART.LC.assignedWinners[58], raider.guid,
+        "an expired item can still be handed out")
+    T.truthy(Owes(raider.KART.LC.owedToMe, 58), "and the winner is owed it")
 end
 
 -- ===================================================================================

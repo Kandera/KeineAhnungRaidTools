@@ -17,8 +17,18 @@ KARTTEST.AddItem({ id = 249293, name = "Weight of Command", quality = 4, ilvl = 
                    classID = 2, subclassID = 4, equipLoc = "INVTYPE_2HWEAPON", bind = 1 })
 KARTTEST.AddItem({ id = 249364, name = "Voidcured Unraveled Nullcore", quality = 4, ilvl = 285,
                    classID = 15, subclassID = 0, bind = 1 })
+-- Everything Council must keep its hands off. A mount is classID 15 with a non-zero subclass; a
+-- Bind-on-Equip is ordinary gear that simply is not bound to the winner, so the lootmaster could
+-- never hand it over through the BoP trade window; and a rare is below the raid's rarity threshold.
+KARTTEST.AddItem({ id = 249400, name = "Voidscarred Ur'zul", quality = 4, ilvl = 1,
+                   classID = 15, subclassID = 5, bind = 1 })
+KARTTEST.AddItem({ id = 249401, name = "Gloombind Wrap", quality = 4, ilvl = 285,
+                   classID = 4, subclassID = 1, equipLoc = "INVTYPE_CLOAK", bind = 2 })
+KARTTEST.AddItem({ id = 249402, name = "Cracked Voidglass Band", quality = 3, ilvl = 200,
+                   classID = 4, subclassID = 0, equipLoc = "INVTYPE_FINGER", bind = 1 })
 
 F.GLOVES, F.WEAPON, F.TOKEN = 249331, 249293, 249364
+F.MOUNT, F.BOE, F.RARE = 249400, 249401, 249402
 
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
@@ -75,7 +85,8 @@ end
 -- realistic case and also the awkward one (peers hear about the roll before their own event).
 function F.Drop(sim, rollID, itemID, opts)
     opts = opts or {}
-    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed, canTransmog = opts.canTransmog }
+    KARTTEST.lootRolls[rollID] = { itemID = itemID, canNeed = opts.canNeed,
+                                   canTransmog = opts.canTransmog, bop = opts.bop }
     for _, c in ipairs(sim.clients) do
         if not (opts.noRollFor and opts.noRollFor[c.name]) then
             RaidSim.As(c, function() c.KART.LC.OnStartLootRoll(rollID) end)

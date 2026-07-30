@@ -86,6 +86,27 @@ do
     T.eq(torvi.KART.LC.raidConfig.lootmaster, lm.guid, "and brings the config with it")
 end
 
+-- Whoever turns up mid-evening should be able to see what has already been handed out. The council
+-- reads the history to decide who is owed something, so a council member arriving on a swapped
+-- character with an empty log would be voting blind on everything left.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 95, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(95, raider.guid, "BIS") end)
+    T.eq(#lm.env.KART_LootHistory, 1, "the award is in the lootmaster's own log")
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(15)     -- the catch-up replies are spread over several seconds
+
+    T.eq(#torvi.env.KART_LootHistory, 1, "and reaches someone who joined afterwards")
+    T.eq(torvi.env.KART_LootHistory[1] and torvi.env.KART_LootHistory[1].winner,
+         lm.env.KART_LootHistory[1].winner, "naming the same winner")
+    -- Several peers hold the same entry and all of them answer; the joiner must end up with one row,
+    -- not one per answerer.
+    T.eq(#torvi.env.KART_LootHistory, 1, "exactly once, however many peers answered")
+end
+
 -- ===================================================================================
 -- Someone swaps character -- the split-run case
 -- ===================================================================================
