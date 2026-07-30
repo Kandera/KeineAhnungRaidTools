@@ -425,7 +425,7 @@ do
 end
 
 do
-    local sim, lm, council = NewRaid()
+    local sim, lm = NewRaid()
     Drop(sim, 62, 249331)
     Drop(sim, 63, 249293)
 
