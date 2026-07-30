@@ -67,7 +67,7 @@ RaidSim.active = nil
 -- asymmetry that makes a reloading lootmaster dangerous.
 local SAVED_VARIABLES = {
     "KART_Settings", "KART_LootHistory", "KART_LCTrades",
-    "KART_LCOfficerNotes", "KART_Profiles", "KART_EquipCache",
+    "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache",
 }
 
 -- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
@@ -108,7 +108,7 @@ local function Boot(client, saved)
     client.env.KART_LCTrades       = saved.KART_LCTrades or { pending = {}, owed = {} }
     client.env.KART_LCOfficerNotes = saved.KART_LCOfficerNotes or {}
     client.env.KART_Profiles       = saved.KART_Profiles or {}
-    client.env.KART_EquipCache     = saved.KART_EquipCache or {}
+    client.env.KART_WoWUtilsCache  = {}
     -- Blizzard's dialog registry is a global table, and every client registers its own handlers
     -- into it under the same names. Shared, the last client to load would own every confirm
     -- dialog in the raid -- accepting a reassign would run somebody else's assignment.
@@ -134,6 +134,20 @@ local function Boot(client, saved)
     client.KAUtil = client.env.LibStub("KAUtil-1.0")
     client.KART.UI = client.env.LibStub("KAUI-1.0")
 
+    -- The two things Core.lua does to KASC on ADDON_LOADED, and both matter.
+    --
+    -- Init sets the message prefix; without it every KASC:Send goes out with a nil prefix, which in
+    -- the game means nothing is received at all.
+    --
+    -- AttachCache is the one that quietly changed what the tests could see: with no cache attached,
+    -- KASC.Identity's persistent-name lookup is a no-op, so the branch that resolves somebody who is
+    -- NOT currently in the roster never ran -- and neither did the hazard it carries, a stale cache
+    -- entry resolving a departed player's name onto their old GUID. A whole raid's worth of identity
+    -- behaviour was being tested in a world where the cache did not exist.
+    client.KASC:Init("KART")
+    client.env.KART_PlayerCache = saved.KART_PlayerCache or {}
+    client.KASC:AttachCache(client.env.KART_PlayerCache)
+
     RaidSim.active = client
     for _, path in ipairs(CLIENT_FILES) do loadInto(client, path) end
 
@@ -155,6 +169,15 @@ local function Boot(client, saved)
     client.KART.Defaults.lcButtonLabels = client.KART.L.LC_DEFAULT_BUTTONS
     client.KAUtil.MergeDefaults(client.env.KART_Settings, client.KART.Defaults)
     client.env.KART_Settings.lcModuleEnabled = true
+
+    -- Outstanding trade obligations from before the reload. Core.lua restores these on ADDON_LOADED,
+    -- and leaving it out meant RaidSim.Reload modelled a reload WITHOUT the one step that brings
+    -- loot-flow state back -- so anything about who still owes whom an item across a relog was being
+    -- measured against a client that had deliberately forgotten.
+    RaidSim.active = client
+    if client.KART.LC.Trade and client.KART.LC.Trade.RestorePersistedTrades then
+        pcall(client.KART.LC.Trade.RestorePersistedTrades)
+    end
 
     RaidSim.active = nil
     return client

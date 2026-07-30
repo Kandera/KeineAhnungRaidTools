@@ -57,6 +57,10 @@ F.MEMBERS = {
 -- starts the session the way the settings toggle does. Returns the sim, the lootmaster, one council
 -- member (Haerri) and one plain raider (Odin).
 function F.NewRaid()
+    -- The guild raids on one realm, so the client's own realm must match the fixture's -- otherwise
+    -- every member reads as cross-realm and the same-realm half of every group-membership check goes
+    -- unexercised. Cross-realm members are worth testing too, but as the exception they are.
+    KARTTEST.realm = "Blackmoore"
     KARTTEST.now = 1000
     KARTTEST.timers, KARTTEST.lootRolls, KARTTEST.rolled = {}, {}, {}
     KARTTEST.solo, KARTTEST.popups = {}, {}

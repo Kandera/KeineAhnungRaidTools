@@ -53,9 +53,15 @@ local function resolve(unit)
 end
 
 function _G.UnitExists(unit) return resolve(unit) ~= nil end
+-- The real UnitName returns an EMPTY realm for a player on your own realm, and only names the realm
+-- for a genuine cross-realm one. Returning it unconditionally, with a fixture whose members all sat
+-- on a realm the client was not on, meant every same-realm branch of the group-membership check --
+-- the path taken by essentially every message in a normal guild raid -- was never executed. Every
+-- authorization gate in the addon was being validated in a configuration that cannot occur.
 function _G.UnitName(unit)
     local m = resolve(unit)
     if not m then return nil end
+    if m.realm == KARTTEST.realm then return m.name, "" end
     return m.name, m.realm
 end
 function _G.UnitGUID(unit) local m = resolve(unit) return m and m.guid or nil end

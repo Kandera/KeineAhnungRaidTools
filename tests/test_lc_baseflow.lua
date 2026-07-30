@@ -193,6 +193,32 @@ do
     T.eq(#lm.KART.LC.pendingTrades, 2, "two items owed, not one collapsed entry")
 end
 
+-- The item link has not reached this client yet -- a brand-new drop whose data has not propagated.
+-- Deciding without it would mean deciding without a classID, so a mount would read as ordinary gear
+-- and be force-won; retrying is the only safe answer, and it has to keep going long enough to
+-- actually work. Blizzard's roll timer runs for minutes.
+do
+    local sim, lm = NewRaid()
+    Drop(sim, 59, 249331, { linkPending = true })
+    -- Well past the seven seconds the old budget gave up after -- which is where the boss dropped
+    -- and nothing happened at all: no force-win, no forced pass, no LC_START, no vote window, and
+    -- nothing printed.
+    KARTTEST.AdvanceTime(10)
+
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "nothing is decided while the item is unidentifiable")
+    T.truthy(not (KARTTEST.rolled[59] or {})[lm.unit], "and nothing is force-won on a guess")
+
+    -- It arrives, late. The roll must still be picked up rather than abandoned.
+    KARTTEST.lootRolls[59].linkPending = nil
+    KARTTEST.AdvanceTime(10)
+
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "the roll is picked up once the item is identifiable")
+    T.eq(KARTTEST.rolled[59] and KARTTEST.rolled[59][lm.unit], 1, "and force-won then")
+    for _, c in ipairs(sim.clients) do
+        T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[59]), c.name .. " gets the item")
+    end
+end
+
 -- ===================================================================================
 -- What Council must never touch
 -- ===================================================================================
@@ -555,6 +581,33 @@ do
     for _, c in ipairs(sim.clients) do
         T.truthy(not c.KART.LC.assignedWinners[61], c.name .. " no longer shows a winner")
     end
+end
+
+-- Revoking an award must reach exactly this roll's entry. Blizzard's roll IDs are small integers
+-- reissued every session, while the loot history is a SavedVariable spanning many raid nights -- so
+-- matching on the ID alone reached back into previous weeks and deleted somebody's record of an item
+-- they really did win, on every client at once.
+do
+    local sim, lm, _, raider = NewRaid()
+
+    RaidSim.As(lm, function()
+        lm.KART.LH.LogHistory(KARTTEST.items[249293].link, "Odin", "BIS", "MAGE", nil, 47, raider.guid)
+    end)
+    lm.env.KART_LootHistory[1].time = os.time() - 7 * 24 * 60 * 60   -- last Tuesday
+    T.eq(#lm.env.KART_LootHistory, 1, "an award from a previous raid is on record")
+
+    -- Tonight, Blizzard hands out roll 47 again for something else, and the council decides nobody
+    -- gets it.
+    Drop(sim, 47, 249331)
+    RaidSim.As(lm, function() lm.KART.LH.RemoveHistoryForRoll(47) end)
+    T.eq(#lm.env.KART_LootHistory, 1, "revoking tonight's roll leaves last week's award alone")
+
+    -- And it still does the job it exists for.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(47, raider.guid, "BIS") end)
+    T.eq(#lm.env.KART_LootHistory, 2, "tonight's award is logged")
+    RaidSim.As(lm, function() lm.KART.LH.RemoveHistoryForRoll(47) end)
+    T.eq(#lm.env.KART_LootHistory, 1, "and revoking it removes exactly that entry")
+    T.eq(lm.env.KART_LootHistory[1].winner, "Odin", "the surviving entry is last week's")
 end
 
 do

@@ -1992,8 +1992,17 @@ end
 
 -- How often LC.OnStartLootRoll re-checks for the item link before giving up, and the per-attempt
 -- backoff — same schedule as ResolveRollItemLink, for the same reason (see the retry block there).
-local START_ROLL_MAX_ATTEMPTS = 8
+--
+-- Deliberately long. The old budget was eight attempts at a quarter-second step — about seven
+-- seconds — after which the handler returned having done NOTHING AT ALL: no force-win, no forced
+-- pass, no LC_START, no vote window anywhere. The boss dropped and nothing happened, on every client
+-- in the raid, with nothing printed. Blizzard's own roll timer runs for minutes, so waiting longer
+-- costs nothing and is far more likely to work than any guess: deciding without the link would mean
+-- deciding without a classID, and a freshly dropped MOUNT would then read as ordinary gear and be
+-- force-won — the exact thing the standing rule forbids, and how housing decor was won once already.
+local START_ROLL_MAX_ATTEMPTS = 20
 local START_ROLL_RETRY_STEP   = 0.25
+local START_ROLL_RETRY_MAX    = 2
 
 -- attempt is internal (see the link-retry block below); Core.lua's START_LOOT_ROLL handler passes
 -- only rollID.
@@ -2021,9 +2030,15 @@ function LC.OnStartLootRoll(rollID, attempt)
     if rollTexture and not itemLink then
         attempt = attempt or 1
         if attempt < START_ROLL_MAX_ATTEMPTS then
-            C_Timer.After(START_ROLL_RETRY_STEP * attempt, function()
+            C_Timer.After(math.min(START_ROLL_RETRY_STEP * attempt, START_ROLL_RETRY_MAX), function()
                 LC.OnStartLootRoll(rollID, attempt + 1)
             end)
+        elseif LC.IsLootOwner() then
+            -- Out of attempts, and the roll is still live. There is nothing safe left to do — the
+            -- item cannot be identified, so it cannot be told apart from a mount — but the loot
+            -- owner has to know an item went past the council rather than find out from a raider
+            -- afterwards. Blizzard's own window is still up for everybody; this says so.
+            print("|cffff0000KART:|r " .. KART.L.LC_ROLL_UNIDENTIFIED)
         end
         return
     end

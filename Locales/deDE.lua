@@ -275,6 +275,7 @@ KART.L_deDE = {
     LC_SESSION_RESUMED     = "Loot-Council-Session wieder übernommen — der Raid war noch drin.",
     LC_STAND_IN_TEXT       = "Der Lootmaster hat den Raid verlassen.\n\nLootverteilung übernehmen? Ab sofort landet jedes Item, das über das Council läuft, in deinen Taschen.",
     LC_STAND_IN_ACCEPTED   = "Du vertrittst jetzt den Lootmaster.",
+    LC_ROLL_UNIDENTIFIED   = "Ein Item konnte nicht identifiziert werden und bleibt bei Blizzards Würfelfenster. Das Loot Council hat es übersprungen.",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",
     LC_AUTO_VOTED_HINT     = "KART hat dieses Item für dich beantwortet. Klick eine beliebige Antwort, um das zu ändern.",

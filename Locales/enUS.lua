@@ -275,6 +275,7 @@ KART.L_enUS = {
     LC_SESSION_RESUMED     = "Loot Council session picked back up — the raid was still in it.",
     LC_STAND_IN_TEXT       = "The lootmaster has left the raid.\n\nTake over loot distribution? Every item the council handles will be won into your bags from now on.",
     LC_STAND_IN_ACCEPTED   = "You are standing in as lootmaster.",
+    LC_ROLL_UNIDENTIFIED   = "An item could not be identified and was left to Blizzard's roll window. Loot Council skipped it.",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
     LC_AUTO_VOTED_HINT     = "KART answered this item for you. Click any response to change it.",

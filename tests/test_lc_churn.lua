@@ -109,6 +109,27 @@ do
     T.eq(#torvi.env.KART_LootHistory, 1, "and the joiner still ends up with exactly one row")
 end
 
+-- A cross-realm raider. Every message the addon accepts is gated on the sender being in our group,
+-- and that check has to handle both spellings: a same-realm player, whose realm the API reports as
+-- empty, and a genuine cross-realm one, who is always fully qualified. The guild raids on one realm,
+-- so the second is the exception -- which is exactly why it needs its own test rather than being the
+-- accident the fixture used to be.
+do
+    local sim, lm = NewRaid()
+    local guest = RaidSim.Join(sim, { name = "Fremd", realm = "TarrenMill", guid = "Player-2-F",
+                                      class = "ROGUE", locale = "enUS" })
+    RosterSettles(sim)
+
+    T.eq(guest.KART.LC.sessionActive, true, "a cross-realm raider joins the session")
+    T.eq(guest.KART.LC.raidConfig.lootmaster, lm.guid, "and gets the config")
+
+    Drop(sim, 99, F.GLOVES)
+    T.truthy(guest.KART.LC.IsRealItemLink(guest.KART.LC.rollItems[99]), "and sees the item")
+    RaidSim.As(guest, function() guest.KART.LC.Vote.CastVote(99, 1) end)
+    T.truthy((lm.KART.LC.votes[99] or {})[guest.guid], "and their vote is accepted, not rejected")
+    T.truthy((lm.KART.LC.rolls[99] or {})[guest.guid], "and so is their roll")
+end
+
 -- ===================================================================================
 -- Someone swaps character -- the split-run case
 -- ===================================================================================

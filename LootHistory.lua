@@ -799,11 +799,30 @@ end
 -- gets a fresh rollID, the dedupe in LogHistory/HandleHistoryEntry (which matches on rollID) can't
 -- collapse the two entries later. Runs on every client, so all logs stay identical: the revoker
 -- calls it locally, everyone else through Trade.HandleResult's "NONE" branch.
+--
+-- Bounded to the roll actually being revoked. A rollID identifies a roll only within the session
+-- Blizzard issued it in — they are small integers and they come round again every evening — while
+-- KART_LootHistory is a SavedVariable holding up to 500 awards across many raid nights. Matching on
+-- the ID alone therefore reached back into previous weeks: pressing "No Winner" on tonight's roll 47
+-- silently deleted a completely unrelated award made under roll 47 last Tuesday, on every client in
+-- the raid at once, with the loot history being precisely what the council consults to decide who is
+-- owed something.
+--
+-- LC.rollLootedAt[rollID] is stamped the moment this roll starts, on every client and on all three
+-- entry paths (a real drop, an LC_START from the owner, and /kart add), so an entry older than it
+-- belongs to an earlier roll by definition. That also covers the within-session reuse the rest of
+-- the module already guards against. The age bound is the fallback for a roll whose stamp we never
+-- saw; it is deliberately generous, since the cost of keeping one stale entry is a line in a log and
+-- the cost of removing the wrong one is somebody's record of an item they actually won.
+local REVOKE_MAX_AGE = 12 * 60 * 60
+
 function LH.RemoveHistoryForRoll(rollID)
     if not rollID or not KART_LootHistory then return end
+    local since = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or (time() - REVOKE_MAX_AGE)
     local changed = false
     for i = #KART_LootHistory, 1, -1 do
-        if KART_LootHistory[i].rollID == rollID then
+        local e = KART_LootHistory[i]
+        if e.rollID == rollID and (e.time or 0) >= since then
             table.remove(KART_LootHistory, i)
             changed = true
         end
