@@ -1096,11 +1096,18 @@ function Council.RefreshCouncilRows()
     -- Ranked, not indexed: the fixed Transmog response is the last button but belongs above the
     -- people who passed (see LC.GetVoteSortRank). Reordering the button list to achieve that is not
     -- an option — the index is a wire value and moving it desynchronises the raid.
+    -- Ranked once per row, not per comparison: LC.GetVoteSortRank calls GetButtonConfig, which splits
+    -- and trims the label string and rebuilds the whole button list. Inside the comparator that ran
+    -- ~150 times for a 30-row council on every incoming vote, note and equip reply. The value cannot
+    -- change during a sort.
+    for _, m in ipairs(members) do
+        m.voteRank = m.voteIdx and LC.GetVoteSortRank(m.voteIdx) or nil
+    end
     table.sort(members, function(a, b)
         if a.voteIdx ~= b.voteIdx then
             if a.voteIdx == nil then return false end
             if b.voteIdx == nil then return true end
-            return LC.GetVoteSortRank(a.voteIdx) < LC.GetVoteSortRank(b.voteIdx)
+            return a.voteRank < b.voteRank
         end
         return (a.short or "") < (b.short or "")
     end)

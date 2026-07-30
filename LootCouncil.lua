@@ -1211,7 +1211,14 @@ end
 -- question-mark placeholder tinted with the item's quality colour (r,g,b — pass what
 -- LC.ParseItemColor returned, which the caller usually also needs for the surrounding border/strip).
 function LC.SetItemIcon(icon, link, r, g, b)
-    local iconTexture = LC.IsRealItemLink(link) and C_Item.GetItemIconByID(link)
+    -- GetItemIconByID answers from a bare item string as well as from a full link, and LC.HandleStart
+    -- rebuilds exactly such a string from the LC_START payload for clients that had no roll of their
+    -- own. Accepting it here is what makes those rows show the real icon straight away instead of
+    -- the question mark they were reported with (#12, #13, #16) — the icon needs only the ID, while
+    -- the name has to wait for the item to be cached.
+    local lookup = LC.IsRealItemLink(link) and link
+        or (type(link) == "string" and link:match("^item:(%d+)"))
+    local iconTexture = lookup and C_Item.GetItemIconByID(lookup)
     if iconTexture then
         icon:SetTexture(iconTexture)
         icon:SetVertexColor(1, 1, 1)
@@ -1379,8 +1386,14 @@ function LC.SetSessionActive(active)
         -- raid silently not rolling while the person who started the session does, and it cost this
         -- guild an evening before anyone worked out why (backlog B33; the real fix is the ownership
         -- design, this is only the missing sentence). Say it out loud instead.
+        -- Two different causes, and telling someone to fill in a field they already filled in is
+        -- worse than saying nothing: an NSRT nickname that has not resolved yet fails IsConfigOwner
+        -- exactly like an empty field does, and that is the very case TryAcceptConfig was rewritten
+        -- for. Distinguish them by whether the field holds anything at all.
         if not LC.IsConfigOwner() then
-            print("|cffff0000KART:|r " .. KART.L.LC_NO_CONFIG_OWNER)
+            local named = KART_Settings.lcLootmaster and KART_Settings.lcLootmaster ~= ""
+            print("|cffff0000KART:|r " ..
+                (named and KART.L.LC_LOOTMASTER_UNRESOLVED or KART.L.LC_NO_CONFIG_OWNER))
         end
     end
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
@@ -1459,9 +1472,21 @@ function LC.CheckRaidJoin()
         end)
         return
     end
-    -- Back in (or never left) — any confirmation still in flight is moot. It re-checks before acting
-    -- anyway, so this only stops the flag from blocking a genuine exit later on.
-    LC.raidExitPending = false
+    -- Back in, or never left. Either way a confirmation still in flight is moot — it re-checks before
+    -- acting, so clearing the flag only stops it blocking a genuine exit later on.
+    --
+    -- But a negative reading DID happen, and this branch cannot tell a two-second API blip from
+    -- actually leaving and being re-invited inside the confirm window. In the second case the
+    -- teardown is skipped, and with it the only runtime reset of these three latches — so the client
+    -- would spend the whole next raid never asking for the session state, never catching up on loot
+    -- history, and never being offered the prompt again. Re-arm them here instead: asking twice
+    -- costs one addon message and one dialog, being unable to ask at all costs the evening.
+    if LC.raidExitPending then
+        LC.raidExitPending      = false
+        LC.promptedThisSession  = false
+        LC.stateSyncRequested   = false
+        LC.historySyncRequested = false
+    end
     if KART_Settings.lcModuleEnabled == false then return end
 
     -- Ask peers (once per raid join) for any loot-history entries logged while we weren't around.
@@ -1532,6 +1557,30 @@ local function ResolveRollItemLink(rollID, attempt)
         end
     elseif attempt < 8 then
         C_Timer.After(0.25 * attempt, function() ResolveRollItemLink(rollID, attempt + 1) end)
+    else
+        -- Polling has given up (~7s). When all we hold is a bare item string, ask the client to tell
+        -- us the moment it caches that item instead — the same escape LootCouncilPanel already uses
+        -- for the bare strings in the equipped-gear cache. Without it an item still uncached after
+        -- seven seconds keeps rendering as "item:249364" for the rest of the session, which is not
+        -- the "name and icon" this path promises. One-shot: it fires once per roll at most, because
+        -- it only runs after the retry budget is spent.
+        local itemID = tonumber(tostring(current):match("item:(%d+)"))
+        if itemID then
+            Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
+                -- Only if this roll is still the same unresolved item — the ID may well have been
+                -- cleared or replaced during the wait (session end, tab close, reused rollID).
+                local now = LC.rollItems[rollID]
+                if now ~= current then return end
+                local full = select(2, C_Item.GetItemInfo(itemID))
+                if not full then return end
+                LC.rollItems[rollID] = full
+                LC.Vote.RefreshVoteListRows()
+                if LC.councilPanel and LC.councilPanel:IsShown() then
+                    KART.LC.Council.RefreshCouncilRows()
+                    KART.LC.Council.RefreshCouncilTabs()
+                end
+            end)
+        end
     end
 end
 

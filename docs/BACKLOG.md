@@ -52,6 +52,37 @@ Both default to off, so an untouched install is not exposed to them.
 
 ---
 
+# Tier 0 — reopened and unresolved
+
+## B56 — a toy can be force-won when the Toy Box has not been populated
+
+`LC.IsCollectibleItem` keeps mounts, pets and mount equipment out by subclass, so `C_ToyBox.GetToyInfo`
+is the only thing keeping a toy out of Council — and toys share subclass 0 with the tier tokens the
+carve-out was narrowed for. `GetToyInfo` answers nil whenever the Toy Box data has not loaded for the
+session, e.g. on a fresh login where Collections was never opened. The item is then not a collectible,
+the lootmaster force-wins it, and every Auto-Pass raider passes: the standing "collectibles never
+enter Loot Council" rule broken in the same direction as the housing-decor incident of the same day.
+
+Deliberately not fixed by guessing at another discriminator. Item level and bind type would separate
+tokens from toys in every case checked, but neither was measured, and inventing an unmeasured rule is
+exactly what produced the housing regression. It wants either a reliable "is this a toy" answer that
+does not depend on Collections being loaded, or a measurement of what distinguishes the two.
+
+## B57 — the council window kept every previous boss's items despite End Round (GitHub #15)
+
+Reported with a screenshot showing items from earlier bosses still listed. The maintainer confirms he
+pressed End Round and that he held raid lead, which means the sender check on the receiving side
+(`IsSenderLootOwner`, falling back to raid leader when no config has been distributed) should have
+passed, and `LC.ClearAllRolls` demonstrably clears the vote list and the tab strip and hides both
+windows. No path in the code explains the report.
+
+That evening also had continuous session failures and manual restarts, so the state the message
+landed in is not reconstructable. Deferred to the next raid with a working session rather than fixed
+speculatively. If it reproduces there, the next thing to establish is whether the peers received
+`LC_END_ROUND` at all.
+
+---
+
 # Tier 0 — reopened
 
 ## B55 — confirm dialogs are buried again (was B8), and the old fix must never come back

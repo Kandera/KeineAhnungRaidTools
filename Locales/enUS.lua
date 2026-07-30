@@ -240,6 +240,7 @@ KART.L_enUS = {
     LC_CONFIG_TRUNCATED    = "Council member list is too long to broadcast in full and was trimmed — shorten it in Loot Council settings so everyone stays in sync.",
     LC_CONFIG_TOO_LONG     = "Your Loot Council settings are too long to send at all — nothing was broadcast, so the raid is still on the previous settings. Shorten the vote button labels or the Lootmaster field.",
     LC_NO_CONFIG_OWNER     = "No Lootmaster is set, so nobody sends the raid-wide settings — every raider falls back to their own vote buttons, minimum quality and roll setting (which is off by default). Put a name in the Lootmaster field to fix this.",
+    LC_LOOTMASTER_UNRESOLVED = "The name in your Lootmaster field does not resolve to you yet, so the raid-wide settings were not sent — every raider falls back to their own vote buttons, minimum quality and roll setting. Use your character name rather than a nickname, or wait for it to sync and start the session again.",
     LC_LOOTMASTER_CLASH    ="|cffffaa00You have yourself entered as lootmaster, but %s is running this raid's Loot Council.|r Yours takes precedence on your own client, so you will not see vote windows. Clear the Lootmaster field in Loot Council settings.",
     LC_VOTE_UNKNOWN        = "?",
     LC_VOTE_UNKNOWN_TIP    = "This raider's vote buttons differ from yours, so their choice cannot be matched to one of your buttons. They are not running the raid's Loot Council settings — have them reload, and check that the lootmaster's settings reached them.",

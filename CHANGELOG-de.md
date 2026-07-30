@@ -10,8 +10,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Blizzards eigene Bestätigungsdialoge funktionieren wieder.** Das Aufwerten eines Items konnte bis zum nächsten Reload komplett verweigert werden.
 - **Set-Tokens laufen wieder über das Loot Council**, statt von niemandem normal ausgewürfelt zu werden.
-- **Items zeigen Namen und Symbol auch bei Spielern, die beim Drop tot oder außer Reichweite waren**, statt eines Fragezeichens.
-- **Das Schließen eines Item-Tabs räumt ihn bei allen Council-Mitgliedern weg**, nicht nur beim Lootmaster.
+- **Items zeigen ihr Symbol auch bei Spielern, deren Client keinen eigenen Loot-Roll hatte**, und ihren Namen sobald das Item bekannt ist, statt die ganze Abstimmung lang ein Fragezeichen.
 - **Ein Item verschwindet aus dem Vote-Fenster desjenigen, der es vergeben hat.**
 - **Transmog-Stimmen stehen über den Spielern, die gepasst haben.**
 - **Ein Bei- oder Austritt beendet die Session nicht mehr.**
