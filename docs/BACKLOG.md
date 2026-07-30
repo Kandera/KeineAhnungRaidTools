@@ -303,28 +303,52 @@ asking anybody about it.
   an empty field is the NORMAL state of a raid whose leader stands in. It now asserts that at least
   one client answers `IsLootOwner()`, which is what would have caught the leaderless raid at once.
 
-## B69 — a client ends the raid on the wrong roll setting, and the config it holds was RECEIVED
+## B69 — a reloaded raid leader answers "start a session?" and pushes its own settings over the raid's
 
-The residue of B68: 7 of 3000 soak runs, `KART_SOAK_DEBUG=878`. Same symptom, different route, and
-the route is not yet identified — written down at the point the evidence ran out rather than
-guessed at, because two guesses about this exact area were already wrong today.
+The residue of B68: 7 of 3000 soak runs, `KART_SOAK_DEBUG=878`. Traced end to end rather than
+guessed at — two guesses about this area were wrong first, and both are recorded below so they are
+not made again.
 
-What is established:
+The chain, from the trace:
 
-* Sinja ends the run with `raidConfig.rollsEnabled = false` while every other client has `true`.
-* Its config is **received, not self-invented** (`fromSelf` is nil), so B68's guard cannot apply.
-* Every `LC_CONFIG` and `LC_CONFIG_RELAY` in the run's wire log carries `:1:` — the correct value.
-* No client ever broadcast a wrong `LC_CONFIG`: the only sender of that token in the whole run is
-  the original lootmaster, before leaving. Everything else is a relay.
-* The run settles for two roster updates and 120 seconds afterwards, so it is not a timing artefact.
+1. Bramor (the lootmaster) leaves. Raid lead ends up with Merrit, whose own Lootmaster field is empty
+   and whose own `lcRollsEnabled` is the default `false`, while the raid is running on `true`.
+2. Merrit reloads. Everything runtime is gone: no config, `sessionActive` false, and crucially
+   `sessionStateKnown` false — it has asked the raid and nobody has answered yet.
+3. Three seconds after the roster settles, `CheckRaidJoin` offers Merrit the session prompt. The
+   guard there is `not LC.sessionActive`, which is true — but only because Merrit has not been told
+   yet. The state-request backoff is 2/5/15/45 seconds, so the first answer need not have arrived.
+4. Merrit answers yes. `sessionStartedByUs` is set, which makes `LC.IsConfigOwner` true for a raid
+   leader with an empty field (the fallback B67 deliberately left open for the legitimate case), and
+   `BroadcastRaidConfig` puts Merrit's OWN settings on the wire — `rollsEnabled = false`.
+5. Sinja, freshly reloaded and holding nothing, accepts it: `TryAcceptConfig` writes `false` and
+   clears `fromSelf`, so B68's guard cannot see it either. Sinja stops asking and ends the raid not
+   rolling on anything.
 
-So a client holds a received value that nothing on the wire appears to have sent. The next step is
-per-recipient wire tracing — logging what each client actually parsed out of each config it accepted
-and when, rather than what was put on the wire — because one of those two must be lying.
+`sessionStartedByUs` is asserting something untrue at step 4. Merrit did not start the session the
+raid is in; it declared a new one locally because it had not heard about the existing one yet.
 
-Worth noting for whoever picks this up: the roll setting is the expensive half of a config. It
-decides whether that raider rolls at all, so this is silent for everyone including the person it
-happens to.
+### What the fix has to decide
+
+Neither direction is obviously right, which is why nothing is implemented yet.
+
+* **Do not ask while the answer is still outstanding.** Gate the prompt on `LC.sessionStateKnown`.
+  Correct in principle, and it costs the ordinary case: on a genuinely fresh raid nobody ever
+  answers, so the prompt would have to wait out the whole backoff (~67 s) before appearing. Today
+  the lootmaster is asked after 3 seconds.
+* **Let the later truth win.** Keep the prompt, but make a config from a client that turns out not to
+  own a running session lose to the real one. That needs a precedence rule receivers can actually
+  evaluate, and today they cannot always tell the two apart.
+
+### Two wrong turns, recorded so they are not repeated
+
+* *"The raid holds two incompatible views of the lootmaster."* It does not. The RAW `raidConfig.
+  lootmaster` differs between clients, but `PresentLootmaster` blanks a named lootmaster who is no
+  longer in the group (B29), so the EFFECTIVE answer agrees everywhere. Read `GetLootmaster()`, never
+  the raw field.
+* *"Merrit never broadcast a config — the wire only shows relays."* It did. The wire dump truncates
+  and the `LC_CONFIG` prefix also matches `LC_CONFIG_RELAY`, so the real broadcast was hidden among
+  them. A probe inside `TryAcceptConfig` printed `rolls=0` on the first run and settled it.
 
 ## B58 — nobody hands a late joiner the config while the lootmaster is away — FIXED 2026-07-30
 

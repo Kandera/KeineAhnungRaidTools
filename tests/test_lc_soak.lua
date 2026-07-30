@@ -283,6 +283,32 @@ local function runOne(seed)
         end },
     }
 
+    -- Under KART_SOAK_DEBUG, follow one config field as it CHANGES on each client instead of only
+    -- printing where it ended up. Watching the value rather than the functions that write it is
+    -- deliberate: it catches every writer without having to know them in advance, which is the whole
+    -- problem with B69 -- the value a client ends up holding is one no message on the wire appears
+    -- to have carried, so the interesting question is which step put it there.
+    local watching = os.getenv("KART_SOAK_DEBUG") == tostring(seed)
+    local lastRolls = {}
+    local function TraceRolls(when)
+        if not watching then return end
+        for _, c in ipairs(sim.clients) do
+            -- rolls AND the fromSelf marker together: the marker is what decides whether the client
+            -- keeps asking for a real config (see LC.StateStillNeeded), so a change to it with no
+            -- change to the values is exactly the event worth seeing.
+            local v = tostring(c.KART.LC.raidConfig.rollsEnabled)
+                .. "/" .. tostring(c.KART.LC.raidConfig.fromSelf)
+            -- Keyed by NAME, not by client object: a reload replaces the object, and the point here
+            -- is to follow the person across it.
+            if lastRolls[c.name] ~= v then
+                print(string.format("  trace t=%-5s %-8s rolls/fromSelf %-12s -> %-12s  after %s",
+                    tostring(KARTTEST.now), c.name, tostring(lastRolls[c.name]), v, when))
+                lastRolls[c.name] = v
+            end
+        end
+    end
+    TraceRolls("the raid was built")
+
     -- The script itself, so a failure names the sequence that produced it instead of only the seed.
     local script = {}
     for _ = 1, EVENTS_PER_RUN do
@@ -295,6 +321,7 @@ local function runOne(seed)
         local a = pick(actions)
         script[#script + 1] = a[1]
         a[2]()
+        TraceRolls(string.format("step %d (%s)", #script, a[1]))
     end
 
     -- Settle: a raid that is mid-recovery is allowed to disagree, a settled one is not. Nothing is
@@ -304,9 +331,11 @@ local function runOne(seed)
     KARTTEST.solo = {}
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(60)
+    TraceRolls("the first settle")
     answerPrompts()
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(60)
+    TraceRolls("the second settle")
 
     -- The session, the config and the council list are the raid's, not anyone's own: they must
     -- agree across every client, including whoever just joined or reloaded.
