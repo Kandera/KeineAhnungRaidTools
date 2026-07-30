@@ -508,10 +508,7 @@ function LC.BuildSettingsPanel(parent)
     KART.LC.BtnToggleSession:SetScript("OnClick", function()
         -- Loot owner, not raid leader: the lootmaster runs the whole loot flow (see LC.IsLootOwner),
         -- and while no lootmaster is configured that check falls back to the leader anyway.
-        -- LC.InAnyRaid, not a bare IsInRaid: the bare form only reports the HOME party category, so
-        -- in a group-finder raid this refused to start a session at all — and this button is the
-        -- fallback for when the prompt did not appear, so it must not fail in the same case.
-        if not LC.InAnyRaid() then
+        if not IsInRaid() then
             print("|cff00ff00KART:|r " .. KART.L.LC_RAID_ONLY)
         elseif LC.IsLootOwner() then
             LC.SetSessionActive(not LC.sessionActive)

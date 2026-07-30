@@ -1286,14 +1286,13 @@ function LC.ShowSessionPrompt()
     btnNo:SetSize(135, 28)
     btnNo:SetPoint("BOTTOMRIGHT", -15, 12)
     btnNo:SetScript("OnClick", function()
-        -- Declining only means "do not start one" — it must never END one. This used to call
-        -- SetSessionActive(false) unconditionally, which broadcasts LC_ACTIVE:0 and makes every
-        -- client in the raid drop its tabs, votes and winner highlights. The prompt no longer opens
-        -- over a live session (see LC.CheckRaidJoin), so there is nothing here left to turn off;
-        -- the guard stays because the cost of being wrong is the whole raid's loot round.
-        if not LC.sessionActive then
-            LC.promptedThisSession = true
-        end
+        -- Broadcasts LC_ACTIVE:0, and that is deliberate even though declining sounds passive. The
+        -- prompt only opens when our own session is off (see LC.CheckRaidJoin), so this cannot end a
+        -- session we knowingly started -- but it CAN end one the raid still believes in while we do
+        -- not, which is exactly the state a reloaded loot owner lands in. Removing the broadcast
+        -- took away the only in-UI way out of that split, leaving Auto-Pass raiders passing on every
+        -- item while nobody force-won it.
+        LC.SetSessionActive(false)
         f:Hide()
     end)
 
@@ -1406,14 +1405,21 @@ function LC.EndRound()
     LC.ClearAllRolls()
 end
 
--- Bare IsInRaid() only reports the HOME party category, so a raid formed through the group finder
--- reads as "no raid" the whole time. Ask both categories before believing it.
--- Exposed as well as local: the settings tab's session toggle needs the same answer, and a bare
--- IsInRaid() there refused to start a session at all in a group-finder raid.
-function LC.InAnyRaid()
-    return IsInRaid(LE_PARTY_CATEGORY_HOME) or IsInRaid(LE_PARTY_CATEGORY_INSTANCE)
+-- Deliberately the BARE IsInRaid(), which reports only the HOME party category.
+--
+-- This briefly asked both categories, on the theory that a group-finder raid reads as "no raid". The
+-- theory was never verified, and widening it here alone opened something much worse: everything that
+-- actually moves data still asks the bare form -- LC.SendLC's IsInGroup guard, KASC:DefaultChannel,
+-- and KAUtil.EachGroupUnit, which decides the roster scan is solo and yields only "player". So the
+-- widened gate let a session start in a group where no message could leave and no sender could be
+-- resolved: "session on", nothing broadcast, the loot owner force-winning every drop with no council
+-- and no vote windows anywhere. Refusing to start, which is what 3.2.1 did, is far better.
+--
+-- If the group-finder case ever turns out to be real, the transport goes first and this follows --
+-- see "Voraussetzung, separat auszuliefern" in the ownership design doc.
+local function InAnyRaid()
+    return IsInRaid()
 end
-local InAnyRaid = LC.InAnyRaid
 
 -- How long to wait before believing a negative raid check. A real raid exit is delayed by this and
 -- nothing else happens in between; a blip costs the session everything, so the trade is one-sided.
@@ -1483,11 +1489,9 @@ function LC.CheckRaidJoin()
     if LC.promptedThisSession then return end
     LC.promptedThisSession = true
     -- Small delay so the roster is fully settled before showing the prompt.
-    -- InAnyRaid, not a bare IsInRaid: the latch above is already set, so a category the bare form
-    -- cannot see would swallow the prompt for the whole raid rather than postpone it. And never ask
-    -- while a session is already running — becoming loot owner mid-raid (the lootmaster field being
-    -- filled in later, or a leader change) used to pop this question over a live session, where
-    -- answering "no" ended it for everyone.
+    -- Never ask while a session is already running: becoming loot owner mid-raid (the lootmaster
+    -- field being filled in later, or a leader change) used to pop this question over a live
+    -- session, and answering "no" then ended it for the whole raid.
     C_Timer.After(3, function()
         if InAnyRaid() and LC.IsLootOwner() and not LC.sessionActive then
             LC.ShowSessionPrompt()
@@ -1922,8 +1926,7 @@ local function RevokePriorAward(itemLink)
     LC.Trade.AnnounceResult(m.rollID, "NONE")
     KART.LH.RemoveHistoryForRoll(m.rollID)
     LC.Trade.ClearWinnerObligations(m.rollID)
-    -- Peers close it from the LC_RESULT:NONE announced just above.
-    KART.LC.Council.CloseCouncilTab(m.rollID, true)
+    KART.LC.Council.CloseCouncilTab(m.rollID)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_MANUAL_REVOKED, itemLink))
 end
 
@@ -2056,8 +2059,6 @@ KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = 
     function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
 KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
-KASC:RegisterMessage("LC_CLOSE_TAB", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) KART.LC.Council.HandleCloseTab(payload, ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.
 KASC:RegisterMessage("LC_SYNC_REQUEST", { payload = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end)

@@ -795,7 +795,7 @@ function Trade.HandleResult(payload, senderKey)
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (SendAddonMessage never echoes to the sender). Without this, peers keep a ghost council tab
         -- with stale votes and a stale gold winner highlight from any prior assignment on this roll.
-        KART.LC.Council.CloseCouncilTab(rollID, true)
+        KART.LC.Council.CloseCouncilTab(rollID)
         return
     end
 
