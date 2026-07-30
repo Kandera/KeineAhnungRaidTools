@@ -57,6 +57,7 @@ dofile("tests/test_lc_collectible.lua")
 dofile("tests/test_lc_relevance.lua")
 dofile("tests/test_lc_buttonconfig.lua")
 dofile("tests/test_lc_baseflow.lua")
+dofile("tests/test_lc_churn.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -131,6 +131,25 @@ that must win the items has it off: `OnStartLootRoll` returns early, so no force
 no vote windows anywhere, while Auto-Pass raiders keep passing. Workaround until fixed: toggle the
 session by hand after every reload.
 
+**Worse than described, confirmed by `tests/test_lc_churn.lua` 2026-07-30.** The reloaded owner does
+not merely fail to recover — they actively tear the session down for everyone else. They are still
+the loot owner, so `LC.HandleStateRequest` answers every incoming `LC_STATE_REQ` with `LC_ACTIVE:0`,
+one whisper per asker, and each recipient runs `LC.ClearAllRolls`. Message trace from the harness,
+after Kandera reloads mid-distribution and one roster change follows:
+
+```
+Haerri   LC_STATE_REQ  -> RAID
+Kandera  LC_ACTIVE:0   -> Haerri-Blackmoore
+Wuusch   LC_STATE_REQ  -> RAID
+Kandera  LC_ACTIVE:0   -> Wuusch-Blackmoore
+...
+```
+
+The whisper-instead-of-broadcast fix already in `HandleStateRequest` limits the blast radius to
+whoever asks; it does not stop it. Anyone whose latches re-arm (see `LC.CheckRaidJoin`) asks, so in a
+raid where people join and leave constantly this reaches everyone. This is the second mechanism
+behind "session geht rando zu".
+
 ## B31 — post-reload recovery hangs on an event that may never come again
 
 `LC.CheckRaidJoin` is wired to `GROUP_ROSTER_UPDATE` only. `PLAYER_ENTERING_WORLD` is registered and

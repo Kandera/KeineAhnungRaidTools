@@ -73,13 +73,27 @@ end
 -- Driven, not real: a test advances the clock deliberately so a retry or a confirmation delay can
 -- be observed instead of waited for. KARTTEST.now is the same clock GetTime() reports.
 KARTTEST.timers = {}
+
+-- A delayed callback belongs to the client that scheduled it, and must run as that client -- the
+-- session prompt, the raid-exit confirmation and the config retry are all C_Timer.After work that
+-- asks who "player" is and sends addon messages. Firing them with nobody active made a raid-exit
+-- confirmation re-read the group as still grouped and cancel itself. tests/raidsim.lua fills these
+-- two hooks in; with no simulator loaded they stay nil and timers behave as they always did.
+KARTTEST.CaptureContext = nil   -- () -> token describing whoever is executing now
+KARTTEST.RestoreContext = nil   -- (token) -> the token that was in force before
+
+local function captureContext()
+    return KARTTEST.CaptureContext and KARTTEST.CaptureContext() or nil
+end
+
 _G.C_Timer = {
     After = function(delay, fn)
-        KARTTEST.timers[#KARTTEST.timers + 1] = { at = KARTTEST.now + (delay or 0), fn = fn }
+        KARTTEST.timers[#KARTTEST.timers + 1] =
+            { at = KARTTEST.now + (delay or 0), fn = fn, ctx = captureContext() }
     end,
     NewTicker = function(_, fn) return { Cancel = function() end, _fn = fn } end,
     NewTimer = function(delay, fn)
-        local entry = { at = KARTTEST.now + (delay or 0), fn = fn }
+        local entry = { at = KARTTEST.now + (delay or 0), fn = fn, ctx = captureContext() }
         KARTTEST.timers[#KARTTEST.timers + 1] = entry
         return { Cancel = function() entry.fn = function() end end }
     end,
@@ -95,15 +109,26 @@ function KARTTEST.AdvanceTime(seconds)
         if not next_ or next_.at > target then break end
         table.remove(KARTTEST.timers, 1)
         KARTTEST.now = next_.at
+        local restore = KARTTEST.RestoreContext
+        local prev = restore and restore(next_.ctx)
         next_.fn()
+        if restore then restore(prev) end
         ran = ran + 1
     end
     KARTTEST.now = target
     return ran
 end
-function _G.IsInRaid() return isRaid end
-function _G.IsInGroup() return count > 0 end
-function _G.GetNumGroupMembers() return count end
+-- One client's group APIs can be made to disagree with the rest of the raid's. Two real situations
+-- need that: someone who actually ports out, and -- the one that cost a session mid-boss -- the
+-- moment during any roster change where the APIs briefly report no group at all on ONE machine
+-- while everyone else reads normally. A shared flag cannot express either.
+KARTTEST.solo = {} -- [unitToken] = true: this client alone reads the world as ungrouped
+local function isSolo()
+    return KARTTEST.activeUnit ~= nil and KARTTEST.solo[KARTTEST.activeUnit] == true
+end
+function _G.IsInRaid() if isSolo() then return false end return isRaid end
+function _G.IsInGroup() if isSolo() then return false end return count > 0 end
+function _G.GetNumGroupMembers() if isSolo() then return 0 end return count end
 function _G.Ambiguate(name, mode)
     if mode == "none" then return name end
     return (name:match("^([^%-]+)")) or name
