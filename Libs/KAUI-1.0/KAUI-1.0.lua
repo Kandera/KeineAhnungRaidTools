@@ -452,27 +452,25 @@ function nsProto:RegisterStaticPopup(name, def)
     def.hideOnEscape   = true
     def.preferredIndex = 3
 
-    -- Blizzard's popup frames are fixed at the DIALOG stratum, so a consumer whose windows sit at
-    -- DIALOG or above buries its own confirm dialog behind the window that raised it -- pressing
-    -- the button then looks like it did nothing at all (B8). TOOLTIP rather than GetDialogStrata()
-    -- because a consumer may give some of its windows their own stratum setting (KART's Loot
-    -- Council windows do), and one-above-the-shared-setting would still land under those. Put it
-    -- back on hide: these frames are shared, so a popup shown later by anyone else must be
-    -- unaffected.
-    local userOnShow, userOnHide = def.OnShow, def.OnHide
-    def.OnShow = function(popup, ...)
-        popup.kauiPrevStrata = popup:GetFrameStrata()
-        popup:SetFrameStrata("TOOLTIP")
-        if userOnShow then return userOnShow(popup, ...) end
-    end
-    def.OnHide = function(popup, ...)
-        if popup.kauiPrevStrata then
-            popup:SetFrameStrata(popup.kauiPrevStrata)
-            popup.kauiPrevStrata = nil
-        end
-        if userOnHide then return userOnHide(popup, ...) end
-    end
-
+    -- DO NOT TOUCH THE POPUP FRAME FROM HERE. Not its stratum, not its level, not its parent.
+    --
+    -- An earlier version raised the frame to TOOLTIP in OnShow and restored it in OnHide, so a
+    -- consumer's confirm dialog would not be buried behind the window that raised it (B8). It works,
+    -- and it breaks the game. Blizzard's popup frames are a shared pool -- StaticPopup1, 2, 3 -- and
+    -- an insecure SetFrameStrata on one of them taints that frame for the rest of the session. The
+    -- taint outlives our dialog: the next Blizzard dialog handed the same pooled frame runs its
+    -- OnAccept tainted, and any protected call inside it is refused. Reported from a live raid as
+    --
+    --     ADDON_ACTION_FORBIDDEN ... tried to call the protected function 'UpgradeItem()'
+    --     Blizzard_ItemUpgradeUI ... OnConfirm -> StaticPopup_OnClick
+    --
+    -- with our addon blamed for a dialog it never registered. A player could not upgrade items at
+    -- all until they reloaded. Whatever a buried confirm dialog costs, it is less than that.
+    --
+    -- B8 is therefore open again, and the fix has to come from OUR side of the frame boundary --
+    -- either lowering the consumer's own windows while a popup is up, or building the dialog out of
+    -- our own frames the way KAUI:ApplyPopupArtwork already does everywhere else. Both are ours to
+    -- taint. Blizzard's frames are not.
     StaticPopupDialogs[name] = def ---@diagnostic disable-line: undefined-global
 end
 

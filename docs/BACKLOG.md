@@ -52,6 +52,28 @@ Both default to off, so an untouched install is not exposed to them.
 
 ---
 
+# Tier 0 — reopened
+
+## B55 — confirm dialogs are buried again (was B8), and the old fix must never come back
+
+B8's fix raised Blizzard's popup frame to the `TOOLTIP` stratum on show and restored it on hide. It
+worked, and it broke the game: those frames are a shared pool, an insecure `SetFrameStrata` taints
+the frame for the rest of the session, and the next Blizzard dialog handed that same pooled frame has
+its protected calls refused — reported from a live raid as `ADDON_ACTION_FORBIDDEN ... tried to call
+the protected function 'UpgradeItem()'`, with KART blamed for a dialog it never registered. Players
+could not upgrade items until they reloaded.
+
+The lift is gone as of 2026-07-29, so B8's original symptom is back: a consumer whose windows sit at
+or above `DIALOG` buries its own confirm dialog behind the window that raised it, and pressing the
+button looks like it did nothing.
+
+The fix has to stay on our side of the frame boundary. Two candidates, both taint-free because they
+only touch our own frames: lower the consumer's own windows while one of our popups is up, or stop
+using Blizzard's StaticPopup for our own confirms and build them from `KAUI:ApplyPopupArtwork`, which
+already backs every other window in the addon. Seven call sites use `RegisterStaticPopup` today.
+
+---
+
 # Tier A — the loot flow stops for the whole raid
 
 B29 to B33 share one root: ownership and session state are distributed across clients with no single

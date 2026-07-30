@@ -95,17 +95,15 @@ do
     ns:RegisterStaticPopup("KAUITEST_PLAIN", { text = "x" })
     local def = StaticPopupDialogs["KAUITEST_PLAIN"]
     T.truthy(def, "RegisterStaticPopup stores the definition under its name")
-
-    local popup = FakePopup()
-    def.OnShow(popup)
-    T.eq(popup.strata, "TOOLTIP",
-        "popup is lifted above every window stratum while one of ours is showing")
-    def.OnHide(popup)
-    T.eq(popup.strata, "DIALOG",
-        "popup goes back to the stratum it had, since the frame is shared")
+    T.eq(def.timeout, 0, "the shared modal defaults are applied")
+    T.truthy(def.whileDead, "and usable while dead")
 end
 
--- A consumer's own OnShow/OnHide must survive the wrapping.
+-- The frame must be left alone. Blizzard's popup frames are a shared pool, and an insecure write to
+-- one of them taints it for the session -- the next Blizzard dialog handed that pooled frame then
+-- has its protected calls refused and blames us. This shipped once and stopped players upgrading
+-- items (see the comment on RegisterStaticPopup). A consumer's own handlers must reach the frame
+-- untouched, so if a hook is ever reintroduced here, these assertions are what should stop it.
 do
     local shown, hidden = false, false
     ns:RegisterStaticPopup("KAUITEST_HOOKED", {
@@ -117,12 +115,13 @@ do
 
     local popup = FakePopup()
     def.OnShow(popup)
-    T.truthy(shown, "the consumer's own OnShow still runs")
-    T.eq(popup.strata, "TOOLTIP", "and the lift happened anyway")
+    T.truthy(shown, "the consumer's own OnShow runs")
+    T.eq(popup.strata, "DIALOG", "and the popup frame's stratum was NOT written to")
 
     def.OnHide(popup)
-    T.truthy(hidden, "the consumer's own OnHide still runs")
-    T.eq(popup.strata, "DIALOG", "and the restore happened anyway")
+    T.truthy(hidden, "the consumer's own OnHide runs")
+    T.eq(popup.strata, "DIALOG", "and the frame is still untouched on hide")
+    T.is_nil(popup.kauiPrevStrata, "no bookkeeping field is left on a Blizzard frame")
 end
 
 -- SetPixelBackdrop: a border is a whole physical pixel, whatever the UI scale ------------------
