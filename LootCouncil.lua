@@ -1910,7 +1910,8 @@ local function RevokePriorAward(itemLink)
     LC.Trade.AnnounceResult(m.rollID, "NONE")
     KART.LH.RemoveHistoryForRoll(m.rollID)
     LC.Trade.ClearWinnerObligations(m.rollID)
-    KART.LC.Council.CloseCouncilTab(m.rollID)
+    -- Peers close it from the LC_RESULT:NONE announced just above.
+    KART.LC.Council.CloseCouncilTab(m.rollID, true)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_MANUAL_REVOKED, itemLink))
 end
 
@@ -2043,6 +2044,8 @@ KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = 
     function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
 KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
+KASC:RegisterMessage("LC_CLOSE_TAB", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) KART.LC.Council.HandleCloseTab(payload, ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.
 KASC:RegisterMessage("LC_SYNC_REQUEST", { payload = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleSyncRequest(payload, ctx.sender, ctx.shortName) end)

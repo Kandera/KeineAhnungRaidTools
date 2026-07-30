@@ -332,7 +332,22 @@ end
 
 -- Removes rollID's tab (e.g. "No Winner", or manually dismissed via the tab's own "x"). Switches
 -- to another remaining tab if there is one, otherwise hides the whole panel.
-function Council.CloseCouncilTab(rollID)
+-- noBroadcast is for every close that some other message already accounts for: one that arrived as
+-- LC_CLOSE_TAB, and the revoke paths, which announce LC_RESULT with winner "NONE" and whose peers
+-- close the tab from that (see Trade.HandleResult). Only a click on the tab's own "x" originates a
+-- close, and only that one travels.
+--
+-- Awarding an item deliberately leaves its tab open (reassigning is a first-class feature, see
+-- Trade.DoAssignWinner), which makes closing the tab the gesture that actually ends a round for one
+-- item -- and it was purely local. The lootmaster worked down his strip while every other council
+-- member kept all of it, votes and winner highlight included, until the whole session ended: "die
+-- Items aus den vorherigen Bossen gehen nicht aus dem Lootcouncil Fenster weg" (GitHub #15). Only
+-- the loot owner's close travels; anyone else tidying their own panel is a personal view change and
+-- stays personal.
+function Council.CloseCouncilTab(rollID, noBroadcast)
+    if not noBroadcast and LC.IsLootOwner() and not LC.IsTestRoll(rollID) then
+        LC.SendLC("LC_CLOSE_TAB:" .. rollID)
+    end
     for i = #LC.councilTabs, 1, -1 do
         if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
     end
@@ -353,6 +368,16 @@ function Council.CloseCouncilTab(rollID)
     else
         Council.RefreshCouncilTabs()
     end
+end
+
+-- The loot owner finished with one item. Same authority check as every other message that changes
+-- what the raid is looking at (LC_START, LC_ACTIVE, LC_END_ROUND) -- otherwise any group member
+-- could clear a council panel mid-vote.
+function Council.HandleCloseTab(payload, senderKey)
+    if not LC.IsSenderLootOwner(senderKey) then return end
+    local rollID = tonumber(payload)
+    if not rollID then return end
+    Council.CloseCouncilTab(rollID, true)
 end
 
 -- Rebuilds the vertical tab strip on the left edge of the panel from LC.councilTabs. Each tab
@@ -772,7 +797,8 @@ function Council.CreateCouncilPanel()
             -- loot log still credits the revoked winner.
             KART.LH.RemoveHistoryForRoll(rollID)
             LC.Trade.ClearWinnerObligations(rollID)
-            Council.CloseCouncilTab(rollID)
+            -- Peers close it from the LC_RESULT:NONE announced just above.
+            Council.CloseCouncilTab(rollID, true)
         end
     end)
 
