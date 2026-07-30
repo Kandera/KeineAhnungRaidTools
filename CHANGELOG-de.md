@@ -9,6 +9,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [3.2.2] - 2026-07-29
 ### Behoben
 - **Blizzards eigene Bestätigungsdialoge funktionieren wieder.** Das Aufwerten eines Items konnte bis zum nächsten Reload komplett verweigert werden.
+- **KARTs eigene Bestätigungsdialoge sind wieder sichtbar**, statt hinter dem Fenster aufzugehen, das sie geöffnet hat.
 - **Set-Tokens laufen wieder über das Loot Council**, statt von niemandem normal ausgewürfelt zu werden.
 - **Spielzeuge bleiben aus dem Loot Council heraus**, statt vom Lootmaster einkassiert zu werden.
 - **Items zeigen ihr Symbol auch bei Spielern, deren Client keinen eigenen Loot-Roll hatte**, und ihren Namen sobald das Item bekannt ist, statt die ganze Abstimmung lang ein Fragezeichen.

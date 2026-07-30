@@ -107,7 +107,7 @@ list. `IsSenderCouncil` accepts the loot owner too, so it is strictly wider than
 
 # Tier 0 — reopened
 
-## B55 — confirm dialogs are buried again (was B8), and the old fix must never come back
+## B55 — confirm dialogs are buried again (was B8) — FIXED 2026-07-30, and the old fix must never come back
 
 B8's fix raised Blizzard's popup frame to the `TOOLTIP` stratum on show and restored it on hide. It
 worked, and it broke the game: those frames are a shared pool, an insecure `SetFrameStrata` taints
@@ -120,24 +120,39 @@ The lift is gone as of 2026-07-29, so B8's original symptom is back: a consumer 
 or above `DIALOG` buries its own confirm dialog behind the window that raised it, and pressing the
 button looks like it did nothing.
 
-The fix has to stay on our side of the frame boundary. Two candidates, both taint-free because they
-only touch our own frames: lower the consumer's own windows while one of our popups is up, or stop
-using Blizzard's StaticPopup for our own confirms and build them from `KAUI:ApplyPopupArtwork`, which
-already backs every other window in the addon. Eight call sites use `RegisterStaticPopup` today.
+**FIXED 2026-07-30** by the first of the two candidates: lower our own windows while one of our
+popups is up, rather than lifting Blizzard's frame. (The other candidate — dropping StaticPopup and
+building the confirms out of `KAUI:ApplyPopupArtwork` across all eight call sites — was not needed.)
 
-**Established 2026-07-30, so it is not re-derived:** the cheaper of the two is not as cheap as it
-looks. KAUI keeps its own registry of the frames it manages strata for (`strataFrames`,
-`strataDialogFrames`), but the Loot Council windows deliberately do NOT use it — they carry their own
-list and their own stratum setting (`LC.windowFrames` / `LC.windowDialogs`, see B22). Lowering "our
-windows" therefore has to reach both, which means a hook the library does not have yet rather than a
-few lines inside `RegisterStaticPopup`.
+Every path that sets a stratum goes through `nsProto:CurrentStrata`, so the clamp also covers the two
+cases a one-shot lowering would miss: a window built while the dialog is open (the vote window
+opening on an incoming roll), and a settings or profile change mid-dialog calling `ApplyFrameStrata`.
+Windows configured below `DIALOG` are left alone — they were never buried, and moving them would
+override a player who chose `MEDIUM` on purpose.
 
-Neither candidate is verifiable offline: the harness's frames are stubs and stratum, taint and
-"is it actually on top" are all invisible there. Whichever is built has to be checked in a client.
+The state is a set keyed by the popup frame, not a counter. `StaticPopup_Show` on a dialog that is
+already up reuses the same frame and fires `OnShow` again with no `OnHide` in between; a counter
+would be left one too high and the windows would stay lowered for the rest of the session.
 
-What IS already guarded is the regression that caused this: `tests/test_kaui.lua` observes the popup
-frame through `RegisterStaticPopup` and fails if anything writes its stratum, level or parent, or
-leaves bookkeeping on it. That is a behavioural check on the real code path, not a comment.
+The Loot Council windows keep their own list and their own stratum setting so the module stays
+separable (B22), so KAUI's clamp cannot reach them; they subscribe through the new
+`RegisterPopupYielder`. They are the ones actually in the way — the stand-in prompt is raised while
+the council panel is open, and a raid whose lootmaster has left waits on somebody pressing a button
+they cannot see.
+
+Covered in `tests/test_kaui.lua` (library contract) and `tests/test_lc_chrome.lua` (the real
+stand-in prompt against real Loot Council windows), which needed frame strata to become real state
+in the stubs rather than a swallowed write. Five mutations were run — removing either clamp, dropping
+the subscription, counting instead of keying, and clamping windows that sit below `DIALOG` — and each
+turns its own assertions red.
+
+**Still needs a client.** What the harness can answer is whether the frames move and come back.
+Whether the dialog then actually renders on top, and whether nothing got tainted, cannot be seen
+offline.
+
+The regression that caused all of this stays guarded separately: `tests/test_kaui.lua` observes the
+popup frame through `RegisterStaticPopup` and fails if anything writes its stratum, level or parent,
+or leaves bookkeeping on it.
 
 ---
 
