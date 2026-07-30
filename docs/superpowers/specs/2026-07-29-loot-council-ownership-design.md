@@ -43,6 +43,24 @@ Die tragfähige Umformulierung lautet deshalb nicht „nicht speichern", sondern
 > Ein gespeicherter Schlüssel darf keine **Antwort** mehr sein, sondern nur noch **Eingabe** für
 > eine Prüfung, die bei jedem Lesen gegen das aktuelle Roster läuft.
 
+## Abnahmekriterien aus dem echten Raidbetrieb
+
+Vom Maintainer nachgereicht, und sie sind der Maßstab — kein Entwurf, der eines davon nicht hält,
+ist fertig:
+
+1. **Den Raid mitten in der Lootverteilung zu verlassen ist der Normalfall.** Midnight hat mehrere
+   Raids mit wenigen Bossen, also porten Leute aus einem Raid raus und in den nächsten, *während*
+   noch verteilt wird. Für alle Verbliebenen muss die Verteilung ungestört weiterlaufen.
+2. **Leute reloggen und wechseln ständig den Charakter, und der Lootmaster kann das nicht begleiten.**
+   Er tankt und verteilt gleichzeitig und merkt einen Charakterwechsel oft gar nicht. Ein Client, der
+   neu dazukommt oder neu lädt, muss sich Config und Session-Zustand **selbst** wiederholen. Von Hand
+   nachschieben oder die Session neu starten ist keine zulässige Antwort.
+
+Damit ist jede Lösung ausgeschlossen, die einen Roster-Wechsel als Ausnahme behandelt, die zur
+Wiederherstellung eine Bedienhandlung braucht, oder die erst konvergiert, wenn jemand ein Problem
+bemerkt. Es ist auch der Grund, warum B30 und B31 als raid-anhaltend eingestuft sind und nicht als
+Schönheitsfehler.
+
 ## Modell
 
 ### Eine Ableitung statt drei
