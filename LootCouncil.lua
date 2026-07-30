@@ -7,6 +7,12 @@ KART.LC = KART.LC or {}
 local LC = KART.LC
 
 LC.sessionActive        = false
+-- Whether LC.sessionActive above is an ANSWER or merely a starting value. False after every load and
+-- every reload; true once we have either set the flag ourselves or been told it by the loot owner.
+-- The distinction exists because "no session" and "I have not found out yet" look identical in a
+-- boolean, and the loot owner answering the second as though it were the first ended the session for
+-- everyone who asked them (see LC.HandleStateRequest, backlog B30).
+LC.sessionStateKnown    = false
 LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
@@ -608,8 +614,24 @@ end
 -- role-status label is set while building, before ADDON_LOADED has created the SavedVariable), and
 -- an unguarded read errored out mid-build on a fresh install. ResolveConfigName(nil) returns nil and
 -- IsMe(nil) is false, so "no settings yet" correctly reads as "we don't own the config".
+--
+-- An EMPTY field falls back to the raid leader, the same way LC.IsLootOwner does. Leaving it empty is
+-- a documented setup, and without this fallback it meant nobody owned the config at all: no client
+-- ever received one, so every raider silently used their own vote-button labels, their own minimum
+-- quality and their own roll setting — which defaults to off. A whole raid not rolling, and the
+-- role-status label reporting that all was well (backlog B33). The two ownership derivations
+-- disagreeing was the bug; they now agree.
+--
+-- The fallback stands down as soon as somebody else actually claims the role, so a raid leader with
+-- an empty field cannot fight a named lootmaster over who broadcasts. Note this reads LC.raidConfig,
+-- which ApplyOwnConfig also writes — stable, because a config we applied ourselves names either us
+-- or nobody, and neither takes this branch.
 function LC.IsConfigOwner()
-    return LC.IsMe(LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster))
+    local declaredKey = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
+    if declaredKey then return LC.IsMe(declaredKey) end
+    local synced = LC.raidConfig.lootmaster
+    if synced and synced ~= "" and not LC.IsMe(synced) then return false end
+    return UnitIsGroupLeader("player")
 end
 
 -- Applies OUR OWN settings as the raid config, locally. SendAddonMessage never echoes back to its
@@ -1071,8 +1093,23 @@ end
 -- own sessionActive is still false (the state a fresh /reload starts in, until they answer the
 -- session prompt) would wipe the in-flight rolls of the entire raid. The requester is the only client
 -- that needs the answer, and they have no roll state to lose.
-function LC.HandleStateRequest(requester)
+function LC.HandleStateRequest(requester, requesterKey)
     if not (IsInGroup() and requester) then return end
+    -- The requester is the person we believe owns the session, and ours is running: they have just
+    -- reloaded and lost it. Tell them, because nobody else can — LC.HandleStateRequest's own replies
+    -- below are the loot owner's to send, and after a reload that is the client doing the asking.
+    -- Left unanswered, they come back believing there is no session while twenty other clients are
+    -- still in one: they force-win nothing, every Auto-Pass raider keeps passing, and the item goes
+    -- to a green roll (backlog B30).
+    --
+    -- Only council members and the raid leader answer, so a reload costs a handful of whispers rather
+    -- than one per raider. The claim is accepted only by the person it is about (see
+    -- LC.HandleSessionResume), which is what keeps it safe to send.
+    if LC.sessionActive and requesterKey and not LC.IsLootOwner()
+        and (LC.IsCouncil() or UnitIsGroupLeader("player"))
+        and requesterKey == LC.GetLootOwnerKey() then
+        LC.SendLC("LC_SESSION_RESUME", requester)
+    end
     -- Two owners answer here: the session flag belongs to the loot owner (only they can toggle it,
     -- see LC.SetSessionActive/HandleActive), the config to whoever the lootmaster field names (see
     -- LC.IsConfigOwner). Normally the same person, in which case this sends both.
@@ -1084,9 +1121,40 @@ function LC.HandleStateRequest(requester)
     if LC.sessionActive and LC.IsConfigOwner() then
         LC.BroadcastRaidConfig(requester)
     end
-    if LC.IsLootOwner() then
+    -- Only when our flag is an answer rather than a starting value (see LC.sessionStateKnown). A
+    -- freshly reloaded loot owner is still the loot owner, so without this they replied "session
+    -- off" to every peer that asked, and each recipient ran LC.ClearAllRolls — one whisper per
+    -- asker, until the session the raid was in had been ended for all of them by the one client
+    -- that had simply not caught up yet.
+    if LC.IsLootOwner() and LC.sessionStateKnown then
         LC.SendLC("LC_ACTIVE:" .. (LC.sessionActive and "1" or "0"), requester)
     end
+end
+
+-- A council member (or the raid leader) telling us the session we own is still running, because we
+-- reloaded and it is not running for us. Sent only in reply to our own LC_STATE_REQ, and only by
+-- someone who believes WE own it — see LC.HandleStateRequest.
+--
+-- Accepted only by the person the claim is about: it can turn a session on for the loot owner and
+-- nothing else. Deliberately one-directional — there is no "resume" that turns a session OFF, since
+-- the damage the two directions can do is not remotely symmetric.
+function LC.HandleSessionResume(senderKey)
+    if LC.sessionActive or not IsInGroup() then return end
+    -- The sender has to be someone actually in our group, and the claim has to be about us.
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+    if not LC.IsLootOwner() then return end
+
+    LC.sessionActive     = true
+    LC.sessionStateKnown = true
+    -- The session was never ours to be asked about: it is already running.
+    LC.promptedThisSession = true
+    LC.HideSessionPrompt()
+    -- We are also the config owner (loot and config ownership cannot be split, see LC.HandleActive),
+    -- and a reload left LC.raidConfig and LC.CouncilNamesTable empty — including on ourselves, since
+    -- our own broadcast never comes back to us. Without this the recovered lootmaster has no council
+    -- list and no vote-button config, which is the same silent half-session B33 describes.
+    LC.BroadcastRaidConfig()
+    print("|cff00ff00KART:|r " .. KART.L.LC_SESSION_RESUMED)
 end
 
 -- Whispers the sender's current Loot Council raid-wide-authority settings to targetName as a
@@ -1397,6 +1465,8 @@ end
 
 function LC.SetSessionActive(active)
     LC.sessionActive = active
+    -- We decided it, so our flag is now an answer and may be quoted to peers (see LC.sessionStateKnown).
+    LC.sessionStateKnown = true
     if active then LC.HideSessionPrompt() end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
@@ -1872,6 +1942,8 @@ function LC.HandleActive(value, senderKey)
     if not LC.IsSenderLootOwner(senderKey) then return end
     local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
+    -- The owner told us, so our flag is an answer now (see LC.sessionStateKnown).
+    LC.sessionStateKnown = true
     -- A session started elsewhere makes our own "start one?" question obsolete; leaving the dialog
     -- up invites someone to answer a question that no longer applies.
     if LC.sessionActive then LC.HideSessionPrompt() end
@@ -2148,7 +2220,9 @@ KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled 
 KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleConfig(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
-    function(_, ctx) LC.HandleStateRequest(ctx.sender) end)
+    function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
+KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },
+    function(_, ctx) LC.HandleSessionResume(ctx:Key()) end)
 KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.

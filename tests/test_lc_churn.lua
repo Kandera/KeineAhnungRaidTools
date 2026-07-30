@@ -153,7 +153,13 @@ do
     Drop(sim, 87, F.GLOVES)
 
     local lm = RaidSim.Reload(sim, "Kandera")
+    RaidSim.ClearLog(sim)
     RosterSettles(sim)
+
+    -- The half that did the damage: a freshly loaded owner's "no session" is not an answer, and
+    -- must not be quoted at anybody.
+    T.eq(#RaidSim.Sent(sim, "LC_ACTIVE:0"), 0,
+        "a reloaded lootmaster never tells anyone the session is off (B30)")
 
     for _, c in ipairs(sim.clients) do
         if c ~= lm then

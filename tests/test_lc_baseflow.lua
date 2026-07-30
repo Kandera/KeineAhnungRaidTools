@@ -285,6 +285,48 @@ do
         "and agrees with it about how many buttons there were, so no mismatch is flagged")
 end
 
+-- ===================================================================================
+-- A raid that never filled in the Lootmaster field
+-- ===================================================================================
+-- A documented, supported setup: leave it empty and the raid leader stands in. It used to stand in
+-- for the LOOT half only -- the config half had no owner at all, so no client ever received one and
+-- every raider silently ran their own vote buttons, their own minimum quality and their own roll
+-- setting, which defaults to off. A whole raid not rolling, with the role-status label reporting
+-- that all was well (B33).
+do
+    local sim = RaidSim.New(MEMBERS)
+    RaidSim.Install(sim)
+    local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster     = ""        -- deliberately blank
+        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        lm.env.KART_Settings.lcRollsEnabled   = true
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.SetSessionActive(true)
+    end)
+
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
+        "the raid leader owns the config when nobody is named")
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1, "so a config is broadcast after all")
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.sessionActive, true, c.name .. " is in the session")
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true,
+            c.name .. " uses the raid's roll setting rather than their own")
+        T.deep_eq(RaidSim.As(c, c.KART.LC.GetButtonConfig),
+                  RaidSim.As(lm, lm.KART.LC.GetButtonConfig),
+            c.name .. " reads the same vote buttons as the leader")
+    end
+    T.truthy(RaidSim.As(council, council.KART.LC.IsCouncil),
+        "and the council list reached the council")
+
+    Drop(sim, 72, 249331)
+    T.eq(KARTTEST.rolled[72] and KARTTEST.rolled[72][lm.unit], 1,
+        "the stand-in still force-wins the item")
+    T.truthy((lm.KART.LC.rolls[72] or {})[raider.guid], "and the raid rolls on it")
+end
+
 -- Without a config, the same two clients disagree -- documented here because it is exactly what a
 -- raid with no lootmaster set looks like, and the reason that state now prints a warning.
 do

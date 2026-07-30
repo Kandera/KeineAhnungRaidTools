@@ -272,6 +272,7 @@ KART.L_enUS = {
     LC_PROMPT_NO           = "No, thanks",
     LC_SESSION_ON          = "Loot Council activated.",
     LC_SESSION_OFF         = "Loot Council deactivated.",
+    LC_SESSION_RESUMED     = "Loot Council session picked back up — the raid was still in it.",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
     LC_AUTO_VOTED_HINT     = "KART answered this item for you. Click any response to change it.",

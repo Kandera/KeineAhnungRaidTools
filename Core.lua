@@ -438,6 +438,15 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             end)
         end
         if KART.AutoLog then KART.AutoLog.Evaluate() end
+        -- Loot Council session recovery, which until now hung on GROUP_ROSTER_UPDATE alone. That
+        -- event fires when the roster changes; a reload, a disconnect or zoning into the instance
+        -- does not change the roster, and a full raid mid-boss does not change either. So the one
+        -- client that just lost every scrap of session state never asked for it back.
+        --
+        -- This event, by contrast, always fires on a reload and on every zone change — the exact
+        -- moments state goes missing. LC.CheckRaidJoin is idempotent (its own latches see to that)
+        -- and cheap when there is nothing to do (backlog B31).
+        if KART.LC then KART.LC.CheckRaidJoin() end
         -- Retry now that every addon has loaded — a LibDurability provider that loads after KART
         -- (e.g. MRT) is nil at BuffChecker parse time. Idempotent (see KART.RegisterLibDurability).
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end

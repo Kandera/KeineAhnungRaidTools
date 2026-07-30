@@ -272,6 +272,7 @@ KART.L_deDE = {
     LC_PROMPT_NO           = "Nein, danke",
     LC_SESSION_ON          = "Loot Council aktiviert.",
     LC_SESSION_OFF         = "Loot Council deaktiviert.",
+    LC_SESSION_RESUMED     = "Loot-Council-Session wieder übernommen — der Raid war noch drin.",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",
     LC_AUTO_VOTED_HINT     = "KART hat dieses Item für dich beantwortet. Klick eine beliebige Antwort, um das zu ändern.",

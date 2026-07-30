@@ -17,6 +17,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Start-Prompt kann keine bereits laufende Session mehr beenden.**
 - **Das Lootmaster-Feld bleibt bearbeitbar, wenn der Lootmaster den Raid verlassen hat**, damit ein Ersatz eingetragen werden kann.
 - **Beim Start einer Session wird gewarnt, wenn kein Lootmaster eingetragen ist**, statt stillschweigend jeden Raider auf seinen eigenen Vote-Buttons und seiner eigenen Würfe-Einstellung sitzen zu lassen.
+- **Ein Lootmaster, der neu lädt, übernimmt die laufende Session wieder**, statt sie für jeden zu beenden, der bei ihm nachfragt.
+- **Zonenwechsel und Reload stellen die Session wieder her**, ohne auf einen Bei- oder Austritt warten zu müssen.
+- **Ein Raid mit leerem Lootmaster-Feld bekommt wieder eine raidweite Konfiguration**, damit niemand auf seinen eigenen Vote-Buttons und seiner eigenen Würfe-Einstellung sitzen bleibt.
+- **Die Raid-Konfiguration erreicht auch Spieler, deren Client keine Northern-Sky-Nicknames lesen kann.**
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

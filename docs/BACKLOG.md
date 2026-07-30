@@ -122,7 +122,7 @@ by anyone. `raidConfig` survives leaving the raid, so the same client is still s
 Partially mitigated 2026-07-29: the Lootmaster field is editable again once the configured owner is
 absent, so a replacement can name themselves. The stale key itself is still never invalidated.
 
-## B30 — a reloaded loot owner is answered by nobody, and their session stays off
+## B30 — a reloaded loot owner is answered by nobody, and their session stays off — FIXED 2026-07-30
 
 `LC.HandleStateRequest` replies only if `LC.IsLootOwner()`. After the lootmaster reloads their own
 `sessionActive` is false and they send `LC_STATE_REQ`; on every peer the loot owner resolves to the
@@ -150,13 +150,24 @@ whoever asks; it does not stop it. Anyone whose latches re-arm (see `LC.CheckRai
 raid where people join and leave constantly this reaches everyone. This is the second mechanism
 behind "session geht rando zu".
 
-## B31 — post-reload recovery hangs on an event that may never come again
+**Fixed 2026-07-30.** Two halves. `LC.sessionStateKnown` separates "no session" from "I have not
+found out yet", and only the first is ever quoted to a peer — so a freshly loaded owner answers
+nothing instead of answering wrongly. And `LC_SESSION_RESUME`: a council member (or the raid leader)
+whose own session is running replies to an `LC_STATE_REQ` from the person they believe owns it,
+saying so. Accepted only by the client the claim is about, and only in the "on" direction. Covered by
+`tests/test_lc_churn.lua`.
+
+## B31 — post-reload recovery hangs on an event that may never come again — FIXED 2026-07-30
 
 `LC.CheckRaidJoin` is wired to `GROUP_ROSTER_UPDATE` only. `PLAYER_ENTERING_WORLD` is registered and
 handled but never calls it. If the roster event after a reload arrives while `GetNumGroupMembers()`
 is still 0, the exit-confirm branch runs and returns; the re-check a few seconds later sees the raid
 again and returns without ever running the in-raid branch. With a static roster nothing else fires,
 so `LC_STATE_REQ`, the loot-history catch-up and the session prompt are all skipped. Compounds B30.
+
+**Fixed 2026-07-30.** `PLAYER_ENTERING_WORLD` now calls `LC.CheckRaidJoin` too — the one event a
+reload and a zone change always raise. Guarded by a source check in `tests/test_lc_churn.lua`, since
+the harness does not load `Core.lua`.
 
 ## B32 — handing the lootmaster role over broadcasts nothing
 
@@ -165,13 +176,18 @@ Typing a successor's name makes `IsConfigOwner()` false on the outgoing owner's 
 returns without sending. Peers still name the outgoing owner; the successor's own field does not name
 them either. Lands straight in B29.
 
-## B33 — an empty Lootmaster field means no config owner at all
+## B33 — an empty Lootmaster field means no config owner at all — FIXED 2026-07-30
 
 `IsConfigOwner()` reads `KART_Settings.lcLootmaster` directly, so an empty field — an explicitly
 supported setup per `LC_SET_LOOTMASTER_HINT` — means `ApplyOwnConfig` and `BroadcastRaidConfig` both
 return early. `LC.CouncilNamesTable` stays empty on every client, so every listed council member gets
 no panel all night, and every client falls back to its own button labels: the B25 vote-label mismatch
 by another route. The role-status label meanwhile reports that all is well.
+
+**Fixed 2026-07-30.** `IsConfigOwner` falls back to the raid leader on an empty field, exactly as
+`IsLootOwner` already did — the two derivations disagreeing was the bug. The fallback stands down as
+soon as somebody else actually claims the role, so it cannot fight a named lootmaster. Covered by
+`tests/test_lc_baseflow.lua`.
 
 ---
 

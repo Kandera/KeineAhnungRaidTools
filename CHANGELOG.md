@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The start prompt can no longer end a session that is already running.**
 - **The Lootmaster field stays editable when the lootmaster has left the raid**, so a replacement can be named.
 - **Starting a session warns you when no Lootmaster is set**, instead of silently leaving every raider on their own vote buttons and roll setting.
+- **A lootmaster who reloads picks the running session back up**, instead of ending it for everyone who asks them about it.
+- **Zoning in or reloading restores the session**, without waiting for someone to join or leave the raid first.
+- **A raid that leaves the Lootmaster field empty gets a raid-wide config again**, so nobody is left on their own vote buttons and roll setting.
+- **The raid config reaches players whose client cannot read Northern Sky nicknames.**
 
 ## [3.2.1] - 2026-07-29
 ### Fixed
