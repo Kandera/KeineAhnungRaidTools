@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The raid config reaches players whose client cannot read Northern Sky nicknames.**
 - **A lootmaster who leaves the raid no longer blocks loot distribution for everyone.** The raid leader is offered the role and takes it over on confirmation.
 - **Naming a successor in the Lootmaster field is announced to the raid**, instead of leaving everyone pointed at the person who stepped down.
+- **A raid leader with an empty Lootmaster field can no longer displace the lootmaster the raid already has.**
+- **Closing the start prompt with Escape leaves the question open**, instead of silently meaning "no session" for the rest of the evening.
+- **A session that never reached you is asked for again**, rather than once and never.
+- **Revoking an award no longer deletes an unrelated award from a previous raid.**
+- **An item whose data is slow to arrive is waited for**, instead of being skipped without a word.
 
 ## [3.2.1] - 2026-07-29
 ### Fixed

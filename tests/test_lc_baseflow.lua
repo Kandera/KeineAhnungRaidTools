@@ -219,6 +219,32 @@ do
     end
 end
 
+-- Blizzard reissues roll IDs within a session -- several trash corpses looted in the same second is
+-- the documented trigger. When the previous roll is still parked as a bare "item:NNN" placeholder,
+-- because that client had not cached the item yet, the reuse has to be recognised all the same: its
+-- votes, its council tab and its vote row must not be inherited by the item that took its place.
+do
+    local sim, lm, council, raider = NewRaid()
+    KARTTEST.items[249293].cached = false
+    Drop(sim, 40, 249293, { noRollFor = { Odin = true } })
+    T.eq(raider.KART.LC.rollItems[40], "item:249293", "the raider holds the item by ID, uncached")
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(40, 1) end)
+    T.truthy((lm.KART.LC.votes[40] or {})[raider.guid], "and votes on it")
+    KARTTEST.items[249293].cached = nil
+
+    -- The same roll ID comes round again, for something else entirely.
+    KARTTEST.lootRolls[40] = nil
+    Drop(sim, 40, 249331)
+
+    T.truthy(tostring(raider.KART.LC.rollItems[40]):find("Ezzorak", 1, true),
+        "the reused roll shows the NEW item")
+    T.truthy(not (raider.KART.LC.votes[40] or {})[raider.guid],
+        "and does not inherit the previous item's vote")
+    local tabs = 0
+    for _, id in ipairs(council.KART.LC.councilTabs) do if id == 40 then tabs = tabs + 1 end end
+    T.eq(tabs, 1, "and the council has one tab for it, not two")
+end
+
 -- ===================================================================================
 -- What Council must never touch
 -- ===================================================================================

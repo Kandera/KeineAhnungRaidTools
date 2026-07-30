@@ -23,6 +23,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Raid-Konfiguration erreicht auch Spieler, deren Client keine Northern-Sky-Nicknames lesen kann.**
 - **Ein Lootmaster, der den Raid verlässt, blockiert die Lootverteilung nicht mehr für alle.** Der Raidleiter wird gefragt und übernimmt nach Bestätigung.
 - **Das Eintragen eines Nachfolgers im Lootmaster-Feld wird dem Raid mitgeteilt**, statt alle weiter auf den Abgebenden zeigen zu lassen.
+- **Ein Raidleiter mit leerem Lootmaster-Feld kann den eingetragenen Lootmaster nicht mehr verdrängen.**
+- **Den Start-Prompt mit Escape zu schließen lässt die Frage offen**, statt still „keine Session" für den ganzen Abend zu bedeuten.
+- **Eine Session, die dich nie erreicht hat, wird erneut angefragt** — nicht nur ein einziges Mal.
+- **Das Zurücknehmen einer Vergabe löscht keine fremde Vergabe aus einem früheren Raid mehr.**
+- **Auf ein Item, dessen Daten spät eintreffen, wird gewartet**, statt es kommentarlos zu überspringen.
 
 ## [3.2.1] - 2026-07-29
 ### Behoben

@@ -222,6 +222,64 @@ bites someone who joins during the gap. The fix is a way for the loot owner to f
 they are holding, rather than broadcasting their own, which needs `TryAcceptConfig` to stop rewriting
 `raidConfig.lootmaster` to the sender. Not attempted while the base flow is still being proven.
 
+## B59 — a lootmaster whose own field does not resolve owns nothing, and is never told
+
+`LC.IsConfigOwner` compares `LC.IsMe(declaredKey)` with no fallback, and `KASC.Identity.ResolvePlayer`
+returns a pending TEXT key rather than nil for a name it cannot place. A lootmaster who types their
+own Northern Sky nickname on a client that cannot read nicknames therefore owns neither the config
+nor the loot flow, and the raid leader silently takes both roles. The one warning that would say so
+(`LC_LOOTMASTER_UNRESOLVED`) is printed from `LC.SetSessionActive`, which they never reach — they are
+not the loot owner, so they are never offered the session prompt either. The only trace is the
+role-status label in a settings tab they have no reason to open.
+
+Not fixed by adding a chat warning on sight: the same condition is true, harmlessly and constantly,
+for anyone whose Lootmaster field names a person who has not loaded in yet. Wants a rule that can
+tell "names me, unresolvable" apart from "names someone else, not here yet".
+
+## B60 — the lootmaster losing Blizzard's roll is undetected, and the obligation auto-confirms
+
+`ForceWinRoll` rolls and nothing checks the outcome. A raider not running KART can out-roll the
+lootmaster; the council still awards, and `Trade.AddPendingTrade` records an obligation for an item
+the lootmaster does not have. `Trade.OnTradeClosed` then reads "not in my bags" as "already traded"
+and clears the reminder the next time that same winner is traded with for anything at all. The
+reminder tidies itself away, the lootmaster believes it is done, the winner never receives anything,
+and the history says they won it.
+
+## B61 — council membership is only evaluated when the roll starts
+
+`Council.ShowCouncilPanel` is called from the four roll-start sites and nowhere else, and
+`LC.IsCouncil()` is read once, there. A client whose config arrives afterwards — a late retry
+success, a state-request reply — is council from that moment on but has no tab for the items already
+on the table, and cannot assign them. Narrow, because a client that late usually has no tracked items
+either, but real for one that already had them.
+
+## B62 — a client on the previous release rejects everything a stand-in or a successor sends
+
+`LC_RESIGN` and `LC_SESSION_RESUME` are new tokens, and an older client drops an unknown token
+silently. So a v3.2.1 client keeps naming a lootmaster who has left or stepped down, which makes
+`IsSenderLootOwner` reject every `LC_START`, `LC_ACTIVE` and `LC_END_ROUND` from whoever actually
+took over — no vote window on any item, for the rest of the raid, with nothing printed on either
+side. Not fixable from our side; the raid has to be on one version. Worth saying out loud in the
+release notes rather than discovering mid-boss.
+
+## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item
+
+`LC_START` for a real drop is sent from exactly one place, inside the loot owner's own
+`START_LOOT_ROLL` handler. The owner is subject to the same conditions as everyone else — out of
+range, ineligible, released — and there is no fallback broadcaster. Meanwhile every other client's
+Auto-Pass still fires, because that branch does not depend on the owner having acted. Visible outcome
+is identical to "nobody stood in": Blizzard's window opens, every KART user passes, no vote window
+anywhere.
+
+## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow
+
+No config is on the wire until a session starts, so until then every client has
+`raidConfig.lootmaster == ""` and the raid-leader fallback is live on the leader while the lootmaster's
+own field makes them the owner too. Both are offered the session prompt; whoever answers first
+decides. It converges once a named config lands (a named lootmaster now outranks an empty-field
+claim, see B29/B33), but the window is real and the loser of the race spends it with
+`sessionActive == false`.
+
 ---
 
 # Tier B — an item is lost or awarded wrongly, silently

@@ -1972,8 +1972,14 @@ local function PurgeStaleRoll(rollID, newItemID)
 
     if not newItemID or newItemID == "" then return end
     local oldLink = LC.rollItems[rollID]
-    if not LC.IsRealItemLink(oldLink) then return end
-    local oldItemID = oldLink:match("item:(%d+)")
+    -- Match on the itemID, whatever form the tracked value is in. Requiring a full "|Hitem:" link
+    -- here meant a roll still parked as the bare "item:NNN" placeholder -- the state LC.HandleStart
+    -- leaves it in until the item is cached -- could not be recognised as stale at all. A reused
+    -- rollID then kept the previous item's votes, council tab and vote row, and a result for the old
+    -- roll was accepted onto the live one, taking the new item's vote row off a raider's screen
+    -- before they had voted. Narrow window, and rollID reuse within seconds is exactly what this
+    -- function exists for.
+    local oldItemID = type(oldLink) == "string" and oldLink:match("item:(%d+)") or nil
     if not oldItemID or oldItemID == newItemID then return end
 
     for i = #LC.voteListRolls, 1, -1 do
