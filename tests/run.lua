@@ -45,6 +45,7 @@ dofile("Libs/KASC-1.0/KASC-1.0.lua")
 dofile("Libs/KAUI-1.0/KAUI-1.0.lua")
 
 -- Test files. Extended by each task that adds tests.
+dofile("tests/test_locales.lua")
 dofile("tests/test_kautil.lua")
 dofile("tests/test_kags.lua")
 dofile("tests/test_kaui.lua")
