@@ -682,6 +682,16 @@ function LC.IsConfigOwner()
     if declaredKey then return LC.IsMe(declaredKey) end
     local synced = LC.raidConfig.lootmaster
     if synced and synced ~= "" and not LC.IsMe(synced) then return false end
+    -- And only while no config from anybody else is in force. A handover clears the lootmaster on
+    -- every peer (see LC.HandleResign), which without this makes the raid leader the config owner and
+    -- pushes THEIR settings over the raid on the very next roster change: usually an empty council
+    -- list — so every council member loses their panel — and rolls off. The raid keeping the settings
+    -- it agreed on is the whole reason HandleResign clears one field instead of all of them.
+    --
+    -- `fromSelf` is what tells the two apart: a config we applied ourselves leaves the fallback
+    -- available (that is the empty-field setup working as documented), a config we RECEIVED means
+    -- somebody else is the source and we do not get to overwrite it by being promoted.
+    if next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf then return false end
     return UnitIsGroupLeader("player")
 end
 
@@ -826,6 +836,22 @@ local function TryAcceptConfig(payload, senderKey)
     -- stored state and follows a leader change by itself — the same fallback LC.IsSenderLootOwner
     -- already uses.
     if not declaredKey and not UnitIsGroupLeader(unit) then return false, "not-leader" end
+    -- A NAMED lootmaster outranks the raid leader standing in, and this is the guard that makes the
+    -- whole empty-field fallback safe rather than dangerous.
+    --
+    -- Without it, any raid leader whose own LC.raidConfig is momentarily blank — a fresh login, a
+    -- reload, a confirmed raid exit, the moment after a handover — passes LC.IsConfigOwner and
+    -- broadcasts a config declaring nobody. Every peer would then overwrite a perfectly good
+    -- lootmaster GUID with "", along with the council list and the roll setting, replacing them with
+    -- the leader's own: usually no council at all and rolls off. The real lootmaster keeps force-
+    -- winning and broadcasting LC_START, and most of the raid silently drops it, because their
+    -- IsSenderLootOwner has fallen back to "is the sender the raid leader?" and it is not.
+    --
+    -- Worst of all, the leader's own client heals itself seconds later from the whispered reply to
+    -- its state request — so the one person anybody would ask sees nothing wrong.
+    if not declaredKey and KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster or "") then
+        return false, "weaker-claim"
+    end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
@@ -1078,7 +1104,7 @@ function LC.HandleConfig(payload, senderKey)
     -- "not-leader" is silent too: it is a legitimate ignore, not a misconfiguration. Nobody but the
     -- raid leader broadcasts an empty-field config in the first place, so it only shows up across a
     -- leader change or from an older client, and neither is the receiver's problem to report.
-    if reason ~= "no-sender" and reason ~= "not-leader" then
+    if reason ~= "no-sender" and reason ~= "not-leader" and reason ~= "weaker-claim" then
         WarnConfigRejected(reason)
     end
 
@@ -1217,17 +1243,37 @@ function LC.HandleSessionResume(senderKey)
     -- The sender has to be someone actually in our group, and the claim has to be about us.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     if not LC.IsLootOwner() then return end
+    -- No council-membership check on the sender, deliberately, and it was tried: the client
+    -- receiving this has just reloaded, so its council list is empty and it cannot verify anybody.
+    -- The check refused every legitimate resume and would not have caught the case that actually
+    -- worries me — a client that MISSED an LC_ACTIVE:0 and still believes a session is running is
+    -- as likely to be a council member as anyone. Staleness is the risk here, not authority, and a
+    -- membership test does nothing about staleness. The broadcast below is what addresses it.
 
     LC.sessionActive     = true
     LC.sessionStateKnown = true
     -- The session was never ours to be asked about: it is already running.
     LC.promptedThisSession = true
     LC.HideSessionPrompt()
-    -- We are also the config owner (loot and config ownership cannot be split, see LC.HandleActive),
-    -- and a reload left LC.raidConfig and LC.CouncilNamesTable empty — including on ourselves, since
-    -- our own broadcast never comes back to us. Without this the recovered lootmaster has no council
-    -- list and no vote-button config, which is the same silent half-session B33 describes.
-    LC.BroadcastRaidConfig()
+    -- A reload left LC.raidConfig and LC.CouncilNamesTable empty — including on ourselves, since our
+    -- own broadcast never comes back to us. A NAMED lootmaster has to put that back or they come
+    -- home to no council list and no vote-button config, which is the silent half-session B33
+    -- describes.
+    --
+    -- Only a named one, though. A raid leader standing in for an absent lootmaster is the loot owner
+    -- but NOT the config owner (see LC.IsConfigOwner), and their own Lootmaster field is empty by
+    -- definition — broadcasting here would push their settings, usually an empty council list and
+    -- rolls off, over the whole raid, unattended, with nothing but "session resumed" on screen.
+    if LC.IsMe(LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)) then
+        LC.BroadcastRaidConfig()
+    end
+    -- Say it back to the raid. We are the only client entitled to assert the session flag, and until
+    -- now nothing ever re-asserted it: LC_ACTIVE is sent once, has no acknowledgement and no retry,
+    -- so anyone who missed the original was out for the evening. This turns a claim we accepted from
+    -- one peer into something the whole raid converges on — and if the claim was stale, everybody
+    -- gets a session that is visibly on and can be ended, instead of the owner quietly force-winning
+    -- into their bags while nineteen clients have no session at all.
+    LC.SendLC("LC_ACTIVE:1")
     print("|cff00ff00KART:|r " .. KART.L.LC_SESSION_RESUMED)
 end
 
@@ -1438,6 +1484,7 @@ function LC.ShowSessionPrompt()
     -- Asking whether to start a session that is already running is never right, and the caller's
     -- own check happens up to three seconds before this runs.
     if LC.sessionActive or not LC.IsLootOwner() then return end
+    LC.sessionPromptAnswered = false
     if LC.sessionPromptFrame then
         LC.sessionPromptFrame:Show()
         return
@@ -1464,6 +1511,7 @@ function LC.ShowSessionPrompt()
     btnYes:SetSize(135, 28)
     btnYes:SetPoint("BOTTOMLEFT", 15, 12)
     btnYes:SetScript("OnClick", function()
+        LC.sessionPromptAnswered = true
         LC.SetSessionActive(true)
         f:Hide()
     end)
@@ -1483,10 +1531,21 @@ function LC.ShowSessionPrompt()
         -- resolves the split where the raid believes a session runs and this client does not. Not
         -- the only way out -- "Yes" resolves it too, and non-destructively -- but the honest answer
         -- for someone who does not want a session at all.
+        LC.sessionPromptAnswered = true
         if LC.IsLootOwner() and not LC.sessionActive then
             LC.SetSessionActive(false)
         end
         f:Hide()
+    end)
+
+    -- Escape closes anything registered in UISpecialFrames, and it runs NEITHER button handler. The
+    -- "already asked" latch is set before this prompt is even scheduled (see LC.CheckRaidJoin), so
+    -- dismissing it that way used to mean no session for the rest of the evening and no second
+    -- question — the loot owner force-winning nothing while every Auto-Pass raider passed. Pressing
+    -- Escape to clear the screen before a pull is not an answer; put the question back.
+    f:SetScript("OnHide", function()
+        if LC.sessionActive or LC.sessionPromptAnswered then return end
+        LC.promptedThisSession = false
     end)
 
     LC.sessionPromptFrame = f
@@ -1637,6 +1696,33 @@ end
 -- nothing else happens in between; a blip costs the session everything, so the trade is one-sided.
 local RAID_EXIT_CONFIRM_DELAY = 3
 
+-- Seconds between attempts to find out whether a session is running. Bounded and backing off: a raid
+-- where nobody can answer must not have twenty clients asking forever.
+local STATE_REQ_BACKOFF = { 5, 15, 45 }
+
+-- Asks the raid for the session state, and keeps asking until we actually learn it.
+--
+-- One request used to be the whole strategy, latched by LC.stateSyncRequested and never re-armed
+-- inside a raid. That was survivable only as long as the answer always arrived — and it does not.
+-- LC_CONFIG carries a twelve-attempt retry; the LC_ACTIVE that travels with it carries none, and
+-- both are rejected by the same condition (a sender this client cannot resolve yet, normal while a
+-- raid is still forming). So the config would land on the retry and the session flag would not, and
+-- nothing would ever ask again.
+--
+-- That client then holds a perfect config with sessionActive false. LC.HandleStart has no session
+-- gate, so it still shows vote windows and everything LOOKS right — while LC.OnStartLootRoll returns
+-- early, so it never auto-passes and rolls Need in Blizzard's window against the lootmaster's forced
+-- win. An item can leave the loot flow entirely and the only visible trace is a dash in one column.
+local function RequestSessionState(attempt)
+    if LC.sessionStateKnown or KART_Settings.lcModuleEnabled == false then return end
+    if not IsInRaid() then return end
+    LC.SendLC("LC_STATE_REQ")
+    local delay = STATE_REQ_BACKOFF[attempt]
+    if delay then
+        C_Timer.After(delay, function() RequestSessionState(attempt + 1) end)
+    end
+end
+
 local function TearDownForRaidExit()
     local wasActive = LC.sessionActive
     LC.promptedThisSession = false
@@ -1677,9 +1763,14 @@ function LC.CheckStandIn()
     end
     if LC.standInAccepted or LC.standInAsked then return end
     if not UnitIsGroupLeader("player") then return end
-    LC.standInAsked = true
     StaticPopupDialogs["KART_LC_STAND_IN"].text = KART.L.LC_STAND_IN_TEXT
-    StaticPopup_Show("KART_LC_STAND_IN")
+    -- Latch only once the question is actually on screen. StaticPopup_Show returns nil when it could
+    -- not show — Blizzard's popup pool is four slots wide and this addon is not the only thing using
+    -- it — and latching first meant a question nobody ever saw was never asked again, leaving the
+    -- raid with no loot owner at all for the rest of the evening and nothing printed anywhere.
+    if StaticPopup_Show("KART_LC_STAND_IN") then
+        LC.standInAsked = true
+    end
 end
 
 function LC.CheckRaidJoin()
@@ -1692,9 +1783,14 @@ function LC.CheckRaidJoin()
         -- from a live raid report ("no session opened for the boss, and afterwards it asked again").
         -- Confirm the departure once more before believing it.
         if LC.raidExitPending then return end
-        LC.raidExitPending = true
-        C_Timer.After(RAID_EXIT_CONFIRM_DELAY, function()
-            LC.raidExitPending = false
+        -- A cancellable timer, not a bare flag and C_Timer.After. The flag alone was the only thing
+        -- tying a pending confirmation to the departure that armed it, and the rejoin branch below
+        -- cleared the flag without stopping the timer — so a second blip arming a second
+        -- confirmation could be resolved by the FIRST one still in flight, seconds early. That
+        -- shortens the confirmation to whatever is left of the older countdown and tears the session
+        -- down mid-boss, which is the exact outcome this delay exists to prevent.
+        LC.raidExitPending = C_Timer.NewTimer(RAID_EXIT_CONFIRM_DELAY, function()
+            LC.raidExitPending = nil
             if InAnyRaid() then return end -- it was a blip; the session was never in danger
             TearDownForRaidExit()
         end)
@@ -1710,7 +1806,8 @@ function LC.CheckRaidJoin()
     -- history, and never being offered the prompt again. Re-arm them here instead: asking twice
     -- costs one addon message and one dialog, being unable to ask at all costs the evening.
     if LC.raidExitPending then
-        LC.raidExitPending      = false
+        LC.raidExitPending:Cancel()
+        LC.raidExitPending      = nil
         LC.promptedThisSession  = false
         LC.stateSyncRequested   = false
         LC.historySyncRequested = false
@@ -1729,7 +1826,7 @@ function LC.CheckRaidJoin()
     -- request/response shape as the loot-history catch-up above.
     if not LC.stateSyncRequested then
         LC.stateSyncRequested = true
-        LC.SendLC("LC_STATE_REQ")
+        RequestSessionState(1)
     end
 
     LC.CheckStandIn()

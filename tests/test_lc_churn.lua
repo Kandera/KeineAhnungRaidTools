@@ -490,6 +490,217 @@ do
 end
 
 -- ===================================================================================
+-- Ways the session has been lost that no test covered
+-- ===================================================================================
+-- Everything below was found by a review of this work rather than by a raid, and every one of them
+-- ends the same way: an item drops, nothing is force-won, every auto-passing raider passes, and the
+-- item goes to a green roll. That is the failure this whole effort exists to stop.
+
+-- Escape closes anything in UISpecialFrames without running a button handler. The prompt latched
+-- "already asked" BEFORE it was shown, so dismissing it that way meant no session for the rest of
+-- the evening and no second question -- which is verbatim the live report the raid-exit guard was
+-- written from ("no session opened for the boss, and afterwards it asked again").
+do
+    local sim, lm = NewRaid()
+    RaidSim.As(lm, function() lm.KART.LC.SetSessionActive(false) end)
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.promptedThisSession = false
+        lm.KART.LC.CheckRaidJoin()
+    end)
+    KARTTEST.AdvanceTime(5)
+    T.truthy(lm.KART.LC.sessionPromptFrame and lm.KART.LC.sessionPromptFrame:IsShown(),
+        "the lootmaster is asked whether to start a session")
+
+    RaidSim.As(lm, function() lm.KART.LC.sessionPromptFrame:Hide() end)   -- Escape
+    T.eq(lm.KART.LC.promptedThisSession, false,
+        "dismissing the prompt without answering leaves the question open")
+
+    RaidSim.As(lm, function() lm.KART.LC.CheckRaidJoin() end)
+    KARTTEST.AdvanceTime(5)
+    T.truthy(lm.KART.LC.sessionPromptFrame:IsShown(), "so it is asked again on the next roster change")
+
+    -- Answering, either way, is an answer and must not be re-asked.
+    RaidSim.As(lm, function() lm.KART.LC.SetSessionActive(true) end)
+    RaidSim.As(lm, function() lm.KART.LC.sessionPromptFrame:Hide() end)
+    T.eq(lm.KART.LC.promptedThisSession, true, "answering it closes the question")
+end
+
+-- A handover must not cost the raid its settings. Clearing the lootmaster on every peer makes the
+-- raid leader the derived config owner, and on the next roster change they broadcast their OWN
+-- settings over the raid: council list gone, rolls off, vote labels changed mid-session.
+do
+    local sim = NewRaid()
+    RaidSim.Promote(sim, "Wuusch")            -- the lootmaster is not the raid leader
+    local lm, odin, successor = sim.byName.Kandera, sim.byName.Odin, sim.byName.Haerri
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster = "Haerri"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    RosterSettles(sim)
+
+    T.truthy(RaidSim.As(successor, successor.KART.LC.IsCouncil),
+        "a council member is still council after the lootmaster steps down")
+    T.eq(RaidSim.As(odin, odin.KART.LC.GetRollsEnabled), true,
+        "and the raid keeps its roll setting")
+    T.deep_eq(RaidSim.As(odin, odin.KART.LC.GetButtonConfig),
+              RaidSim.As(successor, successor.KART.LC.GetButtonConfig),
+        "and everyone still reads the same vote buttons")
+end
+
+-- The stand-in leader reloads. A council member tells them the session is running -- they must not
+-- take that as licence to push their own settings over the raid. Their own Lootmaster field is
+-- empty, which is the documented setup, so their config would carry an empty council list.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    local stand = RaidSim.Promote(sim, "Haerri")
+    RosterSettles(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+
+    local odin = sim.byName.Odin
+    local labelsBefore = RaidSim.As(odin, odin.KART.LC.GetButtonConfig)
+    RaidSim.Reload(sim, "Haerri")
+    RosterSettles(sim)
+
+    T.eq(sim.byName.Haerri.KART.LC.sessionActive, true, "the reloaded stand-in is back in the session")
+    T.eq(RaidSim.As(odin, odin.KART.LC.GetRollsEnabled), true, "and the raid kept its roll setting")
+    T.deep_eq(RaidSim.As(odin, odin.KART.LC.GetButtonConfig), labelsBefore,
+        "and its vote buttons")
+    T.truthy(RaidSim.As(sim.byName.Wuusch, sim.byName.Wuusch.KART.LC.IsCouncil),
+        "and its council")
+end
+
+-- A session flag that never arrives. The config has a retry budget; the session flag it is paired
+-- with had none, and the state request that would have asked again was a one-shot latch. A client
+-- could therefore sit out the whole raid holding a perfectly good config with no session -- getting
+-- vote windows, so nothing looked wrong, while never auto-passing and rolling Need against the
+-- lootmaster's forced win.
+do
+    local sim, lm = NewRaid()
+    RaidSim.Blackhole(sim, "LC_ACTIVE")
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    T.eq(torvi.KART.LC.sessionActive, false, "the lost session flag really is lost")
+    T.eq(torvi.KART.LC.raidConfig.lootmaster, lm.guid, "while the config arrived normally")
+
+    RaidSim.Deliver(sim, "LC_ACTIVE")
+    KARTTEST.AdvanceTime(60)            -- the state request's own retry budget
+    T.eq(torvi.KART.LC.sessionActive, true,
+        "a client that never learned the session state asks again until it does")
+end
+
+-- Two roster blips inside one confirmation window. The confirmation timer was never cancelled when
+-- the raid came back, so the second blip inherited the first one's countdown and could be confirmed
+-- almost immediately -- tearing down the session and every tracked roll mid-boss, which is exactly
+-- what the confirmation exists to prevent.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 96, F.GLOVES)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(96, 1) end)
+
+    KARTTEST.solo[lm.unit] = true
+    RaidSim.As(lm, function() lm.KART.LC.CheckRaidJoin() end)      -- blip one
+    KARTTEST.AdvanceTime(0.5)
+    KARTTEST.solo[lm.unit] = nil
+    RaidSim.As(lm, function() lm.KART.LC.CheckRaidJoin() end)      -- back
+    KARTTEST.AdvanceTime(2.4)
+    KARTTEST.solo[lm.unit] = true
+    RaidSim.As(lm, function() lm.KART.LC.CheckRaidJoin() end)      -- blip two, 0.1s before t=3
+    KARTTEST.AdvanceTime(0.2)
+    KARTTEST.solo[lm.unit] = nil
+
+    T.eq(lm.KART.LC.sessionActive, true, "a second blip gets its own full confirmation window")
+    T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[96]),
+        "so the item being distributed survives it")
+    T.truthy((lm.KART.LC.votes[96] or {})[raider.guid], "and the votes already cast survive it")
+end
+
+-- ===================================================================================
+-- When the lootmaster is NOT the raid leader
+-- ===================================================================================
+-- Every authority check in the addon falls back to the raid leader, and the default fixture cannot
+-- tell that fallback apart from the real answer because one person holds both roles there. Splitting
+-- them exposes a class of failure that was invisible: a raid leader with an empty Lootmaster field
+-- who, for a moment, believes the config is theirs to distribute.
+
+-- The raid leader reloads. For a moment they know nothing, and by the empty-field rule that makes
+-- them the config owner -- so they broadcast a config naming nobody. It must not displace the
+-- lootmaster the raid already has, nor the council list, nor the roll setting. What made this so
+-- expensive is that the leader's own client heals itself seconds later from the reply to its state
+-- request, so the one person anybody would ask sees nothing wrong.
+do
+    local sim, lm, _, raider, leader = F.NewSplitRaid()
+    Drop(sim, 97, F.GLOVES)
+
+    RaidSim.Reload(sim, leader.name)
+    RosterSettles(sim)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.raidConfig.lootmaster, lm.guid, c.name .. " still names the real lootmaster")
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true, c.name .. " still has the raid's rolls")
+    end
+    T.truthy(RaidSim.As(sim.byName.Haerri, sim.byName.Haerri.KART.LC.IsCouncil),
+        "and the council is still the council")
+
+    -- And the loot flow still works, which is the only thing that actually matters.
+    Drop(sim, 98, F.WEAPON)
+    T.eq(KARTTEST.rolled[98] and KARTTEST.rolled[98][lm.unit], 1, "the lootmaster still force-wins")
+    for _, c in ipairs(sim.clients) do
+        T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[98]), c.name .. " still sees the item")
+    end
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(98, 1) end)
+    T.truthy((lm.KART.LC.votes[98] or {})[raider.guid], "and votes still reach the council")
+end
+
+-- Raid lead changes in a raid that never named a lootmaster. The new leader must not overwrite the
+-- settings the raid is already using with their own empty ones.
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local first = sim.byName.Kandera
+    RaidSim.As(first, function()
+        first.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
+        first.env.KART_Settings.lcRollsEnabled   = true
+        first.KART.LC.ApplyOwnConfig()
+        first.KART.LC.SetSessionActive(true)
+    end)
+    RosterSettles(sim)
+
+    RaidSim.Promote(sim, "Nara")     -- somebody else takes raid lead
+    RosterSettles(sim)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true,
+            c.name .. " keeps the raid's roll setting across a raid-lead change")
+    end
+    T.truthy(RaidSim.As(sim.byName.Haerri, sim.byName.Haerri.KART.LC.IsCouncil),
+        "and the council survives it")
+end
+
+-- The stand-in question could not be shown -- Blizzard's popup pool is four slots wide and this
+-- addon is not the only thing using it. Latching "already asked" before checking that left the raid
+-- with no loot owner at all and nothing on anyone's screen.
+do
+    local sim = NewRaid()
+    RaidSim.Leave(sim, "Kandera")
+    local stand = RaidSim.Promote(sim, "Haerri")
+
+    KARTTEST.popupsBlocked = true
+    RosterSettles(sim)
+    KARTTEST.popupsBlocked = false
+    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner), "nobody stood in while the ask failed")
+
+    RosterSettles(sim)
+    T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "so the question is put again rather than silently dropped")
+    T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "and the raid gets a loot owner")
+end
+
+-- ===================================================================================
 -- Zoning: the event that fires on a reload when the roster never changes again -- B31
 -- ===================================================================================
 -- A source check rather than a simulation, because the wiring under test lives in Core.lua's event

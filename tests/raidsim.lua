@@ -273,6 +273,13 @@ function RaidSim.Install(sim)
         local from = RaidSim.active
         if not from then error("raidsim: a message was sent with no active client", 0) end
         sim.log[#sim.log + 1] = { from = from.name, msg = msg, channel = channel, target = target }
+        -- A message that leaves but never lands. Blizzard's chat rate limiter drops the overflow
+        -- SILENTLY and SendAddonMessage's return code is discarded, so the sender cannot tell -- and
+        -- an addon whose recovery depends on one unacknowledged message has no way back. Anything
+        -- important enough to lose has to be tested against losing it.
+        for token in pairs(sim.blackholed or {}) do
+            if msg:sub(1, #token) == token then return end
+        end
         local sender = from.name .. "-" .. from.realm
         for _, to in ipairs(sim.clients) do
             if to ~= from and (channel ~= "WHISPER" or target == sender or target == to.name
@@ -293,5 +300,15 @@ function RaidSim.Sent(sim, token)
 end
 
 function RaidSim.ClearLog(sim) sim.log = {} end
+
+-- Messages starting with `token` are sent but never delivered, until Deliver puts them back.
+function RaidSim.Blackhole(sim, token)
+    sim.blackholed = sim.blackholed or {}
+    sim.blackholed[token] = true
+end
+
+function RaidSim.Deliver(sim, token)
+    if sim.blackholed then sim.blackholed[token] = nil end
+end
 
 return RaidSim

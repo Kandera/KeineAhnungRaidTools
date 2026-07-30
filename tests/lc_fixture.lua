@@ -80,6 +80,17 @@ function F.NewRaid()
     return sim, lm, council, raider
 end
 
+-- The same raid, with the two roles held by DIFFERENT people: Kandera hands out the loot, Wuusch
+-- leads the raid. This is the normal shape in a guild where the tank leads and someone else has time
+-- to distribute, and every authority check in the addon has a raid-leader fallback that the default
+-- fixture cannot tell apart from the real answer, because there both roles are the same person.
+-- A whole class of ownership bug is invisible without this.
+function F.NewSplitRaid()
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.Promote(sim, "Wuusch")
+    return sim, lm, council, raider, sim.byName.Wuusch
+end
+
 -- One item drops. Blizzard raises START_LOOT_ROLL on every eligible client independently; the loot
 -- owner's handler is what broadcasts LC_START to the rest, so running them in this order is the
 -- realistic case and also the awkward one (peers hear about the roll before their own event).

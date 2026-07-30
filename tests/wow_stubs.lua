@@ -215,10 +215,26 @@ function _G.CreateFrame(_, name, _, _)
     function f:GetRegions() return nil end
     function f:GetID() return 0 end
 
+    -- Show/Hide fire their scripts, because closing a window is a real event in this addon and not
+    -- only a rendering concern: Escape closes anything registered in UISpecialFrames without running
+    -- any button handler, so OnHide is the ONLY place a dialog can notice it was dismissed rather
+    -- than answered. A stub that swallowed it made that whole class of bug invisible.
     local shown = true
-    function f:Show() shown = true; return f end
-    function f:Hide() shown = false; return f end
-    function f:SetShown(v) shown = not not v; return f end
+    local function fire(f_, script)
+        local handler = f_:GetScript(script)
+        if handler then handler(f_) end
+    end
+    function f:Show()
+        local was = shown; shown = true
+        if not was then fire(f, "OnShow") end
+        return f
+    end
+    function f:Hide()
+        local was = shown; shown = false
+        if was then fire(f, "OnHide") end
+        return f
+    end
+    function f:SetShown(v) if v then return f:Show() end return f:Hide() end
     function f:IsShown() return shown end
     function f:IsVisible() return shown end
 
@@ -454,7 +470,11 @@ KARTTEST.popups = {}
 -- `owner` is whichever client raised it. A dialog is one player's screen: without this, a test could
 -- accept a popup that was shown to somebody else entirely, and "the raid leader was asked" would be
 -- indistinguishable from "everyone was asked".
+-- The real one returns nil when it could not show the dialog -- all four popup slots are in use, or
+-- the name was never registered. Callers that latch "already asked" before checking that return
+-- value burn the latch on a question nobody was shown. KARTTEST.popupsBlocked models a full pool.
 function _G.StaticPopup_Show(which, a, b, data)
+    if KARTTEST.popupsBlocked then return nil end
     KARTTEST.popups[#KARTTEST.popups + 1] =
         { which = which, a = a, b = b, data = data, owner = KARTTEST.activeUnit }
     return { data = data }
