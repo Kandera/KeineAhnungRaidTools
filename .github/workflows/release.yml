@@ -21,14 +21,27 @@ jobs:
 
       - name: Build zip
         run: |
+          # Same contents CurseForge gets: this list mirrors .pkgmeta's `ignore:`
+          # block, plus the build leftovers the BigWigs packager strips on its own
+          # (.git, dist, .pkgmeta). Keep the two in step -- a GitHub download that
+          # differs from the CurseForge one is a difference nobody thinks to check.
           mkdir -p dist/KeineAhnungRaidTools
           rsync -a \
             --exclude='.git' \
-            --exclude='.github' \
             --exclude='dist' \
-            --exclude='tests' \
+            --exclude='.pkgmeta' \
+            --exclude='.github' \
+            --exclude='.vscode' \
+            --exclude='.gitignore' \
             --exclude='.luacheckrc' \
+            --exclude='tests' \
             --exclude='docs' \
+            --exclude='README.md' \
+            --exclude='README-de.md' \
+            --exclude='CHANGELOG-de.md' \
+            --exclude='LICENSE' \
+            --exclude='KAimg.jpg' \
+            --exclude='CLAUDE.md' \
             . dist/KeineAhnungRaidTools/
           cd dist
           zip -r "../KeineAhnungRaidTools-${{ steps.version.outputs.VERSION }}.zip" KeineAhnungRaidTools/

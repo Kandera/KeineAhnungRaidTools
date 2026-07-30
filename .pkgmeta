@@ -16,3 +16,4 @@ ignore:
   - tests
   - .luacheckrc
   - docs
+  - CLAUDE.md
