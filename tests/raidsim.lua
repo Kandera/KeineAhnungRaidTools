@@ -21,6 +21,7 @@ local RaidSim = {}
 -- options UI and pull in MainFrame, and nothing in the loot flow needs them.
 local CLIENT_FILES = {
     "Locales/enUS.lua",
+    "Locales/deDE.lua",
     "Utils.lua",
     "LootHistory.lua",
     "LootCouncil.lua",
@@ -99,10 +100,22 @@ function RaidSim.New(members)
         RaidSim.active = client
         for _, path in ipairs(CLIENT_FILES) do loadInto(client, path) end
 
-        -- KART.L is assembled by Core.lua, which the harness does not load.
-        client.KART.L = client.KART.L_enUS
+        -- KART.L is assembled by Core.lua, which the harness does not load: English first, then the
+        -- German file laid over it, exactly as Core does. A client's language is part of its
+        -- identity here because it changes what its DEFAULT vote buttons are called -- "Other"
+        -- against "Sonstiges" -- so two clients that never received a raid config disagree about
+        -- what the same vote index means. Mixed languages are normal in this guild.
+        client.locale = m.locale or "enUS"
+        client.KART.L = {}
+        for k, v in pairs(client.KART.L_enUS) do client.KART.L[k] = v end
+        if client.locale == "deDE" then
+            for k, v in pairs(client.KART.L_deDE or {}) do client.KART.L[k] = v end
+        end
 
-        -- Defaults, the way Core.lua's ADDON_LOADED applies them.
+        -- Defaults, the way Core.lua's ADDON_LOADED applies them -- including localising the vote
+        -- buttons BEFORE the merge, which is what makes a German and an English client start from
+        -- different words when no raid config has reached them.
+        client.KART.Defaults.lcButtonLabels = client.KART.L.LC_DEFAULT_BUTTONS
         client.KAUtil.MergeDefaults(client.env.KART_Settings, client.KART.Defaults)
         client.env.KART_Settings.lcModuleEnabled = true
 

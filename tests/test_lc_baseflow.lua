@@ -19,10 +19,27 @@ KARTTEST.AddItem({ id = 249293, name = "Weight of Command", quality = 4, ilvl = 
 KARTTEST.AddItem({ id = 249364, name = "Voidcured Unraveled Nullcore", quality = 4, ilvl = 285,
                    classID = 15, subclassID = 0, bind = 1 })
 
+-- A council of three plus two plain raiders. More than one council member is the point: the whole
+-- feature is several people deciding together, and a "council" of one cannot show a tally going out
+-- of sync, a straw poll disagreeing, or a second council member's assignment reaching the first.
+--
+-- Every raider also runs a DIFFERENT combination of the personal switches, because a raid where
+-- everyone is on defaults is a raid nobody has. The base flow has to hold for all of them at once:
+-- whatever someone has switched on for themselves, the council must still see their answer.
+local SETTINGS = {
+    Kandera = {},                                                    -- lootmaster, defaults
+    Haerri  = { lcAutoPass = false },                                -- clicks Blizzard's roll himself
+    Wuusch  = { lcHideIrrelevant = true },                           -- hides what he cannot equip
+    Odin    = { lcAutoTransmogVote = true },                         -- wants the appearances
+    Nara    = { lcHideIrrelevant = true, lcAutoTransmogVote = true },-- both
+}
+
 local MEMBERS = {
-    { name = "Kandera", realm = "Blackmoore", guid = "Player-1-K", class = "DEATHKNIGHT", leader = true },
-    { name = "Haerri",  realm = "Blackmoore", guid = "Player-1-H", class = "DRUID" },
-    { name = "Odin",    realm = "Blackmoore", guid = "Player-1-O", class = "MAGE" },
+    { name = "Kandera", realm = "Blackmoore", guid = "Player-1-K", class = "DEATHKNIGHT", leader = true, locale = "deDE" },
+    { name = "Haerri",  realm = "Blackmoore", guid = "Player-1-H", class = "DRUID",       locale = "deDE" },
+    { name = "Wuusch",  realm = "Blackmoore", guid = "Player-1-W", class = "PALADIN",     locale = "enUS" },
+    { name = "Odin",    realm = "Blackmoore", guid = "Player-1-O", class = "MAGE",        locale = "enUS" },
+    { name = "Nara",    realm = "Blackmoore", guid = "Player-1-N", class = "PRIEST",      locale = "deDE" },
 }
 
 -- Builds a raid whose lootmaster is Kandera and whose council is Kandera + Haerri, then starts the
@@ -35,14 +52,24 @@ local function NewRaid()
 
     local lm, council, raider = sim.byName.Kandera, sim.byName.Haerri, sim.byName.Odin
 
+    for name, opts in pairs(SETTINGS) do
+        local c = sim.byName[name]
+        for k, v in pairs(opts) do c.env.KART_Settings[k] = v end
+    end
+
     RaidSim.As(lm, function()
         lm.env.KART_Settings.lcLootmaster     = "Kandera"
-        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri"
+        lm.env.KART_Settings.lcCouncilMembers = "Kandera;Haerri;Wuusch"
         lm.env.KART_Settings.lcRollsEnabled   = true
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.SetSessionActive(true)
     end)
     return sim, lm, council, raider
+end
+
+-- Every client the raid config lists as council.
+local function CouncilOf(sim)
+    return { sim.byName.Kandera, sim.byName.Haerri, sim.byName.Wuusch }
 end
 
 -- One item drops. Blizzard raises START_LOOT_ROLL on every eligible client independently; the loot
@@ -193,4 +220,152 @@ do
         "the lootmaster force-wins a tier token (GitHub #14)")
     T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[46]),
         "and every raider gets to vote on it")
+end
+
+-- ===================================================================================
+-- The 1-100 roll: mandatory, from everybody, visible to everybody
+-- ===================================================================================
+-- Opt-in raid-wide, and this raid has it on. It is the council's tie-breaker, so a roll that only
+-- some clients produce is worse than none at all -- that is what "rolls kommen nicht an von allen"
+-- looked like from the council panel.
+do
+    local sim, lm = NewRaid()
+    Drop(sim, 50, 249331)
+
+    local rolls = lm.KART.LC.rolls[50] or {}
+    for _, c in ipairs(sim.clients) do
+        local r = rolls[c.guid]
+        T.truthy(r, "the lootmaster sees a roll from " .. c.name)
+        T.truthy(type(r) == "number" and r >= 1 and r <= 100,
+            c.name .. "'s roll is a number between 1 and 100")
+    end
+
+    -- Every council member scores against the same numbers, so they must agree exactly.
+    for _, c in ipairs(CouncilOf(sim)) do
+        for _, other in ipairs(sim.clients) do
+            T.eq((c.KART.LC.rolls[50] or {})[other.guid], rolls[other.guid],
+                c.name .. " sees the same roll for " .. other.name .. " as the lootmaster does")
+        end
+    end
+
+    -- Exactly one roll per client per item: rolling twice would let someone re-roll a bad number.
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL:50:"), #sim.clients,
+        "each client broadcast its roll exactly once")
+end
+
+-- With rolls switched off raid-wide, nobody rolls -- and nobody half-rolls.
+do
+    local sim, lm = NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    Drop(sim, 51, 249331)
+    for _, c in ipairs(sim.clients) do
+        T.truthy(not (lm.KART.LC.rolls[51] or {})[c.guid],
+            "with rolls off raid-wide, " .. c.name .. " did not roll")
+    end
+end
+
+-- ===================================================================================
+-- The council decides together
+-- ===================================================================================
+do
+    local sim, lm, _, raider = NewRaid()
+    local nara = sim.byName.Nara
+    Drop(sim, 52, 249331)
+
+    -- Both raiders declare an interest.
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(52, 1) end)
+    RaidSim.As(nara,   function() nara.KART.LC.Vote.CastVote(52, 2) end)
+
+    -- Every council member sees both, identically. A council scoring different ballots is the
+    -- failure that cannot be noticed from inside the game.
+    for _, c in ipairs(CouncilOf(sim)) do
+        local v = c.KART.LC.votes[52] or {}
+        T.eq(v[raider.guid] and v[raider.guid].idx, 1, c.name .. " sees Odin's vote")
+        T.eq(v[nara.guid] and v[nara.guid].idx, 2, c.name .. " sees Nara's vote")
+    end
+
+    -- The straw poll: two council members pick Odin, one picks Nara.
+    local council = CouncilOf(sim)
+    RaidSim.As(council[1], function() council[1].KART.LC.Vote.ToggleCouncilVote(52, raider.guid) end)
+    RaidSim.As(council[2], function() council[2].KART.LC.Vote.ToggleCouncilVote(52, raider.guid) end)
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, nara.guid) end)
+
+    for _, c in ipairs(council) do
+        local poll = c.KART.LC.councilVotes[52] or {}
+        T.eq(poll[council[1].guid], raider.guid, c.name .. " sees Kandera's pick")
+        T.eq(poll[council[2].guid], raider.guid, c.name .. " sees Haerri's pick")
+        T.eq(poll[council[3].guid], nara.guid,   c.name .. " sees Wuusch's pick")
+    end
+
+    -- Clicking the same candidate again retracts, and that reaches everyone too.
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(52, nara.guid) end)
+    for _, c in ipairs(council) do
+        T.truthy(not (c.KART.LC.councilVotes[52] or {})[council[3].guid],
+            c.name .. " sees Wuusch's pick retracted")
+    end
+end
+
+-- A council member who is not the lootmaster may award, and everyone converges on it -- including
+-- the lootmaster, who is the one who physically holds the item.
+do
+    local sim, lm, council, raider = NewRaid()
+    Drop(sim, 53, 249331)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(53, 1) end)
+
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(53, raider.guid, "BIS") end)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.assignedWinners[53], raider.guid,
+            c.name .. " agrees on the winner a non-lootmaster council member picked")
+    end
+    T.truthy(lm.KART.LC.pendingTrades and next(lm.KART.LC.pendingTrades),
+        "and the lootmaster -- not the assigner -- is the one reminded to trade it")
+end
+
+-- ===================================================================================
+-- German and English clients in one raid must read the same vote the same way
+-- ===================================================================================
+-- The default button labels are localised -- "Other" against "Sonstiges" -- so language is a real
+-- source of the one failure that cannot be seen from inside the game: two clients resolving the
+-- same vote index to different words. The raid config is what makes them agree, which is also why
+-- a raid where nobody distributes one is dangerous rather than merely degraded.
+do
+    local sim, lm = NewRaid()
+    local de, en = sim.byName.Haerri, sim.byName.Wuusch
+    T.eq(de.locale, "deDE", "the raid really does contain a German client")
+    T.eq(en.locale, "enUS", "and an English one")
+
+    local labelsOf = function(c)
+        local out = {}
+        for i, def in ipairs(RaidSim.As(c, c.KART.LC.GetButtonConfig)) do out[i] = def.label end
+        return out
+    end
+
+    T.deep_eq(labelsOf(de), labelsOf(en),
+        "with a raid config in force, a German and an English client read identical vote buttons")
+    T.deep_eq(labelsOf(lm), labelsOf(en), "and both match the lootmaster's")
+
+    -- And the votes themselves survive the round trip between them.
+    Drop(sim, 54, 249331)
+    RaidSim.As(en, function() en.KART.LC.Vote.CastVote(54, 4) end)
+    local v = de.KART.LC.votes[54] or {}
+    T.eq(v[en.guid] and v[en.guid].idx, 4, "a German client receives an English client's vote")
+    T.eq(v[en.guid] and v[en.guid].count, #RaidSim.As(de, de.KART.LC.GetButtonConfig),
+        "and agrees with it about how many buttons there were, so no mismatch is flagged")
+end
+
+-- Without a config, the same two clients disagree -- documented here because it is exactly what a
+-- raid with no lootmaster set looks like, and the reason that state now prints a warning.
+do
+    local sim = RaidSim.New(MEMBERS)
+    RaidSim.Install(sim)
+    local de, en = sim.byName.Haerri, sim.byName.Wuusch
+    local deLabels = RaidSim.As(de, de.KART.LC.GetButtonConfig)
+    local enLabels = RaidSim.As(en, en.KART.LC.GetButtonConfig)
+    T.truthy(deLabels[4].label ~= enLabels[4].label,
+        "with no config distributed, a German and an English client name the same index differently")
 end
