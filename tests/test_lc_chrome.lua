@@ -177,7 +177,12 @@ do
         local src = assert(io.open(name, "r")):read("*a")
         local starts, clamps = 0, 0
         for _ in src:gmatch("OnDragStart") do starts = starts + 1 end
-        for _ in src:gmatch("SetClampedToScreen") do clamps = clamps + 1 end
+        -- The ARGUMENT, not just the call. Counting occurrences of the name alone let
+        -- SetClampedToScreen(false) through, which is the one edit that reintroduces the bug while
+        -- looking like the fix -- found by mutating all eight and watching nothing go red.
+        for _ in src:gmatch("SetClampedToScreen%(true%)") do clamps = clamps + 1 end
+        T.truthy(not src:find("SetClampedToScreen(false)", 1, true),
+            name .. " does not switch the clamp back off")
         -- One clamp per movable frame. A header that drags its parent shares the parent's clamp, so
         -- the count is allowed to be lower than the number of drag handlers -- never zero while
         -- there is one, which is the shape the bug had.
