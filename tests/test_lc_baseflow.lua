@@ -872,3 +872,38 @@ do
     F.AssertAgreed(sim, 82, "about an item a council member decided")
     F.AssertAgreed(sim, 81, "about the first item, still, after a second one was decided")
 end
+
+-- Four items nobody wants: "No Winner" on each clears the card for the WHOLE council ---------------
+-- The maintainer's question, and it is the difference between "the round is finished" and "I am
+-- still looking at cards from the last boss". End Round wipes everything everywhere in one go; No
+-- Winner is per item -- so what has to hold is that four No Winners leave every council member with
+-- an empty panel, not just the person who pressed them.
+--
+-- Asserted through the real button's own sequence, not through a helper: AnnounceResult sends the
+-- LC_RESULT, and the three lines after it are the local half the sender has to run itself because
+-- KASC drops its own message on the way back.
+do
+    local sim, lm, council = F.NewRaid()
+    local corvin = sim.byName.Corvin
+    local ids = { 120, 121, 122, 123 }
+    for _, id in ipairs(ids) do F.Drop(sim, id, F.GLOVES) end
+
+    T.eq(#lm.KART.LC.councilTabs, 4, "the lootmaster has four cards")
+    T.eq(#council.KART.LC.councilTabs, 4, "and so does every other council member")
+    T.eq(#corvin.KART.LC.councilTabs, 4, "all three of them")
+
+    for _, id in ipairs(ids) do
+        RaidSim.As(lm, function()
+            lm.KART.LC.Trade.AnnounceResult(id, "NONE")
+            lm.KART.LH.RemoveHistoryForRoll(id, lm.KART.LC.rollItems[id])
+            lm.KART.LC.Trade.ClearWinnerObligations(id)
+            lm.KART.LC.Council.CloseCouncilTab(id)
+        end)
+    end
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(#lm.KART.LC.councilTabs, 0, "the lootmaster's panel is empty")
+    T.eq(#council.KART.LC.councilTabs, 0, "and the other council members' panels are too")
+    T.eq(#corvin.KART.LC.councilTabs, 0, "every one of them")
+    T.eq(#sim.byName.Alric.KART.LC.voteListRolls, 0, "and no raider is left with a vote window open")
+end
