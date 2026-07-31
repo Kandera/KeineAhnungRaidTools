@@ -94,6 +94,30 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
         end
     else
         KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
+        -- B48: the assigner does not process its own broadcast (KASC drops the echo), so a council
+        -- member who assigns an item to THEMSELVES never built their own "you are owed this" entry --
+        -- while the lootmaster's queue was correct all along. The one person who cannot see what they
+        -- are owed is the one who decided it.
+        --
+        -- Mirrors Trade.HandleResult's branch exactly, including the "I already hold it" case: being
+        -- the loot owner means the item is in our own bags and there is nobody to be owed by.
+        -- Unconditionally first: reassigning AWAY from ourselves has to take our own entry off, and
+        -- reassigning to ourselves twice must not stack two. The branch below re-adds it if we are
+        -- still the winner.
+        local myKey = (KASC.Identity.ResolvePlayer("player"))
+        if Trade.RemoveOwedEntry(rollID) then Trade.RefreshOwedReminderIfShown() end
+        if playerKey == myKey and not LC.IsLootOwner() then
+            local ownerKey = LC.GetLootOwnerKey()
+            if ownerKey ~= "" then
+                LC.owedToMe = LC.owedToMe or {}
+                table.insert(LC.owedToMe, {
+                    rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = ownerKey,
+                    lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time(),
+                })
+                Trade.RefreshOwedReminder()
+            end
+        end
+
         -- Only the client that actually holds the item needs a trade reminder — an assigner who
         -- isn't the loot owner never physically has the item to trade.
         --
@@ -194,19 +218,52 @@ local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
 -- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
 -- removal path; this is purely a heads-up so the lootmaster doesn't lose the item to the timer.
 function Trade.CheckTradeTimeouts()
-    if #LC.pendingTrades == 0 then
+    -- The winner's own obligations die on the same clock and are pruned below, so returning here
+    -- when WE owe nothing left every "you are owed this" row alive for ever on the one client that
+    -- has no pending trade of its own -- which is every winner who is not the lootmaster (B47).
+    if #LC.pendingTrades == 0 and #(LC.owedToMe or {}) == 0 then
         if LC.tradeTimeoutTicker then LC.tradeTimeoutTicker:Cancel() LC.tradeTimeoutTicker = nil end
         return
     end
     local now = time() -- matches the wall-clock lootedAt stamps (see Trade.AddPendingTrade)
-    for _, entry in ipairs(LC.pendingTrades) do
+    local dropped = false
+    -- Backwards: entries are removed in place, and Blizzard's window is wall clock, so several can
+    -- come due in the same pass after a long fight.
+    for i = #LC.pendingTrades, 1, -1 do
+        local entry = LC.pendingTrades[i]
         local elapsed = now - (entry.lootedAt or now)
-        if not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
+        -- B47: past the trade window the item cannot be handed over at all, and the entry stopped
+        -- being a reminder and became a lie -- indistinguishable in the list from the ones that are
+        -- still live, so the lootmaster works through it and cannot tell which rows are still worth
+        -- chasing. Pruning happened only in Trade.RestorePersistedTrades, which runs at ADDON_LOADED:
+        -- a raid that never reloads never prunes.
+        if elapsed >= TRADE_TIMEOUT_SECONDS then
+            table.remove(LC.pendingTrades, i)
+            dropped = true
+            -- Said once, at the moment it dies. A row vanishing from the reminder list on its own is
+            -- exactly the kind of silence this addon has been paying for elsewhere.
+            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
+                entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)))
+        elseif not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
             entry.timeoutWarned = true
             local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
             print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
                 entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
         end
+    end
+    if dropped then Trade.RefreshTradeReminderIfShown() end
+
+    -- The winner's own side of the same obligation, dying on the same clock.
+    if LC.owedToMe then
+        local owedDropped = false
+        for i = #LC.owedToMe, 1, -1 do
+            local e = LC.owedToMe[i]
+            if (now - (e.lootedAt or now)) >= TRADE_TIMEOUT_SECONDS then
+                table.remove(LC.owedToMe, i)
+                owedDropped = true
+            end
+        end
+        if owedDropped then Trade.RefreshOwedReminderIfShown() end
     end
 end
 
@@ -313,9 +370,10 @@ end
 -- Single implementation on purpose: the local button and the peer-side LC_RESULT handler used to do
 -- this separately, and the local one silently didn't, so whoever clicked "No Winner" kept a trade
 -- reminder for an award nobody else still had.
-function Trade.ClearWinnerObligations(rollID)
-    Trade.RemovePendingTrade(rollID) -- refreshes the trade reminder itself
-    if not LC.owedToMe then return end
+-- Drops our own "you are owed this" entry for one roll. Split out because the assigner now builds
+-- its own (B48) and a reassignment must not leave two behind.
+function Trade.RemoveOwedEntry(rollID)
+    if not LC.owedToMe then return false end
     local changed = false
     for i = #LC.owedToMe, 1, -1 do
         if LC.owedToMe[i].rollID == rollID then
@@ -323,7 +381,12 @@ function Trade.ClearWinnerObligations(rollID)
             changed = true
         end
     end
-    if changed then Trade.RefreshOwedReminderIfShown() end
+    return changed
+end
+
+function Trade.ClearWinnerObligations(rollID)
+    Trade.RemovePendingTrade(rollID) -- refreshes the trade reminder itself
+    if Trade.RemoveOwedEntry(rollID) then Trade.RefreshOwedReminderIfShown() end
 end
 
 -- Drops LC.rollLootedAt stamps that are older than the Bind-on-Pickup trade window.

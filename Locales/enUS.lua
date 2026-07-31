@@ -280,6 +280,7 @@ KART.L_enUS = {
     LC_STATUS_UNTOLD       = "never told",
     LC_STATUS_TRACKED      = "Rolls tracked: %d (%d mine to hand out), vote rows: %d, council tabs: %d",
     LC_CONFIG_OWNER_NOW    = "You hold raid lead, so the raid now runs on YOUR Loot Council settings -- vote buttons, minimum quality, rolls and the council list. Check them if you did not expect this.",
+    LC_TRADE_EXPIRED       = "The trade window for %s (%s) has closed -- it can no longer be handed over, so the reminder is gone.",
     LC_AWARD_CLASH         = "Two council members awarded %s at the same moment -- %s and %s. KART kept %s on every client so the raid does not disagree; reassign it if that is wrong.",
     LC_LOOTMASTER_EMPTY_WARN = "Your Lootmaster field is empty, so the raid is running on your settings only for as long as you hold raid lead. Put a name in it -- your own is fine -- or the raid loses them without a word.",
     LC_ROLL_UNANNOUNCED    ="%s was never announced to the loot council, so it was not passed for you -- roll on Blizzard's window yourself if you want it.",

@@ -220,3 +220,76 @@ do
     T.truthy(not out:find(lead.KART.L.LC_LOOTMASTER_EMPTY_WARN, 1, true),
         "and hears nothing, because the config is theirs by declaration")
 end
+
+-- B48: the council member who assigns to THEMSELVES gets their own reminder -----------------------
+-- LC.owedToMe was populated only in Trade.HandleResult, i.e. only on a client that RECEIVED the
+-- broadcast. The assigner does not process its own message, so the one person who could not see what
+-- they were owed was the one who decided it -- while the lootmaster's queue was correct all along.
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 84, F.GLOVES)
+
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(84, council.guid, "BIS", nil)   -- to themselves
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(#council.KART.LC.owedToMe, 1, "the assigner is owed the item they gave themselves")
+    T.eq(council.KART.LC.owedToMe[1].rollID, 84, "for the right roll")
+    T.eq(council.KART.LC.owedToMe[1].lootmasterKey, lm.guid, "by the person actually holding it")
+    T.eq(council.KART.LC.owedToMe[1].lootedAt, council.KART.LC.rollLootedAt[84],
+        "dated from the drop, so it expires with the real trade window")
+    T.eq(#lm.KART.LC.pendingTrades, 1, "and the loot owner owes it")
+
+    -- Reassigning away from themselves must take it back off, not leave a second one behind.
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(84, sim.byName.Alric.guid, "Upgrade", nil)
+        KARTTEST.AcceptPopup("KART_LC_REASSIGN_CONFIRM")
+    end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(#council.KART.LC.owedToMe, 0, "reassigning away drops their own entry")
+end
+
+do
+    -- The loot owner assigning to themselves is owed nothing: the item is already in their bags.
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 85, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(85, lm.guid, "BIS", nil) end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(#lm.KART.LC.owedToMe, 0, "the loot owner is not owed an item they are holding")
+end
+
+-- B47: an obligation past Blizzard's trade window is dropped, not left looking live ---------------
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 86, F.GLOVES)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(86, council.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "the lootmaster owes the item")
+    T.eq(#council.KART.LC.owedToMe, 1, "and the winner is owed it")
+
+    -- Past four hours it cannot be handed over at all. Pruning used to happen only in
+    -- Trade.RestorePersistedTrades, which runs at ADDON_LOADED -- so a raid that never reloads never
+    -- pruned, and dead rows sat in the list indistinguishable from live ones.
+    KARTTEST.AdvanceTime(TRADE_WINDOW + 60)
+    RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts)
+    RaidSim.As(council, council.KART.LC.Trade.CheckTradeTimeouts)
+
+    T.eq(#lm.KART.LC.pendingTrades, 0, "the dead obligation is gone from the lootmaster's list")
+    T.eq(#council.KART.LC.owedToMe, 0, "and from the winner's")
+end
+
+do
+    -- One still inside the window is untouched, so the pruning cannot be "clear the list".
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 87, F.GLOVES)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(87, council.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(TRADE_WINDOW - 600)          -- ten minutes left
+    RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "an obligation still inside the window survives")
+end
