@@ -404,15 +404,23 @@ function Council.RefreshCouncilTabs()
             -- To the LEFT of the tab, away from the panel: the strip is anchored outside the panel's
             -- left edge (see f.tabStrip), so the tab's right side faces the panel body and an x
             -- placed there would hover over the rows.
-            tab.closeBtn:SetPoint("RIGHT", tab, "LEFT", -2, 0)
-            -- Sitting OUTSIDE the tab is what keeps it from being clicked by accident, and it also
-            -- left a two-pixel strip between the two where NEITHER is hovered. Moving the mouse
-            -- towards the x crossed that strip, the tab's OnLeave fired, the x hid, and it could
-            -- never be reached at all -- reported from use. Widen the button's HIT rect (negative
-            -- insets grow it; its size and position are untouched) so it reaches back over the gap
-            -- and onto the tab's edge. The hover is then continuous and the IsMouseOver checks
-            -- below see what the eye sees.
-            tab.closeBtn:SetHitRectInsets(0, -4, 0, 0)
+            --
+            -- Its right edge sits ONE pixel inside the tab, and that single pixel is the whole point:
+            -- with any gap at all there is a strip where neither frame is hovered, and everything
+            -- that keeps this button on screen asks IsMouseOver. Moving towards the x crossed that
+            -- strip, the tab's OnLeave fired, the x hid, and it could not be clicked -- reported from
+            -- use, twice.
+            --
+            -- The first attempt widened the button's HIT rect over the gap instead. That made the gap
+            -- clickable and fixed nothing, because IsMouseOver measures the frame's RECT and not its
+            -- hit rect: every check still read "not over" in exactly the strip the cursor had to
+            -- cross, so a refresh -- one lands on every vote -- hid the button out from under the
+            -- pointer, sometimes between the press and the release. Hence "sometimes it works".
+            --
+            -- Overlapping by a pixel instead of merely touching survives fractional UI scales, where
+            -- two edges that meet exactly can still round apart. The button is still entirely outside
+            -- the tab's visible body, which is what stops it being clicked by accident.
+            tab.closeBtn:SetPoint("RIGHT", tab, "LEFT", 1, 0)
             tab.closeBtn:Hide()
             tab.closeBtn.bg = tab.closeBtn:CreateTexture(nil, "BACKGROUND")
             tab.closeBtn.bg:SetAllPoints()

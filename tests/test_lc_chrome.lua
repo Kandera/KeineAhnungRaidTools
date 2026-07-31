@@ -88,8 +88,13 @@ end)
 do
     local panel = assert(io.open("LootCouncilPanel.lua", "r")):read("*a")
 
-    T.truthy(panel:find("tab.closeBtn:SetHitRectInsets(", 1, true),
-        "the close button's hit rect bridges the gap to the tab")
+    -- No gap between the two frames, in either direction. A hit-rect widening does NOT count and is
+    -- what the first attempt got wrong: IsMouseOver measures the frame RECT, so the checks below
+    -- still read "not over" in the strip the cursor has to cross.
+    T.truthy(not panel:find("SetHitRectInsets", 1, true),
+        "the close button is not merely made clickable over a gap")
+    local dx = tonumber(panel:match('tab%.closeBtn:SetPoint%("RIGHT", tab, "LEFT", (%-?%d+),'))
+    T.truthy(dx and dx >= 0, "its rect touches or overlaps the tab, so the hover is continuous")
     T.truthy(panel:find("tab.closeBtn:SetShown(tab:IsMouseOver() or tab.closeBtn:IsMouseOver())", 1, true),
         "and a refresh keeps it shown while the cursor is on the button itself")
 
