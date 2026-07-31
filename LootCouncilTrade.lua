@@ -239,6 +239,7 @@ function Trade.RestorePersistedTrades()
     local store = KART_LCTrades
     store.pending = type(store.pending) == "table" and store.pending or {}
     store.owed    = type(store.owed) == "table" and store.owed or {}
+    store.looted  = type(store.looted) == "table" and store.looted or {}
 
     local now = time()
     local function pruneExpired(list)
@@ -257,6 +258,31 @@ function Trade.RestorePersistedTrades()
 
     LC.pendingTrades = store.pending
     LC.owedToMe      = store.owed
+
+    -- The BoP trade clock, kept for the same reason the two lists above are (B34). A roll that is
+    -- still undecided when the lootmaster reloads leaves them holding a real item whose stamp was
+    -- memory-only: when the council finally awards it, Trade.AddPendingTrade and the winner's
+    -- owedToMe entry both fall back to time() at AWARD time, so a four-hour countdown that started
+    -- when the boss died restarts from zero. KART then promises hours that do not exist and warns
+    -- about a deadline that has already passed -- the item is simply lost, silently. Exactly the
+    -- failure Trade.PruneExpiredLootStamps describes for a cleared stamp; a reload did the same
+    -- thing to it.
+    --
+    -- Rebuilt rather than adopted wholesale: keys are rollIDs and a SavedVariables file can come
+    -- back malformed or with them stringified, and the whole table is read by rollID lookup, so one
+    -- bad key would go unnoticed until an award landed on it. Same defensiveness as pruneExpired.
+    local looted = {}
+    for rollID, stamp in pairs(store.looted) do
+        local id = tonumber(rollID)
+        if id and type(stamp) == "number" and (now - stamp) < TRADE_TIMEOUT_SECONDS then
+            looted[id] = stamp
+        end
+    end
+    -- Points the live table at the saved one, so every later stamp persists without a save step --
+    -- the same arrangement as pendingTrades/owedToMe above. Assigned back into the store because the
+    -- loop above built a new table.
+    store.looted     = looted
+    LC.rollLootedAt  = looted
 
     if #LC.pendingTrades > 0 then
         Trade.RefreshTradeReminder()

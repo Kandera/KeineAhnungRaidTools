@@ -176,7 +176,15 @@ function _G.GetNormalizedRealmName() return KARTTEST.realm end
 -- Time --------------------------------------------------------------------------------
 KARTTEST.now = 1000
 function _G.GetTime() return KARTTEST.now end
-_G.time = os.time
+
+-- Wall clock, and it moves with KARTTEST.AdvanceTime like every other clock here. It used to be
+-- os.time directly, which meant the one deadline in this addon that is measured in WALL clock -- the
+-- four-hour Bind-on-Pickup trade window -- could not be advanced by a test at all: no assertion could
+-- reach the timeout warning, the expiry pruning, or what a reload does to the countdown.
+--
+-- Offset from a fixed epoch rather than from the real one, so a failure reproduces tomorrow as well.
+KARTTEST.epoch = 1785000000
+function _G.time() return KARTTEST.epoch + math.floor(KARTTEST.now) end
 
 -- Frames ------------------------------------------------------------------------------
 -- No-op frame: enough for a library that creates an event frame or a scanning tooltip at

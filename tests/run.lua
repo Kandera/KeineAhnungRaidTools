@@ -98,6 +98,13 @@ dofile("tests/test_lc_chrome.lua")
 dofile("tests/test_lc_version.lua")
 dofile("tests/test_lc_autopass.lua")
 dofile("tests/test_lc_churn.lua")
+-- ORDER IS LOAD-BEARING HERE, AND IT SHOULD NOT BE. The addon jitters its own replies with
+-- math.random, and several test_lc_churn.lua assertions turn on which jittered reply lands first --
+-- so inserting a file ANYWHERE above changes the random stream churn starts from and silently
+-- changes what those assertions measure. Reseeding before each file (the obvious fix) makes five of
+-- them fail outright, and that failure is real, not an artifact: see B70 in docs/BACKLOG.md. The
+-- reseeding belongs with that fix, so until then new files go at the END.
+dofile("tests/test_lc_reload.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))

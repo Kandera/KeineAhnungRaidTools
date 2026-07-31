@@ -160,6 +160,48 @@ or leaves bookkeeping on it.
 B29 to B33 share one root: ownership and session state are distributed across clients with no single
 authoritative holder. They want one design pass, not five patches.
 
+## B70 — a raid-lead change during B69's grace leaves the raid with NO config at all — REGRESSION, introduced 2026-07-30
+
+**This is B33 again — the whole raid silently not rolling — and this session's own B69 fix opened it.
+Fix before the raid.** Measured, not deduced; the probe below prints `LC_CONFIG so far: 0` at every
+step.
+
+The sequence, none of it exotic:
+
+1. Somebody with an EMPTY Lootmaster field holds raid lead and starts the session. That is the
+   documented, supported setup (B33) — the leader stands in as loot owner.
+2. Nobody has told them what the raid was already doing, so B69 sets `configClaimUnverified` and
+   holds their config back for `CONFIG_CLAIM_GRACE` (10 seconds).
+3. Raid lead moves to somebody else inside those 10 seconds. A raid forming does this constantly.
+4. The grace expires. `BroadcastRaidConfig` now returns at its own `IsConfigOwner()` check, because
+   the sender is not the leader any more. The held config is dropped on the floor, silently.
+5. The NEW leader never becomes config owner either: `LC.IsConfigOwner`'s raid-leader fallback
+   requires `sessionStartedByUs`, and they were TOLD about the session rather than having declared
+   it. That requirement is deliberate — it is the other half of B69 — and correct on its own.
+
+Result: no `LC_CONFIG` is ever broadcast by anyone, for the rest of the raid. Every client falls back
+to its own `lcRollsEnabled`, which defaults to off. Nothing is printed. This is exactly the evening
+the guild already lost once.
+
+**Why it was not caught.** `tests/test_lc_churn.lua` covers this scenario and was passing — by luck.
+The addon jitters its replies with `math.random`, and whether a peer's jittered answer lands inside
+the first 5 seconds (clearing `configClaimUnverified` before the promote) depends on the random
+stream that whatever test file ran previously happened to leave behind. Reseeding `math.random`
+before each test file — which is plainly the right thing, since otherwise adding any test file
+anywhere silently changes what a later file measures — turns five of those assertions red. That
+reseeding is written and was taken back out; it belongs with this fix, and `tests/run.lua` carries a
+comment saying so.
+
+**Do not fix it by deleting the grace.** Tried and measured: it takes the five promote assertions
+green again but turns two B69 assertions red, so the grace is load-bearing for something else. The
+shape of the real fix is already written into `LC.SetSessionActive`'s own comment — the claim should
+be released when *the asking runs out of attempts*, not after a fixed wall-clock delay that can
+outlive the role it depends on. A reloaded leader that asks gets answered (peers relay); a leader in
+this hole asks and is met with silence, because nobody ever had a config. That is the distinction
+that separates B69's case from this one, and a timer cannot express it.
+
+Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there.
+
 ## B29 — a departed lootmaster leaves the raid with no loot owner — FIXED 2026-07-30
 
 `LC.raidConfig.lootmaster` is written only by `TryAcceptConfig`/`ApplyOwnConfig` and never
@@ -550,13 +592,41 @@ claim, see B29/B33), but the window is real and the loser of the race spends it 
 
 # Tier B — an item is lost or awarded wrongly, silently
 
-## B34 — a reload mid-roll loses the item entirely
+## B34 — a reload mid-roll loses the item entirely — NARROWED 2026-07-30, and the entry above was wrong
 
 Only `KART_LCTrades` and `KART_LootHistory` are SavedVariables, and `Trade.RestorePersistedTrades`
 only rehydrates decided trades. Everything about an undecided roll — item link, votes, deadlines,
 tabs — is in memory only. The lootmaster force-wins a Bind-on-Pickup item, reloads before the council
 assigns, and `START_LOOT_ROLL` will not fire again: they hold a real item that no client, no saved
 variable and no window still associates with a roll.
+
+**Measured, and the paragraph above overstates it.** The council's award DOES still reach a reloaded
+lootmaster: `Trade.HandleResult` rebuilds the item link from the broadcast payload and creates the
+trade obligation, in the split raid as well as the simple one. Probed before anything was changed.
+
+**What was genuinely lost was the CLOCK, and that is what loses items.** Blizzard's Bind-on-Pickup
+trade window is four hours of *wall* clock from the moment the item was looted. `LC.rollLootedAt` was
+memory-only, so after a reload both `Trade.AddPendingTrade` and the winner's `owedToMe` entry fell
+back to `time()` at AWARD time — a countdown that started when the boss died restarted from zero.
+KART then promised hours that did not exist and would warn about a deadline already past. Exactly the
+failure `Trade.PruneExpiredLootStamps` documents for a cleared stamp; a reload did the same thing to
+it. **Fixed:** the stamps persist alongside the two trade lists in `KART_LCTrades`, pruned by the
+same four-hour rule and rebuilt defensively on load.
+
+The harness could not have caught this before, because `time()` was `os.time` and no test could
+advance a wall clock. It is now offset from `KARTTEST.now` like every other clock.
+
+**Still open, deliberately:** the reloaded lootmaster's own vote row and council tab do not come back,
+so they cannot vote on or award an item they are holding. Another council member can, which is the
+normal case. It only becomes a dead end when the lootmaster is the *only* council member left, and
+`/kart add` is the manual way out. Restoring the windows means persisting open rolls or widening who
+may answer `LC_ROLL_CATCHUP` — `HandleStart` requires `IsSenderLootOwner`, and that trust is not
+worth widening casually. Its own task.
+
+**Also found on the way:** a raider who reloads has no council list until the next roster change, and
+`Trade.HandleResult` refuses an award from a sender it cannot confirm is council — so an award landing
+in that gap is dropped entirely, with no owed entry and no history. A raid produces roster changes
+constantly, so the window is short, but it is real. Not fixed here.
 
 ## B35 — two council members can award the same item at the same time
 
