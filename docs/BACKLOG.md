@@ -257,12 +257,41 @@ re-injecting a config the raid has moved off. They stand down only once C2 reach
 `TryAcceptConfig` — and the window before that is the 0.5%. Bisecting confirmed no single one of the
 three is responsible; reverting `HandleConfigRelay` alone takes 16 down to 10.
 
-**Where to go instead.** The relay is the wrong carrier, because a relay cannot express "this is
-superseded". Ownership is the thing that actually moved: consider letting the declaration, not the
-current raid lead, carry config ownership — a client that declared the session and holds the raid's
-config keeps broadcasting rights until a NAMED lootmaster displaces it, which is a rule
-`TryAcceptConfig` already enforces on the receiving side. That keeps one authoritative source instead
-of creating a second. Check it against B29 before building it.
+### The ownership-based fix was built too, and measurement moved the target
+
+Second attempt, following the note this entry used to end with: make ownership follow the
+DECLARATION rather than the current raid lead (`IsConfigOwner` returns true for a declarer who still
+holds a `fromSelf` config, even without the lead), keep `sessionStartedByUs` through a confirming
+`LC_ACTIVE`, and broadcast when `HandleActive` clears the held-back claim. That last one closes a
+real gap on its own: the note in `HandleActive` saying a "broadcast if we own the config" branch is
+unreachable is true only for a NAMED lootmaster — with an empty field `GetLootmaster()` is `""`,
+`IsSenderLootOwner` falls back to the raid leader, and somebody else's `LC_ACTIVE` IS accepted by a
+client that owns the config. Clearing the flag without sending leaves the config waiting for a roster
+change that may never come.
+
+It still did not converge, and probing why produced the fact that matters most:
+
+    declared      : own=true  unverif=true startedBy=true fromSelf=true  CONFIG=0
+    settle 5s     : own=false unverif=true startedBy=true fromSelf=nil   CONFIG=0
+    promote +5s   : own=false unverif=nil  startedBy=true fromSelf=nil   CONFIG=0
+
+**The declarer has already lost its config at the FIRST roster settle, while still holding raid
+lead.** The promote is a red herring — by the time lead moves there is nothing left to lose. Verified
+byte-identical at HEAD with no changes applied, so this is pre-existing, not something the two
+attempts introduced.
+
+It is also timing-dependent: the committed step-1 test asserts `fromSelf` is still set after exactly
+that sequence and passes, while the same sequence in a probe file placed later in the run — different
+message jitter — loses it. Both orderings are reachable. That is the same order-dependence the
+per-file reseeding exists to remove, and it is why this must be pinned with a deterministic seed
+before anything else is tried.
+
+**Start the next pass here**, not at the lead change: find what clears `raidConfig.fromSelf` on the
+declarer during the first `GROUP_ROSTER_UPDATE` after a session is declared. `ApplyOwnConfig`'s
+not-owner branch is the only local writer that can, and reaching it means `IsConfigOwner()` was
+already false — so the ownership loss comes first and is still unexplained. Instrument
+`IsConfigOwner`'s individual conditions rather than reasoning about them; two attempts have now been
+lost to reasoning about this function instead of measuring it.
 
 Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there. And it needs
 the per-file `math.randomseed` in `tests/run.lua` — written and taken back out twice now, because
