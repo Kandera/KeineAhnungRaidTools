@@ -72,6 +72,73 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
+## B81 — OPEN — a reload loses every /kart add item, and only for the person who reloaded
+
+Found in the live v3.2.2-beta1 test, 2026-07-31. Reproduced in the harness before anything was
+touched:
+
+```
+before the reload   lootmaster: 2 cards, 2 rolls tracked
+after the reload    lootmaster: 0 cards, 0 rolls, session still ACTIVE
+                    every peer: 2 cards, 2 rolls
+```
+
+`/kart lc` then opens nothing, because there is nothing left to open, while `/kart status` correctly
+reports the session as running. The raid is split: the person who is supposed to hand the items out
+cannot see them and everybody else still can.
+
+### Why the existing recovery cannot help
+
+A real drop is recoverable because `LC.SendRollCatchup` re-announces it, and `LC.HandleRollCatchup`
+proves the receiver was entitled to it by asking Blizzard: `if not GetLootRollItemLink(rollID) then
+return end`. That check is the whole reason a late arrival is not pulled into a distribution that was
+already running.
+
+A manually added item has no Blizzard roll behind it at all -- that is the point of `/kart add` --
+so that proof does not exist and the catch-up can never restore one. Nothing else persists them:
+`KART_LCTrades` holds decided trades, `KART_LootHistory` holds awards, and an undecided manual roll
+is in memory only.
+
+### Why it matters more than it looks
+
+`/kart add` is not an edge path here. The tests already say so in their own words: *"the path the
+maintainer used all evening"*. Every evening run that way is one reload away from this.
+
+### The shape a fix would have
+
+Peers already know how to announce a manual roll -- `LC_MANUAL_START`, handled by
+`LC.HandleManualStart`, which has no Blizzard-roll requirement. So the recovery is a manual-roll
+catch-up alongside the existing one, sent in reply to a state request.
+
+The open question is the one the Blizzard check answers for free on the other path: **a state request
+is also what a late JOINER sends**, and a late arrival must not be pulled into a distribution that
+was already running. Real rolls tell the two apart by asking Blizzard; manual rolls have nothing to
+ask. Deciding that is the work, and it is a rule decision rather than a patch -- which is why this is
+recorded rather than guessed at.
+
+## B80 — OPEN — the raid leader is not in the council list, though the rule says they always are
+
+Reported from the live v3.2.2-beta1 test, 2026-07-31, and explicitly NOT blocking the guild release:
+the workaround is to put yourself in the list, which takes one edit.
+
+`LC.IsCouncil` and `LC.IsSenderCouncil` read `LC.CouncilNamesTable`, which is built from the config's
+council list and nothing else. The raid leader owns the config (`docs/OWNERSHIP.md`) but is not
+implied by it, so a leader who designates somebody else as lootmaster and does not name themselves
+sits outside the council: no panel, and their own awards would be rejected by everybody.
+
+Worth deciding rather than patching, because "the raid leader is always council" is a rule and
+belongs in `docs/OWNERSHIP.md` next to the other two if it holds.
+
+## B82 — OPEN — a window can be dragged off the screen in windowed mode with two monitors
+
+Reported from the live v3.2.2-beta1 test, 2026-07-31. Dragging a KART window past the edge of the
+game window leaves it partly or wholly outside, where it cannot be grabbed back.
+
+Blizzard's own frames clamp to the screen (`SetClampedToScreen(true)`), and KART's do not. The fix is
+that call plus, for anything already stranded, a way to bring the windows home -- a stored position
+restored on load is exactly how a window comes back off-screen every session once it has been put
+there.
+
 ## B79 — OPEN, by choice — the tab's x and "No Winner" look alike and do different things
 
 Raised by the maintainer on 2026-07-31, after seeing the sequence measured. Not a defect: both
@@ -108,8 +175,13 @@ The three shapes considered, with what each costs:
 * **Drop the x.** One meaning per button: "No Winner" for one item, End Round for the round.
 
 
-**Standing measurement, 2026-07-31:** 0 of 30000 soak runs disagree. Every defect in Tier 0 is closed;
-what is left there is B79, which is a design question rather than a bug.
+**Standing measurement, 2026-07-31:** 0 of 30000 soak runs disagree, and the Manifest run (C1-C12,
+`tests/test_manifest.lua`) is green.
+
+**The first live test of v3.2.2-beta1 found four things the harness could not.** One is fixed (the
+winner's reminder not clearing when the item arrives). Three are open below: B81, B80 and B82. That
+ratio is the point of running it in a raid at all -- 0 of 30000 and a green Manifest still left a
+reload that loses every `/kart add` item.
 `KART_SOAK_SEEDS=30000` is the deeper run worth doing before a raid night; `KART_SOAK_ONLY=<seed>`
 runs a single one, which is the whole debugger.
 
