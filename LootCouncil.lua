@@ -2800,6 +2800,7 @@ function LC.OnStartLootRoll(rollID, attempt)
     local secs = KART_Settings.lcVoteSeconds or 20
     if isLootmaster then
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
+        LC.Vote.ScheduleVoteCatchup(rollID, secs)
     end
 
     -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between

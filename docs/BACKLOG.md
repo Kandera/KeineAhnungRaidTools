@@ -65,7 +65,7 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
-## B78 — OPEN — a two-second blip costs a raider their vote for good
+## B78 — FIXED 2026-07-31 — a two-second blip cost a raider their vote for good
 
 Found by the soak at 30000 seeds, seeds 9545 and 11091. In both, the client missing a vote was the
 one whose group APIs had just blipped -- the state the maintainer has watched cost a session
@@ -81,10 +81,18 @@ council panel is the one screen where a missing vote changes a decision, and it 
 place to ask for them again: a council member who notices a gap could re-request the tally for a
 live roll, the same way a joiner re-requests the state.
 
-**The soak no longer reports this**, because it was reporting a known protocol limitation on every
-pass and burying new findings -- a blipped client is now dropped from the comparison for rolls that
-were live, exactly as a reloaded one is. That makes recording it here the only thing keeping it
-visible.
+Closed with `LC_VOTE_REQ`: a few seconds before the window shuts, the loot owner asks once for the
+votes on that item and everyone who voted says theirs again, jittered. Asked by the loot owner and
+nobody else -- the same "exactly one broadcaster" rule `LC_START` follows, so three council members
+cannot turn it into three rounds -- and answered to the whole raid rather than to the asker, so every
+client's tally converges rather than only the one that noticed. Each client re-sends its OWN vote and
+nothing else, which needs no trust rules of its own and cannot spread a wrong tally. Three clauses,
+all red when removed: the sender must be the loot owner, the scheduler must still be the loot owner
+when it fires (the role moves mid-round), and the request has to go out at all.
+
+**The soak stopped reporting this** in the same pass -- a blipped client is dropped from the
+comparison for rolls that were live, exactly as a reloaded one is. That exclusion stays: a blip can
+still cost an `LC_RESULT`, which has no catch-up of its own.
 
 ## B77 — FIXED 2026-07-31 — a council member who reloads was overruled on their own re-decision
 

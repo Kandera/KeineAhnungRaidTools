@@ -1495,3 +1495,101 @@ do
     T.eq(#lm.env.KART_LootHistory, 1, "the reassignment replaces it rather than sitting beside it")
     T.eq(lm.env.KART_LootHistory[1].winner, "Bramor", "and names the winner the council settled on")
 end
+
+-- B78: a two-second blip must not cost a raider their vote for good -------------------------------
+-- For a moment one client's group APIs answer "no group" -- the state the maintainer has watched
+-- cost a session mid-boss. While it lasts, KASC rejects every group-gated message on that client,
+-- which is the right guard and a fatal one for the tokens with no retry: LC_VOTE is announced
+-- exactly once and nothing acknowledges it, so whatever was said in those seconds was gone for that
+-- one client, silently, with the raid around them carrying on. Rolls have a catch-up and history has
+-- one; votes had neither, and the council panel is the one screen where a missing vote changes a
+-- decision.
+do
+    local sim, lm, council = NewRaid()
+    local sinja = sim.byName.Sinja
+    Drop(sim, 98, F.GLOVES)
+
+    -- The council member's client blinks out, and somebody votes in that instant.
+    KARTTEST.solo[council.unit] = true
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(98, 2) end)
+    KARTTEST.solo[council.unit] = nil
+
+    T.truthy((lm.KART.LC.votes[98] or {})[sinja.guid], "the raid has the vote")
+    T.is_nil((council.KART.LC.votes[98] or {})[sinja.guid],
+        "and the client that blinked out does not")
+
+    -- The window runs down. Before it closes, the loot owner asks once for the votes on this item
+    -- and everyone who voted says theirs again.
+    KARTTEST.AdvanceTime(25)
+
+    T.truthy((council.KART.LC.votes[98] or {})[sinja.guid],
+        "the catch-up brings it back before the council decides")
+    T.eq((council.KART.LC.votes[98] or {})[sinja.guid].idx, 2, "with the answer they actually gave")
+end
+
+do
+    -- Exactly one client asks. Assigning is open to the whole council and so is the panel, so a
+    -- per-council-member request would turn one round of answers into three -- twenty raiders
+    -- answering three times over is the chat throttle this is supposed to survive, not provoke.
+    -- Same "one broadcaster" rule LC_START follows, and for the same reason.
+    local sim = NewRaid()
+    Drop(sim, 99, F.GLOVES)
+    RaidSim.As(sim.byName.Sinja, function() sim.byName.Sinja.KART.LC.Vote.CastVote(99, 2) end)
+    KARTTEST.AdvanceTime(25)
+
+    local asks = RaidSim.Sent(sim, "LC_VOTE_REQ")
+    T.eq(#asks, 1, "one request for the item, not one per council member")
+    T.eq(asks[1].from, "Bramor", "and it comes from whoever hands out the loot")
+end
+
+do
+    -- ...and a request from anyone else is ignored. The token is a broadcast that makes every client
+    -- in the raid re-send, so a raider who could trigger it at will has a chat-throttle lever on the
+    -- whole raid -- and could aim it at the moment the council is deciding.
+    local sim = NewRaid()
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+    Drop(sim, 100, F.GLOVES)
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(100, 2) end)
+    -- Far enough in that the Auto-Pass answers have all been sent, and short of the loot owner's own
+    -- request -- otherwise the count moves for reasons that have nothing to do with this.
+    KARTTEST.AdvanceTime(10)
+
+    -- Counted exactly: RaidSim.Sent matches on the prefix, so the requests themselves would be
+    -- counted as votes (LC_VOTE_REQ starts with LC_VOTE, the same way LC_ROLL_CATCHUP starts with
+    -- LC_ROLL). The addon's own dispatch is exact; this helper is not.
+    local function votesSent()
+        local n = 0
+        for _, e in ipairs(RaidSim.Sent(sim, "LC_VOTE")) do
+            if e.msg:match("^LC_VOTE:") then n = n + 1 end
+        end
+        return n
+    end
+
+    local before = votesSent()
+    RaidSim.As(alric, function() alric.KART.LC.SendLC("LC_VOTE_REQ:100") end)
+    KARTTEST.AdvanceTime(3)
+    T.eq(votesSent(), before, "a request from a plain raider is answered by nobody")
+
+    -- ...and the guard is not "ignore every request": the loot owner's own, when it comes, is.
+    KARTTEST.AdvanceTime(12)
+    T.truthy(votesSent() > before, "the loot owner's is answered")
+end
+
+do
+    -- The loot role moves mid-round -- the lootmaster ports out and the leader stands in, or the
+    -- leader names somebody else -- and the client that scheduled the request is no longer the one
+    -- entitled to broadcast. It must drop it rather than fire it anyway: two broadcasters is the one
+    -- thing the "exactly one asks" rule above exists to prevent, and a stale one asking is how a
+    -- raid ends up with two rounds of answers from a client nobody would accept a roll from.
+    local sim, lm = NewRaid()
+    Drop(sim, 101, F.GLOVES)
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster = "Merrit"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(25)
+
+    T.eq(#RaidSim.Sent(sim, "LC_VOTE_REQ"), 0,
+        "the client that no longer hands out the loot does not ask")
+end
