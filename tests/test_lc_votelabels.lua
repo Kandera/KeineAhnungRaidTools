@@ -9,7 +9,7 @@ local RaidSim = F.RaidSim
 
 -- B43: a SAME-LENGTH rename slips past a count ----------------------------------------------------
 do
-    local sim, lm, council, raider = F.NewRaid()
+    local sim, lm, _, raider = F.NewRaid()
     F.Drop(sim, 40, F.GLOVES)
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(40, 2) end)
 
@@ -54,9 +54,20 @@ do
 
     T.truthy(castFp ~= RaidSim.As(raider, function() return raider.KART.LC.ButtonFingerprint() end),
         "after the edit their stored fingerprint no longer matches the live set")
-    -- Which is what the badge reads. Telling a raider they voted a label they never clicked is worse
-    -- than telling them nothing.
     T.eq(raider.KART.LC.votedByMe[41], 2, "their index is still recorded")
+
+    -- And the badge itself goes quiet. Telling a raider they voted a label they never clicked is
+    -- worse than telling them nothing, and the rendered text is what they actually read.
+    local function badgeText()
+        RaidSim.As(raider, raider.KART.LC.Vote.RefreshVoteListRows)
+        for _, row in ipairs(raider.KART.LC.voteListRows or {}) do
+            if row.rollID == 41 and row.votedText then return row.votedText:GetText() end
+        end
+        return nil
+    end
+    local after = badgeText()
+    T.truthy(after == nil or after == "" or not after:find("Mainspec", 1, true),
+        "the badge does not name the label the index now points at")
 end
 
 -- B46: a vote for the PREVIOUS item does not land in the new one's tally ---------------------------
