@@ -6,7 +6,7 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.2.2] - 2026-07-29
+## [3.2.2] - 2026-07-31
 ### Behoben
 - **Ein Council-Mitglied, dessen Einstellungen spät ankommen, bekommt die schon laufenden Items trotzdem.**
 - **Wer sich selbst ein Item zuweist, wird jetzt auch daran erinnert.**

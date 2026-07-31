@@ -56,7 +56,7 @@ Both default to off, so an untouched install is not exposed to them.
 
 ## B79 — OPEN, by choice — the tab's x and "No Winner" look alike and do different things
 
-Raised by the maintainer on 2026-08-01, after seeing the sequence measured. Not a defect: both
+Raised by the maintainer on 2026-07-31, after seeing the sequence measured. Not a defect: both
 buttons do what they were written to do. The problem is that you cannot tell from the screen which
 one you pressed.
 
