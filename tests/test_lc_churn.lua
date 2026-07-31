@@ -856,6 +856,20 @@ do
     for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
     KARTTEST.AdvanceTime(5)
 
+    -- The stand-in carries the raid's settings, which is what the Sync Settings button is for: you
+    -- hand your base config to whoever covers for you, so they do not configure from scratch. Under
+    -- the ownership rule the raid runs on the LEADER's settings, so this is the step that has to have
+    -- happened -- and the assertions below are then about the raid agreeing, which is the part that
+    -- used to fail.
+    RaidSim.As(council, function()
+        council.env.KART_Settings.lcButtonLabels    = "BIS;Upgrade;Offspec;Sonstiges;Pass"
+        council.env.KART_Settings.lcCouncilMembers  = "Bramor;Merrit;Corvin"
+        council.env.KART_Settings.lcRollsEnabled    = true
+        council.KART.LC.ApplyOwnConfig()
+        council.KART.LC.BroadcastRaidConfig()
+    end)
+    RosterSettles(sim)
+
     local torvi = RaidSim.Join(sim, NEWCOMER)
     RosterSettles(sim)
     KARTTEST.AdvanceTime(90)
@@ -1019,13 +1033,27 @@ do
     for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
     KARTTEST.AdvanceTime(5)
 
+    -- The stand-in carries the raid's settings, which is what the Sync Settings button is for: you
+    -- hand your base config to whoever covers for you, so they do not configure from scratch. Under
+    -- the ownership rule the raid runs on the LEADER's settings, so this is the step that has to have
+    -- happened -- and the assertions below are then about the raid agreeing, which is the part that
+    -- used to fail.
+    RaidSim.As(council, function()
+        council.env.KART_Settings.lcButtonLabels    = "BIS;Upgrade;Offspec;Sonstiges;Pass"
+        council.env.KART_Settings.lcCouncilMembers  = "Bramor;Merrit;Corvin"
+        council.env.KART_Settings.lcRollsEnabled    = true
+        council.KART.LC.ApplyOwnConfig()
+        council.KART.LC.BroadcastRaidConfig()
+    end)
+    RosterSettles(sim)
+
     local leader = RaidSim.Reload(sim, council.name)
     RaidSim.EnterWorld(sim, council.name)
     RosterSettles(sim)
     KARTTEST.AdvanceTime(60)
 
     T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled), true,
-        "the reloaded leader gets the RAID's roll setting back, not their own default")
+        "the reloaded leader still has the raid's roll setting, from its own SavedVariables")
     T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled),
          RaidSim.As(sim.byName.Alric, sim.byName.Alric.KART.LC.GetRollsEnabled),
         "and agrees with the raiders who never reloaded")
@@ -1122,7 +1150,9 @@ do
 
     -- The opposite, from a client holding a config it actually received, so the assertion above
     -- cannot pass simply by the relay being broken outright.
-    local raider = sim.byName.Alric
+    -- Sinja, not Alric: Alric holds raid lead after the promote above, and the config OWNER sends the
+    -- real thing rather than a relay (LC.RelayRaidConfig's first guard).
+    local raider = sim.byName.Sinja
     T.is_nil(raider.KART.LC.raidConfig.fromSelf, "the raider's config is one it received")
     RaidSim.As(raider, function() raider.KART.LC.RelayRaidConfig("Torvi-TarrenMill") end)
     T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY"), 1, "while a config it received is handed on")
@@ -1223,11 +1253,20 @@ do
     Drop(sim, 70, F.GLOVES)
     Drop(sim, 71, F.WEAPON)
 
-    -- The disagreement itself, stated so a change to either side shows up here.
-    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), true,
-        "the raid leader's own client says it owns the loot flow -- this is what enables the button")
+    -- The disagreement is GONE, and this is where it went. It needed the leader's own client to
+    -- believe it owned the loot flow while its peers held a config naming somebody else -- which
+    -- happened because a reload cleared raidConfig and the empty-field fallback then answered "you".
+    --
+    -- The designation now lives in the LEADER's own settings, and KART_Settings is a SavedVariable,
+    -- so it comes back with them: LC.ApplyOwnConfig writes the real lootmaster straight back in and
+    -- the two answers cannot come apart in the first place. Asserted as agreement rather than
+    -- deleted, so anything that reintroduces the split fails here.
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
+        "the reloaded leader does NOT think it owns the loot flow -- its designation survived")
     T.eq(RaidSim.As(lm, function() return lm.KART.LC.IsSenderLootOwner(leader.guid) end), false,
-        "while its peers do not agree, because they hold a config naming the real lootmaster")
+        "and its peers agree with it, which is what used to be impossible")
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner),
+        "the designated lootmaster still owns the loot flow throughout")
 
     RaidSim.As(leader, leader.KART.LC.EndRound)
     KARTTEST.AdvanceTime(1)
@@ -1256,11 +1295,24 @@ do
     RosterSettles(sim)
     RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
 
-    -- Nobody owns the config in this state, which is what makes it B58 rather than an ordinary join.
+    -- "Nobody owns the config in this state" was the whole premise, and the rework removes it: that
+    -- is precisely B70, and ownership is raid lead now, so it can never be held by nobody. Asserted
+    -- the other way round, because the joiner half below is still worth protecting.
+    local owners = 0
     for _, c in ipairs(sim.clients) do
-        T.eq(RaidSim.As(c, c.KART.LC.IsConfigOwner), false,
-            c.name .. " does not own the config while the lootmaster is merely away")
+        if RaidSim.As(c, c.KART.LC.IsConfigOwner) then owners = owners + 1 end
     end
+    T.eq(owners, 1, "somebody owns the config even while the lootmaster is merely away")
+    T.truthy(RaidSim.As(stand, stand.KART.LC.IsConfigOwner), "and it is the raid leader")
+
+    -- Carrying the raid's settings, as the Sync Settings button hands them to a stand-in.
+    RaidSim.As(stand, function()
+        stand.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
+        stand.env.KART_Settings.lcRollsEnabled   = true
+        stand.KART.LC.ApplyOwnConfig()
+        stand.KART.LC.BroadcastRaidConfig()
+    end)
+    RosterSettles(sim)
 
     local alric = sim.byName.Alric
     local labels = RaidSim.As(alric, alric.KART.LC.GetButtonConfig)
