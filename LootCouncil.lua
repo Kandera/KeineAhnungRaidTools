@@ -271,6 +271,22 @@ function LC.ButtonFingerprint(buttons)
     return h
 end
 
+-- Whether a vote cast against `storedFp` can still be shown as a label (B43-B45).
+--
+-- Named and shared because it is read from three places that must agree -- the council rows, the tab
+-- tooltip above them, and the voter's own badge -- and they did not: the tooltip skipped the check
+-- entirely and stated with full confidence the very vote the rows below rendered as "?", and the
+-- badge had nothing stored to check at all. Duplicating a one-line expression across three render
+-- sites is how they came apart, and none of the three is reachable from the offline harness, so the
+-- rule is tested here rather than through what it draws.
+--
+-- An absent fingerprint is NOT stale: a vote from an older client arrives without one, and refusing
+-- to show it would turn a mixed-version raid into a screen full of question marks.
+function LC.VoteLabelStale(storedFp, buttons)
+    if storedFp == nil then return false end
+    return storedFp ~= LC.ButtonFingerprint(buttons)
+end
+
 function LC.GetButtonConfig()
     local raw
     if LC.IsConfigOwner() or not LC.raidConfig.buttonLabels or LC.raidConfig.buttonLabels == "" then

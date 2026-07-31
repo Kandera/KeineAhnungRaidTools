@@ -491,7 +491,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         -- else now, and telling a raider they voted a label they never clicked is worse than telling
         -- them nothing. Same guard the council panel applies to everybody else's vote.
         local votedFp = LC.votedFpByMe[rollID]
-        local votedStale = votedFp ~= nil and votedFp ~= LC.ButtonFingerprint(buttons)
+        local votedStale = LC.VoteLabelStale(votedFp, buttons)
         local votedDef = (not votedStale) and voted and buttons[tonumber(voted)] or nil
         -- An answer LC.Relevance cast on the player's behalf leaves the row OPEN: CastVote lets
         -- exactly one automatic vote be overridden (see there), and the buttons that do the

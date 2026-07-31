@@ -56,18 +56,27 @@ do
         "after the edit their stored fingerprint no longer matches the live set")
     T.eq(raider.KART.LC.votedByMe[41], 2, "their index is still recorded")
 
-    -- And the badge itself goes quiet. Telling a raider they voted a label they never clicked is
-    -- worse than telling them nothing, and the rendered text is what they actually read.
-    local function badgeText()
-        RaidSim.As(raider, raider.KART.LC.Vote.RefreshVoteListRows)
-        for _, row in ipairs(raider.KART.LC.voteListRows or {}) do
-            if row.rollID == 41 and row.votedText then return row.votedText:GetText() end
-        end
-        return nil
-    end
-    local after = badgeText()
-    T.truthy(after == nil or after == "" or not after:find("Mainspec", 1, true),
-        "the badge does not name the label the index now points at")
+    -- The badge, the council rows and the tab tooltip all ask the same question, and none of the
+    -- three is reachable from this harness -- the vote list and the panel need the real UI. So the
+    -- RULE they share is what is asserted, which is also what stopped them disagreeing: the tooltip
+    -- used to skip the check entirely and state as fact the vote the rows rendered as "?".
+    T.truthy(RaidSim.As(raider, function()
+        return raider.KART.LC.VoteLabelStale(castFp, raider.KART.LC.GetButtonConfig())
+    end), "so the label is withheld rather than named")
+end
+
+do
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric
+    local live = RaidSim.As(raider, function() return raider.KART.LC.ButtonFingerprint() end)
+    T.truthy(not RaidSim.As(raider, function()
+        return raider.KART.LC.VoteLabelStale(live, raider.KART.LC.GetButtonConfig())
+    end), "a vote cast against the set in force is shown normally")
+    -- A vote from an older client arrives without a fingerprint. Refusing to show those would turn a
+    -- mixed-version raid into a screen full of question marks, which is worse than what it guards.
+    T.truthy(not RaidSim.As(raider, function()
+        return raider.KART.LC.VoteLabelStale(nil, raider.KART.LC.GetButtonConfig())
+    end), "and a vote with no fingerprint at all is not treated as stale")
 end
 
 -- B46: a vote for the PREVIOUS item does not land in the new one's tally ---------------------------
