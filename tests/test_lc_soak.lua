@@ -392,8 +392,12 @@ local function runOne(seed)
             -- rolls AND the fromSelf marker together: the marker is what decides whether the client
             -- keeps asking for a real config (see LC.StateStillNeeded), so a change to it with no
             -- change to the values is exactly the event worth seeing.
+            -- The council list rides along for the same reason: it is raid-wide state with two
+            -- writers, and who holds which version is invisible in the end state.
             local v = tostring(c.KART.LC.raidConfig.rollsEnabled)
                 .. "/" .. tostring(c.KART.LC.raidConfig.fromSelf)
+                .. "/" .. tostring(c.KART.LC.raidConfig.councilMembers)
+                .. "/own=" .. tostring(c.env.KART_Settings.lcCouncilMembers)
             -- Keyed by NAME, not by client object: a reload replaces the object, and the point here
             -- is to follow the person across it.
             if lastRolls[c.name] ~= v then
@@ -406,6 +410,13 @@ local function runOne(seed)
         -- config trace above answers "who wrote this value"; this one answers "which step lost this
         -- roll", which is the question B71 turned out to be -- one client in five silently dropping
         -- a peer's number is invisible in the end state and obvious in the sequence.
+        if os.getenv("KART_SOAK_TRACEROLLS") and not KARTTEST.relayHook then
+            KARTTEST.relayHook = function(from, payload, hasCfg, selfInv)
+                print(string.format("  RELAY t=%-5s to=%-8s from=%-24s hasCfg=%-5s selfInv=%-5s %s",
+                    tostring(KARTTEST.now), tostring(KARTTEST.activeUnit), tostring(from),
+                    tostring(hasCfg), tostring(selfInv), tostring(payload)))
+            end
+        end
         if os.getenv("KART_SOAK_TRACEROLLS") then
             for _, c in ipairs(sim.clients) do
                 for _, id in ipairs(rolls) do
@@ -550,7 +561,11 @@ local function Record(seed, why)
     kindSeed[sig] = kindSeed[sig] or seed
 end
 
-for seed = 1, SEEDS do
+-- Seeds are independent, so a debugger does not have to walk up to the interesting one: KART_SOAK_ONLY=N
+-- runs that seed and nothing else. Worth having -- reproducing a break at seed 5013 otherwise costs
+-- five thousand runs of setup for every look at it.
+local ONLY = tonumber(os.getenv("KART_SOAK_ONLY") or "")
+for seed = ONLY or 1, ONLY or SEEDS do
     local ok, res = pcall(runOne, seed)
     if not ok then
         Record(seed, "error: " .. tostring(res))

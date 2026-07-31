@@ -208,3 +208,94 @@ do
     T.truthy(out:find(council.KART.L.LC_NO_CONFIG_YET, 1, true),
         "and is told the raid leader's settings have not arrived")
 end
+
+-- A relay with no council list must not settle the question ---------------------------------------
+-- The rule "an empty council list means 'not configured', not 'this raid has no council'" has to
+-- hold at all three sites that write it. It held in TryAcceptConfig and in ApplyOwnConfig, and not
+-- in HandleConfigRelay, which is the one a reloaded raid leader depends on.
+--
+-- Every peer answers a state request at once, spread over a fraction of a second. The soak found a
+-- raid where the first answer came from another client that had just reloaded and had no list
+-- either: it was taken, it cleared the "still waiting" marker, and the real list -- 0.17 seconds
+-- behind it, from a client that had been there all evening -- was rejected as "we already have a
+-- config". Two clients with amnesia confirmed each other, and the raid split over who was council.
+do
+    local sim = F.NewSplitRaid()
+    local leader = sim.byName.Corvin
+    T.truthy(RaidSim.As(leader, leader.KART.LC.IsConfigOwner), "Corvin leads, so Corvin owns the config")
+
+    -- The leader comes back from a reload with nothing, and their own settings name neither a
+    -- lootmaster nor a council -- the normal state for a stand-in who has never configured KART, and
+    -- the reason the raid's list has to come back over the wire rather than out of their saved
+    -- variables. Being raid lead, they write their own empty settings in as the raid config; that is
+    -- the state every peer's answer is racing to replace.
+    RaidSim.As(leader, function()
+        leader.env.KART_Settings.lcCouncilMembers = ""
+        leader.env.KART_Settings.lcLootmaster     = ""
+        wipe(leader.KART.LC.raidConfig)
+        leader.KART.LC.ApplyOwnConfig()
+    end)
+    T.eq(leader.KART.LC.raidConfig.councilMembers, "", "and holds no council list at all")
+
+    local CFG = "4:BIS;Upgrade;Offspec;Sonstiges;Pass:0:"
+    -- The first answer is from a client just as empty-handed.
+    RaidSim.As(leader, function()
+        leader.KART.LC.HandleConfigRelay(CFG .. ":", sim.byName.Alric.guid)
+    end)
+    -- The raid's real answer lands a fraction of a second later.
+    RaidSim.As(leader, function()
+        leader.KART.LC.HandleConfigRelay(CFG .. ":Bramor;Merrit;Corvin", sim.byName.Sinja.guid)
+    end)
+
+    T.eq(leader.KART.LC.raidConfig.councilMembers, "Bramor;Merrit;Corvin",
+        "the answer that carries a council list wins over the one that does not")
+    T.truthy(RaidSim.As(leader, function() return leader.KART.LC.IsCouncil(sim.byName.Merrit.guid) end),
+        "so the leader agrees with the rest of the raid about who is council")
+end
+
+do
+    -- ...and not the other way round: an empty relay arriving second does not undo it, or the two
+    -- would swap places forever while peers keep answering.
+    local sim = F.NewSplitRaid()
+    local leader = sim.byName.Corvin
+    RaidSim.As(leader, function()
+        leader.env.KART_Settings.lcCouncilMembers = ""
+        leader.env.KART_Settings.lcLootmaster     = ""
+        wipe(leader.KART.LC.raidConfig)
+        leader.KART.LC.ApplyOwnConfig()
+    end)
+    local CFG = "4:BIS;Upgrade;Offspec;Sonstiges;Pass:0:"
+
+    RaidSim.As(leader, function()
+        leader.KART.LC.HandleConfigRelay(CFG .. ":Bramor;Merrit;Corvin", sim.byName.Sinja.guid)
+        leader.KART.LC.HandleConfigRelay(CFG .. ":", sim.byName.Alric.guid)
+    end)
+    T.eq(leader.KART.LC.raidConfig.councilMembers, "Bramor;Merrit;Corvin",
+        "a list already recovered is not taken back out by an empty answer")
+end
+
+do
+    -- ...and not while the leader is still holding a config of their own making either. Taking raid
+    -- lead runs LC.ApplyOwnConfig, which KEEPS the raid's council list when the new leader has none
+    -- of their own -- so this client has both the marker that says "still asking" and a real list to
+    -- lose. An empty answer must leave it alone.
+    local sim = F.NewSplitRaid()
+    local leader = sim.byName.Corvin
+    RaidSim.As(leader, function()
+        leader.env.KART_Settings.lcCouncilMembers = ""
+        leader.env.KART_Settings.lcLootmaster     = ""
+        leader.KART.LC.ApplyOwnConfig()
+    end)
+    T.eq(leader.KART.LC.raidConfig.councilMembers, "Bramor;Merrit;Corvin",
+        "taking lead with no council of your own keeps the raid's")
+    T.truthy(leader.KART.LC.raidConfig.fromSelf, "and leaves the config marked as our own")
+
+    RaidSim.As(leader, function()
+        leader.KART.LC.HandleConfigRelay("4:BIS;Upgrade;Offspec;Sonstiges;Pass:0::",
+            sim.byName.Alric.guid)
+    end)
+    T.eq(leader.KART.LC.raidConfig.councilMembers, "Bramor;Merrit;Corvin",
+        "and an answer with no list does not take it away")
+    T.truthy(RaidSim.As(leader, function() return leader.KART.LC.IsCouncil(sim.byName.Merrit.guid) end),
+        "the lookup the awards are gated on says the same")
+end

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A vote delayed by the network cannot land on the next item to reuse the same roll.**
 - **The council sees everyone's roll on an item that reuses an earlier roll's number**, instead of scoring the tie-break on part of the raid.
 - **Someone joining mid-raid keeps the awards already on record**, instead of losing them to the next item that reuses a roll number.
+- **A raid leader who reloads gets the raid's council list back**, instead of being answered by whoever else had just reloaded and leaving half the raid unable to award anything.
 - **Two council members awarding the same item at once no longer leaves the raid disagreeing about who won**, and says so.
 - **A Lootmaster name KART cannot place is reported instead of quietly ignored.**
 - **The raid leader now owns the raid-wide Loot Council settings**, and the Lootmaster field says who hands out the loot.

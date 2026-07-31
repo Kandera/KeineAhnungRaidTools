@@ -972,10 +972,26 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- purpose, and declaredKey short-circuits the fallback long before this.
     local ownField = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
     local selfInvented = LC.raidConfig.fromSelf and not ownField
-    if next(LC.raidConfig) ~= nil and not selfInvented then return end
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
     local minQ, buttons, rolls, _, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return end
+
+    -- The same rule TryAcceptConfig and LC.ApplyOwnConfig apply, at the third site that writes this
+    -- field: an EMPTY council list means "not configured", not "this raid has no council". Here it
+    -- decides two things.
+    --
+    -- One, a relay that carries a list is worth taking even when we have already taken one. Every
+    -- peer answers a state request at once, spread over a fraction of a second, and the first answer
+    -- may come from another client that has just reloaded and has no list either. Measured in the
+    -- soak: an empty answer landed 0.17s ahead of the real one, cleared the "still waiting" marker,
+    -- and the real one -- from a client that had been in the raid all evening -- was then rejected
+    -- as "we already have a config". Two clients with amnesia confirmed each other and the raid
+    -- split over who was council, which means every award from the other half is rejected.
+    --
+    -- Two, an empty list never replaces one we hold. Between them the transition only ever runs
+    -- no-list to list, so peers still answering cannot swap it back and forth.
+    local gainsCouncil = council ~= "" and (LC.raidConfig.councilMembers or "") == ""
+    if next(LC.raidConfig) ~= nil and not selfInvented and not gainsCouncil then return end
 
     LC.raidConfig.minQuality     = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels   = buttons
@@ -984,11 +1000,16 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- LC.GetLootmaster falls back to raid lead here exactly as it already does on every client that
     -- watched the lootmaster leave.
     LC.raidConfig.lootmaster     = ""
-    LC.raidConfig.councilMembers = council
+    if council ~= "" or (LC.raidConfig.councilMembers or "") == "" then
+        LC.raidConfig.councilMembers = council
+    end
     LC.raidConfig.fromSelf       = nil
 
+    -- Built from what we ENDED UP holding, not from what arrived: those differ whenever the list on
+    -- the wire was empty and we kept ours, and rebuilding from the payload there would empty the
+    -- lookup table while the config still named a council.
     LC.CouncilNamesTable = {}
-    for _, name in ipairs(KAUtil.SplitString(council, ";")) do
+    for _, name in ipairs(KAUtil.SplitString(LC.raidConfig.councilMembers or "", ";")) do
         local key = LC.ResolveConfigName(name)
         if key then LC.CouncilNamesTable[key] = true end
     end

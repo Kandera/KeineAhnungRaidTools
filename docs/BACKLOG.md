@@ -61,6 +61,27 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
+## B75 — FIXED 2026-07-31 — two clients with amnesia confirm each other, and the raid splits
+
+Found by the soak at 6000 seeds, seed 5013.
+
+"An EMPTY council list means *not configured*, not *this raid has no council*" has to hold at all
+three sites that write the field. It held in `TryAcceptConfig` and in `LC.ApplyOwnConfig`. The third
+is `LC.HandleConfigRelay` -- the path a reloaded raid leader depends on, since a leader rejects
+every config that is not from a leader and a relay is the only way one gets its state back.
+
+Every peer answers a state request at once, spread over a fraction of a second. Measured: the first
+answer came from another client that had just reloaded and had no council list either. It was taken,
+it cleared the marker that says "still waiting", and the real list -- 0.17 seconds behind it, from a
+client that had been in the raid all evening -- was rejected as "we already have a config". Two
+clients with amnesia confirmed each other. Half the raid then held the council list and half held
+nothing, and `Trade.HandleResult` gates on `LC.IsSenderCouncil`, so every award from the other half
+is rejected -- the same 94-per-3000 silent award loss that put the rule in `TryAcceptConfig`.
+
+Two clauses, both mutation-verified: a relay that carries a list is taken even when we already have
+a config, and an empty list never replaces one we hold. Between them the field only ever moves from
+no-list to list, so peers still answering cannot swap it back and forth.
+
 ## B74 — FIXED 2026-07-31 — a mid-raid joiner loses the awards it was just handed
 
 Found by the soak on the first clean pass after B71, seed 1716.
