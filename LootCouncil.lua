@@ -806,7 +806,13 @@ function LC.ApplyOwnConfig()
     LC.raidConfig.buttonLabels   = KART_Settings.lcButtonLabels or ""
     LC.raidConfig.rollsEnabled   = KART_Settings.lcRollsEnabled == true
     LC.raidConfig.lootmaster     = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
-    LC.raidConfig.councilMembers = KART_Settings.lcCouncilMembers or ""
+    -- Same rule the receiving side applies (see TryAcceptConfig): an empty council list means "not
+    -- configured", not "this raid has no council". It has to hold on BOTH sides or they disagree --
+    -- the config owner never processes its own broadcast, so leaving it out here made the new leader
+    -- the only client in the raid with an empty council while everybody else kept the real one.
+    if (KART_Settings.lcCouncilMembers or "") ~= "" or (LC.raidConfig.councilMembers or "") == "" then
+        LC.raidConfig.councilMembers = KART_Settings.lcCouncilMembers or ""
+    end
     LC.raidConfig.fromSelf       = true
 
     LC.CouncilNamesTable = {}
@@ -846,7 +852,10 @@ function LC.BroadcastRaidConfig(target)
     -- them yet -- a receiver may still manage, and LC.RetryPendingResolutions covers the rest.
     local lootmasterField = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
     local lootmaster = LC.ResolveConfigName(lootmasterField) or lootmasterField
-    local council  = KART_Settings.lcCouncilMembers or ""
+    -- The council list IN FORCE, not our own raw setting. LC.ApplyOwnConfig has just written it, and
+    -- it keeps the raid's list when ours is empty ("not configured", see there) -- so sending the raw
+    -- setting would hand a newcomer an empty council while everybody already here has the real one.
+    local council  = LC.raidConfig.councilMembers or KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
     local payload = BuildCouncilPayload(prefix, council)
@@ -994,14 +1003,31 @@ local function TryAcceptConfig(payload, senderKey)
     -- Empty stays empty and means "the raid leader hands it out themselves" (see LC.GetLootmaster's
     -- fallback), which is a real setting, not a missing one.
     LC.raidConfig.lootmaster    = ConfigKeyFromWire(lootmaster) or ""
-    -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
-    LC.raidConfig.councilMembers = council
+    -- An EMPTY council list means "not configured", not "this raid has no council".
+    --
+    -- The one content-based exception in this function, and it is here because the soak found what it
+    -- costs to be without it: a client promoted to raid lead for a moment, who has never configured
+    -- KART, broadcasts an empty list -- and every receiver then rejects every award, because
+    -- Trade.HandleResult gates on LC.IsSenderCouncil and nobody is council any more. 94 of 3000 soak
+    -- raids lost an award that way, silently. lcCouncilMembers has no default, so empty is exactly
+    -- what an unconfigured client sends, and a raid deliberately running with no council at all is
+    -- not a thing this guild does -- deciding items together IS the feature.
+    --
+    -- Narrow on purpose: it applies to this one field, and only in the direction that cannot lose
+    -- information. A leader who genuinely wants a different council sends a non-empty list, which
+    -- replaces the old one outright, so changing the council still works in one broadcast.
+    local keepCouncil = council == "" and (LC.raidConfig.councilMembers or "") ~= ""
+    if not keepCouncil then
+        LC.raidConfig.councilMembers = council
+    end
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
 
-    LC.CouncilNamesTable = {}
-    for _, name in ipairs(KAUtil.SplitString(council, ";")) do
-        local key = LC.ResolveConfigName(name)
-        if key then LC.CouncilNamesTable[key] = true end
+    if not keepCouncil then
+        LC.CouncilNamesTable = {}
+        for _, name in ipairs(KAUtil.SplitString(council, ";")) do
+            local key = LC.ResolveConfigName(name)
+            if key then LC.CouncilNamesTable[key] = true end
+        end
     end
 
     -- Two clients claiming to be lootmaster. Ours keeps precedence (LC.GetLootmaster prefers our
