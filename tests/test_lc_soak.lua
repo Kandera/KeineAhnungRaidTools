@@ -327,6 +327,19 @@ local function runOne(seed)
             joined = true
             RaidSim.Join(sim, NEWCOMER)
             RaidSim.RosterUpdate(sim)   -- joining a raid is a roster change, on every client
+            -- Turning up is no more instant than coming back from a reload: the client asks for the
+            -- state and waits for somebody to answer, and until that lands its session is off, so
+            -- LC.OnStartLootRoll and LC.HandleStart both return without tracking anything. An item
+            -- dropping inside that window is announced to somebody who is not listening yet, and
+            -- LC_START is never re-sent (B66) -- the same reason a reload gets this treatment, and
+            -- also the maintainer's own rule that a late arrival is not pulled into a distribution
+            -- that is already running. Measured: two of the breaks at 30000 seeds were an item
+            -- dropping while the newcomer's session was still false.
+            --
+            -- Measured from the end of any outage, not from now: if the state request goes out while
+            -- messages are being dropped it is lost, and the next one is a backoff step away -- so a
+            -- client that turns up mid-outage is still waiting well after the outage itself is over.
+            recovering[NEWCOMER.name] = math.max(KARTTEST.now, outageUntil) + RECOVERY_HORIZON
         end },
         -- The raid lead changes hands. Every ownership check in the addon has a raid-leader
         -- fallback, so this moves authority around underneath everything above.
@@ -359,6 +372,20 @@ local function runOne(seed)
             KARTTEST.solo[c.unit] = true
             KARTTEST.AdvanceTime(rnd(2))
             KARTTEST.solo[c.unit] = nil
+            -- While its group APIs read "no group", this client rejects every group-gated message --
+            -- KASC's own guard, and the right one. Votes and results carry no acknowledgement and are
+            -- sent exactly once (docs/BACKLOG.md B66), so whatever was announced in those seconds is
+            -- gone for that client and for nobody else. Same treatment a reload gets, and for the
+            -- same reason: it is not entitled to an item it was deaf for. Measured -- two of the
+            -- breaks at 30000 seeds were exactly this, and in both the client missing the vote was
+            -- the one that had just blipped. Recorded as B78; a vote catch-up would close it.
+            for _, id in ipairs(rolls) do
+                if live(id) then
+                    for i = #present[id], 1, -1 do
+                        if present[id][i].name == c.name then table.remove(present[id], i) end
+                    end
+                end
+            end
         end },
         -- Messages go missing. Blizzard's chat throttle drops the overflow silently and the sender
         -- cannot tell, so anything the addon depends on has to be re-askable. Only the tokens that

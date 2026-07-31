@@ -61,6 +61,27 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
+## B78 — OPEN — a two-second blip costs a raider their vote for good
+
+Found by the soak at 30000 seeds, seeds 9545 and 11091. In both, the client missing a vote was the
+one whose group APIs had just blipped -- the state the maintainer has watched cost a session
+mid-boss, where for a moment one client's `IsInGroup`/`IsInRaid` answer "no".
+
+While that lasts, KASC rejects every group-gated message on that client. That guard is right; the
+consequence is not survivable for the tokens with no retry. `LC_VOTE` and `LC_RESULT` are announced
+exactly once and nothing acknowledges them (B66), so whatever was said in those seconds is gone --
+for that one client, silently, with the raid around them carrying on.
+
+Rolls have a catch-up (`LC_ROLL_CATCHUP`) and history has one (on join). Votes have neither. The
+council panel is the one screen where a missing vote changes a decision, and it is also the natural
+place to ask for them again: a council member who notices a gap could re-request the tally for a
+live roll, the same way a joiner re-requests the state.
+
+**The soak no longer reports this**, because it was reporting a known protocol limitation on every
+pass and burying new findings -- a blipped client is now dropped from the comparison for rolls that
+were live, exactly as a reloaded one is. That makes recording it here the only thing keeping it
+visible.
+
 ## B77 — OPEN — a council member who reloads is overruled on their own re-decision, silently
 
 Found by the soak at 30000 seeds, seeds 29229 and 12530. Reproduce with `KART_SOAK_ONLY=29229
