@@ -54,6 +54,10 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
+**Standing measurement, 2026-07-31:** 4 of 30000 soak runs disagree, and all four are the two
+entries below -- B76 twice (seeds 6151, 16848) and B77 twice (seeds 12530, 29229). Nothing else
+in the random walk breaks. `KART_SOAK_SEEDS=30000` reproduces it; `KART_SOAK_ONLY=<seed>` runs one.
+
 ## Found 2026-07-31 by three new soak steps
 
 The soak learned three things it could not do before -- two council members awarding the same item at
@@ -84,7 +88,7 @@ visible.
 
 ## B77 — OPEN — a council member who reloads is overruled on their own re-decision, silently
 
-Found by the soak at 30000 seeds, seeds 29229 and 12530. Reproduce with `KART_SOAK_ONLY=29229
+Found by the soak: 2 of 30000 runs, seeds 12530 and 29229. Reproduce with `KART_SOAK_ONLY=29229
 KART_SOAK_DEBUG=29229`.
 
 `LC.assignedWinners` does not survive a reload, and nothing restores it: the state request brings
@@ -119,7 +123,7 @@ two are worth deciding together rather than patched one at a time on the eve of 
 
 ## B76 — OPEN — a leader who may not publish its config still acts on it
 
-Found by the soak at 8000 seeds, seed 6151. Reproduce with `KART_SOAK_ONLY=6151
+Found by the soak: 2 of 30000 runs, seeds 6151 and 16848. Reproduce with `KART_SOAK_ONLY=6151
 KART_SOAK_DEBUG=6151`; the config trace prints the designation and `IsLootOwner` per client.
 
 **Not fixed on purpose.** It sits on the ownership core the maintainer settled this week
