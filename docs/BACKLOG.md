@@ -131,7 +131,7 @@ sits outside the council: no panel, and their own awards would be rejected by ev
 Worth deciding rather than patching, because "the raid leader is always council" is a rule and
 belongs in `docs/OWNERSHIP.md` next to the other two if it holds.
 
-## B82 — OPEN — a window can be dragged off the screen in windowed mode with two monitors
+## B82 — FIXED 2026-07-31 — a window could be dragged off the screen
 
 Reported from the live v3.2.2-beta1 test, 2026-07-31. Dragging a KART window past the edge of the
 game window leaves it partly or wholly outside, where it cannot be grabbed back.
