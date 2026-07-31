@@ -47,10 +47,33 @@ KARTTEST.activeUnit = nil
 -- Forward declaration: the group-API stubs further down define this, and the unit stubs above them
 -- need it. Same file, one chunk, so the upvalue is shared.
 local isSolo
+-- "npc" is the trade partner during TRADE_SHOW (see LC.Trade.OnTradeShow). Point it at a roster
+-- row so a test can trade with a real raid member rather than a name string.
+KARTTEST.tradePartnerUnit = nil
 local function resolve(unit)
     if unit == "player" and KARTTEST.activeUnit then unit = KARTTEST.activeUnit end
+    if unit == "npc" then unit = KARTTEST.tradePartnerUnit end
     return roster[unit]
 end
+
+-- The two trade windows, as lists of item links: what WE put in, and what the partner put in.
+-- Both are needed, and from opposite sides -- the person handing an item over confirms it from
+-- their own slots, the person receiving it from the partner's.
+-- Bags, as a flat list of item links per bag. Empty by default, which is the honest state for
+-- everybody except whoever is holding an item they have not handed over yet.
+KARTTEST.bags = {}
+_G.C_Container = {
+    GetContainerNumSlots     = function(bag) return #(KARTTEST.bags[bag] or {}) end,
+    GetContainerItemLink     = function(bag, slot) return (KARTTEST.bags[bag] or {})[slot] end,
+    PickupContainerItem      = function() end,
+    GetContainerItemInfo     = function() return nil end,
+}
+
+KARTTEST.tradePlayerItems = {}
+KARTTEST.tradeTargetItems = {}
+function _G.GetTradePlayerItemLink(i) return KARTTEST.tradePlayerItems[i] end
+function _G.GetTradeTargetItemLink(i) return KARTTEST.tradeTargetItems[i] end
+_G.LE_GAME_ERR_TRADE_COMPLETE = 401
 
 function _G.UnitExists(unit) return resolve(unit) ~= nil end
 -- The real UnitName returns an EMPTY realm for a player on your own realm, and only names the realm

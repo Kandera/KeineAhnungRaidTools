@@ -360,3 +360,64 @@ do
     T.is_nil(reloaded.KART.LC.assignedWinners[93],
         "but it is not restored as the winner of the item now under that number")
 end
+
+-- The winner's "you are owed this" clears when the item actually arrives ---------------------------
+-- Reported from a live test with /kart add: the lootmaster hands the item over, it disappears from
+-- THEIR list, and the winner's own reminder keeps standing. Trade.OnTradeClosed does the whole job
+-- on the giving side -- it reads the trade window and their own bags -- and there was no equivalent
+-- on the receiving side, so LC.owedToMe was only ever cleared by clicking its own tick, by a
+-- reassignment, or by the four-hour prune.
+--
+-- The field it needs was already there and even said so: LC.currentTradePartnerKey is set
+-- unconditionally in Trade.OnTradeShow, for "the separate items-I'm-owed side ... which checks this
+-- same field from the other direction". This is that side.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 110, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(110, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+
+    T.truthy(F.Owes(lm.KART.LC.pendingTrades, 110), "the lootmaster owes it")
+    T.truthy(F.Owes(raider.KART.LC.owedToMe, 110), "and the winner is told they are owed it")
+
+    -- The trade, from the WINNER's client: the lootmaster is the partner, and the item is in the
+    -- partner's half of the window, not in ours.
+    local link = raider.KART.LC.rollItems[110]
+    KARTTEST.tradePartnerUnit = lm.unit
+    KARTTEST.tradePlayerItems = {}
+    KARTTEST.tradeTargetItems = { link }
+    RaidSim.As(raider, function()
+        raider.KART.LC.Trade.OnTradeShow()
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()
+        raider.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+        raider.KART.LC.Trade.OnTradeClosed()
+    end)
+    KARTTEST.tradePartnerUnit, KARTTEST.tradeTargetItems = nil, {}
+
+    T.truthy(not F.Owes(raider.KART.LC.owedToMe, 110),
+        "once it arrives, the winner's reminder is gone")
+end
+
+do
+    -- ...and a trade that did NOT go through leaves it standing. The item sitting in the window is
+    -- not the same as having been given it: either side can close the trade at the last moment, and
+    -- there is deliberately no bag-contents fallback on this side -- "it is in my bags" is also true
+    -- of a copy this player already owned, and clearing a reminder for an item nobody handed over is
+    -- worse than leaving one up.
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 111, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(111, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+
+    KARTTEST.tradePartnerUnit = lm.unit
+    KARTTEST.tradeTargetItems = { raider.KART.LC.rollItems[111] }
+    RaidSim.As(raider, function()
+        raider.KART.LC.Trade.OnTradeShow()
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()
+        raider.KART.LC.Trade.OnTradeClosed()          -- closed, never completed
+    end)
+    KARTTEST.tradePartnerUnit, KARTTEST.tradeTargetItems = nil, {}
+
+    T.truthy(F.Owes(raider.KART.LC.owedToMe, 111),
+        "a cancelled trade leaves the winner still owed it")
+end

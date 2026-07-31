@@ -70,7 +70,7 @@ read_globals = {
     "GetRealmName", "GetNormalizedRealmName", "GetLocale", "GetInstanceInfo", "GetDifficultyInfo",
     -- Items / trade
     "GetInventoryItemLink", "GetAverageItemLevel", "GetWeaponEnchantInfo",
-    "CheckInteractDistance", "InitiateTrade", "GetTradePlayerItemLink", "ClickTradeButton",
+    "CheckInteractDistance", "InitiateTrade", "GetTradePlayerItemLink", "GetTradeTargetItemLink", "ClickTradeButton",
     "LE_GAME_ERR_TRADE_COMPLETE",
     -- Loot rolls
     "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot",

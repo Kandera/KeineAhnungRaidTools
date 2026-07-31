@@ -666,13 +666,25 @@ end
 -- same item string in the trade window at once.
 LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
 
+-- The same, read from the PARTNER's half of the window. The person handing an item over confirms it
+-- from their own slots; the person receiving it has to read the other side, and had no equivalent at
+-- all -- so their "you are owed this" reminder stood after the item had arrived, cleared only by
+-- clicking its own tick, by a reassignment, or by the four-hour prune. Reported from a live test.
+LC.tradeTargetItemStrings = LC.tradeTargetItemStrings or {}
+
 function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
+    wipe(LC.tradeTargetItemStrings)
     for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
         local link = GetTradePlayerItemLink(i) ---@diagnostic disable-line: undefined-global
         local itemString = KAUtil.GetItemString(link)
         if itemString then
             LC.tradeWindowItemStrings[itemString] = (LC.tradeWindowItemStrings[itemString] or 0) + 1
+        end
+        local theirs = GetTradeTargetItemLink(i)
+        local theirString = KAUtil.GetItemString(theirs)
+        if theirString then
+            LC.tradeTargetItemStrings[theirString] = (LC.tradeTargetItemStrings[theirString] or 0) + 1
         end
     end
 end
@@ -804,6 +816,25 @@ function Trade.OnTradeClosed()
             if confirmedByTrade or confirmedByBags then
                 if confirmedByTrade then LC.tradeWindowItemStrings[itemString] = remaining - 1 end
                 Trade.RemovePendingTrade(entry.rollID)
+            end
+        end
+    end
+
+    -- The receiving side of the same trade. Symmetrical with Pass 1 and consuming its own counts for
+    -- the same reason: two entries owed by the same person that share an item string can only be
+    -- confirmed as many times as copies actually crossed the window. Deliberately requires Blizzard's
+    -- own trade-complete signal -- there is no bag-contents fallback here, because "it is in my bags"
+    -- is true of an item this player already owned a copy of, and clearing a reminder we were never
+    -- given is worse than leaving one standing.
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        local entry = LC.owedToMe[i]
+        if entry.lootmasterKey == partnerKey then
+            local itemString = KAUtil.GetItemString(entry.itemLink)
+            local remaining = itemString and LC.tradeTargetItemStrings[itemString]
+            if tradeSucceeded and remaining and remaining > 0 then
+                LC.tradeTargetItemStrings[itemString] = remaining - 1
+                table.remove(LC.owedToMe, i)
+                Trade.RefreshOwedReminderIfShown()
             end
         end
     end

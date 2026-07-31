@@ -22,6 +22,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Raid-Einstellungen erreichen wieder alle, wenn der Lootmaster nicht der Raidlead ist.** Bisher hat sie niemand nachgeschickt — wer später dazukam, lief auf seinen eigenen Vote-Buttons, seiner Mindestqualität und seiner Wurf-Einstellung.
 - **Das × an einer Council-Karte lässt sich wieder anklicken.** Es verschwand, sobald die Maus die Karte verließ, und wurde bei jeder eintreffenden Stimme unter dem Cursor ausgeblendet.
 - **`/kart status` zeigt, wen dein Client für den Raidlead hält.** Dass zwei Leute das unterschiedlich lesen, steckt hinter fast jedem Einstellungsproblem.
+- **„Dir steht das zu“ verschwindet, sobald du das Item tatsächlich bekommst.** Bisher blieb es stehen, bis du es selbst abgehakt hast.
 - **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.
