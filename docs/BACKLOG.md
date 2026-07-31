@@ -54,6 +54,32 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
+## The ownership rework, 2026-07-31 — what it closed
+
+`docs/OWNERSHIP.md` replaces the derivation that B29–B33, B57, B58, B64, B69 and B70 all pull on.
+Config ownership is the raid leader; the Lootmaster field is a designation that names somebody else.
+Those entries are marked superseded rather than deleted, because each is a real failure this guild
+paid for and the rules were written to make them unreachable rather than merely fixed.
+
+Three of them are worth calling out, because the rework did not fix them — it removed the state they
+needed:
+
+* **B57** needed the leader's own client to believe it owned the loot flow while its peers held a
+  config naming somebody else. The designation lives in the leader's own settings now, and
+  `KART_Settings` is a SavedVariable, so it survives their reload and the two answers cannot come
+  apart. Its test asserts the agreement.
+* **B70** needed "nobody owns the config". Ownership is raid lead, which is never held by nobody and
+  never by two people. Its test asserts exactly that across a lead change.
+* **A nickname nobody can resolve** used to mean nobody owned the config and the whole raid silently
+  kept its own roll setting. Ownership needs no name resolution at all now.
+
+What the rework cost, recorded so it is not rediscovered as a bug: a raid-lead change switches the
+raid to the new leader's settings. Confirmed with the maintainer, together with the requirement that
+it must not be silent — `LC_CONFIG_OWNER_NOW` says so once per time the role arrives. One field is
+exempt: an empty council list means "not configured", not "this raid has no council", because the
+soak showed 94 of 3000 raids losing an award to a momentary leader who had never configured KART.
+
+
 ## B56 — a toy could be force-won — FIXED 2026-07-30, but not for the reason recorded
 
 The entry described the cause as an unpopulated Toy Box: `C_ToyBox.GetToyInfo` would answer nil until
@@ -83,6 +109,11 @@ Covered in `tests/test_lc_collectible.lua`; the three new assertions were verifi
 journals behind `classID == 15` and confirming all three turn red.
 
 ## B57 — End Round cleared only the presser's own window (GitHub #15) — FIXED 2026-07-30
+
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
 
 Reported with a screenshot of items from earlier bosses still listed, by a maintainer who had pressed
 End Round and held raid lead. No path in the code explained it, because each side of the exchange
@@ -161,6 +192,11 @@ B29 to B33 share one root: ownership and session state are distributed across cl
 authoritative holder. They want one design pass, not five patches.
 
 ## B70 — a raid-lead change during B69's grace leaves the raid with NO config at all — REGRESSION, introduced 2026-07-30
+
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
 
 **This is B33 again — the whole raid silently not rolling — and this session's own B69 fix opened it.
 Fix before the raid.** Measured, not deduced; the probe below prints `LC_CONFIG so far: 0` at every
@@ -337,6 +373,11 @@ fix, not before.
 
 ## B29 — a departed lootmaster leaves the raid with no loot owner — FIXED 2026-07-30
 
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
+
 `LC.raidConfig.lootmaster` is written only by `TryAcceptConfig`/`ApplyOwnConfig` and never
 invalidated; neither `TearDownForRaidExit` nor `ClearAllRolls` touch it, and nothing prunes it on a
 roster change. When the named lootmaster disconnects, `GetLootmaster()` still returns their key, so
@@ -409,6 +450,11 @@ the harness does not load `Core.lua`.
 
 ## B32 — handing the lootmaster role over broadcasts nothing — FIXED 2026-07-30
 
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
+
 Typing a successor's name makes `IsConfigOwner()` false on the outgoing owner's own client, so
 `ApplyOwnConfig` wipes `raidConfig` and `CouncilNamesTable` and returns, and `BroadcastRaidConfig`
 returns without sending. Peers still name the outgoing owner; the successor's own field does not name
@@ -422,6 +468,11 @@ arrives. Its own token rather than a config with an empty field: an older client
 and record the person stepping DOWN as lootmaster. Covered by `tests/test_lc_churn.lua`.
 
 ## B33 — an empty Lootmaster field means no config owner at all — FIXED 2026-07-30
+
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
 
 `IsConfigOwner()` reads `KART_Settings.lcLootmaster` directly, so an empty field — an explicitly
 supported setup per `LC_SET_LOOTMASTER_HINT` — means `ApplyOwnConfig` and `BroadcastRaidConfig` both
@@ -479,6 +530,11 @@ asking anybody about it.
   one client answers `IsLootOwner()`, which is what would have caught the leaderless raid at once.
 
 ## B69 — a reloaded raid leader answers "start a session?" and pushes its own settings over the raid's — FIXED 2026-07-30
+
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
 
 The residue of B68: 7 of 3000 soak runs, `KART_SOAK_DEBUG=878`. Traced end to end rather than
 guessed at — two guesses about this area were wrong first, and both are recorded below so they are
@@ -577,6 +633,11 @@ difference.
 
 ## B58 — nobody hands a late joiner the config while the lootmaster is away — FIXED 2026-07-30
 
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
+
 Follows from B29's fix, and is the price of not letting a stand-in rewrite the raid's settings.
 `LC.HandleStateRequest` sends the config only if `LC.IsConfigOwner()`, and while a named lootmaster is
 merely absent that is nobody: the stand-in leader owns the loot flow but not the settings, on purpose.
@@ -645,7 +706,7 @@ either, but real for one that already had them.
 
 ## B62 — a client on the previous release rejects everything a stand-in or a successor sends — MITIGATED 2026-07-30
 
-`LC_RESIGN` and `LC_SESSION_RESUME` are new tokens, and an older client drops an unknown token
+`LC_SESSION_RESUME` is a new token (`LC_RESIGN` was one too, and the ownership rework removed it), and an older client drops an unknown token
 silently. So a v3.2.1 client keeps naming a lootmaster who has left or stepped down, which makes
 `IsSenderLootOwner` reject every `LC_START`, `LC_ACTIVE` and `LC_END_ROUND` from whoever actually
 took over — no vote window on any item, for the rest of the raid, with nothing printed on either
@@ -713,6 +774,11 @@ and names the item. Only Auto-Pass users are told — they are the ones whose ex
 and who are now looking at a window they have to answer themselves.
 
 ## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow
+
+> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
+> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
+> history: each one is a real failure this guild paid for, and the rules were written to make them
+> unreachable rather than merely fixed.
 
 No config is on the wire until a session starts, so until then every client has
 `raidConfig.lootmaster == ""` and the raid-leader fallback is live on the leader while the lootmaster's

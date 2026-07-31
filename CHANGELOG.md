@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.2.2] - 2026-07-29
 ### Fixed
+- **The raid leader now owns the raid-wide Loot Council settings**, and the Lootmaster field says who hands out the loot.
+- **A lootmaster whose nickname nobody can read no longer costs the raid its settings.**
+- **Taking raid lead tells you the raid is now running on your settings.**
 - **Blizzard's own confirmation dialogs work again.** Upgrading an item could be refused outright until you reloaded.
 - **Whoever hands out the loot is told which raiders run a KART too old to take part**, instead of their clients ignoring the whole distribution in silence.
 - **An item the loot council never picked up is no longer passed on automatically.** Blizzard's roll window stays open so the raid can roll on it, and KART says so.

@@ -8,6 +8,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [3.2.2] - 2026-07-29
 ### Behoben
+- **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.
+- **Ein Lootmaster, dessen Nickname niemand lesen kann, kostet den Raid nicht mehr seine Einstellungen.**
+- **Wer Raidlead übernimmt, erfährt, dass der Raid ab jetzt auf seinen Einstellungen läuft.**
 - **Blizzards eigene Bestätigungsdialoge funktionieren wieder.** Das Aufwerten eines Items konnte bis zum nächsten Reload komplett verweigert werden.
 - **Wer die Lootverteilung macht, erfährt jetzt, welche Raider ein zu altes KART haben**, statt dass deren Clients die ganze Verteilung stillschweigend ignorieren.
 - **Ein Item, das das Loot Council nie aufgenommen hat, wird nicht mehr automatisch gepasst.** Blizzards Würfelfenster bleibt offen, damit der Raid darauf würfeln kann, und KART sagt Bescheid.
