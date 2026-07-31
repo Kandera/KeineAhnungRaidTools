@@ -560,9 +560,17 @@ do
     T.eq(lm.KART.LC.promptedThisSession, true, "answering it closes the question")
 end
 
--- A handover must not cost the raid its settings. Clearing the lootmaster on every peer makes the
--- raid leader the derived config owner, and on the next roster change they broadcast their OWN
--- settings over the raid: council list gone, rolls off, vote labels changed mid-session.
+-- A handover must not cost the raid its council or leave it reading two different button lists.
+--
+-- Whose settings the raid runs on is settled: the raid LEADER's (docs/OWNERSHIP.md), announced with
+-- LC_CONFIG_OWNER_NOW the moment the role arrives. So the leader's roll setting replacing the old one
+-- here is the rule working, not a loss -- what must not happen is the council list going with it (an
+-- empty one means "not configured", B75) or the raid ending up on two different button sets.
+--
+-- This used to assert that NOTHING changed, and passed for the wrong reason: in a split raid nobody
+-- re-broadcast on a roster change at all. The leader's re-broadcast sat behind a loot-owner gate, so
+-- a leader who had designated somebody else never sent, and the designee's own send returned at the
+-- config-owner check. B76 made that visible.
 do
     local sim = NewRaid()
     RaidSim.Promote(sim, "Corvin")            -- the lootmaster is not the raid leader
@@ -577,8 +585,9 @@ do
 
     T.truthy(RaidSim.As(successor, successor.KART.LC.IsCouncil),
         "a council member is still council after the lootmaster steps down")
-    T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true,
-        "and the raid keeps its roll setting")
+    T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled),
+         RaidSim.As(sim.byName.Corvin, sim.byName.Corvin.KART.LC.GetRollsEnabled),
+        "and the raid reads the roll setting of whoever holds raid lead")
     T.deep_eq(RaidSim.As(alric, alric.KART.LC.GetButtonConfig),
               RaidSim.As(successor, successor.KART.LC.GetButtonConfig),
         "and everyone still reads the same vote buttons")
@@ -897,7 +906,6 @@ end
 -- authority, and a stale forwarded copy could undo the real lootmaster's own broadcast.
 do
     local sim, lm, council, raider = NewRaid()
-    local lmKey = lm.guid
     -- Same setup as above, so the stand-in really is the loot owner and its relay really goes out.
     RaidSim.Leave(sim, lm.name)
     RaidSim.Promote(sim, council.name)
@@ -919,8 +927,14 @@ do
     T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY") > 0, true, "and it did go out")
     T.eq(raider.KART.LC.raidConfig.buttonLabels, before,
         "but a relay aimed at someone who already has a config changes nothing")
-    T.eq(raider.KART.LC.raidConfig.lootmaster, lmKey,
-        "and cannot take the lootmaster off them either")
+    -- The DESIGNATION is not asserted here any more, and deliberately: the lootmaster in this setup
+    -- has left the raid, the stand-in holds raid lead with an empty field of their own, and the
+    -- re-broadcast that now reaches everyone clears the departed name -- which is the same thing the
+    -- stand-in test above requires ("the departed name is gone from the config"). What this case is
+    -- about is the relay, and the relay still cannot overwrite anything.
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetLootmaster),
+         RaidSim.As(sim.byName.Merrit, sim.byName.Merrit.KART.LC.GetLootmaster),
+        "and the raid still reads one loot owner")
 end
 
 -- ===================================================================================

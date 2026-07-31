@@ -862,7 +862,27 @@ function LC.ApplyOwnConfig()
     LC.raidConfig.minQuality     = KART_Settings.lcMinQuality or 4
     LC.raidConfig.buttonLabels   = KART_Settings.lcButtonLabels or ""
     LC.raidConfig.rollsEnabled   = KART_Settings.lcRollsEnabled == true
-    LC.raidConfig.lootmaster     = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
+    -- An EMPTY Lootmaster field means "not configured", not "this raid designates nobody" (B76). Same
+    -- rule as the council list below, one field over, and it was written for exactly this shape:
+    -- raid lead moves to somebody who has never filled the field in -- a stand-in, or a promotion by
+    -- accident -- and writing their emptiness in made them answer LC.IsLootOwner with "yes" while
+    -- everybody else still pointed at the person actually handing out the loot. Both halves stay
+    -- internally consistent, which is what makes it so quiet: the new leader force-wins the next item
+    -- and announces it, and every client that still holds the designation rejects the LC_START
+    -- (LC.HandleStart opens with IsSenderLootOwner), so the roll exists on part of the raid and a
+    -- vote cast on it is dropped for good by the rest.
+    --
+    -- The Lootmaster field is documented as required, which is what makes this the right direction:
+    -- an empty one is somebody who has not got round to it, never "nobody hands out loot tonight".
+    -- Narrow the same way: a field that HAS a name replaces the designation outright, so changing who
+    -- hands out the loot still takes one broadcast.
+    -- LC.GetLootmaster, not the raw field: a designation naming somebody who has LEFT is already
+    -- masked to "" there, and that case must still clear. It is the one time the raid genuinely has
+    -- to move on -- the stand-in's empty field becomes the raid's, and the role follows raid lead
+    -- from then on. Keeping a departed name would leave the raid pointed at an empty chair.
+    if (KART_Settings.lcLootmaster or "") ~= "" or LC.GetLootmaster() == "" then
+        LC.raidConfig.lootmaster = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
+    end
     -- Same rule the receiving side applies (see TryAcceptConfig): an empty council list means "not
     -- configured", not "this raid has no council". It has to hold on BOTH sides or they disagree --
     -- the config owner never processes its own broadcast, so leaving it out here made the new leader
@@ -907,8 +927,16 @@ function LC.BroadcastRaidConfig(target)
     -- The config owner CAN resolve it: they typed it, and they are in the raid with that person. So
     -- they do it once and put the identity key on the wire. Raw text only when even we cannot place
     -- them yet -- a receiver may still manage, and LC.RetryPendingResolutions covers the rest.
+    -- The designation IN FORCE, for the same reason the council list below is: LC.ApplyOwnConfig has
+    -- just written it and keeps the raid's when our own field is empty (B76). Sending the raw field
+    -- instead would put an emptiness on the wire that we had deliberately declined to adopt -- and a
+    -- client with no config yet has nothing to keep, so a newcomer would end up as the only person
+    -- in the raid who does not know who hands out the loot.
     local lootmasterField = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
-    local lootmaster = LC.ResolveConfigName(lootmasterField) or lootmasterField
+    local lootmaster = LC.raidConfig.lootmaster
+    if not lootmaster or lootmaster == "" then
+        lootmaster = LC.ResolveConfigName(lootmasterField) or lootmasterField
+    end
     -- The council list IN FORCE, not our own raw setting. LC.ApplyOwnConfig has just written it, and
     -- it keeps the raid's list when ours is empty ("not configured", see there) -- so sending the raw
     -- setting would hand a newcomer an empty council while everybody already here has the real one.
@@ -2375,12 +2403,23 @@ function LC.CheckRaidJoin()
 
     LC.CheckStandIn()
 
+    -- Re-broadcast the authoritative config on every roster change so late joiners get it too.
+    --
+    -- ABOVE the loot-owner gate below, and that is the whole point: the config belongs to the raid
+    -- LEADER and the loot flow to whoever they designate, and those are different people in the
+    -- normal split setup (one person leads, another hands out the loot -- see docs/OWNERSHIP.md).
+    -- Behind that gate, a leader who had designated somebody else stopped re-broadcasting entirely,
+    -- so nobody in the raid re-sent the config on a roster change and every late arrival was left on
+    -- their own vote buttons, minimum quality and roll setting. It was invisible while an empty
+    -- Lootmaster field still made the leader the loot owner as well; B76 took that coincidence away
+    -- and the soak went from 4 disagreements in 30000 runs to 2885 in 8000.
+    --
+    -- BroadcastRaidConfig self-gates on LC.IsConfigOwner, so this needs no ownership test of its own.
+    if LC.sessionActive then LC.BroadcastRaidConfig() end
+
     -- The loot owner, not the raid leader (see LC.IsLootOwner): they open and close the session, so
     -- they are also the one who gets asked whether to start one.
     if not LC.IsLootOwner() then return end
-
-    -- Re-broadcast the authoritative config on every roster change so late joiners get it too.
-    if LC.sessionActive then LC.BroadcastRaidConfig() end
 
     if LC.promptedThisSession then return end
     LC.promptedThisSession = true

@@ -18,6 +18,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Raidlead, der neu lädt, bekommt die Council-Liste des Raids zurück** — statt von jemandem beantwortet zu werden, der ebenfalls gerade neu geladen hat, womit die Hälfte des Raids nichts mehr vergeben konnte.
 - **Ein Item nach einem Reload neu zuzuweisen funktioniert wieder.** Der Raid behielt den alten Gewinner, während auf deinem Bildschirm der neue stand.
 - **Ein kurzer Verbindungshänger kostet einen Raider nicht mehr seine Stimme.** Kurz bevor das Council entscheidet, werden die Stimmen zu einem Item noch einmal eingesammelt.
+- **Raidlead zu übernehmen nimmt dem Raid nicht mehr den Lootmaster.** Ein leeres Lootmaster-Feld heißt jetzt „noch nicht gesetzt“ statt „niemand“.
+- **Die Raid-Einstellungen erreichen wieder alle, wenn der Lootmaster nicht der Raidlead ist.** Bisher hat sie niemand nachgeschickt — wer später dazukam, lief auf seinen eigenen Vote-Buttons, seiner Mindestqualität und seiner Wurf-Einstellung.
 - **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.

@@ -99,6 +99,18 @@ local function runOne(seed)
     -- window is announced to somebody who is not listening yet, and LC_START is never re-sent -- so
     -- they are left out of THAT item's comparison and held to everything else (B66).
     local recovering = {}
+    -- Somebody is still getting their state back. An award announced now reaches a client that
+    -- cannot authorize the sender yet -- Trade.HandleResult gates on LC.IsSenderCouncil and a
+    -- reloaded client has no council list until the config comes back -- so it never gets that
+    -- award, and the history catch-up only runs on JOIN (B66). Exactly the reason the throttle
+    -- already exempts one; the reload had been left out of it, and the end-state history check held
+    -- the reloaded client to a row it could never have received.
+    local function anyoneRecovering()
+        for _, until_ in pairs(recovering) do
+            if KARTTEST.now < until_ then return true end
+        end
+        return false
+    end
     local function check(id, what)
         if unreliable[id] then return end
         for _, line in ipairs(F.Disagreements(sim, id, present[id], true)) do
@@ -219,7 +231,7 @@ local function runOne(seed)
             -- message was dropped -- rejects the LC_RESULT outright, so it has neither the award in
             -- its history nor the winner on the roll, and nothing re-announces either (B66). The
             -- clash rule cannot converge what never arrived.
-            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil or anyoneRecovering() then
                 unreliableAward[id] = true
                 unreliable[id] = true
             end
@@ -297,7 +309,7 @@ local function runOne(seed)
             if not id then return end
             local by, winner = councilMember(), pick(sim.clients)
             if not by then return end
-            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil or anyoneRecovering() then
                 -- Both, and for the same reason: a client that could not authorize the sender at
                 -- that instant (its council list had not arrived) rejects the LC_RESULT, so it has
                 -- neither the award in its history NOR the winner on the roll, and nothing

@@ -54,9 +54,13 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
-**Standing measurement, 2026-07-31:** 4 of 30000 soak runs disagree, and all four are the two
-entries below -- B76 twice (seeds 6151, 16848) and B77 twice (seeds 12530, 29229). Nothing else
-in the random walk breaks. `KART_SOAK_SEEDS=30000` reproduces it; `KART_SOAK_ONLY=<seed>` runs one.
+**Standing measurement, 2026-07-31:** 0 of 8000 soak runs disagree. Everything in Tier 0 is closed.
+`KART_SOAK_SEEDS=30000` is the deeper run worth doing before a raid night; `KART_SOAK_ONLY=<seed>`
+runs a single one, which is the whole debugger.
+
+The number is worth keeping current: a new signature standing next to a known-empty result is a new
+finding rather than noise, and the last pass showed how much that matters -- of the seventeen breaks
+at 30000 seeds, thirteen turned out to be the harness asking for something a raid cannot do.
 
 ## Found 2026-07-31 by three new soak steps
 
@@ -134,51 +138,60 @@ not restored -- a history row cannot say whether somebody confirmed a dialog, an
 is the answer that loses a tie-break rather than winning one it may not be entitled to. Both
 clauses go red when removed.
 
-## B76 — OPEN — a leader who may not publish its config still acts on it
+## B76 — FIXED 2026-07-31 — an empty Lootmaster field wiped the raid's designation
 
-Found by the soak: 2 of 30000 runs, seeds 6151 and 16848. Reproduce with `KART_SOAK_ONLY=6151
-KART_SOAK_DEBUG=6151`; the config trace prints the designation and `IsLootOwner` per client.
+Found by the soak: 2 of 30000 runs, seeds 6151 and 16848. It needs no reload at all -- one promotion
+is enough, and the reload only made it likelier by clearing what was in memory.
 
-**Not fixed on purpose.** It sits on the ownership core the maintainer settled this week
-(`docs/OWNERSHIP.md`), the plausible fix has a failure mode of its own, and one wrong move there
-costs a raid night. It wants a decision, not a guess.
+### What happens
 
-### What happens, measured
+"An EMPTY council list means *not configured*, not *this raid has no council*" was written for
+exactly this shape and stopped one field over. Raid lead moves to somebody who has never filled the
+Lootmaster field in -- a stand-in, or a promotion by accident -- `LC.ApplyOwnConfig` writes their
+empty field in as the raid's designation, and from that instant they answer `LC.IsLootOwner` with
+"yes" while everybody else still points at the person actually handing out the loot. Both halves stay
+internally consistent, which is what makes it so quiet.
 
-Raid lead moves to Sinja, who then reloads. Coming back, Sinja is raid leader with no settings of
-its own, so `LC.ApplyOwnConfig` writes its own empty Lootmaster field in and marks the config
-`fromSelf`. The rest of the raid still holds the designation it had all along: Bramor.
+An item dropping in that window is force-won by the new leader and announced by them -- and every
+client that still holds the designation rejects the `LC_START`, because `LC.HandleStart` opens with
+`IsSenderLootOwner`. The roll then exists on part of the raid, and a vote cast on it is dropped for
+good by the rest.
 
-For eighteen seconds the raid is split, and both halves are being consistent:
+### The fix, and the second bug it exposed
 
-* Sinja reads "no designation, and I hold raid lead" and answers `LC.IsLootOwner` with **true**.
-* Merrit, Corvin, Alric and Torvi read "Bramor is designated and Bramor is here", so for them the
-  loot owner is Bramor and Sinja is nobody.
+The rule now holds for the designation too: an empty field keeps what the raid has, a field with a
+name replaces it outright, and a designee who has LEFT is cleared (`LC.GetLootmaster` masks a name
+that is no longer in the group, and that case must still clear -- keeping it would point the raid at
+an empty chair). `LC.BroadcastRaidConfig` sends the designation IN FORCE rather than the raw field,
+for the same reason it already sends the council list in force: a client with no config yet has
+nothing to keep, so a newcomer would otherwise be the only person in the raid who does not know who
+hands out the loot.
 
-An item drops in that window. Sinja force-wins it and broadcasts `LC_START`, and **four of the six
-clients reject it** — `LC.HandleStart` opens with `IsSenderLootOwner`. The roll then exists on two
-clients out of six. Everything downstream follows from that: a vote cast on one of the two lands on
-a client that has never heard of the roll and is dropped for good (`Vote.HandleVote` returns on
-`not LC.rollItems[rollID]`, and a vote is sent once with no retry).
+That alone took the soak from 4 disagreements in 30000 runs to **2885 in 8000**, and the cause was a
+separate defect it had been hiding:
 
-### Why the existing guard does not catch it
+> The config re-broadcast on every roster change sat behind `if not LC.IsLootOwner() then return end`
+> -- a gate whose stated purpose is the session prompt below it.
 
-`fromSelf` already exists for exactly this client, and `LC.IsConfigOwner` uses it to stop a reloaded
-leader from *publishing* its invented config over the raid's (B69). It does not stop that client
-from *acting* on it. So the addon's own answer is "this config is a guess, do not tell anyone" while
-the same guess decides who force-wins the boss's loot.
+The config belongs to the raid LEADER and the loot flow to whoever they designate, and in the normal
+split setup those are different people. Behind that gate, a leader who had designated somebody else
+never re-broadcast, and the designee's own send returned immediately at the config-owner check --
+**so in a split raid nobody re-sent the config on a roster change at all**, and every late arrival
+ran the evening on their own vote buttons, minimum quality and roll setting. It was invisible only
+because an empty Lootmaster field used to make the leader the loot owner as well. The re-broadcast
+now sits above the gate; `BroadcastRaidConfig` self-gates on `IsConfigOwner`, so it needs no
+ownership test of its own.
 
-### The obvious fix, and its own failure mode
+Three of the four clauses go red when removed. The fourth -- reading `LC.GetLootmaster()` rather than
+the stored key, so a departed designee still clears -- has its own test but stays green under
+mutation: another path already clears that case. Kept because it states the intent, not because it is
+proven.
 
-Make the raid-leader fallback in `LC.IsLootOwner` yield to the same `selfInvented` predicate
-`HandleConfigRelay` and `StateStillNeeded` already share -- while our config is a guess we do not
-know whether the raid has a designation, so we must not act as though it has none.
+**Measured after: 0 of 8000 runs disagree.**
 
-The cost is that for those seconds **nobody** owns the loot flow: the four clients point at Bramor,
-who has just reloaded too and does not claim it either. An item dropping inside that window would
-then be force-won by nobody at all, which is worse than being force-won by somebody half the raid
-disagrees with. Whether the answer is a short grace, a claim the leader has to have acknowledged, or
-letting peers accept `LC_START` from the current raid leader outright is the decision to make.
+Two existing tests asserted the old behaviour and were rewritten, not deleted: with the re-broadcast
+restored, a promotion really does move the raid onto the new leader's settings. That is the rule
+`LC_CONFIG_OWNER_NOW` announces, and it was simply never reaching anyone.
 
 ## B75 — FIXED 2026-07-31 — two clients with amnesia confirm each other, and the raid splits
 

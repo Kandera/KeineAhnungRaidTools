@@ -299,3 +299,75 @@ do
     T.truthy(RaidSim.As(leader, function() return leader.KART.LC.IsCouncil(sim.byName.Merrit.guid) end),
         "the lookup the awards are gated on says the same")
 end
+
+-- An empty Lootmaster field means "not configured" too (B76) --------------------------------------
+-- The rule below it -- an empty council list does not clear the raid's -- was written for exactly
+-- this shape and stopped one field short. Raid lead moves to somebody who has never filled the
+-- Lootmaster field in (the ordinary case: a stand-in, or a promotion by accident), LC.ApplyOwnConfig
+-- writes their empty field in as the raid's designation, and from that instant they answer
+-- LC.IsLootOwner with "yes" while everybody else still points at the person actually handing out the
+-- loot. Both halves are internally consistent, which is what makes it so quiet.
+--
+-- An item dropping in that window is force-won by the new leader and announced by them -- and every
+-- client that still holds the designation rejects the LC_START, because LC.HandleStart opens with
+-- IsSenderLootOwner. The roll then exists on part of the raid, and a vote cast on it is dropped for
+-- good by the rest. Found by the soak; no reload needed, one promotion is enough.
+do
+    local sim, lm = F.NewRaid()
+    local sinja, merrit = sim.byName.Sinja, sim.byName.Merrit
+    T.eq(sinja.env.KART_Settings.lcLootmaster or "", "",
+        "the incoming leader has no designation of their own")
+
+    RaidSim.Promote(sim, "Sinja")
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+
+    T.eq(sinja.KART.LC.raidConfig.lootmaster, lm.guid,
+        "taking lead with an empty field keeps the designation the raid already has")
+    T.truthy(not RaidSim.As(sinja, sinja.KART.LC.IsLootOwner),
+        "so the new leader does not also take over the loot flow")
+    T.eq(merrit.KART.LC.raidConfig.lootmaster, lm.guid, "and the raid still agrees who that is")
+    T.truthy(RaidSim.As(merrit, function() return merrit.KART.LC.IsSenderLootOwner(lm.guid) end),
+        "so an item the lootmaster announces is still accepted")
+end
+
+do
+    -- ...and a leader who HAS filled it in still replaces the designation outright, so changing who
+    -- hands out the loot takes one broadcast and not a negotiation.
+    local sim = F.NewRaid()
+    local sinja, merrit = sim.byName.Sinja, sim.byName.Merrit
+    RaidSim.Promote(sim, "Sinja")
+    RaidSim.As(sinja, function()
+        sinja.env.KART_Settings.lcLootmaster = "Corvin"
+        sinja.KART.LC.ApplyOwnConfig()
+        sinja.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(sinja.KART.LC.raidConfig.lootmaster, sim.byName.Corvin.guid, "the new designation takes")
+    T.eq(merrit.KART.LC.raidConfig.lootmaster, sim.byName.Corvin.guid, "and reaches the raid")
+end
+
+do
+    -- The one time the designation genuinely has to go: the person named in it has LEFT. Keeping it
+    -- would point the whole raid at an empty chair, and the rule above -- an empty field keeps what
+    -- the raid has -- would do exactly that if it read the stored key instead of LC.GetLootmaster,
+    -- which masks a name that is no longer in the group. The raid leader takes the loot flow over
+    -- from that moment, which is what standing in means.
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Sinja")             -- lead moves; Sinja has no field of their own
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+    T.eq(sim.byName.Sinja.KART.LC.raidConfig.lootmaster, lm.guid, "the designation is still Bramor's")
+
+    RaidSim.Leave(sim, "Bramor")
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+
+    local sinja = sim.byName.Sinja
+    T.eq(sinja.KART.LC.raidConfig.lootmaster, "",
+        "once the designee has left, the raid stops naming them")
+    T.truthy(RaidSim.As(sinja, sinja.KART.LC.IsLootOwner),
+        "and the raid leader carries the loot flow instead")
+    T.eq(sim.byName.Merrit.KART.LC.raidConfig.lootmaster, "", "on every client, not just theirs")
+end

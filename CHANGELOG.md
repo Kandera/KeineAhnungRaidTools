@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A raid leader who reloads gets the raid's council list back**, instead of being answered by whoever else had just reloaded and leaving half the raid unable to award anything.
 - **Changing your mind about an item still works after a reload.** The raid used to keep the earlier winner while your own screen showed the new one.
 - **A moment's connection hiccup no longer costs a raider their vote.** The votes on an item are collected again shortly before the council decides.
+- **Taking raid lead no longer takes the Lootmaster away from the raid.** An empty Lootmaster field now means "not set yet" rather than "nobody".
+- **The raid's settings reach everyone again when the Lootmaster is not the raid leader.** Nobody was re-sending them, so anyone arriving late ran on their own vote buttons, minimum quality and roll setting.
 - **Two council members awarding the same item at once no longer leaves the raid disagreeing about who won**, and says so.
 - **A Lootmaster name KART cannot place is reported instead of quietly ignored.**
 - **The raid leader now owns the raid-wide Loot Council settings**, and the Lootmaster field says who hands out the loot.
