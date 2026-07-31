@@ -128,12 +128,11 @@ do
         "a stamp taken after the restore is in the saved file straight away")
 end
 
--- Losing raid lead is not a handover (B70, partial) -------------------------------------------------
--- An empty Lootmaster field means the raid leader's own settings ARE the raid's (B33). When raid lead
--- then moves, LC.ApplyOwnConfig used to treat that exactly like a deliberate handover: broadcast
--- LC_RESIGN and wipe our copy. Nothing was handed over, and the new leader cannot claim the config
--- (LC.IsConfigOwner needs sessionStartedByUs), so that wipe destroyed the only copy in existence and
--- the raid spent the night on its own defaults -- rolls off. This keeps the copy.
+-- Raid lead moves: exactly one config owner, and it is the new leader ------------------------------
+-- B70 was "nobody owns the config after a lead change, and the raid silently falls back to its own
+-- defaults for the rest of the night". The ownership rule (docs/OWNERSHIP.md) removes the question:
+-- ownership is raid lead, so it can never be held by nobody and never by two people. Both halves are
+-- asserted, because both were real failures (B70 and B64).
 do
     local sim = RaidSim.New(F.MEMBERS)
     RaidSim.Install(sim)
@@ -146,43 +145,27 @@ do
     end)
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(5)
-    T.truthy(first.KART.LC.raidConfig.fromSelf, "the empty-field leader holds the raid's config")
 
-    RaidSim.ClearLog(sim)
+    local function ownerCount()
+        local n, who = 0, nil
+        for _, c in ipairs(sim.clients) do
+            if RaidSim.As(c, c.KART.LC.IsConfigOwner) then n, who = n + 1, c.name end
+        end
+        return n, who
+    end
+
+    local n, who = ownerCount()
+    T.eq(n, 1, "exactly one client owns the config")
+    T.eq(who, "Bramor", "and it is the raid leader")
+
     RaidSim.Promote(sim, "Sinja")
     RaidSim.RosterUpdate(sim)
     KARTTEST.AdvanceTime(5)
 
-    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 0, "losing raid lead is not announced as a handover")
-    T.truthy(first.KART.LC.raidConfig.fromSelf,
-        "and the config they were holding for the raid is still there to hand on")
-    T.eq(RaidSim.As(first, first.KART.LC.GetRollsEnabled), true, "with the raid's roll setting intact")
-    T.truthy(not RaidSim.As(first, first.KART.LC.IsConfigOwner),
-        "while they have correctly stopped being the config owner")
-end
-
--- A real handover still resigns ---------------------------------------------------------------------
--- The branch above must not swallow the case it was written for (B32): naming somebody else in the
--- Lootmaster field is a deliberate handover, and every peer has to be told to stop naming us.
-do
-    local sim = RaidSim.New(F.MEMBERS)
-    RaidSim.Install(sim)
-    local first = sim.byName.Bramor
-    RaidSim.As(first, function()
-        first.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
-        first.KART.LC.ApplyOwnConfig()
-        first.KART.LC.SetSessionActive(true)
-    end)
-    RaidSim.RosterUpdate(sim)
-    KARTTEST.AdvanceTime(5)
-    RaidSim.ClearLog(sim)
-
-    RaidSim.As(first, function()
-        first.env.KART_Settings.lcLootmaster = "Merrit"   -- handing the role over
-        first.KART.LC.ApplyOwnConfig()
-    end)
-    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 1, "naming somebody else still resigns out loud")
-    T.truthy(next(first.KART.LC.raidConfig) == nil, "and drops our own copy")
+    n, who = ownerCount()
+    T.eq(n, 1, "still exactly one after the lead moves -- never nobody (B70), never two (B64)")
+    T.eq(who, "Sinja", "and it is the new raid leader")
+    T.eq(table.concat(F.Disagreements(sim), " | "), "", "with the raid of one mind about the config")
 end
 
 local function Capture(fn)

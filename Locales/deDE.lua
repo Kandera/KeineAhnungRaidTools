@@ -280,6 +280,7 @@ KART.L_deDE = {
     LC_STATUS_TOLD         = "mitgeteilt",
     LC_STATUS_UNTOLD       = "nie mitgeteilt",
     LC_STATUS_TRACKED      = "Verfolgte Würfe: %d (%d davon meine zum Verteilen), Vote-Zeilen: %d, Council-Tabs: %d",
+    LC_CONFIG_OWNER_NOW    = "Du hast Raidlead, also läuft der Raid ab jetzt auf DEINEN Loot-Council-Einstellungen -- Vote-Buttons, Mindestqualität, Würfe und Council-Liste. Schau sie dir an, falls du damit nicht gerechnet hast.",
     LC_LOOTMASTER_EMPTY_WARN = "Dein Lootmaster-Feld ist leer -- der Raid läuft nur so lange auf deinen Einstellungen, wie du Raidlead hast. Trag einen Namen ein, deinen eigenen reicht, sonst verliert der Raid sie kommentarlos.",
     LC_ROLL_UNANNOUNCED    ="%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",

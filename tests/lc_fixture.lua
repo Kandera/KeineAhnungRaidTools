@@ -91,8 +91,21 @@ end
 -- A whole class of ownership bug is invisible without this.
 function F.NewSplitRaid()
     local sim, lm, council, raider = F.NewRaid()
-    RaidSim.Promote(sim, "Corvin")
-    return sim, lm, council, raider, sim.byName.Corvin
+    local leader = RaidSim.Promote(sim, "Corvin")
+    -- The DESIGNATION lives on the config owner's client, and the config owner is the raid leader
+    -- (docs/OWNERSHIP.md). So the leader is the one who has to name the lootmaster -- that is the
+    -- whole point of the split: one person leads, another hands out the loot, and the leader says
+    -- which. A leader with an empty field is a raid that has designated nobody, which is a different
+    -- setup and is covered by F.NewRaid.
+    RaidSim.As(leader, function()
+        leader.env.KART_Settings.lcLootmaster     = "Bramor"
+        leader.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
+        leader.env.KART_Settings.lcRollsEnabled   = true
+        leader.KART.LC.ApplyOwnConfig()
+        leader.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+    return sim, lm, council, raider, leader
 end
 
 -- One item drops. Blizzard raises START_LOOT_ROLL on every eligible client independently; the loot

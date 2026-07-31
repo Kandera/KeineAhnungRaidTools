@@ -105,6 +105,7 @@ dofile("tests/test_lc_churn.lua")
 -- them fail outright, and that failure is real, not an artifact: see B70 in docs/BACKLOG.md. The
 -- reseeding belongs with that fix, so until then new files go at the END.
 dofile("tests/test_lc_reload.lua")
+dofile("tests/test_lc_ownership.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
