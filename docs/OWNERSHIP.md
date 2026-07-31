@@ -53,6 +53,10 @@ whoever stands in for you on an evening you are out, so they do not configure fr
 
 ## What must stay true
 
+Held to the 10-out-of-10 standard in `MANIFEST.md` -- C1, C2, C3, C9 and C10 are these rules seen
+from the raid's side.
+
+
 * Exactly one client broadcasts a config at any moment, and every client can name which one.
 * No client ever has to decide between two configs on content.
 * A raider never needs to configure anything for the raid to work.

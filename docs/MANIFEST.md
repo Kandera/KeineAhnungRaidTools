@@ -1,6 +1,10 @@
-# Core functions: the ones that must work ten times out of ten
+# The Manifest
 
-The maintainer's standard, in their own words about the ownership rework: *"Die Funktion ist eine der
+**The core functions, and the standard they are held to: ten times out of ten.** Named "das Manifest"
+by the maintainer on 2026-07-31 so it can be pointed at in one word -- "gegen das Manifest getestet",
+"das bricht C7". Use that name; it is the whole reason this file has a short one.
+
+The standard, in the maintainer's own words about the ownership rework: *"Die Funktion ist eine der
 10/10 Grundfunktionen die funktionieren muss."*
 
 **DRAFT — the list below is derived, not dictated.** It comes from `docs/OWNERSHIP.md`, from the

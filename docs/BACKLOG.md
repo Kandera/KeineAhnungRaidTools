@@ -3,7 +3,8 @@
 Defects found while working through the v3.0.0 library extraction and the raids after it, each with
 a traced cause rather than a guess. This file exists so the diagnosis is not redone from scratch.
 
-Companion to `REVIEW-DECISIONS.md`, which records findings deliberately **not** changed. This file
+Companion to `MANIFEST.md` (the core functions and the 10-out-of-10 standard they are held to) and to
+`REVIEW-DECISIONS.md`, which records findings deliberately **not** changed. This file
 records findings that *should* change, eventually. An entry is deleted once it is fixed — the code
 and its comments carry the diagnosis from then on, and `git log --grep=Bnn` finds the commit.
 

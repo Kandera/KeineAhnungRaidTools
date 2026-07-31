@@ -19,3 +19,13 @@ When updating `CHANGELOG.md`/`README.md` for a user-facing change, update `CHANG
 ## Changelog style: one line per entry
 
 Each changelog entry is **one line, at most two lines for big changes**. Bold lead + short effect clause — often the bold lead alone is the whole entry (e.g. "**Settings tab moved to the bottom of the sidebar.**"). Never include: technical causes, "was X, now Y" explanations, design rationale, implementation details, examples. The commit message and code carry those — the changelog is for players skimming what changed.
+
+## The Manifest
+
+`docs/MANIFEST.md` is the list of core functions and the standard they are held to: **ten attempts in
+the game, ten successes.** Refer to it by that name -- "gegen das Manifest getestet", "das bricht C7"
+-- and check a change against it before calling the change done. The automated suite is the floor,
+not the standard: it cannot see a cursor, a Blizzard roll window or a real reload.
+
+`docs/OWNERSHIP.md` is the settled rule for who owns the settings and who hands out the loot. A
+change that touches ownership is a change to that document first.
