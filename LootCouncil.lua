@@ -560,10 +560,13 @@ local function LootmasterAbsent()
     return KASC.Identity.FindUnitForKey(key) == nil
 end
 
+-- One derivation for everybody, owner included. LC.ApplyOwnConfig has already written the owner's
+-- own field into LC.raidConfig, so reading KART_Settings again here only reintroduced an asymmetry:
+-- the owner kept naming a designee who had left while every peer blanked them, so the raid disagreed
+-- about who was handing out loot at exactly the moment it mattered. Absence is resolved the same way
+-- on every client now (see PresentLootmaster), and the stand-in prompt reads the raw field, so an
+-- absent designee still comes back to their role by simply returning.
 function LC.GetLootmaster()
-    if LC.IsConfigOwner() then
-        return LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
-    end
     return PresentLootmaster(LC.raidConfig.lootmaster)
 end
 
@@ -756,38 +759,19 @@ end
 -- Mirrors LC.HandleConfig's parsing exactly, so both write paths produce identical state.
 function LC.ApplyOwnConfig()
     if not LC.IsConfigOwner() then
-        -- We owned it and just handed it over (the lootmaster field now names someone else, e.g.
-        -- after a Sync-button handover): drop our own copy instead of keeping ourselves listed as
-        -- lootmaster until the new owner happens to broadcast. A config we RECEIVED is never touched
-        -- here — that's what the fromSelf marker distinguishes.
-        if LC.raidConfig.fromSelf then
-            -- Two different things end up here and only one of them is a handover (B70).
-            --
-            -- A handover: our Lootmaster field now names somebody else, so we deliberately gave the
-            -- role away. Resigning and erasing is right, and that is what the rest of this branch is.
-            --
-            -- Merely losing raid lead: our field is EMPTY and always was. We held the config through
-            -- the raid-leader fallback alone (the documented B33 setup) and somebody else has just
-            -- been promoted. Nothing was handed over, our settings are still the ones the raid is
-            -- running on -- and this copy may be the only one in existence, because the new leader
-            -- cannot claim the config (LC.IsConfigOwner needs sessionStartedByUs, which is the other
-            -- half of B69 and correct). Erasing it here left the raid with no config from anybody,
-            -- for the rest of the night, every client silently back on its own roll setting: B33
-            -- again, reached from a new direction. Keep it instead, so LC_CONFIG_RELAY can hand it
-            -- to whoever asks. We still are not the config owner and still do not broadcast.
-            if not LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster) then return end
-            -- Say so before erasing it. Nothing else on the wire can express "I am no longer the
-            -- lootmaster": a config broadcast is gated on owning the config, which we just stopped
-            -- doing, so handing the role over used to be completely silent — every peer went on
-            -- naming us while the successor's own field named nobody (B32).
-            --
-            -- Its own token rather than a config with an empty field: an older client would accept
-            -- that config and record the person STEPPING DOWN as lootmaster, which is worse than
-            -- doing nothing. An unrecognised token is dropped silently by KASC's dispatcher.
-            LC.SendLC("LC_RESIGN")
-            wipe(LC.raidConfig)
-            LC.CouncilNamesTable = {}
-        end
+        -- We do not hold raid lead, so our own settings are not the raid's and this writes nothing.
+        --
+        -- Whatever we are holding stays. It is either the raid's config, or -- if we were the leader
+        -- a moment ago -- the config the raid is still running on, and keeping it is strictly better
+        -- than falling back to defaults while the new leader gets round to broadcasting. Their
+        -- LC_CONFIG replaces it when it lands, unconditionally (see TryAcceptConfig): under the new
+        -- rule nothing has to be arbitrated on content, so a stale copy cannot win.
+        --
+        -- The handover branch that used to be here is gone with the rule that needed it. It sent
+        -- LC_RESIGN and wiped, because ownership was a claim and "I am no longer the lootmaster" had
+        -- no other way to reach the raid (B32). Ownership is now the raid leader, which every client
+        -- derives for itself, and a lootmaster change is a designation change inside the config --
+        -- carried by the next broadcast, after the session is restarted. Nothing to announce.
         return
     end
 
@@ -816,7 +800,6 @@ function LC.BroadcastRaidConfig(target)
     -- And not while our claim is a guess nobody has confirmed (see LC.SetSessionActive, B69). This
     -- has to be checked HERE rather than only at the point the session starts: every roster change
     -- re-broadcasts, so a one-off guard would be undone by the next person walking in.
-    if LC.configClaimUnverified then return end
     local minQ     = KART_Settings.lcMinQuality or 4
     local buttons  = KART_Settings.lcButtonLabels or ""
     local rolls    = KART_Settings.lcRollsEnabled and "1" or "0"
@@ -845,11 +828,10 @@ end
 
 -- Hands on the config the RAID agreed, to a client that has none (B65).
 --
--- Once the named lootmaster is gone for good, nobody owns the config: standing in deliberately moves
--- only the loot flow, so the departed name stays in raidConfig and they can pick the role back up
--- when they return (see LC.HandleResign, LC.IsConfigOwner). Nothing re-broadcast it after that, so
--- anyone arriving later ran the evening on their own vote buttons, their own minimum quality and
--- their own roll setting -- and their vote reached the council under a different label than they
+-- The config owner re-broadcasts on every roster change, so a joiner is normally covered by that
+-- alone. This is for the gap before it: somebody who arrives, or comes back from a reload, between
+-- one broadcast and the next ran the evening on their own vote buttons, their own minimum quality
+-- and their own roll setting -- and their vote reached the council under a different label than they
 -- clicked, with nothing to show for it on either side.
 --
 -- Three things keep this from becoming a second, competing authority:
@@ -1505,7 +1487,6 @@ function LC.HandleSessionResume(senderKey)
     -- Same as LC.HandleActive: learned, not decided.
     LC.sessionStartedByUs = false
     -- Somebody answered, so nothing we are holding back is a guess any more (B69).
-    LC.configClaimUnverified = nil
     -- The session was never ours to be asked about: it is already running.
     LC.promptedThisSession = true
     LC.HideSessionPrompt()
@@ -1875,11 +1856,11 @@ end
 --  B62: a raider on an older release cannot take part, and says nothing about it
 -- ==========================================================================
 --
--- LC_RESIGN, LC_SESSION_RESUME, LC_CONFIG_RELAY and LC_ROLL_CATCHUP are new tokens, and an older
--- client drops an unknown token without a word. So a 3.2.1 client keeps naming a lootmaster who has
--- left or stepped down, and its LC.IsSenderLootOwner then rejects every LC_START, LC_ACTIVE and
--- LC_END_ROUND from whoever actually took over: no vote window on any item, for the rest of the
--- raid, silently on both sides.
+-- LC_SESSION_RESUME, LC_CONFIG_RELAY and LC_ROLL_CATCHUP are new tokens, and an older client drops
+-- an unknown token without a word. Worse since the ownership rework (docs/OWNERSHIP.md): an older
+-- client still derives config ownership from "does my own Lootmaster field name me?", so it rejects
+-- the raid leader's config outright and runs the whole evening on its own vote buttons, minimum
+-- quality and roll setting -- with nothing printed on either side.
 --
 -- Nothing here can repair that -- the broken half is running code we cannot change. What it can do
 -- is stop it being a mystery: name the raiders concerned, on the one screen that can act on it,
@@ -1928,63 +1909,13 @@ function LC.WarnOutdatedRaiders()
         LC.PROTOCOL_VERSION, table.concat(fresh, ", ")))
 end
 
--- How long a session declared without an answer holds its config back (see below). One round trip:
--- the loot owner's own reply to a state request is immediate, a peer's is jittered up to seven
--- seconds, so ten covers both with room to spare.
---
--- Deliberately NOT longer. "Nobody answered" and "nobody's answer got through" are the same silence
--- from in here, and the second one is a chat throttle, which is exactly what a pull produces -- so
--- thirty seconds was tried, to outlast a throttle burst. It was then measured against the case it
--- was meant for (soak seed 1377) with the weaker-claim guard in TryAcceptConfig in place, and it
--- changed nothing: that guard already stops an invented config from displacing a real one, whenever
--- it arrives. The longer wait bought no measurable safety and cost a raid genuinely starting with an
--- empty Lootmaster field twenty more seconds without one, so it was taken back out.
-local CONFIG_CLAIM_GRACE = 10
-
 function LC.SetSessionActive(active)
-    -- Captured before the line below flips it: had the raid ever told us what it was already doing?
-    local wasTold = LC.sessionStateKnown
     LC.sessionActive = active
     -- We decided it, so our flag is now an answer and may be quoted to peers (see LC.sessionStateKnown).
     LC.sessionStateKnown = true
     -- And we decided it, which is what entitles a raid leader with an empty Lootmaster field to
     -- distribute their own settings as the raid's (see LC.IsConfigOwner).
     LC.sessionStartedByUs = active and true or false
-
-    -- Did we declare this session without ever hearing what the raid was already doing, on a claim
-    -- that rests only on holding raid lead with an empty Lootmaster field?
-    --
-    -- That is the B69 shape, and it is a normal evening rather than an exotic one: the lootmaster
-    -- steps out, somebody else has raid lead, that stand-in reloads, and three seconds after the
-    -- roster settles they are asked "no session is running, start one?" -- which is true only
-    -- because nobody has answered them yet (the state-request backoff runs 2/5/15/45 seconds). They
-    -- say yes, and BroadcastRaidConfig puts THEIR settings on the wire as the raid's. A raider who
-    -- also reloaded around then takes that config and spends the rest of the evening on a roll
-    -- setting nobody chose -- which decides whether they roll at all, and is silent.
-    --
-    -- The session itself still starts at once; only the CONFIG waits, until either somebody tells us
-    -- what is going on (LC.HandleActive / LC.HandleSessionResume, and if a session really was
-    -- running we are not the config owner anyway) or the asking runs out of attempts, at which point
-    -- nobody is going to answer and our own settings are the raid's by default -- the documented
-    -- empty-field setup (B33). Holding it for that long costs an unconfigured minute at the very
-    -- start of a raid, before any boss has died.
-    if active and not wasTold
-        and not LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster) then
-        LC.configClaimUnverified = true
-        -- Released after one round trip rather than after the whole 2/5/15/45 backoff. A raid that
-        -- IS running answers within seconds -- the owner's own reply is immediate and a peer's is
-        -- jittered up to seven -- so anything still unanswered by now is a raid that has nothing to
-        -- tell us, and our settings are the raid's (B33). Waiting out the full backoff would leave a
-        -- genuinely fresh raid unconfigured for over a minute to catch a case that is decided in ten
-        -- seconds.
-        C_Timer.After(CONFIG_CLAIM_GRACE, function()
-            if not LC.configClaimUnverified then return end
-            LC.configClaimUnverified = nil
-            if LC.sessionActive then LC.BroadcastRaidConfig() end
-        end)
-    else
-        LC.configClaimUnverified = nil
-    end
 
     if active then
         LC.HideSessionPrompt()
@@ -2165,7 +2096,6 @@ local function TearDownForRaidExit()
     LC.sessionStartedByUs = false
     LC.standInAccepted = false
     LC.standInAsked = false
-    LC.configClaimUnverified = nil
     -- The raid's config belongs to the raid we just left. It survived before, so the same client
     -- walked into the next raid still naming a lootmaster who was never in it — the cross-raid half
     -- of B29, and a config nobody could displace because that stale name made IsSenderLootOwner
@@ -2727,7 +2657,6 @@ function LC.HandleActive(value, senderKey)
     -- ...and a config we were holding back for want of an answer is no longer a guess: either this
     -- raid has an owner other than us, in which case IsConfigOwner says no anyway, or it does not
     -- and ours stands (B69).
-    LC.configClaimUnverified = nil
     -- Told, not decided: this is somebody else's session, so the raid-leader fallback in
     -- LC.IsConfigOwner must not push our own settings over whatever the raid already agreed.
     LC.sessionStartedByUs = false
@@ -2749,16 +2678,6 @@ function LC.HandleActive(value, senderKey)
     -- IsSenderLootOwner check above reject every sender but ourselves — and we do not process our own
     -- messages. So such a branch is unreachable by construction. The config reaches the raid from
     -- LC.SetSessionActive (sent before LC_ACTIVE) and LC.HandleStateRequest instead.
-end
-
--- Peer side of the handover above. Clears the lootmaster and nothing else: the labels, minimum
--- quality, roll setting and council list the raid agreed on are still the right ones, and throwing
--- them away would leave everybody on their own defaults until the successor gets round to
--- broadcasting. With the name gone, every client falls back to the raid leader by derivation, so
--- they all agree without a further message.
-function LC.HandleResign(senderKey)
-    if not LC.IsSenderLootOwner(senderKey) then return end
-    LC.raidConfig.lootmaster = ""
 end
 
 -- Peer side of LC.EndRound. Same authority as LC_ACTIVE (see LC.HandleActive) — only the loot
@@ -3048,8 +2967,6 @@ KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = 
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleSessionResume(ctx:Key()) end)
-KASC:RegisterMessage("LC_RESIGN", { payload = false, group = true, enabled = lcEnabled },
-    function(_, ctx) LC.HandleResign(ctx:Key()) end)
 KASC:RegisterMessage("LC_END_ROUND", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleEndRound(ctx:Key()) end)
 -- LC_SYNC_REQUEST keeps the enabled gate but no group gate, for the reason above.

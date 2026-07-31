@@ -502,20 +502,14 @@ do
     T.truthy(RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
         "the raid leader owns the config when nobody is named")
 
-    -- Not instantly, though. A client that declares a session without ever having been told what the
-    -- raid was already running holds its config back for one round trip first (B69): the same three
-    -- clicks are made by a stand-in leader who reloaded into a raid that HAD a session and simply
-    -- had not heard yet, and there the broadcast pushes their own defaults over the raid's. Ten
-    -- seconds tells the two apart, because a raid that is running answers in far less than that.
-    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 0, "the config waits for one round trip first")
-    -- Read out of the source rather than hardcoded: if the grace is retuned, this test must follow
-    -- it instead of quietly passing because it happened to wait long enough anyway.
-    local grace = tonumber(assert(io.open("LootCouncil.lua", "r")):read("*a")
-        :match("local CONFIG_CLAIM_GRACE = (%d+)"))
-    T.truthy(grace, "CONFIG_CLAIM_GRACE was found in LootCouncil.lua")
-    KARTTEST.AdvanceTime(grace + 5)
-    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1,
-        "and nobody having answered, the empty-field leader's own settings ARE the raid's")
+    -- Straight away, and that is the point of the ownership rule (docs/OWNERSHIP.md). This used to
+    -- wait out a ten-second grace, because ownership was a CLAIM and a leader who had declared a
+    -- session without being told anything might have been about to push their own defaults over a
+    -- raid that already had settings. There is nothing to arbitrate any more: the raid leader owns
+    -- the config, every client derives that from its own roster, and a config from anybody else is
+    -- refused outright -- so there is no case left for the wait to protect against, and holding a
+    -- raid unconfigured for ten seconds at the start of an evening was its whole cost.
+    T.eq(#RaidSim.Sent(sim, "LC_CONFIG"), 1, "the leader's own settings ARE the raid's, at once")
 
     for _, c in ipairs(sim.clients) do
         T.eq(c.KART.LC.sessionActive, true, c.name .. " is in the session")
