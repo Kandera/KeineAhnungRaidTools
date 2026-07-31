@@ -7,9 +7,10 @@ by the maintainer on 2026-07-31 so it can be pointed at in one word -- "gegen da
 The standard, in the maintainer's own words about the ownership rework: *"Die Funktion ist eine der
 10/10 Grundfunktionen die funktionieren muss."*
 
-**DRAFT — the list below is derived, not dictated.** It comes from `docs/OWNERSHIP.md`, from the
-failures the backlog records as having cost real raid evenings, and from the operating reality the
-maintainer has described. It needs the maintainer's correction before it counts.
+**Settled by the maintainer on 2026-07-31.** It was drafted from `docs/OWNERSHIP.md`, from the
+failures the backlog records as having cost real raid evenings, and from the operating reality
+described below; the maintainer then widened C6 to name pets and housing items, and added C12. It
+counts as it stands. Changing an item is the maintainer's call, not a side effect of changing code.
 
 ## How to read this
 
@@ -75,11 +76,13 @@ same moment.
 
 ## C6 — Collectibles, BoEs and anything below the threshold stay out
 
-A mount, a Bind-on-Equip and a rare-quality item drop. KART does not touch any of them: no force-win,
-no forced pass, Blizzard's own roll window behaves normally.
+A mount, a pet, a housing item, a Bind-on-Equip and an item below the minimum quality all drop. KART
+touches none of them: no force-win, no forced pass, Blizzard's own roll window behaves normally and
+the raid rolls on them the way it would without the addon.
 
-*Protects:* housing decor being force-won, which has happened, and a BoE the lootmaster can never
-hand over.
+*Protects:* housing decor being force-won, which has happened; a BoE the lootmaster can never hand
+over through the trade window at all; and a session where Auto-Pass quietly hands every collectible
+to whichever raider is NOT running KART.
 
 ## C7 — The award reaches the whole raid, once, and everyone agrees
 
@@ -121,6 +124,16 @@ afterwards, and the session is still running.
 
 *Protects:* cards from the last boss still standing at the next one. Note that the tab's own × is
 deliberately local and does NOT do this — see B79.
+
+## C12 — Set tokens go through the council
+
+A tier set token drops. It is treated exactly like a normal piece of gear: force-won, announced,
+voted on, awarded, handed over.
+
+*Protects:* the narrowest distinction in the whole item classification -- a token and a mount sit in
+the same item class and are told apart only by subclass. Getting that wrong once already meant tokens
+were skipped entirely and rolled on the normal way by nobody. Worth its own attempt precisely because
+C6 and C12 are two sides of one check: C6 must exclude, C12 must not.
 
 ---
 

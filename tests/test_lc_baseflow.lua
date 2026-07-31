@@ -149,6 +149,20 @@ do
         "the lootmaster force-wins a tier token (GitHub #14)")
     T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[46]),
         "and every raider gets to vote on it")
+
+    -- The whole chain, because the Manifest's C12 names it: a token is ordinary Council loot, so it
+    -- has to be decidable and handable-over like any other piece. C6 and C12 are two sides of one
+    -- check -- a token and a mount sit in the same item class and differ only by subclass -- and
+    -- stopping at "it was force-won" would leave the half that actually gives somebody the item
+    -- untested.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(46, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.assignedWinners[46], raider.guid, c.name .. " names the same winner")
+    end
+    T.truthy(F.Owes(lm.KART.LC.pendingTrades, 46), "the holder owes it to them")
+    T.truthy(F.Owes(raider.KART.LC.owedToMe, 46), "and the winner is told they are owed it")
 end
 
 -- ===================================================================================
@@ -262,8 +276,10 @@ do
     Drop(sim, 55, 249400)                       -- a mount
     Drop(sim, 56, 249401, { bop = false })      -- Bind-on-Equip
     Drop(sim, 57, 249402)                       -- Bind-on-Pickup, but below the raid's minimum
+    Drop(sim, 58, F.PET)                        -- a battle pet
+    Drop(sim, 59, F.HOUSING)                    -- a housing item, in a subclass nothing enumerates
 
-    for _, id in ipairs({ 55, 56, 57 }) do
+    for _, id in ipairs({ 55, 56, 57, 58, 59 }) do
         T.truthy(not KARTTEST.rolled[id] or KARTTEST.rolled[id][lm.unit] ~= 1,
             "the lootmaster does not force-win roll " .. id)
         for _, c in ipairs(sim.clients) do
@@ -280,6 +296,16 @@ do
     -- The lootmaster clears the low-rarity item out rather than hoarding it.
     T.eq(KARTTEST.rolled[57] and KARTTEST.rolled[57][lm.unit], 0,
         "and the lootmaster passes it too, whatever their own Auto-Pass says")
+    -- The Manifest names pets and housing items next to the mount (C6), and the housing one is the
+    -- case the allow-list exists for: nobody has to teach the rule about a compartment Blizzard
+    -- has not shipped yet. Neither may be force-won NOR force-passed -- passing hands the raid's
+    -- mounts and furniture to whichever raider is not running KART.
+    for _, id in ipairs({ 58, 59 }) do
+        T.truthy(not (KARTTEST.rolled[id] or {})[lm.unit],
+            "roll " .. id .. " is neither won nor passed by the lootmaster")
+        T.truthy(not (KARTTEST.rolled[id] or {})[raider.unit],
+            "and an Auto-Pass raider is left to answer roll " .. id .. " themselves")
+    end
 end
 
 -- ===================================================================================

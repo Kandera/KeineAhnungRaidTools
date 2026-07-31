@@ -26,9 +26,19 @@ KARTTEST.AddItem({ id = 249401, name = "Gloombind Wrap", quality = 4, ilvl = 285
                    classID = 4, subclassID = 1, equipLoc = "INVTYPE_CLOAK", bind = 2 })
 KARTTEST.AddItem({ id = 249402, name = "Cracked Voidglass Band", quality = 3, ilvl = 200,
                    classID = 4, subclassID = 0, equipLoc = "INVTYPE_FINGER", bind = 1 })
+-- A battle pet and a housing item, named in the Manifest's C6 alongside the mount. The housing
+-- one deliberately sits in a subclass nothing enumerates: the rule is an ALLOW-list (only 15/0
+-- reaches Council, see LC.IsCollectibleItem), so an unknown compartment of Miscellaneous is
+-- exactly how Blizzard's next one will look, and the fixture should not pretend to know which
+-- number housing decor actually got.
+KARTTEST.AddItem({ id = 249403, name = "Voidling Hatchling", quality = 4, ilvl = 1,
+                   classID = 15, subclassID = 2, bind = 1 })
+KARTTEST.AddItem({ id = 249404, name = "Gloombound Sconce", quality = 4, ilvl = 1,
+                   classID = 15, subclassID = 7, bind = 1 })
 
 F.GLOVES, F.WEAPON, F.TOKEN = 249331, 249293, 249364
 F.MOUNT, F.BOE, F.RARE = 249400, 249401, 249402
+F.PET, F.HOUSING = 249403, 249404
 
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
