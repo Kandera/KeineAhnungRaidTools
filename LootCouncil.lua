@@ -772,7 +772,20 @@ function LC.ApplyOwnConfig()
         -- no other way to reach the raid (B32). Ownership is now the raid leader, which every client
         -- derives for itself, and a lootmaster change is a designation change inside the config --
         -- carried by the next broadcast, after the session is restarted. Nothing to announce.
+        LC.configOwnerAnnounced = nil
         return
+    end
+
+    -- Taking the role over is now silent by construction -- nobody hands it to you, you simply hold
+    -- raid lead -- and from that moment the RAID runs on your settings. Somebody promoted by accident,
+    -- or while standing in for a moment, would otherwise switch the whole raid onto their own defaults
+    -- without a word, and lcRollsEnabled defaults to OFF. Say it once per time the role arrives.
+    --
+    -- Ungrouped is not the raid's business: LC.IsConfigOwner is true there so the settings tab works
+    -- solo, and announcing it would fire on every settings change outside a group.
+    if IsInGroup() and not LC.configOwnerAnnounced then
+        LC.configOwnerAnnounced = true
+        print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_OWNER_NOW)
     end
 
     LC.raidConfig.minQuality     = KART_Settings.lcMinQuality or 4
