@@ -93,6 +93,8 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
             Trade.ShowWinnerNotification(LC.rollItems[rollID])
         end
     else
+        -- Same rule locally: our own earlier entry for this roll is superseded by this one.
+        KART.LH.RemoveHistoryForRoll(rollID)
         KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
         -- B48: the assigner does not process its own broadcast (KASC drops the echo), so a council
         -- member who assigns an item to THEMSELVES never built their own "you are owed this" entry --
@@ -418,6 +420,7 @@ end
 function Trade.ClearRollState(rollID)
     LC.votes[rollID]           = nil
     LC.rolls[rollID]           = nil
+    LC.rollsFor[rollID]        = nil
     LC.councilVotes[rollID]    = nil
     LC.rollItems[rollID]       = nil
     LC.rollDeadlines[rollID]   = nil
@@ -1009,6 +1012,12 @@ function Trade.HandleResult(payload, senderKey)
         if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
     end
     color = color or Trade.ResolveColorForReason(reason)
+    -- Any earlier entry for this roll is superseded, whether by a confirmed reassignment or by the
+    -- clash rule above (B35). Without this the raid converged on ONE winner and still disagreed about
+    -- its own record of the evening: a client that saw both awards logged both, a client that saw
+    -- only one logged one, and the assigners each logged their own pick locally. Found by the soak
+    -- once it learned to make two council members decide at the same moment.
+    KART.LH.RemoveHistoryForRoll(rollID)
     KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
     -- Same reasoning as DoAssignWinner, including the "loot owner is not the same as holder" case.

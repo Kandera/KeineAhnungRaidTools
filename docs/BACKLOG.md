@@ -54,6 +54,40 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
+## B71-B73 — found 2026-07-31 by three new soak steps, not yet settled
+
+The soak learned three things it could not do before, and each found a defect within its first few
+hundred seeds. Reproduce any of them with `KART_SOAK_NEWSTEPS=1 KART_SOAK_SEEDS=3000`; the steps are
+in `tests/test_lc_soak.lua` and off by default so the gate stays green.
+
+## B71 — a reused rollID still loses rolls, at a lower rate
+
+**Half of this is FIXED.** A client purges everything under a rollID when it processes its own
+`START_LOOT_ROLL` -- but peers broadcast their rolls for the NEW item at that same instant, so a
+client that had already RECEIVED some of them wiped them a moment later with its own purge. Whoever
+ran their handler first lost the rolls of everybody behind them, and the council scored its tie-break
+on a partial set. `LC_ROLL` now carries the itemID and `LC.rollsFor` records which item the stored
+rolls belong to, so a purge keeps the ones already cast for the item now arriving.
+
+Measured: 29 disagreements per 3000 before, 14 after. What is left is a client that joined the raid
+between the original drop and the reuse ending up with a subset -- seed 254 shows Torvi holding two
+of four rolls, its own included. Start there; it is reproducible.
+
+## B72 — two simultaneous awards can still leave one client's council list behind
+
+`KART_SOAK_NEWSTEPS=1`, seed 702: a `council` disagreement after a clash. The award side converges
+(B35 is fixed and its own tests hold), so this is about who is council on which client at that
+instant, not about the winner.
+
+## B73 — a mid-roll button rename can leave a vote on one client and not another
+
+Seeds 81 and 996: `votes` and `roll N after a vote` disagreements with the `relabel` step active. The
+label guard itself is fixed and tested (B43-B45); this is about whether the VOTE survives, which is a
+different question from whether its label can be shown. The B46 item guard added the same day is the
+first thing to rule out -- a client holding `"???"` for the roll compares an empty itemID and lets
+everything through, while one holding a real link does not.
+
+
 ## The ownership rework, 2026-07-31 — what it closed
 
 `docs/OWNERSHIP.md` replaces the derivation that B29–B33, B57, B58, B64, B69 and B70 all pull on.

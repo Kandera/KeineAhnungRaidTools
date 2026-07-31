@@ -1950,6 +1950,7 @@ function LC.ClearAllRolls()
     -- above already ran.
     wipe(LC.votes)
     wipe(LC.rolls)
+    wipe(LC.rollsFor)
     wipe(LC.councilVotes)
     wipe(LC.rollItems)
     wipe(LC.rollDeadlines)
@@ -2450,13 +2451,24 @@ local ROLL_ORPHAN_GRACE = 15
 -- Note the resulting difference in who takes part: a real roll is limited to players Blizzard deemed
 -- eligible, while a manually added item is open to the whole raid — which is the point of handing it
 -- back to the council in the first place.
+-- [rollID] = the itemID the rolls currently stored under it were cast for. Blizzard reuses a rollID
+-- for a genuinely different drop within seconds on trash, and every client purges the old state when
+-- it processes its own START_LOOT_ROLL -- but peers broadcast their new rolls at that same instant,
+-- so a client that had already RECEIVED some of them wiped them a moment later with its own purge.
+-- Whoever ran their handler first lost the rolls of everybody behind them, and the council scored a
+-- tie-break on a partial set. Found by the soak once it learned to reuse a rollID.
+LC.rollsFor = LC.rollsFor or {}
+
 local function RollForSelf(rollID)
     if not LC.GetRollsEnabled() then return end
     local myKey  = (KASC.Identity.ResolvePlayer("player"))
     local myRoll = math.random(1, 100)
+    local link   = LC.rollItems[rollID]
+    local itemID = (type(link) == "string" and link:match("item:(%d+)")) or ""
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][myKey] = myRoll
-    LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll)
+    LC.rollsFor[rollID] = itemID
+    LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll .. ":@" .. itemID)
 end
 
 local function PurgeStaleRoll(rollID, newItemID)
@@ -2505,7 +2517,14 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- (LC.OnStartLootRoll, LC.HandleStart) re-stamp it unconditionally right after this returns, so
     -- the new roll always gets its own time(). See Trade.PruneExpiredLootStamps for why the stamp
     -- otherwise outlives Trade.ClearRollState.
+    -- Rolls already cast FOR THE ITEM NOW ARRIVING survive the purge. Everything else about this
+    -- rollID belongs to the previous item and goes.
+    local keepRolls = (LC.rollsFor[rollID] == newItemID) and LC.rolls[rollID] or nil
     LC.Trade.ClearRollState(rollID)
+    if keepRolls then
+        LC.rolls[rollID] = keepRolls
+        LC.rollsFor[rollID] = newItemID
+    end
 end
 
 -- How often LC.OnStartLootRoll re-checks for the item link before giving up, and the per-attempt

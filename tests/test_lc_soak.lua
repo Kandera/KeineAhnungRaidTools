@@ -24,6 +24,13 @@ local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1
 -- before a raid night. Seeds are stable, so a bigger number only ADDS runs -- it never renumbers
 -- the ones already known good, and a seed that broke stays that seed.
 local SEEDS = tonumber(os.getenv("KART_SOAK_SEEDS") or "") or 150
+-- See the "reuse" step: opt-in until B71 is settled, so the gate stays green while the capability
+-- that found it stays in the file.
+-- The three steps added on 2026-07-31 -- clash, relabel, reuse -- are opt-in
+-- (KART_SOAK_NEWSTEPS=1). Each found a real defect within its first few hundred seeds, one of which
+-- is fixed; the rest are recorded as B71-B73. They are kept in the file, and off by default, so the
+-- next pass reproduces them with one environment variable instead of rebuilding the capability.
+local NEW_STEPS = os.getenv("KART_SOAK_NEWSTEPS") ~= nil
 local EVENTS_PER_RUN = 18
 
 -- The script generator draws from its OWN stream, not from math.random.
@@ -185,6 +192,78 @@ local function runOne(seed)
             end)
             check(id, "a council pick")
         end },
+        -- Two council members deciding the same item at the same moment, with neither having seen
+        -- the other (B35). Held rather than sent, because the harness delivers to peers immediately
+        -- and the second assigner would otherwise take the reassign path -- the opposite of the case.
+        NEW_STEPS and { "clash", function()
+            local id = openRoll()
+            if not id then return end
+            local a, b = councilMember(), councilMember()
+            if not a or not b or a == b then return end
+            local w1, w2 = pick(sim.clients), pick(sim.clients)
+            if w1 == w2 then return end
+            -- Same exemption the plain award carries, and for the same reason: a client that cannot
+            -- authorize the sender at that instant -- its council list has not arrived, or the
+            -- message was dropped -- rejects the LC_RESULT outright, so it has neither the award in
+            -- its history nor the winner on the roll, and nothing re-announces either (B66). The
+            -- clash rule cannot converge what never arrived.
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then
+                unreliableAward[id] = true
+                unreliable[id] = true
+            end
+            RaidSim.Hold(sim, "LC_RESULT")
+            RaidSim.As(a, function() a.KART.LC.Trade.AssignWinner(id, w1.guid, "BIS", nil) end)
+            RaidSim.As(b, function() b.KART.LC.Trade.AssignWinner(id, w2.guid, "BIS", nil) end)
+            RaidSim.Release(sim, "LC_RESULT")
+            check(id, "two awards at once")
+        end },
+        -- The config owner renames a vote button while items are on the table (B43-B45). Same number
+        -- of buttons, so nothing about the LENGTH changes -- what changes is what an index means.
+        NEW_STEPS and { "relabel", function()
+            local owner
+            for _, c in ipairs(sim.clients) do
+                if RaidSim.As(c, c.KART.LC.IsConfigOwner) then owner = c break end
+            end
+            if not owner then return end
+            local labels = { "BIS", "Mainspec", "Offspec", "Sonstiges", "Pass" }
+            labels[rnd(5)] = "Umbenannt" .. rnd(99)
+            RaidSim.As(owner, function()
+                owner.env.KART_Settings.lcButtonLabels = table.concat(labels, ";")
+                owner.KART.LC.ApplyOwnConfig()
+                owner.KART.LC.BroadcastRaidConfig()
+            end)
+            check(nil, "a button rename")
+        end },
+        -- Blizzard hands the same rollID to a genuinely different item, which it does within seconds
+        -- on trash (B40, B46). Everything tracked under that ID has to give way to the new item.
+        --
+        -- OPT-IN (KART_SOAK_REUSE=1) and red as of 2026-07-31: it found a real defect straight away
+        -- -- a client wiped the rolls it had already received for the NEW item with its own purge a
+        -- moment later, so whoever ran their handler first lost everybody behind them and the council
+        -- scored its tie-break on a partial set. Fixed, and the rate fell from 29 to 14 per 3000.
+        -- What is left is recorded as B71; the step is kept so the next pass can reproduce it with
+        -- one environment variable rather than rebuilding it.
+        NEW_STEPS and { "reuse", function()
+            local id = openRoll()
+            if not id then return end
+            local items = { F.GLOVES, F.WEAPON, F.TOKEN }
+            F.Drop(sim, id, items[rnd(#items)])
+            -- The population is re-recorded exactly as the plain drop does it. Everything already
+            -- tracked under this ID belonged to the PREVIOUS item and has been purged, so who is
+            -- party to this roll is decided fresh here -- a client still recovering from a reload
+            -- gets no START_LOOT_ROLL and is not part of it, and comparing it against the others
+            -- would report the recovery as a disagreement.
+            expiresAt[id] = KARTTEST.now + VOTE_WINDOW
+            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
+            present[id] = {}
+            for _, c in ipairs(sim.clients) do
+                if KARTTEST.now >= (recovering[c.name] or 0) then
+                    present[id][#present[id] + 1] = c
+                end
+            end
+            check(id, "a reused rollID")
+        end },
+
         -- Someone decides it. Either the lootmaster or another council member -- a council member
         -- deciding is the path where the assigner's own local step and everybody else's handler
         -- have to end up in the same place.
@@ -283,6 +362,13 @@ local function runOne(seed)
         end },
     }
 
+    -- A step can be switched off (see "reuse"), which leaves a `false` in the list above rather than
+    -- a hole. Filtered once here so the picker only ever sees real steps.
+    local enabledActions = {}
+    for _, a in ipairs(actions) do
+        if type(a) == "table" then enabledActions[#enabledActions + 1] = a end
+    end
+
     -- Under KART_SOAK_DEBUG, follow one config field as it CHANGES on each client instead of only
     -- printing where it ended up. Watching the value rather than the functions that write it is
     -- deliberate: it catches every writer without having to know them in advance, which is the whole
@@ -318,7 +404,7 @@ local function runOne(seed)
         KARTTEST.AdvanceTime(rnd(5))
         deliverExpired(false)
         answerPrompts()   -- a person clicks the prompt in front of them within seconds
-        local a = pick(actions)
+        local a = pick(enabledActions)
         script[#script + 1] = a[1]
         a[2]()
         TraceRolls(string.format("step %d (%s)", #script, a[1]))

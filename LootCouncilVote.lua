@@ -1041,7 +1041,7 @@ end
 -- anything automatically.
 function Vote.HandleRoll(payload, senderKey)
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local rollID, value = payload:match("^(%d+):(%d+)$")
+    local rollID, value, itemID = payload:match("^(%d+):(%d+):@(%d*)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
     if not rollID or not value then return end
@@ -1058,6 +1058,13 @@ function Vote.HandleRoll(payload, senderKey)
     if not LC.rollItems[rollID] then
         LC.rollsPendingSince = LC.rollsPendingSince or {}
         LC.rollsPendingSince[rollID] = LC.rollsPendingSince[rollID] or GetTime()
+    end
+    -- A roll for a DIFFERENT item than the ones we are holding under this ID: the rollID has been
+    -- reused, and what we hold belongs to the previous drop. Start the tally again rather than mixing
+    -- two items' rolls, which is what the council reads its tie-break from.
+    if itemID and itemID ~= "" and LC.rollsFor[rollID] ~= itemID then
+        LC.rolls[rollID] = {}
+        LC.rollsFor[rollID] = itemID
     end
     LC.rolls[rollID] = LC.rolls[rollID] or {}
     LC.rolls[rollID][senderKey] = value
