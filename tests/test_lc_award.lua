@@ -113,3 +113,38 @@ do
     T.eq(#lm.KART.LC.pendingTrades, 1, "and the loot owner still owes exactly one item")
     T.eq(lm.KART.LC.pendingTrades[1].winnerKey, sinja.guid, "to the new winner")
 end
+
+-- The same clash, resolved the same way, whichever award lands first --------------------------------
+-- This is the property the rule actually has to have. "Every client agrees" can be satisfied by
+-- accident on one arrival order; two senders' messages interleave freely, so a client that hears A
+-- then B and one that hears B then A must land in the same place. Both halves of the rule are
+-- commutative for that reason, and this is what says so.
+local function ClashWinner(reverse)
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 62, F.GLOVES)
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+
+    RaidSim.Hold(sim, "LC_RESULT")
+    local first, second = council, lm
+    local firstPick, secondPick = alric.guid, sinja.guid
+    if reverse then
+        first, second = lm, council
+        firstPick, secondPick = sinja.guid, alric.guid
+    end
+    RaidSim.As(first, function() first.KART.LC.Trade.AssignWinner(62, firstPick, "BIS", nil) end)
+    RaidSim.As(second, function() second.KART.LC.Trade.AssignWinner(62, secondPick, "BIS", nil) end)
+    Capture(function()
+        RaidSim.Release(sim, "LC_RESULT")
+        KARTTEST.AdvanceTime(0)
+    end)
+
+    local agreed = sim.clients[1].KART.LC.assignedWinners[62]
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.assignedWinners[62], agreed,
+            c.name .. " agrees (reverse=" .. tostring(reverse) .. ")")
+    end
+    return agreed
+end
+
+T.eq(ClashWinner(false), ClashWinner(true),
+    "the same two awards produce the same winner whichever order they land in")
