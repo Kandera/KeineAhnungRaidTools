@@ -16,7 +16,7 @@ local RaidSim = F.RaidSim
 local NewRaid, Drop = F.NewRaid, F.Drop
 
 local ITEMS = { F.GLOVES, F.WEAPON, F.TOKEN }
-local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1-T",
+local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42",
                    class = "MAGE", locale = "enUS" }
 
 -- How many scripts to run, and how long each one is. The default keeps the suite something you run

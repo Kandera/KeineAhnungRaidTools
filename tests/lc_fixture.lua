@@ -45,12 +45,17 @@ F.SETTINGS = {
     Sinja  = { lcHideIrrelevant = true, lcAutoTransmogVote = true }, -- both
 }
 
+-- Real-length GUIDs on purpose: "Player-<realmID>-<8 hex>", about twice the width of the
+-- placeholders this fixture used to carry. The lootmaster DESIGNATION now travels as an identity key
+-- inside LC_CONFIG's prefix (see LC.BroadcastRaidConfig), so every byte of it comes off the council
+-- list's budget in BuildCouncilPayload -- and a ten-character stand-in would have hidden a truncated
+-- council list until a live raid found it.
 F.MEMBERS = {
-    { name = "Bramor", realm = "TarrenMill", guid = "Player-1-B", class = "DEATHKNIGHT", leader = true, locale = "deDE" },
-    { name = "Merrit", realm = "TarrenMill", guid = "Player-1-M", class = "DRUID",       locale = "deDE" },
-    { name = "Corvin", realm = "TarrenMill", guid = "Player-1-C", class = "PALADIN",     locale = "enUS" },
-    { name = "Alric",  realm = "TarrenMill", guid = "Player-1-A", class = "MAGE",        locale = "enUS" },
-    { name = "Sinja",  realm = "TarrenMill", guid = "Player-1-S", class = "PRIEST",      locale = "deDE" },
+    { name = "Bramor", realm = "TarrenMill", guid = "Player-1096-0A1B2C3D", class = "DEATHKNIGHT", leader = true, locale = "deDE" },
+    { name = "Merrit", realm = "TarrenMill", guid = "Player-1096-0A1B2C3E", class = "DRUID",       locale = "deDE" },
+    { name = "Corvin", realm = "TarrenMill", guid = "Player-1096-0A1B2C3F", class = "PALADIN",     locale = "enUS" },
+    { name = "Alric",  realm = "TarrenMill", guid = "Player-1096-0A1B2C40", class = "MAGE",        locale = "enUS" },
+    { name = "Sinja",  realm = "TarrenMill", guid = "Player-1096-0A1B2C41", class = "PRIEST",      locale = "deDE" },
 }
 
 -- Builds a raid whose lootmaster is Bramor and whose council is Bramor + Merrit + Corvin, then

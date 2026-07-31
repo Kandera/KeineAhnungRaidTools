@@ -18,7 +18,7 @@ local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 local NewRaid, Drop, HasVoteRow = F.NewRaid, F.Drop, F.HasVoteRow
 
-local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1-T", class = "MAGE", locale = "enUS" }
+local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42", class = "MAGE", locale = "enUS" }
 
 -- Everything that recovers state hangs off GROUP_ROSTER_UPDATE, and two of the three paths are
 -- delayed (the state request's reply, the session prompt). Settle both.
@@ -144,7 +144,7 @@ do
     Drop(sim, 83, F.GLOVES)
 
     RaidSim.Leave(sim, "Sinja")
-    local alt = RaidSim.Join(sim, { name = "Sinjaa", realm = "TarrenMill", guid = "Player-1-SA",
+    local alt = RaidSim.Join(sim, { name = "Sinjaa", realm = "TarrenMill", guid = "Player-1096-0A1B2C43",
                                     class = "PRIEST", locale = "deDE" })
     RosterSettles(sim)
 
