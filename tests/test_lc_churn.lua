@@ -489,51 +489,39 @@ end
 -- ===================================================================================
 -- Handing the lootmaster role over -- B32
 -- ===================================================================================
--- Typing a successor's name made `IsConfigOwner()` false on the outgoing client, so `ApplyOwnConfig`
--- wiped its own copy and returned and `BroadcastRaidConfig` sent nothing at all. The raid never heard
--- about it: every peer kept naming the outgoing owner, and the successor's own field named nobody.
+-- Under the ownership rule (docs/OWNERSHIP.md) this is no longer a handover at all: the raid leader
+-- owns the config throughout and simply changes who it DESIGNATES. There is nothing to announce and
+-- no successor to wait for -- the next broadcast carries the new name, and that is the whole
+-- mechanism. The maintainer's own procedure is exactly this: change the field, end the session,
+-- start it again.
+--
+-- What this replaces: typing a successor's name used to make IsConfigOwner() false on the outgoing
+-- client, so ApplyOwnConfig wiped its own copy and BroadcastRaidConfig sent nothing at all. The raid
+-- never heard about it -- every peer kept naming the outgoing owner and the successor's own field
+-- named nobody -- which needed LC_RESIGN as a separate token to paper over (B32). Both are gone.
 do
     local sim, lm, council = NewRaid()
 
     RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster = "Merrit"
+        lm.env.KART_Settings.lcLootmaster = "Merrit"    -- the leader designates somebody else
         lm.KART.LC.ApplyOwnConfig()
         lm.KART.LC.BroadcastRaidConfig()
     end)
 
-    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 1, "stepping down is announced to the raid (B32)")
     for _, c in ipairs(sim.clients) do
-        if c ~= lm then
-            T.truthy((c.KART.LC.raidConfig.lootmaster or "") == "",
-                c.name .. " no longer names the outgoing lootmaster")
-        end
+        T.eq(c.KART.LC.raidConfig.lootmaster, council.guid, c.name .. " names the new lootmaster")
     end
-
-    -- Until the successor configures themselves, ownership rests with the raid leader -- derived, so
-    -- every client agrees without another message.
-    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner),
-        "the raid leader carries the loot flow in the meantime")
-
-    -- The successor fills their own field in, and the raid follows.
-    RaidSim.As(council, function()
-        council.env.KART_Settings.lcLootmaster     = "Merrit"
-        council.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
-        council.env.KART_Settings.lcRollsEnabled   = true
-        council.KART.LC.ApplyOwnConfig()
-        council.KART.LC.BroadcastRaidConfig()
-    end)
-
-    for _, c in ipairs(sim.clients) do
-        T.eq(c.KART.LC.raidConfig.lootmaster, council.guid, c.name .. " names the successor")
-    end
-    T.truthy(RaidSim.As(council, council.KART.LC.IsLootOwner), "who owns the loot flow")
-    T.truthy(not RaidSim.As(lm, lm.KART.LC.IsLootOwner), "and the outgoing owner does not")
+    T.truthy(RaidSim.As(council, council.KART.LC.IsLootOwner), "who owns the loot flow at once")
+    T.truthy(not RaidSim.As(lm, lm.KART.LC.IsLootOwner),
+        "while the leader keeps the CONFIG and stops handing out loot")
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsConfigOwner),
+        "-- the two roles are separate, and only the loot one moved")
 
     Drop(sim, 94, F.GLOVES)
     T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][council.unit], 1,
-        "the successor force-wins from then on")
+        "the designee force-wins from then on")
     T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][lm.unit], 0,
-        "and the outgoing owner passes like any other raider")
+        "and the leader passes like any other raider")
 end
 
 -- ===================================================================================

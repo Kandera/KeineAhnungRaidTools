@@ -547,7 +547,21 @@ end
 local function PresentLootmaster(key)
     if not key or key == "" then return "" end
     if not IsInGroup() then return key end
-    if not KASC.Identity.IsResolvedKey(key) then return key end
+    -- A designation nobody could place is not a designation yet, and the raid leader carries the loot
+    -- flow until it resolves. This used to return the pending key -- "we cannot place this person" was
+    -- deliberately NOT read as absence, so a client that simply could not see a nickname would not
+    -- hand the role to the raid leader over it.
+    --
+    -- That reasoning belonged to the old wire format, where every receiver resolved the NAME for
+    -- itself and a nickname-blind client was the one that failed. The config owner now resolves it
+    -- once and sends an identity key (see LC.BroadcastRaidConfig), so raw text on the wire means the
+    -- owner could not place them either -- and the owner is the person who typed it and is in the
+    -- raid with them. Nobody can. Holding the loot flow hostage to it left the raid with no owner at
+    -- all: no force-win, no LC_START, no vote window, over a typo.
+    --
+    -- Self-healing: LC.ApplyOwnConfig re-resolves on every roster change, so the moment the name does
+    -- resolve the owner broadcasts a proper key and the designation takes effect.
+    if not KASC.Identity.IsResolvedKey(key) then return "" end
     return KASC.Identity.FindUnitForKey(key) and key or ""
 end
 
