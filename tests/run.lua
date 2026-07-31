@@ -107,6 +107,7 @@ dofile("tests/test_lc_churn.lua")
 dofile("tests/test_lc_reload.lua")
 dofile("tests/test_lc_ownership.lua")
 dofile("tests/test_lc_award.lua")
+dofile("tests/test_lc_votelabels.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))

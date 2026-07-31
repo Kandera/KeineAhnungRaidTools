@@ -249,6 +249,28 @@ end
 -- everyone else and must honour it — the old leader check made them silently keep their own
 -- (usually default) labels, quality threshold and rolls flag while the rest of the raid used the
 -- owner's, and made LC_ACTIVE from the lootmaster get rejected on the leader's client.
+-- A fingerprint of the button set a vote was cast against (B43-B45).
+--
+-- The wire used to carry the COUNT, which catches a vote cast against a longer or shorter list but
+-- not a same-length rename or reorder -- and the config owner editing labels mid-roll pushes the new
+-- set live, so votes cast before the edit were then rendered under whatever the label became, stated
+-- as fact on the one screen that decides who gets the item. The count is folded in, so a length
+-- change is still caught by the same comparison.
+--
+-- Deliberately not a cryptographic hash: this is a mismatch detector, not a security boundary -- a
+-- forged vote can claim any fingerprint it likes and could equally have claimed the right count.
+-- djb2, kept under 2^32 so Lua 5.1 arithmetic stays exact and the value survives tostring/tonumber
+-- on the wire.
+function LC.ButtonFingerprint(buttons)
+    buttons = buttons or LC.GetButtonConfig()
+    local parts = {}
+    for i, def in ipairs(buttons) do parts[i] = def.label or "" end
+    local text = #buttons .. "|" .. table.concat(parts, ";")
+    local h = 5381
+    for i = 1, #text do h = (h * 33 + text:byte(i)) % 4294967291 end
+    return h
+end
+
 function LC.GetButtonConfig()
     local raw
     if LC.IsConfigOwner() or not LC.raidConfig.buttonLabels or LC.raidConfig.buttonLabels == "" then
@@ -1919,6 +1941,7 @@ function LC.ClearAllRolls()
     wipe(LC.assignedWinners)
     wipe(LC.assignedDeliberate)
     wipe(LC.votedByMe)
+    wipe(LC.votedFpByMe)
     wipe(LC.relevanceHandled)
     wipe(LC.hiddenIrrelevant)
     wipe(LC.autoVotedByMe)
@@ -2711,6 +2734,10 @@ LC.rollNotInOurBags = LC.rollNotInOurBags or {}
 
 LC.votedByMe = LC.votedByMe or {} -- [rollID] = the buttonIdx WE cast (truthy = voted; tracked by
                                    -- rollID, not by row, since rows get recycled/reindexed as items expire)
+-- [rollID] = the button-set fingerprint OUR vote was cast against (B45). Without it the voter's own
+-- badge is resolved against whatever the list says now, so a mid-roll label edit told them they had
+-- voted something they never did.
+LC.votedFpByMe = LC.votedFpByMe or {}
 LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed before voting, kept
                                    -- around purely so the "you voted" state can still show it —
                                    -- otherwise it vanishes the moment the note box hides, even

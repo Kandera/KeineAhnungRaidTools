@@ -462,8 +462,11 @@ function Council.RefreshCouncilTabs()
             local anyVotes = false
             for key, voteData in pairs(LC.votes[capturedRollID] or {}) do
                 anyVotes = true
+                -- The same guard the rows below apply (B44). Without it the tooltip stated a label
+                -- with full confidence for the very vote the row list correctly rendered as "?".
                 local idx = voteData.idx
-                local def = idx and buttons[tonumber(idx)]
+                local stale = voteData.count ~= nil and voteData.count ~= LC.ButtonFingerprint(buttons)
+                local def = (not stale) and idx and buttons[tonumber(idx)] or nil
                 GameTooltip:AddDoubleLine(KASC.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
             end
             if not anyVotes then
@@ -1001,7 +1004,7 @@ function Council.RefreshCouncilRows()
             -- one screen that decides who gets the item. Withhold the label instead; voteMismatch
             -- drives an explicit "cannot know" marker further down.
             local voteCount = voteData and voteData.count
-            local voteMismatch = voteCount ~= nil and voteCount ~= #buttons
+            local voteMismatch = voteCount ~= nil and voteCount ~= LC.ButtonFingerprint(buttons)
             local voteDef  = (not voteMismatch) and voteIdx and buttons[tonumber(voteIdx)] or nil
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit(unit, rollItem)
 
@@ -1062,7 +1065,7 @@ function Council.RefreshCouncilRows()
             -- one screen that decides who gets the item. Withhold the label instead; voteMismatch
             -- drives an explicit "cannot know" marker further down.
             local voteCount = voteData and voteData.count
-            local voteMismatch = voteCount ~= nil and voteCount ~= #buttons
+            local voteMismatch = voteCount ~= nil and voteCount ~= LC.ButtonFingerprint(buttons)
             local voteDef  = (not voteMismatch) and voteIdx and buttons[tonumber(voteIdx)] or nil
             local equippedLink, equippedIlvl = Council.GetEquippedForUnit("player", rollItem)
             table.insert(members, {

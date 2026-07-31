@@ -8,6 +8,15 @@ KART.LC.Vote = KART.LC.Vote or {}
 local Vote = KART.LC.Vote
 local LC = KART.LC
 
+-- The bare itemID this client currently tracks for a roll, or "" when it has no real link yet.
+-- Carried with a vote so a network-delayed one for the PREVIOUS item cannot land in the new item's
+-- tally after Blizzard reuses the rollID (B46) -- which it does within seconds on trash.
+local function TrackedItemID(rollID)
+    local link = LC.rollItems[rollID]
+    return (type(link) == "string" and link:match("item:(%d+)")) or ""
+end
+
+
 -- =====================================================================
 --  Vote List  (shown to non-council raiders via LC_START message)
 -- =====================================================================
@@ -298,17 +307,23 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
     -- fact (see B25 in docs/BACKLOG.md: a whole raid was scored against votes shifted by one).
     -- Carrying the count lets the council panel tell "they voted Offspec" apart from "I cannot know
     -- what they voted", which is the difference that matters when loot is being handed out.
-    local buttonCount = #LC.GetButtonConfig()
+    -- The button SET, not just how many there are: a same-length rename or reorder changes what an
+    -- index means and used to slip through untouched (B43). See LC.ButtonFingerprint.
+    local buttonCount = LC.ButtonFingerprint()
 
     local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.votes[rollID] = LC.votes[rollID] or {}
     LC.votes[rollID][myKey] = {idx = buttonIdx, note = note, count = buttonCount}
+    -- Our own badge is resolved against whatever the button list says NOW, with nothing stored, so a
+    -- mid-roll label edit told the raider they had voted something they never did (B45).
+    LC.votedFpByMe[rollID] = buttonCount
 
     -- Test rolls stay local (no group to broadcast to); real rolls broadcast.
     if not LC.IsTestRoll(rollID) then
         -- "#" prefixes the count so a 3.0.x note that happens to start with digits and a colon
         -- ("5:30 uhr") can't be mistaken for one by the receiver's optional-field parse below.
-        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":#" .. buttonCount .. ":" .. note)
+        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":#" .. buttonCount
+            .. ":@" .. TrackedItemID(rollID) .. ":" .. note)
     end
     -- Both branches: refresh the council panel too, so a council member sees their own vote appear
     -- in the panel (rows + tab badge), not just in the vote list.
@@ -472,7 +487,12 @@ function Vote.RefreshVoteListRows_Spacious(f)
         -- voted) renders as unvoted below, so it must also lay out as unvoted — otherwise the row got
         -- shrunk to badge height while still showing the full button/note area inside it.
         local voted    = LC.votedByMe[rollID]
-        local votedDef = voted and buttons[tonumber(voted)]
+        -- Withheld when the button set has changed since we voted (B45): the index means something
+        -- else now, and telling a raider they voted a label they never clicked is worse than telling
+        -- them nothing. Same guard the council panel applies to everybody else's vote.
+        local votedFp = LC.votedFpByMe[rollID]
+        local votedStale = votedFp ~= nil and votedFp ~= LC.ButtonFingerprint(buttons)
+        local votedDef = (not votedStale) and voted and buttons[tonumber(voted)] or nil
         -- An answer LC.Relevance cast on the player's behalf leaves the row OPEN: CastVote lets
         -- exactly one automatic vote be overridden (see there), and the buttons that do the
         -- overriding only exist while hasVote is false. Rendered as a finished "you voted X" badge,
@@ -945,7 +965,8 @@ function Vote.ToggleCouncilVote(rollID, candidateKey)
     LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
 
     if not LC.IsTestRoll(rollID) then
-        LC.SendLC("LC_CVOTE:" .. rollID .. ":" .. (retracting and "" or candidateKey))
+        LC.SendLC("LC_CVOTE:" .. rollID .. ":@" .. TrackedItemID(rollID) .. ":"
+            .. (retracting and "" or candidateKey))
     end
 
     KART.LC.Council.RefreshCouncilRows()
@@ -965,28 +986,43 @@ end
 --
 -- Returns nil for rollID/idx when the payload is malformed; the caller drops the message on that.
 local function ParseVotePayload(payload)
-    local rollID, idx, count = payload:match("^(%d+):(%d+):#(%d+):")
+    -- Three shapes now, newest first: "rollID:idx:#fp:@itemID:note", then 3.1's "rollID:idx:#fp:note"
+    -- without the item, then 3.0.x's "rollID:idx:note" without either. Each marker ("#", "@") is what
+    -- keeps its field unambiguous against a free-text note -- colons are not stripped from notes, so
+    -- a plain numeric field would swallow the start of "5:30 uhr" and read it as data.
+    local rollID, idx, count, itemID = payload:match("^(%d+):(%d+):#(%d+):@(%d*):")
     local note
+    if rollID then
+        note = payload:match("^%d+:%d+:#%d+:@%d*:(.*)") or ""
+        return tonumber(rollID), tonumber(idx), tonumber(count), note, itemID
+    end
+    rollID, idx, count = payload:match("^(%d+):(%d+):#(%d+):")
     if rollID then
         note = payload:match("^%d+:%d+:#%d+:(.*)") or ""
     else
         rollID, idx = payload:match("^(%d+):(%d+)")
         note = payload:match("^%d+:%d+:(.*)") or ""
     end
-    return tonumber(rollID), tonumber(idx), tonumber(count), note
+    return tonumber(rollID), tonumber(idx), tonumber(count), note, nil
 end
 
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local rollID, idx, count, note = ParseVotePayload(payload)
+    local rollID, idx, count, note, itemID = ParseVotePayload(payload)
     if not rollID or not idx then return end
     -- Ignore votes for a roll we're no longer tracking (already resolved/pruned): a late straggler
     -- would otherwise re-create LC.votes[rollID] as an orphan that no cleanup path ever frees. Every
     -- peer processes LC_START (which sets rollItems) before any vote can be cast, so a legitimate
     -- vote never arrives before this is set.
     if not LC.rollItems[rollID] then return end
+    -- ...and that it is the SAME item. Blizzard reuses a rollID for a genuinely different drop within
+    -- seconds on trash, so a vote delayed by the network landed in the new item's tally, under a
+    -- name that had never seen it (B46). Only when both sides know the item: an older client sends no
+    -- itemID, and a roll we are still holding as "???" has none to compare against.
+    local mine = TrackedItemID(rollID)
+    if itemID and itemID ~= "" and mine ~= "" and itemID ~= mine then return end
 
     -- Free text from another client, rendered raw into the council row's note tooltip. Double the
     -- pipes so |c colour codes, |H hyperlinks and |T textures can't be injected there (same guard
@@ -1041,12 +1077,20 @@ function Vote.HandleCouncilVote(payload, senderKey)
     -- Council membership is intentionally trusted (see above), but the sender must at least be in
     -- our group — a bare whisper from outside must not land in the council straw-poll tally.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local rollID, candidateKey = payload:match("^(%d+):(.*)$")
+    -- "rollID:@itemID:candidate" since B46; "rollID:candidate" from older clients. The marker keeps
+    -- the item apart from a candidate key, which is free-form text on the wire.
+    local rollID, itemID, candidateKey = payload:match("^(%d+):@(%d*):(.*)$")
+    if not rollID then
+        rollID, candidateKey = payload:match("^(%d+):(.*)$")
+    end
     rollID = tonumber(rollID)
     if not rollID then return end
     -- Ignore council votes for an untracked (already resolved/pruned) roll — see HandleVote:
     -- prevents an orphan LC.councilVotes[rollID] that no cleanup path frees.
     if not LC.rollItems[rollID] then return end
+    -- Same reused-rollID guard as Vote.HandleVote (B46).
+    local mineC = TrackedItemID(rollID)
+    if itemID and itemID ~= "" and mineC ~= "" and itemID ~= mineC then return end
 
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     if candidateKey == "" then

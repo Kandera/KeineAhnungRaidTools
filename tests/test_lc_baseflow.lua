@@ -71,12 +71,13 @@ do
     T.eq(votes[raider.guid] and votes[raider.guid].idx, 1, "and the raider's choice is the one they pressed")
     T.eq(votes[council.guid] and votes[council.guid].idx, 2, "and the council member's is theirs")
 
-    -- The count travels with the vote so a client with a different button list says "unknown"
-    -- instead of confidently showing the wrong label. That guard is why a whole evening's votes
-    -- were once read wrong.
+    -- A fingerprint of the button SET travels with the vote, so a client whose list differs says
+    -- "unknown" instead of confidently showing the wrong label. That guard is why a whole evening's
+    -- votes were once read wrong -- and it used to be the count alone, which cannot see a
+    -- same-length rename (B43).
     T.eq(votes[raider.guid] and votes[raider.guid].count,
-        #RaidSim.As(lm, lm.KART.LC.GetButtonConfig),
-        "the vote carries the sender's button count")
+        RaidSim.As(lm, function() return lm.KART.LC.ButtonFingerprint() end),
+        "the vote carries a fingerprint of the sender's button set")
 end
 
 -- ===================================================================================
@@ -474,8 +475,13 @@ do
     RaidSim.As(en, function() en.KART.LC.Vote.CastVote(54, 4) end)
     local v = de.KART.LC.votes[54] or {}
     T.eq(v[en.guid] and v[en.guid].idx, 4, "a German client receives an English client's vote")
-    T.eq(v[en.guid] and v[en.guid].count, #RaidSim.As(de, de.KART.LC.GetButtonConfig),
-        "and agrees with it about how many buttons there were, so no mismatch is flagged")
+    -- The fingerprint is over the button SET the raid agreed, not over what each client renders, so
+    -- two clients in different languages running the same config match. If they did not, every
+    -- cross-language vote in this guild would render as "?" -- which is the mismatch marker doing
+    -- exactly the wrong thing.
+    T.eq(v[en.guid] and v[en.guid].count,
+        RaidSim.As(de, function() return de.KART.LC.ButtonFingerprint() end),
+        "and agrees with it about which buttons there were, so no mismatch is flagged")
 end
 
 -- ===================================================================================
