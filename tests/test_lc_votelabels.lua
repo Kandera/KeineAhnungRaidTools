@@ -146,3 +146,39 @@ do
     T.truthy(not panel:find("voteData.count ~= LC.ButtonFingerprint", 1, true),
         "and no site compares the fingerprint by hand instead")
 end
+
+-- B40: a roll we could never identify does not blind the reused-rollID detector -------------------
+-- LC_START can arrive with no itemID, and a client that is dead or out of range has no roll of its
+-- own to read a link from either, so it tracks "???". PurgeStaleRoll compares itemIDs, and a "???"
+-- has none -- it used to return there, leaving every per-roll table to survive into the NEXT item
+-- under the same reused ID. The raider's row then showed a vote for an item they had never seen, and
+-- they could never vote again.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 45, F.GLOVES, { noRollFor = { Alric = true } })
+
+    -- Force the state the entry describes: tracked, but never identified.
+    raider.KART.LC.rollItems[45] = "???"
+    raider.KART.LC.votes[45] = { [raider.guid] = { idx = 1, note = "alte stimme", count = 1 } }
+
+    -- A genuinely different item arrives under the same rollID.
+    F.Drop(sim, 45, F.WEAPON)
+
+    T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[45]),
+        "the new item is tracked properly")
+    T.is_nil((raider.KART.LC.votes[45] or {})[raider.guid],
+        "and the unidentifiable roll's vote did not survive into it")
+end
+
+do
+    -- The detector must not have become "purge whenever the link is odd": a roll that IS identified
+    -- and matches is left alone, votes and all.
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 46, F.GLOVES)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(46, 1) end)
+    T.truthy((lm.KART.LC.votes[46] or {})[raider.guid], "the vote is in")
+
+    F.Drop(sim, 46, F.GLOVES)   -- the same item again under the same ID
+    T.truthy((lm.KART.LC.votes[46] or {})[raider.guid],
+        "a re-announced identical item keeps its votes")
+end

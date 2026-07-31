@@ -986,24 +986,22 @@ end
 --
 -- Returns nil for rollID/idx when the payload is malformed; the caller drops the message on that.
 local function ParseVotePayload(payload)
-    -- Three shapes now, newest first: "rollID:idx:#fp:@itemID:note", then 3.1's "rollID:idx:#fp:note"
-    -- without the item, then 3.0.x's "rollID:idx:note" without either. Each marker ("#", "@") is what
-    -- keeps its field unambiguous against a free-text note -- colons are not stripped from notes, so
-    -- a plain numeric field would swallow the start of "5:30 uhr" and read it as data.
+    -- One shape: "rollID:idx:#fingerprint:@itemID:note".
+    --
+    -- The two older shapes are gone, and B53 is why. 3.0.x sent "rollID:idx:note" with no markers at
+    -- all, so a note that itself began with "#2:" was read as a fingerprint -- truncating what the
+    -- raider wrote and fabricating a value the sender never sent, which then either wrongly tripped
+    -- or wrongly satisfied the mismatch check. Notes are free text and colons are not stripped from
+    -- them, so no single-marker format can be made unambiguous against one.
+    --
+    -- Requiring BOTH markers together settles it: a legacy note would have to begin with
+    -- "#<digits>:@<digits>:" to be mistaken for one. Running the current version across the raid is
+    -- already mandatory (see LC.PROTOCOL_VERSION), and a vote from an older client now simply does
+    -- not parse instead of being silently misread -- which is the better of the two failures.
     local rollID, idx, count, itemID = payload:match("^(%d+):(%d+):#(%d+):@(%d*):")
-    local note
-    if rollID then
-        note = payload:match("^%d+:%d+:#%d+:@%d*:(.*)") or ""
-        return tonumber(rollID), tonumber(idx), tonumber(count), note, itemID
-    end
-    rollID, idx, count = payload:match("^(%d+):(%d+):#(%d+):")
-    if rollID then
-        note = payload:match("^%d+:%d+:#%d+:(.*)") or ""
-    else
-        rollID, idx = payload:match("^(%d+):(%d+)")
-        note = payload:match("^%d+:%d+:(.*)") or ""
-    end
-    return tonumber(rollID), tonumber(idx), tonumber(count), note, nil
+    if not rollID then return nil end
+    local note = payload:match("^%d+:%d+:#%d+:@%d*:(.*)") or ""
+    return tonumber(rollID), tonumber(idx), tonumber(count), note, itemID
 end
 
 function Vote.HandleVote(payload, senderKey)

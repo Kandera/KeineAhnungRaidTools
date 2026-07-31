@@ -2478,8 +2478,21 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- roll was accepted onto the live one, taking the new item's vote row off a raider's screen
     -- before they had voted. Narrow window, and rollID reuse within seconds is exactly what this
     -- function exists for.
+    -- Nothing tracked under this ID at all, so there is nothing that could be stale.
+    if oldLink == nil then return end
+
     local oldItemID = type(oldLink) == "string" and oldLink:match("item:(%d+)") or nil
-    if not oldItemID or oldItemID == newItemID then return end
+    if oldItemID == newItemID then return end
+    -- oldItemID nil past this point means we are holding something we never managed to identify --
+    -- "???" from an LC_START that carried no itemID either (B40). That used to return, which left
+    -- the detector blind for the rest of the session: every per-roll table survived into the next
+    -- item under the same reused ID, so a raider's row showed a vote for an item they had never seen
+    -- and they could never vote again.
+    --
+    -- A new item IS arriving under this ID and what we hold cannot be shown to be the same one -- it
+    -- cannot be shown to be anything. Clearing it is the safe direction: losing votes for a roll
+    -- nobody could read beats keeping votes that belong to a different item, on the screen that
+    -- decides who gets it.
 
     for i = #LC.voteListRolls, 1, -1 do
         if LC.voteListRolls[i] == rollID then table.remove(LC.voteListRolls, i) end
