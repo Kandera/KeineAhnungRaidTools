@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The × on a council tab can be clicked again.** It disappeared as soon as the mouse left the card, and a refresh hid it out from under the cursor.
 - **`/kart status` names who your client reads as raid lead.** Two people reading that differently is behind almost every settings problem.
 - **"You are owed this" disappears once the item is actually handed to you.** It used to stand until you ticked it off yourself.
+- **KART windows can no longer be dragged off the screen**, which was easy to do in windowed mode with a second monitor.
 - **Two council members awarding the same item at once no longer leaves the raid disagreeing about who won**, and says so.
 - **A Lootmaster name KART cannot place is reported instead of quietly ignored.**
 - **The raid leader now owns the raid-wide Loot Council settings**, and the Lootmaster field says who hands out the loot.

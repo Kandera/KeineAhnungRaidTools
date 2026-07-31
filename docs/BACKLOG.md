@@ -136,10 +136,17 @@ belongs in `docs/OWNERSHIP.md` next to the other two if it holds.
 Reported from the live v3.2.2-beta1 test, 2026-07-31. Dragging a KART window past the edge of the
 game window leaves it partly or wholly outside, where it cannot be grabbed back.
 
-Blizzard's own frames clamp to the screen (`SetClampedToScreen(true)`), and KART's do not. The fix is
-that call plus, for anything already stranded, a way to bring the windows home -- a stored position
-restored on load is exactly how a window comes back off-screen every session once it has been put
-there.
+Blizzard's own frames clamp to the screen; two of KART's did (the buff checker and the raidlead bar)
+and the other six did not. All eight clamp now.
+
+The other half was already there: `KAUI.IsSavedPosOnScreen` refuses to RESTORE a saved position
+that is off-screen, so a window stranded before this fix comes home by itself on the next load, at
+its default place. Nothing to migrate.
+
+Guarded by a source-level check over every file that starts a drag, because none of these frames
+can be dragged from the harness. What it really protects is the next window somebody adds: the
+pattern is four lines of boilerplate and the clamp is the one that is easy to leave out -- which is
+exactly how six of them ended up without it.
 
 ## B79 — OPEN, by choice — the tab's x and "No Winner" look alike and do different things
 

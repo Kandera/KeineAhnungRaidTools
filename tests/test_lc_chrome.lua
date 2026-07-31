@@ -157,3 +157,32 @@ do
     T.eq(#alric.KART.LC.voteListRolls, 0, "including the raiders' open vote rows")
     T.eq(council.KART.LC.sessionActive, true, "and still leaves the session running")
 end
+
+-- Every movable window is clamped to the screen (B82) ----------------------------------------------
+-- Reported from a live test: in windowed mode on two monitors the desktop past the edge of the game
+-- window is real screen, nothing stops the drag, and a window put there cannot be grabbed back.
+-- Blizzard's own frames clamp; two of KART's did and the rest did not.
+--
+-- KAUI.IsSavedPosOnScreen already refuses to RESTORE an off-screen position, so a stranded window
+-- comes home on the next load by itself -- this is the other half, not getting there at all.
+--
+-- Checked against the source because none of these frames can be dragged from the harness. What it
+-- really guards is the NEXT window somebody adds: the pattern is four lines of boilerplate and the
+-- clamp is the one that is easy to leave out.
+do
+    local files = { "LootCouncilPanel.lua", "LootCouncilVote.lua", "LootCouncilTrade.lua",
+                    "LootHistory.lua", "MainFrame.lua", "BuffChecker.lua", "RaidleadBar.lua",
+                    "Libs/KAUI-1.0/KAUI-1.0.lua" }
+    for _, name in ipairs(files) do
+        local src = assert(io.open(name, "r")):read("*a")
+        local starts, clamps = 0, 0
+        for _ in src:gmatch("OnDragStart") do starts = starts + 1 end
+        for _ in src:gmatch("SetClampedToScreen") do clamps = clamps + 1 end
+        -- One clamp per movable frame. A header that drags its parent shares the parent's clamp, so
+        -- the count is allowed to be lower than the number of drag handlers -- never zero while
+        -- there is one, which is the shape the bug had.
+        if starts > 0 then
+            T.truthy(clamps > 0, name .. " clamps its movable window(s) to the screen")
+        end
+    end
+end

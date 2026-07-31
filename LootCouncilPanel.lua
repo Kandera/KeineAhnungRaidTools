@@ -575,6 +575,12 @@ function Council.CreateCouncilPanel()
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     KART.UI:ApplyPopupArtwork(f)
+    -- Clamped, like every Blizzard frame and like BuffChecker and the raidlead bar already were.
+    -- Without it a window can be dragged past the edge of the game window -- reported from a live
+    -- test in windowed mode on two monitors, where the desktop beyond the edge is real screen and
+    -- there is nothing to stop the drag. KAUI.IsSavedPosOnScreen already refuses to RESTORE an
+    -- off-screen position, so this is the other half: not getting there in the first place.
+    f:SetClampedToScreen(true)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop",  function(self)
         self:StopMovingOrSizing()

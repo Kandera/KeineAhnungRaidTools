@@ -221,6 +221,11 @@ function LH.ShowExportDialog()
         f:SetMovable(true)
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
+        -- Clamped, like every Blizzard frame. Without it a window can be dragged past the edge of the
+        -- game window -- reported from a live test in windowed mode on two monitors, where the desktop
+        -- beyond the edge is real screen and nothing stops the drag. KAUI.IsSavedPosOnScreen already
+        -- refuses to RESTORE an off-screen position; this is the other half.
+        f:SetClampedToScreen(true)
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
         f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
         table.insert(UISpecialFrames, f:GetName())
@@ -352,6 +357,11 @@ function LH.CreateWindow()
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     KART.UI:ApplyPopupArtwork(f)
+    -- Clamped, like every Blizzard frame. Without it a window can be dragged past the edge of the
+    -- game window -- reported from a live test in windowed mode on two monitors, where the desktop
+    -- beyond the edge is real screen and nothing stops the drag. KAUI.IsSavedPosOnScreen already
+    -- refuses to RESTORE an off-screen position; this is the other half.
+    f:SetClampedToScreen(true)
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()

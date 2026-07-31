@@ -62,6 +62,11 @@ local mainFrame = CreateFrame("Frame", "KART_MainFrame", UIParent)
 mainFrame:SetSize(929, 715) -- full PNG footprint incl. transparent shadow margin
 mainFrame:SetPoint("CENTER", UIParent, "CENTER")
 mainFrame:SetMovable(true)
+-- Clamped, like every Blizzard frame. Without it the window can be dragged past the edge of the
+-- game window -- reported from a live test in windowed mode on two monitors, where the desktop
+-- beyond the edge is real screen and nothing stops the drag. The drag is started from clickArea
+-- further down, but the clamp belongs to the frame that actually MOVES.
+mainFrame:SetClampedToScreen(true)
 
 mainFrame.bg = mainFrame:CreateTexture(nil, "BACKGROUND")
 mainFrame.bg:SetTexture("Interface\\AddOns\\KeineAhnungRaidTools\\media\\backgrounds\\kart-bg-dark.png")
