@@ -774,6 +774,21 @@ function LC.ApplyOwnConfig()
         -- lootmaster until the new owner happens to broadcast. A config we RECEIVED is never touched
         -- here — that's what the fromSelf marker distinguishes.
         if LC.raidConfig.fromSelf then
+            -- Two different things end up here and only one of them is a handover (B70).
+            --
+            -- A handover: our Lootmaster field now names somebody else, so we deliberately gave the
+            -- role away. Resigning and erasing is right, and that is what the rest of this branch is.
+            --
+            -- Merely losing raid lead: our field is EMPTY and always was. We held the config through
+            -- the raid-leader fallback alone (the documented B33 setup) and somebody else has just
+            -- been promoted. Nothing was handed over, our settings are still the ones the raid is
+            -- running on -- and this copy may be the only one in existence, because the new leader
+            -- cannot claim the config (LC.IsConfigOwner needs sessionStartedByUs, which is the other
+            -- half of B69 and correct). Erasing it here left the raid with no config from anybody,
+            -- for the rest of the night, every client silently back on its own roll setting: B33
+            -- again, reached from a new direction. Keep it instead, so LC_CONFIG_RELAY can hand it
+            -- to whoever asks. We still are not the config owner and still do not broadcast.
+            if not LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster) then return end
             -- Say so before erasing it. Nothing else on the wire can express "I am no longer the
             -- lootmaster": a config broadcast is gated on owning the config, which we just stopped
             -- doing, so handing the role over used to be completely silent — every peer went on

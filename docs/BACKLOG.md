@@ -193,14 +193,45 @@ reseeding is written and was taken back out; it belongs with this fix, and `test
 comment saying so.
 
 **Do not fix it by deleting the grace.** Tried and measured: it takes the five promote assertions
-green again but turns two B69 assertions red, so the grace is load-bearing for something else. The
-shape of the real fix is already written into `LC.SetSessionActive`'s own comment — the claim should
-be released when *the asking runs out of attempts*, not after a fixed wall-clock delay that can
-outlive the role it depends on. A reloaded leader that asks gets answered (peers relay); a leader in
-this hole asks and is met with silence, because nobody ever had a config. That is the distinction
-that separates B69's case from this one, and a timer cannot express it.
+green again but turns two B69 assertions red. The grace covers the window *before* you have been told
+anything, which is exactly when `IsConfigOwner`'s `sessionStartedByUs` guard has nothing to bite on —
+`sessionActive` is still false there, so the guard does not fire and a reloaded leader claims freely.
+The grace is load-bearing for that. Keep it.
 
-Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there.
+### Step 1, done — losing raid lead is not a handover
+
+`LC.ApplyOwnConfig`'s not-owner branch treated "raid lead moved away from me" exactly like "I typed
+somebody else's name in the Lootmaster field": it broadcast `LC_RESIGN` and wiped our copy. With an
+empty field nothing was handed over, our settings are still the ones the raid is running on, and —
+because the new leader cannot claim the config — that copy is the only one in existence. Erasing it
+is what turned a lead change into a config-less raid. It is now kept, distinguished by whether our
+own field names anybody. Both directions are mutation-checked.
+
+That alone does **not** fix B70. Two measured blockers remain.
+
+### Blocker 1 — `LC.RelayRaidConfig` refuses to relay a `fromSelf` config
+
+So the surviving copy still cannot reach the new leader: 25 `LC_STATE_REQ` go out in the probe and
+`LC_CONFIG_RELAY` stays at 0. The refusal is deliberate and correct for what it was written against —
+a config a client *invented from its own defaults* after a reload cleared `raidConfig` must never
+spread. But it cannot tell that apart from the empty-field leader's config, which is `fromSelf` and
+is genuinely the raid's (B33).
+
+The discriminator that separates them is `sessionStartedByUs`: a client that DECLARED the session
+owns its settings by construction; one that reloaded into a session did not. Which leads to:
+
+### Blocker 2 — `sessionStartedByUs` is cleared on the client that declared the session
+
+The probe shows it flipping true → false on the original leader across the promote, which
+permanently disqualifies them from ever relaying or reclaiming. Four writers set it (`SetSessionActive`,
+`HandleActive`, `HandleSessionResume`, `TearDownForRaidExit`) and which one fires here has NOT been
+pinned down yet — `HandleSessionResume` returns early while `sessionActive` is true, so the obvious
+candidate is not it. **Instrument the four writers before changing any of them.**
+
+Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there. And it needs
+the per-file `math.randomseed` in `tests/run.lua` — written twice now and taken back out twice,
+because with it the five promote assertions are red until B70 is actually fixed. Put it back as part
+of the fix, not before.
 
 ## B29 — a departed lootmaster leaves the raid with no loot owner — FIXED 2026-07-30
 

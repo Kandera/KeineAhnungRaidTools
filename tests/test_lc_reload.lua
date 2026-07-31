@@ -127,3 +127,60 @@ do
     T.eq(lm.env.KART_LCTrades.looted[82], lm.KART.LC.rollLootedAt[82],
         "a stamp taken after the restore is in the saved file straight away")
 end
+
+-- Losing raid lead is not a handover (B70, partial) -------------------------------------------------
+-- An empty Lootmaster field means the raid leader's own settings ARE the raid's (B33). When raid lead
+-- then moves, LC.ApplyOwnConfig used to treat that exactly like a deliberate handover: broadcast
+-- LC_RESIGN and wipe our copy. Nothing was handed over, and the new leader cannot claim the config
+-- (LC.IsConfigOwner needs sessionStartedByUs), so that wipe destroyed the only copy in existence and
+-- the raid spent the night on its own defaults -- rolls off. This keeps the copy.
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local first = sim.byName.Bramor
+    RaidSim.As(first, function()
+        first.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
+        first.env.KART_Settings.lcRollsEnabled   = true
+        first.KART.LC.ApplyOwnConfig()
+        first.KART.LC.SetSessionActive(true)
+    end)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+    T.truthy(first.KART.LC.raidConfig.fromSelf, "the empty-field leader holds the raid's config")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.Promote(sim, "Sinja")
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+
+    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 0, "losing raid lead is not announced as a handover")
+    T.truthy(first.KART.LC.raidConfig.fromSelf,
+        "and the config they were holding for the raid is still there to hand on")
+    T.eq(RaidSim.As(first, first.KART.LC.GetRollsEnabled), true, "with the raid's roll setting intact")
+    T.truthy(not RaidSim.As(first, first.KART.LC.IsConfigOwner),
+        "while they have correctly stopped being the config owner")
+end
+
+-- A real handover still resigns ---------------------------------------------------------------------
+-- The branch above must not swallow the case it was written for (B32): naming somebody else in the
+-- Lootmaster field is a deliberate handover, and every peer has to be told to stop naming us.
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local first = sim.byName.Bramor
+    RaidSim.As(first, function()
+        first.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
+        first.KART.LC.ApplyOwnConfig()
+        first.KART.LC.SetSessionActive(true)
+    end)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)
+    RaidSim.ClearLog(sim)
+
+    RaidSim.As(first, function()
+        first.env.KART_Settings.lcLootmaster = "Merrit"   -- handing the role over
+        first.KART.LC.ApplyOwnConfig()
+    end)
+    T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 1, "naming somebody else still resigns out loud")
+    T.truthy(next(first.KART.LC.raidConfig) == nil, "and drops our own copy")
+end
