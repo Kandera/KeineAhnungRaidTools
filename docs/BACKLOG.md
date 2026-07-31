@@ -706,7 +706,7 @@ Settling the holder question was also a precondition for B63: a fallback broadca
 items the loot owner never won, and without this guard every one of them would have created exactly
 this obligation.
 
-## B61 — council membership is only evaluated when the roll starts
+## B61 — council membership is only evaluated when the roll starts — FIXED 2026-07-31
 
 `Council.ShowCouncilPanel` is called from the four roll-start sites and nowhere else, and
 `LC.IsCouncil()` is read once, there. A client whose config arrives afterwards — a late retry
@@ -899,7 +899,7 @@ learn, and the council may award the item on the strength of it.
 
 # Tier C — one player drops out of the round
 
-## B40 — a "???" item link permanently blinds the reused-rollID detector
+## B40 — a "???" item link permanently blinds the reused-rollID detector — FIXED 2026-07-31
 
 `LC.HandleStart` builds the link only from `GetLootRollItemLink`, which returns nil for a dead or
 out-of-range client, and `ResolveRollItemLink` retries the same nil-returning API and gives up — even
@@ -928,23 +928,23 @@ and the rest fall through to the armor rule, which answers nil for weapons and j
 
 # Tier D — the wrong thing is displayed
 
-## B43 — the vote-count guard is length-only
+## B43 — the vote-count guard is length-only — FIXED 2026-07-31
 
 `voteData.count` catches a change in the number of buttons, not a same-length rename or reorder. The
 config owner editing labels mid-roll pushes the new set live, and votes cast before the edit are then
 rendered under whatever the label became, with no "unknown" fallback.
 
-## B44 — the council tab tooltip skips the guard entirely
+## B44 — the council tab tooltip skips the guard entirely — FIXED 2026-07-31
 
 It resolves `buttons[tonumber(voteData.idx)]` without reading `voteData.count`, so it states a label
 with full confidence for the same vote the row list below it correctly renders as "?".
 
-## B45 — the voter's own badge has no guard at all
+## B45 — the voter's own badge has no guard at all — FIXED 2026-07-31
 
 `votedDef` is resolved against whatever `GetButtonConfig()` returns right now, with no stored count.
 After a mid-roll label edit the raider is told they voted something they did not.
 
-## B46 — a late vote is accepted onto a reused rollID
+## B46 — a late vote is accepted onto a reused rollID — FIXED 2026-07-31
 
 `Vote.HandleVote` and `Vote.HandleCouncilVote` check only that *some* item is tracked under the rollID,
 not that it is the same one. A network-delayed vote for the previous item lands in the new item's tally.
@@ -953,13 +953,13 @@ not that it is the same one. A network-delayed vote for the previous item lands 
 
 # Tier E — cleanup, cosmetics, narrow triggers
 
-## B47 — expired pending trades are pruned only by a reload
+## B47 — expired pending trades are pruned only by a reload — FIXED 2026-07-31
 
 `Trade.CheckTradeTimeouts` warns and never removes; the only pruning happens in
 `Trade.RestorePersistedTrades` at `ADDON_LOADED`. Hours past Blizzard's real trade window, dead entries
 still sit in the reminder list, indistinguishable from live ones.
 
-## B48 — a self-assigning council member gets no reminder
+## B48 — a self-assigning council member gets no reminder — FIXED 2026-07-31
 
 `LC.owedToMe` is populated only in `Trade.HandleResult`, i.e. only on a client that *received* the
 broadcast. A council member who assigns an item to themselves never processes their own message and so
@@ -982,12 +982,12 @@ That path calls `voteListFrame:Show()` directly with no refresh, so the pool sti
 layout: a window full of items the player was told were hidden, with stopped countdowns, until the
 ticker's first prune hides it again.
 
-## B52 — an accepted config does not repaint an open council panel
+## B52 — an accepted config does not repaint an open council panel — FIXED 2026-07-31
 
 `LC.HandleConfig` omits the `RefreshCouncilPanelIfOpen()` call its own retry path makes, so a council
 member keeps seeing votes under the old label set until some unrelated event refreshes the rows.
 
-## B53 — a legacy note beginning with a hash and digits is misparsed
+## B53 — a legacy note beginning with a hash and digits is misparsed — FIXED 2026-07-31
 
 `ParseVotePayload`'s count disambiguator can match a pre-3.1 client's note, truncating it and
 fabricating a count the sender never sent — which then either wrongly trips or wrongly satisfies the

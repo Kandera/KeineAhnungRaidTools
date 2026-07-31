@@ -8,6 +8,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [3.2.2] - 2026-07-29
 ### Behoben
+- **Ein Council-Mitglied, dessen Einstellungen spät ankommen, bekommt die schon laufenden Items trotzdem.**
+- **Wer sich selbst ein Item zuweist, wird jetzt auch daran erinnert.**
+- **Handelserinnerungen verschwinden, sobald das Item nicht mehr übergeben werden kann**, statt weiter aktuell auszusehen.
+- **Einen Vote-Button mitten im Wurf umzubenennen ändert nicht mehr die Beschriftung bereits abgegebener Stimmen.**
+- **Eine vom Netzwerk verzögerte Stimme kann nicht mehr beim nächsten Item landen, das dieselbe Wurf-ID bekommt.**
 - **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.

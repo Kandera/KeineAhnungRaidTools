@@ -154,7 +154,7 @@ end
 -- under the same reused ID. The raider's row then showed a vote for an item they had never seen, and
 -- they could never vote again.
 do
-    local sim, lm, _, raider = F.NewRaid()
+    local sim, _, _, raider = F.NewRaid()
     F.Drop(sim, 45, F.GLOVES, { noRollFor = { Alric = true } })
 
     -- Force the state the entry describes: tracked, but never identified.
