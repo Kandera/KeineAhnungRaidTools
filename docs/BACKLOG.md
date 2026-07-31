@@ -286,12 +286,49 @@ message jitter — loses it. Both orderings are reachable. That is the same orde
 per-file reseeding exists to remove, and it is why this must be pinned with a deterministic seed
 before anything else is tried.
 
-**Start the next pass here**, not at the lead change: find what clears `raidConfig.fromSelf` on the
-declarer during the first `GROUP_ROSTER_UPDATE` after a session is declared. `ApplyOwnConfig`'s
-not-owner branch is the only local writer that can, and reaching it means `IsConfigOwner()` was
-already false — so the ownership loss comes first and is still unexplained. Instrument
-`IsConfigOwner`'s individual conditions rather than reasoning about them; two attempts have now been
-lost to reasoning about this function instead of measuring it.
+### Root cause, MEASURED — and why the obvious fix for it is wrong
+
+Instrumenting `IsConfigOwner`'s conditions one by one (rather than reasoning about them) gives it in
+one line:
+
+    roster    : fromSelf=true why=lead=true
+    !! HandleConfigRelay overwrote our own config
+    +5s       : fromSelf=nil  why=received-config-in-force
+
+**`LC.HandleConfigRelay` replaces the declarer's own config with a forwarded copy.** Its
+"self-invented" test is `fromSelf and not ownField`, and the empty-field declarer's config matches
+that exactly while being the config the whole raid is running on. The overwrite clears `fromSelf`,
+which drops them out of `IsConfigOwner`, and nobody else can claim it.
+
+Third attempt fixed precisely that — `selfInvented` also requires `not (sessionActive and
+sessionStartedByUs)`. It works: the declarer keeps its config through every roster update and does
+finally broadcast. **The soak rejected it too: 9 of 3000, again split on `rollsEnabled` and the vote
+buttons.**
+
+That is the third rejection in the same shape, and the pattern is now clear enough to state as a
+rule: **anything that makes the declarer's config survive independently creates a second
+authoritative copy, and the raid splits.** Whatever the relay overwrite costs, it is currently also
+the mechanism by which everybody converges on ONE config. Do not attack it directly again.
+
+### What is actually wrong, and the one thing left to try
+
+The declarer's config is never broadcast in the first place — B69's grace holds it, and by the time
+the grace expires a relay has already replaced it. Everything downstream is that one fact playing
+out. So the fix belongs at the send, not at the overwrite.
+
+Attempt three also tried the narrow version of that: have `HandleActive` broadcast when it clears the
+held-back claim. **Measured as dead code, and the note in `HandleActive` claiming such a branch is
+unreachable is RIGHT** — a correction to what the previous commit here said. The sender of a
+confirming `LC_ACTIVE` is only accepted when we are NOT the raid leader (`IsSenderLootOwner` falls
+back to the leader for an empty field), and at that point `IsConfigOwner()` is false anyway. The
+branch cannot fire without also changing the ownership rule, which is attempt two, which the soak
+rejected.
+
+Left to try, in order: (1) does the grace need to withhold the config from the RAID at all, or only
+withhold the *claim* — i.e. send it as a relay-shaped fill-a-void message immediately and the
+authoritative `LC_CONFIG` after the grace? (2) failing that, treat the empty-field-plus-declaration
+setup as needing a real lootmaster name and say so out loud at session start, rather than trying to
+make an ownerless config converge.
 
 Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there. And it needs
 the per-file `math.randomseed` in `tests/run.lua` — written and taken back out twice now, because
