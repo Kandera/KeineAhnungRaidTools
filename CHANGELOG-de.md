@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [3.2.2] - 2026-07-29
 ### Behoben
+- **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.
 - **Ein Lootmaster, dessen Nickname niemand lesen kann, kostet den Raid nicht mehr seine Einstellungen.**
 - **Wer Raidlead übernimmt, erfährt, dass der Raid ab jetzt auf seinen Einstellungen läuft.**

@@ -656,7 +656,17 @@ raid leader stands in, all five clients assert they do NOT own the config), lets
 checks they end up on the raid's vote buttons, roll setting and council. Removing the `elseif` branch
 turns those three red, along with eleven other assertions and the soak.
 
-## B59 — a lootmaster whose own field does not resolve owns nothing, and is never told
+## B59 — a lootmaster whose own field does not resolve owns nothing, and is never told — FIXED 2026-07-31
+
+**Most of this went with the ownership rework** (`docs/OWNERSHIP.md`): `LC.IsConfigOwner` reads no
+name at all now, so a client whose field cannot be placed loses nothing. What was left is the
+designation not taking, on the one client that can fix it -- the config owner types a name, their own
+client cannot place it, `LC.GetLootmaster` falls back to them, and they hand out the loot themselves.
+Safe, but not what was asked for. It is now said at session start, naming the text that failed.
+
+The trap this entry named is what the fix turns on: `ResolvePlayer` returns a PENDING TEXT key, never
+nil, so the check is `IsResolvedKey` rather than a nil test. The test was written first and failed
+against the nil version.
 
 `LC.IsConfigOwner` compares `LC.IsMe(declaredKey)` with no fallback, and `KASC.Identity.ResolvePlayer`
 returns a pending TEXT key rather than nil for a name it cannot place. A lootmaster who types their
