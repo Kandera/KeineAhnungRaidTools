@@ -220,18 +220,54 @@ is genuinely the raid's (B33).
 The discriminator that separates them is `sessionStartedByUs`: a client that DECLARED the session
 owns its settings by construction; one that reloaded into a session did not. Which leads to:
 
-### Blocker 2 — `sessionStartedByUs` is cleared on the client that declared the session
+### Blocker 2 — `sessionStartedByUs` is cleared on the client that declared the session — CAUSE FOUND
 
-The probe shows it flipping true → false on the original leader across the promote, which
-permanently disqualifies them from ever relaying or reclaiming. Four writers set it (`SetSessionActive`,
-`HandleActive`, `HandleSessionResume`, `TearDownForRaidExit`) and which one fires here has NOT been
-pinned down yet — `HandleSessionResume` returns early while `sessionActive` is true, so the obvious
-candidate is not it. **Instrument the four writers before changing any of them.**
+`LC.HandleActive`, confirmed by instrumenting all four writers. The empty-field declarer keeps asking
+the raid what is going on (`StateStillNeeded` is true for them: their config is `fromSelf` and their
+own field names nobody), somebody answers `LC_ACTIVE:1` — confirming the very session they started —
+and `HandleActive`'s unconditional "told, not decided" clears the flag. From that moment they no
+longer count as the person who started it. `HandleSessionResume` is not it; it returns early while
+`sessionActive` is true.
+
+### The relay-based fix was BUILT, MEASURED AND REJECTED — do not rebuild it
+
+All three edits were written and they do work for the case: with per-file reseeding on, the five
+promote assertions go green and the raid gets its config. Then the soak said no.
+
+    soak: 16 of 3000 runs disagreed
+        13  config.rollsEnabled     (first at seed 183)
+         3  config.buttons          (first at seed 678)
+
+Config disagreement is the exact failure class this whole tier is about, so it is not shippable.
+Verified as caused by the change, not by the reseeding: at HEAD with reseeding on, the soak is clean
+and only the five known churn assertions fail.
+
+What the three edits were, so nobody redoes them:
+
+1. `HandleActive` keeps `sessionStartedByUs` when the message merely confirms a session we declared
+   and are still in.
+2. `RelayRaidConfig` relays a `fromSelf` config when we declared the session.
+3. One shared `ConfigIsSelfInvented()` predicate for `RelayRaidConfig`, `HandleConfigRelay` and
+   `StateStillNeeded`, which had drifted — two knew about the own-field case, none about the declarer.
+
+**Why it leaks.** It makes the declarer's config sticky: they keep it, relay it, and refuse relayed
+overwrites. That is a second authoritative source alongside any real lootmaster's. Once a real
+lootmaster broadcasts C2, the declarer still holds C1 and hands it to anyone with an empty config,
+re-injecting a config the raid has moved off. They stand down only once C2 reaches them through
+`TryAcceptConfig` — and the window before that is the 0.5%. Bisecting confirmed no single one of the
+three is responsible; reverting `HandleConfigRelay` alone takes 16 down to 10.
+
+**Where to go instead.** The relay is the wrong carrier, because a relay cannot express "this is
+superseded". Ownership is the thing that actually moved: consider letting the declaration, not the
+current raid lead, carry config ownership — a client that declared the session and holds the raid's
+config keeps broadcasting rights until a NAMED lootmaster displaces it, which is a rule
+`TryAcceptConfig` already enforces on the receiving side. That keeps one authoritative source instead
+of creating a second. Check it against B29 before building it.
 
 Needs the soak (`KART_SOAK_SEEDS=3000`) to confirm, since B69 itself was found there. And it needs
-the per-file `math.randomseed` in `tests/run.lua` — written twice now and taken back out twice,
-because with it the five promote assertions are red until B70 is actually fixed. Put it back as part
-of the fix, not before.
+the per-file `math.randomseed` in `tests/run.lua` — written and taken back out twice now, because
+with it the five promote assertions are red until B70 is actually fixed. Put it back as part of the
+fix, not before.
 
 ## B29 — a departed lootmaster leaves the raid with no loot owner — FIXED 2026-07-30
 
