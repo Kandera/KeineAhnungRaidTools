@@ -21,6 +21,31 @@ convergence soak, and it still cannot see a cursor, a Blizzard roll window, or a
 Each item says what must be TRUE at the end, not what to click. If an item needs a third body, an alt
 parked in the raid is enough.
 
+## The numbers are labels; this is the order
+
+C1 to C12 are names, not a running order -- "das bricht C7" has to mean the same thing next month, so
+they do not get renumbered when the sequence is understood better. The sequence is written here
+instead, and it is what `tests/test_manifest.lua` walks:
+
+| | | |
+|---|---|---|
+| the raid forms | C1 | the session starts, everybody in it |
+| | C2 | everybody on the raid's settings |
+| first boss | C4 | the item is force-won |
+| | C5 | everybody sees it, answers reach the council |
+| | C7 | the award converges, the holder owes it |
+| between bosses | C3 | somebody turns up mid-session |
+| | C6 | trash drops collectibles, BoEs, blues -- KART stays out |
+| | C8 | somebody reloads mid-distribution |
+| | C10 | raid lead changes hands |
+| | C9 | the lootmaster walks out, the leader stands in |
+| last boss | C12 | a set token, and it goes through the council |
+| | C11 | End Round, and it ends for everyone |
+
+C6 and C12 are two sides of one check and are deliberately far apart in the run: a token and a mount
+sit in the same item class and are told apart only by subclass, and tokens really do come from the
+last boss. Adjacent, they would share a state that the evening does not give them.
+
 ## The operating reality this has to survive
 
 Stated by the maintainer, and every item below is written against it:
@@ -79,6 +104,8 @@ same moment.
 A mount, a pet, a housing item, a Bind-on-Equip and an item below the minimum quality all drop. KART
 touches none of them: no force-win, no forced pass, Blizzard's own roll window behaves normally and
 the raid rolls on them the way it would without the addon.
+
+Its counterpart is C12: the same class, one subclass apart, and it must NOT be excluded.
 
 *Protects:* housing decor being force-won, which has happened; a BoE the lootmaster can never hand
 over through the trade window at all; and a session where Auto-Pass quietly hands every collectible

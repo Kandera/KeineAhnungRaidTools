@@ -108,6 +108,9 @@ dofile("tests/test_lc_reload.lua")
 dofile("tests/test_lc_ownership.lua")
 dofile("tests/test_lc_award.lua")
 dofile("tests/test_lc_votelabels.lua")
+-- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,
+-- because it is the statement of what must hold and the soak is the search for what does not.
+dofile("tests/test_manifest.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
