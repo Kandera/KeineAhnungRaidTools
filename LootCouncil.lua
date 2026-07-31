@@ -2084,6 +2084,19 @@ function LC.SetSessionActive(active)
                 msg = KART.L.LC_LOOTMASTER_UNRESOLVED      -- names someone we cannot resolve yet
             end
             print("|cffff0000KART:|r " .. msg)
+        elseif not LC.ResolveConfigName(KART_Settings.lcLootmaster) then
+            -- We DO own the config, but only through the raid-leader fallback, because our own
+            -- Lootmaster field is empty. That is a supported setup (B33) and it is also the one that
+            -- cannot survive the evening: nothing carries these settings on. The moment raid lead
+            -- moves, or a relay from a peer lands on this client first, this copy stops being the
+            -- raid's and no successor can claim it -- every client falls back to its own roll
+            -- setting, which is off, in silence. That is B70, it is open, and three attempts to make
+            -- an ownerless config converge have each been rejected by the soak.
+            --
+            -- Naming somebody -- yourself included -- makes the config theirs by declaration and
+            -- takes the whole failure mode off the table. Cheap to say, and it is said at the one
+            -- moment somebody is looking: when they start the session.
+            print("|cffff0000KART:|r " .. KART.L.LC_LOOTMASTER_EMPTY_WARN)
         end
     end
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Whoever hands out the loot is told which raiders run a KART too old to take part**, instead of their clients ignoring the whole distribution in silence.
 - **An item the loot council never picked up is no longer passed on automatically.** Blizzard's roll window stays open so the raid can roll on it, and KART says so.
 - **The trade deadline for an item survives a reload**, instead of restarting its four hours from the moment the council decides.
+- **Starting a session with an empty Lootmaster field now warns you.** The raid keeps those settings only while you hold raid lead.
 - **KART's own confirmation dialogs are visible again**, instead of opening behind the window that raised them.
 - **Tier set tokens go through the Loot Council again**, instead of being rolled on the normal way by nobody.
 - **Toys stay out of the Loot Council**, instead of being force-won by the lootmaster.

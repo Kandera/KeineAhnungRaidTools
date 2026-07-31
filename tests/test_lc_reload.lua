@@ -184,3 +184,56 @@ do
     T.eq(#RaidSim.Sent(sim, "LC_RESIGN"), 1, "naming somebody else still resigns out loud")
     T.truthy(next(first.KART.LC.raidConfig) == nil, "and drops our own copy")
 end
+
+local function Capture(fn)
+    local lines = {}
+    local realPrint = _G.print
+    _G.print = function(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        lines[#lines + 1] = table.concat(parts, " ")
+    end
+    local ok, err = pcall(fn)
+    _G.print = realPrint
+    if not ok then error(err, 0) end
+    return table.concat(lines, "\n")
+end
+
+-- The empty-field setup announces its own weakness (B70 mitigation) ---------------------------------
+-- Leaving the Lootmaster field empty is supported (B33): the raid leader's own settings become the
+-- raid's. It is also the one setup that cannot survive the evening -- when raid lead moves, or a peer's
+-- relay lands on this client first, the copy stops being the raid's and no successor can claim it.
+-- Three attempts at making an ownerless config converge have each been rejected by the soak, so until
+-- that is solved the setup says so at the one moment somebody is looking.
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local lead = sim.byName.Bramor
+    local out = Capture(function()
+        RaidSim.As(lead, function()
+            lead.env.KART_Settings.lcLootmaster = ""
+            lead.KART.LC.ApplyOwnConfig()
+            lead.KART.LC.SetSessionActive(true)
+        end)
+    end)
+    T.truthy(RaidSim.As(lead, lead.KART.LC.IsConfigOwner), "the empty-field leader does own the config")
+    T.truthy(out:find(lead.KART.L.LC_LOOTMASTER_EMPTY_WARN, 1, true),
+        "and is told the raid keeps it only while they hold raid lead")
+end
+
+-- ...and naming somebody silences it, because that is the fix ----------------------------------------
+do
+    local sim = RaidSim.New(F.MEMBERS)
+    RaidSim.Install(sim)
+    local lead = sim.byName.Bramor
+    local out = Capture(function()
+        RaidSim.As(lead, function()
+            lead.env.KART_Settings.lcLootmaster = "Bramor"   -- their own name is enough
+            lead.KART.LC.ApplyOwnConfig()
+            lead.KART.LC.SetSessionActive(true)
+        end)
+    end)
+    T.truthy(RaidSim.As(lead, lead.KART.LC.IsConfigOwner), "a named lootmaster still owns the config")
+    T.truthy(not out:find(lead.KART.L.LC_LOOTMASTER_EMPTY_WARN, 1, true),
+        "and hears nothing, because the config is theirs by declaration")
+end
