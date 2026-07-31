@@ -94,7 +94,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
         end
     else
         -- Same rule locally: our own earlier entry for this roll is superseded by this one.
-        KART.LH.RemoveHistoryForRoll(rollID)
+        KART.LH.RemoveHistoryForRoll(rollID, LC.rollItems[rollID])
         KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
         -- B48: the assigner does not process its own broadcast (KASC drops the echo), so a council
         -- member who assigns an item to THEMSELVES never built their own "you are owed this" entry --
@@ -951,7 +951,7 @@ function Trade.HandleResult(payload, senderKey)
         -- Every client logs the same award locally, so every client has to drop it locally too —
         -- the revoker does this itself (it does not process its own message, see the panel's No-Winner
         -- button and LC.StartManualRoll's re-decision path).
-        KART.LH.RemoveHistoryForRoll(rollID)
+        KART.LH.RemoveHistoryForRoll(rollID, LC.rollItems[rollID])
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (KASC drops our own message when it comes back). Without this, peers keep a ghost council tab
@@ -1017,7 +1017,10 @@ function Trade.HandleResult(payload, senderKey)
     -- its own record of the evening: a client that saw both awards logged both, a client that saw
     -- only one logged one, and the assigners each logged their own pick locally. Found by the soak
     -- once it learned to make two council members decide at the same moment.
-    KART.LH.RemoveHistoryForRoll(rollID)
+    -- itemLink, not LC.rollItems[rollID]: this is the item being logged one line down, and it was
+    -- rebuilt from the itemID on the wire -- so it is right even on a client whose own tracking of
+    -- that rollID is stale or was never there.
+    KART.LH.RemoveHistoryForRoll(rollID, itemLink)
     KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
 
     -- Same reasoning as DoAssignWinner, including the "loot owner is not the same as holder" case.

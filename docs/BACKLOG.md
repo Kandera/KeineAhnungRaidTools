@@ -61,6 +61,27 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
+## B74 — FIXED 2026-07-31 — a mid-raid joiner loses the awards it was just handed
+
+Found by the soak on the first clean pass after B71, seed 1716.
+
+Awarding an item clears any history entry for that rollID first, so a reassignment or a clash
+replaces its own record instead of sitting next to it (B35). Which entries count as "that rollID"
+was decided by time alone: everything logged since `LC.rollLootedAt[rollID]`, the moment this client
+saw that roll start. A client that never saw it start has no stamp and fell back to a twelve-hour
+window -- so it removed the entry for a *previous* item that had reused the same number, which every
+client that had been in the raid kept.
+
+That client is the ordinary mid-evening joiner. It is handed the earlier awards by the history
+catch-up, and the next drop to reuse one of those numbers takes them straight back out. The raid
+agreed on every winner and disagreed about its own record of the evening, on exactly the clients
+that had joined late -- and the council reads that record to decide who is owed something.
+
+`LH.RemoveHistoryForRoll` now takes the item as well, which is the discriminator that actually works
+and the one `LH.LogHistory` already applies to its own replacement pass. Unknown on either side
+counts as belonging, the same rule votes follow (B46): an entry logged while the link was still
+"???" is still superseded by the reassignment that names it.
+
 ## B71 — FIXED 2026-07-31 — a reused rollID lost rolls, in two unrelated ways
 
 **The first half**, fixed when the step was written: a client purges everything under a rollID when

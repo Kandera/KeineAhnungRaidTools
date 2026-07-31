@@ -765,7 +765,7 @@ function Council.CreateCouncilPanel()
             -- Trade.HandleResult has to be run locally too — otherwise whoever revokes the winner is
             -- the one client left holding a pending trade / owed reminder, and the one client whose
             -- loot log still credits the revoked winner.
-            KART.LH.RemoveHistoryForRoll(rollID)
+            KART.LH.RemoveHistoryForRoll(rollID, LC.rollItems[rollID])
             LC.Trade.ClearWinnerObligations(rollID)
             Council.CloseCouncilTab(rollID)
         end

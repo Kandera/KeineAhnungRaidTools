@@ -1436,3 +1436,62 @@ do
     RosterSettles(sim)
     for _, c in ipairs(sim.clients) do StatusRuns(c, "with the lootmaster gone") end
 end
+
+-- ...and what they were handed is not thrown away by the next item to reuse that roll's number ------
+-- Blizzard recycles a rollID for a different drop within seconds on trash. Awarding the new item
+-- clears any history entry for that rollID first, so a reassignment or a clash replaces its own
+-- record rather than sitting next to it -- and "that rollID" was decided by time: entries newer than
+-- LC.rollLootedAt[rollID], the moment this client saw that roll start.
+--
+-- A late joiner never saw it start. It has no stamp, fell back to a twelve-hour window, and so wiped
+-- the entry the catch-up had just handed it -- an award for a DIFFERENT item that everyone who had
+-- been in the raid kept. The raid agreed on who won and disagreed about its own record of the
+-- evening, on exactly the clients that had joined mid-raid.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 96, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(96, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(5)   -- the two drops are seconds apart, not the same instant
+
+    -- The same rollID comes back for a genuinely different item, still before anyone new turns up.
+    -- That is what leaves the joiner below with no stamp for roll 96 at all: it missed both the drop
+    -- and the LC_START that would have given it one.
+    Drop(sim, 96, F.WEAPON)
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RosterSettles(sim)
+    KARTTEST.AdvanceTime(15)
+    T.eq(#torvi.env.KART_LootHistory, 1, "the joiner has the earlier award")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(96, lm.guid, "BIS") end)
+
+    T.eq(#lm.env.KART_LootHistory, 2, "the lootmaster has both awards on record")
+    T.eq(#torvi.env.KART_LootHistory, 2, "and so does the client that joined between them")
+end
+
+-- ...and an entry logged before the item had a name is still superseded ---------------------------
+-- A client that was dead or out of range tracks "???" until the item caches, and an award decided in
+-- that window is logged under that name. Once the link resolves, a reassignment carries a real one.
+-- Matching the two on the itemID alone would call them different items and leave the same physical
+-- drop in the log twice, with two different winners -- which is the duplicate the supersede pass
+-- exists to prevent. Unknown on either side counts as belonging, the same rule votes follow.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 97, F.GLOVES, { noRollFor = { Bramor = true } })
+    lm.KART.LC.rollItems[97] = "???"
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(97, raider.guid, "BIS") end)
+    T.eq(#lm.env.KART_LootHistory, 1, "the award is logged under the name it had")
+    T.eq(lm.env.KART_LootHistory[1].item, "???", "which is no name at all")
+
+    -- The link turns up, and the council changes its mind.
+    lm.KART.LC.rollItems[97] = raider.KART.LC.rollItems[97]
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AssignWinner(97, lm.guid, "BIS")
+        -- Reassigning asks first; the council member clicks yes.
+        KARTTEST.AcceptPopup("KART_LC_REASSIGN_CONFIRM")
+    end)
+
+    T.eq(#lm.env.KART_LootHistory, 1, "the reassignment replaces it rather than sitting beside it")
+    T.eq(lm.env.KART_LootHistory[1].winner, "Bramor", "and names the winner the council settled on")
+end

@@ -3025,7 +3025,7 @@ local function RevokePriorAward(itemLink)
     if not LC.IsRealItemLink(LC.rollItems[m.rollID]) then LC.rollItems[m.rollID] = m.link end
 
     LC.Trade.AnnounceResult(m.rollID, "NONE")
-    KART.LH.RemoveHistoryForRoll(m.rollID)
+    KART.LH.RemoveHistoryForRoll(m.rollID, LC.rollItems[m.rollID])
     LC.Trade.ClearWinnerObligations(m.rollID)
     KART.LC.Council.CloseCouncilTab(m.rollID)
     print("|cff00ff00KART:|r " .. string.format(KART.L.LC_MANUAL_REVOKED, itemLink))

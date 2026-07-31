@@ -14,6 +14,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Einen Vote-Button mitten im Wurf umzubenennen ändert nicht mehr die Beschriftung bereits abgegebener Stimmen.**
 - **Eine vom Netzwerk verzögerte Stimme kann nicht mehr beim nächsten Item landen, das dieselbe Wurf-ID bekommt.**
 - **Das Council sieht bei einem Item, das eine schon vergebene Wurf-ID erbt, die Würfe aller** — statt den Gleichstand auf einem Teil des Raids zu entscheiden.
+- **Wer mitten im Raid dazukommt, behält die bereits vergebenen Items im Log**, statt sie beim nächsten Item mit derselben Wurf-ID zu verlieren.
 - **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.

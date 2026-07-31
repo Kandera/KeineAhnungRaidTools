@@ -24,13 +24,10 @@ local NEWCOMER = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1
 -- before a raid night. Seeds are stable, so a bigger number only ADDS runs -- it never renumbers
 -- the ones already known good, and a seed that broke stays that seed.
 local SEEDS = tonumber(os.getenv("KART_SOAK_SEEDS") or "") or 150
--- See the "reuse" step: opt-in until B71 is settled, so the gate stays green while the capability
--- that found it stays in the file.
--- The three steps added on 2026-07-31 -- clash, relabel, reuse -- are opt-in
--- (KART_SOAK_NEWSTEPS=1). Each found a real defect within its first few hundred seeds, one of which
--- is fixed; the rest are recorded as B71-B73. They are kept in the file, and off by default, so the
--- next pass reproduces them with one environment variable instead of rebuilding the capability.
-local NEW_STEPS = os.getenv("KART_SOAK_NEWSTEPS") ~= nil
+-- The three steps added on 2026-07-31 -- clash, relabel, reuse -- were opt-in while the defects they
+-- found (B71-B73) were still open. All three are fixed, so they run with everything else now: a step
+-- that has already caught three real defects is not one to leave switched off.
+local NEW_STEPS = true
 local EVENTS_PER_RUN = 18
 
 -- The script generator draws from its OWN stream, not from math.random.
@@ -516,7 +513,7 @@ local function runOne(seed)
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
                                  "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLL",
-                                 "LC_ROLL_CATCHUP" }) do
+                                 "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_ENTRY" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
                     tostring(e.target or e.channel), e.msg:sub(1, 60)))

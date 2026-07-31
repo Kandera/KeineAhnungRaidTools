@@ -816,13 +816,30 @@ end
 -- the cost of removing the wrong one is somebody's record of an item they actually won.
 local REVOKE_MAX_AGE = 12 * 60 * 60
 
-function LH.RemoveHistoryForRoll(rollID)
+-- itemLink says WHICH roll under this ID is being superseded, and it is the discriminator that
+-- actually works. The time bound alone reads "everything logged since this roll started", which a
+-- client that never saw it start cannot evaluate -- it falls back to twelve hours and takes the
+-- previous item's award with it. That is not hypothetical: a raider who joins mid-evening is handed
+-- the earlier awards by the history catch-up and then loses them to the next drop that reuses the
+-- number, so the raid agrees on every winner and disagrees about its own record of the evening.
+-- Same rule LH.LogHistory already applies to its own replacement pass, now applied here too.
+--
+-- Unknown on either side counts as belonging: an entry restored from an older version carries no
+-- parseable item, and a caller that has not resolved the link yet passes none. Refusing to act there
+-- would leave the duplicate this function exists to remove.
+local function ItemIDOf(link)
+    return (type(link) == "string" and link:match("item:(%d+)")) or nil
+end
+
+function LH.RemoveHistoryForRoll(rollID, itemLink)
     if not rollID or not KART_LootHistory then return end
-    local since = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or (time() - REVOKE_MAX_AGE)
+    local since  = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or (time() - REVOKE_MAX_AGE)
+    local wantID = ItemIDOf(itemLink)
     local changed = false
     for i = #KART_LootHistory, 1, -1 do
         local e = KART_LootHistory[i]
-        if e.rollID == rollID and (e.time or 0) >= since then
+        local sameItem = wantID == nil or ItemIDOf(e.item) == nil or ItemIDOf(e.item) == wantID
+        if e.rollID == rollID and sameItem and (e.time or 0) >= since then
             table.remove(KART_LootHistory, i)
             changed = true
         end
