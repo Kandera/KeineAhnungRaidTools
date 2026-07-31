@@ -129,3 +129,20 @@ do
     T.is_nil((lm.KART.LC.councilVotes[44] or {})[council.guid],
         "a stale council pick does not land on the new item either")
 end
+
+-- All three render sites actually ask the rule ----------------------------------------------------
+-- The rule above is covered; its WIRING is not, because none of the three sites can be reached from
+-- here -- they need the real UI. Checked against the source instead, which is what stops the tooltip
+-- quietly going back to resolving the label on its own (B44). If a site moves, this must move too.
+do
+    local panel = assert(io.open("LootCouncilPanel.lua", "r")):read("*a")
+    local _, panelSites = panel:gsub("LC%.VoteLabelStale%(", "")
+    T.eq(panelSites, 3, "the council panel asks the rule at all three of its sites")
+
+    local vote = assert(io.open("LootCouncilVote.lua", "r")):read("*a")
+    T.truthy(vote:find("LC.VoteLabelStale(", 1, true), "and the voter's own badge asks it too")
+
+    -- Nobody resolves a label straight out of the button list next to a stored fingerprint any more.
+    T.truthy(not panel:find("voteData.count ~= LC.ButtonFingerprint", 1, true),
+        "and no site compares the fingerprint by hand instead")
+end
