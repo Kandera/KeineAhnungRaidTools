@@ -335,6 +335,7 @@ KART.L_enUS = {
     LC_STATUS_BUTTONS      = "Vote buttons (%d)",
     LC_STATUS_ROLLS        = "Rolls",
     LC_STATUS_COUNCIL      = "Council: %d resolved, %d not yet matched",
+    LC_STATUS_LEADER       = "Raid lead",
     LC_STATUS_LOOTMASTER   = "Lootmaster",
     LC_STATUS_IS_ME        = "That is me",
     LC_STATUS_ON           = "on",

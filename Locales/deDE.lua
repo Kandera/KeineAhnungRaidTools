@@ -335,6 +335,7 @@ KART.L_deDE = {
     LC_STATUS_BUTTONS      = "Vote-Buttons (%d)",
     LC_STATUS_ROLLS        = "Rolls",
     LC_STATUS_COUNCIL      = "Council: %d aufgeloest, %d noch nicht zugeordnet",
+    LC_STATUS_LEADER       = "Raidlead",
     LC_STATUS_LOOTMASTER   = "Lootmaster",
     LC_STATUS_IS_ME        = "Das bin ich",
     LC_STATUS_ON           = "an",

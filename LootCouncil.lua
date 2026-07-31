@@ -1214,6 +1214,18 @@ function LC.PrintStatus()
     end
     print("  " .. string.format(L.LC_STATUS_COUNCIL, resolved, pending))
 
+    -- Who this client reads as raid lead, by name. Every ownership failure this week came down to
+    -- two clients giving different answers to that -- each of them consistent with itself, which
+    -- is what made them so quiet (B76, and the config nobody re-broadcast in a split raid). The
+    -- config line above says where our config CAME from; this says who we think may send one, and
+    -- comparing that one word across a raid is what tells the two apart in seconds.
+    local leader = "-"
+    for unit in KAUtil.EachGroupUnit() do
+        if UnitIsGroupLeader(unit) then leader = UnitName(unit) or "?" break end
+    end
+    print("  " .. L.LC_STATUS_LEADER .. ": " .. leader
+        .. (LC.IsConfigOwner() and (" (" .. L.LC_STATUS_IS_ME .. ")") or ""))
+
     local lm = LC.GetLootmaster()
     local lmUnit = lm ~= "" and KASC.Identity.FindUnitForKey(lm)
     print("  " .. L.LC_STATUS_LOOTMASTER .. ": " .. ((lmUnit and UnitName(lmUnit)) or (lm ~= "" and "?" or "-")))

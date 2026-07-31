@@ -139,7 +139,27 @@ C6 and C12 are two sides of one check: C6 must exclude, C12 must not.
 
 ## What a failure means
 
-One failure in ten is a failure. Write down what was on each screen at the moment it went wrong —
-which client, what it showed, what the others showed. That is what makes it reproducible; the
-convergence soak exists because "it broke somehow" cost three evenings before anything could be
-measured.
+One failure in ten is a failure.
+
+**When one breaks, say so in raid chat and have everybody run `/kart status`, then paste it.** That
+is the whole procedure -- "write down what each screen showed" is not something anybody does mid-boss,
+and the command exists so nobody has to. It prints, per client: whether the session is running and
+whether that is an ANSWER or merely a starting value, where the config came from, who this client
+reads as raid lead, who it reads as lootmaster, the buttons and roll setting in force, and every
+rollID it is tracking.
+
+Two clients giving different answers to "who is raid lead" or "who is lootmaster" is the shape almost
+every failure this week had -- each client consistent with itself, which is what made them so quiet.
+One word each, side by side, tells them apart in seconds. `/kart status` also names any raider on a
+protocol too old to take part, which explains a whole evening of silence on its own (B62).
+
+The convergence soak exists because "it broke somehow" cost three evenings before anything could be
+measured. Do not let the raid test cost a fourth.
+
+## Standing result
+
+| run | date | result |
+|---|---|---|
+| _(none yet)_ | | |
+
+Fill this in. A Manifest with no recorded run is a list of intentions.
