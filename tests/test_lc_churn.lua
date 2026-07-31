@@ -584,22 +584,28 @@ do
         "and everyone still reads the same vote buttons")
 end
 
--- The stand-in leader reloads. A council member tells them the session is running -- they must not
--- take that as licence to push their own settings over the raid. Their own Lootmaster field is
--- empty, which is the documented setup, so their config would carry an empty council list.
+-- The raid leader reloads. Under the ownership rule the raid runs on their settings, so what has to
+-- hold is that a reload does not CHANGE them: KART_Settings is a SavedVariable, so the leader comes
+-- back with what they configured and the raid stays exactly where it was.
 do
     local sim = NewRaid()
     RaidSim.Leave(sim, "Bramor")
     local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
     RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    RaidSim.As(stand, function()
+        stand.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
+        stand.env.KART_Settings.lcRollsEnabled   = true
+        stand.KART.LC.ApplyOwnConfig()
+    end)
+    RosterSettles(sim)
 
     local alric = sim.byName.Alric
     local labelsBefore = RaidSim.As(alric, alric.KART.LC.GetButtonConfig)
     RaidSim.Reload(sim, "Merrit")
     RosterSettles(sim)
 
-    T.eq(sim.byName.Merrit.KART.LC.sessionActive, true, "the reloaded stand-in is back in the session")
+    T.eq(sim.byName.Merrit.KART.LC.sessionActive, true, "the reloaded leader is back in the session")
     T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true, "and the raid kept its roll setting")
     T.deep_eq(RaidSim.As(alric, alric.KART.LC.GetButtonConfig), labelsBefore,
         "and its vote buttons")
@@ -755,8 +761,7 @@ do
              RaidSim.As(newLead, function() return newLead.env.KART_Settings.lcRollsEnabled == true end),
              c.name .. " follows the new raid leader's roll setting")
     end
-    T.eq(F.Disagreements(sim), {} and table.concat(F.Disagreements(sim), " | "), "",
-        "and the raid is of one mind about it")
+    T.eq(table.concat(F.Disagreements(sim), " | "), "", "and the raid is of one mind about it")
 
     -- Handing it back is the same move, so nothing is stuck.
     RaidSim.Promote(sim, "Bramor")
@@ -886,13 +891,16 @@ do
     for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
     KARTTEST.AdvanceTime(5)
 
+    -- Relayed by an ordinary raider, not by the leader: the config OWNER sends the real thing (see
+    -- LC.RelayRaidConfig's own guard), so under the ownership rule the leader never relays at all.
+    local relayer = sim.byName.Sinja
     local before = raider.KART.LC.raidConfig.buttonLabels
-    T.truthy(RaidSim.As(council, council.KART.LC.IsLootOwner),
-        "the stand-in holds the loot flow, so its relay is actually sent")
+    T.truthy(not RaidSim.As(relayer, relayer.KART.LC.IsConfigOwner),
+        "the relayer is not the config owner, which is what makes it a relay")
 
-    RaidSim.As(council, function()
-        council.KART.LC.raidConfig.buttonLabels = "Forged;Nonsense"
-        council.KART.LC.RelayRaidConfig(raider.name .. "-" .. raider.realm)
+    RaidSim.As(relayer, function()
+        relayer.KART.LC.raidConfig.buttonLabels = "Forged;Nonsense"
+        relayer.KART.LC.RelayRaidConfig(raider.name .. "-" .. raider.realm)
     end)
     T.eq(#RaidSim.Sent(sim, "LC_CONFIG_RELAY") > 0, true, "and it did go out")
     T.eq(raider.KART.LC.raidConfig.buttonLabels, before,
@@ -1130,74 +1138,66 @@ do
         "so a newcomer ends up on the raid's roll setting, not one client's default")
 end
 
--- The raid leader reloads into a session somebody else is running (B67)
+-- The raid leader reloads into a running session (was B67/B69)
 -- ===================================================================================
--- The lootmaster has left for good, so nobody owns the config -- and the raid leader reloads. Their
--- raidConfig comes back empty, which leaves the `fromSelf` check in LC.IsConfigOwner nothing to look
--- at, so the empty-field rule made them the config owner: LC.ApplyOwnConfig wrote their own defaults
--- in (rolls off, empty council list) and LC.BroadcastRaidConfig sent those to the raid as the real
--- thing.
+-- This used to be the most expensive shape in the whole file. Ownership was a claim, so a reloaded
+-- leader whose raidConfig came back empty passed the empty-field rule, wrote its own DEFAULTS in
+-- (rolls off, empty council) and broadcast those as the raid's. Worse, it only half-landed: clients
+-- still naming the previous lootmaster rejected it as a weaker claim, anyone who had joined or
+-- reloaded since took it, and the raid split down the middle over its own settings.
 --
--- What made it expensive is that it only half-landed. Clients still remembering the previous
--- lootmaster rejected it as a weaker claim; anyone who joined or reloaded since took it. The raid
--- split down the middle over its own settings, and the half that took the leader's defaults stopped
--- rolling.
---
--- The distinction that fixes it is the one `fromSelf` was reaching for and could not survive a
--- reload: did WE start this session, or did we walk into one. Found by tests/test_lc_soak.lua,
--- seed 254.
+-- Both halves are gone with the claim (docs/OWNERSHIP.md). The reloaded leader IS the config owner
+-- and does broadcast -- and that is now safe for two reasons worth asserting separately:
+--   * It broadcasts its OWN SAVED settings, not defaults. KART_Settings is a SavedVariable, so a
+--     reload does not reset what that person configured.
+--   * Every client accepts it, because acceptance is "did the raid leader send it" and nothing about
+--     the content. A split is not merely unlikely now, it is unreachable.
 do
     local sim, lm, council = NewRaid()
     local raider = sim.byName.Alric
     RaidSim.Leave(sim, lm.name)
-    -- The rest of the council goes too. Council members relay the raid's config the instant they are
-    -- asked, which heals the reloaded leader before it can do any damage -- that is the ordering the
-    -- random walk happened to miss, and testing the lucky order proves nothing. With only ordinary
-    -- raiders left, their reply is jittered a few seconds and LC.ApplyOwnConfig gets there first.
     RaidSim.Leave(sim, "Corvin")
     RaidSim.Promote(sim, council.name)
     RosterSettles(sim)
     for _, c in ipairs(sim.clients) do RaidSim.As(c, KARTTEST.AcceptPopup, "KART_LC_STAND_IN") end
     KARTTEST.AdvanceTime(5)
+
+    -- Something the leader configured, so "their own settings" is a claim with teeth rather than a
+    -- coincidence of the defaults.
+    RaidSim.As(council, function()
+        council.env.KART_Settings.lcRollsEnabled = true
+        council.env.KART_Settings.lcMinQuality   = 3
+        council.KART.LC.ApplyOwnConfig()
+    end)
+    RosterSettles(sim)
     RaidSim.ClearLog(sim)
 
-    -- The ordering is the whole bug, so it is forced rather than hoped for: the session is learned
-    -- FIRST and the config cannot arrive yet. That is the state a reloaded leader is in whenever the
-    -- relay is slow or lost -- empty raidConfig, session running, raid lead in hand -- and it is
-    -- where the empty-field rule used to hand them the config and let them broadcast their defaults.
+    -- The relay is blackholed exactly as before, so the leader comes back with an empty raidConfig
+    -- and nothing to heal it -- the state the old rule turned into a raid-wide split.
     RaidSim.Blackhole(sim, "LC_CONFIG_RELAY")
     local leader = RaidSim.Reload(sim, council.name)
     RaidSim.EnterWorld(sim, council.name)
     RosterSettles(sim)
-    T.eq(leader.KART.LC.sessionActive, true, "the reloaded leader knows the session is running")
-    T.truthy(not RaidSim.As(leader, leader.KART.LC.IsConfigOwner),
-        "and does not take the config over just because it holds raid lead")
-    RosterSettles(sim)          -- the roster change that used to make it invent one
     KARTTEST.AdvanceTime(10)
 
-    -- The relay is fine and expected; a full LC_CONFIG from this client is not, because that is the
-    -- one that claims to be the raid's own and displaces what everybody agreed.
-    local ownConfigs = 0
-    for _, e in ipairs(RaidSim.Sent(sim, "LC_CONFIG:")) do
-        if e.from == leader.name then ownConfigs = ownConfigs + 1 end
-    end
-    T.eq(ownConfigs, 0, "a reloaded leader does not distribute its own settings as the raid's")
-
-    RaidSim.Deliver(sim, "LC_CONFIG_RELAY")
-    RosterSettles(sim)
-    KARTTEST.AdvanceTime(60)
-
+    T.eq(leader.KART.LC.sessionActive, true, "the reloaded leader knows the session is running")
+    T.truthy(RaidSim.As(leader, leader.KART.LC.IsConfigOwner),
+        "and owns the config, because it holds raid lead")
     T.eq(RaidSim.As(leader, leader.KART.LC.GetRollsEnabled), true,
-        "and gets the raid's roll setting back instead of keeping its own")
-    T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), true,
-        "while the raiders who never reloaded are untouched")
+        "on its own SAVED settings -- a reload does not reset them to defaults")
+    T.eq(RaidSim.As(leader, leader.KART.LC.GetRaidMinQuality), 3, "including the ones it changed")
 
-    -- The half of the raid that has nothing to compare against is where the damage used to land.
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetRollsEnabled), true,
+        "and the raid follows it rather than splitting")
+    T.eq(RaidSim.As(raider, raider.KART.LC.GetRaidMinQuality), 3, "on every field, not just some")
+
+    -- The half of the raid with nothing to compare against is where the damage used to land.
     local torvi = RaidSim.Join(sim, NEWCOMER)
     RosterSettles(sim)
     KARTTEST.AdvanceTime(60)
     T.eq(RaidSim.As(torvi, torvi.KART.LC.GetRollsEnabled), true,
-        "and someone arriving afterwards gets the raid's setting, not the leader's default")
+        "somebody arriving afterwards lands on the same config as everybody else")
+    T.eq(table.concat(F.Disagreements(sim), " | "), "", "and the whole raid is of one mind")
 end
 
 -- End Round clears the round for the RAID, not just for whoever pressed it (B57, GitHub #15)
