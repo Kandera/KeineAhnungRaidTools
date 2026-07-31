@@ -155,3 +155,56 @@ do
     T.truthy(back:find(sinja.KART.L.LC_CONFIG_OWNER_NOW, 1, true),
         "but it is said again the next time the role arrives")
 end
+
+-- A designation the config owner cannot place is said out loud (B59) ------------------------------
+-- The old shape of this was fatal and silent: ownership was derived from "does my own field name
+-- me?", so a lootmaster who typed their own nickname on a nickname-blind client owned neither the
+-- config nor the loot flow, the raid leader took both, and the only trace was a label in a settings
+-- tab nobody opens. Ownership no longer reads any name, so all that is left is the designation not
+-- taking -- which is safe, because the leader hands out the loot, but is NOT what was asked for.
+do
+    KARTTEST.SetNSAPI(false)                 -- nobody can resolve nicknames
+    local _, lm = F.NewRaid()
+    local out = Capture(function()
+        RaidSim.As(lm, function()
+            lm.env.KART_Settings.lcLootmaster = "Akuri"   -- a nickname this client cannot place
+            lm.KART.LC.ApplyOwnConfig()
+            lm.KART.LC.SetSessionActive(false)
+            lm.KART.LC.SetSessionActive(true)
+        end)
+    end)
+    T.truthy(out:find("Akuri", 1, true),
+        "the config owner is told the name they typed could not be placed")
+    T.truthy(RaidSim.As(lm, lm.KART.LC.IsLootOwner),
+        "and that they are handing out the loot themselves as a result")
+    KARTTEST.SetNSAPI(true)
+end
+
+do
+    -- A name that DOES resolve says nothing: this must not become a line on every session start.
+    local _, lm = F.NewRaid()
+    local out = Capture(function()
+        RaidSim.As(lm, function()
+            lm.env.KART_Settings.lcLootmaster = "Merrit"
+            lm.KART.LC.ApplyOwnConfig()
+            lm.KART.LC.SetSessionActive(false)
+            lm.KART.LC.SetSessionActive(true)
+        end)
+    end)
+    T.truthy(not out:find(lm.KART.L.LC_LOOTMASTER_UNRESOLVED:sub(1, 20), 1, true),
+        "a designation that resolves is not complained about")
+end
+
+do
+    -- The designated lootmaster starting the session before the leader's config has reached them.
+    -- Their OWN Lootmaster field is not consulted any more, so the old advice about it would be
+    -- noise; what actually matters is that the raid is still on everybody's own settings.
+    local _, _, council = F.NewSplitRaid()
+    wipe(council.KART.LC.raidConfig)
+    local out = Capture(function()
+        RaidSim.As(council, function() council.KART.LC.SetSessionActive(true) end)
+    end)
+    T.truthy(not RaidSim.As(council, council.KART.LC.IsConfigOwner), "the designee does not own the config")
+    T.truthy(out:find(council.KART.L.LC_NO_CONFIG_YET, 1, true),
+        "and is told the raid leader's settings have not arrived")
+end

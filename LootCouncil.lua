@@ -1993,37 +1993,36 @@ function LC.SetSessionActive(active)
         -- raid silently not rolling while the person who started the session does, and it cost this
         -- guild an evening before anyone worked out why (backlog B33; the real fix is the ownership
         -- design, this is only the missing sentence). Say it out loud instead.
-        -- Three causes, not two, and each wants different advice. Getting this wrong is worse than
-        -- silence: the version that only asked "is the field empty?" told a raid leader whose field
-        -- names the actual lootmaster to put his own name there instead — which would take loot
-        -- ownership away from that lootmaster the moment they logged in.
+        -- Who is starting the session decides what is worth saying, and under the ownership rule
+        -- (docs/OWNERSHIP.md) that is one of exactly two people: the raid leader, who owns the
+        -- config, or the person they designated, who owns the loot flow.
         --
         -- Trimmed, because ResolveConfigName trims too: a field holding only spaces is empty as far
-        -- as ownership is concerned and must be reported that way.
-        if not LC.IsConfigOwner() then
-            local field = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
-            local msg
+        -- as the designation is concerned and must be reported that way.
+        local field = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
+        if LC.IsConfigOwner() then
             if field == "" then
-                msg = KART.L.LC_NO_CONFIG_OWNER            -- nobody is named at all
-            elseif LC.ResolveConfigName(field) then
-                msg = KART.L.LC_LOOTMASTER_OTHER           -- names someone else; their client sends
-            else
-                msg = KART.L.LC_LOOTMASTER_UNRESOLVED      -- names someone we cannot resolve yet
+                -- We hand out the loot ourselves. Supported, and worth one line: whoever is promoted
+                -- next inherits that, and the raid switches to their settings with it.
+                print("|cffff0000KART:|r " .. KART.L.LC_LOOTMASTER_EMPTY_WARN)
+            -- IsResolvedKey, not merely non-nil: KASC.Identity.ResolvePlayer does not return nil for
+            -- a name it cannot place, it returns a PENDING TEXT key -- "Akuri" comes back as "akuri".
+            -- That is truthy, so a plain nil check reads an unplaceable name as placed and says
+            -- nothing, which is the exact shape B59 was filed for.
+            elseif not KASC.Identity.IsResolvedKey(LC.ResolveConfigName(field) or "") then
+                -- B59's residue, and the last place it could still hide. We typed a name and our own
+                -- client cannot place it -- so the designation does not take, and LC.GetLootmaster
+                -- falls back to us. Handing out the loot ourselves is the safe outcome, but it is NOT
+                -- what was asked for, and the only trace used to be a label in a settings tab nobody
+                -- opens. Ours is the client that can fix it, and this is the moment we are looking.
+                print("|cffff0000KART:|r " .. string.format(KART.L.LC_LOOTMASTER_UNRESOLVED, field))
             end
-            print("|cffff0000KART:|r " .. msg)
-        elseif not LC.ResolveConfigName(KART_Settings.lcLootmaster) then
-            -- We DO own the config, but only through the raid-leader fallback, because our own
-            -- Lootmaster field is empty. That is a supported setup (B33) and it is also the one that
-            -- cannot survive the evening: nothing carries these settings on. The moment raid lead
-            -- moves, or a relay from a peer lands on this client first, this copy stops being the
-            -- raid's and no successor can claim it -- every client falls back to its own roll
-            -- setting, which is off, in silence. That is B70, it is open, and three attempts to make
-            -- an ownerless config converge have each been rejected by the soak.
-            --
-            -- Naming somebody -- yourself included -- makes the config theirs by declaration and
-            -- takes the whole failure mode off the table. Cheap to say, and it is said at the one
-            -- moment somebody is looking: when they start the session.
-            print("|cffff0000KART:|r " .. KART.L.LC_LOOTMASTER_EMPTY_WARN)
+        elseif next(LC.raidConfig) == nil then
+            -- The designated lootmaster, starting the session without ever having received a config.
+            -- Their own Lootmaster field is not consulted any more, so saying anything about it would
+            -- be noise -- what matters is that the raid leader's settings have not arrived, which
+            -- leaves every raider on their own vote buttons and roll setting.
+            print("|cffff0000KART:|r " .. KART.L.LC_NO_CONFIG_YET)
         end
     end
     LC.SendLC("LC_ACTIVE:" .. (active and "1" or "0"))
