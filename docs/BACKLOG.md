@@ -61,6 +61,52 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
+## B76 — OPEN — a leader who may not publish its config still acts on it
+
+Found by the soak at 8000 seeds, seed 6151. Reproduce with `KART_SOAK_ONLY=6151
+KART_SOAK_DEBUG=6151`; the config trace prints the designation and `IsLootOwner` per client.
+
+**Not fixed on purpose.** It sits on the ownership core the maintainer settled this week
+(`docs/OWNERSHIP.md`), the plausible fix has a failure mode of its own, and one wrong move there
+costs a raid night. It wants a decision, not a guess.
+
+### What happens, measured
+
+Raid lead moves to Sinja, who then reloads. Coming back, Sinja is raid leader with no settings of
+its own, so `LC.ApplyOwnConfig` writes its own empty Lootmaster field in and marks the config
+`fromSelf`. The rest of the raid still holds the designation it had all along: Bramor.
+
+For eighteen seconds the raid is split, and both halves are being consistent:
+
+* Sinja reads "no designation, and I hold raid lead" and answers `LC.IsLootOwner` with **true**.
+* Merrit, Corvin, Alric and Torvi read "Bramor is designated and Bramor is here", so for them the
+  loot owner is Bramor and Sinja is nobody.
+
+An item drops in that window. Sinja force-wins it and broadcasts `LC_START`, and **four of the six
+clients reject it** — `LC.HandleStart` opens with `IsSenderLootOwner`. The roll then exists on two
+clients out of six. Everything downstream follows from that: a vote cast on one of the two lands on
+a client that has never heard of the roll and is dropped for good (`Vote.HandleVote` returns on
+`not LC.rollItems[rollID]`, and a vote is sent once with no retry).
+
+### Why the existing guard does not catch it
+
+`fromSelf` already exists for exactly this client, and `LC.IsConfigOwner` uses it to stop a reloaded
+leader from *publishing* its invented config over the raid's (B69). It does not stop that client
+from *acting* on it. So the addon's own answer is "this config is a guess, do not tell anyone" while
+the same guess decides who force-wins the boss's loot.
+
+### The obvious fix, and its own failure mode
+
+Make the raid-leader fallback in `LC.IsLootOwner` yield to the same `selfInvented` predicate
+`HandleConfigRelay` and `StateStillNeeded` already share -- while our config is a guess we do not
+know whether the raid has a designation, so we must not act as though it has none.
+
+The cost is that for those seconds **nobody** owns the loot flow: the four clients point at Bramor,
+who has just reloaded too and does not claim it either. An item dropping inside that window would
+then be force-won by nobody at all, which is worse than being force-won by somebody half the raid
+disagrees with. Whether the answer is a short grace, a claim the leader has to have acknowledged, or
+letting peers accept `LC_START` from the current raid leader outright is the decision to make.
+
 ## B75 — FIXED 2026-07-31 — two clients with amnesia confirm each other, and the raid splits
 
 Found by the soak at 6000 seeds, seed 5013.

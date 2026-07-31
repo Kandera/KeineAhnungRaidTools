@@ -398,6 +398,8 @@ local function runOne(seed)
                 .. "/" .. tostring(c.KART.LC.raidConfig.fromSelf)
                 .. "/" .. tostring(c.KART.LC.raidConfig.councilMembers)
                 .. "/own=" .. tostring(c.env.KART_Settings.lcCouncilMembers)
+                .. "/lm=" .. tostring(c.KART.LC.raidConfig.lootmaster)
+                .. "/owner=" .. tostring(RaidSim.As(c, c.KART.LC.IsLootOwner))
             -- Keyed by NAME, not by client object: a reload replaces the object, and the point here
             -- is to follow the person across it.
             if lastRolls[c.name] ~= v then
@@ -410,13 +412,6 @@ local function runOne(seed)
         -- config trace above answers "who wrote this value"; this one answers "which step lost this
         -- roll", which is the question B71 turned out to be -- one client in five silently dropping
         -- a peer's number is invisible in the end state and obvious in the sequence.
-        if os.getenv("KART_SOAK_TRACEROLLS") and not KARTTEST.relayHook then
-            KARTTEST.relayHook = function(from, payload, hasCfg, selfInv)
-                print(string.format("  RELAY t=%-5s to=%-8s from=%-24s hasCfg=%-5s selfInv=%-5s %s",
-                    tostring(KARTTEST.now), tostring(KARTTEST.activeUnit), tostring(from),
-                    tostring(hasCfg), tostring(selfInv), tostring(payload)))
-            end
-        end
         if os.getenv("KART_SOAK_TRACEROLLS") then
             for _, c in ipairs(sim.clients) do
                 for _, id in ipairs(rolls) do
