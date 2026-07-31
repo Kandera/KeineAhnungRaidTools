@@ -16,6 +16,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Council sieht bei einem Item, das eine schon vergebene Wurf-ID erbt, die Würfe aller** — statt den Gleichstand auf einem Teil des Raids zu entscheiden.
 - **Wer mitten im Raid dazukommt, behält die bereits vergebenen Items im Log**, statt sie beim nächsten Item mit derselben Wurf-ID zu verlieren.
 - **Ein Raidlead, der neu lädt, bekommt die Council-Liste des Raids zurück** — statt von jemandem beantwortet zu werden, der ebenfalls gerade neu geladen hat, womit die Hälfte des Raids nichts mehr vergeben konnte.
+- **Ein Item nach einem Reload neu zuzuweisen funktioniert wieder.** Der Raid behielt den alten Gewinner, während auf deinem Bildschirm der neue stand.
 - **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.

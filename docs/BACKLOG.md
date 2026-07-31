@@ -86,7 +86,7 @@ pass and burying new findings -- a blipped client is now dropped from the compar
 were live, exactly as a reloaded one is. That makes recording it here the only thing keeping it
 visible.
 
-## B77 — OPEN — a council member who reloads is overruled on their own re-decision, silently
+## B77 — FIXED 2026-07-31 — a council member who reloads was overruled on their own re-decision
 
 Found by the soak: 2 of 30000 runs, seeds 12530 and 29229. Reproduce with `KART_SOAK_ONLY=29229
 KART_SOAK_DEBUG=29229`.
@@ -109,7 +109,7 @@ re-announces, and the clash warning is only printed by clients that *received* t
 loser of a tie it never knew it was in stays silent. The lootmaster then hands the item to somebody
 the deciding council member's panel says did not win it.
 
-### Proposed fix, and why it is not applied here
+### The fix
 
 `KART_LootHistory` is persisted and every client logs every award, so `LC.assignedWinners` is
 rebuildable on load for rolls still inside the trade window -- the same bound
@@ -117,9 +117,14 @@ rebuildable on load for rolls still inside the trade window -- the same bound
 then see the previous winner, show the dialog, and send the flag as 1, which outranks a first award
 everywhere and is the behaviour B35 was written to produce.
 
-Left for the maintainer: it changes what a reload recovers, and it shares a root with B76 -- state a
-reload loses that no catch-up restores, which then makes one client contradict the whole raid. The
-two are worth deciding together rather than patched one at a time on the eve of a raid.
+Applied. `looted` is the bound -- an entry only counts while the roll it belongs to is still inside
+the four-hour trade window, which is exactly the set of rolls that can still be re-decided, and it
+keeps last week's raid out without inventing a second timestamp. The entry must also be NEWER than
+that stamp: the history deliberately keeps both awards made under a reused rollID (B74), and
+restoring the previous item's winner would make the new item look decided. `assignedDeliberate` is
+not restored -- a history row cannot say whether somebody confirmed a dialog, and "not deliberate"
+is the answer that loses a tie-break rather than winning one it may not be entitled to. Both
+clauses go red when removed.
 
 ## B76 — OPEN — a leader who may not publish its config still acts on it
 

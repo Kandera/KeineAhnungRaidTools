@@ -293,3 +293,70 @@ do
     RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts)
     T.eq(#lm.KART.LC.pendingTrades, 1, "an obligation still inside the window survives")
 end
+
+-- B77: a reload must not turn a re-decision into a first award ------------------------------------
+-- Assigning reads LC.assignedWinners to decide whether this is a REASSIGNMENT -- and that table was
+-- memory-only. Nothing restores it: the state request brings the session and the config back, the
+-- roll catch-up brings the rolls, and the history catch-up runs on JOIN only.
+--
+-- So a council member who reloads mid-distribution comes back not knowing which items already have
+-- a winner. Deciding one again read prevWinner = nil, skipped the confirm dialog, and broadcast the
+-- reassign flag as 0. Every peer read that as a first award clashing with the one it held, applied
+-- the B35 tie-break, and kept the older winner -- while the assigner's own local step wrote the new
+-- one unconditionally. The one client showing the new winner was the person who had just decided
+-- it, and nothing told them: HandleResult does not run on our own broadcast and no peer
+-- re-announces.
+do
+    local sim, lm, council = F.NewRaid()
+    local corvin, alric = sim.byName.Corvin, sim.byName.Alric
+    F.Drop(sim, 92, F.GLOVES)
+
+    -- Deliberately to the SMALLER key first, so a first award from the reloaded client would lose
+    -- the tie-break. Awarding the other way round would pass whether this works or not.
+    T.truthy(corvin.guid < alric.guid, "the first winner's key sorts below the second's")
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(92, corvin.guid, "BIS", nil) end)
+    T.eq(lm.KART.LC.assignedWinners[92], corvin.guid, "the raid has a winner")
+
+    RaidSim.Reload(sim, "Merrit")
+    RaidSim.EnterWorld(sim, "Merrit")
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(5)          -- the state request and its answer
+    -- Re-resolved, not kept: a reload replaces the client object.
+    local reloaded = sim.byName.Merrit
+
+    T.eq(reloaded.KART.LC.assignedWinners[92], corvin.guid,
+        "and the client that reloaded still knows the item is decided")
+
+    -- They change their mind. This is a reassignment, so it asks first and the raid is told so.
+    RaidSim.As(reloaded, function()
+        reloaded.KART.LC.Trade.AssignWinner(92, alric.guid, "Upgrade", nil)
+        KARTTEST.AcceptPopup("KART_LC_REASSIGN_CONFIRM")
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(reloaded.KART.LC.assignedWinners[92], alric.guid, "their own client shows the new winner")
+    T.eq(lm.KART.LC.assignedWinners[92], alric.guid, "and so does the lootmaster")
+    T.eq(corvin.KART.LC.assignedWinners[92], alric.guid, "and the previous winner's own client")
+end
+
+do
+    -- ...and the winner it comes back with belongs to the roll running NOW. Blizzard reuses a rollID
+    -- for a different drop within seconds, and the history deliberately keeps both awards under that
+    -- number (B74) -- so "the entry for this rollID" is not enough. Restoring the previous item's
+    -- winner would make the new item look decided the moment its holder reloaded: no confirm dialog
+    -- for whoever decides it, and a reassign flag on a first award.
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 93, F.GLOVES)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(93, sim.byName.Alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(5)
+
+    F.Drop(sim, 93, F.WEAPON)        -- the same number, a genuinely different item
+    T.is_nil(lm.KART.LC.assignedWinners[93], "the new item has no winner yet")
+
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.eq(#(reloaded.env.KART_LootHistory or {}), 1, "the earlier award is still on record")
+    T.is_nil(reloaded.KART.LC.assignedWinners[93],
+        "but it is not restored as the winner of the item now under that number")
+end

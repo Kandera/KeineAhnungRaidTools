@@ -355,6 +355,35 @@ function Trade.RestorePersistedTrades()
     store.looted     = looted
     LC.rollLootedAt  = looted
 
+    -- Which items already HAVE a winner, rebuilt from the loot history (B77).
+    --
+    -- Trade.AssignWinner reads LC.assignedWinners to tell a reassignment from a first award, and
+    -- that table was memory-only. Nothing brought it back: the state request restores the session
+    -- and the config, the roll catch-up restores the rolls, and the history catch-up runs on JOIN
+    -- only. So a council member who reloaded mid-distribution and then decided an item again read
+    -- prevWinner = nil, skipped the confirm dialog, and broadcast the reassign flag as 0 -- which
+    -- every peer reads as a first award clashing with the one it holds, so the B35 tie-break kept
+    -- the OLDER winner. The one client showing the new winner was the person who had just decided
+    -- it, and nothing told them.
+    --
+    -- The history is the right source: it is persisted, every client logs every award, and it
+    -- already carries the winner's identity key. `looted` above is the bound -- an entry only counts
+    -- while the roll it belongs to is still inside the four-hour trade window, which is exactly the
+    -- set of rolls that can still be re-decided. That also keeps last week's raid out of it without
+    -- inventing a second timestamp.
+    --
+    -- assignedDeliberate is deliberately NOT restored. We cannot know from a history row whether
+    -- somebody confirmed a dialog to produce it, and "not deliberate" is the answer that loses the
+    -- tie-break rather than winning one it may not be entitled to.
+    LC.assignedWinners = LC.assignedWinners or {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        local id = type(e) == "table" and type(e.rollID) == "number" and e.rollID or nil
+        if id and looted[id] and type(e.winnerKey) == "string" and e.winnerKey ~= ""
+           and type(e.time) == "number" and e.time >= looted[id] then
+            LC.assignedWinners[id] = e.winnerKey
+        end
+    end
+
     if #LC.pendingTrades > 0 then
         Trade.RefreshTradeReminder()
         Trade.StartTradeTimeoutTicker()
