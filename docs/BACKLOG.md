@@ -54,7 +54,7 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
-## B71-B73 — found 2026-07-31 by three new soak steps, not yet settled
+## B71 — found 2026-07-31 by a new soak step, not yet settled
 
 The soak learned three things it could not do before, and each found a defect within its first few
 hundred seeds. Reproduce any of them with `KART_SOAK_NEWSTEPS=1 KART_SOAK_SEEDS=3000`; the steps are
@@ -73,100 +73,24 @@ Measured: 29 disagreements per 3000 before, 14 after. What is left is a client t
 between the original drop and the reuse ending up with a subset -- seed 254 shows Torvi holding two
 of four rolls, its own included. Start there; it is reproducible.
 
-## B72 — two simultaneous awards can still leave one client's council list behind
+## B72, B73 — FIXED 2026-07-31, and both were the same thing
 
-`KART_SOAK_NEWSTEPS=1`, seed 702: a `council` disagreement after a clash. The award side converges
-(B35 is fixed and its own tests hold), so this is about who is council on which client at that
-instant, not about the winner.
+Both were caused by the reused-rollID guard added the same morning for B46, which DROPPED a vote
+whose itemID did not match what this client was holding. A vote is sent exactly once with no retry,
+and the two clients need not disagree about which item is current -- ours may be the stale half. So
+the guard threw away legitimate votes for good whenever our own link was the one that was behind,
+which is a worse failure than the one it was written for.
 
-## B73 — a mid-roll button rename can leave a vote on one client and not another
+Recorded instead of dropped, and read instead of received: the vote carries the item it was cast for,
+`LC.VoteIsForItem` decides at every reader (the council rows, the tab tooltip, the answered-count
+badge), and a vote that turns out to belong after all is still there to be counted. Unknown on either
+side counts as belonging -- an older client sends no item, and a roll still held as "???" has none to
+compare against, and refusing those would blank a whole raid's votes over a link that had not arrived.
 
-Seeds 81 and 996: `votes` and `roll N after a vote` disagreements with the `relabel` step active. The
-label guard itself is fixed and tested (B43-B45); this is about whether the VOTE survives, which is a
-different question from whether its label can be shown. The B46 item guard added the same day is the
-first thing to rule out -- a client holding `"???"` for the roll compares an empty itemID and lets
-everything through, while one holding a real link does not.
-
-
-## The ownership rework, 2026-07-31 — what it closed
-
-`docs/OWNERSHIP.md` replaces the derivation that B29–B33, B57, B58, B64, B69 and B70 all pull on.
-Config ownership is the raid leader; the Lootmaster field is a designation that names somebody else.
-Those entries are marked superseded rather than deleted, because each is a real failure this guild
-paid for and the rules were written to make them unreachable rather than merely fixed.
-
-Three of them are worth calling out, because the rework did not fix them — it removed the state they
-needed:
-
-* **B57** needed the leader's own client to believe it owned the loot flow while its peers held a
-  config naming somebody else. The designation lives in the leader's own settings now, and
-  `KART_Settings` is a SavedVariable, so it survives their reload and the two answers cannot come
-  apart. Its test asserts the agreement.
-* **B70** needed "nobody owns the config". Ownership is raid lead, which is never held by nobody and
-  never by two people. Its test asserts exactly that across a lead change.
-* **A nickname nobody can resolve** used to mean nobody owned the config and the whole raid silently
-  kept its own roll setting. Ownership needs no name resolution at all now.
-
-What the rework cost, recorded so it is not rediscovered as a bug: a raid-lead change switches the
-raid to the new leader's settings. Confirmed with the maintainer, together with the requirement that
-it must not be silent — `LC_CONFIG_OWNER_NOW` says so once per time the role arrives. One field is
-exempt: an empty council list means "not configured", not "this raid has no council", because the
-soak showed 94 of 3000 raids losing an award to a momentary leader who had never configured KART.
+Confirmed by the soak: with the three new steps enabled, `council` and `votes` disagreements went from
+one each per 3000 to none.
 
 
-## B56 — a toy could be force-won — FIXED 2026-07-30, but not for the reason recorded
-
-The entry described the cause as an unpopulated Toy Box: `C_ToyBox.GetToyInfo` would answer nil until
-Collections had been opened, so a toy read as ordinary gear. Measured in a live client rather than
-reasoned about, and **every part of that premise is false**. Fresh client restart, straight to the
-probe, Collections never opened:
-
-* `C_ToyBox.GetNumToys()` → 1144, `GetNumLearnedDisplayedToys()` → 425. The box is fully populated on
-  login, and it holds far more than what the player has collected.
-* `GetToyInfo(229828)` answers for a toy the player does **not** own.
-* It answers while the box's own display filter is down to 41 entries, so it is not filter-scoped.
-
-The real cause was one line above the toy lookup. `IsCollectibleItem` opened with
-`if classID ~= 15 then return false end`, on the assumption that toys share the tier tokens' bucket.
-Counting the classes of one player's 41 toys: **39 are classID 15, but 2 are classID 0 — Consumable**
-(229828 is 0/8). Those two never reached the toy lookup at all. A toy in Consumable read as ordinary
-Bind-on-Pickup gear: force-won by the lootmaster, passed by every Auto-Pass raider — the standing
-rule broken, exactly as the entry said, through a bucket nobody had looked in.
-
-The three journal lookups now run before the class is consulted. An item the client itself identifies
-as a mount, pet or toy is one whatever compartment Blizzard filed it under, and no gear token appears
-in any journal, so asking first cannot pull a token out of Council. The allow-list for Miscellaneous
-is untouched — that is the part keeping housing decor out, and it still decides everything the
-journals cannot name.
-
-Covered in `tests/test_lc_collectible.lua`; the three new assertions were verified by re-gating the
-journals behind `classID == 15` and confirming all three turn red.
-
-## B57 — End Round cleared only the presser's own window (GitHub #15) — FIXED 2026-07-30
-
-> **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
-> the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
-> history: each one is a real failure this guild paid for, and the rules were written to make them
-> unreachable rather than merely fixed.
-
-Reported with a screenshot of items from earlier bosses still listed, by a maintainer who had pressed
-End Round and held raid lead. No path in the code explained it, because each side of the exchange
-looks correct on its own. They only disagree when compared:
-
-* The button is enabled by the presser's own `LC.IsLootOwner`, which falls back to the raid leader
-  whenever their client holds no config naming somebody else — normal after a reload while the config
-  is slow to come back, or in a raid where it never reached them at all.
-* Their peers judge the incoming `LC_END_ROUND` with `IsSenderLootOwner`, and THEY do hold a config
-  naming the real lootmaster, so they threw it away.
-
-The presser's window cleared, every other window kept the round, and nothing was printed on either
-side. Reproduced in `tests/test_lc_churn.lua` by reloading the raid leader with `LC_CONFIG` and
-`LC_CONFIG_RELAY` blackholed, which is exactly that state.
-
-`LC.HandleEndRound` now accepts from any council member. That is the right width for what the action
-does — it clears the current round's tabs and vote rows and does not touch the session — and a
-council member can already assign an item outright, which is far more authority than clearing a
-list. `IsSenderCouncil` accepts the loot owner too, so it is strictly wider than what it replaced.
 
 ---
 

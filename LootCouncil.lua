@@ -271,6 +271,25 @@ function LC.ButtonFingerprint(buttons)
     return h
 end
 
+-- Whether a vote belongs to the item currently tracked under its roll (B46).
+--
+-- Blizzard reuses a rollID for a genuinely different drop within seconds on trash. The vote carries
+-- the item it was cast for, and this is where that is read -- deliberately at the READER rather than
+-- at the receiver, because a vote is sent exactly once with no retry: dropping one on a mismatch
+-- threw it away for good whenever OUR link was the stale half of the disagreement.
+--
+-- Unknown on either side means "cannot tell", and cannot-tell counts as belonging: an older client
+-- sends no item, and a roll still held as "???" has none to compare against. Refusing those would
+-- blank a whole raid's votes over a link that had not arrived yet.
+function LC.VoteIsForItem(vote, rollID)
+    local stamped = type(vote) == "table" and vote.item or nil
+    if stamped == nil or stamped == "" then return true end
+    local link = LC.rollItems[rollID]
+    local mine = (type(link) == "string" and link:match("item:(%d+)")) or ""
+    if mine == "" then return true end
+    return stamped == mine
+end
+
 -- Whether a vote cast against `storedFp` can still be shown as a label (B43-B45).
 --
 -- Named and shared because it is read from three places that must agree -- the council rows, the tab
@@ -1809,7 +1828,11 @@ end
 -- the group necessarily has KART or is eligible — but good enough for an at-a-glance indicator.
 function LC.CountVotes(rollID)
     local voted = 0
-    for _ in pairs(LC.votes[rollID] or {}) do voted = voted + 1 end
+    -- Votes cast for a DIFFERENT item under this same reused rollID are not this item's votes, so
+    -- they must not inflate the "x of y have answered" badge either (B46).
+    for _, v in pairs(LC.votes[rollID] or {}) do
+        if LC.VoteIsForItem(v, rollID) then voted = voted + 1 end
+    end
     return voted, math.max(GetNumGroupMembers(), 1)
 end
 

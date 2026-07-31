@@ -313,7 +313,8 @@ function Vote.CastVote(rollID, buttonIdx, noteBox)
 
     local myKey = (KASC.Identity.ResolvePlayer("player"))
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][myKey] = {idx = buttonIdx, note = note, count = buttonCount}
+    LC.votes[rollID][myKey] = {idx = buttonIdx, note = note, count = buttonCount,
+                               item = TrackedItemID(rollID)}
     -- Our own badge is resolved against whatever the button list says NOW, with nothing stored, so a
     -- mid-roll label edit told the raider they had voted something they never did (B45).
     LC.votedFpByMe[rollID] = buttonCount
@@ -1015,12 +1016,16 @@ function Vote.HandleVote(payload, senderKey)
     -- peer processes LC_START (which sets rollItems) before any vote can be cast, so a legitimate
     -- vote never arrives before this is set.
     if not LC.rollItems[rollID] then return end
-    -- ...and that it is the SAME item. Blizzard reuses a rollID for a genuinely different drop within
-    -- seconds on trash, so a vote delayed by the network landed in the new item's tally, under a
-    -- name that had never seen it (B46). Only when both sides know the item: an older client sends no
-    -- itemID, and a roll we are still holding as "???" has none to compare against.
-    local mine = TrackedItemID(rollID)
-    if itemID and itemID ~= "" and mine ~= "" and itemID ~= mine then return end
+    -- Which ITEM the vote was cast for travels with it (B46). Blizzard reuses a rollID for a
+    -- genuinely different drop within seconds on trash, so a vote delayed by the network landed in
+    -- the new item's tally, under a name that had never seen it.
+    --
+    -- Recorded, NOT dropped, and the difference matters: a vote is sent exactly once with no retry,
+    -- and the two clients need not disagree about which item is current -- one of them may simply be
+    -- the one that is behind. Dropping on a mismatch threw away a legitimate vote for good whenever
+    -- OUR link was the stale one, which is a worse failure than the one it guards. Stored with the
+    -- item it belongs to, it is the READER that decides (see LC.VoteIsForItem), and a vote that turns
+    -- out to belong here after all is still here to be counted.
 
     -- Free text from another client, rendered raw into the council row's note tooltip. Double the
     -- pipes so |c colour codes, |H hyperlinks and |T textures can't be injected there (same guard
@@ -1029,7 +1034,7 @@ function Vote.HandleVote(payload, senderKey)
     note = (note:gsub("|", "||"))
 
     LC.votes[rollID] = LC.votes[rollID] or {}
-    LC.votes[rollID][senderKey] = {idx = idx, note = note, count = count}
+    LC.votes[rollID][senderKey] = {idx = idx, note = note, count = count, item = itemID}
 
     -- Row list only matters for whichever roll is the active tab; the vote-count badge on every
     -- tab (including inactive ones) stays live regardless — see LC.RefreshCouncilIfShown.
@@ -1093,15 +1098,17 @@ function Vote.HandleCouncilVote(payload, senderKey)
     -- Ignore council votes for an untracked (already resolved/pruned) roll — see HandleVote:
     -- prevents an orphan LC.councilVotes[rollID] that no cleanup path frees.
     if not LC.rollItems[rollID] then return end
-    -- Same reused-rollID guard as Vote.HandleVote (B46).
-    local mineC = TrackedItemID(rollID)
-    if itemID and itemID ~= "" and mineC ~= "" and itemID ~= mineC then return end
+    -- Same reused-rollID question as Vote.HandleVote, and answered the same way: a pick that names a
+    -- different item than we are holding is kept, not dropped, and filtered when it is read.
 
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     if candidateKey == "" then
         LC.councilVotes[rollID][senderKey] = nil -- retracted their pick
     else
         LC.councilVotes[rollID][senderKey] = candidateKey
+        LC.councilVoteItem = LC.councilVoteItem or {}
+        LC.councilVoteItem[rollID] = LC.councilVoteItem[rollID] or {}
+        LC.councilVoteItem[rollID][senderKey] = itemID
     end
 
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then

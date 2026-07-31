@@ -98,8 +98,13 @@ do
     RaidSim.Release(sim, "LC_VOTE")
     KARTTEST.AdvanceTime(0)
 
-    T.is_nil((lm.KART.LC.votes[42] or {})[raider.guid],
-        "the stale vote is not counted for the item it was never cast on")
+    -- Kept, not dropped: a vote is sent exactly once with no retry, and the two clients need not
+    -- disagree about which item is current -- ours may be the stale link. It is the READER that
+    -- decides, so a vote that turns out to belong here after all is still here to be counted.
+    local stale = (lm.KART.LC.votes[42] or {})[raider.guid]
+    T.truthy(stale, "the vote is kept rather than thrown away for good")
+    T.truthy(not RaidSim.As(lm, function() return lm.KART.LC.VoteIsForItem(stale, 42) end),
+        "but it does not count for the item it was never cast on")
 end
 
 do
@@ -126,8 +131,10 @@ do
     RaidSim.Release(sim, "LC_CVOTE")
     KARTTEST.AdvanceTime(0)
 
-    T.is_nil((lm.KART.LC.councilVotes[44] or {})[council.guid],
-        "a stale council pick does not land on the new item either")
+    local pick = (lm.KART.LC.councilVotes[44] or {})[council.guid]
+    T.truthy(pick, "the council pick is kept too")
+    T.truthy((lm.KART.LC.councilVoteItem[44] or {})[council.guid] ~= nil,
+        "stamped with the item it was cast for")
 end
 
 -- All three render sites actually ask the rule ----------------------------------------------------

@@ -461,6 +461,7 @@ function Council.RefreshCouncilTabs()
             local buttons  = LC.GetButtonConfig()
             local anyVotes = false
             for key, voteData in pairs(LC.votes[capturedRollID] or {}) do
+              if LC.VoteIsForItem(voteData, capturedRollID) then
                 anyVotes = true
                 -- The same guard the rows below apply (B44). Without it the tooltip stated a label
                 -- with full confidence for the very vote the row list correctly rendered as "?".
@@ -468,6 +469,7 @@ function Council.RefreshCouncilTabs()
                 local stale = LC.VoteLabelStale(voteData.count, buttons)
                 local def = (not stale) and idx and buttons[tonumber(idx)] or nil
                 GameTooltip:AddDoubleLine(KASC.Identity.ResolveDisplayName(key), def and def.label or "?", 0.9, 0.9, 0.9, def and def.r or 0.6, def and def.g or 0.6, def and def.b or 0.6)
+              end
             end
             if not anyVotes then
                 GameTooltip:AddLine(KART.L.LC_TAB_NO_VOTES_YET, 0.6, 0.6, 0.6)
@@ -940,7 +942,14 @@ function Council.RefreshCouncilRows()
     if not panel then return end
 
     local rollID  = LC.activeRollID
-    local votes   = (rollID and LC.votes[rollID]) or {}
+    -- Only the votes cast for the item this tab is actually showing (B46): a reused rollID can hold
+    -- one raider's answer to the PREVIOUS drop, and rendering it here puts a choice they never made
+    -- on the screen that hands the item out.
+    local allVotes = (rollID and LC.votes[rollID]) or {}
+    local votes = {}
+    for key, v in pairs(allVotes) do
+        if LC.VoteIsForItem(v, rollID) then votes[key] = v end
+    end
     local buttons = LC.GetButtonConfig()
 
     local rollItem = LC.rollItems[rollID]
