@@ -75,3 +75,28 @@ RaidSim.As(lm, function()
     def.OnHide(popup)
     T.eq(window:GetFrameStrata(), "MEDIUM", "and is unchanged afterwards")
 end)
+
+-- The tab's "x" must stay reachable ---------------------------------------------------------------
+-- It sits OUTSIDE the tab on purpose, so it cannot be hit while just clicking a tab to switch. That
+-- placement leaves a strip between the two where neither is hovered, and it made the button
+-- unclickable in practice: moving towards it fired the tab's OnLeave and the x hid. The second half
+-- was the refresh -- it re-derives the button's visibility from the hover state, and it runs every
+-- time a vote lands, so with the mouse resting ON the x and not on the tab the next vote hid it.
+--
+-- Neither is reachable from this harness (both need a real cursor), so the two properties the fix
+-- rests on are checked against the source. If the tab strip is rewritten, this has to move with it.
+do
+    local panel = assert(io.open("LootCouncilPanel.lua", "r")):read("*a")
+
+    T.truthy(panel:find("tab.closeBtn:SetHitRectInsets(", 1, true),
+        "the close button's hit rect bridges the gap to the tab")
+    T.truthy(panel:find("tab.closeBtn:SetShown(tab:IsMouseOver() or tab.closeBtn:IsMouseOver())", 1, true),
+        "and a refresh keeps it shown while the cursor is on the button itself")
+
+    -- The hover handlers this depends on are still the ones that check BOTH frames -- hiding
+    -- unconditionally in either brought back the show/hide flicker that ate every click.
+    local _, bothChecks = panel:gsub("if not tab%.closeBtn:IsMouseOver%(%) then", "")
+    T.eq(bothChecks, 1, "the tab's OnLeave still defers to the button's own hover")
+    local _, tabChecks = panel:gsub("if not tab:IsMouseOver%(%) then", "")
+    T.eq(tabChecks, 1, "and the button's OnLeave defers to the tab's")
+end

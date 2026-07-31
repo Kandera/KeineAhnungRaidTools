@@ -405,6 +405,14 @@ function Council.RefreshCouncilTabs()
             -- left edge (see f.tabStrip), so the tab's right side faces the panel body and an x
             -- placed there would hover over the rows.
             tab.closeBtn:SetPoint("RIGHT", tab, "LEFT", -2, 0)
+            -- Sitting OUTSIDE the tab is what keeps it from being clicked by accident, and it also
+            -- left a two-pixel strip between the two where NEITHER is hovered. Moving the mouse
+            -- towards the x crossed that strip, the tab's OnLeave fired, the x hid, and it could
+            -- never be reached at all -- reported from use. Widen the button's HIT rect (negative
+            -- insets grow it; its size and position are untouched) so it reaches back over the gap
+            -- and onto the tab's edge. The hover is then continuous and the IsMouseOver checks
+            -- below see what the eye sees.
+            tab.closeBtn:SetHitRectInsets(0, -4, 0, 0)
             tab.closeBtn:Hide()
             tab.closeBtn.bg = tab.closeBtn:CreateTexture(nil, "BACKGROUND")
             tab.closeBtn.bg:SetAllPoints()
@@ -502,7 +510,12 @@ function Council.RefreshCouncilTabs()
         -- without the mouse ever leaving it — no OnEnter/OnLeave fires. Re-derive the close button's
         -- visibility from the actual hover state here, or the tab that slid under the cursor comes up
         -- with the previous tab's "x" already showing and one click closes the wrong roll.
-        tab.closeBtn:SetShown(tab:IsMouseOver())
+        --
+        -- The BUTTON's own hover counts too, and leaving it out was the other half of "the x cannot
+        -- be clicked": this runs on every refresh, and the panel refreshes every time a vote lands --
+        -- constantly, while an item is being decided. With the mouse resting on the x and not on the
+        -- tab, the next vote hid it out from under the cursor.
+        tab.closeBtn:SetShown(tab:IsMouseOver() or tab.closeBtn:IsMouseOver())
         tab:Show()
     end
 
