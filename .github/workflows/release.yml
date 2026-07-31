@@ -52,7 +52,15 @@ jobs:
           # Pull the block between the current version header and the next one
           VERSION="${{ steps.version.outputs.VERSION }}"
           NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          # Pre-release tags have no changelog header yet; fall back to Unreleased
+          # A pre-release tag (v3.2.2-beta1) has no changelog header of its own. It is a
+          # pre-release OF something, so strip the suffix and take that version's notes --
+          # which is what the people installing it need to read. Falling straight through
+          # to [Unreleased] published betas with an empty body, and the guild installs
+          # from that page.
+          if [ -z "$NOTES" ]; then
+            BASE="${VERSION%%-*}"
+            NOTES=$(awk "/^## \[$BASE\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          fi
           if [ -z "$NOTES" ]; then
             NOTES=$(awk "/^## \[Unreleased\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
           fi
