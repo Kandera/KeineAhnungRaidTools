@@ -56,22 +56,43 @@ Both default to off, so an untouched install is not exposed to them.
 
 ## Found 2026-07-31 by three new soak steps
 
-The soak learned three things it could not do before, and each found a defect within its first few
-hundred seeds. Reproduce any of them with `KART_SOAK_NEWSTEPS=1 KART_SOAK_SEEDS=3000`; the steps are
-in `tests/test_lc_soak.lua` and off by default so the gate stays green.
+The soak learned three things it could not do before -- two council members awarding the same item at
+the same moment, a vote button renamed mid-roll, and a rollID handed to a different item -- and each
+found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
+the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
-## B71 — a reused rollID still loses rolls, at a lower rate
+## B71 — FIXED 2026-07-31 — a reused rollID lost rolls, in two unrelated ways
 
-**Half of this is FIXED.** A client purges everything under a rollID when it processes its own
-`START_LOOT_ROLL` -- but peers broadcast their rolls for the NEW item at that same instant, so a
-client that had already RECEIVED some of them wiped them a moment later with its own purge. Whoever
-ran their handler first lost the rolls of everybody behind them, and the council scored its tie-break
-on a partial set. `LC_ROLL` now carries the itemID and `LC.rollsFor` records which item the stored
-rolls belong to, so a purge keeps the ones already cast for the item now arriving.
+**The first half**, fixed when the step was written: a client purges everything under a rollID when
+it processes its own `START_LOOT_ROLL` -- but peers broadcast their rolls for the NEW item at that
+same instant, so a client that had already RECEIVED some of them wiped them a moment later with its
+own purge. Whoever ran their handler first lost the rolls of everybody behind them, and the council
+scored its tie-break on a partial set. `LC_ROLL` now carries the itemID and `LC.rollsFor` records
+which item the stored rolls belong to, so a purge keeps the ones already cast for the item arriving.
+29 disagreements per 3000 before, 14 after.
 
-Measured: 29 disagreements per 3000 before, 14 after. What is left is a client that joined the raid
-between the original drop and the reuse ending up with a subset -- seed 254 shows Torvi holding two
-of four rolls, its own included. Start there; it is reproducible.
+**The second half** is `LC.rollsPendingSince`. A roll is accepted for a rollID this client does not
+know yet -- `LC_ROLL` is broadcast from `START_LOOT_ROLL` and routinely beats the `LC_START` that
+explains it -- and the stamp records when that wait began, so `PurgeStaleRoll` can throw the data
+away if the roll never materialises. Nothing cleared the stamp when the roll *did* materialise: on
+the path where `LC_START` arrived inside the grace window, `PurgeStaleRoll` returned at "nothing
+tracked under this ID" before reaching any cleanup. The stamp then sat there for the rest of the
+session. The next time Blizzard reused the ID, the orphan sweep read it as "this data has been
+waiting twenty minutes" and wiped -- except the table no longer held the orphan, it held the rolls
+peers had just broadcast for the NEW item. Only the clients that had missed that `LC_START` were
+hit, so the raid disagreed about who rolled what.
+
+The wait now ends where it actually ends: `PurgeStaleRoll` clears the stamp unconditionally, because
+reaching it means a roll under this ID is being processed right now. Covered in
+`tests/test_lc_votelabels.lua`; removing the line puts it back to red.
+
+**Twelve of the fourteen breaks were the step, not the addon.** It picked the new item from three
+without excluding the one already on the table, so a third of the time it re-announced the *same*
+item -- which is not a reuse at all but Blizzard re-raising the event for the roll already running,
+and the addon deliberately keeps the rolls already cast for it. The step then re-recorded the
+population, so a raider who joined after the original drop was expected to hold rolls broadcast
+before they were in the raid. The step now always picks a different item; the re-announced-identical
+case has its own test.
 
 ## B72, B73 — FIXED 2026-07-31, and both were the same thing
 

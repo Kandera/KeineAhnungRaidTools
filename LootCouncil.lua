@@ -2501,8 +2501,17 @@ local function PurgeStaleRoll(rollID, newItemID)
     local pendingSince = LC.rollsPendingSince and LC.rollsPendingSince[rollID]
     if pendingSince and (GetTime() - pendingSince) > ROLL_ORPHAN_GRACE then
         LC.rolls[rollID] = nil
-        LC.rollsPendingSince[rollID] = nil
     end
+    -- The wait ends here whether or not it timed out: reaching this function means a roll under this
+    -- ID is being processed right now, so nothing is waiting for one any more. Clearing it only in
+    -- the branch above left the stamp behind on the path that matters most -- an LC_START arriving
+    -- INSIDE the grace window, where the function returns a few lines down at "nothing tracked under
+    -- this ID". The stamp then sat there for the rest of the session, and the next time Blizzard
+    -- reused the ID the sweep above read it as "waiting for twenty minutes" and wiped -- except the
+    -- table no longer held the orphan, it held the rolls peers had just broadcast for the NEW item.
+    -- Only the clients that had missed that LC_START were hit, so the raid disagreed about who
+    -- rolled what and the council scored its tie-break on a partial set (B71).
+    if LC.rollsPendingSince then LC.rollsPendingSince[rollID] = nil end
 
     if not newItemID or newItemID == "" then return end
     local oldLink = LC.rollItems[rollID]

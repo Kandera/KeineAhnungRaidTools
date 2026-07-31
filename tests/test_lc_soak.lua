@@ -237,16 +237,29 @@ local function runOne(seed)
         -- Blizzard hands the same rollID to a genuinely different item, which it does within seconds
         -- on trash (B40, B46). Everything tracked under that ID has to give way to the new item.
         --
-        -- OPT-IN (KART_SOAK_REUSE=1) and red as of 2026-07-31: it found a real defect straight away
-        -- -- a client wiped the rolls it had already received for the NEW item with its own purge a
-        -- moment later, so whoever ran their handler first lost everybody behind them and the council
-        -- scored its tie-break on a partial set. Fixed, and the rate fell from 29 to 14 per 3000.
-        -- What is left is recorded as B71; the step is kept so the next pass can reproduce it with
-        -- one environment variable rather than rebuilding it.
+        -- The most productive step of the three. It found two separate defects, both of which cost
+        -- the council its tie-break: a client wiped the rolls it had already received for the NEW
+        -- item with its own purge a moment later, so whoever ran their handler first lost everybody
+        -- behind them (29 per 3000); and B71, a "waiting for this roll" stamp that outlived the roll
+        -- it was taken for and then ate the next item's rolls on exactly the clients that had missed
+        -- the LC_START (the remaining 1 per 3000, once the step stopped reporting itself -- see the
+        -- item choice below).
         NEW_STEPS and { "reuse", function()
             local id = openRoll()
             if not id then return end
-            local items = { F.GLOVES, F.WEAPON, F.TOKEN }
+            -- A DIFFERENT item, always. The same item arriving again under the same ID is not a
+            -- reuse at all -- it is Blizzard re-raising the event for the roll already running, and
+            -- the addon deliberately keeps the rolls already cast for it. Letting the walk pick the
+            -- current item made this step demand the opposite: it re-recorded the population, so a
+            -- raider who joined after the original drop was expected to hold rolls broadcast before
+            -- they were in the raid. Thirteen of the fourteen B71 breaks were that, and none of them
+            -- was the addon. The re-announced-identical-item case has its own test
+            -- (tests/test_lc_votelabels.lua).
+            local items = {}
+            local cur = KARTTEST.lootRolls[id]
+            for _, it in ipairs({ F.GLOVES, F.WEAPON, F.TOKEN }) do
+                if not cur or cur.itemID ~= it then items[#items + 1] = it end
+            end
             F.Drop(sim, id, items[rnd(#items)])
             -- The population is re-recorded exactly as the plain drop does it. Everything already
             -- tracked under this ID belonged to the PREVIOUS item and has been purged, so who is
@@ -392,6 +405,23 @@ local function runOne(seed)
                 lastRolls[c.name] = v
             end
         end
+        -- KART_SOAK_TRACEROLLS follows the roll TABLES the same way, per client and per rollID. The
+        -- config trace above answers "who wrote this value"; this one answers "which step lost this
+        -- roll", which is the question B71 turned out to be -- one client in five silently dropping
+        -- a peer's number is invisible in the end state and obvious in the sequence.
+        if os.getenv("KART_SOAK_TRACEROLLS") then
+            for _, c in ipairs(sim.clients) do
+                for _, id in ipairs(rolls) do
+                    local parts = {}
+                    for k, val in pairs(c.KART.LC.rolls[id] or {}) do
+                        parts[#parts + 1] = k:sub(-2) .. "=" .. val
+                    end
+                    table.sort(parts)
+                    print(string.format("  ROLLS %-8s %d for=%-8s %s | after %s", c.name, id,
+                        tostring(c.KART.LC.rollsFor[id]), table.concat(parts, ","), when))
+                end
+            end
+        end
     end
     TraceRolls("the raid was built")
 
@@ -485,7 +515,8 @@ local function runOne(seed)
                 tostring(c.KART.LC.raidConfig.lootmaster)))
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
-                                 "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLL_CATCHUP" }) do
+                                 "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLL",
+                                 "LC_ROLL_CATCHUP" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
                     tostring(e.target or e.channel), e.msg:sub(1, 60)))
@@ -513,6 +544,7 @@ end
 local broken, firstSeed, firstWhy = 0, nil, nil
 local kinds, kindSeed = {}, {}
 local function Record(seed, why)
+    if os.getenv("KART_SOAK_LISTFAILS") then print("SEEDFAIL " .. seed .. "  " .. why:sub(1, 200)) end
     broken = broken + 1
     firstSeed = firstSeed or seed
     firstWhy = firstWhy or why
