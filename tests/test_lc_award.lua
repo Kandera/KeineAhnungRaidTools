@@ -148,3 +148,47 @@ end
 
 T.eq(ClashWinner(false), ClashWinner(true),
     "the same two awards produce the same winner whichever order they land in")
+
+-- A confirmed reassignment survives a first award that arrives late -------------------------------
+-- The rank has to be recorded when an award is RECEIVED, not only when it is made here. A council
+-- member whose client never saw the reassignment -- their copy of it was lost, which is what the
+-- chat throttle does -- assigns the original winner and broadcasts a first award. Without the
+-- received rank every peer would treat that as an ordinary clash and fall back to the smaller key,
+-- undoing a decision a human confirmed in front of a dialog naming both players.
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 63, F.GLOVES)
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+    T.truthy(alric.guid < sinja.guid, "Alric sorts first, so the tie-break would pick him")
+
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(63, alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    -- Confirmed reassignment to the player the tie-break would NOT pick.
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(63, sinja.guid, "Upgrade", nil)
+        KARTTEST.AcceptPopup("KART_LC_REASSIGN_CONFIRM")
+    end)
+    KARTTEST.AdvanceTime(0)
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.assignedWinners[63], sinja.guid, c.name .. " has the reassigned winner")
+    end
+
+    -- The lootmaster's copy of the reassignment was lost, so their client still believes nobody has
+    -- been assigned and makes a FIRST award for the original winner.
+    lm.KART.LC.assignedWinners[63] = nil
+    lm.KART.LC.assignedDeliberate[63] = nil
+    Capture(function()
+        RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(63, alric.guid, "BIS", nil) end)
+        KARTTEST.AdvanceTime(0)
+    end)
+
+    for _, c in ipairs(sim.clients) do
+        if c ~= lm then
+            T.eq(c.KART.LC.assignedWinners[63], sinja.guid,
+                c.name .. " keeps the confirmed reassignment")
+        end
+    end
+end
