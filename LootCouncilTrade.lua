@@ -695,6 +695,14 @@ end
 function Trade.OnTradeInfoMessage(msgID)
     if msgID == LE_GAME_ERR_TRADE_COMPLETE then ---@diagnostic disable-line: undefined-global
         LC.tradeJustSucceeded = true
+        -- ...and do the receiving side here as well as in Trade.OnTradeClosed, because the ORDER of
+        -- these two is not guaranteed and this side has no second signal to fall back on. The
+        -- giving side does -- it rescans its own bags -- so a trade-complete that arrives after the
+        -- window has already closed still ticks the giver's list off and would silently leave the
+        -- winner's standing. Reported from a live test after the first attempt shipped: the
+        -- lootmaster's row cleared, the winner's did not. Whichever of the two fires last does the
+        -- work; both are idempotent, since an entry can only be removed once.
+        Trade.ConfirmOwedFromPartner(LC.currentTradePartnerKey or LC.lastTradePartnerKey)
     end
 end
 
@@ -793,8 +801,36 @@ end
 -- follow: Pass 1 confirms entries assigned to partnerKey, consuming the per-item-string count as
 -- it goes; Pass 2 warns about entries assigned to someone else, but only for item strings whose
 -- count Pass 1 didn't already exhaust — see the comments on each pass below.
+-- Clears our own "you are owed this" rows for items that just crossed the trade window FROM
+-- partnerKey. Consumes the per-item-string count for the same reason the giving side does: two
+-- entries owed by the same person that share an item string can only be confirmed as many times as
+-- copies actually arrived.
+--
+-- Deliberately no bag-contents fallback, which is where this is NOT symmetrical with the giving
+-- side: "it is in my bags" is also true of a copy this player already owned, and ticking off a
+-- reminder for an item nobody handed over is worse than leaving one standing. That is exactly why
+-- the ordering has to be handled instead -- this side has only the one signal.
+function Trade.ConfirmOwedFromPartner(partnerKey)
+    if not partnerKey then return end
+    for i = #(LC.owedToMe or {}), 1, -1 do
+        local entry = LC.owedToMe[i]
+        if entry.lootmasterKey == partnerKey then
+            local itemString = KAUtil.GetItemString(entry.itemLink)
+            local remaining = itemString and LC.tradeTargetItemStrings[itemString]
+            if remaining and remaining > 0 then
+                LC.tradeTargetItemStrings[itemString] = remaining - 1
+                table.remove(LC.owedToMe, i)
+                Trade.RefreshOwedReminderIfShown()
+            end
+        end
+    end
+end
+
 function Trade.OnTradeClosed()
     local partnerKey = LC.currentTradePartnerKey
+    -- Kept past the close: the trade-complete message can arrive after the window has gone, and the
+    -- receiving side still needs to know who it was.
+    LC.lastTradePartnerKey = partnerKey or LC.lastTradePartnerKey
     local tradeSucceeded = LC.tradeJustSucceeded
     LC.currentTradePartnerKey = nil
     LC.tradeJustSucceeded = nil
@@ -820,24 +856,10 @@ function Trade.OnTradeClosed()
         end
     end
 
-    -- The receiving side of the same trade. Symmetrical with Pass 1 and consuming its own counts for
-    -- the same reason: two entries owed by the same person that share an item string can only be
-    -- confirmed as many times as copies actually crossed the window. Deliberately requires Blizzard's
-    -- own trade-complete signal -- there is no bag-contents fallback here, because "it is in my bags"
-    -- is true of an item this player already owned a copy of, and clearing a reminder we were never
-    -- given is worse than leaving one standing.
-    for i = #(LC.owedToMe or {}), 1, -1 do
-        local entry = LC.owedToMe[i]
-        if entry.lootmasterKey == partnerKey then
-            local itemString = KAUtil.GetItemString(entry.itemLink)
-            local remaining = itemString and LC.tradeTargetItemStrings[itemString]
-            if tradeSucceeded and remaining and remaining > 0 then
-                LC.tradeTargetItemStrings[itemString] = remaining - 1
-                table.remove(LC.owedToMe, i)
-                Trade.RefreshOwedReminderIfShown()
-            end
-        end
-    end
+    -- The receiving side of the same trade, if the trade-complete signal has already arrived. If it
+    -- has not, Trade.OnTradeInfoMessage runs it when it does -- see there for why the order cannot
+    -- be relied on.
+    if tradeSucceeded then Trade.ConfirmOwedFromPartner(partnerKey) end
 
     -- Pass 2: entries assigned to someone else. Only warn if this item string still has an
     -- unconsumed count left after Pass 1 — otherwise a duplicate drop correctly assigned to two

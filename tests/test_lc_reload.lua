@@ -421,3 +421,55 @@ do
     T.truthy(F.Owes(raider.KART.LC.owedToMe, 111),
         "a cancelled trade leaves the winner still owed it")
 end
+
+do
+    -- The order of TRADE_CLOSED and Blizzard's trade-complete message is not guaranteed, and the
+    -- first attempt at this only did the work in TRADE_CLOSED. The giving side has a second signal
+    -- -- it rescans its own bags -- so it ticks off either way; the receiving side has only the one,
+    -- so a trade-complete arriving after the window closed left the winner's row standing while the
+    -- lootmaster's cleared. That is exactly what came back from the live test.
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 112, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(112, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+    T.truthy(F.Owes(raider.KART.LC.owedToMe, 112), "the winner is owed it")
+
+    KARTTEST.tradePartnerUnit = lm.unit
+    KARTTEST.tradeTargetItems = { raider.KART.LC.rollItems[112] }
+    RaidSim.As(raider, function()
+        raider.KART.LC.Trade.OnTradeShow()
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()
+        raider.KART.LC.Trade.OnTradeClosed()                              -- window goes first...
+        raider.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE) -- ...signal after
+    end)
+    KARTTEST.tradePartnerUnit, KARTTEST.tradeTargetItems = nil, {}
+
+    T.truthy(not F.Owes(raider.KART.LC.owedToMe, 112),
+        "the reminder clears whichever of the two signals lands last")
+end
+
+do
+    -- ...and the other way round: the completion message arriving BEFORE the window contents were
+    -- last read. Then the item strings are not there yet when it fires, and only the pass at
+    -- TRADE_CLOSED can see them. Both entry points are kept for that reason -- neither one alone
+    -- covers both orders, and this side has no bag scan to fall back on.
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 113, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(113, raider.guid, "BIS") end)
+    KARTTEST.AdvanceTime(0)
+
+    KARTTEST.tradePartnerUnit = lm.unit
+    KARTTEST.tradeTargetItems = {}
+    RaidSim.As(raider, function()
+        raider.KART.LC.Trade.OnTradeShow()
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()                        -- window still empty
+        raider.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE) -- signal, nothing to see
+        KARTTEST.tradeTargetItems = { raider.KART.LC.rollItems[113] }
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()                        -- contents land late
+        raider.KART.LC.Trade.OnTradeClosed()
+    end)
+    KARTTEST.tradePartnerUnit, KARTTEST.tradeTargetItems = nil, {}
+
+    T.truthy(not F.Owes(raider.KART.LC.owedToMe, 113),
+        "a completion message that lands before the contents still clears at the close")
+end
