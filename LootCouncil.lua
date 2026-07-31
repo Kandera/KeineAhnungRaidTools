@@ -728,32 +728,19 @@ end
 -- on the way back in, and taking the council list with it if that leader never filled one in.
 -- Standing in is about the loot flow (see LC.IsLootOwner), not about the settings.
 function LC.IsConfigOwner()
-    local declaredKey = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
-    if declaredKey then return LC.IsMe(declaredKey) end
-    local synced = LC.raidConfig.lootmaster
-    if synced and synced ~= "" and not LC.IsMe(synced) then return false end
-    -- And only while no config from anybody else is in force. A handover clears the lootmaster on
-    -- every peer (see LC.HandleResign), which without this makes the raid leader the config owner and
-    -- pushes THEIR settings over the raid on the very next roster change: usually an empty council
-    -- list — so every council member loses their panel — and rolls off. The raid keeping the settings
-    -- it agreed on is the whole reason HandleResign clears one field instead of all of them.
+    -- THE RAID LEADER OWNS THE CONFIG. Nothing else decides it. See docs/OWNERSHIP.md.
     --
-    -- `fromSelf` is what tells the two apart: a config we applied ourselves leaves the fallback
-    -- available (that is the empty-field setup working as documented), a config we RECEIVED means
-    -- somebody else is the source and we do not get to overwrite it by being promoted.
-    if next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf then return false end
-    -- And only into a session we started ourselves. `fromSelf` above cannot tell these apart after a
-    -- RELOAD, because a reload clears raidConfig and leaves the check nothing to look at: the leader
-    -- then claimed the config, LC.ApplyOwnConfig wrote its own defaults in — rolls off, empty council
-    -- list — and LC.BroadcastRaidConfig sent them to the raid as the real thing. Clients that still
-    -- remembered the previous lootmaster rejected it as a weaker claim; clients that did not (anyone
-    -- who joined or reloaded since) took it. The raid ended up split down the middle over its own
-    -- settings, and the half that took the leader's defaults stopped rolling.
+    -- Everything this function used to do is gone on purpose, and the five guards that used to live
+    -- here are the reason: they existed only to arbitrate a CLAIM. The old rule asked "does my own
+    -- Lootmaster field name me?", which made ownership something a client asserted about itself
+    -- rather than something the raid could observe -- so two clients could both believe it (B64) or
+    -- neither could (B70), and defending a claim against one invented after a reload needed
+    -- `fromSelf`, `sessionStartedByUs` and a timed grace, each of which went wrong on its own (B69,
+    -- B70). Raid lead is a fact the game tracks and every client already agrees on, so there is
+    -- nothing left to arbitrate.
     --
-    -- Starting a session with an empty field is still the documented setup where the leader's own
-    -- settings ARE the raid's (B33): there we set the flag ourselves, one line earlier in
-    -- LC.SetSessionActive, before this is ever consulted.
-    if LC.sessionActive and not LC.sessionStartedByUs then return false end
+    -- Ungrouped counts as owning it, so the settings tab and a solo test roll still work.
+    if not IsInGroup() then return true end
     return UnitIsGroupLeader("player")
 end
 
@@ -836,7 +823,19 @@ function LC.BroadcastRaidConfig(target)
     -- Keep the full "Name-Realm" text (don't strip the realm): GetLootmaster resolves the same
     -- unstripped value on the leader, so stripping here would let a cross-realm lootmaster resolve
     -- to a different person (or a same-named local) on peers than on the leader.
-    local lootmaster = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
+    -- The DESIGNATION, resolved here rather than on the wire as free text (see docs/OWNERSHIP.md).
+    --
+    -- Under the old rule the sender was always naming themselves, so a receiver could ignore the text
+    -- and use the sender's own identity. A designation names somebody else, so the name now has to
+    -- survive the trip -- and resolving it on every receiver is exactly the dead end that cost a raid
+    -- its config once already: a client without Northern Sky, or with global nicknames off, can never
+    -- resolve a nickname and would be left with a designation it cannot place, for ever.
+    --
+    -- The config owner CAN resolve it: they typed it, and they are in the raid with that person. So
+    -- they do it once and put the identity key on the wire. Raw text only when even we cannot place
+    -- them yet -- a receiver may still manage, and LC.RetryPendingResolutions covers the rest.
+    local lootmasterField = KAUtil.TrimString(KART_Settings.lcLootmaster or "")
+    local lootmaster = LC.ResolveConfigName(lootmasterField) or lootmasterField
     local council  = KART_Settings.lcCouncilMembers or ""
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
@@ -950,6 +949,16 @@ end
 -- the only retryable one), "parse-fail" (malformed payload), or "lootmaster-mismatch" (the payload
 -- names a lootmaster who resolves to somebody other than the sender). Only the caller decides what
 -- to do with the reason.
+-- A lootmaster designation as it comes off the wire. LC.BroadcastRaidConfig sends a resolved identity
+-- key whenever it can, and raw text only when it could not place the person either -- so this has to
+-- accept both. A key must NOT be pushed back through LC.ResolveConfigName: that resolves names, and
+-- would turn a perfectly good GUID into a pending text key.
+local function ConfigKeyFromWire(value)
+    if not value or value == "" then return nil end
+    if KASC.Identity.IsResolvedKey(value) then return value end
+    return LC.ResolveConfigName(value)
+end
+
 local function TryAcceptConfig(payload, senderKey)
     local unit = senderKey and KASC.Identity.FindUnitForKey(senderKey)
     if not unit then return false, "no-sender" end
@@ -957,91 +966,25 @@ local function TryAcceptConfig(payload, senderKey)
     local minQ, buttons, rolls, lootmaster, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return false, "parse-fail" end
 
-    -- The sender IS the lootmaster. Only a client whose own settings name it lootmaster broadcasts
-    -- at all (LC.IsConfigOwner gates LC.BroadcastRaidConfig), so the sender's identity already says
-    -- everything the declared name was ever consulted for -- and unlike the name, it always
-    -- resolves.
-    --
-    -- Requiring the NAME to resolve was a permanent dead end for anyone whose client cannot see the
-    -- lootmaster's Northern Sky nickname: without NSRT, or with its "Global Nicknames" master
-    -- toggle off, KASC.Identity.GetNickname returns nil for every unit forever. That client then
-    -- rejected every config for all time and silently fell back to its own settings -- its own vote
-    -- button labels (so its votes showed up under the WRONG label on the council panel, see B25),
-    -- its own rolls toggle (so it never rolled) and its own council list. Observed across a full
-    -- raid on 2026-07-27; session restarts did not help, because each re-broadcast was rejected
-    -- exactly the same way.
-    --
-    -- The declared name is still checked when it DOES resolve, which keeps the guard against a
-    -- misconfigured client broadcasting somebody else's name -- that case is a real error and stays
-    -- a rejection. It just no longer decides the common path.
-    -- RESOLVED, not merely non-empty. This is the half the 3.1.0 fix missed, and it is why a raid
-    -- still lost its rolls: KASC.Identity.ResolvePlayer does not return nil for a name it cannot
-    -- place, it returns a pending text key -- "Kandy" comes back as "kandy". That is non-empty, it
-    -- is never equal to the sender's GUID, and so every config was rejected exactly as before,
-    -- while LC_ACTIVE still arrived (it falls back to the raid-leader check). The raid then had a
-    -- session but no config: rolls off, own vote-button labels, empty council list, and nothing said
-    -- so. Found by tests/test_lc_baseflow.lua, which runs a nickname-blind client alongside the
-    -- others rather than describing one.
-    --
-    -- The guard itself stays: a client broadcasting a name that genuinely resolves to somebody else
-    -- is a real misconfiguration and must still be refused.
-    local declaredKey = LC.ResolveConfigName(lootmaster)
-    if declaredKey and KASC.Identity.IsResolvedKey(declaredKey) and declaredKey ~= senderKey then
-        return false, "lootmaster-mismatch"
-    end
-    -- An EMPTY lootmaster field is the raid leader standing in (see LC.IsConfigOwner), so only the
-    -- current leader may send one. Checked against the live roster on our own side, so it needs no
-    -- stored state and follows a leader change by itself — the same fallback LC.IsSenderLootOwner
-    -- already uses.
-    if not declaredKey and not UnitIsGroupLeader(unit) then return false, "not-leader" end
-    -- A NAMED lootmaster outranks the raid leader standing in, and this is the guard that makes the
-    -- whole empty-field fallback safe rather than dangerous.
-    --
-    -- Without it, any raid leader whose own LC.raidConfig is momentarily blank — a fresh login, a
-    -- reload, a confirmed raid exit, the moment after a handover — passes LC.IsConfigOwner and
-    -- broadcasts a config declaring nobody. Every peer would then overwrite a perfectly good
-    -- lootmaster GUID with "", along with the council list and the roll setting, replacing them with
-    -- the leader's own: usually no council at all and rolls off. The real lootmaster keeps force-
-    -- winning and broadcasting LC_START, and most of the raid silently drops it, because their
-    -- IsSenderLootOwner has fallen back to "is the sender the raid leader?" and it is not.
-    --
-    -- Worst of all, the leader's own client heals itself seconds later from the whispered reply to
-    -- its state request — so the one person anybody would ask sees nothing wrong.
-    --
-    -- The name is not the only thing worth protecting, and relying on it alone left a hole: a config
-    -- that reached us through LC.HandleConfigRelay carries NO lootmaster, because the relayer is not
-    -- the config owner and must not write itself in (B65). Blanking that field also strips the very
-    -- thing this guard reads, so a perfectly good relayed config was overwritten by the first
-    -- empty-field one that came along -- which is how a raider ends up on a roll setting nobody
-    -- chose (B69, seed 1377: the holder had a relayed config, the sender had reloaded seconds
-    -- earlier and invented one).
-    --
-    -- So a config we RECEIVED outranks an unnamed one too, name or no name. A client that holds
-    -- nothing still takes it, which is what keeps the empty-field bootstrap working (B33).
-    --
-    -- The cost, stated because it narrows a documented setup: in a raid deliberately run with NOBODY
-    -- in the Lootmaster field, the leader's later CHANGES to the raid config no longer propagate to
-    -- clients that already hold one -- only the first config does. Confirmed with the maintainer
-    -- (2026-07-30) that this raid never runs that way: the field always names somebody, and the
-    -- config is shared in advance with everyone who might take over. Handing the role over is
-    -- unaffected either way, because a NAMED config never reaches this check at all.
-    if not declaredKey and (KASC.Identity.IsResolvedKey(LC.raidConfig.lootmaster or "")
-            or (next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf)) then
-        return false, "weaker-claim"
-    end
+    -- THE ONLY ACCEPTANCE RULE: the sender holds raid lead (see docs/OWNERSHIP.md). Checked against
+    -- our own roster, so it needs no stored state and follows a leader change by itself. There is
+    -- exactly one such client in a raid, and every client can name which one -- so there is nothing
+    -- left to arbitrate, and the guards that used to do the arbitrating are gone with the claim they
+    -- existed for: a "lootmaster-mismatch" rejection (the sender no longer names itself -- naming
+    -- somebody else is the whole point now), a "not-leader" rejection for an unnamed field, and the
+    -- "weaker-claim" rule that decided between two configs on their content.
+    if not UnitIsGroupLeader(unit) then return false, "not-leader" end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
     LC.raidConfig.rollsEnabled  = (rolls == "1")
-    -- The sender, not the declared text: senderKey is a resolved identity key by construction,
-    -- while declaredKey is nil for exactly the clients this whole path had to stop depending on.
+    -- The DESIGNATION, not the sender. Under the old rule the sender was always naming itself, so
+    -- recording senderKey was the same thing; now the config owner is the raid leader and the field
+    -- names whoever they put in charge of the loot -- usually somebody else entirely.
     --
-    -- Only a NON-EMPTY field pins ownership to a person. An empty-field config is accepted in full —
-    -- labels, minimum quality, rolls, council list all apply — but leaves ownership derived, so it
-    -- keeps following raid lead. Recording the sender here regardless would stick the role to
-    -- whoever happened to be leader when the config went out, and a later leader change would not
-    -- move it: a regression that does not exist today, and it hides inside this merge.
-    LC.raidConfig.lootmaster    = declaredKey and senderKey or ""
+    -- Empty stays empty and means "the raid leader hands it out themselves" (see LC.GetLootmaster's
+    -- fallback), which is a real setting, not a missing one.
+    LC.raidConfig.lootmaster    = ConfigKeyFromWire(lootmaster) or ""
     -- council is the (.*) capture — never nil once the match above succeeded (guarded by minQ).
     LC.raidConfig.councilMembers = council
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
