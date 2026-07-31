@@ -72,49 +72,51 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
-## B81 — OPEN — a reload loses every /kart add item, and only for the person who reloaded
+## B81 — OPEN — a reload loses the open items, and worst for the one client that must not lose them
 
-Found in the live v3.2.2-beta1 test, 2026-07-31. Reproduced in the harness before anything was
-touched:
+Found in the live v3.2.2-beta1 test, 2026-07-31, first as "`/kart add` items are gone after a
+reload". Measured afterwards, and it is **not** specific to `/kart add`. One real drop, then one
+client reloads:
 
 ```
-before the reload   lootmaster: 2 cards, 2 rolls tracked
-after the reload    lootmaster: 0 cards, 0 rolls, session still ACTIVE
-                    every peer: 2 cards, 2 rolls
+Bramor  (raid lead AND lootmaster)   1 roll -> 0    catch-ups sent to them: 0
+Merrit  (council, not lootmaster)    1 roll -> 1    recovered
+Alric   (plain raider)               1 roll -> 0    catch-up sent, not applied
 ```
 
-`/kart lc` then opens nothing, because there is nothing left to open, while `/kart status` correctly
-reports the session as running. The raid is split: the person who is supposed to hand the items out
-cannot see them and everybody else still can.
+### The lootmaster's case, which is the maintainer's own
 
-### Why the existing recovery cannot help
+`LC.SendOpenRolls` opens with `if not (... and LC.IsLootOwner()) then return end`, and says so:
+*"Last, and only from the loot owner: the items still on the table."* One broadcaster, which is the
+right rule for announcing — but the catch-up is a REPLY, and the client that most needs one is the
+loot owner coming back from a reload. Nobody is allowed to answer them, so nothing does.
 
-A real drop is recoverable because `LC.SendRollCatchup` re-announces it, and `LC.HandleRollCatchup`
-proves the receiver was entitled to it by asking Blizzard: `if not GetLootRollItemLink(rollID) then
-return end`. That check is the whole reason a late arrival is not pulled into a distribution that was
-already running.
+That is the exact shape reported: raid lead and lootmaster in one person, two items on the table,
+reload, `/kart lc` opens nothing while `/kart status` correctly says the session is running. They
+force-win nothing from that point on and every peer still shows both items.
 
-A manually added item has no Blizzard roll behind it at all -- that is the point of `/kart add` --
-so that proof does not exist and the catch-up can never restore one. Nothing else persists them:
-`KART_LCTrades` holds decided trades, `KART_LootHistory` holds awards, and an undecided manual roll
-is in memory only.
+### `/kart add` on top
 
-### Why it matters more than it looks
+A real drop at least has a recovery path when somebody else is the loot owner: `HandleRollCatchup`
+proves entitlement by asking Blizzard for the roll. A manually added item has no Blizzard roll behind
+it -- that is the point of `/kart add` -- so it can never be restored that way even in principle, and
+nothing persists it (`KART_LCTrades` holds decided trades, `KART_LootHistory` holds awards).
 
-`/kart add` is not an edge path here. The tests already say so in their own words: *"the path the
-maintainer used all evening"*. Every evening run that way is one reload away from this.
+### Not yet explained
+
+The plain raider was SENT a catch-up and did not apply it. Measure that before fixing anything --
+guessing at it is how three attempts were wasted on B70.
 
 ### The shape a fix would have
 
-Peers already know how to announce a manual roll -- `LC_MANUAL_START`, handled by
-`LC.HandleManualStart`, which has no Blizzard-roll requirement. So the recovery is a manual-roll
-catch-up alongside the existing one, sent in reply to a state request.
+Peers other than the loot owner must be able to answer a state request with the open rolls, and
+`LC_MANUAL_START` (`LC.HandleManualStart`, no Blizzard-roll requirement) is the existing token for
+the manual half.
 
-The open question is the one the Blizzard check answers for free on the other path: **a state request
-is also what a late JOINER sends**, and a late arrival must not be pulled into a distribution that
-was already running. Real rolls tell the two apart by asking Blizzard; manual rolls have nothing to
-ask. Deciding that is the work, and it is a rule decision rather than a patch -- which is why this is
-recorded rather than guessed at.
+The open question is the one the Blizzard check answers for free today: **a state request is also
+what a late JOINER sends**, and a late arrival must not be pulled into a distribution already
+running. Real rolls tell the two apart by asking Blizzard; manual rolls have nothing to ask. That is
+a rule decision, not a patch.
 
 ## B80 — OPEN — the raid leader is not in the council list, though the rule says they always are
 
