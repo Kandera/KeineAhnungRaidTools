@@ -230,17 +230,46 @@ do
 end
 
 do
-    -- A roll whose vote is already over is not put back on the table.
+    -- A roll whose vote is already over is not put back on the table. The deadline is pushed into the
+    -- past directly rather than by advancing the clock: the pruner would otherwise drop the roll
+    -- outright and the assertion would pass without the guard ever being consulted.
     local sim, lm = F.NewRaid()
     local corvin = sim.byName.Corvin
     wipe(corvin.KART.LC.raidConfig)
     corvin.KART.LC.CouncilNamesTable = {}
     F.Drop(sim, 71, F.GLOVES)
-    KARTTEST.AdvanceTime((KART_Settings and KART_Settings.lcVoteSeconds or 20) + 30)
+    corvin.KART.LC.rollDeadlines[71] = GetTime() - 1
+    T.truthy(corvin.KART.LC.rollItems[71], "the roll is still tracked, so the guard is what decides")
 
     RaidSim.As(lm, function() lm.KART.LC.BroadcastRaidConfig() end)
     KARTTEST.AdvanceTime(0)
     for _, rid in ipairs(corvin.KART.LC.councilTabs) do
         T.truthy(rid ~= 71, "an expired roll is not reopened as a tab")
     end
+end
+
+do
+    -- B52's own half: an OPEN council panel is repainted when a config lands, so the votes stop being
+    -- rendered under the previous label set. Spied rather than rendered -- the stub panel draws
+    -- nothing, and what matters is that the repaint is asked for.
+    local sim, lm = F.NewRaid()
+    local corvin = sim.byName.Corvin
+    F.Drop(sim, 72, F.GLOVES)
+    corvin.KART.LC.councilPanel:Show()
+
+    local repainted = 0
+    local orig = corvin.KART.LC.Council.RefreshCouncilRows
+    corvin.KART.LC.Council.RefreshCouncilRows = function(...) repainted = repainted + 1 return orig(...) end
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcButtonLabels = "A;B;C;D;E"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+    corvin.KART.LC.Council.RefreshCouncilRows = orig
+
+    T.truthy(repainted > 0, "an open council panel is repainted when a config is accepted")
+    T.deep_eq(RaidSim.As(corvin, corvin.KART.LC.GetButtonConfig),
+              RaidSim.As(lm, lm.KART.LC.GetButtonConfig),
+        "and it is reading the new labels")
 end
