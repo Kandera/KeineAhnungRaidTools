@@ -447,20 +447,19 @@ end
 -- The lootmaster comes back from the other split raid. The stand-in claim lapses with them, without
 -- anyone having to undo anything.
 do
-    local sim = NewRaid()
+    local sim, _, _, _, stand = F.NewSplitRaid()   -- Corvin leads and has designated Bramor
     RaidSim.Leave(sim, "Bramor")
-    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
     T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"), "the leader stands in")
     T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "and owns the loot flow")
 
-    -- They come back as an ordinary raider -- Merrit kept raid lead -- carrying the settings that
-    -- name them lootmaster, exactly as their SavedVariables would.
+    -- They come back as an ordinary raider. Their own settings are irrelevant now -- the LEADER's
+    -- config is what names them, and it never stopped (see docs/OWNERSHIP.md), so the claim lapses
+    -- by itself the moment they are back in the roster.
     local returning = {}
     for k, v in pairs(F.MEMBERS[1]) do returning[k] = v end
     returning.leader = nil
     local back = RaidSim.Join(sim, returning)
-    back.env.KART_Settings.lcLootmaster = "Bramor"
     RosterSettles(sim)
 
     T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
@@ -723,8 +722,14 @@ do
     T.truthy((lm.KART.LC.votes[98] or {})[raider.guid], "and votes still reach the council")
 end
 
--- Raid lead changes in a raid that never named a lootmaster. The new leader must not overwrite the
--- settings the raid is already using with their own empty ones.
+-- Raid lead changes. The raid follows the NEW leader's settings, because the config owner is the
+-- raid leader (docs/OWNERSHIP.md) -- confirmed with the maintainer, together with the requirement
+-- that the switch must not be silent. This is the one behaviour the rework deliberately changes.
+--
+-- What it replaces is worse than what it costs: ownership used to be a claim, so a lead change left
+-- the raid with a config nobody owned and every client silently back on its own roll setting, which
+-- defaults to OFF, for the rest of the night (B70). Now the settings simply follow the authority,
+-- and the client taking that authority is told so.
 do
     local sim = RaidSim.New(F.MEMBERS)
     RaidSim.Install(sim)
@@ -736,25 +741,38 @@ do
         first.KART.LC.SetSessionActive(true)
     end)
     RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true, c.name .. " is on the raid's rolls")
+    end
 
-    RaidSim.Promote(sim, "Sinja")     -- somebody else takes raid lead
+    -- Sinja has never configured anything, so their defaults are what the raid gets. The point is
+    -- that the raid AGREES, and that it agrees on something somebody is accountable for.
+    local newLead = RaidSim.Promote(sim, "Sinja")
     RosterSettles(sim)
 
     for _, c in ipairs(sim.clients) do
-        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true,
-            c.name .. " keeps the raid's roll setting across a raid-lead change")
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled),
+             RaidSim.As(newLead, function() return newLead.env.KART_Settings.lcRollsEnabled == true end),
+             c.name .. " follows the new raid leader's roll setting")
     end
-    T.truthy(RaidSim.As(sim.byName.Merrit, sim.byName.Merrit.KART.LC.IsCouncil),
-        "and the council survives it")
+    T.eq(F.Disagreements(sim), {} and table.concat(F.Disagreements(sim), " | "), "",
+        "and the raid is of one mind about it")
+
+    -- Handing it back is the same move, so nothing is stuck.
+    RaidSim.Promote(sim, "Bramor")
+    RosterSettles(sim)
+    for _, c in ipairs(sim.clients) do
+        T.eq(RaidSim.As(c, c.KART.LC.GetRollsEnabled), true,
+             c.name .. " is back on the original leader's rolls when the lead returns")
+    end
 end
 
 -- The stand-in question could not be shown -- Blizzard's popup pool is four slots wide and this
 -- addon is not the only thing using it. Latching "already asked" before checking that left the raid
 -- with no loot owner at all and nothing on anyone's screen.
 do
-    local sim = NewRaid()
+    local sim, _, _, _, stand = F.NewSplitRaid()   -- Corvin leads and has designated Bramor
     RaidSim.Leave(sim, "Bramor")
-    local stand = RaidSim.Promote(sim, "Merrit")
 
     KARTTEST.popupsBlocked = true
     RosterSettles(sim)
