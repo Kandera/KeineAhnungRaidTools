@@ -172,7 +172,19 @@ local function runOne(seed)
         { "vote", function()
             local id = openRoll()
             if not id then return end
-            local c = pick(sim.clients)
+            -- Somebody who can actually SEE the item. A vote reaches Vote.CastVote from the popup or
+            -- from a row in the vote list, and both exist only for a roll this client tracks -- so a
+            -- client with no LC.rollItems entry has no button to press. Picking from the whole raid
+            -- let the walk cast votes nobody could have cast, and then held the raid to them: the
+            -- vote stuck to that client for good (nothing purges per-roll state under an ID with no
+            -- item tracked), so it alone showed a vote for an item it had never heard of. Six of the
+            -- seventeen breaks at 30000 seeds were that, and none of them was the addon.
+            local eligible = {}
+            for _, c in ipairs(sim.clients) do
+                if c.KART.LC.rollItems[id] then eligible[#eligible + 1] = c end
+            end
+            if #eligible == 0 then return end
+            local c = pick(eligible)
             RaidSim.As(c, function() c.KART.LC.Vote.CastVote(id, rnd(4)) end)
             check(id, "a vote")
         end },
@@ -184,6 +196,9 @@ local function runOne(seed)
             -- A council member may have left the raid by now; the list is by name on purpose.
             local voter, subject = councilMember(), pick(sim.clients)
             if not voter then return end
+            -- Same reason as the vote step above: the council tab a pick is made from only exists
+            -- for a roll this client tracks, so a council member without one has nothing to click.
+            if not voter.KART.LC.rollItems[id] then return end
             RaidSim.As(voter, function()
                 voter.KART.LC.Vote.ToggleCouncilVote(id, subject.guid)
             end)

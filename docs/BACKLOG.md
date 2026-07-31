@@ -61,6 +61,41 @@ the same moment, a vote button renamed mid-roll, and a rollID handed to a differ
 found a defect within its first few hundred seeds. All are fixed, and the steps now run as part of
 the ordinary soak rather than behind a flag, so the gate covers them from here on.
 
+## B77 — OPEN — a council member who reloads is overruled on their own re-decision, silently
+
+Found by the soak at 30000 seeds, seeds 29229 and 12530. Reproduce with `KART_SOAK_ONLY=29229
+KART_SOAK_DEBUG=29229`.
+
+`LC.assignedWinners` does not survive a reload, and nothing restores it: the state request brings
+the session and the config back, the roll catch-up brings the rolls, and the history catch-up runs
+on JOIN only. So a council member who reloads mid-distribution comes back not knowing which items
+already have a winner.
+
+Measured on seed 29229. Merrit awards roll 200 to Corvin at t=1012. Merrit reloads. At t=1017 Merrit
+awards the same roll to Alric -- and `Trade.AssignWinner` reads `prevWinner = nil`, so it never
+shows the reassign dialog and `Trade.AnnounceResult` sends the reassign flag as **0**. Every peer
+then reads it as a first award clashing with the one it holds, applies the B35 tie-break (neither
+side deliberate, so the smaller winner key wins), and keeps Corvin. Merrit's own local step wrote
+Alric unconditionally.
+
+The result: the one client showing Alric is the person who just decided it, and the rest of the raid
+shows Corvin. Nothing tells them. `Trade.HandleResult` does not run on our own broadcast, no peer
+re-announces, and the clash warning is only printed by clients that *received* two awards -- the
+loser of a tie it never knew it was in stays silent. The lootmaster then hands the item to somebody
+the deciding council member's panel says did not win it.
+
+### Proposed fix, and why it is not applied here
+
+`KART_LootHistory` is persisted and every client logs every award, so `LC.assignedWinners` is
+rebuildable on load for rolls still inside the trade window -- the same bound
+`Trade.RestorePersistedTrades` already uses for the obligations it restores. `AssignWinner` would
+then see the previous winner, show the dialog, and send the flag as 1, which outranks a first award
+everywhere and is the behaviour B35 was written to produce.
+
+Left for the maintainer: it changes what a reload recovers, and it shares a root with B76 -- state a
+reload loses that no catch-up restores, which then makes one client contradict the whole raid. The
+two are worth deciding together rather than patched one at a time on the eve of a raid.
+
 ## B76 — OPEN — a leader who may not publish its config still acts on it
 
 Found by the soak at 8000 seeds, seed 6151. Reproduce with `KART_SOAK_ONLY=6151
