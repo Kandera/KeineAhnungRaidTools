@@ -54,7 +54,7 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
-## B71 — found 2026-07-31 by a new soak step, not yet settled
+## Found 2026-07-31 by three new soak steps
 
 The soak learned three things it could not do before, and each found a defect within its first few
 hundred seeds. Reproduce any of them with `KART_SOAK_NEWSTEPS=1 KART_SOAK_SEEDS=3000`; the steps are
@@ -149,7 +149,7 @@ or leaves bookkeeping on it.
 B29 to B33 share one root: ownership and session state are distributed across clients with no single
 authoritative holder. They want one design pass, not five patches.
 
-## B70 — a raid-lead change during B69's grace leaves the raid with NO config at all — REGRESSION, introduced 2026-07-30
+## B70 — a raid-lead change during B69's grace leaves the raid with NO config at all — DISSOLVED 2026-07-31 by the ownership rework
 
 > **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
 > the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
