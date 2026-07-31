@@ -14,7 +14,7 @@ local LC = KART.LC
 
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
-function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef)
+function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
     -- tester happened to click) and no raid-chat spam.
@@ -34,7 +34,13 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef)
             colorPacked = string.format("%d,%d,%d",
                 math.floor((colorDef.r or 0) * 255), math.floor((colorDef.g or 0) * 255), math.floor((colorDef.b or 0) * 255))
         end
-        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. colorPacked .. ":" .. (reason or ""))
+        -- The reassign flag (B35). It says "I could see a winner for this roll and replaced them on
+        -- purpose", which is the one thing a receiver cannot work out for itself and the only thing
+        -- that separates a confirmed reassignment from two council members clicking at once.
+        --
+        -- Placed BEFORE the reason, which is free text and has to stay the tail of the payload.
+        LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. colorPacked
+            .. ":" .. (deliberate and "1" or "0") .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
             local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KASC.Identity.ResolveDisplayName(winnerKey), link)
@@ -54,7 +60,7 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef)
     end
 end
 
-local function DoAssignWinner(rollID, playerKey, reason, colorDef)
+local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
     -- The roll may have been cleared (session end / tab close) between opening the reassign-confirm
     -- popup and accepting it — bail rather than logging a history entry with a nil item link.
     if not LC.rollItems[rollID] then return end
@@ -72,7 +78,11 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef)
     -- safe. Row OnLeave re-reads this table live, which is why the highlight used to appear as soon
     -- as the mouse left the row — it looked intermittent rather than broken.
     LC.assignedWinners[rollID] = playerKey
-    Trade.AnnounceResult(rollID, playerKey, reason, colorDef)
+    -- Our own rank, for the clash rule in Trade.HandleResult: a deliberate reassignment outranks a
+    -- first award, so the person who confirmed a dialog naming both players is not overruled by
+    -- somebody who never saw a winner at all.
+    LC.assignedDeliberate[rollID] = deliberate or nil
+    Trade.AnnounceResult(rollID, playerKey, reason, colorDef, deliberate)
 
     if LC.IsTestRoll(rollID) then
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
@@ -141,7 +151,9 @@ end
 -- Set once (not per Trade.AssignWinner call, which used to overwrite it): reads the per-show data
 -- table so concurrent reassign popups can't run each other's assignment.
 StaticPopupDialogs["KART_LC_REASSIGN_CONFIRM"].OnAccept = function(_, data) ---@diagnostic disable-line: undefined-global
-    if data then DoAssignWinner(data.rollID, data.playerKey, data.reason, data.colorDef) end
+    -- Reached only through the reassign dialog, so this assignment is deliberate by construction:
+    -- a human read both names and confirmed (B35).
+    if data then DoAssignWinner(data.rollID, data.playerKey, data.reason, data.colorDef, true) end
 end
 
 -- =====================================================================
@@ -348,6 +360,7 @@ function Trade.ClearRollState(rollID)
     LC.rollDeadlines[rollID]   = nil
     LC.rollDurations[rollID]   = nil
     LC.assignedWinners[rollID] = nil
+    LC.assignedDeliberate[rollID] = nil
     LC.votedByMe[rollID]       = nil
     LC.votedNoteByMe[rollID]   = nil
     LC.rollNotInOurBags[rollID]  = nil
@@ -787,10 +800,12 @@ function Trade.HandleResult(payload, senderKey)
     -- before reaching the colour fallback below. That's intentional — running the current KART
     -- version is mandatory across a raid (an outdated sender already gets an "update available"
     -- warning), so cross-version wire compat is deliberately not supported. Do not re-flag.
-    local rollID, winnerKey, itemID, colorPacked = payload:match("^(%d+):([^:]+):(%d*):([^:]*):")
+    local rollID, winnerKey, itemID, colorPacked, deliberate =
+        payload:match("^(%d+):([^:]+):(%d*):([^:]*):([01]):")
     rollID = tonumber(rollID)
     if not rollID or not winnerKey then return end
-    local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:(.*)$") or ""
+    local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:[01]:(.*)$") or ""
+    deliberate = deliberate == "1"
 
     -- Blizzard's rollID can get reused for a genuinely different item before every client has
     -- finished with the first one (see Trade.AnnounceResult) — if we're still tracking a real
@@ -823,6 +838,45 @@ function Trade.HandleResult(payload, senderKey)
     -- lootmaster's pending trade before re-evaluating. A real winner below re-creates both; a
     -- reassignment back to the same player therefore can't stack duplicates. Must run BEFORE the
     -- NONE branch: revoking a winner has to clear their obligations too.
+    -- B35: two council members award the same item at the same moment. Assigning is open to the whole
+    -- council and the double-assign guard reads LC.assignedWinners LOCALLY, so with no message having
+    -- arrived yet both see nil, both broadcast, and each overwrites the other's record on receipt --
+    -- the two of them end up permanently swapped, and every other client keeps whichever message
+    -- happened to reach it last, which is not the same message on every client.
+    --
+    -- Resolved by a rule every client can apply to (what I hold, what just arrived) and reach the
+    -- same answer from, in either order:
+    --   * a DELIBERATE reassignment outranks a first award -- somebody read a dialog naming both
+    --     players and confirmed, and must not be overruled by a client that never saw a winner;
+    --   * otherwise the smaller winner key wins. Arbitrary on purpose: neither council member is more
+    --     right than the other, and what the raid needs is one answer, not the better one.
+    --
+    -- Order-independence is the whole point. min() and "deliberate beats first" are both commutative,
+    -- so a client that receives A then B lands where one that receives B then A does.
+    local held = LC.assignedWinners[rollID]
+    if held and held ~= winnerKey and winnerKey ~= "NONE" then
+        local heldDeliberate = LC.assignedDeliberate[rollID] and true or false
+        local incomingWins
+        if deliberate ~= heldDeliberate then
+            incomingWins = deliberate
+        else
+            incomingWins = winnerKey < held
+        end
+        -- Said out loud on the screens that can act on it: the council decided it and the loot owner
+        -- physically hands the item over. Silence here is how the raid ends up trading to somebody
+        -- the panel in front of them never showed.
+        if not deliberate and not heldDeliberate and (LC.IsCouncil() or LC.IsLootOwner()) then
+            local kept = incomingWins and winnerKey or held
+            print("|cffff0000KART:|r " .. string.format(KART.L.LC_AWARD_CLASH,
+                LC.rollItems[rollID] or "?",
+                KASC.Identity.ResolveDisplayName(held),
+                KASC.Identity.ResolveDisplayName(winnerKey),
+                KASC.Identity.ResolveDisplayName(kept)))
+        end
+        -- Losing the tie changes nothing at all: our obligations still belong to the winner we hold.
+        if not incomingWins then return end
+    end
+
     Trade.ClearWinnerObligations(rollID)
 
     if winnerKey == "NONE" then
@@ -844,6 +898,7 @@ function Trade.HandleResult(payload, senderKey)
     -- both read from LC.assignedWinners. The result broadcast is a peer's only signal (the assigner
     -- already set this in AssignWinner and does not process its own message), so mirror it here.
     LC.assignedWinners[rollID] = winnerKey
+    LC.assignedDeliberate[rollID] = deliberate or nil
     LC.RefreshCouncilIfShown(rollID)
 
     local myKey = (KASC.Identity.ResolvePlayer("player"))

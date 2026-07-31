@@ -378,6 +378,20 @@ function RaidSim.Install(sim)
         for token in pairs(sim.blackholed or {}) do
             if msg:sub(1, #token) == token then return end
         end
+        -- HELD, not dropped: parked until RaidSim.Release, then delivered in send order.
+        --
+        -- Blackhole models a message that is lost; this models one that is merely SLOW, and the two
+        -- are not interchangeable. Two clients acting on the same thing before either has heard from
+        -- the other -- two council members awarding one item at the same moment (B35) -- cannot be
+        -- built out of drops at all: the harness delivers to peers immediately, so the second client
+        -- always sees the first one's decision and takes a different path entirely.
+        for token in pairs(sim.held or {}) do
+            if msg:sub(1, #token) == token then
+                sim.heldQueue[#sim.heldQueue + 1] =
+                    { prefix = prefix, msg = msg, channel = channel, target = target, from = from }
+                return
+            end
+        end
         local sender = from.name .. "-" .. from.realm
         -- The sender's own copy. A whisper only comes back when it was addressed to the sender
         -- themselves; anything sent to the group always does.
@@ -418,6 +432,33 @@ end
 
 function RaidSim.Deliver(sim, token)
     if sim.blackholed then sim.blackholed[token] = nil end
+end
+
+-- Holds every message whose token matches, instead of dropping it. See the wire above for why this
+-- is not the same tool as Blackhole.
+function RaidSim.Hold(sim, token)
+    sim.held = sim.held or {}
+    sim.held[token] = true
+    sim.heldQueue = sim.heldQueue or {}
+end
+
+-- Lets them go, in send order, as the client that sent each one. Returns how many were released.
+function RaidSim.Release(sim, token)
+    if sim.held then sim.held[token] = nil end
+    local queue = sim.heldQueue or {}
+    sim.heldQueue = {}
+    local n = 0
+    for _, m in ipairs(queue) do
+        if m.msg:sub(1, #token) == token then
+            n = n + 1
+            RaidSim.As(m.from, function()
+                _G.C_ChatInfo.SendAddonMessage(m.prefix, m.msg, m.channel, m.target)
+            end)
+        else
+            sim.heldQueue[#sim.heldQueue + 1] = m
+        end
+    end
+    return n
 end
 
 return RaidSim

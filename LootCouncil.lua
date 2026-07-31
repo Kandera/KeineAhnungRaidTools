@@ -1884,6 +1884,7 @@ function LC.ClearAllRolls()
     wipe(LC.rollDeadlines)
     wipe(LC.rollDurations)
     wipe(LC.assignedWinners)
+    wipe(LC.assignedDeliberate)
     wipe(LC.votedByMe)
     wipe(LC.relevanceHandled)
     wipe(LC.hiddenIrrelevant)
@@ -2685,6 +2686,10 @@ LC.votedNoteByMe = LC.votedNoteByMe or {} -- [rollID] = the note text WE typed b
 -- rollID -> shortName of whoever this roll has already been awarded to (guards against accidental
 -- double-assignment when the assign menu is used more than once for the same item).
 LC.assignedWinners = LC.assignedWinners or {}
+-- [rollID] = true when the winner above was set by a DELIBERATE reassignment -- somebody read a
+-- dialog naming both players and confirmed. It is the rank the clash rule in Trade.HandleResult
+-- compares (B35), and the one thing a receiver cannot work out for itself.
+LC.assignedDeliberate = LC.assignedDeliberate or {}
 
 KART.UI:RegisterStaticPopup("KART_LC_REASSIGN_CONFIRM", { ---@diagnostic disable-line: undefined-global
     text = "Already assigned.", -- unconditionally overwritten with KART.L.LC_REASSIGN_CONFIRM_TEXT in LC.Trade.AssignWinner below
