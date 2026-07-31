@@ -50,6 +50,23 @@ lootmaster-clash warning, and `StartTest` missing `equipRequestedRolls`.
 Entries marked **[opt-in]** can only fire while `lcHideIrrelevant` or `lcAutoTransmogVote` is on.
 Both default to off, so an untouched install is not exposed to them.
 
+## Reading this file
+
+**Every heading carries its own status**, so "what is still open?" is one look at the headings and
+never a read of the bodies. Anything without one of these words is open:
+
+| in the heading | means |
+|---|---|
+| `FIXED` | done, with the date and the tests that hold it |
+| `NARROWED` | the entry overstated it; what is left is written down |
+| `DISSOLVED` / `SUPERSEDED` | the situation it describes cannot arise any more, usually because a rule changed underneath it. Kept as history -- each one is a failure this guild paid for, and the rules exist to make them unreachable rather than merely patched |
+| `MITIGATED` | not fixable here; the damage is reduced and the real fix is named |
+| `OPEN, by choice` | measured, understood, and deliberately left -- the reasoning and the options are in the entry |
+| **[opt-in]** | can only fire while one of the two relevance switches is on. Both default to off |
+
+Keep it that way. A status that lives only in the body reads as open to anybody scanning, which is
+exactly how B64 and B70 kept coming back up after they had stopped being real.
+
 ---
 
 # Tier 0 — reopened and unresolved
@@ -973,7 +990,7 @@ legitimately spend that whole budget before sending anything), a client that hea
 and names the item. Only Auto-Pass users are told — they are the ones whose expectation was not met
 and who are now looking at a window they have to answer themselves.
 
-## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow
+## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow — SUPERSEDED 2026-07-31 by the ownership rework
 
 > **Superseded by the ownership rework, 2026-07-31 (see `docs/OWNERSHIP.md`).** Config ownership is
 > the raid leader and nothing else, so the claim these entries arbitrate no longer exists. Kept as
