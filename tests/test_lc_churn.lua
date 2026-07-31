@@ -255,13 +255,18 @@ do
     RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
     T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner), "the stand-in owns the loot flow")
 
+    -- Standing in also CLEARS the designation, because the stand-in is now the config owner and
+    -- their own Lootmaster field is empty (see docs/OWNERSHIP.md). From here the raid names nobody,
+    -- so the role simply follows raid lead and there is nothing left to ask about: the question
+    -- exists to stop somebody being made to force-win items in place of a NAMED person who is gone,
+    -- not to confirm what holding raid lead already means.
     local next_ = RaidSim.Promote(sim, "Corvin")
     RosterSettles(sim)
     T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
         "and stops owning it when the raid lead moves on")
-    T.truthy(RaidSim.As(next_, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
-        "the new raid leader is asked in turn")
-    T.truthy(RaidSim.As(next_, next_.KART.LC.IsLootOwner), "and takes it over")
+    T.truthy(RaidSim.As(next_, next_.KART.LC.IsLootOwner),
+        "while the new raid leader carries it without being asked -- nobody is named any more")
+    T.eq(next_.KART.LC.raidConfig.lootmaster, "", "because the departed name is gone from the config")
 end
 
 -- ===================================================================================
@@ -345,18 +350,21 @@ end
 --
 -- Handing the role on is not silent. Whoever stands in starts force-winning every council-eligible
 -- item into their own bags, and that is not a side effect to mention in a chat line afterwards.
+-- Modelled the way the raid is actually run now (docs/OWNERSHIP.md): the raid leader designates
+-- somebody ELSE as lootmaster, and keeps raid lead throughout. When that designee ports out it is
+-- the leader's own config that still names them, so the leader is the one asked to stand in.
 do
-    local sim = NewRaid()
+    local sim, _, _, _, leader = F.NewSplitRaid()   -- Corvin leads and has designated Bramor
     RaidSim.Leave(sim, "Bramor")
-    local stand = RaidSim.Promote(sim, "Merrit")
     RosterSettles(sim)
 
-    T.truthy(not RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+    T.truthy(not RaidSim.As(leader, leader.KART.LC.IsLootOwner),
         "nobody takes over loot distribution without being asked first (B29)")
-    T.truthy(RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
-        "the new raid leader is asked whether to take it over")
-    T.truthy(RaidSim.As(stand, stand.KART.LC.IsLootOwner),
+    T.truthy(RaidSim.As(leader, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "the raid leader is asked whether to take it over")
+    T.truthy(RaidSim.As(leader, leader.KART.LC.IsLootOwner),
         "and owns the loot flow once they accept")
+    local stand = leader
 
     -- The whole point: the raid can keep distributing.
     Drop(sim, 92, F.GLOVES)
@@ -426,8 +434,7 @@ end
 -- bags still hold the loot, and moving ownership on every connection hiccup would leave the stand-in
 -- owing items somebody else is carrying.
 do
-    local sim, lm = NewRaid()
-    local stand = RaidSim.Promote(sim, "Merrit")
+    local sim, lm, _, _, stand = F.NewSplitRaid()   -- Corvin leads and has designated Bramor
     lm.member.offline = true
     RosterSettles(sim)
 
