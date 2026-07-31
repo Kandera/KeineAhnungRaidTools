@@ -105,3 +105,55 @@ do
     local _, tabChecks = panel:gsub("if not tab:IsMouseOver%(%) then", "")
     T.eq(tabChecks, 1, "and the button's OnLeave defers to the tab's")
 end
+
+-- The tab's x is LOCAL, "No Winner" is raid-wide -- and that is deliberate --------------------------
+-- Decided by the maintainer after seeing this measured. The two buttons sit next to each other and
+-- leave the same empty panel behind, so the difference is easy to forget and worth pinning down:
+--
+--   * "No Winner" broadcasts LC_RESULT ... NONE. Every client drops the item -- card, vote row,
+--     trade obligation, history entry. The raid is finished with it.
+--   * the tab's x sends nothing. It means "off my screen", and everybody else keeps the card.
+--
+-- Leaving it local is the choice: closing a tab drops the roll entirely, and a mis-click that took
+-- the item away from the whole raid could not be undone. End Round is the tool that clears
+-- everything for everyone, and it is what ends the round.
+--
+-- What this test exists to stop is somebody quietly making the x broadcast -- or quietly making
+-- "No Winner" local -- because the two looked like they should match.
+do
+    local sim, owner, council = F.NewRaid()
+    local corvin, alric = sim.byName.Corvin, sim.byName.Alric
+    for _, id in ipairs({ 130, 131, 132, 133 }) do F.Drop(sim, id, F.GLOVES) end
+
+    RaidSim.As(owner, function()
+        owner.KART.LC.Council.CloseCouncilTab(130)
+        owner.KART.LC.Council.CloseCouncilTab(131)
+    end)
+    for _, id in ipairs({ 132, 133 }) do
+        RaidSim.As(owner, function()
+            owner.KART.LC.Trade.AnnounceResult(id, "NONE")
+            owner.KART.LH.RemoveHistoryForRoll(id, owner.KART.LC.rollItems[id])
+            owner.KART.LC.Trade.ClearWinnerObligations(id)
+            owner.KART.LC.Council.CloseCouncilTab(id)
+        end)
+    end
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(#owner.KART.LC.councilTabs, 0, "the panel of whoever pressed them is empty")
+    T.deep_eq(council.KART.LC.councilTabs, { 130, 131 },
+        "and the rest of the council still holds exactly the two that were dismissed locally")
+    T.deep_eq(corvin.KART.LC.councilTabs, { 130, 131 }, "the same two, on every council member")
+    T.eq(#alric.KART.LC.voteListRolls, 2, "and the raiders still have those two to answer")
+
+    -- Neither button touches the session. Only Close Session does.
+    for _, c in ipairs(sim.clients) do
+        T.eq(c.KART.LC.sessionActive, true, c.name .. " is still in the session")
+    end
+
+    -- End Round is what finishes it, and it reaches everyone.
+    RaidSim.As(owner, owner.KART.LC.EndRound)
+    KARTTEST.AdvanceTime(0)
+    T.eq(#council.KART.LC.councilTabs, 0, "End Round clears what the local dismissals left behind")
+    T.eq(#alric.KART.LC.voteListRolls, 0, "including the raiders' open vote rows")
+    T.eq(council.KART.LC.sessionActive, true, "and still leaves the session running")
+end

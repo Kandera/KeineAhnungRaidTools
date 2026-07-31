@@ -54,7 +54,44 @@ Both default to off, so an untouched install is not exposed to them.
 
 # Tier 0 — reopened and unresolved
 
-**Standing measurement, 2026-07-31:** 0 of 8000 soak runs disagree. Everything in Tier 0 is closed.
+## B79 — OPEN, by choice — the tab's x and "No Winner" look alike and do different things
+
+Raised by the maintainer on 2026-08-01, after seeing the sequence measured. Not a defect: both
+buttons do what they were written to do. The problem is that you cannot tell from the screen which
+one you pressed.
+
+Measured, closing two cards with the tab's x and the other two with "No Winner":
+
+```
+whoever pressed them   0 cards, panel closed
+every other council    2 cards still open  -- the two dismissed with the x
+the raiders            2 vote windows still open
+next boss              1 card for them, 3 for the council
+```
+
+"No Winner" broadcasts `LC_RESULT ... NONE` and the whole raid drops the item. The x sends nothing --
+it means "off my screen". Both leave the same empty panel behind, so the person who pressed them has
+no way to know half the raid is still looking at the last boss. Neither ends the session; only Close
+Session does. `LC.EndRound` is what clears everything for everyone, and it does (asserted in
+`tests/test_lc_chrome.lua`, along with the difference itself, so nobody quietly makes the two match).
+
+**Left as it is for now, deliberately** -- in the maintainer's words, unsure how involved changing it
+is without breaking something, but it could be better. Recorded so the next pass starts from the
+measurement rather than re-deriving it.
+
+The three shapes considered, with what each costs:
+
+* **The x clears for everyone.** Same reach as "No Winner", minus the history entry and the trade
+  obligation. Costs: a mis-click takes the item away from the whole raid and there is no undo -- the
+  reason the button was moved outside the tab in the first place (B27, issue #9).
+* **The x stays local but says so.** When the last card is dismissed locally while others still hold
+  some, offer "2 items are still open for the council -- End Round?". Nothing silently diverges, and
+  no new way to lose an item.
+* **Drop the x.** One meaning per button: "No Winner" for one item, End Round for the round.
+
+
+**Standing measurement, 2026-07-31:** 0 of 30000 soak runs disagree. Every defect in Tier 0 is closed;
+what is left there is B79, which is a design question rather than a bug.
 `KART_SOAK_SEEDS=30000` is the deeper run worth doing before a raid night; `KART_SOAK_ONLY=<seed>`
 runs a single one, which is the whole debugger.
 
