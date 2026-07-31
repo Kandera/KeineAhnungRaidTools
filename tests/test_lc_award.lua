@@ -192,3 +192,55 @@ do
         end
     end
 end
+
+-- B61/B52: a config that arrives AFTER the item did ------------------------------------------------
+-- Council membership was evaluated once, at roll start, by the four sites that open the panel. A
+-- client whose config lands afterwards -- a late retry, a state-request reply -- is council from that
+-- moment on, but had no tab for the items already on the table and could not assign them. The panel
+-- also kept rendering votes under the previous label set (B52), on the one screen that decides who
+-- gets the item.
+do
+    local sim, lm = F.NewRaid()
+    local corvin = sim.byName.Corvin
+
+    -- A client that has not received the config yet: no council list, so not council.
+    wipe(corvin.KART.LC.raidConfig)
+    corvin.KART.LC.CouncilNamesTable = {}
+    T.truthy(not RaidSim.As(corvin, corvin.KART.LC.IsCouncil), "not council while the config is missing")
+
+    F.Drop(sim, 70, F.GLOVES)
+    T.truthy(corvin.KART.LC.rollItems[70], "but the item still reaches them")
+    T.eq(#corvin.KART.LC.councilTabs, 0, "with no council tab, because they are not council yet")
+
+    local deadlineBefore = corvin.KART.LC.rollDeadlines[70]
+    KARTTEST.AdvanceTime(5)
+
+    -- The config finally lands.
+    RaidSim.As(lm, function() lm.KART.LC.BroadcastRaidConfig() end)
+    KARTTEST.AdvanceTime(0)
+
+    T.truthy(RaidSim.As(corvin, corvin.KART.LC.IsCouncil), "the config makes them council")
+    T.eq(#corvin.KART.LC.councilTabs, 1, "and the item already on the table gets its tab")
+    T.eq(corvin.KART.LC.councilTabs[1], 70, "the right one")
+
+    -- The remaining time is carried across, not restarted: the council decides when the shortest
+    -- clock runs out, and a late arrival must not be looking at a longer vote than everybody else.
+    T.truthy(deadlineBefore and corvin.KART.LC.rollDeadlines[70] <= deadlineBefore + 0.001,
+        "with the vote it has left, not a fresh one")
+end
+
+do
+    -- A roll whose vote is already over is not put back on the table.
+    local sim, lm = F.NewRaid()
+    local corvin = sim.byName.Corvin
+    wipe(corvin.KART.LC.raidConfig)
+    corvin.KART.LC.CouncilNamesTable = {}
+    F.Drop(sim, 71, F.GLOVES)
+    KARTTEST.AdvanceTime((KART_Settings and KART_Settings.lcVoteSeconds or 20) + 30)
+
+    RaidSim.As(lm, function() lm.KART.LC.BroadcastRaidConfig() end)
+    KARTTEST.AdvanceTime(0)
+    for _, rid in ipairs(corvin.KART.LC.councilTabs) do
+        T.truthy(rid ~= 71, "an expired roll is not reopened as a tab")
+    end
+end

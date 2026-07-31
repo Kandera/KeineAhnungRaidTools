@@ -1214,6 +1214,44 @@ local function RefreshCouncilPanelIfOpen()
     end
 end
 
+-- Everything that has to happen once a config is finally in force, wherever it came from.
+--
+-- Two of these were only on the retry path, which is how they came to be filed separately:
+--   * B52 -- LC.HandleConfig's own accept branch never repainted an open council panel, so a council
+--     member kept reading votes under the previous label set until some unrelated event refreshed
+--     the rows. On the one screen that decides who gets the item.
+--   * B61 -- council membership was evaluated once, at roll start, by the four sites that open the
+--     panel. A client whose config lands afterwards IS council from that moment, but had no tab for
+--     the items already on the table and could not assign them.
+function LC.OnConfigAccepted()
+    LC.CancelPendingConfig()
+    LC.configRejectWarned = false
+    if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
+    RefreshCouncilPanelIfOpen()
+    LC.CatchUpCouncilPanel()
+end
+
+-- Opens a tab for every roll already on the table, for a client that has just become council.
+--
+-- The remaining time is carried across rather than restarted: Council.ShowCouncilPanel writes
+-- LC.rollDeadlines from the seconds it is given, so passing the default would hand a late arrival a
+-- longer vote than everybody else is looking at -- and the council decides when the shortest one
+-- runs out. A roll whose deadline has already passed is skipped; it is not on the table any more.
+function LC.CatchUpCouncilPanel()
+    if not (LC.sessionActive and LC.IsCouncil()) then return end
+    if not (KART.LC.Council and KART.LC.Council.ShowCouncilPanel) then return end
+    local ids = {}
+    for rollID in pairs(LC.rollItems or {}) do ids[#ids + 1] = rollID end
+    table.sort(ids)   -- deterministic tab order, not pairs order
+    for _, rollID in ipairs(ids) do
+        local deadline = LC.rollDeadlines and LC.rollDeadlines[rollID]
+        local left = deadline and (deadline - GetTime()) or nil
+        if left == nil or left > 0 then
+            KART.LC.Council.ShowCouncilPanel(rollID, left or (KART_Settings.lcVoteSeconds or 20))
+        end
+    end
+end
+
 -- Re-runs TryAcceptConfig for the one stored payload, if any. Called by its own retry timer and by
 -- the roster-change hook (LC.RetryPendingConfigThrottled) — both are ways the lootmaster-resolution
 -- failure can clear up. Re-running the WHOLE predicate (not just the lootmaster check) matters here:
@@ -1230,10 +1268,7 @@ function LC.RetryPendingConfig()
 
     local accepted, reason = TryAcceptConfig(pending.payload, pending.senderKey)
     if accepted then
-        LC.CancelPendingConfig()
-        LC.configRejectWarned = false
-        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
-        RefreshCouncilPanelIfOpen()
+        LC.OnConfigAccepted()
         return
     end
 
@@ -1275,9 +1310,7 @@ end
 function LC.HandleConfig(payload, senderKey)
     local accepted, reason = TryAcceptConfig(payload, senderKey)
     if accepted then
-        LC.CancelPendingConfig()
-        LC.configRejectWarned = false
-        if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
+        LC.OnConfigAccepted()
         return
     end
 
