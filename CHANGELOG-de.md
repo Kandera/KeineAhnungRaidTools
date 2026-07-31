@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [3.2.2] - 2026-07-29
 ### Behoben
+- **Wenn zwei Council-Mitglieder dasselbe Item gleichzeitig vergeben, ist sich der Raid trotzdem einig, wer gewonnen hat** — und es wird angesagt.
 - **Ein Lootmaster-Name, den KART niemandem zuordnen kann, wird gemeldet statt still übergangen.**
 - **Der Raidlead besitzt jetzt die raidweiten Loot-Council-Einstellungen**, und das Lootmaster-Feld sagt, wer den Loot verteilt.
 - **Ein Lootmaster, dessen Nickname niemand lesen kann, kostet den Raid nicht mehr seine Einstellungen.**

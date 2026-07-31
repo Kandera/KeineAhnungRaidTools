@@ -837,7 +837,25 @@ worth widening casually. Its own task.
 in that gap is dropped entirely, with no owed entry and no history. A raid produces roster changes
 constantly, so the window is short, but it is real. Not fixed here.
 
-## B35 — two council members can award the same item at the same time
+## B35 — two council members can award the same item at the same time — FIXED 2026-07-31
+
+Resolved by a rule every client applies to (what I hold, what just arrived) and reaches the same
+answer from in either order: a DELIBERATE reassignment outranks a first award, and otherwise the
+smaller winner key wins. Arbitrary on purpose -- neither council member is more right than the other,
+and what the raid needs is one answer, not the better one. Both halves are commutative, which is what
+makes the arrival order irrelevant; the test asserts exactly that rather than asserting a winner.
+
+`LC_RESULT` carries a reassign flag for it. That is the one thing a receiver cannot work out for
+itself, and it is what separates a confirmed reassignment from two people clicking at once.
+
+**Harness:** `RaidSim.Hold`/`Release` had to be added -- this could not be built before. `Blackhole`
+models a message that is LOST; peers were delivered to immediately, so the second assigner always saw
+the first one's decision and took the reassign path, which is the opposite of the case.
+
+Not independently reachable, and kept as hygiene rather than covered: clearing the rank in
+`Trade.ClearRollState`. Every write path sets the rank alongside the winner, so a stale rank is
+overwritten before anything reads it.
+
 
 Assigning is deliberately open to the whole council, and `Trade.AssignWinner`'s only double-assign
 guard reads `LC.assignedWinners[rollID]` locally. Addon messages never echo to their sender, so two

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.2.2] - 2026-07-29
 ### Fixed
+- **Two council members awarding the same item at once no longer leaves the raid disagreeing about who won**, and says so.
 - **A Lootmaster name KART cannot place is reported instead of quietly ignored.**
 - **The raid leader now owns the raid-wide Loot Council settings**, and the Lootmaster field says who hands out the loot.
 - **A lootmaster whose nickname nobody can read no longer costs the raid its settings.**
