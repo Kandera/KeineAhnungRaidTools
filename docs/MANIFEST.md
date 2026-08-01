@@ -195,8 +195,32 @@ measured. Do not let the raid test cost a fourth.
 
 ## Standing result
 
-| run | date | result |
-|---|---|---|
-| _(none yet)_ | | |
+| run | version | date | scope | result |
+|---|---|---|---|---|
+| three-man `/kart add` | 3.2.0 | 2026-07-31 | C1, C2, C5, C7, C11 | clean, no complaint |
+| _(a real raid)_ | | | | |
 
 Fill this in. A Manifest with no recorded run is a list of intentions.
+
+### What the three-man run does and does not say
+
+Reported by the maintainer: 3.2.0, three people, items added with `/kart add`, everything behaved.
+That is real evidence and it is written down as such -- but it is worth being exact about its
+reach, because a Manifest that counts partial evidence as a pass is worse than an empty one.
+
+**Covered.** C1 and C2 (the session and the settings reached all three), C5 (everybody saw the item
+and their answers arrived), C7 (the award converged and the holder owed it), C11 (End Round).
+
+**Not reachable that way, whatever the outcome looked like:**
+
+* **C4** -- `/kart add` has no Blizzard roll behind it at all, which is the whole point of the
+  command. Force-winning is exactly what it skips.
+* **C6** and **C12** -- both need real drops: a mount, a pet, a housing item, a BoE and something
+  below the threshold for one, a set token for the other.
+* **C3**, **C9**, **C10** -- nobody joined, nobody left, lead did not move.
+* **C8** -- nobody reloaded. This is the one that carries forward least: B81 landed after 3.2.0 and
+  changed what a reload does, so a clean reload on 3.2.0 says nothing about the build shipping now.
+
+**And it was 3.2.0.** 3.2.1, 3.2.2 and everything since sit between that evening and today,
+including both relevance switches coming back and the whole snapshot-across-reload mechanism. The
+row stays because it is true; it does not count toward the ten.
