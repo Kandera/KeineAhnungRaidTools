@@ -402,6 +402,41 @@ listed by name: a genuinely forgotten default cannot hide among them.
 tests/test_lc_version.lua already covers to the corners (two-part versions, build suffixes, and never
 calling a NEWER peer outdated).
 
+## B101 — NO DEFECT 2026-08-01 — the three UI files, and eight harness gaps behind them
+
+Bug runs eleven to thirteen, covering the last addon files with no test at all:
+`LootCouncilSettings.lua`, `MainFrame.lua`, `RaidleadBar.lua`. No defect in any of them.
+
+What the 49 new assertions hold, all of which already worked:
+
+* **the raid-wide settings box** -- a peer sees the RAID's council list, lootmaster (by name, not by
+  key) and vote buttons while their own settings sit untouched underneath (B20); the borrowed fields
+  are read-only; the lootmaster field, and only that one, becomes editable the moment its owner is
+  gone, which is the raid's only way back to a loot flow; and the role label tells owner, plain
+  member and "you named a third party and the whole box is inert" apart.
+* **the main window** -- one tab panel visible at a time, every search entry knowing both its tab and
+  its widget, and the reset asking first, changing nothing until answered, and DEEP-copying the
+  defaults rather than handing its own nested tables out.
+* **the raidlead bar** -- auto-hide keyed off being alone rather than off the setting, the saved
+  position restored rather than the hard-coded default, the combat guard leaving the frame alone
+  until combat ends, and the override bindings given back when the bar hides. That last one is the
+  only thing in the file that can break something outside it: override bindings outrank the player's
+  own keys for the whole session.
+
+**Eight harness gaps, which is the real result of these three runs.** Each had made a whole class of
+behaviour unreachable, and one of them hung the suite outright:
+
+| gap | what it hid |
+|---|---|
+| `CreateFrame` discarded the parent; the catch-all returned the frame itself | `GetParent` looped forever -- the settings search walks that chain |
+| `EnableMouse` / `EnableKeyboard` unstubbed | "is this box editable" answered truthy for everything |
+| `SetPoint` discarded anchors, `GetPoint` returned a frame | every save-and-restore-position path |
+| `InCombatLockdown` hard-coded false | every combat branch in the addon |
+| `SetOverrideBindingClick` / `ClearOverrideBindings` absent | whether a hidden bar frees its keys |
+| `GetTop`/`GetBottom`/`GetLeft`/`GetRight` returned a frame | now nil, which is what the game answers for an unanchored region -- and what every caller already guards for |
+| `GetVerticalScroll`, `GetFrameLevel` returned a frame | arithmetic on both |
+| `hooksecurefunc`, `ReloadUI`, `date` missing entirely | the settings panel's hooks, the two reload paths, the whole JSON export |
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
