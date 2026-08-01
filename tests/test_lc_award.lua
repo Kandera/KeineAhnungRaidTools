@@ -273,3 +273,63 @@ do
               RaidSim.As(lm, lm.KART.LC.GetButtonConfig),
         "and it is reading the new labels")
 end
+
+-- ===================================================================================
+-- The reminder windows reopen with what is owed NOW
+-- ===================================================================================
+-- Found in the bug run for B51, which fixed the same defect in `/kart lc`: both reminder windows
+-- only HIDE on their "x", and every removal path deliberately refuses to reopen a closed one
+-- (Trade.RefreshTradeReminderIfShown). So a row ticked off, traded away or timed out while the
+-- window was shut stayed in the frame's row pool, and `/kart trade` put that picture back on screen
+-- -- an item the lootmaster had already handed over, still listed as owed.
+local function ShownRows(frame)
+    if not frame then return 0 end
+    local n = 0
+    for _, row in ipairs(frame.rows or {}) do if row:IsShown() then n = n + 1 end end
+    return n
+end
+
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 70, F.GLOVES)
+    F.Drop(sim, 71, F.WEAPON)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(70, sim.byName.Alric.guid, "BIS", nil)
+        council.KART.LC.Trade.AssignWinner(71, sim.byName.Sinja.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(#lm.KART.LC.pendingTrades, 2, "the lootmaster owes two items")
+    T.eq(ShownRows(lm.KART.LC.tradeReminderFrame), 2, "and both are listed")
+
+    -- The lootmaster closes the list, then hands one of them over.
+    lm.KART.LC.tradeReminderFrame:Hide()
+    RaidSim.As(lm, function() lm.KART.LC.Trade.RemovePendingTrade(70) end)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "one obligation is settled")
+    T.eq(ShownRows(lm.KART.LC.tradeReminderFrame), 2,
+        "but the closed window still holds the layout it last drew")
+
+    RaidSim.As(lm, function() lm.KART.LC.ReopenTradeReminder() end)
+    T.truthy(lm.KART.LC.tradeReminderFrame:IsShown(), "/kart trade brings the list back")
+    T.eq(ShownRows(lm.KART.LC.tradeReminderFrame), 1, "showing what is still owed, not what was")
+end
+
+do
+    -- The winner's side of the same window, and the same command shape (/kart owed).
+    local sim, _, council = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 72, F.GLOVES)
+    F.Drop(sim, 73, F.WEAPON)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(72, alric.guid, "BIS", nil)
+        council.KART.LC.Trade.AssignWinner(73, alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(ShownRows(alric.KART.LC.owedReminderFrame), 2, "the winner is owed two items")
+
+    alric.KART.LC.owedReminderFrame:Hide()
+    RaidSim.As(alric, function() alric.KART.LC.Trade.RemoveOwedItem(72) end)
+    RaidSim.As(alric, function() alric.KART.LC.ReopenOwedReminder() end)
+    T.eq(ShownRows(alric.KART.LC.owedReminderFrame), 1,
+        "/kart owed lists only what has not arrived yet")
+end

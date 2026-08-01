@@ -1375,6 +1375,21 @@ function LC.ReopenTrackedWindow()
     end
 end
 
+-- What `/kart trade` and `/kart owed` do. Same shape and same reason as LC.ReopenTrackedWindow
+-- above: both reminder windows only HIDE on their "x", and every removal path deliberately refuses
+-- to reopen a closed one (see Trade.RefreshTradeReminderIfShown). So an obligation ticked off,
+-- traded away or timed out while the window was shut stayed in the frame's row pool, and a plain
+-- :Show() put that picture back on screen -- an item the lootmaster had already handed over, still
+-- listed as owed. The refresh below rebuilds the rows, sizes the window and shows it itself, and
+-- correctly leaves it hidden when nothing is owed any more.
+function LC.ReopenTradeReminder()
+    LC.Trade.RefreshTradeReminder()
+end
+
+function LC.ReopenOwedReminder()
+    LC.Trade.RefreshOwedReminder()
+end
+
 -- Opens a tab for every roll already on the table, for a client that has just become council.
 --
 -- The remaining time is carried across rather than restarted: Council.ShowCouncilPanel writes

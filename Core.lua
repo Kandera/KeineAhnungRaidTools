@@ -776,16 +776,12 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
     elseif cmd == "lc" then
         if KART.LC and KART.LC.ReopenTrackedWindow then KART.LC.ReopenTrackedWindow() end
     elseif cmd == "trade" then
-        if KART.LC and KART.LC.tradeReminderFrame and #KART.LC.pendingTrades > 0 then
-            KART.LC.tradeReminderFrame:Show()
-        end
+        if KART.LC and KART.LC.ReopenTradeReminder then KART.LC.ReopenTradeReminder() end
     elseif cmd == "owed" then
         -- Winner-side counterpart to /kart trade. Both reminder windows' "x" only hides them, and
         -- nothing re-opens a closed one except winning another item (removals deliberately don't —
         -- see Trade.RefreshOwedReminderIfShown), so this is the only way back to the list.
-        if KART.LC and KART.LC.owedReminderFrame and #(KART.LC.owedToMe or {}) > 0 then
-            KART.LC.owedReminderFrame:Show()
-        end
+        if KART.LC and KART.LC.ReopenOwedReminder then KART.LC.ReopenOwedReminder() end
     elseif cmd == "showall" then
         -- Reveals every currently active roll in the vote-list window, whichever of the two personal
         -- settings hid it: KART_Settings.lcVotedItemDisplay == "hide" (already voted on) or

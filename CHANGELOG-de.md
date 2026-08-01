@@ -14,6 +14,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Beide Einstellungen wirken jetzt auch auf die Items, die schon vor dir liegen** — nicht erst ab dem nächsten Boss.
 - **Items laufen auch ab, während dein Vote-Fenster leer ist** — statt später mit aktiven Vote-Buttons zurückzukommen.
 - **`/kart lc` öffnet das Fenster mit dem, was gerade läuft** — nicht mit dem Bild von vorhin.
+- **`/kart trade` und `/kart owed` zeigen, was jetzt offen ist** — nicht, was beim Schließen offen war.
 - **Die Council-Mitgliederliste sagt, wer wirklich im Council ist.** Der Raidleiter ist nicht automatisch drin — trag dich ein, wenn du mitentscheidest.
 - **Die Items auf dem Tisch überstehen einen Reload.** Wer den Loot verteilt, hat sie vorher komplett verloren — alle anderen, sobald der Vote-Timer abgelaufen war.
 
