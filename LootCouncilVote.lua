@@ -1020,11 +1020,20 @@ end
 --- via whisper instead of clicking the vote popup. Purely a local display correction: unlike
 --- AssignWinner, this never announces anything, never touches loot history, and never triggers
 --- the reassignment-confirmation dialog. Any note the player already attached is kept as-is.
+--- Stamped with the item and the button set it was chosen against, exactly like the two writers
+--- above it (B102). This was the one vote writer that stored neither, and both readers treat a
+--- missing stamp as "cannot tell, so show it" -- which is right for an older client's vote and wrong
+--- here, because this vote was made on THIS screen a moment ago:
+---   * no item stamp meant the correction survived Blizzard reusing the rollID for the next drop
+---     and was rendered as an answer to an item that raider never saw (B46);
+---   * no button fingerprint meant a later label edit re-captioned it, so the row stated a vote
+---     nobody had made (B43, B45).
 function Vote.SetPlayerVote(rollID, playerKey, buttonIdx)
     LC.votes[rollID] = LC.votes[rollID] or {}
     local prev = LC.votes[rollID][playerKey]
     local note = (prev and prev.note) or ""
-    LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note}
+    LC.votes[rollID][playerKey] = {idx = buttonIdx, note = note,
+                                   count = LC.ButtonFingerprint(), item = TrackedItemID(rollID)}
 
     LC.RefreshCouncilIfShown(rollID)
 end
