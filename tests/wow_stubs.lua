@@ -317,9 +317,15 @@ function KARTTEST.FireEvent(event, ...)
     end
 end
 
-function _G.CreateFrame(_, name, _, _)
+function _G.CreateFrame(_, name, parent, _)
     local f = setmetatable({}, frameMeta)
     if name then _G[name] = f end
+    -- The parent was discarded, and the catch-all answers every unknown method with the frame
+    -- itself -- so GetParent returned the frame and any walk up the chain looped forever.
+    -- KART.BuildSearchIndex does exactly that walk, to find which tab a label lives on, so the
+    -- settings search could not be exercised at all until this existed.
+    function f:GetParent() return parent end
+    function f:SetParent(p) parent = p end
     local owner = KARTTEST.frameOwner
 
     local scripts = {}
@@ -347,6 +353,21 @@ function _G.CreateFrame(_, name, _, _)
     function f:GetWidth() return 0 end
     function f:GetHeight() return 0 end
 
+    -- Screen position: nil, because this harness has no layout and cannot answer where a widget
+    -- sits. nil is the truthful answer rather than a convenient zero -- the game returns it too,
+    -- for an unanchored or hidden region, which is why every caller here already guards for it
+    -- (`if top and scrollTop then`). A zero would sail past those guards into arithmetic that
+    -- silently means nothing.
+    function f:GetTop() return nil end
+    function f:GetBottom() return nil end
+    function f:GetLeft() return nil end
+    function f:GetRight() return nil end
+
+    -- Frame level IS a number and gets arithmetic done to it (`parent:GetFrameLevel() + 10`).
+    local frameLevel = 1
+    function f:SetFrameLevel(v) frameLevel = tonumber(v) or frameLevel end
+    function f:GetFrameLevel() return frameLevel end
+
     -- Frame strata is real state rather than a no-op. KAUI moves every window it owns down below
     -- Blizzard's DIALOG stratum while one of the addon's own confirm dialogs is up, and back
     -- afterwards (B55) -- "did it actually move, and did it come back" is the whole assertion, and
@@ -366,6 +387,13 @@ function _G.CreateFrame(_, name, _, _)
     -- raid-wide settings box makes its fields read-only while somebody else's config is in force,
     -- and "is this box editable" is the only way to check that. Without these the catch-all answered
     -- something truthy for everything and a test asking the question measured the stub.
+    -- Scroll offset, as a number rather than the catch-all's frame: KART.UpdateScrollRange clamps
+    -- the current offset against the new range, and comparing a frame to a number is an error that
+    -- reads nothing like "this getter was never stubbed".
+    local vScroll = 0
+    function f:SetVerticalScroll(value) vScroll = tonumber(value) or 0 end
+    function f:GetVerticalScroll() return vScroll end
+
     local mouseEnabled, keyboardEnabled = true, true
     function f:EnableMouse(on) mouseEnabled = on ~= false end
     function f:IsMouseEnabled() return mouseEnabled end
@@ -721,6 +749,11 @@ function _G.hooksecurefunc(a, b, c)
         return r
     end
 end
+-- Counted, not performed. Two paths end in a reload rather than doing the work themselves -- the
+-- settings reset and a profile that changes the language -- and "did it reload" is the only way to
+-- tell those apart from a path that quietly did nothing.
+KARTTEST.reloads = 0
+function _G.ReloadUI() KARTTEST.reloads = KARTTEST.reloads + 1 end
 function _G.IsShiftKeyDown() return false end
 function _G.IsControlKeyDown() return false end
 function _G.PlaySound() end
