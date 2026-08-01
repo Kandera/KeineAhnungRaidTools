@@ -688,3 +688,20 @@ do
     KARTTEST.AdvanceTime(10)
     T.eq(lm.KART.LC.sessionActive, true, "B81: with the session coming back the normal way")
 end
+
+-- A reload with nothing owed --------------------------------------------------------------------
+-- Trade.RestorePersistedTrades opens the trade-reminder window when there are obligations to show.
+-- A mutation run found the "are there any" check survives being switched off, which is a window
+-- listing nothing at all, on every reload, for a raid that owes nobody anything. The window is only
+-- ever closed by hand, so it would sit there for the evening.
+do
+    local sim, lm = F.NewRaid()
+    T.eq(#lm.KART.LC.pendingTrades, 0, "nobody is owed anything")
+    T.eq(#lm.KART.LC.owedToMe, 0, "and nothing is owed to us")
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    T.truthy(not (lm.KART.LC.tradeReminderFrame and lm.KART.LC.tradeReminderFrame:IsShown()),
+        "a reload with no obligations opens no trade reminder")
+    T.truthy(not (lm.KART.LC.owedReminderFrame and lm.KART.LC.owedReminderFrame:IsShown()),
+        "and no owed reminder either")
+end
