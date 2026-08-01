@@ -30,7 +30,17 @@ LC.Relevance.DecideAutoResponse = DecideAutoResponse
 
 -- Rolls this file has already answered, so a refresh (which runs several times a second during
 -- active looting) cannot vote twice or re-hide a row the player brought back with /kart showall.
+--
+-- The value is the SETTINGS the answer was given under, not a bare true (B50). As a permanent latch
+-- this table made both switches inert for anything already on screen: a player who ticked the second
+-- one during a boss saw nothing happen, and the Pass their first setting had already broadcast to
+-- the council stood. A stamp keeps the anti-recursion guarantee exactly as strong -- within one
+-- refresh the settings cannot change -- while letting a genuine change be reconsidered.
 LC.relevanceHandled = LC.relevanceHandled or {}
+
+local function SettingsStamp(hide, mog)
+    return (hide and "H" or "-") .. (mog and "M" or "-")
+end
 
 -- [rollID] = true for a row hidden because the player cannot use the item. Read by
 -- Vote.GetVisibleRolls next to the lcVotedItemDisplay == "hide" case.
@@ -215,11 +225,15 @@ function LC.Relevance.ApplyToPendingRolls()
     local mog  = KART_Settings and KART_Settings.lcAutoTransmogVote
     if not (hide or mog) then return end
 
+    local stamp = SettingsStamp(hide, mog)
+
     for _, rollID in ipairs(LC.voteListRolls) do
         -- Test rolls are exempt: /kart test exists to show what the window looks like, and a filter
-        -- that empties it defeats that. Already-voted and already-handled rolls are left alone so a
-        -- refresh cannot vote twice.
-        if not LC.IsTestRoll(rollID) and not LC.votedByMe[rollID] and not LC.relevanceHandled[rollID] then
+        -- that empties it defeats that. A vote the PLAYER cast is final and ends the matter for that
+        -- roll; one this file cast is not, and is reconsidered only when the settings behind it
+        -- actually changed -- which is what keeps a refresh from voting twice (B50).
+        local playerVoted = LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID]
+        if not LC.IsTestRoll(rollID) and not playerVoted and LC.relevanceHandled[rollID] ~= stamp then
             local itemLink = LC.rollItems[rollID]
             -- Nothing is decidable without a link; leave the roll pending and try again on the
             -- refresh that ResolveRollItemLink fires once it has one.
@@ -235,15 +249,14 @@ function LC.Relevance.ApplyToPendingRolls()
                     if idx then
                         -- Marked handled BEFORE the vote, and that order is load-bearing: CastVote
                         -- ends in an unconditional RefreshVoteListRows, which calls this function
-                        -- again from inside itself. Without the guard already set, that re-entry
+                        -- again from inside itself. Without the stamp already set, that re-entry
                         -- would answer the same roll again and recurse until the stack gives out.
-                        LC.relevanceHandled[rollID] = true
-                        if answer == "pass" then LC.hiddenIrrelevant[rollID] = true end
-                        -- Set after CastVote, not before: CastVote itself clears autoVotedByMe (the
-                        -- reset that lets a real click through next time), so setting it any earlier
-                        -- would just have it wiped again by the call that's supposed to install it.
-                        LC.Vote.CastVote(rollID, idx, nil)
-                        LC.autoVotedByMe[rollID] = true
+                        LC.relevanceHandled[rollID] = stamp
+                        -- Assigned per answer, not only set: on a re-answer under changed settings
+                        -- the previous run's Pass may have hidden this row, and a Transmog vote is
+                        -- not a reason to keep it hidden.
+                        LC.hiddenIrrelevant[rollID] = (answer == "pass") or nil
+                        LC.Vote.CastVote(rollID, idx, nil, true)
                     end
                 end
             end

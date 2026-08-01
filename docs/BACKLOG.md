@@ -1260,7 +1260,7 @@ The window hides when `GetVisibleRolls` comes back empty, and `OnHide` cancels t
 only thing calling `Vote.PruneExpiredRolls` during a batch. The rolls never expire and never reach
 `Trade.ClearRollState`; `/kart showall` later reopens long-dead rolls with live vote buttons.
 
-## B50 — `relevanceHandled` ignores the settings that produced the answer **[opt-in]**
+## B50 — `relevanceHandled` ignores the settings that produced the answer — FIXED 2026-08-01
 
 The latch is permanent per roll, so ticking the other switch mid-batch does nothing for rolls already
 answered — the setting appears inert and the broadcast Pass stands.

@@ -316,20 +316,40 @@ function Vote.RefreshVoteListRowsIfShown()
     end
 end
 
+-- Both relevance switches change which of the LIVE rolls the player is shown and which get answered
+-- on their behalf, so flipping one has to reach a window that is currently hidden — the hiding is
+-- what emptied it in the first place, and ...IfShown alone made the switch read as dead exactly when
+-- it mattered. The rule that guard enforces (a display-only toggle must never pop the window over
+-- stale rolls) still stands and is not what this is: since B49 the expiry sweep no longer depends on
+-- the window being open, so a roll in LC.voteListRolls is a live roll, not a leftover.
+function Vote.RefreshAfterRelevanceChange()
+    if #LC.voteListRolls > 0 then
+        Vote.RefreshVoteListRows()
+    else
+        Vote.RefreshVoteListRowsIfShown()
+    end
+end
+
 -- Shared click path for both layouts' vote buttons. Test rolls stay local (no group to
 -- broadcast to — see the original comment in the Spacious handler); real rolls broadcast.
-function Vote.CastVote(rollID, buttonIdx, noteBox)
+--
+-- isAuto marks a vote LC.Relevance is casting on the player's behalf rather than a click. It decides
+-- two things below, and both used to be handled by the caller afterwards — which was wrong as soon
+-- as LC.Relevance could answer a roll a second time (B50), because the "this is an override" branch
+-- fired for its own re-answer and undid the hide flag it had just set.
+function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
     -- A vote the player clicked is final. One that LC.Relevance cast on their behalf is not: the
     -- relevance check can be wrong, and the player's own correction has to win over it. HandleVote
     -- stores per sender and overwrites, so the council simply sees the corrected vote -- no protocol
     -- change and no double counting.
     if LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID] then return end
-    -- A stored vote at this point can only be an automatic one being overridden. Drop the hide flag
-    -- with it: the row was hidden because the item looked useless to this player, the click just
-    -- said otherwise, and leaving the flag set would make the row vanish again the moment
-    -- /kart showall lapses (a new batch, or the last roll expiring).
-    if LC.votedByMe[rollID] then LC.hiddenIrrelevant[rollID] = nil end
-    LC.autoVotedByMe[rollID] = nil
+    -- A stored vote at this point can only be an automatic one, and this is the PLAYER overriding it.
+    -- Drop the hide flag with it: the row was hidden because the item looked useless to them, the
+    -- click just said otherwise, and leaving the flag set would make the row vanish again the moment
+    -- /kart showall lapses (a new batch, or the last roll expiring). LC.Relevance re-answering its
+    -- own vote is not an override and sets the flag itself, per answer.
+    if LC.votedByMe[rollID] and not isAuto then LC.hiddenIrrelevant[rollID] = nil end
+    LC.autoVotedByMe[rollID] = isAuto or nil
     LC.votedByMe[rollID] = buttonIdx
     -- Strip pipes at input, the same way LootCouncilSettings strips colons from the synced fields:
     -- this note is rendered raw into every council member's tooltip, and "|c"/"|H"/"|T" escapes would

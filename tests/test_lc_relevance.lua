@@ -286,3 +286,73 @@ do
     KARTTEST.AdvanceTime(sinja.env.KART_Settings.lcVoteSeconds + 5)
     T.is_nil(sinja.KART.LC.pruneTicker, "B49: and it stops itself once the batch is over")
 end
+
+-- B50: a switch flipped mid-batch acts on the items that are on screen NOW ---------------------------
+-- LC.relevanceHandled was a permanent per-roll latch: once this file had answered a roll, no later
+-- change of the settings that produced that answer could reach it. Ticking the second switch during a
+-- boss therefore did nothing at all -- the switch read as broken, and the Pass already broadcast to
+-- the council stood.
+do
+    local sim = F.NewRaid()
+    local sinja, merrit = sim.byName.Sinja, sim.byName.Merrit   -- PRIEST; and a council member
+    sinja.env.KART_Settings.lcAutoTransmogVote = false          -- hide only, to begin with
+    F.Drop(sim, 560, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(sinja.KART.LC.votedByMe[560], sinja.KART.LC.GetPassButtonIndex(),
+        "B50: hiding alone answers with the configured Pass")
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[560], "B50: and takes the row off screen")
+
+    -- The player ticks "vote Transmog for appearances I still need" while the item is still up.
+    sinja.env.KART_Settings.lcAutoTransmogVote = true
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.RefreshAfterRelevanceChange() end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(sinja.KART.LC.votedByMe[560], sinja.KART.LC.GetTransmogButtonIndex(),
+        "B50: the roll already answered is answered again under the new settings")
+    T.is_nil(sinja.KART.LC.hiddenIrrelevant[560],
+        "B50: and it is no longer hidden, because the answer is no longer a Pass")
+    T.truthy(IsVisible(sinja, 560), "B50: so the item is back in front of the player")
+    T.eq((merrit.KART.LC.votes[560] or {})[sinja.guid].idx, sinja.KART.LC.GetTransmogButtonIndex(),
+        "B50: and the council has the corrected vote, not the Pass")
+end
+
+do
+    -- The other direction: switching one OFF has to re-answer too, and the answer it falls back to
+    -- carries its own hide flag. This is where CastVote's "the player is overriding me" branch used
+    -- to fire for LC.Relevance's own re-answer and undo the flag set two lines earlier.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja           -- PRIEST, hide AND transmog on
+    F.Drop(sim, 562, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(1)
+    T.eq(sinja.KART.LC.votedByMe[562], sinja.KART.LC.GetTransmogButtonIndex(),
+        "B50: the appearance is wanted, so Transmog outranks hiding")
+    T.truthy(IsVisible(sinja, 562), "B50: and the row is on screen")
+
+    sinja.env.KART_Settings.lcAutoTransmogVote = false
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.RefreshAfterRelevanceChange() end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(sinja.KART.LC.votedByMe[562], sinja.KART.LC.GetPassButtonIndex(),
+        "B50: without it, hiding answers the same roll with the configured Pass")
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[562], "B50: and the row is hidden, as that setting means")
+    T.truthy(not IsVisible(sinja, 562), "B50: so it is off screen again")
+end
+
+do
+    -- A vote the PLAYER cast is never revisited, whatever they do with the switches afterwards.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja
+    sinja.env.KART_Settings.lcHideIrrelevant   = false
+    sinja.env.KART_Settings.lcAutoTransmogVote = false
+    F.Drop(sim, 561, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(1)
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(561, 1, nil) end)
+
+    sinja.env.KART_Settings.lcHideIrrelevant   = true
+    sinja.env.KART_Settings.lcAutoTransmogVote = true
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.RefreshAfterRelevanceChange() end)
+
+    T.eq(sinja.KART.LC.votedByMe[561], 1, "B50: the player's own vote stands")
+    T.is_nil(sinja.KART.LC.hiddenIrrelevant[561], "B50: and their answer is not hidden away from them")
+end
