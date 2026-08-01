@@ -916,6 +916,17 @@ _G.MenuUtil = {
         return root
     end,
 }
+-- Clicks a widget the way the game delivers a click: a frame with the mouse disabled never receives
+-- one, so calling its OnClick directly is a stronger act than a player is capable of. Returns
+-- whether the click landed.
+function KARTTEST.Click(widget, button)
+    if not widget or (widget.IsMouseEnabled and not widget:IsMouseEnabled()) then return false end
+    local onClick = widget.GetScript and widget:GetScript("OnClick")
+    if not onClick then return false end
+    onClick(widget, button or "LeftButton")
+    return true
+end
+
 -- Finds a button by label in the most recent menu, descending into submenus, so a test names the
 -- entry it means rather than a path.
 local function FindMenuEntry(node, label)

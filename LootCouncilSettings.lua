@@ -127,6 +127,15 @@ function LC.RefreshRaidWideFields()
             if foreign then eb:ClearFocus() end
         end
     end
+    -- The same rule, for the two controls in this box that are not EditBoxes (B103). Both write
+    -- into the viewer's OWN settings on click and then call LC.BroadcastRaidConfig, which refuses
+    -- to send for a non-owner -- so the click threw away a setting of theirs, did nothing for the
+    -- raid, and was wiped off the screen by the next RefreshRaidWideFields with nothing to show for
+    -- it. The damage lands later, when that client becomes the config owner and the raid runs on a
+    -- minimum quality nobody chose.
+    for _, widget in ipairs({ KART.LC.BtnMinQuality, KART.LC.CbRollsEnabled }) do
+        if widget then widget:EnableMouse(not foreign) end
+    end
     -- The Lootmaster field is the exception: it stays editable when the configured owner is gone,
     -- because naming a replacement is the only way the raid gets its loot flow back (see ownerGone).
     local lockLootmaster = foreign and not ownerGone

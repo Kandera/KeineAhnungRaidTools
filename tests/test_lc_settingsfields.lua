@@ -101,6 +101,49 @@ do
 end
 
 do
+    -- The other two raid-wide controls (B103). The read-only rule above is written for EditBoxes,
+    -- and the box holds two things that are not: the minimum-quality menu button and the rolls
+    -- checkbox. Both write straight into the viewer's OWN settings, and the broadcast that follows
+    -- refuses to send because they do not own the config -- so the click discards a setting of
+    -- theirs, changes nothing for the raid, and the display snaps back on the next roster change
+    -- with no sign anything happened. It surfaces later, when this client becomes the config owner
+    -- and the raid quietly runs on the value they never meant to set.
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcMinQuality = 4
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    local alric = sim.byName.Alric
+    alric.env.KART_Settings.lcMinQuality = 3
+    alric.env.KART_Settings.lcRollsEnabled = false
+    local LC = WithPanel(alric)
+    Refresh(alric)
+
+    T.truthy(not LC.BtnMinQuality:IsMouseEnabled(),
+        "the borrowed minimum-quality button does not take clicks")
+    T.truthy(not LC.CbRollsEnabled:IsMouseEnabled(),
+        "and neither does the borrowed rolls checkbox")
+
+    -- ...and clicking it does not open the menu at all, so the viewer's own value survives.
+    -- KARTTEST.Click, not the OnClick script directly: a frame with the mouse disabled never
+    -- receives a click in the game, and calling its handler is a stronger act than a player can
+    -- perform -- which would make this assert about a path that does not exist.
+    T.truthy(not RaidSim.As(alric, function() return KARTTEST.Click(LC.BtnMinQuality) end),
+        "a click on it does not reach the menu")
+    T.eq(alric.env.KART_Settings.lcMinQuality, 3,
+        "so their own minimum quality is not overwritten by a value they cannot set for the raid")
+
+    -- The owner's own box is untouched by all of this: their controls are the raid's.
+    local LCowner = WithPanel(lm)
+    Refresh(lm)
+    T.truthy(LCowner.BtnMinQuality:IsMouseEnabled(), "the config owner can still set it")
+    T.truthy(LCowner.CbRollsEnabled:IsMouseEnabled(), "and still toggle rolls")
+end
+
+do
     -- The role label is the one line that tells somebody why the box below is doing nothing.
     local sim, lm = F.NewRaid()
     local LC = WithPanel(lm)
