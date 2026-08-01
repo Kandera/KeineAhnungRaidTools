@@ -525,6 +525,7 @@ function LH.CreateWindow()
         btnReasonFilter.text:SetText(KART.L.LH_FILTER_ALL_REASONS)
         LH.Refresh()
     end)
+    f.btnReset = btnReset
 
     -- Column headers
     local hDate = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

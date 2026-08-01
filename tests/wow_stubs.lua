@@ -882,7 +882,75 @@ function KARTTEST.AcceptPopup(which)
     end
     return false
 end
-_G.MenuUtil = { CreateContextMenu = function() end }
+-- Context menus. This was an empty stub, which meant the initializer -- the function that builds
+-- every entry the menu will contain -- was never called: eight menus across the addon, and not one
+-- of their bodies had ever run. The addon uses exactly two of Blizzard's root-description methods,
+-- so answering them honestly is cheap.
+--
+-- Entries are recorded in the order they are created, which is the order they appear on screen, and
+-- a button's function is kept so a test can click it.
+-- CreateButton WITHOUT a function is Blizzard's way of declaring a submenu: the returned descriptor
+-- takes further entries of its own. LootCouncilPanel's "change vote" menu is built that way, so a
+-- descriptor that could not do it would fail the moment the menu opened.
+local function NewMenuNode()
+    local node = { entries = {} }
+    function node:CreateTitle(text)
+        table.insert(self.entries, { kind = "title", text = text })
+    end
+    function node:CreateButton(text, fn)
+        local entry = NewMenuNode()
+        entry.kind, entry.text, entry.fn = "button", text, fn
+        -- Greyed-out entries are still shown; KARTTEST.ClickMenu refuses them the way the game does.
+        function entry:SetEnabled(on) self.disabled = not on end
+        table.insert(self.entries, entry)
+        return entry
+    end
+    return node
+end
+
+_G.MenuUtil = {
+    CreateContextMenu = function(owner, initializer)
+        local root = NewMenuNode()
+        initializer(owner, root)
+        KARTTEST.lastMenu = root
+        return root
+    end,
+}
+-- Finds a button by label in the most recent menu, descending into submenus, so a test names the
+-- entry it means rather than a path.
+local function FindMenuEntry(node, label)
+    for _, entry in ipairs((node or {}).entries or {}) do
+        if entry.kind == "button" and entry.text == label then return entry end
+        local nested = FindMenuEntry(entry, label)
+        if nested then return nested end
+    end
+    return nil
+end
+-- Clicks that entry the way a player would. Returns false if the menu has no such entry, or if it
+-- is greyed out -- so a test can assert on an option being absent or inert as well as on what it
+-- does.
+function KARTTEST.ClickMenu(label)
+    local entry = FindMenuEntry(KARTTEST.lastMenu, label)
+    if not entry or entry.disabled then return false end
+    if entry.fn then entry.fn() end
+    return true
+end
+-- The labels of the most recent menu's top-level buttons, titles excluded.
+function KARTTEST.MenuLabels()
+    local out = {}
+    for _, entry in ipairs((KARTTEST.lastMenu or {}).entries or {}) do
+        if entry.kind == "button" then out[#out + 1] = entry.text end
+    end
+    return out
+end
+-- The labels inside the submenu hanging off that entry.
+function KARTTEST.SubmenuLabels(label)
+    local out = {}
+    for _, entry in ipairs((FindMenuEntry(KARTTEST.lastMenu, label) or {}).entries or {}) do
+        if entry.kind == "button" then out[#out + 1] = entry.text end
+    end
+    return out
+end
 _G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = 1, 2
 _G.CLASS_ICON_TEXCOORDS = {}
 _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
