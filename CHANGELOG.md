@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raiders who have left the guild are listed by name in the history filter**, not as a raw ID.
 - **Removing everyone not on a boss's roster now asks first**, and says how many people it is about to remove.
 - **A damaged settings profile no longer takes your settings with it.** It is refused instead of loaded halfway.
+- **A vote you corrected by hand disappears with its item**, instead of showing up as an answer to the next drop.
+- **The raid's minimum quality and roll setting cannot be clicked while somebody else's settings apply.** Clicking them used to overwrite your own.
 
 ## [3.2.2] - 2026-08-01
 ### Fixed

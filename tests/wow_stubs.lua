@@ -967,7 +967,7 @@ local function NewMenuNode()
         local entry = NewMenuNode()
         entry.kind, entry.text, entry.fn = "button", text, fn
         -- Greyed-out entries are still shown; KARTTEST.ClickMenu refuses them the way the game does.
-        function entry:SetEnabled(on) self.disabled = not on end
+        function entry.SetEnabled(_, on) entry.disabled = not on end
         table.insert(self.entries, entry)
         return entry
     end

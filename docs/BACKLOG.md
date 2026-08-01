@@ -437,6 +437,76 @@ behaviour unreachable, and one of them hung the suite outright:
 | `GetVerticalScroll`, `GetFrameLevel` returned a frame | arithmetic on both |
 | `hooksecurefunc`, `ReloadUI`, `date` missing entirely | the settings panel's hooks, the two reload paths, the whole JSON export |
 
+## B102 — FIXED 2026-08-01 — a corrected vote outlived the item it was made about
+
+Fourteenth bug run, which stopped asking which FILE had no test and started asking which LINES had
+never run. Coverage put the loot-history window at 41% and BuffChecker at 20%, and the first thing it
+turned up was not in either of them: `MenuUtil.CreateContextMenu` was an empty stub, so the
+initializer that builds a menu's entries had never run anywhere in the suite. Eight menus, none of
+them ever opened.
+
+One of the eight is the right-click menu on a council row, and its "change vote" entry calls
+`Vote.SetPlayerVote` -- the way a lootmaster records an answer somebody called out on voice. That was
+the only one of the addon's three vote writers that stored neither the item the vote was about nor
+the button set its index was chosen from. Both readers treat a missing stamp as "cannot tell, so show
+it", which is the right answer for a vote from an older client and the wrong one for a vote typed on
+this screen a moment ago:
+
+* Blizzard hands the same rollID to a genuinely different drop within seconds on trash. The addon
+  deliberately does not wipe votes on reuse -- the reader decides per vote, from the stamp (B46). An
+  unstamped correction passed that test and was drawn as that raider's answer to an item they had
+  never been shown, and counted in the "x of y answered" badge on it.
+* Rename the vote buttons mid-item and the correction was re-captioned rather than marked unreadable,
+  which is B43 and B45 through the one door they had not been closed on.
+
+Both stamps are set now, so the three writers agree. Five assertions turn red with the line reverted.
+
+## B103 — FIXED 2026-08-01 — the borrowed minimum-quality and rolls controls took clicks
+
+Found in the same run, opening the remaining seven menus. The read-only rule for a foreign raid
+config (B20) is written for EditBoxes -- `EnableMouse`/`EnableKeyboard` over a list of them -- and the
+raid-wide box holds two controls that are not: the minimum-quality menu button and the rolls
+checkbox.
+
+Both write into the VIEWER'S OWN settings on click and then call `LC.BroadcastRaidConfig`, which
+refuses to send for a non-owner. So a council member glancing at the raid's minimum quality and
+clicking it discarded their own stored value, changed nothing for the raid, and had the display
+snapped back by the next `RefreshRaidWideFields` with nothing to show that anything had happened. It
+surfaces much later, when that client becomes the config owner -- a lootmaster leaving is enough --
+and the raid runs on a minimum quality nobody chose.
+
+Measured rather than argued: the test set the viewer's own quality to 3, clicked "2" in the borrowed
+menu, and read 1 back out of their settings.
+
+Both are covered by the same lock now. `KARTTEST.Click` was added alongside it, because the assertion
+has to be about a path a player can reach: a frame with the mouse disabled never receives a click in
+the game, so calling its `OnClick` script directly is a stronger act than a player is capable of.
+
+## B104 — NO DEFECT 2026-08-01 — what the fourteenth run turned up that was the harness
+
+The run's other four areas were clean, and each one cost a harness gap to reach. Recorded because the
+last of them invalidated assertions that had been passing:
+
+| gap | what it hid |
+|---|---|
+| `MenuUtil.CreateContextMenu` an empty stub | all eight context menus -- their entries were never built, let alone clicked |
+| `GetCursorInfo`, `ClickTradeButton` absent | the two lines that actually put an item into the trade window |
+| `C_UnitAuras`, `GetReadyCheckStatus` absent | the whole buff-check render, which is the screen a raid leader reads before the pull (20% -> 69%) |
+| **`CreateTexture`/`CreateFontString` answered with the FRAME** | every region a frame owned was the same object |
+
+The last one is the one to remember. A buff-check row's twelve indicators were all one texture
+writing over each other, and `label:Hide()` hid the window the label sat on. Every assertion about a
+region was really an assertion about its parent -- and the proof is a mutation: switching the aura
+scan's entire name-match branch off changed nothing until regions became distinct, and turns the
+suite red now.
+
+What was checked and holds: the history window's paging, both its filter menus and the reset button;
+the trade fill, for one item, two items to one person, two copies of one item, somebody else's item,
+a busy cursor and a slot the player filled by hand; the three main-window menus, including a profile
+list that is sorted and an empty one that is inert; the aura scan by spell id, by name in either
+locale, the class gate that stops a report naming people for a buff nobody present can cast, and a
+private aura not taking the rest of that player's auras down with it.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
