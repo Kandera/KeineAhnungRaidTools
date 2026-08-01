@@ -292,3 +292,35 @@ do
     T.truthy(not HasName(lm.KART.MissingBuffs.flask, "Alric"),
         "and the aura after it is still read")
 end
+
+do
+    -- The name-match path, which is the only one carrying a localisation trap: Skyfury is matched
+    -- by the German AND the English name, because a raid runs both clients and the buff is read off
+    -- whatever the VIEWER's client calls it.
+    --
+    -- Checked on the indicator rather than through /Report: a shaman buff is only reported when a
+    -- shaman is present, and the fixture has none -- which is exactly what makes the two states
+    -- distinguishable here. The indicator's alpha is the render's own answer: 1.0 for a buff that
+    -- is there, 0.1 for a column nobody in the raid can fill.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    local SKY = 6            -- KART.BuffData index of the shaman buff
+    local ALRIC_ROW = 4      -- raid4, the fixture's fourth member
+
+    KARTTEST.auras = {}
+    Render(lm)
+    local ind = lm.KART.BuffCheckFrame.rows[ALRIC_ROW].indicators[SKY]
+    T.eq(ind:GetAlpha(), 0.1, "with no shaman present the column is dimmed out entirely")
+
+    KARTTEST.auras = { [alric.unit] = { { name = "Himmelszorn", spellId = 0 } } }
+    Render(lm)
+    T.eq(ind:GetAlpha(), 1.0, "a buff matched by its German name reads as present")
+
+    KARTTEST.auras = { [alric.unit] = { { name = "Skyfury", spellId = 0 } } }
+    Render(lm)
+    T.eq(ind:GetAlpha(), 1.0, "and so does the English one, on a client running either language")
+
+    KARTTEST.auras = { [alric.unit] = { { name = "Skyfury Totem is not it", spellId = 0 } } }
+    Render(lm)
+    T.eq(ind:GetAlpha(), 1.0, "matching is by substring, as the spell names carry suffixes")
+end

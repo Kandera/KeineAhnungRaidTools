@@ -523,6 +523,17 @@ function _G.CreateFrame(_, name, parent, _)
     function f:SetBackdropBorderColor(...) edge = { ... }; return f end
     function f:GetBackdropBorderColor() if edge then return unpack(edge) end end
 
+    -- Textures and font strings are their OWN regions. The catch-all answered both with the frame
+    -- itself, so every texture and label a frame owned was the same object: a row's twelve buff
+    -- indicators all wrote over one another, and hiding a label hid the window it sat on. Anything
+    -- asserting on a region was really asserting on its parent.
+    --
+    -- Built from CreateFrame so they answer the same getters (alpha, shown, text, colour) -- the
+    -- game's regions are not frames, but every method the addon calls on one is a method a frame
+    -- here already has, and a second near-identical factory would drift.
+    function f:CreateTexture() return _G.CreateFrame("Frame", nil, f) end
+    function f:CreateFontString() return _G.CreateFrame("Frame", nil, f) end
+
     if name == "KART_GearScanTooltip" then InstallScanTooltip(f) end
 
     return f
@@ -650,7 +661,14 @@ local function itemLoader(id)
             local it = KARTTEST.items[id]
             if it and it.cached ~= false then return cb() end
             KARTTEST.pendingItemLoads[id] = KARTTEST.pendingItemLoads[id] or {}
-            table.insert(KARTTEST.pendingItemLoads[id], cb)
+            -- Who asked is remembered with the callback, the same way the timer stub does it: this
+            -- runs later, from KARTTEST.CacheItem, and a callback that refreshes a window can send
+            -- addon messages -- which belong to that client and to nobody else.
+            table.insert(KARTTEST.pendingItemLoads[id], {
+                fn = cb,
+                owner = KARTTEST.frameOwner,
+                ctx = KARTTEST.CaptureContext and KARTTEST.CaptureContext() or nil,
+            })
         end,
         GetItemID = function() return id end,
     }
@@ -669,7 +687,14 @@ _G.Item.CreateFromItemLink = function(a, b) if a == _G.Item then return rawCreat
 function KARTTEST.CacheItem(id)
     local it = KARTTEST.items[id]
     if it then it.cached = true end
-    for _, cb in ipairs(KARTTEST.pendingItemLoads[id] or {}) do cb() end
+    local prevOwner = KARTTEST.frameOwner
+    for _, pending in ipairs(KARTTEST.pendingItemLoads[id] or {}) do
+        KARTTEST.frameOwner = pending.owner
+        local prevCtx = pending.ctx and KARTTEST.RestoreContext(pending.ctx)
+        pending.fn()
+        if prevCtx then KARTTEST.RestoreContext(prevCtx) end
+    end
+    KARTTEST.frameOwner = prevOwner
     KARTTEST.pendingItemLoads[id] = nil
 end
 
