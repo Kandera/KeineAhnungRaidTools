@@ -139,6 +139,65 @@ better trade.
 So this is not a defect in the code, and nothing about it goes into `docs/OWNERSHIP.md` — the
 document already says the council list is the raid leader's to set.
 
+## B83 — FIXED 2026-08-01 — a relevance switch reopened a window holding only test rolls
+
+Found in the bug run for B36-B54, and introduced by B50's own fix. Widening the switch callbacks to
+reach a hidden window is right for LIVE rolls -- the hiding is what emptied it -- but it also reached
+a window holding nothing but `/kart test` items. LC.Relevance exempts test rolls outright, so neither
+switch can change anything about them, and putting the window back over them is exactly what
+`Vote.RefreshVoteListRowsIfShown` exists to prevent.
+
+## B84 — FIXED 2026-08-01 — re-answering an item re-broadcast an unchanged vote
+
+Also from the bug run, also in B50's fix. Flipping a switch mid-boss reconsiders every item on screen
+at once, and most come out the same way -- so one toggle sent the council a burst of LC_VOTE messages
+saying what it already knew. That is the shape Blizzard's chat throttle swallows, and it takes
+somebody else's message with it. The stamp and the hide flag are still updated every time; only the
+vote is now conditional on having changed.
+
+## B85 — FIXED 2026-08-01 — restored items never gave up on themselves
+
+From the bug run, in B81's fix. A snapshot is only worth anything while the raid it belonged to is
+still running, and the client cannot know that at load -- the answer arrives from the raid. If it
+never does, the items are last night's, and the restored tabs would sit in the panel into the next
+evening: the "stale tabs after next boss" failure again. They now wait a minute for the raid to
+confirm and drop themselves if it does not. The wait is long on purpose -- a reloaded loot owner is
+the slowest client to hear back, because their session has to be handed to them rather than confirmed.
+
+## B86 — FIXED 2026-08-01 — /kart trade and /kart owed showed a frozen list
+
+The same defect as B51, in the two sibling commands, which were not looked at when it was fixed. Both
+reminder windows only HIDE on their "x", and every removal path deliberately refuses to reopen a
+closed one -- so an obligation ticked off, traded away or timed out while the window was shut stayed
+in the row pool, and the command put that picture straight back on screen.
+
+## B87 — FIXED 2026-08-01 — a restored item stayed a bare item string
+
+From the bug run, in B81's fix. A snapshot carries whatever `LC.rollItems` held, and what
+`LC.HandleStart` leaves behind until the client has cached an item is a bare `item:12345` string. A
+reload is when that cache is coldest, and nothing would ever look at the roll again -- the resolver
+runs from the two start handlers and a restored roll goes through neither. So it would have rendered
+as `item:249293` for the whole distribution: GitHub #12, #13 and #16 all over again.
+
+## B88 — FIXED 2026-08-01 — clearing the loot history did not keep it cleared
+
+Reported by the maintainer: "I clear the history and another player syncs it straight back, so at the
+start of a season I still have last tier's items in the list."
+
+`LH.RequestHistorySync` asks for everything newer than the newest entry it holds, and after a wipe
+that is zero -- which reads as "send me everything". Switching the sync off is not the alternative,
+and the report says why: the whole reason it exists is that items decided while you were absent still
+reach the list you export.
+
+A clear now draws a line (`KART_LootHistoryClearedAt`) and the request asks from there. The
+since-timestamp already means "I have everything up to here", so no protocol changes and no peer
+needs to know about it. Both sides are needed: the request side means nothing is put on the wire at
+all, and the receive side covers the race it cannot -- a reply burst spans about eight seconds, so a
+clear can land in the middle of one.
+
+Not covered, and nothing asks for it: deleting a SINGLE entry. There is no such control -- the window
+offers a full clear, and a revoked award is removed on every client at once by the same broadcast.
+
 ## B82 — FIXED 2026-07-31 — a window could be dragged off the screen
 
 Reported from the live v3.2.2-beta1 test, 2026-07-31. Dragging a KART window past the edge of the
