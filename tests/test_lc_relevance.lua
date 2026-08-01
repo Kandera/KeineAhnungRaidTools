@@ -357,6 +357,25 @@ do
     T.is_nil(sinja.KART.LC.hiddenIrrelevant[561], "B50: and their answer is not hidden away from them")
 end
 
+do
+    -- A TEST roll is not a reason to pop the window back open. /kart test exists to show what the
+    -- window looks like, LC.Relevance.ApplyToPendingRolls exempts test rolls outright, and the rule
+    -- Vote.RefreshVoteListRowsIfShown enforces is that a display-only toggle must never put the
+    -- window over rolls the player did not ask to see. Widening that guard for the relevance
+    -- switches (B50) must not widen it for this.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja
+    F.RaidSim.As(sinja, function() sinja.KART.LC.StartTest("looter") end)
+    T.truthy(sinja.KART.LC.voteListFrame and sinja.KART.LC.voteListFrame:IsShown(),
+        "the test window is up")
+    sinja.KART.LC.voteListFrame:Hide()
+
+    sinja.env.KART_Settings.lcHideIrrelevant = false
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.RefreshAfterRelevanceChange() end)
+    T.truthy(not sinja.KART.LC.voteListFrame:IsShown(),
+        "a relevance switch does not reopen a window holding nothing but test rolls")
+end
+
 -- B51: /kart lc reopens the window, not the picture it was showing when it closed ------------------
 -- That command called :Show() on the frame. A frame's row pool holds whatever was last drawn, and
 -- both these windows only HIDE on their "x" -- so what came back could be arbitrarily old: rows for

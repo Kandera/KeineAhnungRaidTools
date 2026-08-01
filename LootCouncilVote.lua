@@ -322,12 +322,19 @@ end
 -- it mattered. The rule that guard enforces (a display-only toggle must never pop the window over
 -- stale rolls) still stands and is not what this is: since B49 the expiry sweep no longer depends on
 -- the window being open, so a roll in LC.voteListRolls is a live roll, not a leftover.
+--
+-- Test rolls do not count. LC.Relevance.ApplyToPendingRolls exempts them outright -- /kart test
+-- exists to show what the window looks like, and a filter that empties it defeats that -- so
+-- flipping a relevance switch cannot change anything about them, and putting the window back over
+-- them is the exact thing the guard above exists to prevent.
 function Vote.RefreshAfterRelevanceChange()
-    if #LC.voteListRolls > 0 then
-        Vote.RefreshVoteListRows()
-    else
-        Vote.RefreshVoteListRowsIfShown()
+    for _, rollID in ipairs(LC.voteListRolls) do
+        if not LC.IsTestRoll(rollID) then
+            Vote.RefreshVoteListRows()
+            return
+        end
     end
+    Vote.RefreshVoteListRowsIfShown()
 end
 
 -- Shared click path for both layouts' vote buttons. Test rolls stay local (no group to
