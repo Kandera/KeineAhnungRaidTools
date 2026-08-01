@@ -727,6 +727,44 @@ receiver stores whatever arrives and the history window renders it.
 
 All three guards turn the suite red when removed, one per guard.
 
+## B113 — FIXED 2026-08-01 — the catch-up's two unheld guards, one with lasting damage
+
+From the same sweep as B112. Both could be removed without the suite noticing.
+
+**A timestamp from the future.** `time()` is each client's OS clock. An entry dated years ahead is
+not just a wrong row: `LH.RequestHistorySync` asks for everything newer than the newest entry it
+holds, so that date becomes the watermark and every later request asks for entries newer than a date
+nobody reaches. Catch-up is dead on that client for good, and nothing says so -- one raider with a
+badly set clock is enough. Held on both sides now: years ahead refused, two minutes of ordinary drift
+accepted (drift between two raiders must not cost an award), and the client demonstrably still asks
+from a reachable date afterwards.
+
+**How much one answer may be.** Without the entry cap a peer holding a long history puts one whisper
+per entry on the wire because one raider walked in.
+
+Three assertions of mine were fixed with it, and the mistake is the one this whole stretch keeps
+finding: `RaidSim.Sent` returns log ENTRIES, so `#msg` measured an array with no elements -- always 0,
+always under the cap, an assertion that cannot fail. Caught only because another test in the same
+file crashed on the same confusion. `test_lc_churn` and `test_lc_soak` had it right already.
+
+## B114 — NO DEFECT 2026-08-02 — the third 255-byte site, and a mutant that marks unreachable code
+
+The equipped-item exchange (`REQ_EQUIP` / `EQUIP`) is the addon's third message-length site, after
+the raid config (B107) and the history catch-up (B112) -- and the only one that resolves it by
+DROPPING the message rather than shortening it. That is correct here and would be wrong there: a
+missing comparison renders as "no data", while a missing award is gone from the record.
+
+Two guards had no test and now do: the per-slot answer cooldown (the panel refreshes on every
+incoming vote, and without it every raider answers every refresh), and the compact-link fallback --
+measured, a max-crafted link is 309 bytes and the reply still goes out in 57, because
+`KAUtil.GetItemString` keeps the item id and drops the bonus list the length came from.
+
+**The drop itself cannot be tested, and that is the finding.** With any real item link the fallback
+always produces something short, so `if #msg > 255 then return end` is unreachable. Its mutant
+survives for that reason -- not because a test is missing. Worth writing down as a third category
+alongside "real gap" and "equivalent mutant": a survivor can also be marking defensive code that
+nothing can reach, and chasing it is time spent on an assertion that could never fail.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

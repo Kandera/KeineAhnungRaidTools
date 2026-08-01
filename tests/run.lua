@@ -130,6 +130,7 @@ dofile("tests/test_lc_outsider.lua")
 dofile("tests/test_lc_configlength.lua")
 dofile("tests/test_lc_persistedtables.lua")
 dofile("tests/test_lc_histsync_length.lua")
+dofile("tests/test_lc_equipexchange.lua")
 -- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,
 -- because it is the statement of what must hold and the soak is the search for what does not.
 dofile("tests/test_manifest.lua")
