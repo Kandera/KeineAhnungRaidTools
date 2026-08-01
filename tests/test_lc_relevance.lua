@@ -187,3 +187,64 @@ do
             "B42: roll " .. id .. " still has Blizzard's verdict after the later drops")
     end
 end
+
+-- B41: the row an automatic vote is meant to be corrected on must stay on screen ------------------
+-- An automatic vote is explicitly not final: Vote.CastVote lets it be overridden, and both row
+-- renderers keep the vote buttons up for it (`hasVote = votedDef ~= nil and not isAuto`) so the
+-- player can click a different answer. Vote.GetVisibleRolls read LC.votedByMe raw, without that
+-- exemption -- so with "voted item display = hide" the row carrying those buttons removed itself on
+-- the very next refresh, and the override existed with no way to reach it.
+local function VisibleFor(client)
+    return F.RaidSim.As(client, function() return client.KART.LC.Vote.GetVisibleRolls() end)
+end
+
+local function IsVisible(client, rollID)
+    for _, id in ipairs(VisibleFor(client)) do if id == rollID then return true end end
+    return false
+end
+
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric            -- MAGE, auto-transmog ON, hide OFF
+    alric.env.KART_Settings.lcVotedItemDisplay = "hide"
+    F.Drop(sim, 540, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(alric.KART.LC.votedByMe[540], alric.KART.LC.GetTransmogButtonIndex(),
+        "B41: the Transmog vote was cast automatically")
+    T.truthy(alric.KART.LC.autoVotedByMe[540], "B41: and is marked as automatic, i.e. overridable")
+    T.truthy(IsVisible(alric, 540),
+        "B41: the row stays on screen, because that is where the correction is clicked")
+end
+
+do
+    -- ...and a vote the player actually clicked still hides, which is what the setting is for.
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric
+    alric.env.KART_Settings.lcVotedItemDisplay = "hide"
+    F.Drop(sim, 541, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(IsVisible(alric, 541), "B41: an unanswered row is visible to begin with")
+
+    F.RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(541, 1, nil) end)
+    T.truthy(not IsVisible(alric, 541), "B41: a vote the player clicked still hides its row")
+end
+
+do
+    -- The guarantee GetVisibleRolls states in its own comment: switching lcHideIrrelevant off brings
+    -- those rows back for the rolls still running, not only from the next batch on. It could not,
+    -- because the auto-cast Pass that came with the hiding was still counted as "voted".
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja           -- PRIEST, hide ON
+    sinja.env.KART_Settings.lcVotedItemDisplay = "hide"
+    -- Transmog off for this drop, so the answer is the Pass rather than a Transmog vote.
+    F.Drop(sim, 542, F.PLATE_CHEST, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[542], "B41: plate is hidden from a priest")
+    T.truthy(not IsVisible(sinja, 542), "B41: and the row is gone while the setting is on")
+
+    sinja.env.KART_Settings.lcHideIrrelevant = false
+    T.truthy(IsVisible(sinja, 542),
+        "B41: unticking the setting brings the row back for the roll still running")
+end

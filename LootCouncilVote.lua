@@ -182,14 +182,23 @@ local NO_HIDDEN = {}
 
 -- Which of LC.voteListRolls actually get drawn. Two independent, purely personal reasons a roll is
 -- left out, both lifted together by LC.showAllOverride (/kart showall):
---   * the player has voted on it and set lcVotedItemDisplay == "hide" (card/row disappears, window
---     shrinks);
+--   * the player has voted on it THEMSELVES and set lcVotedItemDisplay == "hide" (card/row
+--     disappears, window shrinks);
 --   * their class cannot use it and lcHideIrrelevant answered it for them (LC.hiddenIrrelevant).
 -- The second reason is read through the LIVE setting rather than off the flag alone: switching
 -- lcHideIrrelevant off has to bring those rows back for the rolls still running, not only from the
 -- next batch on. The flag itself stays, so switching it on again re-hides exactly the same rolls.
 -- Returns LC.voteListRolls itself (no copy) whenever neither reason removes anything — which needs
 -- checking both, not just the voted one.
+--
+-- "Voted" here means voted BY THE PLAYER (B41). LC.autoVotedByMe marks a vote LC.Relevance cast on
+-- their behalf, which is explicitly not final: Vote.CastVote lets it be overridden and both row
+-- renderers keep such a row's vote buttons on screen for exactly that (`hasVote = votedDef ~= nil
+-- and not isAuto`). Reading LC.votedByMe raw removed the row those buttons live on, so the override
+-- existed in CastVote with no way to reach it -- and it broke the guarantee stated just above, since
+-- an auto-PASS also carries a vote, so unticking lcHideIrrelevant could not bring its row back
+-- either. An automatic answer hides through LC.hiddenIrrelevant, which the live setting governs,
+-- and never through this clause.
 function Vote.GetVisibleRolls()
     local hideVoted = (KART_Settings and KART_Settings.lcVotedItemDisplay) == "hide"
     if LC.showAllOverride then return LC.voteListRolls end
@@ -203,7 +212,8 @@ function Vote.GetVisibleRolls()
     end
     local visible = {}
     for _, rollID in ipairs(LC.voteListRolls) do
-        if not hidden[rollID] and not (hideVoted and LC.votedByMe[rollID]) then
+        local votedByPlayer = LC.votedByMe[rollID] and not LC.autoVotedByMe[rollID]
+        if not hidden[rollID] and not (hideVoted and votedByPlayer) then
             table.insert(visible, rollID)
         end
     end

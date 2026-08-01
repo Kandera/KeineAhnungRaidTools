@@ -1197,7 +1197,7 @@ a link (`Trade.HandleResult` performs exactly that rebuild). `"???"` fails `IsRe
 `PurgeStaleRoll` bails for the rest of the session and every per-roll table survives into the next
 item: the raider's row shows an old vote and they can never vote again.
 
-## B41 — the voted-items filter removes the row the correction lives on **[opt-in]**
+## B41 — the voted-items filter removes the row the correction lives on — FIXED 2026-08-01
 
 `Vote.GetVisibleRolls` tests `LC.votedByMe[rollID]` raw, without the `not isAuto` exemption both row
 renderers apply. With "voted item display = hide" an auto-cast Transmog vote removes its own row on the
