@@ -48,6 +48,13 @@ do
         "the trade obligations are restored before the tracked rolls")
 end
 
+-- Applying settings to the widgets ------------------------------------------------------------------
+-- KART.SyncSettingsToUI is what every settings-wide change ends by calling -- loading a profile,
+-- resetting to defaults, ADDON_LOADED itself. The profile button's label is part of that, and
+-- tests/test_mainframe.lua stands in for this line when it asserts a loaded profile is named on the
+-- button. Drop it and the button keeps saying whatever it said before, in the game and nowhere else.
+Wired("KART.RefreshProfileButton()", "the profile button is relabelled when settings are applied")
+
 -- The three commands that bring a window back (B51, B86) -------------------------------------------
 -- Each of these used to call :Show() on a frame, which puts back whatever the row pool last drew --
 -- and all three windows only HIDE on their "x", so that picture can be arbitrarily old. They go

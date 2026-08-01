@@ -11,14 +11,29 @@ local sim = F.NewRaid()
 local me = sim.byName.Bramor
 local KART = me.KART
 
+-- Profiles.lua alongside it: the profile menu built below calls straight into KART.LoadProfile, and
+-- raidsim does not carry that file (nothing in the loot flow touches it).
 RaidSim.As(me, function()
-    local chunk = assert(loadstring(assert(io.open("MainFrame.lua", "r")):read("*a"), "@MainFrame.lua"))
-    setfenv(chunk, me.env)
-    chunk("KeineAhnungRaidTools", KART)
+    for _, path in ipairs({ "MainFrame.lua", "Profiles.lua" }) do
+        local chunk = assert(loadstring(assert(io.open(path, "r")):read("*a"), "@" .. path))
+        setfenv(chunk, me.env)
+        chunk("KeineAhnungRaidTools", KART)
+    end
 end)
 T.truthy(KART.MainFrame and KART.ShowTab, "the main window builds")
 
 local function As(fn) return RaidSim.As(me, fn) end
+
+-- KART.SyncSettingsToUI lives in Core.lua, which needs the game and is not loadable here. Loading a
+-- profile ends by calling it, and the one part of it this file is about is the profile button being
+-- relabelled -- which Core does at Core.lua:157. tests/test_core_wiring.lua holds that call in place
+-- against the source, so this stands in for it rather than inventing behaviour.
+KART.SyncSettingsToUI = KART.SyncSettingsToUI or function()
+    if KART.RefreshProfileButton then KART.RefreshProfileButton() end
+end
+-- Also Core.lua's, and pure restyling: it re-applies font, scale and colours to widgets already
+-- built. Nothing below asserts on how anything looks, so a no-op is the honest stand-in.
+KART.UpdateStyles = KART.UpdateStyles or function() end
 
 -- Tabs ---------------------------------------------------------------------------------------------
 do
@@ -58,6 +73,63 @@ do
         As(function() KART.JumpToSearchResult(target) end)
         T.eq(KART.CurrentTab, target.tabIndex, "a search result switches to the tab it belongs to")
     end
+end
+
+-- The three context menus in this file -----------------------------------------------------------
+-- MenuUtil.CreateContextMenu was an empty stub until now, so the function that builds a menu's
+-- entries had never run: none of these three had ever been opened by the suite.
+do
+    -- Profiles. The empty case is a real one -- a fresh install has none -- and it must say so
+    -- rather than opening a menu with nothing in it.
+    me.env.KART_Profiles = {}
+    As(function() KART.BtnProfile:GetScript("OnClick")(KART.BtnProfile) end)
+    T.eq(#KARTTEST.MenuLabels(), 1, "with no profiles saved the menu holds a single entry")
+    T.truthy(not As(function() return KARTTEST.ClickMenu(KART.L.PROFILE_NONE_SAVED) end),
+        "and it is inert, so there is nothing to click that could not work")
+end
+
+do
+    me.env.KART_Profiles = {
+        raid   = { lcVoteSeconds = 42 },
+        solo   = { lcVoteSeconds = 7 },
+        alltag = { lcVoteSeconds = 21 },
+    }
+    As(function() KART.BtnProfile:GetScript("OnClick")(KART.BtnProfile) end)
+    local labels = KARTTEST.MenuLabels()
+    T.eq(#labels, 3, "every saved profile is listed")
+    T.eq(labels[1] .. "," .. labels[2] .. "," .. labels[3], "alltag,raid,solo",
+        "sorted, so the same profile is in the same place every time it is opened")
+
+    T.truthy(As(function() return KARTTEST.ClickMenu("raid") end), "picking one loads it")
+    T.eq(me.env.KART_Settings.lcVoteSeconds, 42, "the settings it stored are in force")
+    T.eq(me.env.KART_Settings.activeProfile, "raid", "and it is recorded as the active one")
+    T.eq(KART.BtnProfile.text:GetText(), KART.L.PROFILE_LABEL_PREFIX .. "raid",
+        "with the button naming it rather than still saying none")
+end
+
+do
+    -- Language. The only menu entry in the addon that reloads the UI, which is a thing to do to
+    -- somebody mid-raid -- so it must at least do it for a language that actually changed.
+    local before = KARTTEST.reloads
+    As(function() KART.BtnLang:GetScript("OnClick")(KART.BtnLang) end)
+    T.eq(#KARTTEST.MenuLabels(), 3, "the language menu offers auto and the two locales")
+
+    T.truthy(As(function() return KARTTEST.ClickMenu(KART.L.LANG_DE) end), "picking German is possible")
+    T.eq(me.env.KART_Settings.language, "deDE", "which is what gets stored")
+    T.eq(KARTTEST.reloads, before + 1, "and the reload that applies it happens")
+    me.env.KART_Settings.language = "Auto"
+end
+
+do
+    -- Fonts. Without LibSharedMedia there is exactly one, and it used to be a dead entry that set
+    -- nothing -- picking the only font available has to still apply it.
+    As(function() KART.BtnFont:GetScript("OnClick")(KART.BtnFont) end)
+    local labels = KARTTEST.MenuLabels()
+    T.truthy(#labels > 0, "the font menu is never empty")
+    T.truthy(As(function() return KARTTEST.ClickMenu(labels[1]) end), "and its entries are clickable")
+    T.eq(me.env.KART_Settings.fontName, labels[1], "picking one stores it")
+    T.eq(KART.BtnFont.text:GetText(), KART.L.BTN_FONT_PREFIX .. labels[1],
+        "and the button says which font is in use")
 end
 
 -- Reset --------------------------------------------------------------------------------------------
