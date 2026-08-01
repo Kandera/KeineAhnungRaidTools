@@ -8,7 +8,7 @@ KART.LH = KART.LH or {}
 local LH = KART.LH
 local LC = KART.LC
 
-LH.filters = { player = nil, reason = nil, search = "" }
+LH.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
 
 -- =====================================================================
 --  Helpers
@@ -25,11 +25,18 @@ end
 local function GetFilteredEntries()
     local filtered = {}
     for _, e in ipairs(KART_LootHistory or {}) do
-        -- filters.player holds a stable id: a winnerKey (GUID) for modern entries, or a legacy
-        -- display name. Match either so switching filters catches every entry for that person.
-        local matchPlayer = (not LH.filters.player)
-            or (e.winnerKey and e.winnerKey ~= "" and e.winnerKey == LH.filters.player)
-            or (e.winner == LH.filters.player)
+        -- filters.playerIds is the SET of identities one person is known by in this log: their
+        -- winnerKey (GUID) for entries written since 2.6.0, and their plain display name for
+        -- everything older. One person, several ids, because that is what a history spanning the
+        -- GUID migration actually contains.
+        --
+        -- It used to be a single id, and LH.GetUniquePlayers produced one entry per DISTINCT id --
+        -- so anybody with history on both sides of that migration appeared in the filter twice under
+        -- the same name, and neither of the two showed more than half of what they had won.
+        local ids = LH.filters.playerIds
+        local matchPlayer = (not ids)
+            or (e.winnerKey and e.winnerKey ~= "" and ids[e.winnerKey])
+            or (e.winner and ids[e.winner])
         local matchReason = (not LH.filters.reason) or ((e.reason or "") == LH.filters.reason)
         local matchSearch = true
         if LH.filters.search ~= "" then
@@ -304,17 +311,41 @@ end
 -- GUID when present, else the stored display name for legacy entries) and is what the filter stores;
 -- `label` is the current resolved display — NSRT nickname / short name via Identity.ResolveDisplayName
 -- — so the same person's entries logged under different display names collapse to one filter option.
+-- One entry per PERSON, not per identity. Each carries every id that person is known by in this log:
+-- their winnerKey for entries written since the GUID migration (2.6.0) and their display name for
+-- everything older. Grouping by the displayed label is what makes the two halves one line in the
+-- filter — and grouping by id, as this used to, put the same name in the list twice with half a
+-- history behind each.
+--
+-- `id` is kept as a stable scalar because LH.Refresh builds its page-reset signature out of it; the
+-- set beside it is what the filter actually matches on.
 function LH.GetUniquePlayers()
-    local seen, list = {}, {}
+    local byLabel, list = {}, {}
     for _, e in ipairs(KART_LootHistory or {}) do
-        local id = (e.winnerKey and e.winnerKey ~= "" and e.winnerKey) or e.winner
-        if id and id ~= "" and not seen[id] then
-            seen[id] = true
+        local key = (e.winnerKey and e.winnerKey ~= "" and e.winnerKey) or nil
+        local id = key or e.winner
+        if id and id ~= "" then
             local label = e.winner
-            if e.winnerKey and e.winnerKey ~= "" then
-                label = KASC.Identity.ResolveDisplayName(e.winnerKey) or e.winner
+            if key then
+                -- ResolveDisplayName answers with the KEY itself when it cannot place somebody --
+                -- which is every raider who has since left the guild, since they are neither in the
+                -- group nor in the name cache. Taking that as a label put raw GUIDs in the filter
+                -- list ("Player-1096-0A1B2C3D") while the name they were logged under sat unused in
+                -- the entry. Only a real answer wins over it.
+                local resolved = KASC.Identity.ResolveDisplayName(key)
+                if resolved and resolved ~= key and resolved ~= "?" then label = resolved end
             end
-            table.insert(list, { id = id, label = label })
+            label = label or e.winner or id
+            local group = byLabel[label]
+            if not group then
+                group = { id = id, label = label, ids = {} }
+                byLabel[label] = group
+                table.insert(list, group)
+            end
+            group.ids[id] = true
+            -- A keyed entry also answers to the name it was logged under, so a later legacy row for
+            -- the same person still lands in this group rather than opening a second one.
+            if key and e.winner and e.winner ~= "" then group.ids[e.winner] = true end
         end
     end
     table.sort(list, function(a, b) return (a.label or "") < (b.label or "") end)
@@ -444,13 +475,13 @@ function LH.CreateWindow()
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
             rootDescription:CreateTitle(KART.L.LH_FILTER_PLAYER)
             rootDescription:CreateButton(KART.L.LH_FILTER_ALL_PLAYERS, function()
-                LH.filters.player = nil
+                LH.filters.player, LH.filters.playerIds = nil, nil
                 self.text:SetText(KART.L.LH_FILTER_ALL_PLAYERS)
                 LH.Refresh()
             end)
             for _, p in ipairs(LH.GetUniquePlayers()) do
                 rootDescription:CreateButton(p.label, function()
-                    LH.filters.player = p.id
+                    LH.filters.player, LH.filters.playerIds = p.id, p.ids
                     self.text:SetText(p.label)
                     LH.Refresh()
                 end)
@@ -486,7 +517,7 @@ function LH.CreateWindow()
     btnReset:SetSize(56, 22)
     btnReset:SetPoint("LEFT", btnReasonFilter, "RIGHT", 6, 0)
     btnReset:SetScript("OnClick", function()
-        LH.filters.player = nil
+        LH.filters.player, LH.filters.playerIds = nil, nil
         LH.filters.reason = nil
         LH.filters.search = ""
         searchBox:SetText("")

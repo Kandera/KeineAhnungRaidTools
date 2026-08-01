@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-Promote works with names written as "Name-Realm" for your own realm too.** Until now that spelling only ever matched people from another realm.
 - **A bulk invite can start a raid from nothing again.** Clicking Invite while not yet in a group said "you are not the leader" and did nothing.
 - **Auto Combat Log no longer starts out in the open world.** It now checks that you are actually in an instance, not just what difficulty the game reports.
+- **Filtering the loot history by a player shows their whole history**, instead of splitting it across two identical-looking entries.
+- **Raiders who have left the guild are listed by name in the history filter**, not as a raw ID.
 - **Removing everyone not on a boss's roster now asks first**, and says how many people it is about to remove.
 - **A damaged settings profile no longer takes your settings with it.** It is refused instead of loaded halfway.
 

@@ -23,6 +23,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Auto-Promote greift jetzt auch bei Namen im Format "Name-Realm" für den eigenen Realm.** Bisher traf diese Schreibweise ausschließlich Leute von anderen Realms.
 - **Ein Bulk-Invite kann wieder aus dem Stand einen Raid aufmachen.** Ein Klick auf Einladen ohne Gruppe sagte „du bist nicht der Anführer" und tat nichts.
 - **Das automatische Kampflog startet nicht mehr in der offenen Welt.** Es prüft jetzt, ob du wirklich in einer Instanz bist, statt nur auf die gemeldete Schwierigkeit zu schauen.
+- **Die Loot-Historie nach einem Spieler zu filtern zeigt dessen komplette Historie** — statt sie auf zwei gleich aussehende Einträge zu verteilen.
+- **Ausgetretene Raider stehen im Historien-Filter mit Namen**, nicht als rohe ID.
 - **Alle zu entfernen, die nicht auf der Boss-Liste stehen, fragt jetzt vorher** — und sagt, um wie viele Leute es geht.
 - **Ein beschädigtes Einstellungsprofil reißt deine Einstellungen nicht mehr mit.** Es wird abgelehnt statt halb geladen.
 

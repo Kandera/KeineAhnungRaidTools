@@ -354,6 +354,33 @@ matching content, and a stale ownership claim -- `autoLogOwned` is a SavedVariab
 is not -- is dropped before it can make the next hand-started log look like ours. Getting that wrong
 is a raid night with no Warcraft Logs upload that nobody notices until the next morning.
 
+## B98 — FIXED 2026-08-01 — one raider was two entries in the loot-history filter
+
+Eighth bug run. The history's JSON export had no test either -- `date` was missing from the harness,
+so `LH.BuildRCLootCouncilJSON` had never run a line.
+
+`LH.GetUniquePlayers` produced one entry per distinct IDENTITY, not per person: a `winnerKey` for
+entries written since the GUID migration (2.6.0) and a plain display name for everything older. So
+anybody with history on both sides of that migration appeared in the filter TWICE under the same
+name, and neither of the two showed more than half of what they had won -- with nothing to suggest
+the other half existed.
+
+Grouped by the displayed person now, carrying the set of ids they are known by, and the filter
+matches any of them. `filters.player` stays a scalar because `LH.Refresh` builds its page-reset
+signature out of it; `filters.playerIds` is what the matching actually uses.
+
+## B99 — FIXED 2026-08-01 — the history filter listed departed raiders as raw GUIDs
+
+Same function, found while fixing the one above. `KASC.Identity.ResolveDisplayName` answers with the
+KEY ITSELF when it cannot place somebody -- which is every raider who has since left the guild, since
+they are in neither the group nor the name cache. Taken as a label, that put
+`Player-1096-0A1B2C3D` in the filter list while the name they were logged under sat unused in the
+entry beside it.
+
+Only a real answer wins over the stored name now. Worth knowing about `ResolveDisplayName` generally:
+it never fails, it degrades to the key, so every caller that renders its result has to decide whether
+that is acceptable output.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

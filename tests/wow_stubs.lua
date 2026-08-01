@@ -696,6 +696,9 @@ KARTTEST.secretValues = {}
 function _G.issecretvalue(value)
     return KARTTEST.secretValues[value] == true
 end
+-- WoW exposes Lua's os.date under this name. The loot-history export formats every row's date and
+-- time through it, which is why that whole path had never run here before 2026-08-01.
+_G.date = os.date
 function _G.IsShiftKeyDown() return false end
 function _G.IsControlKeyDown() return false end
 function _G.PlaySound() end
