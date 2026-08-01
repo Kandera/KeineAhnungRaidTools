@@ -168,6 +168,34 @@ do
 end
 
 do
+    -- The one menu in this panel, and a PERSONAL setting rather than a raid-wide one -- it decides
+    -- what happens to an item in your own vote window once you have answered it, so unlike the two
+    -- controls above it stays usable no matter whose config the raid is on.
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcVotedItemDisplay = "full"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+    local alric = sim.byName.Alric
+    local LC = WithPanel(alric)
+    Refresh(alric)
+
+    T.truthy(RaidSim.As(alric, function() return KARTTEST.Click(LC.BtnVotedItemDisplay) end),
+        "a raider under a foreign config can still open it -- this one is theirs")
+    local labels = KARTTEST.MenuLabels()
+    T.eq(#labels, 3, "with one entry per mode")
+
+    T.truthy(RaidSim.As(alric, function()
+        return KARTTEST.ClickMenu(alric.KART.LC.VotedItemDisplayLabel("hide"))
+    end), "and a mode can be picked")
+    T.eq(alric.env.KART_Settings.lcVotedItemDisplay, "hide", "which is stored against their own settings")
+    T.eq(LC.BtnVotedItemDisplay.text:GetText(), alric.KART.LC.VotedItemDisplayLabel("hide"),
+        "with the button saying which one is in force")
+end
+
+do
     -- Colons are the LC_CONFIG payload separator. One inside a synced field makes every receiver's
     -- pattern fail silently and leaves the whole raid on stale config.
     local _, lm = F.NewRaid()
