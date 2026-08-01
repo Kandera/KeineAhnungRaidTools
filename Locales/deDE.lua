@@ -286,7 +286,6 @@ KART.L_deDE = {
     LC_ROLL_UNANNOUNCED    ="%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_OUTDATED_PEERS      = "Diese Raider haben ein KART älter als %s und können nicht am Loot Council teilnehmen -- sie müssen aktualisieren: %s",
-    SET_WITHHELD           = "Vorübergehend nicht verfügbar. Bekannte Fehler in dieser Funktion werden zuerst behoben -- bis dahin bleibt sie aus.",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",
     LC_AUTO_VOTED_HINT     = "KART hat dieses Item für dich beantwortet. Klick eine beliebige Antwort, um das zu ändern.",

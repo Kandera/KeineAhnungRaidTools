@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unveröffentlicht]
+### Behoben
+- **Das Ausblenden von Items, die deine Klasse nicht nutzen kann, ist wieder verfügbar** — und nimmt dir kein Off-Spec-Upgrade mehr weg.
+- **Die automatische Transmog-Stimme ist wieder verfügbar** — und stimmt nie für ein Aussehen, das dein Charakter nicht lernen kann.
+- **Ein für dich beantwortetes Item bleibt sichtbar**, damit du die Antwort noch ändern kannst.
+- **Beide Einstellungen wirken jetzt auch auf die Items, die schon vor dir liegen** — nicht erst ab dem nächsten Boss.
+- **Items laufen auch ab, während dein Vote-Fenster leer ist** — statt später mit aktiven Vote-Buttons zurückzukommen.
+- **`/kart lc` öffnet das Fenster mit dem, was gerade läuft** — nicht mit dem Bild von vorhin.
+
 ## [3.2.2] - 2026-08-01
 ### Behoben
 - **Ein Council-Mitglied, dessen Einstellungen spät ankommen, bekommt die schon laufenden Items trotzdem.**

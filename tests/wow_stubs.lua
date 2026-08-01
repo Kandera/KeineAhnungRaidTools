@@ -329,9 +329,8 @@ function _G.CreateFrame(_, name, _, _)
     function f:SetFrameStrata(value) strata = value end
     function f:GetFrameStrata() return strata end
 
-    -- Alpha is real state for the same reason: it is how a control is greyed out (see
-    -- KART.WithholdCheckbox) and how the Loot Council windows follow the opacity setting, so
-    -- "is it dimmed" has to be answerable.
+    -- Alpha is real state for the same reason: it is how a control is greyed out and how the Loot
+    -- Council windows follow the opacity setting, so "is it dimmed" has to be answerable.
     local alpha = 1
     function f:SetAlpha(value) alpha = value end
     function f:GetAlpha() return alpha end

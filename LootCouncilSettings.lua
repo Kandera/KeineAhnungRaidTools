@@ -281,20 +281,15 @@ function LC.BuildSettingsPanel(parent)
         name = "KART_LCHideIrrelevant", label = L.LC_SET_HIDE_IRRELEVANT,
         store = SettingsStore, key = "lcHideIrrelevant", y = -350,
         onChanged = function() LC.Vote.RefreshAfterRelevanceChange() end,
-        tooltip = L.LC_DESC_HIDE_IRRELEVANT .. "\n\n" .. L.SET_WITHHELD,
+        tooltip = L.LC_DESC_HIDE_IRRELEVANT,
     })
 
     KART.LC.CbAutoTransmogVote = KART.UI:CreateSettingsCheckbox(prefsCard, {
         name = "KART_LCAutoTransmogVote", label = L.LC_SET_AUTO_TRANSMOG,
         store = SettingsStore, key = "lcAutoTransmogVote", y = -380,
         onChanged = function() LC.Vote.RefreshAfterRelevanceChange() end,
-        tooltip = L.LC_DESC_AUTO_TRANSMOG .. "\n\n" .. L.SET_WITHHELD,
+        tooltip = L.LC_DESC_AUTO_TRANSMOG,
     })
-
-    -- Both relevance switches are held off until the defects behind them are fixed; see
-    -- KART.WithheldSettings for the list and for how to bring them back.
-    KART.WithholdCheckbox(KART.LC.CbHideIrrelevant)
-    KART.WithholdCheckbox(KART.LC.CbAutoTransmogVote)
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a

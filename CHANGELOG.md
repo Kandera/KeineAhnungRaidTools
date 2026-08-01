@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- **Hiding items your class cannot use is available again**, and it no longer takes away an off-spec upgrade you would have taken.
+- **The automatic transmog vote is available again**, and never votes for an appearance your character cannot learn.
+- **An item answered on your behalf stays on screen**, so you can still change the answer.
+- **Both of those settings now affect the items already in front of you**, not only the next boss.
+- **Items still run out while your vote window is empty**, instead of coming back later with live vote buttons.
+- **`/kart lc` reopens the window with what is running now**, not the picture it was showing when you closed it.
+
 ## [3.2.2] - 2026-08-01
 ### Fixed
 - **A council member whose settings arrive late still gets the items already on the table.**

@@ -48,8 +48,11 @@ by where it lives. Five entries were fixed the same evening and never got a numb
 Lootmaster field, the session prompt ending a live session, two bare `IsInRaid()` calls, the latched
 lootmaster-clash warning, and `StartTest` missing `equipRequestedRolls`.
 
-Entries marked **[opt-in]** can only fire while `lcHideIrrelevant` or `lcAutoTransmogVote` is on.
-Both default to off, so an untouched install is not exposed to them.
+Ten entries below carried an **[opt-in]** marker while the two relevance switches
+(`lcHideIrrelevant`, `lcAutoTransmogVote`) were held off in the options: B36 to B39, B41, B42, B49 to
+B51 and B54. All ten are fixed and both switches are available again as of 2026-08-01, so the marker
+is gone. Until that pass the feature had never executed in a test at all -- `RegisterEvent` was a
+no-op in the harness, so its own frame never received START_LOOT_ROLL.
 
 ## Reading this file
 
@@ -63,7 +66,6 @@ never a read of the bodies. Anything without one of these words is open:
 | `DISSOLVED` / `SUPERSEDED` | the situation it describes cannot arise any more, usually because a rule changed underneath it. Kept as history -- each one is a failure this guild paid for, and the rules exist to make them unreachable rather than merely patched |
 | `MITIGATED` | not fixable here; the damage is reduced and the real fix is named |
 | `OPEN, by choice` | measured, understood, and deliberately left -- the reasoning and the options are in the entry |
-| **[opt-in]** | can only fire while one of the two relevance switches is on. Both default to off |
 
 Keep it that way. A status that lives only in the body reads as open to anybody scanning, which is
 exactly how B64 and B70 kept coming back up after they had stopped being real.
@@ -1152,7 +1154,7 @@ assigners each see nil, each broadcast, and each overwrite the other's record on
 end up permanently disagreeing about the winner, and what actually gets traded is whichever message
 reached the lootmaster last.
 
-## B36 — "irrelevant" is far wider than the setting claims **[opt-in]**
+## B36 — "irrelevant" is far wider than the setting claims — FIXED 2026-08-01
 
 `irrelevant = not canNeed` treats every reason Blizzard disables Need as "your class cannot equip
 this": wrong loot specialization, level requirement, unique-equipped. `reasonNeed` sits in the same
@@ -1161,7 +1163,7 @@ have taken for off-spec — the exact case the feature was designed to keep visi
 The same expression turns an unknown `canNeed` into "irrelevant", which the file's own header forbids;
 `needsAppearance` on the same line resolves unknown the safe way.
 
-## B37 — the relevance snapshot outlives the roll it describes **[opt-in]**
+## B37 — the relevance snapshot outlives the roll it describes — FIXED 2026-08-01
 
 `Trade.ClearRollState` deliberately keeps `relevanceSnapshot`, arguing the relevance frame has already
 snapshotted the new item. That holds for the `LC.OnStartLootRoll` caller and not for `LC.HandleStart`,
@@ -1169,14 +1171,14 @@ which exists precisely for clients that got no local `START_LOOT_ROLL`. A raider
 reused rollID gets the previous item's verdict applied to the new one — a best-in-slot piece
 auto-passed without ever being drawn.
 
-## B38 — the snapshot records no item identity, and is written for rolls Council ignores **[opt-in]**
+## B38 — the snapshot records no item identity, and is written for rolls Council ignores — FIXED 2026-08-01
 
 The `START_LOOT_ROLL` handler has no `councilEngages` gate, and `LC.OnStartLootRoll` returns before
 `PurgeStaleRoll` for rolls Council does not engage. So a trash Bind-on-Equip drop or collectible
 reusing a live rollID silently rewrites the snapshot of the item currently being voted on, and nothing
 purges it. Those are exactly the items trash drops constantly.
 
-## B39 — the appearance fallback answers the wrong question **[opt-in]**
+## B39 — the appearance fallback answers the wrong question — FIXED 2026-08-01
 
 `NeedsAppearance`'s non-snapshot path asks "do I already own this appearance", never "can I collect
 it": the sourceID from `C_TransmogCollection.GetItemInfo` is discarded and `PlayerCanCollectSource` is
@@ -1205,7 +1207,7 @@ next refresh, so the hint "click any response to change it" points at a button t
 and unticking the hide setting does not bring an auto-passed row back either, contrary to the guarantee
 stated in that function.
 
-## B42 — snapshots are swept before the vote row they belong to exists **[opt-in]**
+## B42 — snapshots are swept before the vote row they belong to exists — FIXED 2026-08-01
 
 The self-sweep protects `rollID` itself and entries in `LC.voteListRolls`, but on a non-lootmaster
 client a roll only enters that list when `LC_START` arrives — one round trip after the local

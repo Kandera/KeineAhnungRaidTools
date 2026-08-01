@@ -286,7 +286,6 @@ KART.L_enUS = {
     LC_ROLL_UNANNOUNCED    ="%s was never announced to the loot council, so it was not passed for you -- roll on Blizzard's window yourself if you want it.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
-    SET_WITHHELD           = "Temporarily unavailable. Known defects in this feature are being fixed first -- it stays off until they are.",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
     LC_AUTO_VOTED_HINT     = "KART answered this item for you. Click any response to change it.",

@@ -55,9 +55,6 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
 -- switch (KART.LoadProfile, Profiles.lua) — must stay free of one-time initialization
 -- (AddonCompartment registration, event handler setup) since those must never run twice.
 function KART.SyncSettingsToUI()
-    -- Before anything reads them: a profile switch can bring back a value the addon is deliberately
-    -- holding off (see KART.WithheldSettings).
-    KART.EnforceWithheldSettings()
     KART.UpdateCache()
     if KART.LC and KART.LC.BroadcastRaidConfig then KART.LC.BroadcastRaidConfig() end
     if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
