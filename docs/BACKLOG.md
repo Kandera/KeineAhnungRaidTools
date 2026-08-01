@@ -1282,7 +1282,7 @@ member keeps seeing votes under the old label set until some unrelated event ref
 fabricating a count the sender never sent — which then either wrongly trips or wrongly satisfies the
 mismatch check.
 
-## B54 — auto-answers rebuild the window once per roll, nested **[opt-in]**
+## B54 — auto-answers rebuild the window once per roll, nested — FIXED 2026-08-01
 
 `ApplyToPendingRolls` runs at the top of `RefreshVoteListRows`, and `CastVote` ends in
 `RefreshVoteListRows`, so N simultaneous auto-answered drops produce N nested full rebuilds in one

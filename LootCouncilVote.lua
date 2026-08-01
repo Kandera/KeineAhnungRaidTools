@@ -389,7 +389,14 @@ function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
     -- Both branches: refresh the council panel too, so a council member sees their own vote appear
     -- in the panel (rows + tab badge), not just in the vote list.
     LC.RefreshCouncilIfShown(rollID)
-    Vote.RefreshVoteListRows()
+    -- An automatic answer is cast from inside LC.Relevance.ApplyToPendingRolls, which is itself the
+    -- first thing RefreshVoteListRows does — so a refresh is already in progress and will draw the
+    -- final state once every roll has been answered. Rebuilding per answer meant N nested full
+    -- rebuilds of a window the outer call had not drawn yet (B54): bounded and correct, but a
+    -- visible hitch exactly when the window first appears, which is when several items are answered
+    -- at once. ApplyToPendingRolls has no other caller, so there is no path where an automatic vote
+    -- is cast outside a refresh.
+    if not isAuto then Vote.RefreshVoteListRows() end
 end
 
 -- "Spacious" style: one card per item, full window width each, large touch targets. The default

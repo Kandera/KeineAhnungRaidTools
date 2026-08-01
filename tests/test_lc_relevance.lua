@@ -391,3 +391,31 @@ do
     T.truthy(alric.KART.LC.voteListFrame:IsShown(), "B51: /kart lc brings the window back")
     T.eq(ShownRows(alric), 1, "B51: showing what is actually still running, not the old picture")
 end
+
+-- B54: answering an item automatically does not rebuild the whole window a second time -------------
+-- LC.Relevance.ApplyToPendingRolls runs at the TOP of RefreshVoteListRows, and CastVote ended in
+-- RefreshVoteListRows -- so every item answered on the player's behalf triggered a full nested
+-- rebuild of a window the outer call had not drawn yet. Bounded and correct, but a visible hitch
+-- exactly when the window first appears, which is when several items are answered at once.
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric           -- MAGE, auto-transmog ON: plate is answered for them
+    local builds = 0
+    local real = alric.KART.LC.Vote.RefreshVoteListRows_Spacious
+    alric.KART.LC.Vote.RefreshVoteListRows_Spacious = function(f)
+        builds = builds + 1
+        return real(f)
+    end
+
+    F.Drop(sim, 580, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(0)
+    local perDrop = builds
+    F.Drop(sim, 581, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    F.Drop(sim, 582, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(alric.KART.LC.votedByMe[582], alric.KART.LC.GetTransmogButtonIndex(),
+        "B54: all three items were answered automatically")
+    T.eq(builds, perDrop * 3, "B54: and each one cost the same as the first — no nested rebuild")
+    T.eq(perDrop, 1, "B54: which is one rebuild per item, not two")
+end
