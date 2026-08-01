@@ -502,6 +502,16 @@ _G.C_Item = {
         local it = itemOf(v)
         return it and ("Interface\\Icons\\" .. it.name) or nil
     end,
+    -- The EFFECTIVE item level of one specific link, upgrades included -- which is not
+    -- GetItemInfo's fourth return, that being the item's base level. Droptimizer needs the
+    -- difference: the same item simmed at several upgrade tracks appears more than once in the
+    -- companion's cache, and the rolled level is what picks the right candidate. Absent here until
+    -- 2026-08-01, which is one of the reasons that module had never executed in a test at all.
+    GetDetailedItemLevelInfo = function(v)
+        local it = itemOf(v)
+        if not it then return nil end
+        return it.detailedIlvl or it.ilvl
+    end,
 }
 
 -- Item:CreateFromItemID():ContinueOnItemLoad(cb) -- the event-driven escape the addon uses when

@@ -30,6 +30,9 @@ local CLIENT_FILES = {
     "LootCouncilVote.lua",
     "LootCouncilTrade.lua",
     "LootCouncilPanel.lua",
+    -- Loads after the panel, exactly as the .toc orders it: the panel is what asks it for a
+    -- gain%, so a client without it would never exercise that call at all.
+    "Droptimizer.lua",
 }
 
 local LIB_FILES = {

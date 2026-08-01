@@ -1027,7 +1027,10 @@ function Council.RefreshCouncilRows()
 
     local members = {}
     for unit in KAUtil.EachGroupUnit() do
-        local fullName = UnitName(unit)
+        -- The realm is UnitName's SECOND return (empty for our own), and it used to be dropped
+        -- here -- which is what left Droptimizer asking about our realm for every cross-realm
+        -- raider. See FindPlayerCandidates.
+        local fullName, unitRealm = UnitName(unit)
         if fullName then
             local short    = fullName:match("([^%-]+)")
             local key      = (KASC.Identity.ResolvePlayer(unit))
@@ -1066,7 +1069,7 @@ function Council.RefreshCouncilRows()
             end
 
             table.insert(members, {
-                short = short, unit = unit, key = key,
+                short = short, realm = unitRealm, unit = unit, key = key,
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef, voteMismatch = voteMismatch,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
@@ -1317,7 +1320,9 @@ function Council.RefreshCouncilRows()
         if KART.DT and KART.DT.GetGainPercent and m.short then
             -- Droptimizer's own cache is short-name-text keyed (imported from an external report,
             -- no GUID concept) — deliberately still m.short here, not m.key. See design doc.
-            capturedGainPct, capturedGainSource = KART.DT.GetGainPercent(m.short, rollItem)
+            -- With THEIR realm, not ours: without it a cross-realm raider was answered with a
+            -- same-named character's sim number from our own realm, confidently.
+            capturedGainPct, capturedGainSource = KART.DT.GetGainPercent(m.short, rollItem, m.realm)
         end
 
         row:Show()

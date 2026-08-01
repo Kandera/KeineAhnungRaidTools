@@ -110,6 +110,7 @@ dofile("tests/test_lc_votelabels.lua")
 -- Core.lua is not loadable here (it needs the game), so its event and slash wiring is checked
 -- against the source instead -- see the file for why that is worth doing.
 dofile("tests/test_core_wiring.lua")
+dofile("tests/test_droptimizer.lua")
 -- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,
 -- because it is the statement of what must hold and the soak is the search for what does not.
 dofile("tests/test_manifest.lua")

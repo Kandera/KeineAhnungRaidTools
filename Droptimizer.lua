@@ -61,11 +61,21 @@ function DT.RebuildIndex()
     DT.RefreshStatusLabel()
 end
 
--- Finds the candidate list for a raid-roster short name. Tries the player's own realm first
--- (the common case); falls back to a short-name-only match only if it's unambiguous, so two
--- cross-realm namesakes in the cache never silently pick the wrong one.
-local function FindPlayerCandidates(shortName)
-    local ownRealmKey = NormalizeKey(shortName, GetRealmName())
+-- Finds the candidate list for a raid-roster short name. Tries THAT RAIDER's realm first, falling
+-- back to a short-name-only match only if it's unambiguous, so two cross-realm namesakes in the
+-- cache never silently pick the wrong one.
+--
+-- `realm` matters and used to be absent. Without it this asked about OUR realm for everybody, and
+-- the ambiguity guard below only ever protected the fallback — so a cross-realm raider with a
+-- namesake on our own realm got that namesake's key on the first try and the guard never ran. The
+-- council then read somebody else's sim number under this raider's name, with no sign anything was
+-- wrong, on the one screen that decides who gets the item. The realm was available the whole time:
+-- it is UnitName's second return, which the panel discarded while splitting the short name out.
+--
+-- Empty or missing still means our own realm, which is the right default for the two vote-window
+-- call sites — those ask about the player themselves.
+local function FindPlayerCandidates(shortName, realm)
+    local ownRealmKey = NormalizeKey(shortName, (realm and realm ~= "") and realm or GetRealmName())
     if ownRealmKey and DT.index[ownRealmKey] then return DT.index[ownRealmKey] end
 
     local shortLower = KAUtil.CaseFold(shortName)
@@ -81,8 +91,11 @@ local function FindPlayerCandidates(shortName)
 end
 
 -- Returns gainPct, source for the given player/item, or nil if there's no sim data for it.
+--
+-- `realm` is that RAIDER's realm, not ours, and leaving it out means our own -- see
+-- FindPlayerCandidates for what asking the wrong realm cost.
 -- Never errors on missing/malformed cache data — callers must treat nil as "no data".
-function DT.GetGainPercent(shortName, itemLink)
+function DT.GetGainPercent(shortName, itemLink, realm)
     if not shortName or not itemLink then return nil end
     if KART_Settings and KART_Settings.dtModuleEnabled == false then return nil end
 
@@ -93,7 +106,7 @@ function DT.GetGainPercent(shortName, itemLink)
     -- sim candidate when the same item was simmed at several upgrade tracks.
     local actualIlvl = C_Item.GetDetailedItemLevelInfo(itemLink)
 
-    local candidates = FindPlayerCandidates(shortName)
+    local candidates = FindPlayerCandidates(shortName, realm)
     if not candidates then return nil end
 
     local matches = {}

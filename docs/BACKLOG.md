@@ -198,6 +198,50 @@ clear can land in the middle of one.
 Not covered, and nothing asks for it: deleting a SINGLE entry. There is no such control -- the window
 offers a full clear, and a revoked award is removed on every client at once by the same broadcast.
 
+## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
+
+Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
+missing `C_Item.GetDetailedItemLevelInfo` stub proves it had never executed in the harness, since the
+first line of `GetGainPercent` that reaches it would have thrown.
+
+`FindPlayerCandidates` looked the raider up under OUR realm first and only fell back to a short-name
+match, where its ambiguity guard lives. For a cross-realm raider with a same-named character on our
+own realm, the first try hit and the guard never ran -- so the council read somebody else's sim number
+under this raider's name, confidently, with no sign anything was wrong, on the one screen that decides
+who gets the item.
+
+The realm was available the whole time. `UnitName` returns it as a second value and
+`Council.RefreshCouncilRows` discarded it while splitting the short name out. It is now carried on the
+member table and passed through; absent still means our own realm, which is right for the two
+vote-window call sites, since those ask about the player themselves.
+
+Both halves are mutation-verified, and Droptimizer.lua is now loaded per client in the harness so the
+panel's own call is exercised rather than only the module beneath it.
+
+## B90 — OPEN, by choice — the loot history is capped, not pruned by age
+
+Raised by the maintainer as "the history is never cleaned up, so it clutters players' disks". Measured
+against a real SavedVariables file on 2026-08-01 rather than reasoned about:
+
+```
+75.5 KB total
+  50.9 KB  67.4%  KART_WoWUtilsCache
+  10.6 KB  14.1%  KART_LootHistory      (31 entries, 352 bytes each)
+   7.1 KB   9.4%  KART_Settings
+   4.4 KB   5.9%  KART_PlayerCache
+   2.3 KB   3.0%  KART_Profiles
+   0.2 KB   0.2%  KART_LCOfficerNotes
+```
+
+The history is not the bulk, and it is already bounded: `MAX_HISTORY_ENTRIES` is 500 and `TrimHistory`
+drops the OLDEST TIMESTAMP rather than index 1 (the catch-up sync appends older entries, so a plain
+`remove(1)` would evict the newest). Worst case is about 172 KB, permanently, and the file measured
+sits at 6% of that cap. Two thirds of it is the companion app's own cache, which is replaced wholesale
+on each sync rather than grown.
+
+So no age prune. It would cost exactly what the maintainer wants kept -- the export to WoWUtils -- and
+would save at most 170 KB. Revisit only if a real file is ever measured well past that.
+
 ## B82 — FIXED 2026-07-31 — a window could be dragged off the screen
 
 Reported from the live v3.2.2-beta1 test, 2026-07-31. Dragging a KART window past the edge of the
