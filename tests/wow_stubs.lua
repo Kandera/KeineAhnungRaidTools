@@ -65,7 +65,11 @@ KARTTEST.bags = {}
 _G.C_Container = {
     GetContainerNumSlots     = function(bag) return #(KARTTEST.bags[bag] or {}) end,
     GetContainerItemLink     = function(bag, slot) return (KARTTEST.bags[bag] or {})[slot] end,
-    PickupContainerItem      = function() end,
+    -- Puts the bag item on the cursor, which is what makes GetCursorInfo answer and what
+    -- ClickTradeButton then drops into a trade slot.
+    PickupContainerItem      = function(bag, slot)
+        KARTTEST.cursorItem = (KARTTEST.bags[bag] or {})[slot]
+    end,
     GetContainerItemInfo     = function() return nil end,
 }
 
@@ -73,6 +77,24 @@ KARTTEST.tradePlayerItems = {}
 KARTTEST.tradeTargetItems = {}
 function _G.GetTradePlayerItemLink(i) return KARTTEST.tradePlayerItems[i] end
 function _G.GetTradeTargetItemLink(i) return KARTTEST.tradeTargetItems[i] end
+
+-- The cursor, and the two calls that put a bag item into a trade slot. Both were absent, so the
+-- two lines in Trade.OnTradeShow that actually hand an item over had never run.
+--
+-- The trade slot is filled the INSTANT ClickTradeButton is called here -- the reading most
+-- favourable to the addon, since the real client only shows the item once the server answers
+-- (TRADE_PLAYER_ITEM_CHANGED). Anything this finds is therefore not an artefact of the timing.
+KARTTEST.cursorItem = nil
+function _G.GetCursorInfo()
+    if not KARTTEST.cursorItem then return nil end
+    return "item", nil, nil, KARTTEST.cursorItem
+end
+function _G.ClearCursor() KARTTEST.cursorItem = nil end
+function _G.ClickTradeButton(slot)
+    if not KARTTEST.cursorItem then return end
+    KARTTEST.tradePlayerItems[slot] = KARTTEST.cursorItem
+    KARTTEST.cursorItem = nil
+end
 _G.LE_GAME_ERR_TRADE_COMPLETE = 401
 
 function _G.UnitExists(unit) return resolve(unit) ~= nil end
