@@ -50,3 +50,122 @@ do
     T.eq(table.concat(mismatched, ", "), "",
         "both languages use the same format placeholders in the same order")
 end
+
+-- ===================================================================================
+-- The other two ways a locale key goes wrong
+-- ===================================================================================
+-- The checks above compare the two languages against each other. Both can agree perfectly and still
+-- be wrong in a way only the CODE can show: a key nothing defines renders as nil and throws on the
+-- first concat, and a call site passing the wrong number of arguments to string.format throws at the
+-- moment it prints -- which for a warning path means the client fails exactly when it was trying to
+-- tell somebody something was wrong.
+--
+-- Read out of the source, like tests/test_core_wiring.lua, because there is no other way to see a
+-- reference that was never taken.
+
+local SOURCES = {
+    "Core.lua", "MainFrame.lua", "Utils.lua", "Profiles.lua", "AutoLog.lua",
+    "BuffChecker.lua", "Droptimizer.lua", "GroupLogic.lua", "Invite.lua", "RaidleadBar.lua",
+    "LootCouncil.lua", "LootCouncilPanel.lua", "LootCouncilSettings.lua", "LootCouncilTrade.lua",
+    "LootCouncilVote.lua", "LootCouncilRelevance.lua", "LootCouncilOfficerNotes.lua",
+    "LootHistory.lua",
+}
+
+local function Slurp(path)
+    local f = assert(io.open(path, "r"), path)
+    local text = f:read("*a")
+    f:close()
+    return text
+end
+
+do
+    local en = LoadLocale("Locales/enUS.lua").L_enUS
+    local missing = {}
+    for _, path in ipairs(SOURCES) do
+        local src = Slurp(path)
+        -- "L.KEY", "KART.L.KEY", "Lx.KEY" -- the three spellings this codebase uses. Keys are
+        -- ALL_CAPS by convention, which is what keeps this from matching ordinary table fields.
+        for key in src:gmatch("[%w%.]-L%.([A-Z][A-Z0-9_]*)") do
+            if en[key] == nil then missing[key] = path end
+        end
+    end
+    local names = {}
+    for key, path in pairs(missing) do names[#names + 1] = key .. " (" .. path .. ")" end
+    table.sort(names)
+    T.eq(table.concat(names, ", "), "", "every locale key the addon reads is actually defined")
+end
+
+do
+    -- Keys reached by name rather than written out: BuffChecker builds its rows from BuffData's
+    -- labelKey/reportLabelKey, and the quality menu from "LC_QUALITY_" .. n. Neither is visible to
+    -- the scan above, and a buff added without its string renders as an empty label.
+    local en = LoadLocale("Locales/enUS.lua").L_enUS
+    local src = Slurp("BuffChecker.lua")
+    local seen = 0
+    for key in src:gmatch("labelKey%s*=%s*\"([A-Z][A-Z0-9_]*)\"") do
+        seen = seen + 1
+        T.truthy(en[key] ~= nil, "BuffData's " .. key .. " has a string")
+    end
+    T.truthy(seen >= 12, "and every row of BuffData was actually looked at (" .. seen .. ")")
+
+    for i = 0, 5 do
+        T.truthy(en["LC_QUALITY_" .. i] ~= nil, "the quality menu has a name for quality " .. i)
+    end
+end
+
+do
+    -- string.format's argument count against the placeholder count of the string it is given.
+    -- Walks parentheses rather than matching to the first ")", so a nested call in an argument does
+    -- not end the scan early.
+    local en = LoadLocale("Locales/enUS.lua").L_enUS
+    local function CountSpecs(s)
+        local n = 0
+        for _ in s:gsub("%%%%", ""):gmatch("%%[%-%+ #0-9%.]*[diouxXeEfgGqcs]") do n = n + 1 end
+        return n
+    end
+
+    local checked, bad = 0, {}
+    for _, path in ipairs(SOURCES) do
+        local src = Slurp(path)
+        local pos = 1
+        while true do
+            local s, e, key = src:find("string%.format%(%s*[%w%.]-L%.([A-Z][A-Z0-9_]*)%s*,", pos)
+            if not s then break end
+            pos = e + 1
+            if type(en[key]) == "string" then
+                -- Find the closing paren of the format call.
+                local depth, i = 1, e
+                while i < #src and depth > 0 do
+                    i = i + 1
+                    local c = src:sub(i, i)
+                    if c == "(" or c == "[" or c == "{" then depth = depth + 1
+                    elseif c == ")" or c == "]" or c == "}" then depth = depth - 1 end
+                end
+                -- Split the argument list on top-level commas.
+                local args, d, cur = 0, 0, ""
+                for c in src:sub(e + 1, i - 1):gmatch(".") do
+                    if c == "(" or c == "[" or c == "{" then d = d + 1
+                    elseif c == ")" or c == "]" or c == "}" then d = d - 1 end
+                    if c == "," and d == 0 then
+                        if cur:match("%S") then args = args + 1 end
+                        cur = ""
+                    else
+                        cur = cur .. c
+                    end
+                end
+                if cur:match("%S") then args = args + 1 end
+
+                checked = checked + 1
+                local want = CountSpecs(en[key])
+                if want ~= args then
+                    bad[#bad + 1] = string.format("%s %s: %d placeholders, %d arguments",
+                        path, key, want, args)
+                end
+            end
+        end
+    end
+    table.sort(bad)
+    T.eq(table.concat(bad, " | "), "",
+        "every string.format on a locale string is given as many arguments as it has placeholders")
+    T.truthy(checked >= 40, "and enough call sites were actually reached (" .. checked .. ")")
+end

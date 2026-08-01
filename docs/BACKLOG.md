@@ -264,6 +264,25 @@ identity for LibDBIcon, re-deriving `autoLogOwned` from what is actually running
 a profile predates, the language-change reload, and deleting a profile leaving the loaded settings
 alone all held -- and now have nineteen assertions holding them, each mutation-verified.
 
+## B94 — the locale bug run found nothing, and that is the interesting part
+
+Fifth and last of the 2026-08-01 bug runs. Three axes checked, all clean:
+
+* every locale key the addon reads is defined -- 360 written-out references plus the ones reached by
+  name (BuffData's labelKey/reportLabelKey, `"LC_QUALITY_" .. n`, the voted-display modes);
+* no key is defined and never reached -- the 31 that look unused are all the dynamic families above;
+* 43 `string.format` call sites all pass exactly as many arguments as their string has placeholders.
+
+Worth writing down because of what it says about the other four. Locales were the ONE area entering
+these bug runs with a test of their own, and the one area with nothing to find. Droptimizer,
+BuffChecker, Auto-Promote and Profiles each had none -- proven, not assumed, by the stub each one
+needed being absent from the harness entirely -- and each produced a real defect: B89, B91, B92, B93.
+
+The three checks are tests now rather than a one-off scan, since two of them cover classes the
+existing DE/EN comparison structurally cannot see: a key nothing defines renders as nil and throws on
+the first concat, and a call site with the wrong argument count throws at the moment it prints --
+which on a warning path means the client fails exactly when it was trying to say something was wrong.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
