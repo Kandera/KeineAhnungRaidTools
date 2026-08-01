@@ -183,3 +183,112 @@ do
     T.truthy(KARTTEST.chat[1].msg:find("Alric", 1, true)
          and KARTTEST.chat[1].msg:find("Sinja", 1, true), "with both of them on it")
 end
+
+-- ==========================================================================
+--  The render, and the missing-buff list it produces
+-- ==========================================================================
+-- KART.MissingBuffs is what /Report sends, and it is filled by the render pass -- which had never
+-- run: C_UnitAuras and GetReadyCheckStatus were both absent from the harness, and the aura loop is
+-- the first thing UpdateBuffCheck does per player.
+
+-- Builds the window for `client` and renders it. UpdateStyles and CreateTabTitle live in files the
+-- harness does not load (Core.lua, MainFrame.lua) and only restyle what is already built.
+local function Render(client)
+    RaidSim.As(client, function()
+        client.KART.CreateTabTitle = client.KART.CreateTabTitle or function() end
+        client.KART.UpdateStyles = client.KART.UpdateStyles or function() end
+        if not client.KART.BuffCheckFrame then client.KART.CreateBuffCheckFrame() end
+        client.KART.UpdateBuffCheck()
+    end)
+    return client.KART.MissingBuffs or {}
+end
+
+local function Names(list)
+    local out = {}
+    for _, n in ipairs(list or {}) do out[#out + 1] = n end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+
+local function HasName(list, name)
+    for _, n in ipairs(list or {}) do if n:find(name, 1, true) then return true end end
+    return false
+end
+
+do
+    -- A flask is matched by NAME, not by spell id -- there is one per stat every tier and the list
+    -- would go stale every patch. The three spellings the addon accepts are the two locales plus the
+    -- older "Flask".
+    local sim, lm = F.NewRaid()
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+    KARTTEST.auras = {
+        [alric.unit] = { { name = "Fläschchen der launischen Winde", spellId = 431972 } },
+        [sinja.unit] = { { name = "Phial of Tepid Versatility", spellId = 431972 } },
+    }
+    local missing = Render(lm)
+    T.truthy(not HasName(missing.flask, "Alric"), "a raider carrying a Fläschchen is not reported")
+    T.truthy(not HasName(missing.flask, "Sinja"), "nor one carrying a Phial")
+    T.truthy(HasName(missing.flask, "Bramor"), "and one carrying neither is")
+end
+
+do
+    -- Expiring is a warning, not an absence: the raider HAS the buff, and putting them on the
+    -- "these people have no flask" list would be wrong.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.auras = {
+        [alric.unit] = { { name = "Flask of Power", spellId = 1, expirationTime = GetTime() + 60 } },
+    }
+    local missing = Render(lm)
+    T.truthy(not HasName(missing.flask, "Alric"),
+        "a flask about to run out still counts as having one")
+end
+
+do
+    -- Class buffs are only asked for when somebody in the raid can cast them. Without this the
+    -- report reads out a list of people who "forgot" a buff no one present has.
+    -- The fixture raid is DK, druid, paladin, mage, priest: a mage is there, no warrior is. The
+    -- class list is rebuilt from the roster on every render, so this is the raid deciding it and
+    -- not the test.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    local missing = Render(lm)
+    T.eq(Names(missing.shout), "",
+        "with no warrior in the group nobody is reported as missing Battle Shout")
+    T.truthy(#(missing.int or {}) > 0,
+        "while the mage's buff, which somebody present can cast, is asked for")
+    T.truthy(sim ~= nil)
+end
+
+do
+    -- Matching by spell id, which is how the class buffs are found. 1459 is Arcane Intellect, and
+    -- the fixture's mage makes the column live.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.auras = {
+        [alric.unit] = { { name = "Arkane Intelligenz", spellId = 1459 } },
+    }
+    local missing = Render(lm)
+    T.truthy(not HasName(missing.int, "Alric"), "the buff is recognised by its spell id")
+    T.truthy(HasName(missing.int, "Bramor"), "and its absence still is")
+end
+
+do
+    -- A private aura carries values that throw when compared. The loop pcalls the comparison for
+    -- exactly this reason; one such aura must not take the rest of that player's auras with it.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    local secret = setmetatable({ name = "Private" }, {
+        __index = function(_, k)
+            if k == "spellId" then error("secret value") end
+            return nil
+        end,
+    })
+    KARTTEST.auras = {
+        [alric.unit] = { secret, { name = "Flask of Power", spellId = 2 } },
+    }
+    local ok = pcall(Render, lm)
+    T.truthy(ok, "a private aura does not take the whole render down")
+    T.truthy(not HasName(lm.KART.MissingBuffs.flask, "Alric"),
+        "and the aura after it is still read")
+end

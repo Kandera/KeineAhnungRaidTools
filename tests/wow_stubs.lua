@@ -73,6 +73,25 @@ _G.C_Container = {
     GetContainerItemInfo     = function() return nil end,
 }
 
+-- Auras, per unit, in the order the buff check walks them. Absent until now, which is why the whole
+-- buff-check render -- the screen a raid leader reads before the pull -- had never run: the loop
+-- over C_UnitAuras is the first thing it does per player.
+-- Each entry is {name=, spellId=, expirationTime=}; expirationTime is GetTime()-based, as in the
+-- game, and 0/absent means "does not expire".
+KARTTEST.auras = {}
+_G.C_UnitAuras = {
+    GetAuraDataByIndex = function(unit, index, filter)
+        if filter and filter ~= "HELPFUL" then return nil end
+        return (KARTTEST.auras[unit] or {})[index]
+    end,
+}
+
+-- Blizzard's ready-check state, which it clears again the moment the check resolves -- the addon
+-- keeps its own snapshot for exactly that reason, and only one of the two paths could be reached
+-- while this was missing.
+KARTTEST.readyCheck = {}
+function _G.GetReadyCheckStatus(unit) return KARTTEST.readyCheck[unit] end
+
 KARTTEST.tradePlayerItems = {}
 KARTTEST.tradeTargetItems = {}
 function _G.GetTradePlayerItemLink(i) return KARTTEST.tradePlayerItems[i] end
