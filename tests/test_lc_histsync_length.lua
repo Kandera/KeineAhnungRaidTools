@@ -61,9 +61,11 @@ do
         winnerKey = "Player-1096-0A1B2C3D",
         reason = string.rep("Zweitspec-wenn-frei ", 12), class = "MAGE", rollID = 72,
     })
-    for _, msg in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
-        T.truthy(#msg <= 255,
-            "every history message put on the wire fits the cap (" .. #msg .. " bytes)")
+    -- e.msg, not e: RaidSim.Sent returns log ENTRIES. Measuring the entry counts an array with no
+    -- elements, which is 0 and always under the cap -- an assertion that cannot fail.
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
+        T.truthy(#e.msg <= 255,
+            "every history message put on the wire fits the cap (" .. #e.msg .. " bytes)")
     end
 end
 
@@ -114,9 +116,9 @@ do
             T.truthy(false, "an award with a long German reason is lost at pad " .. pad)
             break
         end
-        for _, msg in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
-            if #msg > 255 then
-                T.truthy(false, "a message over the cap went out at pad " .. pad .. " (" .. #msg .. ")")
+        for _, e in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
+            if #e.msg > 255 then
+                T.truthy(false, "a message over the cap went out at pad " .. pad .. " (" .. #e.msg .. ")")
                 break
             end
         end
@@ -156,4 +158,72 @@ do
     end
     T.eq(checked, 25, "every three-byte cut position was tried")
     T.truthy(not IsValidUTF8(string.char(195)), "and rejects a lead byte with nothing after it")
+end
+
+-- ==========================================================================
+--  What the catch-up accepts, and how much of it it sends
+-- ==========================================================================
+
+-- A timestamp from the future -----------------------------------------------------------------------
+-- time() is each client's OS clock. A peer with a badly set one -- or a hostile one -- dating an entry
+-- years ahead does not just add a wrong row: LH.RequestHistorySync asks for everything newer than the
+-- newest entry it holds, so that date becomes the watermark and every future request asks for entries
+-- newer than a date nobody will ever reach. Catch-up sync is then dead on this client for good, and
+-- nothing says so.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+
+    local far = time() + 5 * 365 * 24 * 60 * 60
+    RaidSim.As(raider, function()
+        raider.KASC:Send(("LC_HIST_ENTRY:%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s")
+            :format(far, GLOVES), "WHISPER", lm.name)
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(#lm.env.KART_LootHistory, 0, "an entry dated years ahead is refused")
+
+    -- The point of refusing it: the catch-up still works afterwards.
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+    local asks = RaidSim.Sent(sim, "LC_HIST_REQ")
+    T.eq(#asks, 1, "and the client still asks its peers for what it is missing")
+    local since = tonumber(((asks[1] or {}).msg or ""):match("^LC_HIST_REQ:(%d+)"))
+    T.truthy(since and since <= time(),
+        "from a point in time that can actually be reached, not from the bad entry's date")
+end
+
+do
+    -- The boundary itself: a few minutes of clock drift between two raiders is ordinary and must not
+    -- cost them an award, while years ahead is not drift.
+    local _, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    RaidSim.As(raider, function()
+        raider.KASC:Send(("LC_HIST_ENTRY:%d:16:71:MAGE:1,1,1:Player-1-A:Alric:BIS:%s")
+            :format(time() + 120, GLOVES), "WHISPER", lm.name)
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(#lm.env.KART_LootHistory, 1, "two minutes of clock drift is accepted, not treated as an attack")
+end
+
+-- How much one answer may be --------------------------------------------------------------------
+-- One whisper per entry, staggered. A peer holding a long history answering in full would put
+-- hundreds of messages on the wire for one raider walking in.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local many = {}
+    for i = 1, 80 do
+        many[i] = { time = time() - 1000 + i, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+                    reason = "BIS", class = "MAGE", rollID = 200 + i }
+    end
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = many end)
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(30)
+
+    local sent = #RaidSim.Sent(sim, "LC_HIST_ENTRY")
+    T.truthy(sent > 0, "the peer answers a catch-up request")
+    T.truthy(sent <= 30,
+        "with a bounded number of messages, not one per entry it happens to hold (" .. sent .. ")")
 end
