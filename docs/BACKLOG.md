@@ -575,6 +575,58 @@ language. None of the nine had ever been called.
 
 Coverage went 82% -> 86% across the run. No defect in any of the four.
 
+## B107 — NO DEFECT 2026-08-01 — the sixteenth run: mutating the loot core, and what survived
+
+The previous run's find (B105) was, underneath, a test that was green for a reason unrelated to the
+code. This run looks for that systematically instead of by accident: mutate a decision in the loot
+core, run the suite, and record every mutant it fails to notice. A survivor is not a defect — it is
+a decision no assertion depends on.
+
+Scope: `LootCouncil.lua`, `LootCouncilVote.lua`, `LootCouncilTrade.lua`, restricted to lines coverage
+proves the suite executes (mutating unreachable code proves nothing) and to two rules — moving a
+boundary (`>=` <-> `>`) and weakening a conjunction (`and` -> `or`). 83 survivors out of ~200
+mutants, each one a candidate needing a human verdict.
+
+**Two classes were worked through. The rest are recorded, not cleared** — mostly `X and X.y` nil
+guards, where the mutant is usually equivalent, and second-clocked timeouts where an off-by-one
+second cannot be observed.
+
+**Six identical authority guards (worked through).** Every one of `HandleConfig`,
+`HandleSessionResume`, `HandleVoteRequest`, `HandleVote`, `HandleRoll` and `HandleCouncilVote` opens
+with `if not (senderKey and FindUnitForKey(senderKey)) then return end`, and all six survived being
+switched off.
+
+The first test written for it *passed and proved nothing*, which is worth more than the fix: it sent
+from a player who had left the raid, and was caught one layer earlier by KASC's own group filter
+(`entry.group` -> `KAUtil.IsFullNameInGroup`), already held by `tests/test_kasc_responders.lua`. The
+messages never reached the handlers, every mutant still survived, and the file would have read as
+coverage of something it never touched.
+
+The two layers ask different questions — KASC compares the sender's NAME, the handler asks whether
+the resolved KEY belongs to anybody present — and they disagree in exactly one state, the one the
+identity code is written around: a group member whose `UnitGUID` is momentarily nil during a loading
+screen. `KARTTEST.guidBlackout` models it, and with it **two of the six turn out to be the only
+defence at their site**: `HandleVote` and `HandleCouncilVote`, where without the guard a vote lands
+in the raid's loot state under a pending-text key like `sinja` instead of a GUID, on the panel that
+hands out the item. Both are held now. The other four have a later authority check that refuses the
+same sender anyway — defence in depth, and the reason their mutants are not worth chasing.
+
+**The 255-byte cap on the raid config (worked through).** `BuildCouncilPayload` fits the council list
+into what is left of an addon message after the prefix, and all three of its boundaries survived
+being moved. Going over is not a partial send: every receiver's anchored pattern fails on the
+fragment, so the whole raid silently stays on its previous config with nothing printed on either
+side — the failure the function was written for, and one this addon has already paid for once. Now
+measured at exactly 255, at one over, at a cut that must land on a separator rather than mid-name, at
+a prefix that leaves no room at all (button labels run to 128 characters and the lootmaster field is
+unbounded, so it is reachable from the settings panel), and at a council list of umlaut names, since
+the budget counts BYTES.
+
+**Measured and dismissed.** `RestorePersistedTrades`'s "are there any obligations" check is
+redundant: `RefreshTradeReminder` makes the same check itself and hides the window. The outcome is
+held anyway, because two independent places have to agree on it for a reload to stay quiet.
+
+No defect in the addon. Two test gaps closed at the places that write loot state.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

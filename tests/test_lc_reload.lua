@@ -691,9 +691,10 @@ end
 
 -- A reload with nothing owed --------------------------------------------------------------------
 -- Trade.RestorePersistedTrades opens the trade-reminder window when there are obligations to show.
--- A mutation run found the "are there any" check survives being switched off, which is a window
--- listing nothing at all, on every reload, for a raid that owes nobody anything. The window is only
--- ever closed by hand, so it would sit there for the evening.
+-- A mutation run flagged its "are there any" check as held by nothing; measuring showed why that is
+-- harmless -- Trade.RefreshTradeReminder makes the same check itself and hides the window instead,
+-- so the outer one only saves a call. What is worth holding is the OUTCOME, because two independent
+-- places have to agree on it for a reload to stay quiet: nothing owed, no window.
 do
     local sim, lm = F.NewRaid()
     T.eq(#lm.KART.LC.pendingTrades, 0, "nobody is owed anything")
