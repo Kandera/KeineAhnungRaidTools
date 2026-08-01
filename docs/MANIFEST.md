@@ -96,6 +96,11 @@ on it; the item is in their bags.
 Every eligible raider gets a vote window for that item. Each answer appears on every council member's
 panel, under the label the raider actually clicked.
 
+Include somebody running one of the two personal relevance switches, which are available again as of
+2026-08-01. They change what a raider is SHOWN, never whether the council hears from them: an item
+the switch hides is answered automatically, so the tally is complete either way, and the raider can
+still change that answer — the row it is changed on stays on screen.
+
 *Protects:* the council deciding on a partial tally. Do this one with several people answering at the
 same moment.
 
@@ -121,12 +126,17 @@ reminder, and only the holder.
 ## C8 — A reload changes nothing
 
 Reload mid-distribution — as the lootmaster, as a council member, and as a plain raider, one attempt
-each. The session comes back, the item is still tracked, the trade deadline still counts from when
-the boss died, and a re-decision after the reload is still a re-decision (it asks first, and the raid
-follows it).
+each. The session comes back, the item is still on the council panel with the votes that were cast on
+it, `/kart lc` opens that panel, the trade deadline still counts from when the boss died, and a
+re-decision after the reload is still a re-decision (it asks first, and the raid follows it).
 
-*Protects:* B34 (the four-hour clock restarting, which loses the item silently) and B77 (the person
-who just decided being the only client showing their own decision).
+Do it BOTH while the vote timer is running and after it has run out. The second is the ordinary state
+of a distribution — twenty seconds of voting, then however long the council takes — and it is the one
+that used to lose the item outright for everybody.
+
+*Protects:* B34 (the four-hour clock restarting, which loses the item silently), B77 (the person who
+just decided being the only client showing their own decision) and B81 (the items disappearing
+altogether, worst for the lootmaster, who nobody was allowed to answer).
 
 ## C9 — The loot flow survives the lootmaster walking out
 
