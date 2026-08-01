@@ -559,6 +559,40 @@ do
 end
 
 do
+    -- The bound that matters most in practice: a snapshot is only worth anything while the raid it
+    -- belonged to is still running, and the client cannot know that at load -- the answer arrives
+    -- from the raid (LC_ACTIVE / LC_SESSION_RESUME). If it never does, the restored items are last
+    -- night's, and leaving them would put a stale tab in tonight's council panel. This models the
+    -- ordinary case of logging back in shortly after a raid, alone: nobody asks, nobody answers.
+    local sim = F.NewRaid()
+    F.Drop(sim, 95, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+
+    local lm = RaidSim.Reload(sim, "Bramor")
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: the items come back first, before anybody has answered")
+    T.eq(lm.KART.LC.sessionActive, false, "B81: with no session yet")
+
+    KARTTEST.AdvanceTime(90)
+    T.eq(#lm.KART.LC.councilTabs, 0, "B81: and are dropped again when no raid confirms them")
+end
+
+do
+    -- ...and a session that DOES come back keeps them, for as long as the distribution takes.
+    local sim = F.NewRaid()
+    F.Drop(sim, 96, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+
+    local lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(10)
+    T.eq(lm.KART.LC.sessionActive, true, "B81: the raid confirms the session")
+
+    KARTTEST.AdvanceTime(300)
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: so the item stays for as long as the council needs")
+end
+
+do
     -- The bound that keeps it from resurrecting the wrong evening: a snapshot older than the
     -- restore window is discarded, whatever it says.
     local sim, lm = F.NewRaid()

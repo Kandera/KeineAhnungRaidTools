@@ -2124,6 +2124,10 @@ end
 --     clean without anybody having to remember to.
 local SESSION_RESTORE_MAX = 60 * 60
 
+-- How long the restored items wait for the raid to confirm the session before giving up on
+-- themselves. See the end of LC.RestoreSessionSnapshot for what it is protecting against.
+local RESTORE_CONFIRM_SECONDS = 60
+
 -- The per-roll tables worth carrying across. This is Trade.ClearRollState's list, which is the
 -- addon's own definition of "everything tracked under a rollID", minus three:
 --   * LC.relevanceSnapshot -- Blizzard's live per-roll verdict, meaningless once the client restarts
@@ -2247,6 +2251,18 @@ function LC.RestoreSessionSnapshot()
     -- LC_ACTIVE / LC_SESSION_RESUME). If the answer comes back "no", LC.ClearAllRolls removes exactly
     -- what was just restored, which is the correct outcome and needs no special case.
     if #LC.voteListRolls > 0 then LC.Vote.EnsurePruneTicker() end
+
+    -- If no answer comes at all, the items are last night's. That is the ordinary shape of logging
+    -- back in shortly after a raid -- inside the age bound, but with nobody left to ask -- and
+    -- leaving them would put a stale tab in tonight's council panel, which is a failure this addon
+    -- has already paid for once ("stale tabs after next boss"). The wait is generous on purpose: a
+    -- reloaded loot owner is the SLOWEST client to hear back, because their session has to be handed
+    -- to them by a peer rather than simply confirmed (LC_SESSION_RESUME), and it is measured in tens
+    -- of seconds, not tens of minutes.
+    C_Timer.After(RESTORE_CONFIRM_SECONDS, function()
+        if LC.sessionActive then return end
+        LC.ClearAllRolls()
+    end)
 end
 
 -- ==========================================================================
