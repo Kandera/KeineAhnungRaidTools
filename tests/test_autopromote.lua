@@ -112,11 +112,45 @@ do
 end
 
 do
+    -- The case the export actually produces most of: a realm-qualified name for somebody on YOUR
+    -- OWN realm. UnitName answers "" for their realm -- that is how the game says "same realm as
+    -- you" -- so the realm-qualified branch was skipped entirely and the entry matched nothing at
+    -- all. Copy the list out of WoWUtils, which qualifies everybody, and most of it silently never
+    -- fires. Same shape as B15 and the same silence.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    PromoteList("Wuusch-TarrenMill")
+    T.eq(Run()[1], "Wuusch",
+        "a realm-qualified entry for our own realm matches, and promotes by plain name")
+end
+
+do
+    -- ...and it is still the REALM that decides: another realm's name must not promote our own
+    -- namesake just because the realm field came back empty.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    PromoteList("Wuusch-Silvermoon")
+    T.eq(#Run(), 0, "another realm's entry does not promote our own player of that name")
+end
+
+do
     -- A realm-qualified entry must not promote a DIFFERENT realm's namesake. This is the whole
     -- reason the entry is realm-qualified in the first place.
     Raid({ { name = "Wuusch",  guid = "Player-3-B", realm = "Silvermoon" } })
     PromoteList("Wuusch-TarrenMill")
     T.eq(#Run(), 0, "a namesake on another realm is not the person named")
+end
+
+do
+    -- The other direction, and the only thing the canonical key UpdateCache stores is there for:
+    -- the LIST carries a spelling the unit does not. Someone typing "Tarren Mill" out of habit for
+    -- a realm the game calls "TarrenMill" is the ordinary way to land here, and neither spelling
+    -- read off the unit alone can match it -- only a canonicalized key stored with the entry can.
+    KARTTEST.realm = "Blackmoore"
+    Raid({ { name = "Wuusch", guid = "Player-2-B", realm = "TarrenMill" } },
+          { name = "Kandera", guid = "Player-1-A", realm = "Blackmoore", leader = true })
+    KARTTEST.realm = "Blackmoore"
+    PromoteList("Wuusch-Tarren Mill")
+    T.eq(Run()[1], "Wuusch-TarrenMill",
+        "a spelling only the list has still matches, through the key stored beside the entry")
 end
 
 -- The nickname --------------------------------------------------------------------------------------
@@ -131,3 +165,7 @@ do
     T.eq(#out, 1, "an alt is promoted by the nickname its main is known by")
     T.eq(out[1], "Wuuschdk", "and the promote names the character, not the nickname")
 end
+
+-- Leave the shared roster the way this file found it: KARTTEST.activeUnit is global across every
+-- test file, and a stray "raidN" here would make the next file's "player" somebody else entirely.
+KARTTEST.activeUnit = nil

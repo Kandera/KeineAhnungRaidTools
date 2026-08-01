@@ -102,7 +102,16 @@ function KART.HandleAutoPromote()
             -- Tools nickname (see KASC.Identity.GetNickname), so a name in the promote list applies to
             -- every character sharing that nickname, not just one specific alt.
             local matches = shortName and KART.PromoteNamesTable[KAUtil.CaseFold(shortName)]
-            if not matches and realm and realm ~= "" then
+            -- UnitName answers "" for somebody on our own realm -- that is how the game says "same
+            -- realm as you", not "no realm". Reading it as "nothing to qualify" skipped the branch
+            -- below entirely, so a realm-qualified entry for one of our OWN players matched nothing
+            -- at all. That is most of the WoWUtils export, which qualifies everybody: paste it in and
+            -- the majority of the list silently never fires. Same shape as B15, same silence.
+            --
+            -- Only for MATCHING. `realm` itself stays as the game reported it, because it is also
+            -- what the promote below targets, and a same-realm character is addressed by plain name.
+            local matchRealm = (realm ~= "" and realm) or GetRealmName()
+            if not matches and matchRealm and matchRealm ~= "" then
                 -- Also accept a realm-qualified entry. "Name-Realm" is the format the WoWUtils
                 -- export uses and the format this function itself passes to PromoteToAssistant, so a
                 -- user copying a name from there would otherwise never get promoted.
@@ -112,8 +121,8 @@ function KART.HandleAutoPromote()
                 -- ("TarrenMill"). UpdateCache stores a canonicalized key alongside the raw entry,
                 -- so checking the canonical form here closes the gap from the other end too (B15).
                 local folded = KAUtil.CaseFold(name)
-                matches = KART.PromoteNamesTable[folded .. "-" .. KAUtil.CaseFold(realm)]
-                       or KART.PromoteNamesTable[folded .. "-" .. KAUtil.CanonRealm(realm)]
+                matches = KART.PromoteNamesTable[folded .. "-" .. KAUtil.CaseFold(matchRealm)]
+                       or KART.PromoteNamesTable[folded .. "-" .. KAUtil.CanonRealm(matchRealm)]
             end
             if not matches then
                 local nick = KASC.Identity.GetNickname(unit)

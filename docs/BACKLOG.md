@@ -220,6 +220,30 @@ raised out of reach, and a split after every name -- each turns a different asse
 The stub records chat now and marks anything over the cap as refused, so this class of silent failure
 is visible to any later test rather than swallowed.
 
+## B92 — FIXED 2026-08-01 — a realm-qualified promote entry never matched anyone on our own realm
+
+Found in the Invite/GroupLogic/RaidleadBar bug run, picked because Auto-Promote acts on other
+people's raid and had no test at all -- `PromoteToAssistant` was not even defined in the harness, so
+`KART.HandleAutoPromote` would simply have thrown if anything had called it.
+
+`UnitName` answers `""` for the realm of somebody on our own realm. That is the game saying "same
+realm as you", not "no realm" -- and `HandleAutoPromote` read it as the latter, skipping its
+realm-qualified branch entirely. So an entry like `Wuusch-TarrenMill` matched nothing for a player
+standing on our own realm.
+
+That is most of the WoWUtils export, which qualifies everybody. Paste the list in and the majority of
+it silently never fires -- exactly the shape of B15, which fixed the cross-realm half of the same
+question and left this one open.
+
+Fixed for MATCHING only: the realm the game reported is still what `PromoteToAssistant` targets,
+because a same-realm character is addressed by plain name. Three mutations, each red on a different
+assertion -- reading the empty realm as "nothing to qualify", using the match realm as the promote
+target, and dropping the canonical key `UpdateCache` stores beside each entry.
+
+Twelve assertions now cover the rest of it as well: case and spacing, a non-leader promoting nobody,
+someone already an assistant being left alone, a namesake on another realm not being the person
+named, and the nickname path.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
