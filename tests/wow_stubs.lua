@@ -651,9 +651,14 @@ _G.C_Item = {
     -- difference: the same item simmed at several upgrade tracks appears more than once in the
     -- companion's cache, and the rolled level is what picks the right candidate. Absent here until
     -- 2026-08-01, which is one of the reasons that module had never executed in a test at all.
+    -- detailedIlvl = false means the client cannot answer yet, which is what the real one does for an
+    -- item this client has not cached -- on a fresh login, every item that has not dropped. Falling
+    -- back to the base level unconditionally made that case unreachable, and it is a case with its
+    -- own branch: with no level to measure against, Droptimizer picks the largest gain instead of
+    -- the closest one.
     GetDetailedItemLevelInfo = function(v)
         local it = itemOf(v)
-        if not it then return nil end
+        if not it or it.detailedIlvl == false then return nil end
         return it.detailedIlvl or it.ilvl
     end,
 }

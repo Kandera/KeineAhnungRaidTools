@@ -123,6 +123,36 @@ do
         "the candidate closest to the level actually rolled wins, not the biggest number")
 end
 
+do
+    -- The other half of that tie-break, which had never run: the item's real level is not always
+    -- knowable -- C_Item.GetDetailedItemLevelInfo answers nothing for an item this client has not
+    -- cached yet, which on a fresh login is every item that has not dropped. With nothing to measure
+    -- against, the largest gain is the honest fallback, and showing the SMALLEST would talk the
+    -- council out of an upgrade.
+    KARTTEST.realm = "Blackmoore"
+    KARTTEST.items[700002].detailedIlvl = false -- the client cannot answer for this link yet
+    Cache({ ["kandera-blackmoore"] = {
+        { itemId = 700002, ilvl = 278, gainPct = 1.0 },
+        { itemId = 700002, ilvl = 291, gainPct = 5.0 },
+        { itemId = 700002, ilvl = 304, gainPct = 9.0 },
+    } })
+    T.eq(Gain("Kandera", RING), 9.0,
+        "with the rolled level unknown, the largest gain among them is shown")
+end
+
+do
+    -- Same fallback from the other direction: the level IS known, but the companion wrote no ilvl on
+    -- any candidate, so there is nothing to compare it to. Older exports look exactly like this.
+    KARTTEST.realm = "Blackmoore"
+    KARTTEST.items[700002].detailedIlvl = 291
+    Cache({ ["kandera-blackmoore"] = {
+        { itemId = 700002, gainPct = 2.0 },
+        { itemId = 700002, gainPct = 7.0 },
+    } })
+    T.eq(Gain("Kandera", RING), 7.0,
+        "candidates carrying no level at all fall back to the largest gain rather than the first")
+end
+
 -- What the companion can hand us on a bad day -------------------------------------------------------
 -- Everything below is another program's output. None of it may throw: this runs inside the council
 -- panel's row build, once per candidate per item.
