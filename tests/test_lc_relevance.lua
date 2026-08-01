@@ -340,6 +340,32 @@ do
 end
 
 do
+    -- Re-answering must not re-broadcast an answer that did not change. A settings toggle during a
+    -- boss reconsiders every item on screen at once, and a burst of identical LC_VOTE messages is
+    -- exactly the sort of thing Blizzard's chat throttle swallows -- taking somebody else's message
+    -- with it.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja           -- PRIEST, hide ON, transmog ON
+    -- An appearance this character already owns, so Transmog is not the answer either way: both
+    -- settings combinations below come out as the same Pass.
+    KARTTEST.appearances[F.PLATE_CHEST] = { appearance = 920, source = 921, collectible = true, owned = true }
+    F.Drop(sim, 563, F.PLATE_CHEST, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    KARTTEST.appearances = {}
+    T.eq(sinja.KART.LC.votedByMe[563], sinja.KART.LC.GetPassButtonIndex(), "B50: answered with Pass")
+
+    F.RaidSim.ClearLog(sim)
+    sinja.env.KART_Settings.lcAutoTransmogVote = false
+    F.RaidSim.As(sinja, function() sinja.KART.LC.Vote.RefreshAfterRelevanceChange() end)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(sinja.KART.LC.votedByMe[563], sinja.KART.LC.GetPassButtonIndex(),
+        "B50: and the answer is unchanged under the new settings")
+    T.eq(#F.RaidSim.Sent(sim, "LC_VOTE:563"), 0,
+        "B50: so nothing is sent to the council a second time")
+end
+
+do
     -- A vote the PLAYER cast is never revisited, whatever they do with the switches afterwards.
     local sim = F.NewRaid()
     local sinja = sim.byName.Sinja

@@ -256,7 +256,15 @@ function LC.Relevance.ApplyToPendingRolls()
                         -- the previous run's Pass may have hidden this row, and a Transmog vote is
                         -- not a reason to keep it hidden.
                         LC.hiddenIrrelevant[rollID] = (answer == "pass") or nil
-                        LC.Vote.CastVote(rollID, idx, nil, true)
+                        -- Only when the answer actually CHANGED. A settings toggle mid-boss
+                        -- reconsiders every item on screen at once, and most of them come out the
+                        -- same way -- a burst of identical LC_VOTE messages is exactly what
+                        -- Blizzard's chat throttle swallows, taking somebody else's message with it.
+                        -- The stamp and the hide flag above are the parts that always have to be
+                        -- brought up to date; the vote is already what it should be.
+                        if LC.votedByMe[rollID] ~= idx or not LC.autoVotedByMe[rollID] then
+                            LC.Vote.CastVote(rollID, idx, nil, true)
+                        end
                     end
                 end
             end
