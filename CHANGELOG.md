@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Both of those settings now affect the items already in front of you**, not only the next boss.
 - **Items still run out while your vote window is empty**, instead of coming back later with live vote buttons.
 - **`/kart lc` reopens the window with what is running now**, not the picture it was showing when you closed it.
+- **The council member list says who is actually in the council.** The raid leader is not in it automatically — enter yourself if you take part.
 
 ## [3.2.2] - 2026-08-01
 ### Fixed

@@ -120,7 +120,7 @@ what a late JOINER sends**, and a late arrival must not be pulled into a distrib
 running. Real rolls tell the two apart by asking Blizzard; manual rolls have nothing to ask. That is
 a rule decision, not a patch.
 
-## B80 — OPEN — the raid leader is not in the council list, though the rule says they always are
+## B80 — OPEN, by choice — the raid leader is not in the council list
 
 Reported from the live v3.2.2-beta1 test, 2026-07-31, and explicitly NOT blocking the guild release:
 the workaround is to put yourself in the list, which takes one edit.
@@ -130,8 +130,14 @@ council list and nothing else. The raid leader owns the config (`docs/OWNERSHIP.
 implied by it, so a leader who designates somebody else as lootmaster and does not name themselves
 sits outside the council: no panel, and their own awards would be rejected by everybody.
 
-Worth deciding rather than patching, because "the raid leader is always council" is a rule and
-belongs in `docs/OWNERSHIP.md` next to the other two if it holds.
+**Maintainer's call, 2026-08-01: no rule. The council list stays the only source.** Whoever decides
+is written in it, the raid leader included. The alternative was a second implicit special case next
+to the loot owner's, and it would have taken the choice away from a raid leader who deliberately
+does not want to vote on the loot they are leading for. One edit in a field they already own is the
+better trade.
+
+So this is not a defect in the code, and nothing about it goes into `docs/OWNERSHIP.md` — the
+document already says the council list is the raid leader's to set.
 
 ## B82 — FIXED 2026-07-31 — a window could be dragged off the screen
 

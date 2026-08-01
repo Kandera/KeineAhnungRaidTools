@@ -14,6 +14,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Beide Einstellungen wirken jetzt auch auf die Items, die schon vor dir liegen** — nicht erst ab dem nächsten Boss.
 - **Items laufen auch ab, während dein Vote-Fenster leer ist** — statt später mit aktiven Vote-Buttons zurückzukommen.
 - **`/kart lc` öffnet das Fenster mit dem, was gerade läuft** — nicht mit dem Bild von vorhin.
+- **Die Council-Mitgliederliste sagt, wer wirklich im Council ist.** Der Raidleiter ist nicht automatisch drin — trag dich ein, wenn du mitentscheidest.
 
 ## [3.2.2] - 2026-08-01
 ### Behoben
