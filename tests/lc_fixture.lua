@@ -38,7 +38,15 @@ KARTTEST.AddItem({ id = 249404, name = "Gloombound Sconce", quality = 4, ilvl = 
 
 F.GLOVES, F.WEAPON, F.TOKEN = 249331, 249293, 249364
 F.MOUNT, F.BOE, F.RARE = 249400, 249401, 249402
+-- A SECOND plate piece. One is not enough: the relevance feature only reaches its Transmog branch
+-- for an item the armor check calls irrelevant, so exercising a reused rollID across two such
+-- items needs two of them. This is also the shape from GitHub #11 -- the strength plate chest a
+-- Holy Paladin would have taken for off-spec.
+KARTTEST.AddItem({ id = 249405, name = "Gloombound Breastplate", quality = 4, ilvl = 285,
+                   classID = 4, subclassID = 4, equipLoc = "INVTYPE_CHEST", bind = 1 })
+
 F.PET, F.HOUSING = 249403, 249404
+F.PLATE_CHEST = 249405
 
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out

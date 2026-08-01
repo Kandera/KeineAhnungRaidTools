@@ -129,3 +129,61 @@ do
     T.eq(alric.KART.LC.votedByMe[511], alric.KART.LC.GetTransmogButtonIndex(),
         "B39: an appearance this character still needs is voted Transmog")
 end
+
+-- B37, B38, B42: the snapshot has to say WHICH item it describes -----------------------------------
+-- Blizzard's per-roll verdict is captured under a rollID and nothing else, and a rollID is reused for
+-- a genuinely different drop within seconds on trash. Three entries, one cause:
+--
+--   B37  Trade.ClearRollState keeps the snapshot on purpose, reasoning that the relevance frame has
+--        already captured the new item. True for a client that got its own START_LOOT_ROLL; false for
+--        one that was dead or out of range and learned of the item from LC_START -- which is exactly
+--        the client with no way to notice.
+--   B38  the snapshot is written for rolls Council never engages (trash BoEs, collectibles), so one
+--        of those reusing a live rollID silently rewrites the verdict of the item being voted on.
+--   B42  the self-sweep protects only rollID itself and entries in LC.voteListRolls, and on a
+--        non-lootmaster client a roll enters that list one round trip later -- so on a multi-item
+--        boss each roll's snapshot is deleted while the next one is being handled.
+--
+-- The medicine is the one this codebase has already applied three times: LC.rollsFor for rolls,
+-- vote.item for votes, RemoveHistoryForRoll's itemLink for history. Stamp it with the item.
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric            -- MAGE, auto-transmog ON
+    -- Item A: an appearance this client still needs. That verdict lands in the snapshot.
+    F.Drop(sim, 520, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
+    KARTTEST.AdvanceTime(1)
+    T.eq(alric.KART.LC.votedByMe[520], alric.KART.LC.GetTransmogButtonIndex(),
+        "the first item is voted Transmog, as it should be")
+
+    -- The same rollID comes back for plate gloves whose appearance this character ALREADY owns, and
+    -- this client is dead for the new roll -- no local START_LOOT_ROLL, so no new snapshot. Reading
+    -- the leftover one would vote Transmog for an appearance they have, and the council would award
+    -- the item on it.
+    KARTTEST.appearances[F.GLOVES] = { appearance = 910, source = 911, collectible = true, owned = true }
+    F.Drop(sim, 520, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    KARTTEST.appearances = {}
+
+    T.is_nil(alric.KART.LC.votedByMe[520],
+        "B37: the previous item's verdict is not applied to the one that replaced it")
+end
+
+do
+    -- B42: a boss dropping several items must not have each snapshot swept while the next is handled.
+    -- The sweep used to protect only the roll being handled and whatever had reached LC.voteListRolls
+    -- -- and on any client that is not the loot owner a roll reaches that list one round trip later,
+    -- because LC_START has to arrive first. By then Auto-Pass has blanked GetLootRollItemInfo, so the
+    -- previous roll looked dead and its snapshot went. Only the last item kept Blizzard's verdict; the
+    -- rest fell through to the armor rule, which answers nil for weapons and jewellery.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja            -- not the loot owner
+    F.Drop(sim, 530, F.GLOVES, { canNeed = false, canTransmog = false })
+    F.Drop(sim, 531, F.PLATE_CHEST, { canNeed = false, canTransmog = false })
+    F.Drop(sim, 532, F.WEAPON, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+
+    for _, id in ipairs({ 530, 531, 532 }) do
+        T.truthy(sinja.KART.LC.relevanceSnapshot[id],
+            "B42: roll " .. id .. " still has Blizzard's verdict after the later drops")
+    end
+end

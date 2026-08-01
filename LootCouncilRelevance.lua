@@ -73,7 +73,20 @@ relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
         -- canNeed is stored RAW, not folded into a verdict. "Blizzard refused the Need roll" and
         -- "your class cannot equip this" are not the same statement -- see IsIrrelevantForMe,
         -- which is where the two are told apart, and B36 for what folding them cost.
-        LC.relevanceSnapshot[rollID] = { canNeed = canNeed, needsAppearance = not not canTransmog }
+        --
+        -- Stamped with the ITEM it describes (B37, B38). A rollID alone does not identify a drop:
+        -- Blizzard reuses one for a genuinely different item within seconds on trash, and this
+        -- handler fires for every roll including the ones Council never engages -- a BoE or a
+        -- collectible landing on a live rollID rewrote the verdict of the item being voted on.
+        -- The reader compares against the item currently tracked and falls back rather than
+        -- trusting a verdict that belongs to something else. Same medicine as LC.rollsFor for
+        -- rolls, vote.item for votes and RemoveHistoryForRoll's itemLink for the loot history.
+        local link = GetLootRollItemLink(rollID)
+        LC.relevanceSnapshot[rollID] = {
+            canNeed = canNeed,
+            needsAppearance = not not canTransmog,
+            item = (type(link) == "string" and link:match("item:(%d+)")) or nil,
+        }
     end
 
     -- Self-limiting sweep, run on every roll rather than tied to a session ending: most rolls never
@@ -88,19 +101,32 @@ relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
     -- judge here), and any roll still in LC.voteListRolls -- a roll reports no texture once IT has
     -- been rolled while its vote row can still be open for minutes, which is the entire reason this
     -- snapshot exists in the first place.
+    -- LC.rollItems, not LC.voteListRolls (B42). A roll reaches the vote list one round trip after
+    -- the local START_LOOT_ROLL on any client that is not the loot owner -- LC_START has to
+    -- arrive first -- and by then Auto-Pass has already blanked GetLootRollItemInfo. On a boss
+    -- dropping several items each roll's snapshot was therefore deleted while the NEXT one was
+    -- being handled, so only the last item kept Blizzard's verdict and the rest fell through to
+    -- the armor rule -- which answers nil for weapons and jewellery. LC.rollItems is the
+    -- addon's own "am I tracking this" table and is populated by both entry paths at once.
     for id in pairs(LC.relevanceSnapshot) do
-        if id ~= rollID then
-            local stillVoting = false
-            for _, votingID in ipairs(LC.voteListRolls) do
-                if votingID == id then stillVoting = true break end
-            end
-            if not stillVoting then
-                local stillLive = GetLootRollItemInfo(id)
-                if not stillLive then LC.relevanceSnapshot[id] = nil end
-            end
+        if id ~= rollID and not LC.rollItems[id] then
+            local stillLive = GetLootRollItemInfo(id)
+            if not stillLive then LC.relevanceSnapshot[id] = nil end
         end
     end
 end)
+
+-- The snapshot for this roll, but only if it describes the item we are actually holding under that
+-- rollID (B37, B38). Unknown on either side counts as belonging -- the same rule votes follow
+-- (B46) -- because a roll still parked as "???" has no itemID to compare and refusing those
+-- would throw away Blizzard's verdict for every client that was slow to resolve a link.
+local function SnapshotFor(rollID, itemLink)
+    local snap = rollID and LC.relevanceSnapshot[rollID]
+    if not snap then return nil end
+    local mine = (type(itemLink) == "string" and itemLink:match("item:(%d+)")) or nil
+    if snap.item and mine and snap.item ~= mine then return nil end
+    return snap
+end
 
 -- Can this player's class not equip the item at all?  true / false / nil when undecidable.
 --
@@ -116,7 +142,7 @@ local function IsIrrelevantForMe(rollID, itemLink)
     -- Blizzard's canNeed, from the snapshot or live, in that order (see above for why live is
     -- only a fallback).
     local canNeed
-    local snap = rollID and LC.relevanceSnapshot[rollID]
+    local snap = SnapshotFor(rollID, itemLink)
     if snap then
         canNeed = snap.canNeed
     elseif rollID and not LC.IsTestRoll(rollID) then
@@ -154,7 +180,7 @@ end
 -- (rings, necks, trinkets) can never be needed, and one with a source is needed exactly while it is
 -- uncollected.
 local function NeedsAppearance(rollID, itemLink)
-    local snap = rollID and LC.relevanceSnapshot[rollID]
+    local snap = SnapshotFor(rollID, itemLink)
     if snap then return snap.needsAppearance end
     if rollID and not LC.IsTestRoll(rollID) then
         local texture, _, _, _, _, _, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
