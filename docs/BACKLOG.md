@@ -66,6 +66,7 @@ never a read of the bodies. Anything without one of these words is open:
 | `DISSOLVED` / `SUPERSEDED` | the situation it describes cannot arise any more, usually because a rule changed underneath it. Kept as history -- each one is a failure this guild paid for, and the rules exist to make them unreachable rather than merely patched |
 | `MITIGATED` | not fixable here; the damage is reduced and the real fix is named |
 | `OPEN, by choice` | measured, understood, and deliberately left -- the reasoning and the options are in the entry |
+| `NO DEFECT` | looked for, measured, nothing there. Kept because the absence is itself a result -- and because the next person to wonder should find the measurement rather than repeat it |
 
 Keep it that way. A status that lives only in the body reads as open to anybody scanning, which is
 exactly how B64 and B70 kept coming back up after they had stopped being real.
@@ -275,7 +276,7 @@ identity for LibDBIcon, re-deriving `autoLogOwned` from what is actually running
 a profile predates, the language-change reload, and deleting a profile leaving the loaded settings
 alone all held -- and now have nineteen assertions holding them, each mutation-verified.
 
-## B94 — the locale bug run found nothing, and that is the interesting part
+## B94 — NO DEFECT 2026-08-01 — the locale bug run found nothing, and that is the interesting part
 
 Fifth and last of the 2026-08-01 bug runs. Three axes checked, all clean:
 
