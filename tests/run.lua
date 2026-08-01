@@ -112,6 +112,7 @@ dofile("tests/test_lc_votelabels.lua")
 dofile("tests/test_core_wiring.lua")
 dofile("tests/test_droptimizer.lua")
 dofile("tests/test_buffchecker.lua")
+dofile("tests/test_autopromote.lua")
 -- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,
 -- because it is the statement of what must hold and the soak is the search for what does not.
 dofile("tests/test_manifest.lua")

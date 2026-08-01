@@ -98,6 +98,15 @@ function _G.UnitIsGroupLeader(unit)
     return m and m.leader or false
 end
 function _G.UnitIsGroupAssistant(unit) local m = resolve(unit) return m and m.assist or false end
+-- Handing out assistant is a real change to somebody else's raid, so it is recorded rather than
+-- swallowed: what matters about Auto-Promote is WHO it targets and in what spelling, and a no-op
+-- stub can answer neither. Absent entirely until 2026-08-01, which is why KART.HandleAutoPromote had
+-- never run in a test -- the call would simply have thrown.
+KARTTEST.promoted = {}
+function _G.PromoteToAssistant(target)
+    KARTTEST.promoted[#KARTTEST.promoted + 1] = target
+end
+function KARTTEST.ClearPromoted() KARTTEST.promoted = {} end
 function _G.UnitIsConnected(unit) local m = resolve(unit) return m == nil or m.offline ~= true end
 function _G.UnitClass(unit)
     local m = resolve(unit)
