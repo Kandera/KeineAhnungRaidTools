@@ -166,6 +166,33 @@ do
     T.eq(out[1], "Wuuschdk", "and the promote names the character, not the nickname")
 end
 
+do
+    -- The same, for an alt on ANOTHER realm. B92 made the realm-qualified branch run for everybody
+    -- rather than only for cross-realm units, so it now gets its turn before the nickname does --
+    -- and it must still fall through when the list holds a nickname rather than a Name-Realm.
+    KARTTEST.realm = "Blackmoore"
+    Raid({ { name = "Wuuschpal", guid = "Player-2-B", realm = "Tarren Mill", nickname = "Wuusch" } },
+          { name = "Kandera", guid = "Player-1-A", realm = "Blackmoore", leader = true })
+    KARTTEST.realm = "Blackmoore"
+    KARTTEST.SetNSAPI(true)
+    PromoteList("Wuusch")
+    local out = Run()
+    KARTTEST.SetNSAPI(false)
+    T.eq(#out, 1, "a cross-realm alt is still promoted by its nickname")
+    T.eq(out[1], "Wuuschpal-Tarren Mill", "and targeted as the real character it is")
+end
+
+do
+    -- ...and a nickname nobody in the raid carries promotes nobody, so the branch is a match and
+    -- not a catch-all.
+    Raid({ { name = "Wuuschdk", guid = "Player-1-B", nickname = "Wuusch" } })
+    KARTTEST.SetNSAPI(true)
+    PromoteList("Narrath")
+    local out = Run()
+    KARTTEST.SetNSAPI(false)
+    T.eq(#out, 0, "a nickname nobody carries promotes nobody")
+end
+
 -- Leave the shared roster the way this file found it: KARTTEST.activeUnit is global across every
 -- test file, and a stray "raidN" here would make the next file's "player" somebody else entirely.
 KARTTEST.activeUnit = nil
