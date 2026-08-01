@@ -319,6 +319,19 @@ end
 --
 -- `id` is kept as a stable scalar because LH.Refresh builds its page-reset signature out of it; the
 -- set beside it is what the filter actually matches on.
+-- One entry per person for the history window's player filter.
+--
+-- Grouped by the DISPLAYED NAME, and that choice has a cost worth stating (B109). Two different
+-- people who were ever logged under the same name -- somebody leaves and a later raider brings a
+-- character of that name -- collapse into one filter entry showing both their histories.
+--
+-- Kept that way on purpose: the filter is a list of names a person picks from, so the name is the
+-- only axis they can reason about, and grouping by key instead is precisely what B98 was. That bug
+-- put ONE raider in the list twice, split their record down the middle, and gave no sign the other
+-- half existed -- a wrong answer to the question actually being asked ("what has this person had?").
+-- The namesake case answers that question too widely rather than too narrowly, is visible in the
+-- rows themselves (they carry dates and items), and needs a name to be reused inside the 500 entries
+-- the history keeps at all.
 function LH.GetUniquePlayers()
     local byLabel, list = {}, {}
     for _, e in ipairs(KART_LootHistory or {}) do

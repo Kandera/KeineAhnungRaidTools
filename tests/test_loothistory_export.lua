@@ -177,3 +177,19 @@ do
 end
 
 LH.filters.player, LH.filters.reason, LH.filters.search = nil, nil, ""
+
+do
+    -- The cost of grouping by displayed name, held so the choice stays a choice (B109). Two different
+    -- people ever logged under the same name collapse into ONE filter entry carrying both histories.
+    -- Grouping by key instead is what B98 was: one raider listed twice with their record split in
+    -- half and nothing to say the other half existed.
+    History({
+        { winner = "Bramor", winnerKey = "K-OLD", item = GLOVES, reason = "BIS", time = 1785000002 },
+        { winner = "Bramor", winnerKey = "K-NEW", item = GLOVES, reason = "BIS", time = 1785000001 },
+    })
+    local players = RaidSim.As(me, LH.GetUniquePlayers)
+    T.eq(#players, 1, "two people of the same name are one entry in the filter, not two")
+    T.truthy(players[1] and players[1].ids["K-OLD"] and players[1].ids["K-NEW"],
+        "and picking it shows both of their histories, which is the documented trade")
+    LH.filters.player, LH.filters.playerIds = nil, nil
+end

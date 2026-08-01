@@ -627,6 +627,58 @@ held anyway, because two independent places have to agree on it for a reload to 
 
 No defect in the addon. Two test gaps closed at the places that write loot state.
 
+## B108 — FIXED 2026-08-01 — the confirmation asked, then removed people anyway
+
+Found by reading the diff of everything unpushed since v3.2.2, rather than by a bug run — the first
+review in this stretch that read the addon changes as CODE instead of scanning them for leftovers.
+
+`WU.RemoveForBoss` checks both of its gates -- do I have the permissions, am I in combat -- when the
+question is ASKED. What a confirmation buys is time to think, and the raid does not stand still
+during it: lead moves (a handover, a disconnect), or the pull happens while the dialog is up. The
+`OnAccept` then ran the uninvites under whatever was true by then.
+
+The two fail differently, and only one of them is cosmetic:
+
+* **Combat.** `UninviteUnit` is NOT combat-protected. The removals genuinely go through mid-pull,
+  which is the exact thing the gate was written to prevent.
+* **Permissions.** The game refuses each call, which is the right outcome — but the loop counts
+  attempts, not successes, so it printed "2 players removed" to somebody who removed nobody.
+
+Both gates re-checked in `OnAccept` now. The targets stay frozen from when the question was asked
+(that part was already right and deliberate — what the player agreed to is the number they saw).
+
+Two assertions turn red with the gates taken back out, one per gate.
+
+While in there: the dialog now takes the locale template with the count as a show argument, the way
+`KART_WU_RESET_CONFIRM` and `KART_LC_REASSIGN_CONFIRM` both do it. Formatting it in place AND passing
+the argument worked only because the finished text had no placeholder left for the argument to land
+in — a second one added to the locale string later would have found a filled-in text and an argument
+list that no longer matched. `KARTTEST.popups` records the resolved text now, so "the question names
+the number" — which is what B96 was for — is an assertion rather than an assumption.
+
+## B109 — OPEN, by choice — two people of one name are one entry in the history filter
+
+Raised by the same review. `LH.GetUniquePlayers` groups by DISPLAYED NAME, so two different people
+ever logged under the same name — somebody leaves the guild and a later raider brings a character of
+that name — collapse into a single filter entry showing both their records.
+
+Kept, and now written down where the code makes the choice. The filter is a list of names a person
+picks from, so the name is the only axis they can reason about. Grouping by key instead is precisely
+what B98 was: it put ONE raider in the list twice, split their record down the middle, and gave no
+sign the other half existed — a wrong answer to the question actually being asked. The namesake case
+answers that same question too widely rather than too narrowly, stays visible in the rows themselves
+(they carry dates and items), and needs a name to be reused within the 500 entries the history keeps.
+
+## B110 — NO DEFECT 2026-08-01 — the report line that cannot be split
+
+Also from the review, and recorded because the first reading of it was wrong. `SplitNameLines` only
+measures from the SECOND name onwards: a single name that is already over the cap with the label in
+front of it goes out whole and is refused by the client.
+
+That is deliberate and says so in the comment directly above it ("cannot be helped"). What the split
+is actually for is that such a line must not take the rest with it, and that had no test. It does
+now: one impossible name plus six ordinary ones, and the six still reach the raid.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

@@ -29,6 +29,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein beschädigtes Einstellungsprofil reißt deine Einstellungen nicht mehr mit.** Es wird abgelehnt statt halb geladen.
 - **Eine von Hand korrigierte Stimme verschwindet mit ihrem Item** — statt beim nächsten Drop als Antwort aufzutauchen.
 - **Mindestqualität und Würfe des Raids lassen sich nicht anklicken, solange fremde Einstellungen gelten.** Ein Klick hat vorher deine eigenen überschrieben.
+- **Das Entfernen von Spielern prüft beim Bestätigen erneut.** Verlierst du währenddessen die Leitung oder wird gepullt, wird jetzt niemand mehr rausgeworfen.
 
 ## [3.2.2] - 2026-08-01
 ### Behoben
