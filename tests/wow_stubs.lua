@@ -523,6 +523,12 @@ function _G.CreateFrame(_, name, parent, _)
     function f:SetBackdropBorderColor(...) edge = { ... }; return f end
     function f:GetBackdropBorderColor() if edge then return unpack(edge) end end
 
+    -- Where the mouse is. The catch-all answered this with the frame -- truthy for every frame at
+    -- once, which is not a state a mouse can be in. The council panel's tab close button decides
+    -- whether to hide itself from exactly this, and got it wrong twice in ways that cost clicks, so
+    -- "the cursor is on that one and not on this one" has to be expressible.
+    function f:IsMouseOver() return KARTTEST.mouseOver == f end
+
     -- Textures and font strings are their OWN regions. The catch-all answered both with the frame
     -- itself, so every texture and label a frame owned was the same object: a row's twelve buff
     -- indicators all wrote over one another, and hiding a label hid the window it sat on. Anything

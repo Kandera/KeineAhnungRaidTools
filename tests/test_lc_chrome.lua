@@ -83,8 +83,11 @@ end)
 -- was the refresh -- it re-derives the button's visibility from the hover state, and it runs every
 -- time a vote lands, so with the mouse resting ON the x and not on the tab the next vote hid it.
 --
--- Neither is reachable from this harness (both need a real cursor), so the two properties the fix
--- rests on are checked against the source. If the tab strip is rewritten, this has to move with it.
+-- The HOVER BEHAVIOUR is exercised in tests/test_lc_tabhover.lua now that IsMouseOver is real state
+-- rather than the catch-all's always-true. What stays here is the part a harness with no layout
+-- still cannot answer: where the two frames sit relative to each other. Checked against the source,
+-- because a gap between them re-breaks the fix without changing a line of the logic. If the tab
+-- strip is rewritten, this has to move with it.
 do
     local panel = assert(io.open("LootCouncilPanel.lua", "r")):read("*a")
 

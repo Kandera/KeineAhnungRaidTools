@@ -124,20 +124,13 @@ dofile("tests/test_raidleadbar.lua")
 dofile("tests/test_loothistory_window.lua")
 dofile("tests/test_lc_assignmenu.lua")
 dofile("tests/test_lc_tradefill.lua")
+dofile("tests/test_lc_tabhover.lua")
 -- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,
 -- because it is the statement of what must hold and the soak is the search for what does not.
 dofile("tests/test_manifest.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
-
-if os.getenv("KART_CATCHALL") then
-    local names = {}
-    for k, v in pairs(KARTTEST.catchAll or {}) do names[#names + 1] = { k, v } end
-    table.sort(names, function(a, b) return a[2] > b[2] end)
-    print("-- methods answered by the catch-all --")
-    for _, e in ipairs(names) do print(string.format("%8d  %s", e[2], e[1])) end
-end
 
 -- Written before os.exit, which luacov's own exit hook never sees from here.
 if coverage then
