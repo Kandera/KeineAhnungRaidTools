@@ -356,3 +356,38 @@ do
     T.eq(sinja.KART.LC.votedByMe[561], 1, "B50: the player's own vote stands")
     T.is_nil(sinja.KART.LC.hiddenIrrelevant[561], "B50: and their answer is not hidden away from them")
 end
+
+-- B51: /kart lc reopens the window, not the picture it was showing when it closed ------------------
+-- That command called :Show() on the frame. A frame's row pool holds whatever was last drawn, and
+-- both these windows only HIDE on their "x" -- so what came back could be arbitrarily old: rows for
+-- items long since won or expired, countdowns frozen where they stopped, with live vote buttons.
+local function ShownRows(client)
+    local f = client.KART.LC.voteListFrame
+    if not f then return 0 end
+    local compact = client.env.KART_Settings.lcVoteLayoutCompact
+    local n = 0
+    for _, row in ipairs((compact and f.compactRows or f.rows) or {}) do
+        if row:IsShown() then n = n + 1 end
+    end
+    return n
+end
+
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric           -- plain raider; a weapon, so relevance stays out of it
+    F.Drop(sim, 570, F.WEAPON)
+    KARTTEST.AdvanceTime(10)
+    F.Drop(sim, 571, F.WEAPON)
+    T.eq(ShownRows(alric), 2, "B51: both items are on screen")
+
+    -- The player closes the window with its "x" (which only hides), and the first roll runs out
+    -- while it is shut.
+    alric.KART.LC.voteListFrame:Hide()
+    KARTTEST.AdvanceTime(12)
+    T.truthy(not F.HasVoteRow(alric, 570), "B51: the expired roll is gone from the list")
+    T.eq(ShownRows(alric), 2, "B51: but the closed window still holds the layout it last drew")
+
+    F.RaidSim.As(alric, function() alric.KART.LC.ReopenTrackedWindow() end)
+    T.truthy(alric.KART.LC.voteListFrame:IsShown(), "B51: /kart lc brings the window back")
+    T.eq(ShownRows(alric), 1, "B51: showing what is actually still running, not the old picture")
+end

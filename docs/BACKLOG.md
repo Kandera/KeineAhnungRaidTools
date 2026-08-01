@@ -1265,7 +1265,7 @@ only thing calling `Vote.PruneExpiredRolls` during a batch. The rolls never expi
 The latch is permanent per roll, so ticking the other switch mid-batch does nothing for rolls already
 answered — the setting appears inert and the broadcast Pass stands.
 
-## B51 — `/kart lc` shows frozen hidden rows **[opt-in]**
+## B51 — `/kart lc` shows frozen hidden rows — FIXED 2026-08-01
 
 That path calls `voteListFrame:Show()` directly with no refresh, so the pool still holds the last drawn
 layout: a window full of items the player was told were hidden, with stopped countdowns, until the

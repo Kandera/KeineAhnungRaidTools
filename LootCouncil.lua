@@ -1349,6 +1349,26 @@ function LC.OnConfigAccepted()
     LC.CatchUpCouncilPanel()
 end
 
+-- What `/kart lc` does: brings back whichever Loot Council window still has tracked, unfinished
+-- rolls. Does nothing (rather than error) when nothing is being tracked right now.
+--
+-- Both branches REBUILD before showing (B51). The command used to call :Show() on the frame, and a
+-- frame's row pool holds whatever was last drawn — while both these windows only HIDE on their "x",
+-- so the picture that came back could be arbitrarily old: rows for items long since won or expired,
+-- countdowns frozen where they stopped, and live vote buttons on all of them.
+function LC.ReopenTrackedWindow()
+    if LC.councilPanel and #LC.councilTabs > 0 then
+        KART.LC.Council.RefreshCouncilRows()
+        KART.LC.Council.RefreshCouncilTabs()
+        LC.councilPanel:Show()
+    elseif #LC.voteListRolls > 0 then
+        -- The dispatcher rather than :Show(): it rebuilds the rows, sizes the window and shows it
+        -- itself. It also leaves it hidden when every remaining roll is hidden by a personal
+        -- setting, which is the honest answer in that state — `/kart showall` is what overrides it.
+        LC.Vote.RefreshVoteListRows()
+    end
+end
+
 -- Opens a tab for every roll already on the table, for a client that has just become council.
 --
 -- The remaining time is carried across rather than restarted: Council.ShowCouncilPanel writes

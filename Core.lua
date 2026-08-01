@@ -764,15 +764,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
         if KART.LC then KART.LC.StartManualRoll(itemsText) end
     elseif cmd == "lc" then
-        -- Reopens whichever Loot Council window still has tracked, unfinished rolls — does
-        -- nothing (rather than error) if there's genuinely nothing being tracked right now.
-        if KART.LC then
-            if KART.LC.councilPanel and #KART.LC.councilTabs > 0 then
-                KART.LC.councilPanel:Show()
-            elseif KART.LC.voteListFrame and #KART.LC.voteListRolls > 0 then
-                KART.LC.voteListFrame:Show()
-            end
-        end
+        if KART.LC and KART.LC.ReopenTrackedWindow then KART.LC.ReopenTrackedWindow() end
     elseif cmd == "trade" then
         if KART.LC and KART.LC.tradeReminderFrame and #KART.LC.pendingTrades > 0 then
             KART.LC.tradeReminderFrame:Show()
