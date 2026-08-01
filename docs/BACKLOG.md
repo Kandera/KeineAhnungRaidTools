@@ -521,6 +521,60 @@ Two lines were added to the addon purely to make a rule reachable, both in the s
 neighbours: `f.btnReset` on the history window (the only one of its four filter controls not hung on
 the frame) and `KART.KeybindListener`. Neither changes behaviour.
 
+## B105 — FIXED 2026-08-01 — the suite had an expiry date, and it expired mid-run
+
+Fifteenth bug run. Found by accident and worth the entry on its own: the same commit that had just
+run green went red half an hour later, with nothing changed. Three assertions in
+`tests/test_lc_baseflow.lua`, all about revoking an award without reaching back into a previous raid.
+
+The harness clock runs from a FIXED epoch (`KARTTEST.epoch = 1785000000`, 2026-07-25) precisely so a
+failure reproduces tomorrow as well. That one assertion mixed the real clock in: it dated its "last
+Tuesday" entry with `os.time() - 7 days`. Once the real world was more than a week past that epoch,
+"last Tuesday" landed AFTER the harness's today, `RemoveHistoryForRoll`'s twelve-hour revoke window
+swallowed it, and the assertion measured the opposite of what it says. The crossover was 2026-08-01
+at about 17:53 UTC.
+
+It is the same defect class as a stub that answers too generously — an assertion that passes for a
+reason that has nothing to do with the code — with a delay fuse on it. `time()` now, and it is the
+only place in the suite that ever reached for the real clock (checked: every other `os.` in
+`tests/` is `os.getenv`).
+
+## B106 — NO DEFECT 2026-08-01 — the fifteenth run's four areas, and the getter behind them
+
+The run's method: instrument the harness's catch-all — the metatable that answers any unknown
+capitalised method with the frame itself — and let the suite report which methods actually go through
+it. 59 names, and all but one are setters whose return value nobody reads. The exception:
+
+| gap | what it hid |
+|---|---|
+| `IsMouseOver` came from the catch-all | truthy for every frame at once, which is not a state a mouse can be in |
+| `GetDetailedItemLevelInfo` fell back to the base item level | the branch for an item this client cannot answer for yet was unreachable |
+
+**The tab "x"** (`tests/test_lc_tabhover.lua`). `tests/test_lc_chrome.lua` checked this against the
+SOURCE and said why: "neither is reachable from this harness (both need a real cursor)". It is now,
+so the two bugs the tab strip paid for are held by behaviour: moving onto the x does not take it away
+(the flicker that ate every click), and a refresh with the cursor resting on it leaves it there
+(every incoming vote triggers one). What stays a source check is the part a harness with no layout
+still cannot answer — where the two frames sit relative to each other.
+
+**The compact vote layout** (`tests/test_lc_votecompact.lua`). Two renderers share the vote window;
+every test in the suite ran the spacious one, and the compact renderer's 163 lines were at zero. A
+raider who ticks that box was on code no assertion had ever reached, including the chips they answer
+with. Held now: the answer lands, the note typed into that row travels with it, an automatic answer
+leaves the chips on offer, and switching layouts does not leave both drawn at once.
+
+**Truncating a name.** The buff check cuts a name that does not fit its column by binary search over
+BYTE indices, and a German umlaut is two bytes. Never run — every fixture name fitted. Every cut
+width on a name full of two-byte characters is walked now and the result validated as UTF-8.
+
+**The gain tie-break, and the nine locale refreshers.** Droptimizer prefers the sim candidate closest
+to the rolled item level and falls back to the largest gain when that level is unknown; only the
+first half had a test. The refreshers re-label their widgets by hand, one line per widget, so they go
+stale silently — a renamed control leaves a nil index that throws only when somebody changes their
+language. None of the nine had ever been called.
+
+Coverage went 82% -> 86% across the run. No defect in any of the four.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
