@@ -30,6 +30,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Eine von Hand korrigierte Stimme verschwindet mit ihrem Item** — statt beim nächsten Drop als Antwort aufzutauchen.
 - **Mindestqualität und Würfe des Raids lassen sich nicht anklicken, solange fremde Einstellungen gelten.** Ein Klick hat vorher deine eigenen überschrieben.
 - **Das Entfernen von Spielern prüft beim Bestätigen erneut.** Verlierst du währenddessen die Leitung oder wird gepullt, wird jetzt niemand mehr rausgeworfen.
+- **Eine Vergabe mit langem Vote-Grund landet auch in der Loot-Historie der anderen.** Vorher fehlte sie dort kommentarlos.
 
 ## [3.2.2] - 2026-08-01
 ### Behoben

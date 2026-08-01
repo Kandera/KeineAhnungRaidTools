@@ -1099,6 +1099,32 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                     e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                     winnerKey, winnerSafe, reasonSafe, "")
             end
+            -- And if even that does not fit, the REASON is what has to give (B112). Dropping the
+            -- item was never enough on its own: the reason is a vote-button label, the settings box
+            -- limits those to 128 LETTERS, and a German label counts two bytes for every umlaut in
+            -- it -- so a raid running "Zweitspec für Nebenrolle über Mainspec" style labels produces
+            -- entries that fit LC_RESULT (fewer fields) and not LC_HIST_ENTRY. The comment above
+            -- promised "the entry still syncs" and that promise did not hold: over the cap nothing
+            -- arrives at all, so the award was simply missing from the peer's history with nothing
+            -- said on either side.
+            --
+            -- Cut on a character boundary, not a byte one: a half umlaut renders as a broken box in
+            -- the reason column, and the receiver stores whatever arrives.
+            if #msg > 255 then
+                local room = #reasonSafe - (#msg - 255)
+                local cut = (room > 0) and reasonSafe:sub(1, room) or ""
+                -- Back up off a trailing UTF-8 continuation byte (0x80-0xBF).
+                while #cut > 0 do
+                    local b = cut:byte(#cut)
+                    if b < 128 or b >= 192 then break end
+                    cut = cut:sub(1, #cut - 1)
+                end
+                -- A lead byte left with nothing following it is half a character too.
+                if #cut > 0 and cut:byte(#cut) >= 192 then cut = cut:sub(1, #cut - 1) end
+                msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
+                    e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
+                    winnerKey, winnerSafe, cut, "")
+            end
             KASC:Send(msg, "WHISPER", senderFullName)
         end)
     end

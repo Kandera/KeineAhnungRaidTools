@@ -679,6 +679,54 @@ That is deliberate and says so in the comment directly above it ("cannot be help
 is actually for is that such a line must not take the rest with it, and that had no test. It does
 now: one impossible name plus six ordinary ones, and the six still reach the raid.
 
+## B111 — FIXED 2026-08-01 — the two lists that define a roll agreed only by hand
+
+Raised while reading LootCouncil.lua's unpushed diff. `PERSISTED_ROLL_TABLES` carries the rule in a
+comment -- "Add to ClearRollState and this list wants the same entry" -- and nothing checked it. A
+rule that lives only in a comment is kept until the first person who does not read it, and it fails
+quietly: the new table is simply not restored, so after a reload one aspect of an item on the table
+is blank while everything around it is right, weeks after the line that caused it was written.
+
+Both lists are read out of the source and compared now. It immediately found three tables that
+`ClearRollState` clears and the snapshot does not carry -- and all three turn out to be right to
+leave out, which is the answer worth having written down: `equipRequestedRolls`, `rollsPendingSince`
+and `pendingItemLoads` are in-flight markers rather than state, and restoring them would do harm
+rather than nothing. A restored "we already asked this raider for their gear" would stop the question
+ever being asked again, leaving the council panel's equipped column empty for the session.
+
+The comment also claimed "minus three" where it is five, and named `relevanceSnapshot` among them --
+which is not in `ClearRollState` at all.
+
+## B112 — FIXED 2026-08-01 — a loot-history entry could be too long to sync, and was simply lost
+
+Seventeenth bug run: the same mutation sweep as B107, over the modules the first sweep did not cover.
+82 survivors, mostly display colours and nil guards -- and two identical `if #msg > 255` in the
+history catch-up, which is the same shape as B107 with the same consequence.
+
+`LH.HandleHistoryRequest` sends one `LC_HIST_ENTRY` per award and has two fallbacks for the byte cap:
+swap the full item link for the compact item string, then send an empty item field. The comment on
+the second states the outcome as fact -- "the entry still syncs; the item just shows blank" -- and it
+did not hold. Over the cap NOTHING arrives, so the award was missing from that peer's history with
+nothing said on either side.
+
+Reachable from the ordinary settings box, not from an edge case. The reason is a vote-button label,
+the field limits those to 128 LETTERS, and a German label spends two bytes on every umlaut -- so
+"Zweitspec für Nebenrolle über Mainspec" style labels produce entries that fit `LC_RESULT` (fewer
+fields) and not `LC_HIST_ENTRY`. The reason is cut to fit now, on a character boundary, because the
+receiver stores whatever arrives and the history window renders it.
+
+**The test for it was wrong twice before it was right**, and both are worth recording:
+
+* it first walked 25 REASON lengths, which moves nothing: the amount to cut is
+  `(fixed part + reason) - 255`, so the reason cancels and the cut lands at the same offset into it
+  every time. A probe printed the byte class it landed on -- "lead" 25 times out of 25. Walking the
+  WINNER NAME is what moves the cut across character boundaries.
+* with only umlauts it still could not tell the two-byte rewind loop from the single lead-byte step,
+  because for a two-byte character they do the same thing. Three-byte characters (the euro sign is
+  one, and item names carry it) separate them.
+
+All three guards turn the suite red when removed, one per guard.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
