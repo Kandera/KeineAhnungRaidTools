@@ -231,9 +231,20 @@ realm as you", not "no realm" -- and `HandleAutoPromote` read it as the latter, 
 realm-qualified branch entirely. So an entry like `Wuusch-TarrenMill` matched nothing for a player
 standing on our own realm.
 
-That is most of the WoWUtils export, which qualifies everybody. Paste the list in and the majority of
-it silently never fires -- exactly the shape of B15, which fixed the cross-realm half of the same
-question and left this one open.
+So an entry typed with a realm only ever worked for people from somewhere ELSE, which is the
+opposite of what anyone writing one would expect -- exactly the shape of B15, which fixed the
+cross-realm half of the same question and left this one open.
+
+**Never hit in practice, and the first framing of this entry was wrong about why.** It claimed the
+names come from the WoWUtils export, which qualifies everybody -- repeated from a comment B15 left in
+`GroupLogic.lua` and never checked. There is no such path: the WoWUtils module imports INVITE lists
+and writes nothing into the promote field, which is a separate, hand-typed setting. Asked rather than
+assumed, 2026-08-01: the maintainer types short names and NS nicknames only, never realm-qualified.
+The claim is out of the code comments and the changelog as well as out of this entry.
+
+The fix stands on its own without it. The field accepts `Name-Realm`, the code has a branch for it,
+and `PromoteToAssistant` is handed exactly that spelling by this very function -- so it is what
+anyone reading the addon's own output would type back in, and it matched nobody on their own realm.
 
 Fixed for MATCHING only: the realm the game reported is still what `PromoteToAssistant` targets,
 because a same-realm character is addressed by plain name. Three mutations, each red on a different

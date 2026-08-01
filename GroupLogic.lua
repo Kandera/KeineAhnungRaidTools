@@ -24,12 +24,13 @@ function KART.UpdateCache()
             local trimmed = KAUtil.TrimString(name)
             if trimmed ~= "" then
                 KART.PromoteNamesTable[trimmed] = true
-                -- Also store a realm-canonicalized form of any "Name-Realm" entry. UnitName returns
-                -- a cross-realm unit's realm in its DISPLAY spelling ("Tarren Mill"), while a name
-                -- pasted from the WoWUtils export carries the normalized one ("TarrenMill") — so the
-                -- realm-qualified branch of HandleAutoPromote could never match for those players
-                -- and they were silently never promoted (B15). Same canonicalization
-                -- KAUtil.IsFullNameInGroup has always applied for the same reason.
+                -- Also store a realm-canonicalized form of any "Name-Realm" entry. The two sides
+                -- spell a realm differently — UnitName gives a cross-realm unit its DISPLAY realm
+                -- ("Tarren Mill") while a list can just as easily carry the normalized one
+                -- ("TarrenMill") — so the realm-qualified branch of HandleAutoPromote could never
+                -- match one against the other, and those players were silently never promoted (B15).
+                -- Same canonicalization KAUtil.IsFullNameInGroup has always applied for the same
+                -- reason.
                 local base, realm = trimmed:match("^(.-)%-(.+)$")
                 if base and realm then
                     KART.PromoteNamesTable[base .. "-" .. KAUtil.CanonRealm(realm)] = true
@@ -105,16 +106,17 @@ function KART.HandleAutoPromote()
             -- UnitName answers "" for somebody on our own realm -- that is how the game says "same
             -- realm as you", not "no realm". Reading it as "nothing to qualify" skipped the branch
             -- below entirely, so a realm-qualified entry for one of our OWN players matched nothing
-            -- at all. That is most of the WoWUtils export, which qualifies everybody: paste it in and
-            -- the majority of the list silently never fires. Same shape as B15, same silence.
+            -- at all — so an entry typed with a realm only ever worked for people from somewhere
+            -- else, which is the opposite of what anyone writing one would expect. Same shape as
+            -- B15, same silence.
             --
             -- Only for MATCHING. `realm` itself stays as the game reported it, because it is also
             -- what the promote below targets, and a same-realm character is addressed by plain name.
             local matchRealm = (realm ~= "" and realm) or GetRealmName()
             if not matches and matchRealm and matchRealm ~= "" then
-                -- Also accept a realm-qualified entry. "Name-Realm" is the format the WoWUtils
-                -- export uses and the format this function itself passes to PromoteToAssistant, so a
-                -- user copying a name from there would otherwise never get promoted.
+                -- Also accept a realm-qualified entry. "Name-Realm" is the format this function
+                -- itself hands to PromoteToAssistant, so it is the spelling anyone reading the
+                -- addon's own output would reasonably type back in.
                 --
                 -- Both spellings, because the two sides disagree: UnitName gives a cross-realm unit
                 -- its display realm ("Tarren Mill") while the export gives the normalized one
