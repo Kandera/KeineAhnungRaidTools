@@ -2143,13 +2143,21 @@ local SESSION_RESTORE_MAX = 60 * 60
 -- themselves. See the end of LC.RestoreSessionSnapshot for what it is protecting against.
 local RESTORE_CONFIRM_SECONDS = 60
 
--- The per-roll tables worth carrying across. This is Trade.ClearRollState's list, which is the
--- addon's own definition of "everything tracked under a rollID", minus three:
---   * LC.relevanceSnapshot -- Blizzard's live per-roll verdict, meaningless once the client restarts
---     (it goes blank the moment you roll, which is the whole reason it is snapshotted at all);
+-- The per-roll tables worth carrying across. This is Trade.ClearRollState's list -- the addon's own
+-- definition of "everything tracked under a rollID" -- minus two that are persisted elsewhere and
+-- three that must NOT come back:
 --   * LC.rollDeadlines -- stored separately below, converted to wall clock;
 --   * LC.rollLootedAt -- already persisted, by KART_LCTrades.
--- Add to ClearRollState and this list wants the same entry. The values are numbers, strings,
+--   * LC.equipRequestedRolls, LC.rollsPendingSince, LC.pendingItemLoads -- in-flight markers, not
+--     state. Nothing is in flight after a reload, and restoring "we already asked" would stop the
+--     question being asked again: the equipped column would stay empty for the rest of the session.
+-- (LC.relevanceSnapshot is not in ClearRollState at all -- it is swept on its own schedule -- and is
+-- deliberately not carried either: it is Blizzard's live verdict, meaningless once the client
+-- restarts, which is the whole reason it gets snapshotted in the first place.)
+--
+-- Add to ClearRollState and this list wants the same entry -- held by
+-- tests/test_lc_persistedtables.lua, which reads both lists out of the source and compares them, so
+-- a new table has to be decided about rather than forgotten. The values are numbers, strings,
 -- booleans and one flat table of those (LC.votes), all of which SavedVariables round-trips.
 local PERSISTED_ROLL_TABLES = {
     "votes", "rolls", "rollsFor", "councilVotes", "rollItems", "rollDurations",
