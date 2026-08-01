@@ -854,8 +854,13 @@ end
 -- tell those apart from a path that quietly did nothing.
 KARTTEST.reloads = 0
 function _G.ReloadUI() KARTTEST.reloads = KARTTEST.reloads + 1 end
-function _G.IsShiftKeyDown() return false end
-function _G.IsControlKeyDown() return false end
+-- The three modifiers, driven by a settable table so a test can record a bound key the way a player
+-- holding one would. Alt was the one missing entirely, which is the only one that could not be
+-- pressed while recording a keybind.
+KARTTEST.modifiers = {}
+function _G.IsShiftKeyDown() return KARTTEST.modifiers.shift or false end
+function _G.IsControlKeyDown() return KARTTEST.modifiers.ctrl or false end
+function _G.IsAltKeyDown() return KARTTEST.modifiers.alt or false end
 function _G.PlaySound() end
 -- instanceType is part of the answer, not decoration: "none" is where the player spends most of
 -- their time, and anything deciding on the difficultyID alone has to say what it expects that ID to

@@ -100,5 +100,58 @@ do
     T.eq(#got, 0, "and invites nobody")
 end
 
+-- Battle.net whispers, where the sender is not a character at all ------------------------------
+-- CHAT_MSG_BN_WHISPER hands over a numeric Battle.net account id, and InviteUnit takes a character
+-- name: passing the id silently invites nobody. The friend's current character has to be looked up,
+-- and it may not exist -- somebody whispering from the app, or playing another Blizzard game, has an
+-- account but no WoW character to invite.
+local accounts = {}
+env.C_BattleNet = { GetAccountInfoByID = function(id) return accounts[id] end }
+
+-- The id is CHAT_MSG_BN_WHISPER's thirteenth event argument, and HandleChatInvite takes the first
+-- three by name -- so it is the eleventh of the varargs, which is what select(11, ...) reads. The
+-- ten placeholders below are the event arguments in between; getting the count wrong is exactly the
+-- mistake this path cannot survive, so it is spelled out rather than counted in the head.
+local function BNInvite(msg, bnetID)
+    invited = {}
+    local ok, err = pcall(KART.HandleChatInvite, msg, "SomeBattleTag", "CHAT_MSG_BN_WHISPER",
+        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, bnetID)
+    return ok, invited, err
+end
+
+do
+    accounts[77] = { gameAccountInfo = { characterName = "Alric", realmName = "TarrenMill" } }
+    local ok, got = BNInvite("inv", 77)
+    T.truthy(ok, "a Battle.net whisper is handled without error")
+    T.eq(got[1], "Alric-TarrenMill", "and invites the friend's character, realm-qualified")
+    T.truthy(got[1] ~= 77, "rather than the account id, which would invite nobody at all")
+end
+
+do
+    -- Same realm as us: the game leaves realmName empty, and appending a bare "-" would produce a
+    -- name that matches nobody.
+    accounts[78] = { gameAccountInfo = { characterName = "Sinja", realmName = "" } }
+    local _, got = BNInvite("inv", 78)
+    T.eq(got[1], "Sinja", "a friend on our own realm is invited by plain name")
+end
+
+do
+    -- The friend is online on Battle.net but not in WoW.
+    accounts[79] = { gameAccountInfo = { characterName = "" } }
+    local ok, got = BNInvite("inv", 79)
+    T.truthy(ok, "a friend with no character is handled without error")
+    T.eq(#got, 0, "and nobody is invited")
+
+    accounts[80] = {}
+    local ok2, got2 = BNInvite("inv", 80)
+    T.truthy(ok2, "and so is an account the client knows nothing about")
+    T.eq(#got2, 0, "with nobody invited there either")
+end
+
+do
+    local _, got = BNInvite("not a keyword", 77)
+    T.eq(#got, 0, "an unrelated Battle.net whisper invites nobody")
+end
+
 -- Leave the harness as found, for whatever file runs next.
 KARTTEST.activeUnit, KARTTEST.solo = prevActive, prevSolo

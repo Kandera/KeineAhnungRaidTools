@@ -11,10 +11,13 @@ local sim = F.NewRaid()
 local me = sim.byName.Bramor
 local KART = me.KART
 
--- Profiles.lua alongside it: the profile menu built below calls straight into KART.LoadProfile, and
--- raidsim does not carry that file (nothing in the loot flow touches it).
+-- Profiles.lua and RaidleadBar.lua alongside it, neither of which raidsim carries: the profile menu
+-- calls straight into KART.LoadProfile, and recording a keybind ends by calling KART.ApplyKeybinds,
+-- which is what puts the binding on the bar. Both are the real files rather than stand-ins, because
+-- what those two controls do IS the call into them.
 RaidSim.As(me, function()
-    for _, path in ipairs({ "MainFrame.lua", "Profiles.lua" }) do
+    me.KART.CreateTabTitle = me.KART.CreateTabTitle or function() end
+    for _, path in ipairs({ "MainFrame.lua", "Profiles.lua", "RaidleadBar.lua" }) do
         local chunk = assert(loadstring(assert(io.open(path, "r")):read("*a"), "@" .. path))
         setfenv(chunk, me.env)
         chunk("KeineAhnungRaidTools", KART)
@@ -130,6 +133,60 @@ do
     T.eq(me.env.KART_Settings.fontName, labels[1], "picking one stores it")
     T.eq(KART.BtnFont.text:GetText(), KART.L.BTN_FONT_PREFIX .. labels[1],
         "and the button says which font is in use")
+end
+
+-- Keybinds -----------------------------------------------------------------------------------------
+-- Recording a key is a small dialog with one rule in it that is not obvious: the key is TAKEN from
+-- whoever held it. KART.ApplyKeybinds sets one override per action in list order, so two actions
+-- sharing a binding meant the later one simply won while the earlier button went on displaying a key
+-- that did nothing.
+do
+    local S = me.env.KART_Settings
+    S.keybinds = {}
+    KARTTEST.modifiers = {}
+
+    local function Record(actionKey, key)
+        local btn = KART.KeybindButtons[actionKey]
+        As(function() btn:GetScript("OnClick")(btn, "LeftButton") end)
+        As(function() KART.KeybindListener:GetScript("OnKeyDown")(KART.KeybindListener, key) end)
+        return btn
+    end
+
+    local ready = Record("readyCheck", "F1")
+    T.eq(S.keybinds.readyCheck, "F1", "a pressed key is stored against the action being recorded")
+    T.eq(ready.text:GetText(), "F1", "and shown on its button")
+
+    -- Modifiers are read at the moment the key lands, not from the key name -- and they go on in
+    -- Blizzard's own order (ALT-CTRL-SHIFT-KEY), which is what SetOverrideBindingClick is given.
+    KARTTEST.modifiers = { shift = true, alt = true }
+    Record("pullTimer", "F2")
+    T.eq(S.keybinds.pullTimer, "ALT-SHIFT-F2", "held modifiers become part of the binding")
+    KARTTEST.modifiers = {}
+
+    -- The rule: the same key on a second action takes it off the first.
+    local pull = Record("pullTimer", "F1")
+    T.eq(S.keybinds.pullTimer, "F1", "the second action gets the key")
+    T.eq(S.keybinds.readyCheck, nil, "and the first no longer holds it")
+    T.eq(ready.text:GetText(), KART.L.KB_NOT_BOUND,
+        "with its button saying so, rather than displaying a key that would do nothing")
+    T.truthy(pull ~= nil)
+
+    -- Right-click clears, which is the only way back to unbound.
+    As(function() pull:GetScript("OnClick")(pull, "RightButton") end)
+    T.eq(S.keybinds.pullTimer, nil, "right-clicking a binding removes it")
+    T.eq(pull.text:GetText(), KART.L.KB_NOT_BOUND, "and the button says it is unbound")
+end
+
+do
+    -- Escape leaves the previous binding alone, and a bare modifier press is not a key.
+    local S = me.env.KART_Settings
+    S.keybinds = { readyCheck = "F5" }
+    local btn = KART.KeybindButtons.readyCheck
+    As(function() btn:GetScript("OnClick")(btn, "LeftButton") end)
+    As(function() KART.KeybindListener:GetScript("OnKeyDown")(KART.KeybindListener, "LSHIFT") end)
+    T.eq(S.keybinds.readyCheck, "F5", "holding a modifier alone does not end the recording")
+    As(function() KART.KeybindListener:GetScript("OnKeyDown")(KART.KeybindListener, "ESCAPE") end)
+    T.eq(S.keybinds.readyCheck, "F5", "and escape leaves the old binding in place")
 end
 
 -- Reset --------------------------------------------------------------------------------------------

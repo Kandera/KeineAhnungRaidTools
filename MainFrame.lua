@@ -315,6 +315,7 @@ local kbLabels = {
 -- Invisible key-listener used only while a bind-button is in capture mode; created once and
 -- reused for whichever button is currently capturing (only one capture can be active at a time).
 local kbListener = CreateFrame("Frame", nil, kbCard)
+KART.KeybindListener = kbListener -- so the capture rules can be exercised from tests/test_mainframe.lua
 kbListener:Hide()
 kbListener:EnableKeyboard(true)
 kbListener:SetPropagateKeyboardInput(false)
