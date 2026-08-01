@@ -266,13 +266,52 @@ local function InstallScanTooltip(f)
     end
 end
 
+-- Frames that asked to hear an event, in registration order, tagged with the client that created
+-- them. RegisterEvent used to be a no-op, so a frame that drives real behaviour off an event --
+-- LootCouncilRelevance.lua snapshots Blizzard's per-roll verdict the instant START_LOOT_ROLL
+-- fires -- stored its handler and was never called. 192 lines of the addon were unreachable from
+-- the harness, and its own three assertions could not have noticed.
+--
+-- Tagged by OWNER because raidsim runs several clients in one process: each loads the addon files
+-- into its own environment and so creates its own frames, and firing an event has to reach one
+-- client's handlers and nobody else's.
+KARTTEST.eventFrames = {}
+
+-- Fires one event at the frames of the client currently executing, in the order they registered
+-- -- which is load order, and load order is what decides whether the relevance snapshot sees a
+-- roll before Core.lua's dispatcher has resolved it away.
+function KARTTEST.FireEvent(event, ...)
+    local owner = KARTTEST.frameOwner
+    for _, reg in ipairs(KARTTEST.eventFrames) do
+        if reg.event == event and reg.owner == owner then
+            local handler = reg.frame:GetScript("OnEvent")
+            if handler then handler(reg.frame, event, ...) end
+        end
+    end
+end
+
 function _G.CreateFrame(_, name, _, _)
     local f = setmetatable({}, frameMeta)
     if name then _G[name] = f end
+    local owner = KARTTEST.frameOwner
 
     local scripts = {}
     function f:SetScript(scriptType, handler) scripts[scriptType] = handler; return f end
     function f:GetScript(scriptType) return scripts[scriptType] end
+    function f:RegisterEvent(event)
+        for _, reg in ipairs(KARTTEST.eventFrames) do
+            if reg.frame == f and reg.event == event then return f end
+        end
+        KARTTEST.eventFrames[#KARTTEST.eventFrames + 1] = { frame = f, event = event, owner = owner }
+        return f
+    end
+    function f:UnregisterEvent(event)
+        for i = #KARTTEST.eventFrames, 1, -1 do
+            local reg = KARTTEST.eventFrames[i]
+            if reg.frame == f and reg.event == event then table.remove(KARTTEST.eventFrames, i) end
+        end
+        return f
+    end
 
     local checked = false
     function f:SetChecked(value) checked = not not value; return f end

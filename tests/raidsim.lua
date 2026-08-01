@@ -149,6 +149,14 @@ local function Boot(client, saved)
     client.KASC:AttachCache(client.env.KART_PlayerCache)
 
     RaidSim.active = client
+    -- Frames created from here on belong to this client, so KARTTEST.FireEvent can reach one
+    -- client's handlers and nobody else's. A reload creates a whole new set; the old ones are
+    -- dropped below rather than left registered, or a reloaded client would hear every event
+    -- twice for the rest of the run.
+    KARTTEST.frameOwner = client.name
+    for i = #KARTTEST.eventFrames, 1, -1 do
+        if KARTTEST.eventFrames[i].owner == client.name then table.remove(KARTTEST.eventFrames, i) end
+    end
     for _, path in ipairs(CLIENT_FILES) do loadInto(client, path) end
 
     -- KART.L is assembled by Core.lua, which the harness does not load: English first, then the
@@ -180,6 +188,7 @@ local function Boot(client, saved)
     end
 
     RaidSim.active = nil
+    KARTTEST.frameOwner = nil
     return client
 end
 
@@ -311,11 +320,16 @@ end
 local asDepth = 0
 function RaidSim.As(client, fn, ...)
     local prevClient, prevUnit = RaidSim.active, KARTTEST.activeUnit
+    local prevOwner = KARTTEST.frameOwner
     RaidSim.active, KARTTEST.activeUnit = client, client and client.unit or nil
+    -- So KARTTEST.FireEvent reaches THIS client's frames. Same reason activeUnit exists: an
+    -- event is delivered to one client's handlers, not to the whole raid's at once.
+    KARTTEST.frameOwner = client and client.name or nil
     asDepth = asDepth + 1
     local results = { pcall(fn, ...) }
     asDepth = asDepth - 1
     RaidSim.active, KARTTEST.activeUnit = prevClient, prevUnit
+    KARTTEST.frameOwner = prevOwner
     if asDepth == 0 and KARTTEST.FlushEcho then KARTTEST.FlushEcho() end
     if not results[1] then error(results[2], 0) end
     return unpack(results, 2)

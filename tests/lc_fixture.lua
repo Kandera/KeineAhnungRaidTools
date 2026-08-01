@@ -149,7 +149,16 @@ function F.Drop(sim, rollID, itemID, opts)
                                    linkPending = opts.linkPending }
     for _, c in ipairs(sim.clients) do
         if not notFor[c.unit] then
-            RaidSim.As(c, function() c.KART.LC.OnStartLootRoll(rollID) end)
+            RaidSim.As(c, function()
+                -- The EVENT first, then Core.lua's dispatcher -- which is the order the game
+                -- uses and the order that matters. LootCouncilRelevance.lua registers its own
+                -- frame for START_LOOT_ROLL and the .toc loads it before Core.lua, so it sees
+                -- Blizzard's per-roll verdict BEFORE OnStartLootRoll resolves this client's own
+                -- roll and GetLootRollItemInfo goes blank. Calling only the dispatcher, as this
+                -- did, meant that whole file never ran in any test.
+                KARTTEST.FireEvent("START_LOOT_ROLL", rollID)
+                c.KART.LC.OnStartLootRoll(rollID)
+            end)
         end
     end
     KARTTEST.AdvanceTime(0)
