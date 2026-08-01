@@ -162,11 +162,54 @@ do
         "with its own confirmation")
     T.eq(KARTTEST.popups[1] and KARTTEST.popups[1].a, 2,
         "naming how many people it is about to remove")
+    -- The count has to reach the TEXT, not just the show arguments: "remove everyone not on this
+    -- roster" reads very differently at two people and at eighteen, and that difference is the
+    -- entire reason this dialog exists rather than a bare yes/no.
+    T.eq(KARTTEST.popups[1] and KARTTEST.popups[1].text, "remove 2?",
+        "and the question the player reads carries that number")
 
     KARTTEST.AcceptPopup("KART_WU_REMOVE_CONFIRM")
     table.sort(KARTTEST.uninvited)
     T.eq(table.concat(KARTTEST.uninvited, ","), "Merrit,Sinja",
         "and once confirmed it removes exactly the people not on the list")
+end
+
+do
+    -- The confirmation takes time to answer, and the raid does not stand still while it is up. Both
+    -- gates -- may I do this, and am I in combat -- are checked when the question is ASKED. Whatever
+    -- is true when it is ANSWERED is what the uninvites actually run under.
+    --
+    -- Losing lead mid-question is ordinary: the leader hands over, or a disconnect moves it. Blizzard
+    -- then refuses every UninviteUnit, which is the right outcome -- but the addon counted the
+    -- attempts, not the successes, and reported "2 players removed" to somebody who removed nobody.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" },
+           { name = "Sinja",  guid = "Player-1-C" },
+           { name = "Merrit", guid = "Player-1-D" } })
+    Import(EXPORT)
+    WU.RemoveForBoss(1)
+    T.eq(#KARTTEST.popups, 1, "the question is up")
+
+    -- Lead moves to somebody else while it sits there.
+    KARTTEST.SetRaid({ { name = "Wuusch", guid = "Player-1-B", leader = true },
+                       { name = "Sinja",  guid = "Player-1-C" },
+                       { name = "Merrit", guid = "Player-1-D" },
+                       { name = "Kandera", guid = "Player-1-A" } })
+    KARTTEST.activeUnit = "raid4"
+    KARTTEST.AcceptPopup("KART_WU_REMOVE_CONFIRM")
+    T.eq(#KARTTEST.uninvited, 0, "answering yes after losing lead removes nobody")
+end
+
+do
+    -- Same shape, the other gate: the pull happens while the question is on screen.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" },
+           { name = "Sinja",  guid = "Player-1-C" },
+           { name = "Merrit", guid = "Player-1-D" } })
+    Import(EXPORT)
+    WU.RemoveForBoss(1)
+    KARTTEST.inCombat = true
+    KARTTEST.AcceptPopup("KART_WU_REMOVE_CONFIRM")
+    T.eq(#KARTTEST.uninvited, 0, "and answering yes after the pull removes nobody either")
+    KARTTEST.inCombat = false
 end
 
 do

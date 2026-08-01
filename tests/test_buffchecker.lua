@@ -422,3 +422,30 @@ do
         T.eq(fs:GetText(), "...", "a column too narrow for anything still shows the ellipsis")
     end
 end
+
+do
+    -- The line the split cannot make shorter: one name that, with the label in front of it, is
+    -- already over the cap. That case is documented at SplitNameLines as deliberate -- it "cannot be
+    -- helped", so the line goes out and the client refuses THAT ONE.
+    --
+    -- What must not happen is it taking the rest with it. Everybody else missing food is still worth
+    -- reporting, and the only thing standing between them and silence is that the split keeps them on
+    -- their own line.
+    local _, lm = F.NewRaid()
+    local names = { string.rep("N", 300) }
+    for i = 1, 6 do names[#names + 1] = "Raider" .. i .. "-Silvermoon" end
+    lm.KART.MissingBuffs = { food = names }
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function() lm.KART.ReportMissingBuffs() end)
+    KARTTEST.AdvanceTime(10)
+
+    local delivered, refused = {}, 0
+    for _, m in ipairs(KARTTEST.chat) do
+        if m.refused then refused = refused + 1 else delivered[#delivered + 1] = m.msg end
+    end
+    T.eq(refused, 1, "the one impossible line is the only one the client refuses")
+    local all = table.concat(delivered, " ")
+    local found = 0
+    for i = 1, 6 do if all:find("Raider" .. i .. "-", 1, true) then found = found + 1 end end
+    T.eq(found, 6, "and every other name still reaches the raid")
+end

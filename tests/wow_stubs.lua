@@ -948,8 +948,19 @@ KARTTEST.popups = {}
 -- value burn the latch on a question nobody was shown. KARTTEST.popupsBlocked models a full pool.
 function _G.StaticPopup_Show(which, a, b, data)
     if KARTTEST.popupsBlocked then return nil end
+    -- The text the PLAYER ends up reading, resolved the way the game resolves it: the dialog's own
+    -- `text` with the show arguments substituted into it. Recording only `a` and `b` meant a
+    -- confirmation could be asserted on without anybody checking that the question it asks actually
+    -- names them -- which is the whole point of a count in a "remove N players?" dialog.
+    local reg = (KARTTEST.PopupRegistry and KARTTEST.PopupRegistry()) or StaticPopupDialogs
+    local def = reg and reg[which]
+    local shown = def and def.text
+    if shown and (a ~= nil or b ~= nil) then
+        local ok, formatted = pcall(string.format, shown, a, b)
+        if ok then shown = formatted end
+    end
     KARTTEST.popups[#KARTTEST.popups + 1] =
-        { which = which, a = a, b = b, data = data, owner = KARTTEST.activeUnit }
+        { which = which, a = a, b = b, data = data, text = shown, owner = KARTTEST.activeUnit }
     return { data = data }
 end
 function _G.StaticPopup_Hide(which)

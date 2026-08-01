@@ -295,7 +295,12 @@ function WU.RemoveForBoss(idx)
     end
 
     local dlg = StaticPopupDialogs["KART_WU_REMOVE_CONFIRM"]
-    dlg.text = string.format(KART.L.WU_REMOVE_CONFIRM_TEXT, #targets)
+    -- The template, not a pre-formatted string: the count rides in as a show argument below, which is
+    -- how KART_WU_RESET_CONFIRM and KART_LC_REASSIGN_CONFIRM both do it. Formatting here AND passing
+    -- the argument worked only because the finished text no longer contained a placeholder for it to
+    -- land in -- a second one added to the locale string later would have found a filled-in text and
+    -- an argument list that no longer matched it.
+    dlg.text = KART.L.WU_REMOVE_CONFIRM_TEXT
     dlg.button1, dlg.button2 = KART.L.BTN_ACCEPT, KART.L.BTN_CANCEL
     -- The targets are resolved NOW and carried into the dialog, not re-derived on accept: the roster
     -- can change while the question sits on screen, and what the player agreed to is the number they
@@ -309,6 +314,24 @@ KART.UI:RegisterStaticPopup("KART_WU_REMOVE_CONFIRM", {
     button2 = CANCEL,
     OnAccept = function(_, data)
         if not (data and data.targets) then return end
+        -- Both gates again, HERE (B108). WU.RemoveForBoss checks them when the question is asked, and
+        -- what a confirmation is for is time to think -- during which the raid does not stand still.
+        -- Losing lead mid-question is ordinary (a handover, a disconnect moving it), and the pull can
+        -- land while the dialog is up.
+        --
+        -- The two fail differently, and the combat one is the reason this is a fix and not a tidy-up:
+        -- UninviteUnit is NOT combat-protected, so the removals would genuinely go through mid-pull,
+        -- which is exactly what the gate above exists to stop. Without lead the game refuses them
+        -- instead -- the right outcome, but the count below is of attempts, not of successes, so it
+        -- reported "2 players removed" to somebody who removed nobody.
+        if not KAUtil.HasGroupPermissions() then
+            print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
+            return
+        end
+        if InCombatLockdown() then
+            print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
+            return
+        end
         local removed = 0
         for _, full in ipairs(data.targets) do
             UninviteUnit(full)
