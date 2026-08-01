@@ -107,6 +107,24 @@ function _G.PromoteToAssistant(target)
     KARTTEST.promoted[#KARTTEST.promoted + 1] = target
 end
 function KARTTEST.ClearPromoted() KARTTEST.promoted = {} end
+
+-- Inviting and removing people, recorded for the same reason as the promote above: these change
+-- somebody else's evening, and the only thing worth asserting about them is WHO was named. Neither
+-- existed in the harness until 2026-08-01 -- WU.InviteBoss and WU.RemoveForBoss had never run in a
+-- test, and a call would have thrown.
+KARTTEST.invited, KARTTEST.uninvited = {}, {}
+function _G.UninviteUnit(target)
+    KARTTEST.uninvited[#KARTTEST.uninvited + 1] = target
+end
+_G.C_PartyInfo = _G.C_PartyInfo or {}
+function _G.C_PartyInfo.InviteUnit(target)
+    KARTTEST.invited[#KARTTEST.invited + 1] = target
+end
+function _G.C_PartyInfo.ConvertToRaid() KARTTEST.convertedToRaid = true end
+function KARTTEST.ClearInvites()
+    KARTTEST.invited, KARTTEST.uninvited = {}, {}
+    KARTTEST.convertedToRaid = false
+end
 function _G.UnitIsConnected(unit) local m = resolve(unit) return m == nil or m.offline ~= true end
 function _G.UnitClass(unit)
     local m = resolve(unit)

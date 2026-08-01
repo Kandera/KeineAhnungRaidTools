@@ -139,7 +139,15 @@ function WU.InviteBoss(idx)
     if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
-    if not KAUtil.HasGroupPermissions() then
+    -- "Not in a group at all" is not a lack of permission, it is the ordinary starting point: open
+    -- the tab before the evening, click the first boss, and the invites go out. HasGroupPermissions
+    -- answers false while ungrouped -- correctly, there is no group to lead -- so gating on it alone
+    -- refused this feature at its main use, with a "you are not the leader" that made no sense to
+    -- somebody standing alone. Same shape KART.HandleChatInvite has always used for the same reason.
+    --
+    -- The deferred raid conversion further down (KART.pendingBulkRaidConvert) exists only for the
+    -- solo case and could never be reached, which is what gave this away.
+    if IsInGroup() and not KAUtil.HasGroupPermissions() then
         print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
         return
     end
@@ -221,7 +229,48 @@ function WU.InviteBoss(idx)
     print(msg)
 end
 
+-- Who WU.RemoveForBoss would uninvite, as full "Name-Realm" strings. Split out from the removing
+-- itself so the confirmation below can say how many people it is about to throw out before it does.
+--
+-- Never ourselves. EachGroupUnit yields raid1..raidN in a raid and never the literal "player" token,
+-- so a plain unit ~= "player" guard would fail to exclude your own raid slot — UnitIsUnit matches the
+-- player under whatever token currently represents them, so a roster that does not list you cannot
+-- get you kicked from your own raid.
+local function PlanRemoval(boss)
+    local keepSet = {}
+    for _, p in ipairs(boss.players) do
+        -- CaseFold (not :lower()) so umlaut names fold consistently with the roster check below.
+        keepSet[KAUtil.CaseFold(p)] = true
+        local short = p:match("([^%-]+)")
+        if short then keepSet[KAUtil.CaseFold(short)] = true end
+    end
+
+    local out = {}
+    for unit in KAUtil.EachGroupUnit() do
+        if not UnitIsUnit(unit, "player") then
+            local name, realm = UnitName(unit)
+            if name then
+                local full = (realm and realm ~= "") and (name.."-"..realm) or name
+                if not keepSet[KAUtil.CaseFold(full)] and not keepSet[KAUtil.CaseFold(name)] then
+                    -- The specific character (full Name-Realm) — the realm-free short name is
+                    -- ambiguous when a same-named cross-realm twin is in the group.
+                    out[#out + 1] = full
+                end
+            end
+        end
+    end
+    return out
+end
+
 -- Removes current group members who are NOT in the boss's player list.
+--
+-- Asks first (B96). This is the most destructive thing the addon can do: it throws real people out
+-- of the raid, they have to be re-invited and accept again, and there is no undo — while the button
+-- is seventy pixels wide and sits directly beside "Invite". Resetting the boss LIST already asked,
+-- and says "this cannot be undone"; removing people asked nothing at all.
+--
+-- The count is in the question, because "remove everyone not on this roster" reads very differently
+-- when the answer is two people and when it is eighteen.
 function WU.RemoveForBoss(idx)
     if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
@@ -237,35 +286,37 @@ function WU.RemoveForBoss(idx)
         return
     end
 
-    local keepSet = {}
-    for _, p in ipairs(boss.players) do
-        -- CaseFold (not :lower()) so umlaut names fold consistently with the roster check below.
-        keepSet[KAUtil.CaseFold(p)] = true
-        local short = p:match("([^%-]+)")
-        if short then keepSet[KAUtil.CaseFold(short)] = true end
+    local targets = PlanRemoval(boss)
+    -- Nobody to remove: say so and ask nothing. A confirmation for a no-op is worse than none at
+    -- all — it trains people to click straight through the one that matters.
+    if #targets == 0 then
+        print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, 0, boss.name))
+        return
     end
 
-    local removed = 0
-    for unit in KAUtil.EachGroupUnit() do
-        -- Never uninvite yourself. EachGroupUnit yields raid1..raidN in a raid (never the literal
-        -- "player" token), so a plain unit ~= "player" guard would fail to exclude your own raid
-        -- slot — UnitIsUnit matches the player under whatever token currently represents them, so
-        -- a roster that doesn't list you can't get you kicked from your own raid.
-        if not UnitIsUnit(unit, "player") then
-            local name, realm = UnitName(unit)
-            if name then
-                local full = (realm and realm ~= "") and (name.."-"..realm) or name
-                if not keepSet[KAUtil.CaseFold(full)] and not keepSet[KAUtil.CaseFold(name)] then
-                    -- Uninvite the specific character (full Name-Realm) — the realm-free short name
-                    -- is ambiguous when a same-named cross-realm twin is in the group.
-                    UninviteUnit(full)
-                    removed = removed + 1
-                end
-            end
-        end
-    end
-    print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, boss.name))
+    local dlg = StaticPopupDialogs["KART_WU_REMOVE_CONFIRM"]
+    dlg.text = string.format(KART.L.WU_REMOVE_CONFIRM_TEXT, #targets)
+    dlg.button1, dlg.button2 = KART.L.BTN_ACCEPT, KART.L.BTN_CANCEL
+    -- The targets are resolved NOW and carried into the dialog, not re-derived on accept: the roster
+    -- can change while the question sits on screen, and what the player agreed to is the number they
+    -- were shown.
+    StaticPopup_Show("KART_WU_REMOVE_CONFIRM", #targets, nil, { targets = targets, name = boss.name })
 end
+
+KART.UI:RegisterStaticPopup("KART_WU_REMOVE_CONFIRM", {
+    text = "Remove %d players from the raid?", -- overwritten with KART.L.WU_REMOVE_CONFIRM_TEXT before every StaticPopup_Show
+    button1 = ACCEPT,
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        if not (data and data.targets) then return end
+        local removed = 0
+        for _, full in ipairs(data.targets) do
+            UninviteUnit(full)
+            removed = removed + 1
+        end
+        print(string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_REMOVED, removed, data.name))
+    end,
+})
 
 KART.UI:RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
     text = "Really reset the boss list?", -- overwritten with KART.L.WU_RESET_CONFIRM_TEXT before every StaticPopup_Show call below

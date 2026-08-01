@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A raider from another realm is no longer shown a same-named character's sim number** in the council's gain column.
 - **The missing-buff report reaches the raid even when many people are missing something.** It was silently dropped once the list of names got long.
 - **Auto-Promote works with names written as "Name-Realm" for your own realm too.** Until now that spelling only ever matched people from another realm.
+- **A bulk invite can start a raid from nothing again.** Clicking Invite while not yet in a group said "you are not the leader" and did nothing.
+- **Removing everyone not on a boss's roster now asks first**, and says how many people it is about to remove.
 - **A damaged settings profile no longer takes your settings with it.** It is refused instead of loaded halfway.
 
 ## [3.2.2] - 2026-08-01

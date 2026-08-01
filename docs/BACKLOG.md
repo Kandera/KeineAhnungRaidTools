@@ -294,6 +294,40 @@ existing DE/EN comparison structurally cannot see: a key nothing defines renders
 the first concat, and a call site with the wrong argument count throws at the moment it prints --
 which on a warning path means the client fails exactly when it was trying to say something was wrong.
 
+## B95 — FIXED 2026-08-01 — a bulk invite could not start a raid, which is what it is for
+
+Found in the WoWUtils bug run, which happened because a claim about that module in B92's write-up
+turned out to be unchecked -- so the module itself got looked at properly. It had no test:
+`UninviteUnit` and `C_PartyInfo` were absent from the harness entirely, so `WU.InviteBoss` and
+`WU.RemoveForBoss` had never run a line.
+
+`WU.InviteBoss` gated on `KAUtil.HasGroupPermissions()`, which answers false while ungrouped --
+correctly, there is no group to lead. But "not in a group at all" is not a lack of permission, it is
+the ordinary starting point: open the tab before the evening, click the first boss, and the invites
+go out. Instead the player got "you are not the leader" while standing alone, and nothing happened.
+
+The giveaway is in the same function: `KART.pendingBulkRaidConvert`, the deferred raid conversion,
+exists ONLY for the solo case and could never be reached. `KART.HandleChatInvite` has always used the
+right shape for the same question (`not IsInGroup() or HasGroupPermissions()`); this one forgot half
+of it.
+
+## B96 — FIXED 2026-08-01 — throwing people out of the raid asked nothing
+
+Same bug run. "Remove" un-invites every group member who is not on the selected boss's roster. It is
+the most destructive thing this addon can do -- real people leave the raid, they have to be invited
+again and accept again, and there is no undo -- and it ran on a single click of a seventy-pixel
+button sitting directly beside "Invite".
+
+Resetting the boss LIST already asked, and its text says "this cannot be undone". Removing humans
+asked nothing. Everywhere else in the addon confirms far less: reassigning a winner routes through a
+dialog, ending a session asks, the raid leader is asked before standing in as lootmaster.
+
+It asks now, and the count is in the question -- "remove everyone not on this roster" reads very
+differently at two people than at eighteen. The targets are resolved before the question and carried
+into the dialog rather than re-derived on accept, so the roster changing while the question sits on
+screen cannot turn a "yes" to two into a "yes" to eighteen. Nothing to remove still asks nothing: a
+confirmation for a no-op only teaches people to click through the one that matters.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

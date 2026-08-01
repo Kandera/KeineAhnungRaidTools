@@ -384,6 +384,7 @@ KART.L_deDE = {
     WU_BTN_IMPORT          = "Importieren",
     WU_BTN_RESET           = "Zurücksetzen",
     WU_RESET_CONFIRM_TEXT  = "Boss-Liste wirklich zurücksetzen? Dies kann nicht rückgängig gemacht werden.",
+    WU_REMOVE_CONFIRM_TEXT = "%d Spieler aus dem Raid entfernen? Sie müssen danach neu eingeladen werden.",
     WU_STATUS_EMPTY        = "Noch kein Import.",
     WU_STATUS_LOADED       = "%d Bosse geladen.",
     WU_STATUS_PARSE_ERROR  = "Kein gültiges WoWUtils-Format gefunden.",

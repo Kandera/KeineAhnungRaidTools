@@ -384,6 +384,7 @@ KART.L_enUS = {
     WU_BTN_IMPORT          = "Import",
     WU_BTN_RESET           = "Reset",
     WU_RESET_CONFIRM_TEXT  = "Really reset the boss list? This cannot be undone.",
+    WU_REMOVE_CONFIRM_TEXT = "Remove %d players from the raid? They will have to be invited again.",
     WU_STATUS_EMPTY        = "No import yet.",
     WU_STATUS_LOADED       = "%d bosses loaded.",
     WU_STATUS_PARSE_ERROR  = "No valid WoWUtils format found.",

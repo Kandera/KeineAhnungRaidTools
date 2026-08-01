@@ -21,6 +21,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Raider von einem anderen Realm bekommt in der Gain-Spalte nicht mehr die Sim-Zahl eines gleichnamigen Charakters.**
 - **Der Report fehlender Buffs kommt auch dann im Raid an, wenn vielen etwas fehlt.** Bei langer Namensliste ist er vorher stillschweigend verschwunden.
 - **Auto-Promote greift jetzt auch bei Namen im Format "Name-Realm" für den eigenen Realm.** Bisher traf diese Schreibweise ausschließlich Leute von anderen Realms.
+- **Ein Bulk-Invite kann wieder aus dem Stand einen Raid aufmachen.** Ein Klick auf Einladen ohne Gruppe sagte „du bist nicht der Anführer" und tat nichts.
+- **Alle zu entfernen, die nicht auf der Boss-Liste stehen, fragt jetzt vorher** — und sagt, um wie viele Leute es geht.
 - **Ein beschädigtes Einstellungsprofil reißt deine Einstellungen nicht mehr mit.** Es wird abgelehnt statt halb geladen.
 
 ## [3.2.2] - 2026-08-01
