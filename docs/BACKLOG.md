@@ -492,6 +492,9 @@ last of them invalidated assertions that had been passing:
 | `MenuUtil.CreateContextMenu` an empty stub | all eight context menus -- their entries were never built, let alone clicked |
 | `GetCursorInfo`, `ClickTradeButton` absent | the two lines that actually put an item into the trade window |
 | `C_UnitAuras`, `GetReadyCheckStatus` absent | the whole buff-check render, which is the screen a raid leader reads before the pull (20% -> 69%) |
+| `C_BattleNet` absent | the Battle.net whisper invite, which must resolve a friend's character rather than pass the numeric account id to `InviteUnit` |
+| `IsAltKeyDown` absent | the one modifier that could not be held while recording a keybind |
+| item-load callbacks carried no client | with real regions the refresh they trigger reaches a `SendAddonMessage`, which belongs to one client and not to whoever is executing |
 | **`CreateTexture`/`CreateFontString` answered with the FRAME** | every region a frame owned was the same object |
 
 The last one is the one to remember. A buff-check row's twelve indicators were all one texture
@@ -505,7 +508,18 @@ the trade fill, for one item, two items to one person, two copies of one item, s
 a busy cursor and a slot the player filled by hand; the three main-window menus, including a profile
 list that is sorted and an empty one that is inert; the aura scan by spell id, by name in either
 locale, the class gate that stops a report naming people for a buff nobody present can cast, and a
-private aura not taking the rest of that player's auras down with it.
+private aura not taking the rest of that player's auras down with it; the Battle.net invite,
+including a friend with no WoW character to invite; the keybind recorder, where a key is taken off
+whoever held it; and the WoWUtils Import button, which replaces rather than appends, ignores
+identical text, and hands the previous roster back when a paste parses to nothing.
+
+Coverage over the addon went from 71% to 82% across the run. What is left is overwhelmingly frame
+construction -- `BuffChecker.lua` and `Invite.lua` are both half panel-building by line count -- and
+the remaining logic in it was walked by hand rather than left unread.
+
+Two lines were added to the addon purely to make a rule reachable, both in the same shape as their
+neighbours: `f.btnReset` on the history window (the only one of its four filter controls not hung on
+the frame) and `KART.KeybindListener`. Neither changes behaviour.
 
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
