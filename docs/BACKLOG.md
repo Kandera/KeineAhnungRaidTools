@@ -74,7 +74,7 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
-## B81 — OPEN — a reload loses the open items, and worst for the one client that must not lose them
+## B81 — FIXED 2026-08-01 — a reload lost the open items, and worst for the one client that must not lose them
 
 Found in the live v3.2.2-beta1 test, 2026-07-31, first as "`/kart add` items are gone after a
 reload". Measured afterwards, and it is **not** specific to `/kart add`. One real drop, then one

@@ -181,12 +181,14 @@ do
     T.eq(alric.KART.LC.sessionActive, true, "and is back in the session on the next roster change")
     T.eq(alric.KART.LC.raidConfig.lootmaster, lm.guid, "with the config back")
     T.eq(RaidSim.As(alric, alric.KART.LC.GetRollsEnabled), true, "and the raid's roll setting back")
-    -- They had already answered Blizzard's roll before reloading (Auto-Pass fires in
-    -- LC.OnStartLootRoll), so the roll is gone from their client and the catch-up has nothing to
-    -- hand back -- which is right: they answered, the council has their reply. The other case, a
-    -- client that was deaf BEFORE it could answer, is restored; see the B66 test further down.
-    T.truthy(not HasVoteRow(alric, 85),
-        "an item they already answered is not put back in front of them")
+    -- The item is back in front of them, and it has to be: answering BLIZZARD's roll (Auto-Pass
+    -- fires in LC.OnStartLootRoll) is not the same as telling the COUNCIL what they want, and this
+    -- raider has not done the second. This assertion used to read the other way round and called
+    -- the silence right -- it was reading the defect as intent (B81). Their own client is the only
+    -- one that can give it back: no catch-up can, because Blizzard's roll is gone the moment you
+    -- answer it, which is exactly what Auto-Pass just did.
+    T.truthy(HasVoteRow(alric, 85),
+        "an item they have not answered the council on is back in front of them")
 
     Drop(sim, 86, F.WEAPON)
     RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(86, 1) end)

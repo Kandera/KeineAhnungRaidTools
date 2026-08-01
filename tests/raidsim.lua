@@ -67,7 +67,7 @@ RaidSim.active = nil
 -- asymmetry that makes a reloading lootmaster dangerous.
 local SAVED_VARIABLES = {
     "KART_Settings", "KART_LootHistory", "KART_LCTrades",
-    "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache",
+    "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache", "KART_LCSession",
 }
 
 -- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
@@ -106,6 +106,7 @@ local function Boot(client, saved)
     client.env.KART_Settings       = saved.KART_Settings or {}
     client.env.KART_LootHistory    = saved.KART_LootHistory or {}
     client.env.KART_LCTrades       = saved.KART_LCTrades or { pending = {}, owed = {} }
+    client.env.KART_LCSession      = saved.KART_LCSession or {}
     client.env.KART_LCOfficerNotes = saved.KART_LCOfficerNotes or {}
     client.env.KART_Profiles       = saved.KART_Profiles or {}
     client.env.KART_WoWUtilsCache  = {}
@@ -187,6 +188,13 @@ local function Boot(client, saved)
         pcall(client.KART.LC.Trade.RestorePersistedTrades)
     end
 
+    -- The items that were still on the table, in the same order Core.lua restores them: trades
+    -- first, then the tracked rolls (B81). Leaving this out modelled a reload that deliberately
+    -- forgets the distribution it was in the middle of.
+    if client.KART.LC.RestoreSessionSnapshot then
+        pcall(client.KART.LC.RestoreSessionSnapshot)
+    end
+
     RaidSim.active = nil
     KARTTEST.frameOwner = nil
     return client
@@ -254,6 +262,12 @@ end
 -- what makes it obvious when an assertion is looking at pre-reload state.
 function RaidSim.Reload(sim, name)
     local old = sim.byName[name]
+    -- PLAYER_LOGOUT, which the game raises before SavedVariables are written -- for a /reload
+    -- as much as for a logout. Without it a test would be measuring a client that crashed,
+    -- not one that reloaded (B81).
+    if old.KART.LC.SaveSessionSnapshot then
+        RaidSim.As(old, function() pcall(old.KART.LC.SaveSessionSnapshot) end)
+    end
     local saved = {}
     for _, key in ipairs(SAVED_VARIABLES) do saved[key] = old.env[key] end
 

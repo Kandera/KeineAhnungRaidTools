@@ -2084,6 +2084,157 @@ function LC.ClearAllRolls()
 end
 
 -- ==========================================================================
+--  The tracked rolls survive a reload (B81)
+-- ==========================================================================
+--
+-- Everything above this point is runtime state, and a /reload throws all of it away. Measured on
+-- 2026-08-01, one drop and one client reloading:
+--
+--   * the LOOT OWNER is answered by nobody. LC.SendOpenRolls opens with `LC.IsLootOwner()` and says
+--     so -- "only from the loot owner" -- which is the right rule for ANNOUNCING an item and the
+--     wrong one for a REPLY, because the client that most needs the reply is the loot owner coming
+--     back. Reported from the live test: two items added, reload, `/kart lc` opens nothing while
+--     `/kart status` correctly reports the session running.
+--   * everyone else loses the item outright once the vote timer has run out, since the catch-up only
+--     lists rolls with `deadline > now`. That is most of a distribution: the vote window is twenty
+--     seconds and the council takes as long as it takes.
+--   * the one client that did recover a row got it back with an EMPTY tally -- votes were never part
+--     of the catch-up.
+--   * a `/kart add` item can never come back that way even in principle. LC.HandleRollCatchup proves
+--     entitlement by asking Blizzard for the roll, and a manual item has no Blizzard roll at all.
+--
+-- So it is not fixed by messages. Each client keeps its OWN tracked rolls in SavedVariables and
+-- picks them back up at load: no protocol change, no question of which peer to believe, no rule to
+-- rewrite about late arrivals -- a client can only ever restore what it already had -- and the
+-- manual half comes along for free. Same shape as KART_LCTrades, which already carries the trade
+-- obligations and the BoP clock across a reload (B34).
+--
+-- Two bounds decide whether a snapshot is still the one this raid is in the middle of. Neither is
+-- about the data being valid; both are about it being CURRENT:
+--   * the session it belonged to must not have been ended. Ending a session is how the raid says "we
+--     are done", and a reload must not undo that;
+--   * age, in wall clock, because that is the clock that survives a logout (the same reasoning as
+--     the BoP trade stamp). An hour covers a distribution that drags; a raid the next evening starts
+--     clean without anybody having to remember to.
+local SESSION_RESTORE_MAX = 60 * 60
+
+-- The per-roll tables worth carrying across. This is Trade.ClearRollState's list, which is the
+-- addon's own definition of "everything tracked under a rollID", minus three:
+--   * LC.relevanceSnapshot -- Blizzard's live per-roll verdict, meaningless once the client restarts
+--     (it goes blank the moment you roll, which is the whole reason it is snapshotted at all);
+--   * LC.rollDeadlines -- stored separately below, converted to wall clock;
+--   * LC.rollLootedAt -- already persisted, by KART_LCTrades.
+-- Add to ClearRollState and this list wants the same entry. The values are numbers, strings,
+-- booleans and one flat table of those (LC.votes), all of which SavedVariables round-trips.
+local PERSISTED_ROLL_TABLES = {
+    "votes", "rolls", "rollsFor", "councilVotes", "rollItems", "rollDurations",
+    "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
+    "rollNotInOurBags", "rollAnnounced", "rollSeenHere", "relevanceHandled",
+    "hiddenIrrelevant", "autoVotedByMe", "councilTabsNew",
+}
+
+-- Called from PLAYER_LOGOUT, which the client raises for /reload, a logout and a quit alike -- so
+-- one write site covers every ordinary way a session is interrupted. A crash or a pulled cable is
+-- not covered, and cannot be: nothing runs then.
+function LC.SaveSessionSnapshot()
+    KART_LCSession = KART_LCSession or {}
+    local store = KART_LCSession
+    -- Wiped first, unconditionally: a snapshot must never outlive the moment it describes, and every
+    -- early return below means "there is nothing to come back to".
+    wipe(store)
+
+    -- Deliberately NOT gated on LC.sessionActive. Ending a session already clears every tracked roll
+    -- (LC.SetSessionActive and LC.HandleActive both call LC.ClearAllRolls), so the empty check below
+    -- says the same thing -- while the flag says something else as well, and getting it wrong costs
+    -- the item: a client that has just restored a snapshot holds the rolls with the flag still off,
+    -- because whether the raid is in a session is the raid's answer and arrives on the next roster
+    -- change. Reloading twice in that window would have thrown away exactly what the first reload
+    -- had just rescued.
+    --
+    -- What is on screen is what there is to lose. Anything tracked but on neither list is state the
+    -- client could not show the player anyway.
+    local ids, seen = {}, {}
+    for _, list in ipairs({ LC.councilTabs, LC.voteListRolls }) do
+        for _, id in ipairs(list) do
+            if not seen[id] and not LC.IsTestRoll(id) then seen[id] = true ids[#ids + 1] = id end
+        end
+    end
+    if #ids == 0 then return end
+
+    store.savedAt      = time()
+    store.councilTabs  = {}
+    store.voteListRolls = {}
+    for _, id in ipairs(LC.councilTabs) do
+        if seen[id] then table.insert(store.councilTabs, id) end
+    end
+    for _, id in ipairs(LC.voteListRolls) do
+        if seen[id] then table.insert(store.voteListRolls, id) end
+    end
+
+    -- Deadlines in WALL clock. LC.rollDeadlines is GetTime()-based, and GetTime() counts from when
+    -- the client process started -- it survives a /reload and does not survive a logout, which is
+    -- exactly the difference that would put a twenty-second timer hours into the future.
+    store.expiresAt = {}
+    local now = GetTime()
+    for _, id in ipairs(ids) do
+        local deadline = LC.rollDeadlines[id]
+        if deadline then store.expiresAt[tostring(id)] = time() + (deadline - now) end
+    end
+
+    store.tables = {}
+    for _, name in ipairs(PERSISTED_ROLL_TABLES) do
+        local src, out = LC[name], {}
+        if src then
+            -- rollIDs are stringified on the way out: a SavedVariables file is Lua source, and a
+            -- table with numeric keys round-trips as an array with holes. Read back with tonumber.
+            for _, id in ipairs(ids) do
+                if src[id] ~= nil then out[tostring(id)] = src[id] end
+            end
+        end
+        store.tables[name] = out
+    end
+end
+
+-- Called from ADDON_LOADED, in the same place and for the same reason as
+-- Trade.RestorePersistedTrades.
+function LC.RestoreSessionSnapshot()
+    local store = KART_LCSession
+    if type(store) ~= "table" or type(store.savedAt) ~= "number" then return end
+    if (time() - store.savedAt) >= SESSION_RESTORE_MAX then wipe(store) return end
+    if type(store.tables) ~= "table" then wipe(store) return end
+
+    local now = GetTime()
+    for _, name in ipairs(PERSISTED_ROLL_TABLES) do
+        local saved = store.tables[name]
+        if type(saved) == "table" and LC[name] then
+            for key, value in pairs(saved) do
+                local id = tonumber(key)
+                if id then LC[name][id] = value end
+            end
+        end
+    end
+    for key, expiresAt in pairs(type(store.expiresAt) == "table" and store.expiresAt or {}) do
+        local id = tonumber(key)
+        -- A deadline already past is restored as past rather than dropped: the roll then expires on
+        -- the first sweep, which is what would have happened had the client never restarted.
+        if id and type(expiresAt) == "number" then
+            LC.rollDeadlines[id] = now + (expiresAt - time())
+        end
+    end
+    for _, id in ipairs(type(store.councilTabs) == "table" and store.councilTabs or {}) do
+        if tonumber(id) then table.insert(LC.councilTabs, tonumber(id)) end
+    end
+    for _, id in ipairs(type(store.voteListRolls) == "table" and store.voteListRolls or {}) do
+        if tonumber(id) then table.insert(LC.voteListRolls, tonumber(id)) end
+    end
+    -- The rolls are back but the session flag is NOT set here: whether the raid is still in a session
+    -- is the raid's answer, not ours, and the existing recovery already asks for it (LC_STATE_REQ ->
+    -- LC_ACTIVE / LC_SESSION_RESUME). If the answer comes back "no", LC.ClearAllRolls removes exactly
+    -- what was just restored, which is the correct outcome and needs no special case.
+    if #LC.voteListRolls > 0 then LC.Vote.EnsurePruneTicker() end
+end
+
+-- ==========================================================================
 --  B62: a raider on an older release cannot take part, and says nothing about it
 -- ==========================================================================
 --

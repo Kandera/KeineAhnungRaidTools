@@ -473,3 +473,136 @@ do
     T.truthy(not F.Owes(raider.KART.LC.owedToMe, 113),
         "a completion message that lands before the contents still clears at the close")
 end
+
+-- ===================================================================================
+-- B81: a reload keeps the items on the table
+-- ===================================================================================
+-- Measured on 2026-08-01, and the backlog entry understated it. LC.SendOpenRolls answers only from
+-- the loot owner and only for rolls whose vote timer is still running, so:
+--
+--   * the loot owner reloading is answered by nobody -- they are the only one allowed to answer;
+--   * everyone else loses the item outright the moment the vote window has closed, which is most of
+--     a distribution;
+--   * the one client that did recover a row got it back with an empty tally, because votes are not
+--     part of the catch-up at all;
+--   * a "/kart add" item can never come back that way even in principle -- HandleRollCatchup proves
+--     entitlement by asking Blizzard for a roll that never existed.
+--
+-- Fixed locally instead: every client writes its own tracked rolls to SavedVariables at logout and
+-- picks them back up at load, while the session is still the one they belonged to. No protocol, no
+-- question of whom to believe, and it covers the manual half for free.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    F.Drop(sim, 90, F.WEAPON)
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function() c.KART.LC.Vote.CastVote(90, 1, nil) end)
+    end
+    -- Past the vote window, which is where every client used to lose the item completely: this is
+    -- the ordinary state of a distribution, not an edge case.
+    KARTTEST.AdvanceTime(60)
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: the item is on the lootmaster's council panel")
+
+    local votesBefore = 0
+    for _ in pairs(lm.KART.LC.votes[90] or {}) do votesBefore = votesBefore + 1 end
+    T.eq(votesBefore, 5, "B81: with the whole raid's votes on it")
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: the reloaded lootmaster still has the item")
+    T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[90]), "B81: and knows which item it is")
+    local votesAfter = 0
+    for _ in pairs(lm.KART.LC.votes[90] or {}) do votesAfter = votesAfter + 1 end
+    T.eq(votesAfter, 5, "B81: and every vote that was cast on it")
+
+    -- The point of getting it back: they can finish the distribution.
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(90, raider.guid, "BIS", nil) end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(council.KART.LC.assignedWinners[90], raider.guid,
+        "B81: and the award reaches the raid from the client that reloaded")
+end
+
+do
+    -- A council member reloading is the same case, and used to lose the tab just as completely.
+    local sim = F.NewRaid()
+    F.Drop(sim, 91, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+    local council = RaidSim.Reload(sim, "Merrit")
+    RaidSim.EnterWorld(sim, "Merrit")
+    KARTTEST.AdvanceTime(1)
+    T.eq(#council.KART.LC.councilTabs, 1, "B81: a council member keeps the item across a reload too")
+end
+
+do
+    -- The manual half: "/kart add" has no Blizzard roll behind it, so no message-based catch-up can
+    -- ever restore it. This is the case the report started from.
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.KART.LC.StartManualRoll("|cffa335ee|Hitem:249293::::::::80:::::::::|h[Weight of Command]|h|r")
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: a manually added item is on the panel")
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    KARTTEST.AdvanceTime(1)
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: and survives the reload, which no catch-up could do")
+end
+
+do
+    -- The bound that keeps it from resurrecting the wrong evening: a snapshot older than the
+    -- restore window is discarded, whatever it says.
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 92, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+    RaidSim.As(lm, function() lm.KART.LC.SaveSessionSnapshot() end)
+    local stale = lm.env.KART_LCSession
+    T.truthy(stale.savedAt, "B81: a snapshot is written for the items on the table")
+
+    -- A client handed YESTERDAY's file. Age is measured in wall clock, not GetTime, for the same
+    -- reason the BoP trade stamp is (B34): GetTime counts from when the client process started, so
+    -- it says nothing at all across a logout.
+    lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.As(lm, function() lm.KART.LC.ClearAllRolls() end)
+    stale.savedAt = stale.savedAt - (60 * 60 * 24)
+    lm.env.KART_LCSession = stale
+    RaidSim.As(lm, function() lm.KART.LC.RestoreSessionSnapshot() end)
+    T.eq(#lm.KART.LC.councilTabs, 0, "B81: yesterday's snapshot is not brought back")
+end
+
+do
+    -- ...and a snapshot from a session that was ENDED is not brought back either. Ending the session
+    -- is how a raid says "we are done with this", and a reload must not undo that.
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 93, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+    RaidSim.As(lm, function() lm.KART.LC.SetSessionActive(false) end)
+    KARTTEST.AdvanceTime(0)
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    KARTTEST.AdvanceTime(1)
+    T.eq(#lm.KART.LC.councilTabs, 0, "B81: an ended session leaves nothing to come back to")
+end
+
+do
+    -- Reloading TWICE, before the raid has confirmed the session. This is where gating the snapshot
+    -- on LC.sessionActive would have thrown away exactly what the first reload rescued: the rolls are
+    -- back, but whether the raid is still in a session is the raid's answer and has not arrived yet.
+    local sim = F.NewRaid()
+    F.Drop(sim, 94, F.WEAPON)
+    KARTTEST.AdvanceTime(60)
+
+    local lm = RaidSim.Reload(sim, "Bramor")
+    T.eq(lm.KART.LC.sessionActive, false, "B81: a reloaded client does not know about the session yet")
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: but it does have the item back")
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    T.eq(#lm.KART.LC.councilTabs, 1, "B81: and still has it after reloading again in that window")
+
+    RaidSim.EnterWorld(sim, "Bramor")
+    F.RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(10)
+    T.eq(lm.KART.LC.sessionActive, true, "B81: with the session coming back the normal way")
+end

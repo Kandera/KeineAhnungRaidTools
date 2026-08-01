@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Items still run out while your vote window is empty**, instead of coming back later with live vote buttons.
 - **`/kart lc` reopens the window with what is running now**, not the picture it was showing when you closed it.
 - **The council member list says who is actually in the council.** The raid leader is not in it automatically — enter yourself if you take part.
+- **The items on the table survive a reload.** Whoever hands out the loot used to lose them entirely, and everyone else lost them the moment the vote timer ran out.
 
 ## [3.2.2] - 2026-08-01
 ### Fixed

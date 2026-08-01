@@ -26,6 +26,7 @@ frame:RegisterEvent("TRADE_SHOW")
 frame:RegisterEvent("TRADE_CLOSED")
 frame:RegisterEvent("TRADE_ACCEPT_UPDATE")
 frame:RegisterEvent("UI_INFO_MESSAGE")
+frame:RegisterEvent("PLAYER_LOGOUT")
 -- Border widths are in frame units, which stop being whole pixels when the UI scale or the
 -- resolution changes under us (B23). Both events fire without the addon touching anything.
 frame:RegisterEvent("UI_SCALE_CHANGED")
@@ -248,6 +249,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.LC.Trade.RestorePersistedTrades()
         end
 
+        -- The items still on the table when this client last stopped (B81). After the trades for the
+        -- same reason: both restore loot-flow state, and the trade obligations are the older, longer
+        -- lived half.
+        if KART.LC and KART.LC.RestoreSessionSnapshot then
+            KART.LC.RestoreSessionSnapshot()
+        end
+
         KART.SyncSettingsToUI()
 
         AddonCompartmentFrame:RegisterAddon({
@@ -284,6 +292,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "TRADE_ACCEPT_UPDATE" then
         if KART.LC then KART.LC.Trade.OnTradeAcceptUpdate() end
 
+    elseif event == "PLAYER_LOGOUT" then
+        -- The last thing that runs before SavedVariables are written, and it fires for a
+        -- /reload, a logout and a quit alike -- so one write site keeps the items on the table
+        -- across every ordinary interruption (B81).
+        if KART.LC and KART.LC.SaveSessionSnapshot then KART.LC.SaveSessionSnapshot() end
     elseif event == "UI_INFO_MESSAGE" then
         if KART.LC then KART.LC.Trade.OnTradeInfoMessage(arg1) end
 
