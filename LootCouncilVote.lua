@@ -80,9 +80,9 @@ function Vote.CreateVoteList()
         f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
     end
 
-    -- One shared ticker drives every row's countdown; a row is dropped once its own voting
-    -- window closes. Only touches timer text on a normal tick — a full rebuild (which would
-    -- reset in-progress note text) only happens when a row actually gets added or removed.
+    -- One shared ticker drives every row's countdown. It only touches timer text — dropping an
+    -- expired roll and rebuilding the list is Vote.EnsurePruneTicker's job, because that has to
+    -- keep happening when this window is hidden (B49).
     -- Only runs while the window is actually visible: created on show, cancelled on hide, instead
     -- of ticking forever behind an IsShown guard. The guard stays as belt-and-braces.
     local function startVoteTicker()
@@ -90,19 +90,14 @@ function Vote.CreateVoteList()
         f.ticker = C_Timer.NewTicker(1, function()
             if not f:IsShown() then return end
             local now = GetTime()
-            local changed = Vote.PruneExpiredRolls()
-            if changed then
-                Vote.RefreshVoteListRows()
-            else
-                local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
-                for i, rid in ipairs(Vote.GetVisibleRolls()) do
-                    local row = pool and pool[i]
-                    if row and row:IsShown() then
-                        local deadline  = LC.rollDeadlines[rid]
-                        local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
-                        local votedCount, total = LC.CountVotes(rid)
-                        row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
-                    end
+            local pool = (KART_Settings and KART_Settings.lcVoteLayoutCompact) and f.compactRows or f.rows
+            for i, rid in ipairs(Vote.GetVisibleRolls()) do
+                local row = pool and pool[i]
+                if row and row:IsShown() then
+                    local deadline  = LC.rollDeadlines[rid]
+                    local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
+                    local votedCount, total = LC.CountVotes(rid)
+                    row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
                 end
             end
         end)
@@ -139,6 +134,34 @@ function Vote.PruneExpiredRolls()
     return changed
 end
 
+-- The expiry sweep belongs to the ROLLS, not to the window (B49). It used to run from the vote
+-- window's own ticker, which is created on show and cancelled on hide — so a player with no visible
+-- rows had no window, therefore no ticker, therefore no expiry at all. That is not an edge case:
+-- lcHideIrrelevant empties the window for every drop the player cannot use, and lcVotedItemDisplay
+-- == "hide" empties it as soon as they have answered everything on screen. Their rolls stayed
+-- tracked for the rest of the session, never reached Trade.ClearRollState, and `/kart showall` then
+-- reopened long-dead items with live vote buttons on them.
+--
+-- Lifetime follows LC.voteListRolls instead: started when a roll is registered, cancelled by its own
+-- first tick after the last one is gone. Still not "ticking forever behind a guard" — it stops with
+-- the batch, the way the window ticker stopped with the window.
+function Vote.EnsurePruneTicker()
+    if LC.pruneTicker then return end
+    LC.pruneTicker = C_Timer.NewTicker(1, function()
+        local changed = Vote.PruneExpiredRolls()
+        if #LC.voteListRolls == 0 then
+            -- The same reset RefreshVoteListRows performs when the batch empties. It cannot be left
+            -- to that function here: the window may be hidden, or never have been built at all.
+            LC.showAllOverride = nil
+            if LC.pruneTicker then LC.pruneTicker:Cancel() end
+            LC.pruneTicker = nil
+        end
+        -- ...IfShown, for the same reason RemoveVoteListItem uses it: a sweep must never open a
+        -- window the player closed.
+        if changed then Vote.RefreshVoteListRowsIfShown() end
+    end)
+end
+
 -- Registers rollID as an active roll and (re)builds the list.
 --
 -- The two arguments behave differently on a repeat call for the same rollID, on purpose: itemLink is
@@ -160,6 +183,7 @@ function Vote.ShowVotePopup(rollID, itemLink, seconds)
         table.insert(LC.voteListRolls, rollID)
     end
 
+    Vote.EnsurePruneTicker()
     Vote.RefreshVoteListRows()
 end
 

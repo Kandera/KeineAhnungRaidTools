@@ -248,3 +248,41 @@ do
     T.truthy(IsVisible(sinja, 542),
         "B41: unticking the setting brings the row back for the roll still running")
 end
+
+-- B49: a roll expires whether or not anybody is looking at it ---------------------------------------
+-- The vote window's ticker was the only thing calling Vote.PruneExpiredRolls during a batch, and it
+-- lives and dies with the window. Hide every row -- which is precisely what lcHideIrrelevant does to
+-- a player who cannot use the drop -- and the window hides, the ticker is cancelled, and the rolls
+-- never expire and never reach Trade.ClearRollState. `/kart showall` reopened long-dead rolls with
+-- live vote buttons on them.
+do
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja           -- PRIEST, hide ON, not on the council
+    -- Plate, transmog off: hidden and auto-passed, so this client's window has nothing to show at all.
+    F.Drop(sim, 550, F.PLATE_CHEST, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[550], "B49: the one roll of the batch is hidden")
+    T.eq(#VisibleFor(sinja), 0, "B49: so there is no window and no ticker")
+    T.truthy(F.HasVoteRow(sinja, 550), "B49: the roll is still tracked, though")
+
+    -- Well past the raid's voting window. Nothing is driving the addon here but its own timers.
+    KARTTEST.AdvanceTime(sinja.env.KART_Settings.lcVoteSeconds + 5)
+
+    T.truthy(not F.HasVoteRow(sinja, 550), "B49: it expires anyway")
+    T.is_nil(sinja.KART.LC.rollItems[550], "B49: and its per-roll state is freed")
+end
+
+do
+    -- ...and the sweep stops once there is nothing left to sweep, rather than ticking for the rest of
+    -- the evening. The whole reason the old one hung off the window was to avoid a ticker that runs
+    -- forever behind a guard, and moving it must not quietly reintroduce that.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja
+    T.is_nil(sinja.KART.LC.pruneTicker, "B49: nothing ticks before the first drop")
+    F.Drop(sim, 551, F.PLATE_CHEST, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(sinja.KART.LC.pruneTicker, "B49: a tracked roll is what starts the sweep")
+    KARTTEST.AdvanceTime(sinja.env.KART_Settings.lcVoteSeconds + 5)
+    T.is_nil(sinja.KART.LC.pruneTicker, "B49: and it stops itself once the batch is over")
+end

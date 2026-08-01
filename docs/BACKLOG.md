@@ -1254,7 +1254,7 @@ still sit in the reminder list, indistinguishable from live ones.
 broadcast. A council member who assigns an item to themselves never processes their own message and so
 never gets their own "you are owed this" entry, though the lootmaster's queue is correct.
 
-## B49 — hiding every row stops the pruner **[opt-in]**
+## B49 — hiding every row stops the pruner — FIXED 2026-08-01
 
 The window hides when `GetVisibleRolls` comes back empty, and `OnHide` cancels the ticker that is the
 only thing calling `Vote.PruneExpiredRolls` during a batch. The rolls never expire and never reach
