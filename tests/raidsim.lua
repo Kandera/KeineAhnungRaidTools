@@ -34,6 +34,9 @@ local CLIENT_FILES = {
     -- gain%, so a client without it would never exercise that call at all.
     "Droptimizer.lua",
     "BuffChecker.lua",
+    -- Defines LC.BuildSettingsPanel and the raid-wide field logic around it. Loading it does
+    -- nothing on its own; a test that wants real widgets calls the builder.
+    "LootCouncilSettings.lua",
 }
 
 local LIB_FILES = {

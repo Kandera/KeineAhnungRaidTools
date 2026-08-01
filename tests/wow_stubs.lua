@@ -362,6 +362,16 @@ function _G.CreateFrame(_, name, _, _)
     function f:SetAlpha(value) alpha = value end
     function f:GetAlpha() return alpha end
 
+    -- Whether a control accepts input is real state too, and for the same reason as alpha: the
+    -- raid-wide settings box makes its fields read-only while somebody else's config is in force,
+    -- and "is this box editable" is the only way to check that. Without these the catch-all answered
+    -- something truthy for everything and a test asking the question measured the stub.
+    local mouseEnabled, keyboardEnabled = true, true
+    function f:EnableMouse(on) mouseEnabled = on ~= false end
+    function f:IsMouseEnabled() return mouseEnabled end
+    function f:EnableKeyboard(on) keyboardEnabled = on ~= false end
+    function f:IsKeyboardEnabled() return keyboardEnabled end
+
     -- Getters that must answer with something other than a frame, or callers that build strings and
     -- run loops from them go wrong in ways that look nothing like their cause -- a name concatenated
     -- into a lookup, a region count driving a for loop.
@@ -699,6 +709,18 @@ end
 -- WoW exposes Lua's os.date under this name. The loot-history export formats every row's date and
 -- time through it, which is why that whole path had never run here before 2026-08-01.
 _G.date = os.date
+-- Blizzard's post-hook. Real behaviour, not a no-op: the settings panel hooks its own edit boxes
+-- through this, so swallowing the hook would silently disable whatever it installed.
+function _G.hooksecurefunc(a, b, c)
+    local tbl, name, hook = a, b, c
+    if type(a) == "string" then tbl, name, hook = _G, a, b end
+    local orig = tbl[name]
+    tbl[name] = function(...)
+        local r = orig and orig(...)
+        hook(...)
+        return r
+    end
+end
 function _G.IsShiftKeyDown() return false end
 function _G.IsControlKeyDown() return false end
 function _G.PlaySound() end
