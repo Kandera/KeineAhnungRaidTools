@@ -96,3 +96,36 @@ do
     T.eq(sinja.KART.LC.votedByMe[501], sinja.KART.LC.GetPassButtonIndex(),
         "B36: answered with the configured pass, so the council is not left waiting")
 end
+
+-- B39: "do I own this appearance" is not "can this character ever learn it" -------------------------
+-- The fallback path -- an item with no Blizzard roll on this client, i.e. /kart add, or a client that
+-- was dead when it dropped -- asked only whether the appearance was already collected. The sourceID
+-- sitting right next to it was discarded and PlayerCanCollectSource never called. So it voted
+-- Transmog on appearances this character can never learn, and the council awarded the item on the
+-- strength of that vote.
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric            -- MAGE, auto-transmog ON, hide OFF
+    -- Plate, so the armor check makes it irrelevant for a mage and the Transmog question is reached.
+    -- An appearance that is NOT collected, and that this character can never collect.
+    KARTTEST.appearances[F.GLOVES] = { appearance = 900, source = 901, collectible = false, owned = false }
+    F.Drop(sim, 510, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    KARTTEST.appearances = {}
+
+    T.is_nil(alric.KART.LC.votedByMe[510],
+        "B39: no Transmog vote for an appearance this character can never learn")
+end
+
+do
+    -- ...and one it CAN learn and does not have is still voted for, so the guard is not "never vote".
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.appearances[F.GLOVES] = { appearance = 900, source = 902, collectible = true, owned = false }
+    F.Drop(sim, 511, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    KARTTEST.appearances = {}
+
+    T.eq(alric.KART.LC.votedByMe[511], alric.KART.LC.GetTransmogButtonIndex(),
+        "B39: an appearance this character still needs is voted Transmog")
+end

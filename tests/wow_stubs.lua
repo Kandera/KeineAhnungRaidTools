@@ -573,6 +573,36 @@ local function rollFor(rollID)
     return r
 end
 
+-- Transmog appearances, for the FALLBACK path in LootCouncilRelevance.lua -- the one taken by an
+-- item that never had a Blizzard roll on this client (/kart add, or a client that was dead when
+-- it dropped). Three separate facts, because the addon has to ask three separate questions and
+-- conflating any two of them is what B39 was:
+--   appearance  -- does this item have an appearance at all (rings and trinkets do not)
+--   collectible -- can THIS character ever learn that source
+--   owned       -- has it already been collected
+KARTTEST.appearances = {}
+local function appearanceFor(link)
+    local id = tonumber(type(link) == "string" and link:match("item:(%d+)") or nil)
+    return id and KARTTEST.appearances[id] or nil
+end
+_G.C_TransmogCollection = {
+    GetItemInfo = function(link)
+        local a = appearanceFor(link)
+        if not a or not a.appearance then return nil end
+        return a.appearance, a.source
+    end,
+    PlayerCanCollectSource = function(sourceID)
+        for _, a in pairs(KARTTEST.appearances) do
+            if a.source == sourceID then return a.collectible ~= false end
+        end
+        return true
+    end,
+    PlayerHasTransmogByItemInfo = function(link)
+        local a = appearanceFor(link)
+        return a ~= nil and a.owned == true
+    end,
+}
+
 function _G.GetLootRollItemInfo(rollID)
     local r = rollFor(rollID)
     if not r then return nil end

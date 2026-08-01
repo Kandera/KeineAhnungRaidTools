@@ -162,8 +162,21 @@ local function NeedsAppearance(rollID, itemLink)
     end
     if not LC.IsRealItemLink(itemLink) then return nil end
     if not C_TransmogCollection or not C_TransmogCollection.GetItemInfo then return nil end
-    local appearanceID = C_TransmogCollection.GetItemInfo(itemLink)
+    local appearanceID, sourceID = C_TransmogCollection.GetItemInfo(itemLink)
     if not appearanceID then return false end -- no appearance to collect
+    -- CAN this character learn it, asked before "do I already have it" (B39). The two are
+    -- different questions and only the second was being asked -- the sourceID sat unused in the
+    -- same return. An appearance nobody in this armor class can ever collect is not "needed" no
+    -- matter how uncollected it is, and voting Transmog on it puts this player's name on an item
+    -- the council then awards them.
+    --
+    -- Only a definite NO counts. A missing sourceID or a client without the API leaves the
+    -- question to the ownership check below, which is the direction that cannot silently drop a
+    -- vote the player wanted.
+    if sourceID and C_TransmogCollection.PlayerCanCollectSource
+       and C_TransmogCollection.PlayerCanCollectSource(sourceID) == false then
+        return false
+    end
     if not C_TransmogCollection.PlayerHasTransmogByItemInfo then return nil end
     return not C_TransmogCollection.PlayerHasTransmogByItemInfo(itemLink)
 end
