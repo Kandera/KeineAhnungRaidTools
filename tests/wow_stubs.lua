@@ -699,11 +699,31 @@ end
 function _G.IsShiftKeyDown() return false end
 function _G.IsControlKeyDown() return false end
 function _G.PlaySound() end
-KARTTEST.instance = { name = "The Voidspire", difficultyID = 16, difficultyName = "Mythic" }
+-- instanceType is part of the answer, not decoration: "none" is where the player spends most of
+-- their time, and anything deciding on the difficultyID alone has to say what it expects that ID to
+-- be out there. Defaults to a raid because that is what almost every test here is about.
+KARTTEST.instance = { name = "The Voidspire", instanceType = "raid",
+                      difficultyID = 16, difficultyName = "Mythic" }
 function _G.GetInstanceInfo()
     local i = KARTTEST.instance
-    return i.name, "raid", i.difficultyID, i.difficultyName, 20, 0, false, 2912
+    return i.name, i.instanceType or "raid", i.difficultyID, i.difficultyName, 20, 0, false, 2912
 end
+
+-- Combat logging, as real state: AutoLog's whole job is deciding when to turn this on and, more
+-- delicately, when it is allowed to turn it back off. None of these three existed here before
+-- 2026-08-01, so KART.AutoLog.Evaluate had never run.
+KARTTEST.logging = false
+KARTTEST.cvars = {}
+function _G.LoggingCombat(on)
+    if on ~= nil then KARTTEST.logging = not not on end
+    return KARTTEST.logging
+end
+function _G.SetCVar(name, value) KARTTEST.cvars[name] = value end
+function _G.GetCVar(name) return KARTTEST.cvars[name] end
+KARTTEST.keystoneLevel = 0
+_G.C_ChallengeMode = {
+    GetActiveKeystoneInfo = function() return KARTTEST.keystoneLevel end,
+}
 -- Loot history stamps every entry with the difficulty it was won on, and the catch-up sync resolves
 -- a received difficulty ID back to its name.
 function _G.GetDifficultyInfo(id)

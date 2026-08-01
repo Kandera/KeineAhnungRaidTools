@@ -25,7 +25,17 @@ local DIFFICULTY_TOGGLES = {
 -- reloading mid-run via PLAYER_ENTERING_WORLD.
 local function MatchContent()
     if not KART_Settings.autoLogEnabled then return false end
-    local name, _, difficultyID, difficultyName = GetInstanceInfo()
+    local name, instanceType, difficultyID, difficultyName = GetInstanceInfo()
+    -- The open world is not content, whatever difficultyID it reports there. Deciding on the ID
+    -- alone made this depend on an unstated assumption about what GetInstanceInfo answers outside an
+    -- instance -- and the table below claims 1 for Normal dungeons, which is exactly the value that
+    -- assumption is about. Anyone with the dungeon toggle on would have been logging while flying
+    -- around a capital city, for hours, with a file to match.
+    --
+    -- "Not the world" rather than an allow-list of party/raid: delves are in the table (208) and do
+    -- not report either of those, so the stricter rule would have quietly stopped logging them while
+    -- looking like the safer choice.
+    if instanceType == "none" then return false end
     local keyLevel = C_ChallengeMode.GetActiveKeystoneInfo()
     if keyLevel and keyLevel > 0 then
         if not KART_Settings.autoLogMythicPlus then return false end

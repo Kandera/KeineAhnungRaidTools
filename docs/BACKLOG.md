@@ -329,6 +329,31 @@ into the dialog rather than re-derived on accept, so the roster changing while t
 screen cannot turn a "yes" to two into a "yes" to eighteen. Nothing to remove still asks nothing: a
 confirmation for a no-op only teaches people to click through the one that matters.
 
+## B97 — FIXED 2026-08-01 — Auto Combat Log decided on a difficulty ID alone
+
+Seventh bug run. AutoLog.lua is 69 lines and had no test: `LoggingCombat`, `SetCVar` and
+`C_ChallengeMode` were all absent from the harness, so `KART.AutoLog.Evaluate` had never run a line.
+
+`MatchContent` read `GetInstanceInfo()` and threw away the instanceType, deciding purely on the
+difficultyID against a table that claims `[1] = autoLogDungeons` for Normal dungeons. That makes the
+whole feature depend on an unstated assumption about what that API answers OUTSIDE an instance -- and
+1 is exactly the value the assumption is about. Anyone with the dungeon toggle on would have been
+logging while flying around a capital city, for hours, with a file to match.
+
+Not proven live from here -- the API's out-of-instance value cannot be read off the source, and this
+is written down as the defensive gap it is rather than as a confirmed field report. The guard removes
+the dependency either way and costs one comparison.
+
+The guard is "not the open world", NOT an allow-list of party/raid: delves are in the table (208) and
+report neither, so the stricter rule would have quietly stopped logging them while looking like the
+safer choice. A mutation to exactly that stricter form is red for that reason.
+
+Twenty assertions cover the rest, and the ones that matter are about STOPPING, which is the expensive
+direction: a log the player started by hand is never stopped, never adopted while KART walks into
+matching content, and a stale ownership claim -- `autoLogOwned` is a SavedVariable, `LoggingCombat`
+is not -- is dropped before it can make the next hand-started log look like ours. Getting that wrong
+is a raid night with no Warcraft Logs upload that nobody notices until the next morning.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
