@@ -1357,7 +1357,13 @@ end
 -- so the picture that came back could be arbitrarily old: rows for items long since won or expired,
 -- countdowns frozen where they stopped, and live vote buttons on all of them.
 function LC.ReopenTrackedWindow()
-    if LC.councilPanel and #LC.councilTabs > 0 then
+    if #LC.councilTabs > 0 then
+        -- Built here if it does not exist yet, rather than guarded on. The panel is created lazily,
+        -- by the first item that reaches it — so after a reload the tabs are back (B81) while
+        -- LC.councilPanel is still nil, and guarding on it made this command fall silently through
+        -- its own condition. That is the report this whole thread started from: "session is running,
+        -- two items on the table, /kart lc opens nothing".
+        if not LC.councilPanel then KART.LC.Council.CreateCouncilPanel() end
         KART.LC.Council.RefreshCouncilRows()
         KART.LC.Council.RefreshCouncilTabs()
         LC.councilPanel:Show()
@@ -2162,6 +2168,9 @@ function LC.SaveSessionSnapshot()
     if #ids == 0 then return end
 
     store.savedAt      = time()
+    -- Which tab the panel was on. Without it a council member comes back to a panel full of tabs
+    -- and no rows, because every row list is drawn for LC.activeRollID.
+    store.activeRollID = (LC.activeRollID and seen[LC.activeRollID]) and LC.activeRollID or nil
     store.councilTabs  = {}
     store.voteListRolls = {}
     for _, id in ipairs(LC.councilTabs) do
@@ -2227,6 +2236,12 @@ function LC.RestoreSessionSnapshot()
     for _, id in ipairs(type(store.voteListRolls) == "table" and store.voteListRolls or {}) do
         if tonumber(id) then table.insert(LC.voteListRolls, tonumber(id)) end
     end
+    -- Only if it is one of the tabs that actually came back, so a malformed file cannot point the
+    -- panel at a roll it has no rows for.
+    for _, id in ipairs(LC.councilTabs) do
+        if id == tonumber(store.activeRollID) then LC.activeRollID = id break end
+    end
+    if not LC.activeRollID then LC.activeRollID = LC.councilTabs[1] end
     -- The rolls are back but the session flag is NOT set here: whether the raid is still in a session
     -- is the raid's answer, not ours, and the existing recovery already asks for it (LC_STATE_REQ ->
     -- LC_ACTIVE / LC_SESSION_RESUME). If the answer comes back "no", LC.ClearAllRolls removes exactly

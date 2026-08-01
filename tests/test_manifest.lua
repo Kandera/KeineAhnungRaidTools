@@ -149,6 +149,14 @@ do
     T.eq(lm.KART.LC.rollLootedAt[1], lootedAt, "C8: and the trade clock still dates from the boss")
     T.eq(back.KART.LC.assignedWinners[1], raider.guid,
         "C8: the client that reloaded still knows what was already decided")
+    -- The item is still on their panel, and they can get back to it (B81). Without this C8 passed
+    -- while a council member came back to an empty screen: they knew the winner but had no tab, no
+    -- votes and no way to open the window at all.
+    T.eq(#back.KART.LC.councilTabs, 1, "C8: the item is still on their council panel")
+    T.truthy(next(back.KART.LC.votes[1] or {}), "C8: with the votes that were cast on it")
+    RaidSim.As(back, function() back.KART.LC.ReopenTrackedWindow() end)
+    T.truthy(back.KART.LC.councilPanel and back.KART.LC.councilPanel:IsShown(),
+        "C8: and /kart lc puts the window back in front of them")
 
     -- ...so deciding it again is a RE-decision, and the raid follows it.
     RaidSim.As(back, function()

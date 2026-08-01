@@ -516,6 +516,14 @@ do
     for _ in pairs(lm.KART.LC.votes[90] or {}) do votesAfter = votesAfter + 1 end
     T.eq(votesAfter, 5, "B81: and every vote that was cast on it")
 
+    -- ...and can get to it. This is the report itself -- "/kart lc opens nothing" -- and having the
+    -- state back is not enough on its own: the council panel is built lazily, so after a reload
+    -- LC.councilPanel is nil and the command used to fall straight through its own guard.
+    RaidSim.As(lm, function() lm.KART.LC.ReopenTrackedWindow() end)
+    T.truthy(lm.KART.LC.councilPanel and lm.KART.LC.councilPanel:IsShown(),
+        "B81: /kart lc opens the council panel again")
+    T.eq(lm.KART.LC.activeRollID, 90, "B81: showing the item it was showing before")
+
     -- The point of getting it back: they can finish the distribution.
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(90, raider.guid, "BIS", nil) end)
     KARTTEST.AdvanceTime(0)
