@@ -25,6 +25,14 @@ RaidSim.As(me, function()
 end)
 T.truthy(KART.MainFrame and KART.ShowTab, "the main window builds")
 
+-- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
+-- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or
+-- removed control leaves a nil index that throws only when somebody actually changes language.
+do
+    local ok, err = pcall(function() RaidSim.As(me, function() KART.UI:ApplyLocaleRefreshers() end) end)
+    T.truthy(ok, "every registered locale refresher runs without error: " .. tostring(err))
+end
+
 local function As(fn) return RaidSim.As(me, fn) end
 
 -- KART.SyncSettingsToUI lives in Core.lua, which needs the game and is not loadable here. Loading a

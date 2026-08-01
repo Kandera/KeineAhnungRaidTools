@@ -220,6 +220,14 @@ do
     setfenv(WU.BuildPanel, env)
     WU.BuildPanel(CreateFrame("Frame"))
     T.truthy(WU.BtnImport and WU.ImportEditBox, "the WoWUtils panel builds")
+
+    -- The locale refresher this panel registers, run the way Core.lua runs it: on load and again
+    -- whenever the language is switched. It re-labels widgets by hand, one line per widget, so it
+    -- goes stale silently -- a renamed or removed control leaves a nil index that only throws when
+    -- somebody actually changes their language. Nine of these exist across the addon and none had
+    -- ever been called.
+    local ok, err = pcall(function() KART.UI:ApplyLocaleRefreshers() end)
+    T.truthy(ok, "its locale refresher runs without error: " .. tostring(err))
 end
 
 local function ClickImport(text)
