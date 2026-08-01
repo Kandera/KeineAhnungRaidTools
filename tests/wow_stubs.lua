@@ -390,6 +390,27 @@ function _G.CreateFrame(_, name, parent, _)
     -- Scroll offset, as a number rather than the catch-all's frame: KART.UpdateScrollRange clamps
     -- the current offset against the new range, and comparing a frame to a number is an error that
     -- reads nothing like "this getter was never stubbed".
+    -- Anchors, remembered rather than discarded. The addon reads its OWN position back through
+    -- GetPoint to save it (the drag handlers on the raidlead bar and the buff-check window), so
+    -- without this the whole save-and-restore-position path answered with a frame.
+    local points = {}
+    function f:SetPoint(a, b, c, d, e)
+        -- The three shapes the game accepts: (point), (point, x, y) and
+        -- (point, relativeTo, relativePoint, x, y).
+        local entry
+        if type(b) == "number" then entry = { a, nil, a, b, c }
+        elseif c == nil and b == nil then entry = { a, nil, a, 0, 0 }
+        else entry = { a, b, c, d or 0, e or 0 } end
+        points[#points + 1] = entry
+    end
+    function f:ClearAllPoints() points = {} end
+    function f:GetNumPointsSet() return #points end
+    function f:GetPoint(i)
+        local p = points[i or 1]
+        if not p then return nil end
+        return p[1], p[2], p[3], p[4], p[5]
+    end
+
     local vScroll = 0
     function f:SetVerticalScroll(value) vScroll = tonumber(value) or 0 end
     function f:GetVerticalScroll() return vScroll end
@@ -724,7 +745,20 @@ function _G.CanInspect() return false end
 function _G.NotifyInspect() end
 function _G.ClearInspectPlayer() end
 function _G.CheckInteractDistance() return false end
-function _G.InCombatLockdown() return false end
+-- Combat lockdown is a switch a test flips, not a constant. Half this addon has a branch for it
+-- -- the raidlead bar refuses to change frames, keybinds defer themselves -- and a hard false
+-- meant none of those branches had ever run.
+KARTTEST.inCombat = false
+function _G.InCombatLockdown() return KARTTEST.inCombat end
+
+-- Override bindings outrank the player's own keybinds for the whole session, so which frame owns
+-- them and whether they were given back is the only interesting thing about them.
+KARTTEST.overrideBindings = {}
+function _G.SetOverrideBindingClick(owner, _, key, button)
+    KARTTEST.overrideBindings[owner] = KARTTEST.overrideBindings[owner] or {}
+    KARTTEST.overrideBindings[owner][key] = button or true
+end
+function _G.ClearOverrideBindings(owner) KARTTEST.overrideBindings[owner] = nil end
 
 -- Values the client refuses to let an addon read (see KAUtil.IsSecret). A real secret string throws
 -- on every string operation and cannot be built in plain Lua, so what is modelled here is the part
