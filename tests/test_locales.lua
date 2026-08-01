@@ -169,3 +169,52 @@ do
         "every string.format on a locale string is given as many arguments as it has placeholders")
     T.truthy(checked >= 40, "and enough call sites were actually reached (" .. checked .. ")")
 end
+
+-- ===================================================================================
+-- Every setting the addon reads has a default
+-- ===================================================================================
+-- A setting read but never defaulted is nil on a fresh install, and nil takes whichever branch the
+-- reader did not mean -- silently, and only for new users, which is the hardest kind to notice. The
+-- exceptions below are settings that are MEANT to be absent until something writes them, and each
+-- reader of those carries its own fallback; they are listed by name so a genuinely forgotten default
+-- cannot hide among them.
+do
+    local NIL_BY_DESIGN = {
+        activeProfile = true,  -- no profile loaded yet
+        -- Window geometry, written when a window is first moved. Every reader supplies its own
+        -- default position (`KART_Settings.bcX or 200`), which is what makes "unset" meaningful.
+        bcPoint = true, bcRelativePoint = true, bcX = true, bcY = true,
+        bcWidth = true, bcHeight = true,
+        rlBarPoint = true, rlBarRelativePoint = true, rlBarX = true, rlBarY = true,
+    }
+
+    local utils = Slurp("Utils.lua")
+    local from = utils:find("KART.Defaults = {", 1, true)
+    T.truthy(from, "KART.Defaults was found in Utils.lua")
+    local depth, i = 0, from + #"KART.Defaults = " - 1
+    while i <= #utils do
+        local c = utils:sub(i, i)
+        if c == "{" then depth = depth + 1
+        elseif c == "}" then
+            depth = depth - 1
+            if depth == 0 then break end
+        end
+        i = i + 1
+    end
+    local block = utils:sub(from, i)
+    local defaults = {}
+    for name in block:gmatch("([A-Za-z_][A-Za-z0-9_]*)%s*=") do defaults[name] = true end
+
+    local missing, seen = {}, 0
+    for _, path in ipairs(SOURCES) do
+        for name in Slurp(path):gmatch("KART_Settings%.([A-Za-z_][A-Za-z0-9_]*)") do
+            seen = seen + 1
+            if not defaults[name] and not NIL_BY_DESIGN[name] then missing[name] = path end
+        end
+    end
+    local names = {}
+    for name, path in pairs(missing) do names[#names + 1] = name .. " (" .. path .. ")" end
+    table.sort(names)
+    T.eq(table.concat(names, ", "), "", "every setting the addon reads has a default")
+    T.truthy(seen >= 200, "and enough reads were actually reached (" .. seen .. ")")
+end

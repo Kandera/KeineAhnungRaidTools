@@ -381,6 +381,27 @@ Only a real answer wins over the stored name now. Worth knowing about `ResolveDi
 it never fails, it degrades to the key, so every caller that renders its result has to decide whether
 that is acceptable output.
 
+## B100 — NO DEFECT 2026-08-01 — officer notes, settings defaults, MainFrame
+
+Bug runs nine and ten, both clean, and both now carry tests where they had none.
+
+**Officer notes** (15 assertions): written locally and broadcast, colons and pipes stripped before
+either so both sides keep byte-identical text, a pipe arriving over the wire escaped rather than
+trusted, a note from somebody who is not council refused, and the pre-GUID key migration -- which
+moves a legacy note onto the resolved key, leaves an unresolvable one alone rather than dropping it,
+and does not clobber a newer note already written under the key. All of it already held.
+
+**Settings defaults**: every `KART_Settings.x` the addon reads was checked against `KART.Defaults`.
+Eleven are absent, all of them deliberately -- `activeProfile`, and window geometry written when a
+window is first moved -- and every reader of those supplies its own fallback (`KART_Settings.bcX or
+200`). A read with no default and no fallback is nil on a fresh install and takes whichever branch
+the reader did not mean, silently and only for new users, so the check is a test now with the eleven
+listed by name: a genuinely forgotten default cannot hide among them.
+
+**Utils and MainFrame** beyond that are UI construction and `KART.IsOlderVersion`, which
+tests/test_lc_version.lua already covers to the corners (two-part versions, build suffixes, and never
+calling a NEWER peer outdated).
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
