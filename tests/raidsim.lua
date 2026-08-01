@@ -125,6 +125,22 @@ local function Boot(client, saved)
     client.KART = { LC = {} }
     client.env.KART = client.KART
 
+    -- Everything this client is about to create belongs to it, LIBRARIES INCLUDED, so
+    -- KARTTEST.FireEvent can reach one client's handlers and nobody else's -- and, just as
+    -- important, so the next boot under this name can drop them again. A reload creates a whole new
+    -- set; leaving the old ones registered would have a reloaded client hear every event twice.
+    --
+    -- Set before the libraries, not after: KASC registers a CHAT_MSG_ADDON frame of its own, and
+    -- with the owner still nil at that point nothing could ever match it for removal. Every boot
+    -- then left one behind, and each of those pins the whole client environment -- ten loaded addon
+    -- chunks and every table in them -- so a long soak grew by about 3 MB per raid and ran the
+    -- process out of memory around seed 8000. Measured, not guessed: the START_LOOT_ROLL
+    -- registrations stayed correctly at five while the CHAT_MSG_ADDON ones climbed one per boot.
+    KARTTEST.frameOwner = client.name
+    for i = #KARTTEST.eventFrames, 1, -1 do
+        if KARTTEST.eventFrames[i].owner == client.name then table.remove(KARTTEST.eventFrames, i) end
+    end
+
     -- Fresh library instances per client. LibStub hands out singletons, so without clearing its
     -- registry every client would share one KASC -- one handler table, one identity cache, and
     -- no way to tell two clients apart.
@@ -151,14 +167,6 @@ local function Boot(client, saved)
     client.KASC:AttachCache(client.env.KART_PlayerCache)
 
     RaidSim.active = client
-    -- Frames created from here on belong to this client, so KARTTEST.FireEvent can reach one
-    -- client's handlers and nobody else's. A reload creates a whole new set; the old ones are
-    -- dropped below rather than left registered, or a reloaded client would hear every event
-    -- twice for the rest of the run.
-    KARTTEST.frameOwner = client.name
-    for i = #KARTTEST.eventFrames, 1, -1 do
-        if KARTTEST.eventFrames[i].owner == client.name then table.remove(KARTTEST.eventFrames, i) end
-    end
     for _, path in ipairs(CLIENT_FILES) do loadInto(client, path) end
 
     -- KART.L is assembled by Core.lua, which the harness does not load: English first, then the

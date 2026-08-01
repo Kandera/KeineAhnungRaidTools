@@ -15,6 +15,29 @@ local RaidSim = F.RaidSim
 
 local TRADE_WINDOW = 4 * 60 * 60
 
+-- Booting a client must not leave its event registrations behind ------------------------------------
+-- Not about the addon: about the harness being able to run long enough to find things. Every retained
+-- registration pins the whole client environment -- ten loaded chunks and every table in them -- so a
+-- leak of one per boot cost about 3 MB per raid and took the 10000-seed soak out of memory around
+-- seed 8000, which reads as a failed run rather than as what it was.
+--
+-- The cause was ownership: KASC registers a CHAT_MSG_ADDON frame of its own, and the libraries were
+-- loaded before the owner was set, so nothing could ever match those for removal. Cheap to assert,
+-- and it fails here in a second instead of after twenty minutes of soak.
+do
+    F.NewRaid()
+    local settled = #KARTTEST.eventFrames
+    T.truthy(settled > 0, "a booted raid registers for events at all")
+
+    for _ = 1, 5 do
+        local sim = F.NewRaid()
+        RaidSim.Reload(sim, "Bramor")
+        RaidSim.Reload(sim, "Alric")
+    end
+    T.eq(#KARTTEST.eventFrames, settled,
+        "five more raids and ten reloads later, nothing is left registered")
+end
+
 -- The lootmaster reloads mid-roll -----------------------------------------------------------------
 do
     local sim, lm, council = F.NewRaid()
