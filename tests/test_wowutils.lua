@@ -24,9 +24,12 @@ env.KART = KART
 
 -- The two things Invite.lua reaches for at file scope. RegisterStaticPopup writes into the same
 -- StaticPopupDialogs table KARTTEST.AcceptPopup reads, so a confirm raised here is answerable.
-KART.UI = {
+-- The real widget library underneath, so WU.BuildPanel builds the real controls rather than
+-- stand-ins; only RegisterStaticPopup is replaced, to write into the same StaticPopupDialogs table
+-- KARTTEST.AcceptPopup reads.
+KART.UI = setmetatable({
     RegisterStaticPopup = function(_, name, def) StaticPopupDialogs[name] = def end,
-}
+}, { __index = LibStub("KAUI-1.0"):NewNamespace("KARTWoWUtilsTest") })
 
 do
     local chunk = assert(loadstring(assert(io.open("Invite.lua", "r")):read("*a"), "@Invite.lua"))
@@ -200,3 +203,75 @@ do
 end
 
 KARTTEST.activeUnit = nil
+
+-- The Import button ---------------------------------------------------------------------------------
+-- The parser above is reached directly; the BUTTON around it holds three rules of its own, none of
+-- which had run -- WU.BuildPanel had never been called, so every line of the panel was dark.
+--
+-- The panel needs the two things Core.lua and MainFrame.lua provide and the harness does not:
+-- a tab-title creator and the locale-refresher registry's owner table.
+do
+    KART.CreateTabTitle = KART.CreateTabTitle or function() end
+    KART.TabTitles = KART.TabTitles or setmetatable({}, { __index = function(t, k)
+        local f = CreateFrame("Frame")
+        rawset(t, k, f)
+        return f
+    end })
+    setfenv(WU.BuildPanel, env)
+    WU.BuildPanel(CreateFrame("Frame"))
+    T.truthy(WU.BtnImport and WU.ImportEditBox, "the WoWUtils panel builds")
+end
+
+local function ClickImport(text)
+    WU.ImportEditBox:SetText(text)
+    WU.BtnImport:GetScript("OnClick")(WU.BtnImport)
+    return WU.bosses
+end
+
+do
+    -- Replace, not append. Only the edit box's text is saved, so the list has to be reconstructible
+    -- from it alone -- an appended second import would silently shrink back to the last export on
+    -- the next reload, and re-clicking Import on a box holding both would duplicate the first.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport(EXPORT)
+    T.eq(#WU.bosses, 1, "importing loads the roster")
+
+    local other = "EncounterID:3135;Difficulty:Heroic;Name:Loomithar\ninvitelist:Sinja Merrit;"
+    ClickImport(other)
+    T.eq(#WU.bosses, 1, "a second import replaces the first rather than adding to it")
+    T.eq(WU.bosses[1].name, "Loomithar", "leaving only what is in the box")
+end
+
+do
+    -- Clicking Import again on unchanged text must not double the list. This is the ordinary case:
+    -- the text is re-parsed from the saved box at login, and the player then presses the button.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport(EXPORT)
+    local first = #WU.bosses
+    ClickImport(EXPORT)
+    T.eq(#WU.bosses, first, "re-importing identical text changes nothing")
+end
+
+do
+    -- The one that matters on a raid night: a failed paste must not leave the raid leader with an
+    -- empty list. Rebuilding from the saved text would not work either -- the box's OnTextChanged has
+    -- already overwritten it with the text that just failed.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport(EXPORT)
+    local loaded = WU.bosses
+    T.eq(#loaded, 1, "a roster is loaded")
+
+    ClickImport("this is not an export at all")
+    T.eq(#WU.bosses, 1, "a paste that parses to nothing leaves the previous roster in place")
+    T.eq(WU.bosses[1].name, "Plexus Sentinel", "the same one, not a rebuilt guess")
+end
+
+do
+    -- The module switch is off: the button does nothing at all rather than half of it.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport(EXPORT)
+    env.KART_Settings.wuModuleEnabled = false
+    ClickImport("EncounterID:3135;Difficulty:Heroic;Name:Loomithar\ninvitelist:Sinja;")
+    T.eq(WU.bosses[1].name, "Plexus Sentinel", "with the module off, Import leaves the list untouched")
+    env.KART_Settings.wuModuleEnabled = true
+end
