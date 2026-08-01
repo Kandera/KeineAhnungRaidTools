@@ -244,6 +244,26 @@ Twelve assertions now cover the rest of it as well: case and spacing, a non-lead
 someone already an assistant being left alone, a namesake on another realm not being the person
 named, and the nickname path.
 
+## B93 — FIXED 2026-08-01 — a corrupt profile wiped every setting on the way to failing
+
+Found in the profiles bug run. `KART.LoadProfile` checked its snapshot for PRESENCE and not for
+being a table, and it does that check before `wipe(KART_Settings)`. A snapshot that came back as a
+string therefore passed the guard, the settings were wiped, and `KAUtil.DeepCopy` then threw on
+`pairs()` -- so the player lost every setting they had AND got a Lua error, instead of a profile that
+simply refused to load.
+
+`KART_Profiles` is a SavedVariable: hand-edited, half-written after a crash, or touched by another
+addon. This is the same defensiveness `Trade.RestorePersistedTrades` and the loot-history handler
+already apply to their own persisted data; profiles had none.
+
+The mutation is unusually loud -- putting the presence check back does not fail an assertion, it
+aborts the whole suite, which is exactly what it does to the addon.
+
+Nothing else in that file needed changing. The deep-copy isolation, the minimap table keeping its
+identity for LibDBIcon, re-deriving `autoLogOwned` from what is actually running, merging in defaults
+a profile predates, the language-change reload, and deleting a profile leaving the loaded settings
+alone all held -- and now have nineteen assertions holding them, each mutation-verified.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

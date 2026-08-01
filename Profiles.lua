@@ -11,7 +11,12 @@ end
 -- profile predates (KART.Defaults), marks it active, and pushes the result into every widget.
 function KART.LoadProfile(name)
     local snapshot = KART_Profiles[name]
-    if not snapshot then return end
+    -- Checked as a TABLE, not just for presence, and checked BEFORE the wipe below. KART_Profiles is
+    -- a SavedVariable: hand-edited, half-written after a crash, or touched by another addon. A
+    -- snapshot that came back as a string reached DeepCopy's pairs() and threw -- with KART_Settings
+    -- already wiped, which costs the player every setting they have and leaves an error on screen
+    -- rather than a profile that simply refused to load.
+    if type(snapshot) ~= "table" then return end
     -- Language is only applied once at load (Core.lua) and the language picker itself reloads to
     -- switch it, so a profile that stored a different language needs the same reload to take effect.
     local prevLang = KART_Settings.language
