@@ -2266,6 +2266,9 @@ function LC.RestoreSessionSnapshot()
     -- LC_ACTIVE / LC_SESSION_RESUME). If the answer comes back "no", LC.ClearAllRolls removes exactly
     -- what was just restored, which is the correct outcome and needs no special case.
     if #LC.voteListRolls > 0 then LC.Vote.EnsurePruneTicker() end
+    -- A snapshot carries whatever LC.rollItems held, which for a client that had not cached the item
+    -- yet is a bare "item:12345" string. Nothing else would ever look at that roll again.
+    if LC.ResolveTrackedItemLinks then LC.ResolveTrackedItemLinks() end
 
     -- If no answer comes at all, the items are last night's. That is the ordinary shape of logging
     -- back in shortly after a raid -- inside the age bound, but with nobody left to ask -- and
@@ -2719,6 +2722,23 @@ local function ResolveRollItemLink(rollID, attempt)
                     KART.LC.Council.RefreshCouncilTabs()
                 end
             end)
+        end
+    end
+end
+
+-- Restarts the resolver for anything currently tracked that is not a real link yet. Only caller is
+-- LC.RestoreSessionSnapshot (B81): a snapshot carries whatever LC.rollItems held at logout, and what
+-- LC.HandleStart leaves behind until the client caches an item is a bare "item:12345" string. A
+-- reload is exactly when that cache is coldest, and nothing else would ever look at the roll again —
+-- so a restored item would render as "item:249293" instead of a name for the whole distribution,
+-- which is the shape of GitHub #12, #13 and #16.
+--
+-- Reached through LC rather than the local above because the restore is defined earlier in this
+-- file; by the time it runs (ADDON_LOADED) this assignment has long happened.
+function LC.ResolveTrackedItemLinks()
+    for _, list in ipairs({ LC.councilTabs, LC.voteListRolls }) do
+        for _, rollID in ipairs(list) do
+            if not LC.IsRealItemLink(LC.rollItems[rollID]) then ResolveRollItemLink(rollID) end
         end
     end
 end

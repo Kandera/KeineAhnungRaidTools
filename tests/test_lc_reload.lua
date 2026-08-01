@@ -559,6 +559,23 @@ do
 end
 
 do
+    -- An item that was still a bare "item:12345" string when the client stopped. That is what
+    -- LC.HandleStart leaves behind until the client caches the item, and a reload is exactly when
+    -- that cache is coldest -- so a restored roll could otherwise render as "item:249293" instead
+    -- of a name for the whole distribution, which is the shape of GitHub #12, #13 and #16.
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 97, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+    lm.KART.LC.rollItems[97] = "item:249293"
+    T.truthy(not lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[97]), "the link is not a real one yet")
+
+    lm = RaidSim.Reload(sim, "Bramor")
+    KARTTEST.AdvanceTime(5)
+    T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[97]),
+        "B81: a restored item finishes resolving its link instead of staying a bare string")
+end
+
+do
     -- The bound that matters most in practice: a snapshot is only worth anything while the raid it
     -- belonged to is still running, and the client cannot know that at load -- the answer arrives
     -- from the raid (LC_ACTIVE / LC_SESSION_RESUME). If it never does, the restored items are last
