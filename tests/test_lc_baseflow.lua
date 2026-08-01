@@ -721,7 +721,12 @@ do
     RaidSim.As(lm, function()
         lm.KART.LH.LogHistory(KARTTEST.items[249293].link, "Alric", "BIS", "MAGE", nil, 47, raider.guid)
     end)
-    lm.env.KART_LootHistory[1].time = os.time() - 7 * 24 * 60 * 60   -- last Tuesday
+    -- time(), not os.time(). The harness clock runs from a FIXED epoch so a failure reproduces
+    -- tomorrow as well (see tests/wow_stubs.lua) -- mixing the real clock in gives the assertion an
+    -- expiry date: once the real world was more than a week past that epoch, "last Tuesday" landed
+    -- AFTER the harness's today, the revoke window swallowed it, and three assertions here went red
+    -- with nothing having changed. Which is what happened, 2026-08-01.
+    lm.env.KART_LootHistory[1].time = time() - 7 * 24 * 60 * 60   -- last Tuesday
     T.eq(#lm.env.KART_LootHistory, 1, "an award from a previous raid is on record")
 
     -- Tonight, Blizzard hands out roll 47 again for something else, and the council decides nobody

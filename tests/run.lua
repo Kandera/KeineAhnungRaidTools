@@ -131,6 +131,14 @@ dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 
+if os.getenv("KART_CATCHALL") then
+    local names = {}
+    for k, v in pairs(KARTTEST.catchAll or {}) do names[#names + 1] = { k, v } end
+    table.sort(names, function(a, b) return a[2] > b[2] end)
+    print("-- methods answered by the catch-all --")
+    for _, e in ipairs(names) do print(string.format("%8d  %s", e[2], e[1])) end
+end
+
 -- Written before os.exit, which luacov's own exit hook never sees from here.
 if coverage then
     coverage.shutdown()
