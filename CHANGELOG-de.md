@@ -17,6 +17,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **`/kart trade` und `/kart owed` zeigen, was jetzt offen ist** — nicht, was beim Schließen offen war.
 - **Die Council-Mitgliederliste sagt, wer wirklich im Council ist.** Der Raidleiter ist nicht automatisch drin — trag dich ein, wenn du mitentscheidest.
 - **Die Items auf dem Tisch überstehen einen Reload.** Wer den Loot verteilt, hat sie vorher komplett verloren — alle anderen, sobald der Vote-Timer abgelaufen war.
+- **Die Loot-Historie zu löschen hält jetzt.** Vorher hat sie ein anderer Client direkt wieder reingesynct; alles, was nach dem Löschen vergeben wird, kommt weiterhin an.
 
 ## [3.2.2] - 2026-08-01
 ### Behoben

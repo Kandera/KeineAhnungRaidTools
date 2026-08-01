@@ -36,7 +36,7 @@ files["MainFrame.lua"] = { ignore = { "431" } }
 
 globals = {
     -- SavedVariables
-    "KART_Settings", "KART_LootHistory", "KART_LCOfficerNotes", "KART_WoWUtilsCache",
+    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LCOfficerNotes", "KART_WoWUtilsCache",
     "KART_Profiles", "KART_PlayerCache", "KART_LCTrades", "KART_LCSession",
     -- Named frames created by the addon and reached through _G
     "KART_GearScanTooltip",

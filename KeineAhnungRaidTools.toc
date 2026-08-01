@@ -4,7 +4,7 @@
 ## Author: Kandera
 ## Version: 3.2.2
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
-## SavedVariables: KART_Settings, KART_LootHistory, KART_LCOfficerNotes, KART_WoWUtilsCache, KART_Profiles, KART_PlayerCache
+## SavedVariables: KART_Settings, KART_LootHistory, KART_LootHistoryClearedAt, KART_LCOfficerNotes, KART_WoWUtilsCache, KART_Profiles, KART_PlayerCache
 ## SavedVariablesPerCharacter: KART_LCTrades, KART_LCSession
 ## OptionalDeps: NorthernSkyRaidTools
 ## X-Curse-Project-ID: 1603461

@@ -334,14 +334,29 @@ function LH.GetUniqueReasons()
     return list
 end
 
+-- Clearing draws a line rather than just emptying a table, and the line is what makes the clear
+-- stick. LH.RequestHistorySync asks peers for everything newer than the newest entry it holds; after
+-- a wipe that is zero, which reads as "send me everything you have" -- so the catch-up faithfully
+-- rebuilt exactly what had just been deleted, and a season started with last tier's items still in
+-- the list. Reported by the maintainer, 2026-08-01.
+--
+-- Switching the sync off is not the alternative: the whole reason it exists is that items decided
+-- while you were absent still reach the list you export. A line keeps both -- nothing older than it
+-- ever comes back, everything after it still does.
+--
+-- Personal and account-wide, like the history itself. It is not synced and nobody else's clear
+-- affects yours.
+function LH.ClearHistory()
+    wipe(KART_LootHistory)
+    KART_LootHistoryClearedAt = time()
+    LH.Refresh()
+end
+
 KART.UI:RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
     text = "Really clear loot history?", -- unconditionally overwritten with KART.L.LH_CLEAR_CONFIRM_TEXT below
     button1 = YES,
     button2 = NO,
-    OnAccept = function()
-        wipe(KART_LootHistory)
-        LH.Refresh()
-    end,
+    OnAccept = function() LH.ClearHistory() end,
 })
 
 -- =====================================================================
@@ -940,7 +955,10 @@ local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
 local HISTORY_SYNC_ANSWER_COOLDOWN = 60
 
 function LH.RequestHistorySync()
-    local latest = 0
+    -- Never earlier than the last clear (see LH.ClearHistory). The since-timestamp already means
+    -- "I have everything up to here", so a line drawn by hand fits it exactly and no peer needs to
+    -- know anything about it.
+    local latest = KART_LootHistoryClearedAt or 0
     for _, e in ipairs(KART_LootHistory or {}) do
         if e.time and e.time > latest then latest = e.time end
     end
@@ -1055,6 +1073,10 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- becomes the "since" watermark LH.RequestHistorySync sends, permanently asking every peer for
     -- entries newer than that date and silently killing catch-up sync for good.
     if t > time() + 300 then return end
+    -- Older than the line the player drew when they last cleared. The request side already asks from
+    -- there, but a reply burst spans about eight seconds -- so a clear can land in the middle of one,
+    -- with the deleted entries already on their way.
+    if t <= (KART_LootHistoryClearedAt or 0) then return end
     -- Free text from another client, rendered raw into the history window and the export. Double the
     -- pipes so |c colour codes and |H hyperlinks can't be injected into a SavedVariable that is then
     -- displayed forever. (RC_REASON does the same on its own receive side.)

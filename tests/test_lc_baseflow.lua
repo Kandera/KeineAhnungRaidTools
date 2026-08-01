@@ -649,6 +649,68 @@ do
     end
 end
 
+-- Clearing the loot history has to keep it cleared -------------------------------------------------
+-- Reported by the maintainer, 2026-08-01: "I clear the history and another player syncs it straight
+-- back, so at the start of a season I still have last tier's items in the list."
+--
+-- LH.RequestHistorySync asks for everything newer than the newest entry it holds. After a clear that
+-- is zero, which reads as "send me everything" -- so the catch-up faithfully rebuilt what had just
+-- been deleted. Switching the sync off is not the answer either: the whole point of it is that items
+-- decided while you were absent still reach your list, and that list is what gets exported.
+--
+-- A clear is a personal "my history starts here" line. The request already carries a since-timestamp,
+-- so nothing about the protocol changes: it just stops asking about anything older than that line.
+do
+    local sim, lm, _, raider = NewRaid()
+    local threeDaysAgo = time() - 3 * 24 * 60 * 60
+    for _, c in ipairs({ lm, raider }) do
+        RaidSim.As(c, function()
+            c.KART.LH.LogHistory(KARTTEST.items[249293].link, "Alric", "BIS", "MAGE", nil, 47, raider.guid)
+        end)
+        c.env.KART_LootHistory[1].time = threeDaysAgo
+    end
+    T.eq(#lm.env.KART_LootHistory, 1, "both clients hold last tier's award")
+
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    T.eq(#lm.env.KART_LootHistory, 0, "the history is cleared")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    T.eq(#lm.env.KART_LootHistory, 0, "and stays cleared -- nobody syncs last tier back in")
+    -- Not merely discarded on arrival: the request itself says where the history starts, so a peer
+    -- with thirty old entries sends nothing at all rather than thirty messages nobody wants.
+    T.eq(#RaidSim.Sent(sim, "LC_HIST_ENTRY"), 0, "and nothing is put on the wire for it either")
+
+    -- ...and the catch-up still does the job it exists for: an award decided while this client was
+    -- away, AFTER the line was drawn, still reaches the list that gets exported.
+    KARTTEST.AdvanceTime(90) -- past the per-sender answer cooldown
+    RaidSim.As(raider, function()
+        raider.KART.LH.LogHistory(KARTTEST.items[249331].link, "Corvin", "Upgrade", "PALADIN", nil, 48,
+            sim.byName.Corvin.guid)
+    end)
+    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    T.eq(#lm.env.KART_LootHistory, 1, "an award from after the clear still arrives")
+    T.eq(lm.env.KART_LootHistory[1].winner, "Corvin", "and it is that one, not the deleted one")
+end
+
+do
+    -- The race the request-side line cannot cover: a reply burst spans about eight seconds, so a
+    -- clear can land in the middle of one. Those entries are already on their way and must be
+    -- refused on arrival.
+    local _, lm, _, raider = NewRaid()
+    RaidSim.As(raider, function()
+        raider.KART.LH.LogHistory(KARTTEST.items[249293].link, "Alric", "BIS", "MAGE", nil, 49, raider.guid)
+    end)
+    raider.env.KART_LootHistory[1].time = time() - 3 * 24 * 60 * 60
+
+    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)   -- while the answer is in flight
+    KARTTEST.AdvanceTime(15)
+    T.eq(#lm.env.KART_LootHistory, 0, "entries already on their way are refused too")
+end
+
 -- Revoking an award must reach exactly this roll's entry. Blizzard's roll IDs are small integers
 -- reissued every session, while the loot history is a SavedVariable spanning many raid nights -- so
 -- matching on the ID alone reached back into previous weeks and deleted somebody's record of an item

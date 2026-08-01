@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/kart trade` and `/kart owed` list what is owed now**, not what was owed when you last closed them.
 - **The council member list says who is actually in the council.** The raid leader is not in it automatically — enter yourself if you take part.
 - **The items on the table survive a reload.** Whoever hands out the loot used to lose them entirely, and everyone else lost them the moment the vote timer ran out.
+- **Clearing the loot history keeps it cleared.** Another player's client used to sync the deleted entries straight back; awards made after the clear still arrive as before.
 
 ## [3.2.2] - 2026-08-01
 ### Fixed

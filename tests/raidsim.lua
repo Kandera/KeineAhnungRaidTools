@@ -66,7 +66,7 @@ RaidSim.active = nil
 -- session flag, the tracked rolls -- is runtime state and starts empty again, which is exactly the
 -- asymmetry that makes a reloading lootmaster dangerous.
 local SAVED_VARIABLES = {
-    "KART_Settings", "KART_LootHistory", "KART_LCTrades",
+    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LCTrades",
     "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache", "KART_LCSession",
 }
 
@@ -105,6 +105,7 @@ local function Boot(client, saved)
     saved = saved or {}
     client.env.KART_Settings       = saved.KART_Settings or {}
     client.env.KART_LootHistory    = saved.KART_LootHistory or {}
+    client.env.KART_LootHistoryClearedAt = saved.KART_LootHistoryClearedAt
     client.env.KART_LCTrades       = saved.KART_LCTrades or { pending = {}, owed = {} }
     client.env.KART_LCSession      = saved.KART_LCSession or {}
     client.env.KART_LCOfficerNotes = saved.KART_LCOfficerNotes or {}
