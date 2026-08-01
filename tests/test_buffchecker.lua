@@ -324,3 +324,101 @@ do
     Render(lm)
     T.eq(ind:GetAlpha(), 1.0, "matching is by substring, as the spell names carry suffixes")
 end
+
+-- ==========================================================================
+--  Truncating a name that does not fit its column
+-- ==========================================================================
+-- WoW FontStrings do not ellipsize: text wider than the string's width overflows into whatever is
+-- anchored next to it. The buff check truncates by binary search, and every step of that search cuts
+-- the string at a BYTE index -- so on a German realm, where an umlaut is two bytes, the cut can land
+-- inside a character and render as a broken box.
+--
+-- Lifted out of the source rather than driven through a render: the two functions are pure, and what
+-- is under test is where they cut, not what the row looks like.
+do
+    local src = assert(io.open("BuffChecker.lua", "r")):read("*a")
+    local floor = src:match("\nlocal function Utf8Floor%(s, i%).-\nend\n")
+    local trunc = src:match("\nlocal function SetTruncatedName%(fontString, text, maxWidth%).-\nend\n")
+    T.truthy(floor and trunc, "both truncation helpers were found in BuffChecker.lua")
+
+    local chunk = assert(loadstring(floor .. trunc .. "\nreturn SetTruncatedName"))
+    local SetTruncatedName = chunk()
+
+    -- A stand-in FontString whose width is proportional to its BYTE length, which is what the
+    -- harness's own GetStringWidth does and what makes the search take its steps at all.
+    local function NewString()
+        local fs, value = {}, ""
+        function fs:SetText(t) value = t end
+        function fs:GetText() return value end
+        function fs:GetStringWidth() return #value * 6 end
+        return fs
+    end
+
+    -- Valid UTF-8, checked by walking it: a lead byte announces how many continuation bytes follow,
+    -- and a cut inside a character leaves either a lone continuation byte or a lead byte with too
+    -- few of them.
+    local function IsValidUTF8(s)
+        local i = 1
+        while i <= #s do
+            local b = s:byte(i)
+            local extra
+            if b < 0x80 then extra = 0
+            elseif b >= 0xF0 then extra = 3
+            elseif b >= 0xE0 then extra = 2
+            elseif b >= 0xC0 then extra = 1
+            else return false end          -- continuation byte where a character should start
+            for k = 1, extra do
+                local c = s:byte(i + k)
+                if not c or c < 0x80 or c >= 0xC0 then return false end
+            end
+            i = i + extra + 1
+        end
+        return true
+    end
+
+    do
+        local fs = NewString()
+        SetTruncatedName(fs, "Alric", 600)
+        T.eq(fs:GetText(), "Alric", "a name that fits is left alone")
+    end
+
+    do
+        local fs = NewString()
+        SetTruncatedName(fs, "Verylongcharactername-Silvermoon", 60)
+        local out = fs:GetText()
+        T.truthy(#out * 6 <= 60, "a name that does not fit is cut down to the width")
+        T.eq(out:sub(-3), "...", "and says so")
+    end
+
+    do
+        -- Every cut position, on a name full of two-byte characters: at some width the search tries,
+        -- the cut lands between the two halves of a glyph.
+        local name = "Wölfeäöüß-Blackmoore"
+        local checked = 0
+        for width = 12, 240, 6 do
+            local fs = NewString()
+            SetTruncatedName(fs, name, width)
+            local out = fs:GetText()
+            checked = checked + 1
+            if not IsValidUTF8(out) then
+                T.truthy(false, "cut at width " .. width .. " left a half character: " .. out)
+                break
+            end
+        end
+        T.truthy(checked > 20, "every cut width was tried")
+        T.truthy(IsValidUTF8("Wölfe"), "the validator itself accepts a whole umlaut")
+        -- string.char, not an escape: 0xC3 is the lead byte of every German umlaut, and it must
+        -- be rejected when the byte completing it is gone -- which is what a cut in the wrong
+        -- place leaves behind.
+        T.truthy(not IsValidUTF8("W" .. string.char(195)),
+            "and rejects a lead byte with nothing after it")
+    end
+
+    do
+        -- Narrower than the ellipsis itself. Anything is better than an empty column, and an empty
+        -- string is what the search returns on its own.
+        local fs = NewString()
+        SetTruncatedName(fs, "Alricsson", 6)
+        T.eq(fs:GetText(), "...", "a column too narrow for anything still shows the ellipsis")
+    end
+end
