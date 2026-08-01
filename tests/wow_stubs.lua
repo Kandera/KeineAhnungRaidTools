@@ -128,7 +128,16 @@ function _G.UnitName(unit)
     if m.realm == KARTTEST.realm then return m.name, "" end
     return m.name, m.realm
 end
-function _G.UnitGUID(unit) local m = resolve(unit) return m and m.guid or nil end
+-- KARTTEST.guidBlackout[unit] models the loading-screen edge the identity code is written around:
+-- the player is in the group and answers UnitName, but UnitGUID is momentarily nil. It is the one
+-- state in which a sender passes KASC's name-based group filter and still cannot be resolved to
+-- anybody -- which is exactly what the second guard in each loot handler is for.
+KARTTEST.guidBlackout = {}
+function _G.UnitGUID(unit)
+    if KARTTEST.guidBlackout[unit] then return nil end
+    local m = resolve(unit)
+    return m and m.guid or nil
+end
 -- A client that reads itself as ungrouped is not a raid leader either. Leaving the leader flag on
 -- during a simulated blip produced a state the game cannot be in -- no group, no members, still
 -- leader -- and every raid-leader fallback in the addon took the wrong branch through it, in the
