@@ -51,3 +51,48 @@ check("mog on, unknown",      {irrelevant = true,  needsAppearance = nil,   hide
 check("both, mog needed",     {irrelevant = true,  needsAppearance = true,  hideIrrelevant = true,  autoTransmog = true},  "transmog")
 check("both, mog owned",      {irrelevant = true,  needsAppearance = false, hideIrrelevant = true,  autoTransmog = true},  "pass")
 check("both, mog unknown",    {irrelevant = true,  needsAppearance = nil,   hideIrrelevant = true,  autoTransmog = true},  "pass")
+
+-- ===================================================================================
+-- The feature end to end, in a real raid (B36 onwards)
+-- ===================================================================================
+-- Everything above compiles one pure function out of the source. This half drives the whole path:
+-- START_LOOT_ROLL fires on each client, LootCouncilRelevance.lua's own frame snapshots Blizzard's
+-- verdict, and the vote-list refresh answers on the player's behalf.
+--
+-- None of this was reachable from the harness until RegisterEvent became real -- the snapshot frame
+-- stored its handler and nothing ever called it, so 192 lines and ten backlog entries sat behind a
+-- no-op stub.
+local F = dofile("tests/lc_fixture.lua")
+
+-- B36: "Blizzard says you may not Need this" is not "your class cannot equip this" ------------------
+-- canNeed comes back false for a wrong loot specialization, a level requirement and a unique-equipped
+-- item just as it does for armor your class can never wear -- one boolean for four questions, and
+-- only the last of them is what this feature means. Reading it as "irrelevant" hid an off-spec
+-- upgrade from the person who would have taken it (GitHub #11).
+do
+    local sim = F.NewRaid()
+    local corvin = sim.byName.Corvin          -- PALADIN, hide-irrelevant ON
+    -- Plate gloves, and Blizzard says no: on a Holy Paladin that is the loot specialization talking,
+    -- not the armor class. Plate is exactly what a paladin wears.
+    F.Drop(sim, 500, F.GLOVES, { canNeed = false })
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(not corvin.KART.LC.hiddenIrrelevant[500],
+        "B36: plate is not hidden from a paladin just because Blizzard refused the Need roll")
+    T.is_nil(corvin.KART.LC.votedByMe[500],
+        "B36: and nothing was passed away on their behalf")
+end
+
+do
+    -- ...and the case the feature IS for still works: the same plate on a priest.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja            -- PRIEST, hide ON
+    -- Transmog off for this drop, so the pass is what is being measured rather than a Transmog vote
+    -- outranking it (see DecideAutoResponse).
+    F.Drop(sim, 501, F.GLOVES, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[501], "B36: a priest still has plate hidden")
+    T.eq(sinja.KART.LC.votedByMe[501], sinja.KART.LC.GetPassButtonIndex(),
+        "B36: answered with the configured pass, so the council is not left waiting")
+end

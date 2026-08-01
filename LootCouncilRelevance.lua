@@ -70,7 +70,10 @@ relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
 
     local texture, _, _, _, _, canNeed, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
     if texture then
-        LC.relevanceSnapshot[rollID] = { irrelevant = not canNeed, needsAppearance = not not canTransmog }
+        -- canNeed is stored RAW, not folded into a verdict. "Blizzard refused the Need roll" and
+        -- "your class cannot equip this" are not the same statement -- see IsIrrelevantForMe,
+        -- which is where the two are told apart, and B36 for what folding them cost.
+        LC.relevanceSnapshot[rollID] = { canNeed = canNeed, needsAppearance = not not canTransmog }
     end
 
     -- Self-limiting sweep, run on every roll rather than tied to a session ending: most rolls never
@@ -110,14 +113,32 @@ end)
 -- all, and clients that missed the roll through death or distance and only learned of the item
 -- through LC_START. That path cannot judge weapons, so it returns nil for them rather than guessing.
 local function IsIrrelevantForMe(rollID, itemLink)
+    -- Blizzard's canNeed, from the snapshot or live, in that order (see above for why live is
+    -- only a fallback).
+    local canNeed
     local snap = rollID and LC.relevanceSnapshot[rollID]
-    if snap then return snap.irrelevant end
-    if rollID and not LC.IsTestRoll(rollID) then
-        local texture, _, _, _, _, canNeed = GetLootRollItemInfo(rollID)
+    if snap then
+        canNeed = snap.canNeed
+    elseif rollID and not LC.IsTestRoll(rollID) then
+        local texture, _, _, _, _, live = GetLootRollItemInfo(rollID)
         -- A nil texture means there is no live roll under this ID on our client, not that we are
-        -- ineligible -- fall through instead of reading canNeed's nil as "cannot use".
-        if texture then return not canNeed end
+        -- ineligible -- leave canNeed unknown rather than reading nil as "cannot use".
+        if texture then canNeed = live end
     end
+
+    -- A Need roll Blizzard allows settles it: this is ours to take.
+    if canNeed == true then return false end
+
+    -- It does NOT settle the other direction (B36). canNeed comes back false for a wrong loot
+    -- specialization, a level requirement and a unique-equipped item exactly as it does for
+    -- armor this class can never wear -- one boolean for four questions, and only the last is
+    -- what this feature means. A Holy Paladin was never shown the strength plate chest they
+    -- would have taken for off-spec, which is the case the feature was written for (GitHub #11).
+    --
+    -- So the question is asked again, of the one check that answers exactly it: our own armor
+    -- class table. It answers "eligible" whenever it is unsure, which is the direction that
+    -- cannot pass away somebody's upgrade -- and it returns nil for weapons and jewellery, which
+    -- reaches DecideAutoResponse as "not determinable" and is treated as relevant.
     if not LC.IsRealItemLink(itemLink) then return nil end
     local rank = KART.LC.Council.GetItemArmorRank(itemLink)
     if not rank then return nil end -- jewellery, weapons, shields: no armor-weight restriction
