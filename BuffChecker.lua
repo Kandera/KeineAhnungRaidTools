@@ -610,6 +610,32 @@ local function setInd(row, idx, has, buffData, classes)
     end
 end
 
+-- SendChatMessage takes at most 255 bytes, and a longer line is not truncated into something the
+-- raid can still read -- it does not arrive at all. Two of the checks report NAMES (food and flask,
+-- the two most commonly missing things in any raid), and the list used to be concatenated into one
+-- message however long it came out. So on the pull where fifteen people have no food, the report
+-- silently did nothing: worst exactly when it matters most, with nothing printed on either side.
+--
+-- Split on name boundaries, never inside one, and repeat the label on each line so the second line
+-- still says what it is about. A single name that does not fit on its own cannot be helped; it goes
+-- out as its own line and the client refuses that one rather than the whole report.
+local CHAT_MSG_MAX = 255
+
+local function SplitNameLines(prefix, names)
+    local lines, current = {}, nil
+    for _, name in ipairs(names) do
+        local candidate = current and (current .. ", " .. name) or (prefix .. name)
+        if current and #candidate > CHAT_MSG_MAX then
+            lines[#lines + 1] = current
+            current = prefix .. name
+        else
+            current = candidate
+        end
+    end
+    if current then lines[#lines + 1] = current end
+    return lines
+end
+
 function KART.ReportMissingBuffs()
     if not IsInGroup() or not KART.MissingBuffs then return end
     -- Reviewed 2026-07-25, intentional: RAID/PARTY only, never INSTANCE_CHAT. /Report targets the
@@ -621,18 +647,21 @@ function KART.ReportMissingBuffs()
     for _, buff in ipairs(KART.BuffData) do
         local list = KART.MissingBuffs[buff.id]
         if list and #list > 0 then
-            -- Snapshot the names now: this table is wiped/refilled by UpdateBuffCheck (roster,
-            -- durability and ready-check ticks all trigger it), so reading it when the staggered
-            -- message actually fires up to N*0.5s later could report a stale or empty player list.
-            local namesStr = table.concat(list, ", ")
-            C_Timer.After(delay, function()
-                if buff.report == "buff" then
-                    SendChatMessage(L.BC_MISSING .. (buff.reportLabel or buff.label), channel)
-                elseif buff.report == "item" then
-                    SendChatMessage(L.BC_MISSING .. (buff.reportLabel or buff.label) .. ": " .. namesStr, channel)
-                end
-            end)
-            delay = delay + 0.5 -- 0.5 Sekunden Verzögerung zwischen den Nachrichten zum Schutz vor Disconnects
+            -- Built now, not inside the timer: this table is wiped/refilled by UpdateBuffCheck
+            -- (roster, durability and ready-check ticks all trigger it), so reading it when the
+            -- staggered message actually fires up to N*0.5s later could report a stale or empty
+            -- player list.
+            local label = L.BC_MISSING .. (buff.reportLabel or buff.label)
+            local lines
+            if buff.report == "buff" then
+                lines = { label }
+            elseif buff.report == "item" then
+                lines = SplitNameLines(label .. ": ", list)
+            end
+            for _, line in ipairs(lines or {}) do
+                C_Timer.After(delay, function() SendChatMessage(line, channel) end)
+                delay = delay + 0.5 -- Verzögerung zwischen den Nachrichten zum Schutz vor Disconnects
+            end
         end
     end
 end

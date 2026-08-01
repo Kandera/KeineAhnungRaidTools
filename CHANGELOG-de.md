@@ -19,6 +19,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Items auf dem Tisch überstehen einen Reload.** Wer den Loot verteilt, hat sie vorher komplett verloren — alle anderen, sobald der Vote-Timer abgelaufen war.
 - **Die Loot-Historie zu löschen hält jetzt.** Vorher hat sie ein anderer Client direkt wieder reingesynct; alles, was nach dem Löschen vergeben wird, kommt weiterhin an.
 - **Ein Raider von einem anderen Realm bekommt in der Gain-Spalte nicht mehr die Sim-Zahl eines gleichnamigen Charakters.**
+- **Der Report fehlender Buffs kommt auch dann im Raid an, wenn vielen etwas fehlt.** Bei langer Namensliste ist er vorher stillschweigend verschwunden.
 
 ## [3.2.2] - 2026-08-01
 ### Behoben

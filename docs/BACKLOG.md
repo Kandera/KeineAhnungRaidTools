@@ -198,6 +198,28 @@ clear can land in the middle of one.
 Not covered, and nothing asks for it: deleting a SINGLE entry. There is no such control -- the window
 offers a full clear, and a revoked award is removed on every client at once by the same broadcast.
 
+## B91 — FIXED 2026-08-01 — the buff report was silently dropped on the pull it mattered on
+
+Found in the BuffChecker bug run, picked because that file is 1161 lines the suite had never executed
+a line of -- proven by `SendChatMessage` being a bare no-op stub.
+
+`SendChatMessage` takes at most 255 bytes, and a longer line is not truncated into something the raid
+can still read: it does not arrive at all. Two of the twelve checks report NAMES -- food and flask,
+which are the two most commonly missing things in any raid -- and the name list was concatenated into
+one message however long it came out.
+
+Fifteen people without food, several of them cross-realm, is an ordinary pull and comes to well over
+the cap. So the report did nothing, silently, on exactly the pull it exists for, with nothing printed
+on either side.
+
+Split on name boundaries now, never inside one, with the label repeated on each line so the second
+line still says what it is about. A single name too long on its own goes out alone and the client
+refuses that one line rather than the whole report. Three mutations: one message however long, the cap
+raised out of reach, and a split after every name -- each turns a different assertion red.
+
+The stub records chat now and marks anything over the cap as refused, so this class of silent failure
+is visible to any later test rather than swallowed.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the

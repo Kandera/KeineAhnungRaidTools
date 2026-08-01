@@ -33,6 +33,7 @@ local CLIENT_FILES = {
     -- Loads after the panel, exactly as the .toc orders it: the panel is what asks it for a
     -- gain%, so a client without it would never exercise that call at all.
     "Droptimizer.lua",
+    "BuffChecker.lua",
 }
 
 local LIB_FILES = {

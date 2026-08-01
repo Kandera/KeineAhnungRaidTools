@@ -692,7 +692,18 @@ function _G.CreateColor(r, g, b, a)
 end
 
 -- Chat / misc ---------------------------------------------------------------------------
-function _G.SendChatMessage() end
+-- Visible chat, recorded rather than swallowed. The 255-byte cap is the client's own and is the
+-- whole reason this is worth modelling: a longer line does not get truncated into something the raid
+-- can still read, it does not arrive at all. Anything over the cap is recorded under `refused` so a
+-- test can assert about the message that was never sent, which is what a silent failure looks like
+-- from the inside.
+KARTTEST.chat = {}
+function _G.SendChatMessage(msg, channel)
+    msg = tostring(msg or "")
+    KARTTEST.chat[#KARTTEST.chat + 1] =
+        { msg = msg, channel = channel, refused = #msg > 255, by = KARTTEST.activeUnit }
+end
+function KARTTEST.ClearChat() KARTTEST.chat = {} end
 function _G.IsInGuild() return false end
 _G.UISpecialFrames = {}
 -- Popups are recorded rather than shown, so a test can accept one deliberately. Several confirms
