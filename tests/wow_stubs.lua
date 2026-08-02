@@ -546,6 +546,15 @@ function _G.CreateFrame(_, name, parent, _)
     -- missing this" by tinting an icon red and "this is about to run out" by tinting it amber, and
     -- the durability column says 19% in red and 51% in green with the same three digits. On the
     -- catch-all all of that was a no-op, so an assertion about it could not be written at all.
+    -- SetTexture/SetColorTexture are write-only in the real API; these getters exist for the harness
+    -- alone, because "which icon is on this row" and "is this stripe shaded" are otherwise
+    -- unobservable and the addon decides both from data that can be wrong.
+    local texture, colorTexture
+    function f:SetTexture(v) texture = v; return f end
+    function f:GetTexture() return texture end
+    function f:SetColorTexture(...) colorTexture = { ... }; return f end
+    function f:GetColorTexture() if colorTexture then return unpack(colorTexture) end end
+
     local textColor, vertexColor, desaturated
     function f:SetTextColor(...) textColor = { ... }; return f end
     function f:GetTextColor() if textColor then return unpack(textColor) end end
@@ -1088,7 +1097,18 @@ function KARTTEST.SubmenuLabels(label)
 end
 _G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = 1, 2
 _G.CLASS_ICON_TEXCOORDS = {}
-_G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
+-- Only the real class tokens, and nil for anything else -- which is what the game answers too.
+-- A blanket __index returning white for EVERY key made "this client does not know that class"
+-- unreachable in the harness, and that is not a corner case: history entries outlive expansions in
+-- a SavedVariable, the class arrives from a peer as a bare string, and the row colours by it.
+local CLASS_TOKENS = {
+    "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE", "MONK",
+    "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
+}
+_G.RAID_CLASS_COLORS = {}
+for _, token in ipairs(CLASS_TOKENS) do
+    _G.RAID_CLASS_COLORS[token] = { r = 1, g = 1, b = 1 }
+end
 _G.ITEM_QUALITY_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1, hex = "|cffffffff" } end })
 _G.YES, _G.NO, _G.ACCEPT, _G.CANCEL, _G.OKAY, _G.CLOSE, _G.UNKNOWN = "Yes", "No", "Accept", "Cancel", "Okay", "Close", "Unknown"
 _G.GameTooltip = _G.CreateFrame("Frame")

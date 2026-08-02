@@ -190,3 +190,60 @@ do
     As(function() f.searchBox:GetScript("OnTextChanged")(f.searchBox) end)
     T.truthy(not f.emptyLabel:IsShown(), "and clearing it brings the rows back")
 end
+
+-- The page arrows ----------------------------------------------------------------------------------
+-- Both arrows are always visible once there is more than one page; whether they DO anything is said
+-- by their colour alone. A bright arrow on the first page is an invitation to click something that
+-- cannot happen, on the one screen a raider opens to check they were not skipped.
+do
+    History(Bulk(30))
+    As(LH.Refresh)
+    T.truthy(f.prevPageBtn:IsShown() and f.nextPageBtn:IsShown(), "both arrows are up on a long list")
+
+    local p = f.prevPageBtn.text:GetTextColor()
+    local n = f.nextPageBtn.text:GetTextColor()
+    T.truthy(p < n, "on the first page, back is dimmed and forward is not")
+
+    -- Walk to the last page and check the other end of the same rule.
+    for _ = 1, 10 do As(function() f.nextPageBtn:GetScript("OnClick")(f.nextPageBtn) end) end
+    p = f.prevPageBtn.text:GetTextColor()
+    n = f.nextPageBtn.text:GetTextColor()
+    T.truthy(n < p, "and on the last page it is the other way round")
+end
+
+-- The rows themselves ------------------------------------------------------------------------------
+do
+    History(Bulk(4))
+    As(LH.Refresh)
+    local rows = f.rows or (f.scrollChild and f.scrollChild.rows)
+    T.truthy(rows and rows[1] and rows[2], "the list builds its rows")
+
+    -- Alternating shading, and both halves of it an opacity: a boolean is different from 0.1 and is
+    -- not a shade, so "the rows differ" on its own does not say this works.
+    local _, _, _, a1 = rows[1].bg:GetColorTexture()
+    local _, _, _, a2 = rows[2].bg:GetColorTexture()
+    local _, _, _, a3 = rows[3].bg:GetColorTexture()
+    T.eq(type(a1), "number", "a row's shading is an opacity")
+    T.eq(type(a2), "number", "and so is its neighbour's")
+    T.truthy(a1 ~= a2, "neighbouring rows are shaded differently")
+    T.eq(a1, a3, "and the shading alternates rather than drifting")
+
+    -- The item icon is the ITEM's icon, not the item id that was used to look it up. Both are
+    -- truthy, and a texture path built out of an id renders as the green-and-black missing texture.
+    T.truthy(tostring(rows[1].icon:GetTexture()):find("Interface", 1, true),
+        "the row shows the item's icon rather than the number it was found by")
+end
+
+do
+    -- A class this client does not know. Entries outlive expansions in a SavedVariable, they arrive
+    -- from peers, and the class is a bare string on the wire -- so "not in RAID_CLASS_COLORS" is an
+    -- ordinary state, not a corrupt one. Colouring by it must fall back rather than index nil.
+    History({ { winner = "Alric", winnerKey = "K-A", item = GLOVES, reason = "BIS",
+                time = 1785000000, class = "TINKER" } })
+    local ok = pcall(function() As(LH.Refresh) end)
+    T.truthy(ok, "an entry naming a class this client has never heard of still renders")
+
+    local rows = f.rows or (f.scrollChild and f.scrollChild.rows)
+    local r, g, b = rows[1].playerText:GetTextColor()
+    T.truthy(r == 0.8 and g == 0.8 and b == 0.8, "in the neutral colour, not one read off nothing")
+end
