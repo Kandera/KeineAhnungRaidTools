@@ -31,7 +31,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Mindestqualität und Würfe des Raids lassen sich nicht anklicken, solange fremde Einstellungen gelten.** Ein Klick hat vorher deine eigenen überschrieben.
 - **Das Entfernen von Spielern prüft beim Bestätigen erneut.** Verlierst du währenddessen die Leitung oder wird gepullt, wird jetzt niemand mehr rausgeworfen.
 - **Eine Vergabe mit langem Vote-Grund landet auch in der Loot-Historie der anderen.** Vorher fehlte sie dort kommentarlos.
-- **Eine Vergabe, die während des Startens deines Clients angekündigt wurde, landet doch noch in deiner Loot-Historie.** Vorher fehlte sie dort den ganzen Abend.
+- **Eine Vergabe, die während des Startens deines Clients angekündigt wurde, landet doch noch in deiner Loot-Historie.**
 - **Wer den Loot verteilt, wird gewarnt, wenn ein Item doch an jemand anderen ging** — statt ein Item zuzusagen, das er gar nicht hat.
 
 ## [3.2.2] - 2026-08-01

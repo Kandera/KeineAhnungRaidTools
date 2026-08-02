@@ -736,7 +736,7 @@ end
 -- and the sender that needs authorising is a council member who is not the loot owner (the loot
 -- owner is authorised without any council list at all -- see B34).
 do
-    local sim, lm, council = F.NewRaid()
+    local sim, _, council = F.NewRaid()
     F.Drop(sim, 92, F.GLOVES)
 
     local raider = RaidSim.Reload(sim, "Alric")
@@ -757,14 +757,13 @@ do
     KARTTEST.AdvanceTime(30)
     T.eq(#raider.env.KART_LootHistory, 1,
         "an award a reloaded client could not authorise still reaches its loot history")
-    T.truthy(lm ~= nil)
 end
 
 do
     -- Rate-limited: a client whose config never arrives sees a whole distribution it cannot
     -- authorise, and one request per award would put the raid's history on the wire over and over.
     -- The answer to the first request already carries everything the later ones would ask for.
-    local sim, lm, council = F.NewRaid()
+    local sim, _, council = F.NewRaid()
     local raider = RaidSim.Reload(sim, "Alric")
     RaidSim.As(raider, function()
         raider.KART.LC.CouncilNamesTable = {}
@@ -797,5 +796,4 @@ do
     end)
     KARTTEST.AdvanceTime(10)
     T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1, "and a minute later it asks again")
-    T.truthy(lm ~= nil)
 end

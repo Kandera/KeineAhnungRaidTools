@@ -250,14 +250,13 @@ do
     -- The fixture raid is DK, druid, paladin, mage, priest: a mage is there, no warrior is. The
     -- class list is rebuilt from the roster on every render, so this is the raid deciding it and
     -- not the test.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     local missing = Render(lm)
     T.eq(Names(missing.shout), "",
         "with no warrior in the group nobody is reported as missing Battle Shout")
     T.truthy(#(missing.int or {}) > 0,
         "while the mage's buff, which somebody present can cast, is asked for")
-    T.truthy(sim ~= nil)
 end
 
 do
@@ -582,7 +581,7 @@ do
     -- The reason a raider gave for declining, which arrives on its own message and outlives the
     -- ready check itself. It is looked up by the raider's SHORT name -- with no name to look up,
     -- there is no reason to show, and the row must not fall back to showing the name as the reason.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     lm.KART.ReadyCheckReasons = { Alric = "afk, sorry" }
     Render(lm)
@@ -590,7 +589,6 @@ do
     T.eq(rows[4].reasonIcon.reasonText, "afk, sorry", "the raider who gave a reason carries it")
     T.truthy(not rows[5].reasonIcon:IsShown(), "and one who gave none shows no reason icon")
     lm.KART.ReadyCheckReasons = {}
-    T.truthy(sim ~= nil)
 end
 
 -- ==========================================================================
@@ -599,7 +597,7 @@ end
 -- Three digits and a colour. The digits are the same at 19% and at 51%, so the colour is the entire
 -- warning -- and it is read at a glance across forty rows, which is the only way it is ever read.
 do
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     local REPAIR = 11
     local function ColorAt(percent)
@@ -618,7 +616,6 @@ do
     T.truthy(Same(ColorAt(50), lm.KART.SUCCESS), "exactly 50 is fine")
     T.truthy(Same(ColorAt(100), lm.KART.SUCCESS), "and so is a full set")
     lm.KART.DurabilityCache = {}
-    T.truthy(sim ~= nil)
 end
 
 -- ==========================================================================
@@ -629,7 +626,7 @@ do
     -- fill is dimmed to 0.1 and means "not your problem". A buff you are simply missing is dimmed to
     -- 0.6 in the danger colour and means "go get it". Rendering the second as the first is a raider
     -- reading their own row as fine.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     local FLASK = 8
     Render(lm)
@@ -638,7 +635,6 @@ do
     local r, g, b = ind:GetVertexColor()
     T.truthy(r == lm.KART.DANGER[1] and g == lm.KART.DANGER[2] and b == lm.KART.DANGER[3],
         "and it is shown in the colour that says so")
-    T.truthy(sim ~= nil)
 end
 
 -- ==========================================================================
@@ -647,7 +643,7 @@ end
 do
     -- The throttled refresh has no argument, so the window remembers which mode it is in. Remembered
     -- as "preview" while showing live data, every roster tick would redraw the raid as sample rows.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     Render(lm)
     T.eq(lm.KART.BuffCheckPreviewActive, false, "a live render is not remembered as a preview")
@@ -655,7 +651,6 @@ do
     T.eq(lm.KART.BuffCheckPreviewActive, true, "and a preview is")
     Render(lm)
     T.eq(lm.KART.BuffCheckPreviewActive, false, "and going back to live clears it again")
-    T.truthy(sim ~= nil)
 end
 
 -- ==========================================================================
@@ -733,7 +728,7 @@ do
     -- id field is not cleared when the first answer is false -- it is simply not meaningful -- so
     -- the "has one" flag is what decides whether the id may be read at all. Reading it anyway rates
     -- a bare weapon by whatever oil was on it last, and the column then says the raider is fine.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     -- A bare key rather than a real link: the equip location is looked up in the flat table the
     -- gear-scan tests drive, which only answers for links the item database does not already know.
@@ -773,6 +768,5 @@ do
 
     KARTTEST.inventory[16], KARTTEST.inventory[17] = nil, nil
     KARTTEST.weaponEnchant = { false, 0, 0, 0, false, 0, 0, 0 }
-    T.truthy(sim ~= nil)
 end
 

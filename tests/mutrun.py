@@ -87,14 +87,19 @@ for target in TARGETS:
         if mutated == lines[n - 1]:
             continue
         lines[n - 1] = mutated
-        open(target, "wb").write(nl.join(lines).encode("utf-8"))
-        env = dict(os.environ, KART_SOAK_SEEDS=SEEDS)
+        # try/finally, not two statements in a row: a Ctrl-C or a killed terminal between the
+        # mutating write and the restoring one leaves a flipped operator in the addon's own source,
+        # where the next commit picks it up. The file is under the repo now, not in a temp directory.
         try:
-            rc = subprocess.run(["luajit", "tests/run.lua"], capture_output=True,
-                                env=env, timeout=300).returncode
-        except subprocess.TimeoutExpired:
-            rc = -1  # a hang counts as caught
-        open(target, "wb").write(raw.encode("utf-8"))   # always restore verbatim
+            open(target, "wb").write(nl.join(lines).encode("utf-8"))
+            env = dict(os.environ, KART_SOAK_SEEDS=SEEDS)
+            try:
+                rc = subprocess.run(["luajit", "tests/run.lua"], capture_output=True,
+                                    env=env, timeout=300).returncode
+            except subprocess.TimeoutExpired:
+                rc = -1  # a hang counts as caught
+        finally:
+            open(target, "wb").write(raw.encode("utf-8"))   # always restore verbatim
         if rc == 0:
             results.append({"file": target, "line": n, "was": original[n - 1].strip(),
                             "now": mutated.strip()})

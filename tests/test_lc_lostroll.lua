@@ -57,7 +57,6 @@ do
     -- Once per drop. LOOT_HISTORY_UPDATE_DROP fires again for the same drop as the panel fills in,
     -- and a line repeated four times reads as four lost items.
     T.eq(Drop(lm, 2000, 1), "", "and told once, not once per update of the same drop")
-    T.truthy(sim ~= nil)
 end
 
 do
@@ -73,20 +72,18 @@ do
     -- Nobody rolled: there is no item to have lost.
     Resolve(2001, 2, { itemHyperlink = GLOVES, allPassed = true })
     T.eq(Drop(lm, 2001, 2), "", "and neither does a drop everybody passed on")
-    T.truthy(sim ~= nil)
 end
 
 do
     -- An item this client never rolled on. Every drop in the instance raises this event, including
     -- the ones below the raid's rarity threshold and the ones from a boss the council ignored --
     -- reporting those would make the line meaningless within one evening.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     Resolve(2002, 1, {
         itemHyperlink = KARTTEST.items[F.WEAPON].link,
         winner = { playerName = "Fremder", playerGUID = "Player-1-ZZZ", isSelf = false },
     })
     T.eq(Drop(lm, 2002, 1), "", "an item the council never took up is not reported")
-    T.truthy(sim ~= nil)
 end
 
 do
@@ -101,7 +98,6 @@ do
     T.eq(Drop(council, 2003, 1), "", "a council member is not told")
     T.eq(Drop(raider, 2003, 1), "", "and neither is a plain raider")
     T.truthy(Drop(lm, 2003, 1) ~= "", "while the loot owner is")
-    T.truthy(sim ~= nil)
 end
 
 do
@@ -116,5 +112,42 @@ do
         winner = { playerName = "Fremder", playerGUID = "Player-1-ZZZ", isSelf = false },
     })
     T.eq(Drop(lm, 2004, 1), "", "an item this client never rolled on is not reported as lost")
-    T.truthy(sim ~= nil)
+end
+
+do
+    -- The two links come from different producers -- ours from GetLootRollItemLink, Blizzard's from
+    -- C_LootHistory -- and the colour escape at the front of a link is not the same on every client
+    -- version. Comparing the links as written would make this silent on any client whose escape is
+    -- spelled differently, which looks exactly like the state before this existed.
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 99, F.GLOVES)
+    local named = GLOVES:gsub("^|cff%x%x%x%x%x%x", "|cnIQ4:")
+    T.truthy(named ~= GLOVES, "the two link forms really do differ")
+    Resolve(2005, 1, {
+        itemHyperlink = named,
+        winner = { playerName = "Fremder", playerGUID = "Player-1-ZZZ", isSelf = false },
+    })
+    T.truthy(Drop(lm, 2005, 1):find("Fremder", 1, true),
+        "the same item written with the other colour escape is still recognised")
+end
+
+do
+    -- The setup this could not see at all. Vote.PruneExpiredRolls frees LC.rollItems once the vote
+    -- window is over for any client holding no council tab, and tabs exist only for council
+    -- members -- so a lootmaster who is not in the council list has nothing left to match against
+    -- by the time Blizzard resolves the roll, which is much later than twenty seconds. The trade
+    -- obligation is what outlives it, and it is the promise this warning is about.
+    local _, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.KART.LC.rollItems = {}       -- the vote window is long over
+        lm.KART.LC.pendingTrades = { {
+            rollID = 99, itemLink = GLOVES, winnerKey = "Player-1-A", lootedAt = time(),
+        } }
+    end)
+    Resolve(2006, 1, {
+        itemHyperlink = GLOVES,
+        winner = { playerName = "Fremder", playerGUID = "Player-1-ZZZ", isSelf = false },
+    })
+    T.truthy(Drop(lm, 2006, 1):find("Fremder", 1, true),
+        "an item already owed to somebody is still recognised after the roll state is gone")
 end

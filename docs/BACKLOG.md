@@ -1789,8 +1789,25 @@ the loot owner, or when the roll was learned from somebody else's `LC_START`.
 
 **Where the match is loose, and why it is allowed to be.** Blizzard's `rollID` and the loot history's
 `encounterID` + `lootListID` are different id spaces with no documented bridge — Blizzard's own
-LootHistory frame works purely in the latter and never mentions a roll id. So the drop is matched to
-a tracked roll by ITEM LINK, and two identical tokens off one boss would match the same link.
+LootHistory frame works purely in the latter and never mentions a roll id. So the drop is matched by
+ITEM STRING (`KAUtil.GetItemString`, the same comparison `Trade.GetDuplicateOrdinal` and
+`LH.HandleHistoryEntry` use), and two identical tokens off one boss would match the same one.
+
+Comparing the raw links instead would have been the worse mistake, and a code review caught it: the
+two sides come from different producers — ours from `GetLootRollItemLink`, Blizzard's from
+`C_LootHistory` — and a link carries a colour escape that different client versions write
+differently (`|cffa335ee` against `|cnIQ4:`, documented next to `KAUtil.GetItemString`). One byte
+apart and the whole feature is a silent no-op, which looks exactly like the state before it existed
+and so would never have been reported.
+
+**Two records are consulted, not one, and the second is the load-bearing one.**
+`Vote.PruneExpiredRolls` frees `LC.rollItems` once the VOTE window closes — twenty seconds by
+default — for any client holding no council tab, and tabs exist only for council members. A
+lootmaster who is not in the council list is an ordinary setup (this release's own changelog says the
+raid leader is not in it automatically), and Blizzard resolves a group-loot roll long after twenty
+seconds. Matching only against `LC.rollItems` would have left this feature structurally dead in that
+whole configuration. `LC.pendingTrades` outlives it: it is the promise the warning is actually about,
+it carries the item link, and it lives as long as the four-hour trade window.
 
 That is why this only ever prints. Marking the roll as not-held on a link match would take a trade
 reminder away from an item the lootmaster really is holding, turning a rare miss into a routine one.

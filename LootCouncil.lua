@@ -3168,18 +3168,40 @@ function LC.HandleLootHistoryDrop(encounterID, lootListID)
     -- No winner yet, everybody passed, or we won it after all: nothing to report in any of those.
     if not (info and info.winner) or info.winner.isSelf then return end
     local link = info.itemHyperlink
-    if not link then return end
+    -- Compared as an item STRING, never as a raw link. The two sides come from different producers
+    -- -- ours from GetLootRollItemLink, theirs from C_LootHistory -- and a link carries a colour
+    -- escape and a display name that different client versions write differently (see
+    -- KAUtil.GetItemString, and the shift-click forms documented next to it). Raw equality would
+    -- make this feature a silent no-op on any client whose escape does not match ours, which is
+    -- indistinguishable from the state before it existed and so would never be reported.
+    local wanted = KAUtil.GetItemString(link)
+    if not wanted then return end
 
-    -- Only for an item this client actually rolled on. rollNotInOurBags records the NEGATIVE (see
-    -- the comment above it), so "not marked" is what "we force-won this" looks like.
-    for rollID, tracked in pairs(LC.rollItems or {}) do
-        if tracked == link and not LC.rollNotInOurBags[rollID] then
-            LC.lostRollReported[key] = true
-            print("|cffff0000KART:|r " .. string.format(KART.L.LC_FORCEWIN_LOST,
-                link, info.winner.playerName or "?"))
-            return
+    -- Two records can say "this client force-won that item", and the obvious one is not enough on
+    -- its own: Vote.PruneExpiredRolls frees LC.rollItems once the VOTE window is over -- twenty
+    -- seconds by default -- for any client that holds no council tab for the roll, and tabs exist
+    -- only for council members. A lootmaster who is not in the council list is an ordinary setup,
+    -- and Blizzard resolves its roll long after that. The trade obligation outlives both: it is the
+    -- promise this warning is actually about, it carries the item link, and it lives for the four
+    -- hours the trade window does.
+    local function HeldByUs()
+        -- rollNotInOurBags records the NEGATIVE (see the comment above it), so "not marked" is what
+        -- "we force-won this" looks like.
+        for rollID, tracked in pairs(LC.rollItems or {}) do
+            if KAUtil.GetItemString(tracked) == wanted and not LC.rollNotInOurBags[rollID] then
+                return true
+            end
         end
+        for _, entry in ipairs(LC.pendingTrades or {}) do
+            if KAUtil.GetItemString(entry.itemLink) == wanted then return true end
+        end
+        return false
     end
+
+    if not HeldByUs() then return end
+    LC.lostRollReported[key] = true
+    print("|cffff0000KART:|r " .. string.format(KART.L.LC_FORCEWIN_LOST,
+        link, info.winner.playerName or "?"))
 end
 
 LC.votedByMe = LC.votedByMe or {} -- [rollID] = the buttonIdx WE cast (truthy = voted; tracked by
