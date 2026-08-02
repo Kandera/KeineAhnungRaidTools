@@ -1747,8 +1747,9 @@ three mutations, each red on its own assertions.
 outcome IS readable: `C_LootHistory.GetSortedInfoForDrop(encounterID, lootListID)` carries the
 `winner` of every drop (name, GUID and an `isSelf` flag) along with `allPassed`, and
 `LOOT_HISTORY_UPDATE_DROP` fires with both ids when one resolves. Verified against the generated API
-annotations shipped with the ketho.wow-api extension — **which are for 12.0.1 while the live client
-is 12.1**, so the call is right on paper and unproven in practice.
+annotations shipped with the ketho.wow-api extension, which are for 12.0.1 while the live client is
+12.1 — one minor version back, and per the maintainer 12.1 changed little, so this is a solid source
+rather than a guess. What it still is not is a run in the game.
 
 `LC.HandleLootHistoryDrop` reads the drop, and tells the loot owner when the winner is somebody else
 and the item is one this client rolled on. Held by `tests/test_lc_lostroll.lua`: the line names the
