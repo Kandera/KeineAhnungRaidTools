@@ -60,7 +60,7 @@ read_globals = {
     -- clients, which is why KAUtil.IsSecret tests for it rather than calling it outright.
     "issecretvalue",
     "GetCursorInfo", "CreateColor", "ReloadUI", "SetCVar",
-    "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras",
+    "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras", "C_LootHistory",
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",
     -- Unit / group API
     "UnitName", "UnitGUID", "UnitExists", "UnitClass", "UnitIsGroupLeader", "UnitIsGroupAssistant",

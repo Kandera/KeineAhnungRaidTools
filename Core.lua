@@ -22,6 +22,8 @@ frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("CHALLENGE_MODE_START")
 frame:RegisterEvent("START_LOOT_ROLL")
+-- The outcome of a group-loot roll, which is the only way to notice the lootmaster lost one (B60).
+frame:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")
 frame:RegisterEvent("TRADE_SHOW")
 frame:RegisterEvent("TRADE_CLOSED")
 frame:RegisterEvent("TRADE_ACCEPT_UPDATE")
@@ -282,6 +284,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "START_LOOT_ROLL" then
         if KART.LC then KART.LC.OnStartLootRoll(arg1) end
+
+    elseif event == "LOOT_HISTORY_UPDATE_DROP" then
+        if KART.LC and KART.LC.HandleLootHistoryDrop then KART.LC.HandleLootHistoryDrop(arg1, arg2) end
 
     elseif event == "TRADE_SHOW" then
         if KART.LC then KART.LC.Trade.OnTradeShow() end

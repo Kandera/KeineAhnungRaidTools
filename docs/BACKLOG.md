@@ -1725,7 +1725,7 @@ Not fixed by adding a chat warning on sight: the same condition is true, harmles
 for anyone whose Lootmaster field names a person who has not loaded in yet. Wants a rule that can
 tell "names me, unresolvable" apart from "names someone else, not here yet".
 
-## B60 — the lootmaster losing Blizzard's roll is undetected — NARROWED 2026-07-30
+## B60 — the lootmaster losing Blizzard's roll is undetected — ANSWERED 2026-08-02, UNPROVEN IN GAME (NARROWED 2026-07-30)
 
 `ForceWinRoll` rolls and nothing checks the outcome. A raider not running KART can out-roll the
 lootmaster; the council still awards, and `Trade.AddPendingTrade` records an obligation for an item
@@ -1743,9 +1743,33 @@ the role. The loot owner is told when one is skipped (`LC_TRADE_NOT_HELD`) inste
 silently. Covered in `tests/test_lc_churn.lua`, including the stale-mark case on a reused rollID;
 three mutations, each red on its own assertions.
 
-**What remains is the original half:** the lootmaster force-wins, genuinely loses Blizzard's roll,
-and nothing notices. `rollNotInOurBags` cannot see that — from the client's point of view it did
-everything right. It wants the roll's actual outcome, which the addon does not currently read.
+**The original half is answered as of 2026-08-02, and needs proving in the game.** The roll's actual
+outcome IS readable: `C_LootHistory.GetSortedInfoForDrop(encounterID, lootListID)` carries the
+`winner` of every drop (name, GUID and an `isSelf` flag) along with `allPassed`, and
+`LOOT_HISTORY_UPDATE_DROP` fires with both ids when one resolves. Verified against the generated API
+annotations shipped with the ketho.wow-api extension — **which are for 12.0.1 while the live client
+is 12.1**, so the call is right on paper and unproven in practice.
+
+`LC.HandleLootHistoryDrop` reads the drop, and tells the loot owner when the winner is somebody else
+and the item is one this client rolled on. Held by `tests/test_lc_lostroll.lua`: the line names the
+winner and the item, is said once per drop rather than once per update of it, and is not said when we
+won, when everybody passed, when the item is one the council never took up, when the reader is not
+the loot owner, or when the roll was learned from somebody else's `LC_START`.
+
+**Where the match is loose, and why it is allowed to be.** Blizzard's `rollID` and the loot history's
+`encounterID` + `lootListID` are different id spaces with no documented bridge — Blizzard's own
+LootHistory frame works purely in the latter and never mentions a roll id. So the drop is matched to
+a tracked roll by ITEM LINK, and two identical tokens off one boss would match the same link.
+
+That is why this only ever prints. Marking the roll as not-held on a link match would take a trade
+reminder away from an item the lootmaster really is holding, turning a rare miss into a routine one.
+A false positive costs a glance in the bags; a false negative is exactly the state before this
+existed. Nothing about the distribution is decided from here.
+
+**Still to do in the game, and it cannot be done anywhere else:** confirm the event fires for group
+loot in 12.1, that `lootListID` is stable across the updates of one drop, and that the item hyperlink
+matches the one `GetLootRollItemLink` gave us for the same item. The harness can only prove the
+addon's own reasoning about the answer; it invents the answer itself.
 
 Settling the holder question was also a precondition for B63: a fallback broadcaster would announce
 items the loot owner never won, and without this guard every one of them would have created exactly
@@ -1788,7 +1812,20 @@ when a release genuinely changes the wire, never with every version bump — poi
 version would name every raider who simply has not updated a patch release yet, and the warning would
 stop being read.
 
-## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item — NARROWED 2026-07-30
+**Raised to 3.3.0 on 2026-08-02, deliberately against that rule, and the reason is worth keeping.**
+The branch had run 70 commits past 3.2.2 while both the `.toc` and the floor still said 3.2.2, so two
+builds that behave nothing alike would have reported the same version to each other and
+`LC.OutdatedRaiders` — the one check meant to tell the loot owner who cannot take part — could not
+have told them apart. The diff was measured first: no new wire token and no new send site, so by the
+letter of the rule the floor should have stayed. It was moved anyway, by the maintainer's decision,
+because what changed is the shared flow — who owns the council list, what survives a reload, what the
+history catch-up carries — enough that a peer left on 3.2.2 is worth naming before the first boss.
+
+The rule itself stands. This is the exception it is measured against, not a precedent for moving the
+floor with every release: the next bump wants the same measurement, and the same argument made out
+loud, or it should not move.
+
+## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item — NARROWED 2026-07-30; remainder OPEN BY CHOICE, re-checked 2026-08-02
 
 `LC_START` for a real drop is sent from exactly one place, inside the loot owner's own
 `START_LOOT_ROLL` handler. The owner is subject to the same conditions as everyone else — out of
@@ -1827,6 +1864,13 @@ After a wait derived from the owner's own link-retry budget (not a hand-picked n
 legitimately spend that whole budget before sending anything), a client that heard nothing says so
 and names the item. Only Auto-Pass users are told — they are the ones whose expectation was not met
 and who are now looking at a window they have to answer themselves.
+
+**Re-checked 2026-08-02: nothing here is waiting to be done.** Both halves that were fixed are held
+by `tests/test_lc_autopass.lua` — nobody passes an item the council never took up and Blizzard's
+window is left live for them, and after the wait the item is named to exactly the people it affects
+and to nobody else. What is left is not an open defect but the rejected design: a second broadcaster
+would announce items the loot owner never won, and a vote whose winner can never be handed the item
+is a decision nobody can execute. Filed under choice, not under work.
 
 ## B64 — before the first config, the leader and the lootmaster both believe they own the loot flow — SUPERSEDED 2026-07-31 by the ownership rework
 

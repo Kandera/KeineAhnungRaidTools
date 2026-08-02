@@ -284,6 +284,7 @@ KART.L_enUS = {
     LC_AWARD_CLASH         = "Two council members awarded %s at the same moment -- %s and %s. KART kept %s on every client so the raid does not disagree; reassign it if that is wrong.",
     LC_LOOTMASTER_EMPTY_WARN = "Your Lootmaster field is empty, so the raid is running on your settings only for as long as you hold raid lead. Put a name in it -- your own is fine -- or the raid loses them without a word.",
     LC_ROLL_UNANNOUNCED    ="%s was never announced to the loot council, so it was not passed for you -- roll on Blizzard's window yourself if you want it.",
+    LC_FORCEWIN_LOST       = "%s went to %s, not to you -- check your bags before you promise it to anybody.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     LC_VOTE_TITLE          = "Loot Council — Vote",

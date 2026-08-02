@@ -284,6 +284,7 @@ KART.L_deDE = {
     LC_AWARD_CLASH         = "Zwei Council-Mitglieder haben %s im selben Moment vergeben -- %s und %s. KART hat auf allen Clients %s behalten, damit der Raid sich einig ist; weis es neu zu, falls das falsch ist.",
     LC_LOOTMASTER_EMPTY_WARN = "Dein Lootmaster-Feld ist leer -- der Raid läuft nur so lange auf deinen Einstellungen, wie du Raidlead hast. Trag einen Namen ein, deinen eigenen reicht, sonst verliert der Raid sie kommentarlos.",
     LC_ROLL_UNANNOUNCED    ="%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst.",
+    LC_FORCEWIN_LOST       = "%s ging an %s, nicht an dich -- schau in deine Taschen, bevor du es jemandem zusagst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_OUTDATED_PEERS      = "Diese Raider haben ein KART älter als %s und können nicht am Loot Council teilnehmen -- sie müssen aktualisieren: %s",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",

@@ -2095,6 +2095,9 @@ function LC.ClearAllRolls()
     wipe(LC.rollNotInOurBags)
     wipe(LC.rollAnnounced)
     wipe(LC.rollSeenHere)
+    -- Keyed by encounter and loot list rather than by rollID, so it is not one of the per-roll tables
+    -- ClearRollState walks -- but a session ending ends every drop it could still be about.
+    if LC.lostRollReported then wipe(LC.lostRollReported) end
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
     if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
@@ -3129,6 +3132,55 @@ end
 -- lootmaster would silently stop getting trade reminders for items genuinely in their bags; an empty
 -- table here means "assume held", which is exactly what the code did before this existed.
 LC.rollNotInOurBags = LC.rollNotInOurBags or {}
+
+-- ==========================================================================
+--  The lootmaster losing Blizzard's roll (B60)
+-- ==========================================================================
+--
+-- ForceWinRoll rolls Need and never reads the outcome. A raider not running KART can out-roll the
+-- lootmaster: the council still awards, Trade.AddPendingTrade records an obligation for an item the
+-- lootmaster does not have, and Trade.OnTradeClosed later reads "not in my bags" as "already traded"
+-- and tidies the reminder away. The lootmaster believes it is done, the winner never receives
+-- anything, and the loot history says they won it.
+--
+-- The outcome IS readable: C_LootHistory carries the winner of every drop, and
+-- LOOT_HISTORY_UPDATE_DROP fires when one resolves. What it does not carry is Blizzard's rollID --
+-- the loot-history id space (encounterID + lootListID) and the group-loot rollID never meet, not in
+-- this addon and not in Blizzard's own LootHistory frame, which works purely in the former. So the
+-- match is on the item link.
+--
+-- Which is why this only ever SAYS something. Two identical tokens off one boss would match the same
+-- link, and marking the wrong roll as not-held would take a trade reminder away from an item the
+-- lootmaster really is holding -- turning a rare miss into a routine one. A false positive here costs
+-- a glance in the bags; a false negative is exactly the state before this existed. Nothing about the
+-- distribution is decided from here.
+LC.lostRollReported = LC.lostRollReported or {} -- ["encounterID:lootListID"] = true, one line per drop
+
+function LC.HandleLootHistoryDrop(encounterID, lootListID)
+    if not (C_LootHistory and C_LootHistory.GetSortedInfoForDrop) then return end
+    -- Only the person who force-wins has anything to lose here.
+    if not LC.IsLootOwner() then return end
+
+    local key = tostring(encounterID) .. ":" .. tostring(lootListID)
+    if LC.lostRollReported[key] then return end
+
+    local info = C_LootHistory.GetSortedInfoForDrop(encounterID, lootListID)
+    -- No winner yet, everybody passed, or we won it after all: nothing to report in any of those.
+    if not (info and info.winner) or info.winner.isSelf then return end
+    local link = info.itemHyperlink
+    if not link then return end
+
+    -- Only for an item this client actually rolled on. rollNotInOurBags records the NEGATIVE (see
+    -- the comment above it), so "not marked" is what "we force-won this" looks like.
+    for rollID, tracked in pairs(LC.rollItems or {}) do
+        if tracked == link and not LC.rollNotInOurBags[rollID] then
+            LC.lostRollReported[key] = true
+            print("|cffff0000KART:|r " .. string.format(KART.L.LC_FORCEWIN_LOST,
+                link, info.winner.playerName or "?"))
+            return
+        end
+    end
+end
 
 LC.votedByMe = LC.votedByMe or {} -- [rollID] = the buttonIdx WE cast (truthy = voted; tracked by
                                    -- rollID, not by row, since rows get recycled/reindexed as items expire)

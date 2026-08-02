@@ -1105,6 +1105,17 @@ local CLASS_TOKENS = {
     "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE", "MONK",
     "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
 }
+-- The group-loot roll OUTCOME (B60). Blizzard resolves a drop and raises LOOT_HISTORY_UPDATE_DROP
+-- with an encounter and a loot-list id; the winner is read back out of C_LootHistory. Driven by a
+-- table here, keyed the same way the real API is indexed.
+--   KARTTEST.lootDrops["<encounterID>:<lootListID>"] = { itemHyperlink = ..., winner = {...} }
+KARTTEST.lootDrops = {}
+_G.C_LootHistory = {
+    GetSortedInfoForDrop = function(encounterID, lootListID)
+        return KARTTEST.lootDrops[tostring(encounterID) .. ":" .. tostring(lootListID)]
+    end,
+}
+
 _G.RAID_CLASS_COLORS = {}
 for _, token in ipairs(CLASS_TOKENS) do
     _G.RAID_CLASS_COLORS[token] = { r = 1, g = 1, b = 1 }

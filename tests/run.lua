@@ -96,6 +96,7 @@ dofile("tests/test_lc_baseflow.lua")
 dofile("tests/test_lc_chrome.lua")
 dofile("tests/test_lc_version.lua")
 dofile("tests/test_lc_autopass.lua")
+dofile("tests/test_lc_lostroll.lua")
 dofile("tests/test_lc_churn.lua")
 -- ORDER IS LOAD-BEARING HERE, AND IT SHOULD NOT BE. The addon jitters its own replies with
 -- math.random, and several test_lc_churn.lua assertions turn on which jittered reply lands first --
