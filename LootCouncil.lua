@@ -2304,7 +2304,7 @@ end
 -- Nothing here can repair that -- the broken half is running code we cannot change. What it can do
 -- is stop it being a mystery: name the raiders concerned, on the one screen that can act on it,
 -- before the first boss rather than during it.
-LC.PROTOCOL_VERSION = "3.2.2" -- release whose loot-council wire protocol this client requires of peers
+LC.PROTOCOL_VERSION = "3.3.0" -- release whose loot-council wire protocol this client requires of peers
 LC.outdatedWarned = LC.outdatedWarned or {} -- short name -> true, so a raid is named once, not per hello
 
 -- Group members whose KART is older than the protocol above, sorted. Skipped on purpose:
