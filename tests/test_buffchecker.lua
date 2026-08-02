@@ -449,3 +449,330 @@ do
     for i = 1, 6 do if all:find("Raider" .. i .. "-", 1, true) then found = found + 1 end end
     T.eq(found, 6, "and every other name still reaches the raid")
 end
+
+-- ==========================================================================
+--  Where the split puts its line break
+-- ==========================================================================
+-- The cap is the LAST length that still goes out, not the first that does not. Lifted from the
+-- source for the same reason the truncation helpers are: the amount that matters is a single byte,
+-- and driving it through a render would put a locale-dependent label in front of it.
+do
+    local src = assert(io.open("BuffChecker.lua", "r")):read("*a")
+    local split = src:match("\nlocal function SplitNameLines%(prefix, names%).-\nend\n")
+    T.truthy(split, "the split helper was found in BuffChecker.lua")
+    local SplitNameLines = assert(loadstring("local CHAT_MSG_MAX = 255\n" .. split
+        .. "\nreturn SplitNameLines"))()
+
+    -- "P: " + 100 + ", " + 150 is 255 on the nose.
+    local exact = SplitNameLines("P: ", { string.rep("a", 100), string.rep("b", 150) })
+    T.eq(#exact, 1, "a line of exactly 255 bytes is one line")
+    T.eq(#exact[1], 255, "and goes out whole")
+
+    -- One more byte, and only then does it become two.
+    local over = SplitNameLines("P: ", { string.rep("a", 100), string.rep("b", 151) })
+    T.eq(#over, 2, "256 bytes is where it breaks")
+    T.truthy(#over[1] <= 255 and #over[2] <= 255, "with both halves inside the cap")
+    T.eq(over[2]:sub(1, 3), "P: ", "and the label repeated, so the second line still says what it is")
+end
+
+do
+    -- A buff nobody is missing. The list is built per buff and can be empty for any of them -- the
+    -- ordinary case, since a raid usually fails only one or two checks.
+    --
+    -- The empty list has to be caught HERE and not left to the split below, and the reason is that
+    -- the two report kinds are not alike. A named check ("food", "flask") splits its names into
+    -- lines and an empty list happens to produce none. A class-buff check is a headline with no
+    -- names at all -- so an empty one still posts "Missing Arcane Intellect" into raid chat, naming
+    -- nobody, on a pull where everybody had it.
+    local _, lm = F.NewRaid()
+    lm.KART.MissingBuffs = { int = {}, food = {}, flask = { "Alric" } }
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function() lm.KART.ReportMissingBuffs() end)
+    KARTTEST.AdvanceTime(10)
+
+    T.eq(#KARTTEST.chat, 1, "only the buff somebody is actually missing is reported")
+    T.truthy(KARTTEST.chat[1].msg:find("Alric", 1, true), "and it is that one")
+
+    -- The same check with somebody on it, so the assertion above is known to be able to move.
+    lm.KART.MissingBuffs = { int = { "Sinja" } }
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function() lm.KART.ReportMissingBuffs() end)
+    KARTTEST.AdvanceTime(10)
+    T.eq(#KARTTEST.chat, 1, "a class buff somebody IS missing is still announced")
+end
+
+-- ==========================================================================
+--  Truncation cuts at the LONGEST place that fits
+-- ==========================================================================
+-- The existing walk above proves the cut never lands inside a character. It does not prove the cut
+-- is in the right place: a search that stops one step early returns a shorter name that is still
+-- valid UTF-8, still ends in "...", and still fits the column -- so every assertion there passes
+-- while the name column throws away a character it had room for on every single row.
+do
+    local src = assert(io.open("BuffChecker.lua", "r")):read("*a")
+    local floor = src:match("\nlocal function Utf8Floor%(s, i%).-\nend\n")
+    local trunc = src:match("\nlocal function SetTruncatedName%(fontString, text, maxWidth%).-\nend\n")
+    local chunk = assert(loadstring(floor .. trunc .. "\nreturn SetTruncatedName, Utf8Floor"))
+    local SetTruncatedName, Utf8Floor = chunk()
+
+    local function NewString()
+        local fs, value = {}, ""
+        function fs:SetText(t) value = t end
+        function fs:GetText() return value end
+        function fs:GetStringWidth() return #value * 6 end
+        return fs
+    end
+
+    -- The answer, worked out by trying every cut rather than by searching: the longest candidate
+    -- that fits, or the whole name when it already does. The last line mirrors the source's own
+    -- floor -- below the width of the ellipsis nothing fits, and an ellipsis beats an empty column.
+    local function Longest(text, maxWidth)
+        if #text * 6 <= maxWidth then return text end
+        local best = ""
+        for m = 1, #text do
+            local cand = text:sub(1, Utf8Floor(text, m)) .. "..."
+            if #cand * 6 <= maxWidth then best = cand end
+        end
+        return best ~= "" and best or "..."
+    end
+
+    local names = { "Alricsson", "Verylongcharactername-Silvermoon", "Wölfeäöüß-Blackmoore" }
+    local checked = 0
+    for _, name in ipairs(names) do
+        for width = 6, #name * 6 + 12, 6 do
+            local fs = NewString()
+            SetTruncatedName(fs, name, width)
+            checked = checked + 1
+            if fs:GetText() ~= Longest(name, width) then
+                T.eq(fs:GetText(), Longest(name, width),
+                    "the cut of " .. name .. " at width " .. width .. " uses all the room there is")
+                break
+            end
+        end
+    end
+    T.truthy(checked > 60, "every width was tried on every name")
+    T.truthy(true, "the cut always uses all the room there is")
+
+    -- The boundary at the top of the function, which decides whether anything is cut at all: a name
+    -- exactly as wide as its column fits, so it must keep its last character instead of losing it
+    -- to an ellipsis that is wider than what it replaced.
+    local fs = NewString()
+    SetTruncatedName(fs, "Alric", 5 * 6)
+    T.eq(fs:GetText(), "Alric", "a name exactly as wide as the column is left whole")
+end
+
+-- ==========================================================================
+--  The ready-check column
+-- ==========================================================================
+do
+    -- Three statuses have an icon. Anything else -- a status Blizzard adds, or a value that arrived
+    -- from somewhere it should not have -- has none, and the column has to stay EMPTY rather than
+    -- show a texture built out of the status itself, which draws as a green-and-black grid.
+    local _, lm = F.NewRaid()
+    local icon = CreateFrame("Frame")
+    RaidSim.As(lm, function() lm.KART.SetReadyCheckIcon(icon, "ready") end)
+    T.truthy(icon:IsShown(), "a status with an icon shows one")
+    RaidSim.As(lm, function() lm.KART.SetReadyCheckIcon(icon, "declined") end)
+    T.truthy(not icon:IsShown(), "a status without one shows nothing at all")
+    RaidSim.As(lm, function() lm.KART.SetReadyCheckIcon(icon, nil) end)
+    T.truthy(not icon:IsShown(), "and neither does no status")
+end
+
+do
+    -- The reason a raider gave for declining, which arrives on its own message and outlives the
+    -- ready check itself. It is looked up by the raider's SHORT name -- with no name to look up,
+    -- there is no reason to show, and the row must not fall back to showing the name as the reason.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    lm.KART.ReadyCheckReasons = { Alric = "afk, sorry" }
+    Render(lm)
+    local rows = lm.KART.BuffCheckFrame.rows
+    T.eq(rows[4].reasonIcon.reasonText, "afk, sorry", "the raider who gave a reason carries it")
+    T.truthy(not rows[5].reasonIcon:IsShown(), "and one who gave none shows no reason icon")
+    lm.KART.ReadyCheckReasons = {}
+    T.truthy(sim ~= nil)
+end
+
+-- ==========================================================================
+--  The durability column
+-- ==========================================================================
+-- Three digits and a colour. The digits are the same at 19% and at 51%, so the colour is the entire
+-- warning -- and it is read at a glance across forty rows, which is the only way it is ever read.
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    local REPAIR = 11
+    local function ColorAt(percent)
+        lm.KART.DurabilityCache = { Bramor = percent }
+        Render(lm)
+        local ind = lm.KART.BuffCheckFrame.rows[1].indicators[REPAIR]
+        T.truthy(ind and ind.text, "the durability column is a framed number, not a plain icon")
+        local r, g, b = ind.text:GetTextColor()
+        return { r, g, b }
+    end
+    local function Same(a, b) return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] end
+
+    T.truthy(Same(ColorAt(19), lm.KART.DANGER), "below 20 percent reads as danger")
+    T.truthy(Same(ColorAt(20), lm.KART.WARNING), "exactly 20 is already only a warning")
+    T.truthy(Same(ColorAt(49), lm.KART.WARNING), "and so is anything under 50")
+    T.truthy(Same(ColorAt(50), lm.KART.SUCCESS), "exactly 50 is fine")
+    T.truthy(Same(ColorAt(100), lm.KART.SUCCESS), "and so is a full set")
+    lm.KART.DurabilityCache = {}
+    T.truthy(sim ~= nil)
+end
+
+-- ==========================================================================
+--  Missing, versus nobody here can give it to you
+-- ==========================================================================
+do
+    -- Two different dimmed states that must not collapse into one. A column nobody in the raid can
+    -- fill is dimmed to 0.1 and means "not your problem". A buff you are simply missing is dimmed to
+    -- 0.6 in the danger colour and means "go get it". Rendering the second as the first is a raider
+    -- reading their own row as fine.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    local FLASK = 8
+    Render(lm)
+    local ind = lm.KART.BuffCheckFrame.rows[4].indicators[FLASK]
+    T.eq(ind:GetAlpha(), 0.6, "a flask nobody has is a raider's own problem, not a dead column")
+    local r, g, b = ind:GetVertexColor()
+    T.truthy(r == lm.KART.DANGER[1] and g == lm.KART.DANGER[2] and b == lm.KART.DANGER[3],
+        "and it is shown in the colour that says so")
+    T.truthy(sim ~= nil)
+end
+
+-- ==========================================================================
+--  The preview flag
+-- ==========================================================================
+do
+    -- The throttled refresh has no argument, so the window remembers which mode it is in. Remembered
+    -- as "preview" while showing live data, every roster tick would redraw the raid as sample rows.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    Render(lm)
+    T.eq(lm.KART.BuffCheckPreviewActive, false, "a live render is not remembered as a preview")
+    RaidSim.As(lm, function() lm.KART.UpdateBuffCheck(true) end)
+    T.eq(lm.KART.BuffCheckPreviewActive, true, "and a preview is")
+    Render(lm)
+    T.eq(lm.KART.BuffCheckPreviewActive, false, "and going back to live clears it again")
+    T.truthy(sim ~= nil)
+end
+
+-- ==========================================================================
+--  Somebody who is offline
+-- ==========================================================================
+do
+    -- A disconnected raider's row is dimmed, because their data is the last thing anybody saw rather
+    -- than what is true now. The dimming has to be an opacity: a boolean here is drawn as fully
+    -- opaque, which is the one thing it must not look like.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    lm.env.KART_Settings.grayOffline = true
+    sim.byName.Alric.member.offline = true
+    Render(lm)
+    local rows = lm.KART.BuffCheckFrame.rows
+    T.eq(type(rows[4]:GetAlpha()), "number", "the offline row's dimming is an opacity")
+    T.truthy(rows[4]:GetAlpha() < rows[1]:GetAlpha(), "and it is dimmer than a connected one")
+    sim.byName.Alric.member.offline = nil
+end
+
+-- ==========================================================================
+--  A raid larger than the row pool
+-- ==========================================================================
+do
+    -- Forty rows exist and the loop stops after the fortieth, which is a guard against an epic
+    -- battleground rather than a raid size. Stopping one row early is the failure to watch for: in a
+    -- full forty-man group the last person on the list is simply not checked, and their row keeps
+    -- whatever the previous render left in it.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    local members = {}
+    for i, c in ipairs(sim.clients) do members[i] = c.member end
+    for i = #members + 1, 40 do
+        members[i] = { name = "Filler" .. i, realm = "TarrenMill",
+                       guid = "Player-1096-FFFF" .. i, class = "WARRIOR" }
+    end
+    KARTTEST.SetRaid(members)
+    Render(lm)
+    T.eq(lm.KART.BuffCheckFrame.rows[40].name:GetText(), "Filler40",
+        "the fortieth raider is checked like everybody else")
+end
+
+-- ==========================================================================
+--  About to run out, versus already gone
+-- ==========================================================================
+do
+    -- The amber "expiring" tint is a five-minute warning on a buff the raider still HAS. The
+    -- boundary at the other end of that window is the one worth pinning: an aura whose expiry is
+    -- exactly now has no time left, so it is not a warning to act on -- and the raider is about to
+    -- be reported as missing it anyway, which is the louder of the two signals.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    local FLASK = 8
+    local ALRIC_ROW = 4
+
+    KARTTEST.auras = { [alric.unit] = {
+        { name = "Flask of Power", spellId = 1, expirationTime = GetTime() + 60 } } }
+    Render(lm)
+    local ind = lm.KART.BuffCheckFrame.rows[ALRIC_ROW].indicators[FLASK]
+    local r, g, b = ind:GetVertexColor()
+    T.truthy(r == 1 and g == 0.8 and b == 0, "a minute left is shown as running out")
+
+    KARTTEST.auras = { [alric.unit] = {
+        { name = "Flask of Power", spellId = 1, expirationTime = GetTime() } } }
+    Render(lm)
+    r, g, b = ind:GetVertexColor()
+    T.truthy(r == 1 and g == 1 and b == 1, "no time left is not a warning about time running out")
+end
+
+-- ==========================================================================
+--  The weapon oil, read off our own hands
+-- ==========================================================================
+do
+    -- GetWeaponEnchantInfo answers per hand: whether there IS a temporary enchant, and its id. The
+    -- id field is not cleared when the first answer is false -- it is simply not meaningful -- so
+    -- the "has one" flag is what decides whether the id may be read at all. Reading it anyway rates
+    -- a bare weapon by whatever oil was on it last, and the column then says the raider is fine.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    -- A bare key rather than a real link: the equip location is looked up in the flat table the
+    -- gear-scan tests drive, which only answers for links the item database does not already know.
+    KARTTEST.inventory[16] = "MainhandWeapon"
+    KARTTEST.equipLocs.MainhandWeapon = "INVTYPE_WEAPONMAINHAND"
+
+    -- Read off the player's own row rather than KART.BuffStatesCache: that table is wiped before
+    -- every player and holds the LAST one rendered, which is never us.
+    local OIL = 12
+    local function OilColor()
+        Render(lm)
+        local r, g, b = lm.KART.BuffCheckFrame.rows[1].indicators[OIL]:GetVertexColor()
+        return { r, g, b }
+    end
+    local function Same(a, b) return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] end
+
+    KARTTEST.weaponEnchant = { true, 0, 0, 8052, false, 0, 0, 0 }
+    T.truthy(Same(OilColor(), lm.KART.SUCCESS), "an oiled main hand reads as the current oil")
+
+    -- Same id, same slot, but the hand carries nothing.
+    KARTTEST.weaponEnchant = { false, 0, 0, 8052, false, 0, 0, 0 }
+    T.truthy(Same(OilColor(), lm.KART.DANGER),
+        "a bare main hand is not rated by the id left behind in the answer")
+
+    -- And the same for the off hand, which a dual wielder has to keep oiled as well: the worst of
+    -- the two hands is what the column shows, so a bare off hand next to an oiled main hand still
+    -- reads as missing. Both hands answer out of the same eight-value reply and the off hand's
+    -- fields sit at the far end of it, which is where a mistake is least likely to be noticed.
+    KARTTEST.inventory[17] = "OffhandWeapon"
+    KARTTEST.equipLocs.OffhandWeapon = "INVTYPE_WEAPONOFFHAND"
+    KARTTEST.weaponEnchant = { true, 0, 0, 8052, true, 0, 0, 8052 }
+    T.truthy(Same(OilColor(), lm.KART.SUCCESS), "two oiled hands read as the current oil")
+
+    KARTTEST.weaponEnchant = { true, 0, 0, 8052, false, 0, 0, 8052 }
+    T.truthy(Same(OilColor(), lm.KART.DANGER),
+        "and a bare off hand pulls the column down even with the main hand oiled")
+
+    KARTTEST.inventory[16], KARTTEST.inventory[17] = nil, nil
+    KARTTEST.weaponEnchant = { false, 0, 0, 0, false, 0, 0, 0 }
+    T.truthy(sim ~= nil)
+end
+

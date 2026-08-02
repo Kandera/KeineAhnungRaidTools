@@ -400,8 +400,18 @@ function _G.CreateFrame(_, name, parent, _)
     function f:SetChecked(value) checked = not not value; return f end
     function f:GetChecked() return checked end
 
-    function f:GetWidth() return 0 end
-    function f:GetHeight() return 0 end
+    -- A size that was never set is 0, which is a freshly created frame's real starting size and what
+    -- a "skip rounding a frame this small" comparison needs to see. A size that WAS set is answered
+    -- with, like a real frame -- the buff check's name column truncates against its own
+    -- GetWidth(), so a stub that always said 0 cut every name in the harness down to "..." and made
+    -- the entire column unassertable.
+    local width, height = 0, 0
+    function f:SetWidth(v) width = tonumber(v) or 0; return f end
+    function f:SetHeight(v) height = tonumber(v) or 0; return f end
+    function f:SetSize(w, h) width, height = tonumber(w) or 0, tonumber(h) or 0; return f end
+    function f:GetWidth() return width end
+    function f:GetHeight() return height end
+    function f:GetSize() return width, height end
 
     -- Screen position: nil, because this harness has no layout and cannot answer where a widget
     -- sits. nil is the truthful answer rather than a convenient zero -- the game returns it too,
@@ -531,6 +541,18 @@ function _G.CreateFrame(_, name, parent, _)
     function f:GetBackdropColor() if bg then return unpack(bg) end end
     function f:SetBackdropBorderColor(...) edge = { ... }; return f end
     function f:GetBackdropBorderColor() if edge then return unpack(edge) end end
+
+    -- Colour is the whole answer for a column that has no text: the buff-check grid says "you are
+    -- missing this" by tinting an icon red and "this is about to run out" by tinting it amber, and
+    -- the durability column says 19% in red and 51% in green with the same three digits. On the
+    -- catch-all all of that was a no-op, so an assertion about it could not be written at all.
+    local textColor, vertexColor, desaturated
+    function f:SetTextColor(...) textColor = { ... }; return f end
+    function f:GetTextColor() if textColor then return unpack(textColor) end end
+    function f:SetVertexColor(...) vertexColor = { ... }; return f end
+    function f:GetVertexColor() if vertexColor then return unpack(vertexColor) end end
+    function f:SetDesaturated(v) desaturated = v and true or false; return f end
+    function f:IsDesaturated() return desaturated end
 
     -- Where the mouse is. The catch-all answered this with the frame -- truthy for every frame at
     -- once, which is not a state a mouse can be in. The council panel's tab close button decides
