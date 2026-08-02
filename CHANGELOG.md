@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The raid's minimum quality and roll setting cannot be clicked while somebody else's settings apply.** Clicking them used to overwrite your own.
 - **Removing people from the raid checks again when you confirm it.** Losing lead or pulling while the question is on screen no longer lets the removals go through anyway.
 - **An award with a long vote reason still reaches everyone else's loot history.** It used to go missing on their side without a word.
+- **An award announced while your client was still starting up reaches your loot history after all.** It used to be missing there for the rest of the evening.
 
 ## [3.2.2] - 2026-08-01
 ### Fixed

@@ -999,6 +999,32 @@ local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
 -- absorb a rejoin burst, short enough that a genuine relog later in the raid still gets served.
 local HISTORY_SYNC_ANSWER_COOLDOWN = 60
 
+-- B66: an award this client could not authorise leaves a hole that nothing else fills.
+--
+-- Trade.HandleResult drops an LC_RESULT whose sender it cannot confirm is council, and that is the
+-- right call -- it is what stands between the loot record and anybody in the group writing rows into
+-- it. What was wrong is what happened next: nothing at all. LH.RequestHistorySync runs once per raid
+-- JOIN, so a client still waiting for the raid's config when an award was announced is missing that
+-- award for the rest of the evening, on the list the council reads to see who is already owed
+-- something, with no sign of it on any screen.
+--
+-- The rejection is the one moment a client knows for certain that it is missing one, so it is where
+-- the catch-up belongs. Delayed, because the config that would have authorised the sender is usually
+-- seconds behind and asking after it lands costs nothing. Rate-limited, because a client whose
+-- config never arrives would otherwise ask once per award for a whole distribution -- and the answer
+-- to one request already carries everything the later ones would have asked for.
+local UNAUTHORISED_SYNC_DELAY    = 5
+local UNAUTHORISED_SYNC_COOLDOWN = 60
+
+function LH.NoteUnauthorisedAward()
+    local now = GetTime()
+    if LH.lastUnauthorisedSync and (now - LH.lastUnauthorisedSync) < UNAUTHORISED_SYNC_COOLDOWN then
+        return
+    end
+    LH.lastUnauthorisedSync = now
+    C_Timer.After(UNAUTHORISED_SYNC_DELAY, function() LH.RequestHistorySync() end)
+end
+
 function LH.RequestHistorySync()
     -- Never earlier than the last clear (see LH.ClearHistory). The since-timestamp already means
     -- "I have everything up to here", so a line drawn by hand fits it exactly and no peer needs to

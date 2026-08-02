@@ -728,3 +728,62 @@ do
         "an award reaching a raider who has just reloaded is recorded, not dropped")
     T.eq(#raider.env.KART_LootHistory, 1, "and reaches their loot history")
 end
+
+-- B66's first remaining half: an award this client could not authorise ---------------------------
+-- LC_RESULT is announced once and never re-requested. A client that cannot confirm the SENDER is
+-- council drops it -- and LH.RequestHistorySync runs once per raid join, so the hole it leaves is
+-- permanent for the evening. The window is a reloaded client before the raid's config reaches it,
+-- and the sender that needs authorising is a council member who is not the loot owner (the loot
+-- owner is authorised without any council list at all -- see B34).
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 92, F.GLOVES)
+
+    local raider = RaidSim.Reload(sim, "Alric")
+    -- The gap itself: this client knows nothing about who is on the council yet.
+    RaidSim.As(raider, function()
+        raider.KART.LC.CouncilNamesTable = {}
+        raider.KART.LC.raidConfig = { councilMembers = "", fromSelf = false }
+    end)
+
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(92, sim.byName.Sinja.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(2)
+    T.eq(#raider.env.KART_LootHistory, 0, "the award itself is refused, which is the right call")
+
+    -- ...and then asked for, which is the part that was missing. The delay is deliberate: the config
+    -- that would have authorised the sender is usually seconds behind.
+    KARTTEST.AdvanceTime(30)
+    T.eq(#raider.env.KART_LootHistory, 1,
+        "an award a reloaded client could not authorise still reaches its loot history")
+    T.truthy(lm ~= nil)
+end
+
+do
+    -- Rate-limited: a client whose config never arrives sees a whole distribution it cannot
+    -- authorise, and one request per award would put the raid's history on the wire over and over.
+    -- The answer to the first request already carries everything the later ones would ask for.
+    local sim, lm, council = F.NewRaid()
+    local raider = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(raider, function()
+        raider.KART.LC.CouncilNamesTable = {}
+        raider.KART.LC.raidConfig = { councilMembers = "", fromSelf = false }
+    end)
+
+    RaidSim.ClearLog(sim)
+    for i = 1, 4 do
+        F.Drop(sim, 100 + i, F.GLOVES)
+        RaidSim.As(council, function()
+            council.KART.LC.Trade.AssignWinner(100 + i, sim.byName.Sinja.guid, "BIS", nil)
+        end)
+        KARTTEST.AdvanceTime(6)
+    end
+
+    -- Counted across the whole raid rather than by sender: the request goes out from inside a timer,
+    -- and which client the harness calls "active" at that moment is not the sender's identity.
+    -- Nobody else in this block has a reason to ask.
+    T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1,
+        "four unauthorised awards in a row produce one catch-up request, not four")
+    T.truthy(lm ~= nil)
+end

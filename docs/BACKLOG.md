@@ -2087,13 +2087,28 @@ arrivals is the receiving side: the roll is rebuilt only if Blizzard gave *this*
 roll, which is its own proof of having been in the raid when the boss died. A client that already
 answered has no roll left either, so an item it has decided is not put back in front of it.
 
-**Two halves remain open:**
+**The first of the two remaining halves is closed as of 2026-08-02.** `LC_RESULT` had no equivalent:
+an award announced while a client could not authorise the sender — its council list had not arrived —
+was missing from that client's loot history for the rest of the evening, because
+`LH.RequestHistorySync` runs once per raid JOIN and nothing else asks.
 
-* `LC_RESULT` has no equivalent. An award announced while a client could not authorise the sender
-  — its council list had not arrived — is missing from that client's loot history, and
-  `LH.RequestHistorySync` only runs on join. A history catch-up on *rejecting* a result would close
-  it.
-* The loot owner's own deafness cannot be repaired by anyone. Blizzard offers no way to enumerate
+Measured first, because the shape had narrowed since this was written: the loot owner is authorised
+with no council list at all (`LC.IsSenderCouncil` answers on `IsSenderLootOwner` before it consults
+the table — see B34), so the case is an award from a council member who is NOT the loot owner,
+reaching a client that has reloaded and is still waiting for the config. A test reproduces exactly
+that and was red.
+
+Closed the way the entry itself proposed: the rejection asks. `LH.NoteUnauthorisedAward` is called
+from `Trade.HandleResult` where the result is dropped — the one moment a client knows for certain
+that an award exists which it does not have. Delayed five seconds, because the config that would have
+authorised the sender is usually seconds behind and asking after it lands costs nothing; and
+rate-limited to once a minute, because a client whose config never arrives sees a whole distribution
+it cannot authorise, and one request per award would put the raid's history on the wire over and over
+for nothing — the answer to the first already carries what the later ones would ask for. Both
+properties are held: the award arrives, and four unauthorised awards in a row produce one request.
+
+**The second half stays open, and cannot be closed here.** The loot owner's own deafness cannot be
+repaired by anyone. Blizzard offers no way to enumerate
   the rolls currently open, so a lootmaster that reloads and misses a drop cannot ask for it back —
   it can only recover fast enough not to miss it. That is what the 2-second first retry and the
   raider-supplied session resume are for. Narrowed, not closed.

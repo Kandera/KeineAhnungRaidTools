@@ -948,7 +948,12 @@ function Trade.ResolveColorForReason(reason)
 end
 
 function Trade.HandleResult(payload, senderKey)
-    if not LC.IsSenderCouncil(senderKey) then return end
+    if not LC.IsSenderCouncil(senderKey) then
+        -- Refusing it is right; leaving it at that was not (B66). This is the one moment we know an
+        -- award exists that we do not have, so it is where the loot-history catch-up is asked for.
+        if KART.LH and KART.LH.NoteUnauthorisedAward then KART.LH.NoteUnauthorisedAward() end
+        return
+    end
     -- payload = "rollID:winnerKey:itemID:colorPacked:reason"
     -- Reviewed 2026-07-24, NOT a bug: this pattern requires the current 5-field wire format (4
     -- colons). A pre-itemID/pre-colorPacked build sends fewer fields and its result is dropped here
