@@ -765,6 +765,84 @@ survives for that reason -- not because a test is missing. Worth writing down as
 alongside "real gap" and "equivalent mutant": a survivor can also be marking defensive code that
 nothing can reach, and chasing it is time spent on an assertion that could never fail.
 
+## B115 — NO DEFECT 2026-08-02 — the eighteenth bug run found no bug, and three lies in the harness
+
+The same mutation sweep as B107 and B112, over the same five modules, after the tests those runs
+produced. 96 candidates, and **not one of them was a defect** — every survivor marked an assertion
+that was missing over code that turned out to be right. Nothing reached the changelog, because
+nothing changed for a player.
+
+That is worth recording precisely because the three runs before it each found something. A sweep
+that comes back empty is the expected outcome eventually, and mistaking it for "the tool stopped
+working" is how a run gets abandoned one round before it would have paid off again.
+
+The confirmation sweep afterwards: 138 mutable executed lines, 93 dead, 45 alive.
+
+| module | mutable | dead | alive |
+| --- | ---: | ---: | ---: |
+| Invite.lua | 12 | 12 | 0 |
+| BuffChecker.lua | 32 | 29 | 3 |
+| LootCouncilSettings.lua | 6 | 5 | 1 |
+| LootHistory.lua | 42 | 28 | 14 |
+| LootCouncilPanel.lua | 46 | 19 | 27 |
+
+**The panel is where the next run starts.** Nineteen of forty-six is the worst coverage of the five
+by a wide margin, and what survives there is not scattered: the equipped-item exchange's nil guards
+and the test-roll row, both of which need a fixture that does not exist yet.
+
+**Three lies in the harness, all the same shape.** Each was a convenient answer that made the branch
+under test unreachable, so the assertion could not be written at all — the same failure the frame
+catch-all's own comment calls the most expensive one in the harness:
+
+* `SetTextColor` / `SetVertexColor` / `SetDesaturated` went to the catch-all and did nothing. Colour
+  IS the answer in the buff grid: the durability column says 19% in red and 51% in green with the
+  same three digits, and a missing buff is a red icon while a column nobody in the raid can fill is
+  a dim one.
+* `GetWidth` answered 0 for every frame. The buff check truncates each name against its own
+  `GetWidth()`, so every name in every test was cut down to "..." and the whole binary search was
+  unassertable. A size that was set is answered with now; one that never was is still 0.
+* `RAID_CLASS_COLORS` answered EVERY key with white, so "this client does not know that class" could
+  not happen. It is an ordinary state — history entries outlive expansions in a SavedVariable and
+  the class arrives from a peer as a bare string — and two different screens colour a name by it.
+
+**Two of my own assertions could not fail, and both are one mistake:** measuring a COUNT where the
+defect changes a VALUE.
+
+* five seconds of clock skew leaves one history row whether the arriving award is recognised as a
+  duplicate or REPLACES the row it matched — same roll, same item, so nothing stacks. What separates
+  them is whose timestamp survives.
+* "hold one entry, expect one entry" is also what a whisper that never arrived looks like. Every
+  such test needs a control that proves delivery before it asks for nothing to happen.
+
+Neither showed up as a failure. The mutant is what said so, which is the argument for running the
+sweep against new tests rather than trusting them green.
+
+**What survives, and why none of it is a gap.** Recorded so the next run does not re-chase them:
+
+* *provably equivalent* — `LootHistory:1008` and `:1048` compute the same answer either way (a
+  maximum, and a trim that takes exactly the whole list); `BuffChecker:938` leaves a negative
+  remaining, which is not "expiring" on either side.
+* *only differ on invalid input* — the three UTF-8 rewinds (`BuffChecker:680`, `LootHistory:1119`
+  and `:1123`) turn on byte 0xC0, which valid UTF-8 never contains (leads are 0xC2–0xF4);
+  `BuffChecker:678` and `LootHistory:1117` need a string that opens with a continuation byte.
+* *equivalent in effect* — `LootHistory:917`, `:982`, `:1251` and `:1256` cost an extra call into a
+  function that guards itself (`LH.Refresh` returns immediately with no window).
+* *harmless boundary* — the 255-byte guards choose the shorter of two item forms one byte earlier.
+  The entry still arrives.
+* *unassertable, not unheld* — `LootHistory:653` differs only in where the window ends up, and the
+  harness deliberately answers "I do not know" for a frame's position.
+* *noise* — `LootCouncilSettings:170` mutates a `->` inside a trailing comment. The runner skips
+  whole-line comments but not trailing ones.
+
+The runner itself now lives at `tests/mutrun.py` instead of a temp directory, with what it needs and
+what must not run beside it in the header. `tests` is in `.pkgmeta`'s ignore list, so nothing there
+reaches the packaged addon.
+
+**One thing to know before writing a test against the buff grid:** `KART.BuffStatesCache` is wiped
+before EVERY player (`BuffChecker.lua`, the per-unit loop). Reading it after a render shows the last
+raider in the roster, never the player — the player's own answer is only on their row. That cost a
+detour here and will cost the next one the same.
+
 ## B89 — FIXED 2026-08-01 — a cross-realm raider was shown a namesake's sim number
 
 Found in the Droptimizer bug run, which was picked BECAUSE that module had no tests at all -- the
