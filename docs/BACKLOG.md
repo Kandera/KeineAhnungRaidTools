@@ -765,6 +765,39 @@ survives for that reason -- not because a test is missing. Worth writing down as
 alongside "real gap" and "equivalent mutant": a survivor can also be marking defensive code that
 nothing can reach, and chasing it is time spent on an assertion that could never fail.
 
+## B117 — OPEN 2026-08-02 — the twentieth run's leftovers, written down instead of left in a temp file
+
+The sweep over `LootCouncil.lua` and `LootCouncilVote.lua` after B108–B116 and the day's ~145 new
+assertions. **135 mutable executed lines, 71 dead, 64 alive** — 1802 executed lines between the two,
+against B107's narrower reach on 2026-08-01.
+
+Four groups were closed the same day and are not in the list below: the five sender guards, Auto-Pass
+with the setting switched off, the `C_LootHistory` guard, and the roll handler. What is left is
+recorded HERE rather than in a run log, because the log lived in a session-scoped temp directory and
+would have been gone before anybody read it — the same mistake this file already records once, about
+`mutrun.py` itself.
+
+**`LootCouncil.lua`, 46 alive:**
+36, 437, 474, 556, 909, 967, 1003, 1148, 1370, 1400, 1401, 1408, 1444, 1536, 1542, 1544, 1572, 1601,
+1607, 1613, 1627, 1668, 1671, 1677, 1711, 1916, 1918, 2195, 2203, 2242, 2279, 2311, 2360, 2643, 2674,
+2707, 2711, 2822, 2989, 3056, 3160, 3258, 3406, 3462, 3613, 3653
+
+**`LootCouncilVote.lua`, 18 alive:**
+77, 93, 96, 98, 124, 576, 578, 613, 711, 712, 713, 894, 904, 905, 980, 981, 1120, 1177
+
+Line numbers age with the file, so treat them as a starting point and re-run rather than as a
+worklist: `KART_COVERAGE=1 luajit tests/run.lua` then `python tests/mutrun.py LootCouncil.lua`.
+
+**Where to start, and what to skip.** Two clusters have a bearing on a raid night and neither was
+reached today: the state-request answers (`:1601`, `:1607`, `:1613`, `:1627` — who is allowed to
+answer, and B69/B77 are what happens when the wrong client does) and the retry budgets (`:1444`,
+`:2711`, `:2989`, `:2822`). The rest is overwhelmingly display thresholds and nil guards on widget
+plumbing — the `LootCouncilVote.lua` block from `:576` to `:981` is entirely the vote window's own
+rendering.
+
+`:1120` is known and is NOT a gap: `LC.IsSenderLootOwner` on the very next line refuses everything
+the unit lookup would have. Recorded in the bug-run-20 commit; do not re-chase it.
+
 ## B116 — OPEN 2026-08-02 — LootCouncilTrade.lua has never been swept, and Core.lua cannot be
 
 The nineteenth bug run, over the files today's B60 and B66 work touched. Two things came out of it
