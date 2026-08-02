@@ -1846,7 +1846,7 @@ claim, see B29/B33), but the window is real and the loser of the race spends it 
 
 # Tier B — an item is lost or awarded wrongly, silently
 
-## B34 — a reload mid-roll loses the item entirely — NARROWED 2026-07-30, and the entry above was wrong
+## B34 — a reload mid-roll loses the item entirely — FIXED 2026-08-02, the last of it by B81 (NARROWED 2026-07-30, and the entry above was wrong)
 
 Only `KART_LCTrades` and `KART_LootHistory` are SavedVariables, and `Trade.RestorePersistedTrades`
 only rehydrates decided trades. Everything about an undecided roll — item link, votes, deadlines,
@@ -1870,17 +1870,25 @@ same four-hour rule and rebuilt defensively on load.
 The harness could not have caught this before, because `time()` was `os.time` and no test could
 advance a wall clock. It is now offset from `KARTTEST.now` like every other clock.
 
-**Still open, deliberately:** the reloaded lootmaster's own vote row and council tab do not come back,
-so they cannot vote on or award an item they are holding. Another council member can, which is the
-normal case. It only becomes a dead end when the lootmaster is the *only* council member left, and
-`/kart add` is the manual way out. Restoring the windows means persisting open rolls or widening who
-may answer `LC_ROLL_CATCHUP` — `HandleStart` requires `IsSenderLootOwner`, and that trust is not
-worth widening casually. Its own task.
+**Both remainders are closed as of 2026-08-02.** They were written here on 2026-07-30 as "still open,
+deliberately" and "not fixed here", and that wording outlived the work that closed them — which is
+its own lesson about leaving a residual paragraph in an entry whose heading has moved on.
 
-**Also found on the way:** a raider who reloads has no council list until the next roster change, and
-`Trade.HandleResult` refuses an award from a sender it cannot confirm is council — so an award landing
-in that gap is dropped entirely, with no owed entry and no history. A raid produces roster changes
-constantly, so the window is short, but it is real. Not fixed here.
+*The reloaded lootmaster's vote row and council tab* were the whole subject of **B81** two days
+later, and the fix went the other way from the one guessed at here: not persisting open rolls into
+the protocol or widening who may answer `LC_ROLL_CATCHUP`, but each client keeping its OWN tracked
+rolls in SavedVariables and picking them up at load (`LC.SaveSessionSnapshot` on `PLAYER_LOGOUT`,
+`LC.RestoreSessionSnapshot` at `ADDON_LOADED`). No protocol change and no rule about late arrivals,
+because a client can only ever restore what it already had. Held by `tests/test_lc_reload.lua`: the
+reloaded lootmaster still has the tab, knows which item it is, has all five votes back, and
+`ReopenTrackedWindow` gets them to it — which is the report itself, "`/kart lc` opens nothing".
+
+*The award landing while a reloaded raider has no council list* does not happen. `LC.IsSenderCouncil`
+answers on `LC.IsSenderLootOwner` FIRST and only then consults `LC.CouncilNamesTable`, so an award
+from the loot owner needs no council list on the receiving side at all. Measured rather than reasoned
+about: a plain raider reloads, no roster update is allowed to run, the lootmaster assigns, and the
+award arrives as both an owed entry and a history row. That assertion is in `test_lc_reload.lua` now,
+because the guard it depends on is one line and nothing else was watching it.
 
 ## B35 — two council members can award the same item at the same time — FIXED 2026-07-31
 

@@ -706,3 +706,25 @@ do
     T.truthy(not (lm.KART.LC.owedReminderFrame and lm.KART.LC.owedReminderFrame:IsShown()),
         "and no owed reminder either")
 end
+
+-- B34's second half: an award landing while a reloaded raider has no council list ------------------
+-- Recorded on 2026-07-30 as "also found on the way, not fixed here": a raider who reloads has no
+-- council list until the next roster change, and Trade.HandleResult refuses an award from a sender
+-- it cannot confirm is council -- so an award landing in that gap was dropped entirely, with no owed
+-- entry and no history. A raid produces roster changes constantly, so the window is short. It is
+-- also exactly as long as it takes somebody to click Assign, which is what happens in that window.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 91, F.GLOVES)
+
+    local raider = RaidSim.Reload(sim, "Alric")
+    RaidSim.EnterWorld(sim, "Alric")
+    -- Deliberately NO roster update: that is the event the gap is measured against.
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(91, raider.guid, "BIS", nil) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(#raider.KART.LC.owedToMe, 1,
+        "an award reaching a raider who has just reloaded is recorded, not dropped")
+    T.eq(#raider.env.KART_LootHistory, 1, "and reaches their loot history")
+end
