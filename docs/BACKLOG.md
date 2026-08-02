@@ -2257,11 +2257,28 @@ it cannot authorise, and one request per award would put the raid's history on t
 for nothing — the answer to the first already carries what the later ones would ask for. Both
 properties are held: the award arrives, and four unauthorised awards in a row produce one request.
 
-**The second half stays open, and cannot be closed here.** The loot owner's own deafness cannot be
-repaired by anyone. Blizzard offers no way to enumerate
-  the rolls currently open, so a lootmaster that reloads and misses a drop cannot ask for it back —
-  it can only recover fast enough not to miss it. That is what the 2-second first retry and the
-  raider-supplied session resume are for. Narrowed, not closed.
+**The second half stays open — but its stated reason is out of date as of 2026-08-02.** It read:
+*"Blizzard offers no way to enumerate the rolls currently open, so a lootmaster that reloads and
+misses a drop cannot ask for it back — it can only recover fast enough not to miss it."* That was
+written on 2026-07-30, before anyone had looked at `C_LootHistory`.
+
+Looking it up for B60 turned that claim over. `C_LootHistory.GetAllEncounterInfos()` lists the
+encounters, `GetSortedDropsForEncounter(encounterID)` lists each drop in one with its
+`itemHyperlink` and this client's own `playerRollState`, and `GetSortedInfoForDrop` gives the roll
+in full. A loot owner coming back from a reload could therefore ask BLIZZARD what dropped and what
+it did with its own roll, instead of depending on a peer to tell it — which is the dependency this
+half of the entry is entirely about.
+
+**Not built, and not to be treated as settled either way.** What is written above is read off the
+generated API annotations for 12.0.1 (see B60 for the same caveat), and three things would have to
+hold before it means anything: that the encounter is still listed after a reload, that a drop the
+council never announced is distinguishable from one it did, and that `playerRollState` says
+something useful for a roll this client force-won before the reload. None of that can be answered
+outside the game.
+
+Until then the recovery is unchanged: the 2-second first retry and the raider-supplied session
+resume. What has changed is that "cannot be closed" is no longer the right words for it — it is
+"not attempted, on a lead that is one in-game session away from being worth something".
 
 `tests/test_lc_soak.lua` excludes exactly these windows from its per-item comparison, and says so
 where it does it — everything with a retry behind it is still held to the full standard.
