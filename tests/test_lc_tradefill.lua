@@ -126,3 +126,24 @@ do
     T.eq(KARTTEST.tradePlayerItems[1], WEAPON, "an occupied slot is not overwritten")
     T.eq(KARTTEST.tradePlayerItems[2], GLOVES, "the owed item takes the next free one")
 end
+
+-- Closing the trade: what counts as "handed over" ---------------------------------------------------
+-- B60's damage runs through this check. An obligation is cleared when the item demonstrably left --
+-- either the trade window carried it, or it is no longer in our bags. The second half is what makes
+-- "the lootmaster never had it" look like "the lootmaster already traded it": both are "not in my
+-- bags". The two conditions have to hold TOGETHER -- a real link that IS still in the bags is an
+-- obligation that has not been met, and clearing it there loses the item silently.
+do
+    local _, lm, alric = TradeWith(function(a)
+        return { { itemLink = GLOVES, winnerKey = a.guid, rollID = 71 } }
+    end, { [0] = { GLOVES } })
+
+    -- The trade is closed without the item ever going across: nothing was put in the window on the
+    -- partner's side, and the item is right there in the bags where it started.
+    KARTTEST.tradePlayerItems = {}
+    RaidSim.As(lm, function() lm.KART.LC.Trade.OnTradeClosed() end)
+
+    T.eq(#lm.KART.LC.pendingTrades, 1,
+        "an item still in our bags is still owed after a trade that carried nothing")
+    T.eq(lm.KART.LC.pendingTrades[1].winnerKey, alric.guid, "to the same person")
+end

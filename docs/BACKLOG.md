@@ -783,11 +783,24 @@ a sweep — B107 and B112 covered other modules, B115 covered five more. Not cha
 is a bug run of its own and this one was scoped to today's changes. Three of the seventeen are worth
 starting with:
 
-* `:857` — `confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)`.
-  This is the exact "not in my bags" reasoning B60 is about, and nothing holds the `and`.
-* `:1023` — `incomingWins = winnerKey < held`, the tie-break between two council members awarding the
-  same item in the same moment. B35 is the entry that made this a real case.
-* `:1028` / `:1029` — which of the two awards is kept afterwards.
+**`:857` is closed as of 2026-08-02.** `confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not
+FindItemInBags(entry.itemLink)` is the exact "not in my bags" reasoning B60 is about, and nothing
+held the `and`. With an `or` there, any trade with that partner clears the obligation while the item
+is still sitting in the bags — which is the silent loss B60 describes, reached from the other side.
+Held now in `tests/test_lc_tradefill.lua`: a trade that carries nothing leaves the item owed.
+
+**`:1023` is an equivalent mutant, and the proof is three lines up.** `incomingWins = winnerKey < held`
+sits inside `if held and held ~= winnerKey`, so the two are never equal and `<` and `<=` cannot
+disagree. Worth writing down rather than re-deriving: this is the fourth kind of survivor after "real
+gap", "equivalent by construction" and "defensive code nothing reaches" — a comparison whose
+equal case an enclosing guard has already excluded.
+
+**Still open: `:1028` and `:1029`,** the award-clash message. `kept = incomingWins and winnerKey or
+held` mutated to `or` makes `kept` the boolean, so the line names the winner that was kept as
+`true` — the message is informational, but it is printed on the two screens that can act on a clash
+and naming nobody is worse than not printing. `:1028` decides when the line is printed at all.
+Neither is chased here; both want a test that drives two council members awarding one roll to
+different winners in the same moment, which is B35's scenario.
 
 Two survivors are in code written today and both are recorded rather than chased:
 `LootCouncilTrade:954` is `KART.LH or KART.LH.NoteUnauthorisedAward`, which cannot differ because
