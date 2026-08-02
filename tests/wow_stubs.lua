@@ -585,6 +585,11 @@ function _G.CreateFrame(_, name, parent, _)
     return f
 end
 _G.UIParent = _G.CreateFrame("Frame")
+-- Sized, now that a set size is answered with: KAUI.IsSavedPosOnScreen divides by UIParent's width
+-- and height, so with both at 0 every saved window position read as off-screen and the restore path
+-- was unreachable. Matches KARTTEST.physW/physH below, which is what the game's own default scale
+-- assumes.
+_G.UIParent:SetSize(1920, 1080)
 
 -- Screen geometry -----------------------------------------------------------------------
 -- Two numbers drive every pixel-border test: the physical screen height, and the UI scale that
@@ -1096,7 +1101,6 @@ function KARTTEST.SubmenuLabels(label)
     return out
 end
 _G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = 1, 2
-_G.CLASS_ICON_TEXCOORDS = {}
 -- Only the real class tokens, and nil for anything else -- which is what the game answers too.
 -- A blanket __index returning white for EVERY key made "this client does not know that class"
 -- unreachable in the harness, and that is not a corner case: history entries outlive expansions in
@@ -1116,9 +1120,26 @@ _G.C_LootHistory = {
     end,
 }
 
+-- Distinct per class, so "this row is coloured by the RIGHT class" is a question that can be asked
+-- at all -- with every token answering white, a correct colour and a fallback were the same value.
+-- These are NOT Blizzard's palette and deliberately so: a test that pinned a real hex would be
+-- asserting a fact this file cannot know. What it can honestly promise is that two classes differ
+-- and that the unknown-class fallback (which every reader spells 0.8/0.8/0.8 or 1/1/1) differs from
+-- all of them.
 _G.RAID_CLASS_COLORS = {}
-for _, token in ipairs(CLASS_TOKENS) do
-    _G.RAID_CLASS_COLORS[token] = { r = 1, g = 1, b = 1 }
+for i, token in ipairs(CLASS_TOKENS) do
+    _G.RAID_CLASS_COLORS[token] = { r = i / 20, g = 0.5, b = 1 - i / 20 }
+end
+
+-- The class icon's slice of Blizzard's shared circle texture. LC.SetClassIconTexture hides the icon
+-- when the token is missing here, and an empty table meant it hid it for EVERY class in every test
+-- -- so three lines of that function had never run. The coordinates are a 4x4 grid because the real
+-- sheet is one; which class sits in which cell is not something this harness needs to be right
+-- about, and no test may assert a specific cell.
+_G.CLASS_ICON_TEXCOORDS = {}
+for i, token in ipairs(CLASS_TOKENS) do
+    local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+    _G.CLASS_ICON_TEXCOORDS[token] = { col * 0.25, col * 0.25 + 0.25, row * 0.25, row * 0.25 + 0.25 }
 end
 _G.ITEM_QUALITY_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1, hex = "|cffffffff" } end })
 _G.YES, _G.NO, _G.ACCEPT, _G.CANCEL, _G.OKAY, _G.CLOSE, _G.UNKNOWN = "Yes", "No", "Accept", "Cancel", "Okay", "Close", "Unknown"

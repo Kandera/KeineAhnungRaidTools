@@ -94,11 +94,19 @@ do
     if row then
         local r, g, b = row.nameText:GetTextColor()
         T.truthy(r == 0.8 and g == 0.8 and b == 0.8, "with the neutral name colour")
+        -- ...and no class icon, rather than a slice of the circle sheet picked at random. Which cell
+        -- belongs to which class is not asserted anywhere and must not be: the harness's grid is a
+        -- stand-in. That an unknown token yields NO cell is the part that matters.
+        T.truthy(not row.classIcon:IsShown(), "and no class icon at all")
     else
         T.truthy(false, "the raider is still on the panel")
     end
     alric.member.class = realClass
     Refresh()
+
+    row = RowFor(KeyOf(alric))
+    T.truthy(row and row.classIcon:IsShown(), "while a class it does know gets one")
+    T.truthy(row and row.classIcon:GetTexture() ~= nil, "drawn from the shared circle sheet")
 end
 
 -- The roll column ----------------------------------------------------------------------------------
