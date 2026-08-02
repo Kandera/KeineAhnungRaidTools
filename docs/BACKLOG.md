@@ -1755,7 +1755,7 @@ Not fixed by adding a chat warning on sight: the same condition is true, harmles
 for anyone whose Lootmaster field names a person who has not loaded in yet. Wants a rule that can
 tell "names me, unresolvable" apart from "names someone else, not here yet".
 
-## B60 — the lootmaster losing Blizzard's roll is undetected — ANSWERED 2026-08-02, UNPROVEN IN GAME (NARROWED 2026-07-30)
+## B60 — the lootmaster losing Blizzard's roll is undetected — ANSWERED 2026-08-02; IRRELEVANT IN AN ORGANISED GUILD, by the maintainer's call (NARROWED 2026-07-30)
 
 `ForceWinRoll` rolls and nothing checks the outcome. A raider not running KART can out-roll the
 lootmaster; the council still awards, and `Trade.AddPendingTrade` records an obligation for an item
@@ -1814,7 +1814,19 @@ reminder away from an item the lootmaster really is holding, turning a rare miss
 A false positive costs a glance in the bags; a false negative is exactly the state before this
 existed. Nothing about the distribution is decided from here.
 
-**Still to do in the game, and it cannot be done anywhere else:** confirm the event fires for group
+**Priority, settled by the maintainer on 2026-08-02: irrelevant in an organised guild structure.**
+Every route to this failure needs somebody in the raid answering Blizzard's roll window by hand —
+Auto-Pass switched off, the Loot Council module switched off, or an `LC_START` lost to the chat
+throttle. KART is mandatory for this guild, and a member who breaks that on a raid night does not
+stay in the guild. The technical routes are known and are not the point: the social rule is the
+enforcement, and it is stronger than the code could be.
+
+The detection is kept because it is already written and costs nothing — it prints one line and
+changes no state, so it is inert when it never matches. What it does NOT justify is further work:
+do not build roll-outcome handling out into anything larger, and do not raise this entry as an open
+risk again.
+
+**Still to do in the game if this is ever exercised, and it cannot be done anywhere else:** confirm the event fires for group
 loot in 12.1, that `lootListID` is stable across the updates of one drop, and that the item hyperlink
 matches the one `GetLootRollItemLink` gave us for the same item. The harness can only prove the
 addon's own reasoning about the answer; it invents the answer itself.
