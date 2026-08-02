@@ -182,3 +182,23 @@ do
     T.truthy(not corvin.KART.LC.rollAnnounced[57], "and clearing the roll forgets that")
     T.truthy(not corvin.KART.LC.rollSeenHere[57], "along with having seen it locally")
 end
+
+-- Auto-Pass switched OFF is a raider who answers the window themselves ------------------------------
+-- The setting is the first half of that branch, and nothing held it: with it off, a below-threshold
+-- item must be left alone for this raider exactly like any other. Passing on their behalf when they
+-- asked not to is the same damage the whole file is about, reached from the other side -- the item
+-- goes to whoever did not pass, and the raider never saw a choice.
+do
+    local sim = NewRaid()
+    for _, name in ipairs(AUTOPASSERS) do
+        sim.byName[name].env.KART_Settings.lcAutoPass = false
+    end
+    Drop(sim, 58, F.RARE)
+
+    for _, name in ipairs(AUTOPASSERS) do
+        T.is_nil(PassedBy(sim, 58, name), name .. " does not pass with Auto-Pass switched off")
+    end
+    for _, name in ipairs(AUTOPASSERS) do
+        sim.byName[name].env.KART_Settings.lcAutoPass = true
+    end
+end

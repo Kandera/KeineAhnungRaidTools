@@ -151,3 +151,16 @@ do
     T.truthy(Drop(lm, 2006, 1):find("Fremder", 1, true),
         "an item already owed to somebody is still recognised after the roll state is gone")
 end
+
+do
+    -- The API guard, which is the whole safety net under a call taken from annotations one minor
+    -- version behind the live client. C_LootHistory existing does not mean this function does: a
+    -- rename leaves the table in place and the member gone, and calling it then throws inside an
+    -- event handler. Both halves have to be checked, not just the table.
+    local _, lm = F.NewRaid()
+    local real = _G.C_LootHistory
+    _G.C_LootHistory = {}                     -- table there, function renamed away
+    local ok = pcall(function() Drop(lm, 2007, 1) end)
+    _G.C_LootHistory = real
+    T.truthy(ok, "a client whose loot-history API moved does not throw on every drop")
+end
