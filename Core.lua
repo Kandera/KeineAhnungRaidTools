@@ -23,7 +23,13 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("CHALLENGE_MODE_START")
 frame:RegisterEvent("START_LOOT_ROLL")
 -- The outcome of a group-loot roll, which is the only way to notice the lootmaster lost one (B60).
-frame:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")
+--
+-- pcall'd, and this one is not defensive habit. RegisterEvent THROWS on a name the client does not
+-- know, and this name was taken from generated API annotations for 12.0.1 while the live client is
+-- 12.1. Unprotected, a rename would abort Core.lua at load and take the whole addon with it -- every
+-- core function in docs/MANIFEST.md, for a warning that only ever prints a line. The cost of being
+-- wrong has to be "this one feature is silent", never "KART does not load".
+pcall(frame.RegisterEvent, frame, "LOOT_HISTORY_UPDATE_DROP")
 frame:RegisterEvent("TRADE_SHOW")
 frame:RegisterEvent("TRADE_CLOSED")
 frame:RegisterEvent("TRADE_ACCEPT_UPDATE")

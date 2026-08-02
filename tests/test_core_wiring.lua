@@ -77,6 +77,12 @@ end
 -- handler is tested directly in tests/test_lc_lostroll.lua, so a wrong event name or a dropped
 -- registration leaves every one of those assertions green while the lootmaster is never told in the
 -- game. That is precisely the shape this file exists for.
-Wired('frame:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")', "the roll outcome event is registered")
+-- Registered through pcall on purpose: RegisterEvent throws on a name the client does not know, and
+-- this one comes from annotations a minor version behind the live client. Unprotected, a rename
+-- aborts Core.lua at load and takes every core function in docs/MANIFEST.md with it, for the sake of
+-- a warning that only prints. Asserted in that exact form so the protection cannot be dropped while
+-- the registration stays.
+Wired('pcall(frame.RegisterEvent, frame, "LOOT_HISTORY_UPDATE_DROP")',
+    "the roll outcome event is registered, and registered safely")
 Wired('elseif event == "LOOT_HISTORY_UPDATE_DROP" then', "and routed in the event handler")
 Wired("KART.LC.HandleLootHistoryDrop(arg1, arg2)", "with both ids, which the lookup needs")
