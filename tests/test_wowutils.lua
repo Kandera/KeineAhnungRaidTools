@@ -100,13 +100,68 @@ do
     T.eq(#WU.bosses, 0, "none of which leaves anything behind")
 end
 
+do
+    -- A boss block whose invite list is blank. The export pattern still matches it -- the list is
+    -- whitespace, not absent -- so the only thing keeping it out of the list is the player count.
+    --
+    -- What it would cost is not a stray row: PlanRemoval builds its keep-set FROM boss.players, so a
+    -- boss with none keeps nobody, and "Remove" on that row asks to throw the entire raid out.
+    T.eq(Import("EncounterID:3134;Difficulty:Heroic;Name:Plexus Sentinel\ninvitelist:   ;"), 0,
+        "a boss block with a blank invite list parses to nothing")
+    T.eq(#WU.bosses, 0, "and leaves no roster that would keep nobody")
+end
+
+do
+    -- The retroactive "A" has to land on the entry it is about, and the list is not sorted: the same
+    -- boss on two difficulties is ordinary (the Normal clear before the Heroic one), and either can
+    -- be pasted first. Import order here is Normal, Heroic, Heroic -- so the entry the third import
+    -- makes a pair with is the SECOND one in the list, not the first one that shares its boss.
+    Import("EncounterID:3134;Difficulty:Normal;Name:Plexus Sentinel\ninvitelist:Sinja;")
+    WU.ParseImport(EXPORT)
+    WU.ParseImport("EncounterID:3134;Difficulty:Heroic;Name:Plexus Sentinel\ninvitelist:Corvin;")
+    T.eq(WU.bosses[1].name, "Plexus Sentinel", "the normal roster is not part of the pair and keeps its plain name")
+    T.eq(WU.bosses[2].name, "Plexus Sentinel A", "the first heroic one is the one relabelled")
+    T.eq(WU.bosses[3].name, "Plexus Sentinel B", "and the new one takes the next letter")
+end
+
 -- Inviting -----------------------------------------------------------------------------------------
+local function Capture(fn)
+    local lines, realPrint = {}, _G.print
+    _G.print = function(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        lines[#lines + 1] = table.concat(parts, " ")
+    end
+    local ok, err = pcall(fn)
+    _G.print = realPrint
+    if not ok then error(err, 0) end
+    return table.concat(lines, "\n")
+end
+
 do
     Raid({ { name = "Wuusch", guid = "Player-1-B" } })
     Import(EXPORT)
     WU.InviteBoss(1)
     T.eq(#KARTTEST.invited, 1, "only the people not already here are invited")
     T.eq(KARTTEST.invited[1], "Narrath", "and it is the one who is missing")
+end
+
+do
+    -- What the raid leader is told afterwards. The "already in the raid" half is a footnote to a
+    -- count that would otherwise look wrong -- "invited 1" off a roster of three -- so it belongs on
+    -- the line only when it explains something. Reported at zero it is noise on the one message the
+    -- leader reads to check the invite did what they meant.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    Import("EncounterID:3134;Difficulty:Heroic;Name:Plexus Sentinel\ninvitelist:Narrath Sinja;")
+    local out = Capture(function() WU.InviteBoss(1) end)
+    T.eq(#KARTTEST.invited, 2, "both missing raiders are invited")
+    T.truthy(not out:find("already in", 1, true),
+        "and with nobody skipped the message does not mention anybody being here already")
+
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    Import(EXPORT)  -- Kandera and Wuusch are both here
+    out = Capture(function() WU.InviteBoss(1) end)
+    T.truthy(out:find("already in", 1, true), "while a skipped raider is still accounted for")
 end
 
 do
@@ -245,6 +300,34 @@ do
     T.eq(#KARTTEST.uninvited, 0, "and removes nothing")
 end
 
+do
+    -- A cross-realm raider against a roster written without realms, which is how the export usually
+    -- reads for a guild raid: the list says "Narrath", the raider is "Narrath-Anderswo".
+    --
+    -- Their full "Name-Realm" is genuinely not on the list; their short name is. Both have to miss
+    -- before anybody is thrown out -- ONE of them matching is the whole point of keeping two forms in
+    -- the keep-set. A raider who is on the roster being asked about by the kick dialog is a raider
+    -- who gets kicked, because the person clicking has no reason to doubt the list.
+    Raid({ { name = "Wuusch",  guid = "Player-1-B" },
+           { name = "Narrath", guid = "Player-1-C", realm = "Anderswo" } })
+    Import(EXPORT)  -- Kandera, Wuusch, Narrath -- all three are here
+    WU.RemoveForBoss(1)
+    T.eq(#KARTTEST.popups, 0, "a raider listed by short name alone is not up for removal")
+    T.eq(#KARTTEST.uninvited, 0, "and nobody is removed")
+end
+
+do
+    -- The confirmation carries its target list in the dialog's own data table. Answering yes to a
+    -- dialog that arrived without one must do nothing -- the alternative is walking a nil list, which
+    -- throws inside a StaticPopup handler and takes the rest of the OnAccept with it.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    local def = StaticPopupDialogs["KART_WU_REMOVE_CONFIRM"]
+    local ok = pcall(def.OnAccept, nil, {})
+    T.truthy(ok, "answering a removal dialog with no target list does not throw")
+    T.eq(#KARTTEST.uninvited, 0, "and removes nobody")
+    T.truthy(pcall(def.OnAccept, nil, nil), "and neither does one with no data at all")
+end
+
 KARTTEST.activeUnit = nil
 
 -- The Import button ---------------------------------------------------------------------------------
@@ -325,4 +408,40 @@ do
     ClickImport("EncounterID:3135;Difficulty:Heroic;Name:Loomithar\ninvitelist:Sinja;")
     T.eq(WU.bosses[1].name, "Plexus Sentinel", "with the module off, Import leaves the list untouched")
     env.KART_Settings.wuModuleEnabled = true
+end
+
+do
+    -- Text that parsed to nothing must not become the remembered text. What is remembered is the
+    -- text the CURRENT list was built from, and a failed paste built nothing -- recording it would
+    -- leave the addon believing the roster on screen came from a paste that produced no roster.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport(EXPORT)
+    T.eq(WU.lastImportedText, EXPORT, "a successful import is what gets remembered")
+    ClickImport("this is not an export at all")
+    T.eq(WU.lastImportedText, EXPORT, "and a paste that parsed to nothing does not take its place")
+end
+
+-- The boss rows ---------------------------------------------------------------------------------
+do
+    -- Alternating row shading, which is what makes a list of eight rosters readable at a glance
+    -- rather than one grey block. Every row taking the same value is the failure to watch for --
+    -- it looks deliberate, so nobody reports it.
+    WU.bosses, WU.lastImportedText = {}, nil
+    ClickImport("EncounterID:3134;Difficulty:Heroic;Name:Plexus Sentinel\ninvitelist:Kandera;"
+        .. "\nEncounterID:3135;Difficulty:Heroic;Name:Loomithar\ninvitelist:Sinja;"
+        .. "\nEncounterID:3136;Difficulty:Heroic;Name:Soulbinder\ninvitelist:Merrit;")
+    T.eq(#WU.bosses, 3, "three rosters are listed")
+
+    local rows = WU.bossListFrame and WU.bossListFrame.rows
+    T.truthy(rows and rows[1] and rows[2] and rows[3], "and each has a row")
+    local _, _, _, a1 = rows[1]:GetBackdropColor()
+    local _, _, _, a2 = rows[2]:GetBackdropColor()
+    local _, _, _, a3 = rows[3]:GetBackdropColor()
+    -- Both halves of the alternation have to be an OPACITY. "Different from its neighbour" is not
+    -- enough on its own: a boolean is different from 0.15 and is not a shade, and the game draws it
+    -- as fully opaque black rather than refusing it.
+    T.eq(type(a1), "number", "a row's shading is an opacity")
+    T.eq(type(a2), "number", "and so is its neighbour's")
+    T.truthy(a1 ~= a2, "neighbouring rows are shaded differently")
+    T.eq(a1, a3, "and the shading alternates rather than drifting")
 end
