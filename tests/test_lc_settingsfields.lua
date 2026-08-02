@@ -208,3 +208,46 @@ do
     T.truthy(not (Text(LC.CouncilMembersEditBox) or ""):find(":", 1, true),
         "a colon typed into a synced field is stripped at input")
 end
+
+-- The colour on the role line ---------------------------------------------------------------------
+do
+    -- Green for "your settings apply", amber for "somebody else's do". The wording carries the same
+    -- meaning, so the colour is only a second channel -- but all three components have to be
+    -- components: a boolean where the red one belongs is drawn as fully saturated, which turns the
+    -- reassuring green into something that reads as an alarm.
+    local _, lm = F.NewRaid()
+    local LC = WithPanel(lm)
+    RaidSim.As(lm, function() lm.KART.LC.UpdateRoleStatusLabel() end)
+    local r, g, b = LC.RoleStatusLabel:GetTextColor()
+    T.eq(type(r), "number", "the role line's colour has a red component")
+    T.eq(type(g), "number", "a green one")
+    T.eq(type(b), "number", "and a blue one")
+    T.truthy(g > r and g > b, "and the owner's line is green")
+end
+
+-- The "not resolved yet" counter -------------------------------------------------------------------
+do
+    -- It counts council entries that are still a typed name rather than a resolved player. A raid
+    -- whose council is fully resolved has nothing to report -- and "0 names not resolved yet" under
+    -- a box that is working correctly is the exact line B20 was about.
+    local _, lm = F.NewRaid()
+    local LC = WithPanel(lm)
+    -- Driven through LC.RetryPendingResolutions, which is what the label is actually hooked to --
+    -- the retry sweep is the only thing that can change the answer while the box is open.
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcCouncilMembers = "Nieerreichbar;Auchnicht"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.RetryPendingResolutions()
+    end)
+    T.truthy(LC.CouncilPendingLabel, "the pending counter exists")
+    T.truthy(LC.CouncilPendingLabel:IsShown(),
+        "and says so while a council entry is still a typed name rather than a resolved player")
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcCouncilMembers = "Bramor"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.RetryPendingResolutions()
+    end)
+    T.truthy(not LC.CouncilPendingLabel:IsShown(),
+        "and stays out of the way once every council entry is a resolved player")
+end
