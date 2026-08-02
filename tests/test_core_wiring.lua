@@ -71,3 +71,12 @@ do
             "no command shows " .. frame .. " without rebuilding it first")
     end
 end
+
+-- The lootmaster losing Blizzard's roll (B60) -------------------------------------------------------
+-- The whole feature is one event away from doing nothing at all, and nothing else would say so: the
+-- handler is tested directly in tests/test_lc_lostroll.lua, so a wrong event name or a dropped
+-- registration leaves every one of those assertions green while the lootmaster is never told in the
+-- game. That is precisely the shape this file exists for.
+Wired('frame:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")', "the roll outcome event is registered")
+Wired('elseif event == "LOOT_HISTORY_UPDATE_DROP" then', "and routed in the event handler")
+Wired("KART.LC.HandleLootHistoryDrop(arg1, arg2)", "with both ids, which the lookup needs")

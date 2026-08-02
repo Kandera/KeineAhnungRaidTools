@@ -785,5 +785,17 @@ do
     -- Nobody else in this block has a reason to ask.
     T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1,
         "four unauthorised awards in a row produce one catch-up request, not four")
+
+    -- The far end of the cooldown. A minute after the last request is a new one -- a distribution
+    -- runs far longer than that, and a client still unable to authorise anything an hour in has
+    -- been missing awards the whole time.
+    KARTTEST.AdvanceTime(60)
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 110, F.GLOVES)
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(110, sim.byName.Sinja.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(10)
+    T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1, "and a minute later it asks again")
     T.truthy(lm ~= nil)
 end

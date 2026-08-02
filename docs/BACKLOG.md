@@ -765,6 +765,36 @@ survives for that reason -- not because a test is missing. Worth writing down as
 alongside "real gap" and "equivalent mutant": a survivor can also be marking defensive code that
 nothing can reach, and chasing it is time spent on an assertion that could never fail.
 
+## B116 — OPEN 2026-08-02 — LootCouncilTrade.lua has never been swept, and Core.lua cannot be
+
+The nineteenth bug run, over the files today's B60 and B66 work touched. Two things came out of it
+that are not about those fixes.
+
+**Core.lua reports zero executed lines.** The harness does not load it — it needs the game to exist —
+so every line of event routing in that file is invisible to the suite AND to the mutation sweep. The
+answer is not to load it: it is `tests/test_core_wiring.lua`, which asserts the exact registrations
+and calls against the source text. B60's own wiring went in without that check and had to be added
+afterwards, which is the second time this file has caught a feature that was one event name away from
+doing nothing while its own tests stayed green. **Anything new in Core.lua wants a line there in the
+same commit.**
+
+**LootCouncilTrade.lua has 31 mutable executed lines and 17 survivors**, and it has never been part of
+a sweep — B107 and B112 covered other modules, B115 covered five more. Not chased here, because that
+is a bug run of its own and this one was scoped to today's changes. Three of the seventeen are worth
+starting with:
+
+* `:857` — `confirmedByBags = LC.IsRealItemLink(entry.itemLink) and not FindItemInBags(entry.itemLink)`.
+  This is the exact "not in my bags" reasoning B60 is about, and nothing holds the `and`.
+* `:1023` — `incomingWins = winnerKey < held`, the tie-break between two council members awarding the
+  same item in the same moment. B35 is the entry that made this a real case.
+* `:1028` / `:1029` — which of the two awards is kept afterwards.
+
+Two survivors are in code written today and both are recorded rather than chased:
+`LootCouncilTrade:954` is `KART.LH or KART.LH.NoteUnauthorisedAward`, which cannot differ because
+`KART.LH` is always truthy by the time that line runs — the same equivalent-in-effect shape as
+`:982` and `:1251` in B115. `LootHistory:1021`'s cooldown boundary IS now held: a request exactly a
+minute after the last one is allowed, because a distribution runs far longer than that.
+
 ## B115 — NO DEFECT 2026-08-02 — the eighteenth bug run found no bug, and three lies in the harness
 
 The same mutation sweep as B107 and B112, over the same five modules, after the tests those runs
