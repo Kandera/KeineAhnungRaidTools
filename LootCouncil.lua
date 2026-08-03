@@ -2854,6 +2854,12 @@ LC.rollsFor = LC.rollsFor or {}
 local function RollForSelf(rollID)
     if not LC.GetRollsEnabled() then return end
     local myKey  = (KASC.Identity.ResolvePlayer("player"))
+    -- Once per client per roll, whichever path gets here first (B121). Both roll-start paths call
+    -- this now, and on a client that gets Blizzard's own roll AND the owner's announcement they both
+    -- run -- a second draw would replace a number the raid has already been shown, which is the one
+    -- thing a tie-breaker must never do. PurgeStaleRoll has already emptied this table when the
+    -- rollID belongs to a different item, so a reused id is not caught by this guard.
+    if LC.rolls[rollID] and LC.rolls[rollID][myKey] then return end
     local myRoll = math.random(1, 100)
     local link   = LC.rollItems[rollID]
     local itemID = (type(link) == "string" and link:match("item:(%d+)")) or ""
@@ -3414,6 +3420,13 @@ function LC.HandleStart(payload, senderKey)
     -- released, out of range -- has nothing to pass and AutoPassAnnounced returns without acting.
     LC.rollAnnounced[rollID] = true
     AutoPassAnnounced(rollID)
+
+    -- Our own 1-100 roll, for the clients this handler exists for (B121). LC.OnStartLootRoll was the
+    -- only place that rolled, and it never runs for somebody dead, released, out of range or
+    -- ineligible -- so exactly the people who most need the council to see them as candidates were
+    -- the ones with no number in the column, permanently. RollForSelf refuses to draw twice for the
+    -- same roll, which is what makes it safe to call from both paths.
+    RollForSelf(rollID)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

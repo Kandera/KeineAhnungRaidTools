@@ -2472,7 +2472,25 @@ lines, proves or kills this entry, and is the same hook a send queue would need 
 
 Fix: cooldown and jitter on the `KA_HELLO` answer, and a re-request that is not tied to a channel change.
 
-## B121 — OPEN 2026-08-03 — a client with no roll of its own never rolls, and its row stays empty all evening
+## B121 — FIXED 2026-08-03 — a client with no roll of its own never rolls, and its row stays empty all evening
+
+**Fixed the same evening.** `LC.HandleStart` now casts this client's own roll too, so the path that
+exists specifically for clients Blizzard gave no roll to finally produces one. `RollForSelf` refuses to
+draw twice for the same roll, which is what makes it safe to call from both start paths — on a client
+that gets Blizzard's event AND the owner's announcement they both run, and a second draw would replace
+a number the raid has already been shown, on the screen that decides who gets the item.
+
+The raid-wide rolls setting still gates it (`LC.GetRollsEnabled`): the new call site must not become a
+way around a raid that has the feature off.
+
+Held by `tests/test_lc_rolls.lua`, which asserts the absent raider's number reaches every client and
+that all of them agree on it — two council members scoring a tie-break differently is the failure this
+is really about.
+
+**Not addressed here:** `LC.OnStartLootRoll` still returns early while `LC.sessionActive` is false, so
+a client whose session flag is out of step is silent on its own event. It now rolls from the
+announcement instead, which covers the case in practice, but the session flag going out of step is
+B118's territory and not a roll problem.
 
 Report #3, reported twice now ("Rolls werden **wieder** nicht für jeden Char angezeigt").
 

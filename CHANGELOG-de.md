@@ -10,6 +10,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Items zeigen jetzt bei allen das echte Itemlevel und die echten Werte** — auch bei Raidern, die kein eigenes Würfelfenster von Blizzard bekommen haben.
 - **Raider werden nicht mehr den ganzen Abend als „Kein KART erkannt" angezeigt** — die Versionsabfrage repariert sich jetzt selbst.
+- **Der Wurf jedes Raiders erreicht das Council** — auch der von Leuten ohne eigenes Würfelfenster von Blizzard.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
