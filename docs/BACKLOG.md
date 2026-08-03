@@ -8,6 +8,9 @@ Companion to `MANIFEST.md` (the core functions and the 10-out-of-10 standard the
 records findings that *should* change, eventually. An entry is deleted once it is fixed — the code
 and its comments carry the diagnosis from then on, and `git log --grep=Bnn` finds the commit.
 
+Client-version work lives in `BACKLOG-12.1.md` instead: what the 12.1 client changes underneath KART,
+numbered `Pn`, held until the last 12.0.7 raid is over.
+
 **2026-07-27:** B1 (shift-clicked items) and B5 (small close button) were fixed and removed.
 
 **2026-07-28:** B2 (the font setting not reaching some widgets) was removed. Its Loot Council and
@@ -2307,3 +2310,219 @@ Note for anyone re-deriving this: the guard looks inert in a hand-built scenario
 member relays the raid's config the instant it is asked and heals the leader before it can do damage.
 It is load-bearing only when the config is slow or lost, which is why its test forces that ordering
 by blackholing `LC_CONFIG_RELAY`. Removing the guard turns four assertions red.
+
+---
+
+# The live raid test, 2026-08-03
+
+The first full evening on 3.3.0 with the whole guild, run against `MANIFEST.md`. Fifteen reports from
+the raid plus GitHub issues #18–#25 reduce to the nine entries below — every report is mapped in a
+heading, so nothing is filed twice under two names.
+
+**Two Manifest items failed outright: C5 and C11.** The run is recorded in `MANIFEST.md`'s standing
+result table, with what it did and did not reach.
+
+Where a cause was traced to the line, it says so. Where it is still a hypothesis, it says that too and
+names the measurement that would settle it — the evening ended before the send probe could be run, and
+guessing past that point is how B70 cost three attempts.
+
+## B118 — OPEN 2026-08-03 — a lost addon message costs the item, and nothing in a running session notices
+
+Reports #1, #7, #11, #13, #15; GitHub #18, #19, #21, #25. The most expensive defect of the evening, and
+the reason four different symptoms looked like four different bugs.
+
+**Four measurements, three different messages, three different clients:**
+
+| lost | what was seen | what it proves |
+|---|---|---|
+| `LC_END_ROUND` | a council member's `/kart status` listing tabs `1,2,3,4,5,6,7` — the same items three times over, after three `/kart add` rounds with End Round pressed between them | his client never cleared. `LC.EndRound` sends once and clears itself locally; there is no acknowledgement and no second attempt |
+| `LC_START` ×3 | KART's own `LC_ROLL_UNANNOUNCED` printed three times in one second on a raider's screen | that line only prints when `LC.rollAnnounced[rollID]` is still false `ANNOUNCE_WAIT` (45s) after this client's OWN roll started, with the roll still live |
+| `LC_START` ×1 | a raider had no vote card for *Endless March Waistwrap* while other raiders did; Blizzard's window stayed up, and Auto-Pass had passed the same boss's other three items for him | the message reached the raid and not him. Also rules out the min-quality branch (`LootCouncil.lua:3052`), which would have passed it silently instead |
+| `LC_VOTE` ×4 | four raiders confirmed, asked directly, that they pressed a button; the council panel showed `-` for all four | their clients recorded the vote locally and told them "Voted: …". Nothing on either screen said it had not gone out |
+
+**Which side loses it.** The loot owner's own card is built locally (`LootCouncil.lua:3117-3122`), never
+from the wire, so the lootmaster seeing an item proves nothing about delivery — that was checked, and
+briefly mis-scored during the evening. It was settled by asking the raid: **other raiders did have the
+belt's card.** So the send succeeded and one recipient lost it. A sender-side throttle cannot explain
+that case, whatever it may explain about B120.
+
+**Three ways a receiver drops it, all silent:**
+
+* the dispatcher's group gate, `KAUtil.IsFullNameInGroup(sender)` (`KASC-1.0.lua:300`) — a roster that
+  is briefly stale discards the real sender's message;
+* `LC.IsSenderLootOwner` (`LootCouncil.lua:707-722`) — a lootmaster key that has not resolved yet
+  refuses everything. The affected client printed `Council: 2 resolved, 3 not yet matched` in the same
+  status (see B126);
+* Blizzard simply not delivering to a client on a loading screen or zoning — which the operating
+  reality in `MANIFEST.md` guarantees will happen every evening.
+
+All three end in a bare `return`. Nothing anywhere counts them, so from outside they are
+indistinguishable, and the first fix is therefore not a fix.
+
+**The shape of the fix, in order:**
+
+1. **Count the drops and print them in `/kart status`** — per gate, per session. No behaviour change.
+   One raid then says which of the three it is, instead of another evening of inference.
+2. **Recovery must not hang on `LC_STATE_REQ`.** `LC_ROLL_CATCHUP` already exists and already solves
+   this (B66) — it is only ever triggered by a client that joins or reloads. A client that stays put
+   and misses a message has no way back to the item at all. A periodic "what is on the table?" while a
+   session is active covers every cause above without needing to know which one it was.
+3. **End Round needs the same treatment from the other end**: a round/generation number carried on the
+   messages that follow, so a client that missed the end learns it from the next message it does get
+   rather than never.
+
+Note for whoever builds (2): a manually added item cannot prove entitlement the way a real drop can —
+`HandleRollCatchup` asks Blizzard for the roll, and `/kart add` items have no Blizzard roll. B79 records
+that problem and the rule decision it needs; this entry does not re-open it.
+
+## B119 — OPEN 2026-08-03 — items arrive without their bonus IDs, so half the raid votes on a different item
+
+Report #12; GitHub #20, #22, #23. Measured from a screenshot: the vote window's tooltip read
+*Light's March Bracers, **Item Level 44**, Item ID 249326* next to an equipped 285 — the base version of
+the item, with base stats and base item level.
+
+`LC_START` carries `rollID:seconds:itemID` and nothing else (`LootCouncil.lua:3101`). Every client that
+does not get its own `START_LOOT_ROLL` rebuilds the link from that bare ID (`LootCouncil.lua:3341`, and
+the same fallback again in `ResolveRollItemLink`, `LootCouncil.lua:2702`). An itemID alone carries
+neither bonus IDs nor upgrade level, so those clients render a different item than the one on the floor.
+
+Three consequences, all reported separately during the evening:
+
+* the tooltip and the ilvl column state a level nobody in the raid is looking at;
+* the Droptimizer gain column stays empty — that lookup is bonus-ID exact (`KAUtil.GetItemString`), and
+  a base link never matches a sim entry;
+* a set token "is not shown, or another item replaces it" (GitHub #22), the same defect on the item
+  class where it is most visible. That one also touches **C12**.
+
+**The constraint on the fix, and it is the whole difficulty:** the itemID fallback exists because of
+GitHub #12, #13 and #16 — items rendering as `???` with no name and no icon, reported by three people
+out of one raid. The comment at `LootCouncil.lua:3329-3342` names those issues. A fix that carries bonus
+IDs must keep the name-and-icon behaviour, or it trades this defect back for the older one.
+
+The manual path is the working precedent: send the full link, fall back to the compact item string only
+when the 255-byte cap would be hit (`LootCouncil.lua:3458-3465`) — and `KAUtil.GetItemString` keeps the
+bonus list, so even that fallback is bonus-exact.
+
+## B120 — OPEN 2026-08-03 — the handshake is announced once, in the noisiest minute of the evening
+
+Reports #8 and #9, which are one marker and not two: the red `!` on a council row IS the
+`LC_STATUS_NO_KART` warning (`LootCouncilPanel.lua:1062-1063`).
+
+Every council panel in the raid showed `NO KART DETECTED` on nearly every row while the whole raid was
+demonstrably running 3.3.0 (`/kart status`: *Raiders below KART 3.3.0: 0*). **One `/kart v` cleared it
+raid-wide**, and it stayed clear — measured during the evening. So reception, parsing and rendering are
+sound; the data had simply never arrived.
+
+`KA_HELLO` is the only token in `KASC` with **no answer cooldown and no jitter**
+(`KASC-1.0.lua:488-494`). The four tokens that do have one carry the reasoning in a comment right above
+them (`KASC-1.0.lua:338-346`): one request answered by twenty clients in the same instant overruns
+Blizzard's rate limiter, which drops the overflow silently, and nothing retries. KART asks exactly once
+per channel change (`Core.lua:330-341`) — i.e. during raid formation, when every other client is doing
+the same thing.
+
+**Unmeasured, and cheap to measure:** whether the drop is the throttle. `C_ChatInfo.SendAddonMessage`
+returns `Enum.SendAddonMessageResult` (12.0.1 annotations; `AddonMessageThrottle = 3`,
+`ChannelThrottle = 8`) and `KASC:Send` throws it away (`KASC-1.0.lua:40-42`). Reading it costs three
+lines, proves or kills this entry, and is the same hook a send queue would need anyway.
+
+Fix: cooldown and jitter on the `KA_HELLO` answer, and a re-request that is not tied to a channel change.
+
+## B121 — OPEN 2026-08-03 — a client with no roll of its own never rolls, and its row stays empty all evening
+
+Report #3, reported twice now ("Rolls werden **wieder** nicht für jeden Char angezeigt").
+
+`RollForSelf` is called from `LC.OnStartLootRoll` (`LootCouncil.lua:3111`) and from
+`LC.HandleManualStart`. It is NOT called from `LC.HandleStart` — the handler that exists precisely for
+clients Blizzard gave no roll to (dead, released, out of range, ineligible), as its own comment says
+(`LootCouncil.lua:3329-3335`). `OnStartLootRoll` additionally returns early while `LC.sessionActive` is
+false (`:2968`), so a client whose session flag is out of step is silent too.
+
+Those raiders are then permanently absent from the tie-breaker the council reads, with no way to tell a
+missing number from a low one. Note the interaction with B118: a lost `LC_START` produces the same empty
+column, so the two are told apart by WHICH raiders are affected, not by the symptom.
+
+The Manifest gains an item for this — see C13.
+
+## B122 — OPEN 2026-08-03 — the second item into a trade window is a race, and the harness always lets it win
+
+Reports #5 and #10. Seen failing early in the evening (two items won, one placed) and succeeding later
+the same evening with the same shape — which is the finding: it is timing, not logic.
+
+`Trade.OnTradeShow` looks for a free slot with `GetTradePlayerItemLink(i)` immediately after the previous
+iteration's `ClickTradeButton` (`LootCouncilTrade.lua:785-793`). The real client only fills that slot
+once the server answers, so on a slow answer the second item resolves to slot 1 again and swaps the
+first back out. `tests/test_lc_tradefill.lua` states the assumption in its own header — *"The harness
+fills a trade slot the INSTANT ClickTradeButton is called"* — so the suite can never see this.
+
+The follow-on is report #10: an item that never entered the window is never in
+`LC.tradeWindowItemStrings`, so `Trade.OnTradeClosed` cannot tick it off, and the lootmaster's list keeps
+an obligation that was already handed over — or drops one that was not.
+
+Fix: count the slots this function has placed into itself rather than asking the client, exactly the way
+`usedSlots` already tracks bag slots two lines above. The harness change is to stop answering instantly,
+not to add another assertion against the current behaviour.
+
+## B123 — OPEN 2026-08-03 — the council panel reopens itself on every roster change
+
+Report #6: a council member votes on everything, closes the panel, and it is back immediately.
+
+The config owner re-broadcasts on every roster change — deliberately, and the comment says so
+(`LootCouncil.lua:912`). The receive path accepts it unconditionally, with no "this is the config I
+already hold" short-circuit, and ends in `LC.OnConfigAccepted` → `LC.CatchUpCouncilPanel` →
+`Council.ShowCouncilPanel` → `panel:Show()` (`LootCouncil.lua:1344-1350`, `:1399-1412`,
+`LootCouncilPanel.lua:297`).
+
+B61 is why that chain exists — a client whose config lands late IS council from that moment and needs the
+items already on the table. The defect is that it cannot tell that case from a config it has held for
+twenty minutes. In this guild's raids people port out and relog constantly (`MANIFEST.md`, operating
+reality), so the panel reopens over and over.
+
+Fix: catch up only when membership or the tracked set actually changed, and never re-show a panel the
+player closed while its tabs are unchanged.
+
+## B124 — OPEN 2026-08-03 — guild ranks are read from data nobody asked the client to load
+
+Report #4. The council panel reads `select(2, GetGuildInfo(unit))` per row
+(`LootCouncilPanel.lua:1082`, `:1117`) and renders `-` when that comes back nil.
+
+For units other than the player, that call answers only once the client holds guild data. KART never
+requests the roster and never listens for `GUILD_ROSTER_UPDATE` — not one occurrence of either in the
+tree, harness stub aside. So the column is filled only for people who happened to have their guild frame
+open, which is exactly the reported pattern: missing for the raid, present on some screenshots.
+
+Fix: request the roster once when the panel is first built, and refresh the rows on
+`GUILD_ROSTER_UPDATE`. Display only, no wire traffic.
+
+## B125 — OPEN 2026-08-03 — the owed-items window cannot be closed
+
+GitHub #24. `CreateReminderFrame` builds a title and rows and no close button at all
+(`LootCouncilTrade.lua:491-528`). The frame is in `UISpecialFrames`, so Escape closes it; nothing on
+screen says so, and the reporter's reading — "no x, probably because the items are never handed over" —
+is what any raider would conclude.
+
+It is also downstream of B122: while an obligation is never ticked off, the window has nothing to empty
+itself with, so the two read as one bug from the outside.
+
+Fix: the same close button every other KART window has (`KAUI.CLOSE_BUTTON_GLYPH_SIZE`), and a decision
+about what closing it means — "hide until the next change" or "stop reminding me this session". The
+reminder windows deliberately refuse to reopen themselves today
+(`Trade.RefreshTradeReminderIfShown`), so that answer has to be written down rather than assumed.
+
+## B126 — OPEN 2026-08-03 — identity resolution is never retried when NSRT finishes loading
+
+Report #2, and visible in the same `/kart status` as B118: **`Council: 2 resolved, 3 not yet matched`**.
+Reported as "a council member could only be resolved after opening and closing NSRT once".
+
+`Identity.GetNickname` reaches into NSRT's `NSAPI` global and returns nil while that addon has not set it
+up yet (`KASC-1.0.lua:99-108`). Nicknames are how this guild names people in the council and lootmaster
+fields, so a client that starts before NSRT is ready holds plain text where everyone else holds keys. The
+retry pass (`LC.RetryPendingResolutions`) is driven by `GROUP_ROSTER_UPDATE` and by nothing else —
+opening the NSRT window is not a roster change, so what actually healed it was whatever roster event
+happened to follow.
+
+Unresolved keys are not cosmetic: they are what `LC.IsSenderLootOwner`, `LC.IsSenderCouncil` and the
+vote/roll lookups compare against, so this feeds B118's second gate and leaves rows blank that are merely
+unmatched.
+
+Fix: retry on `ADDON_LOADED` for the optional dependency as well, and once more a few seconds after
+`PLAYER_ENTERING_WORLD` — both are moments a nickname source can appear without the roster moving.

@@ -12,6 +12,9 @@ failures the backlog records as having cost real raid evenings, and from the ope
 described below; the maintainer then widened C6 to name pets and housing items, and added C12. It
 counts as it stands. Changing an item is the maintainer's call, not a side effect of changing code.
 
+**Extended by the maintainer on 2026-08-03**, after the first live raid on 3.3.0: C13 (the rolls are
+complete) and C14 (nothing is lost quietly), both named from failures that evening.
+
 ## How to read this
 
 Ten out of ten means **in the game, with two clients, ten separate attempts** — not ten green test
@@ -23,9 +26,10 @@ parked in the raid is enough.
 
 ## The numbers are labels; this is the order
 
-C1 to C12 are names, not a running order -- "das bricht C7" has to mean the same thing next month, so
-they do not get renumbered when the sequence is understood better. The sequence is written here
-instead, and it is what `tests/test_manifest.lua` walks:
+C1 to C14 are names, not a running order -- "das bricht C7" has to mean the same thing next month, so
+they do not get renumbered when the sequence is understood better. New items are appended at the end
+of the numbering and slotted into the sequence below, which is why C13 and C14 sit at the first boss.
+The sequence is written here instead, and it is what `tests/test_manifest.lua` walks:
 
 | | | |
 |---|---|---|
@@ -33,6 +37,8 @@ instead, and it is what `tests/test_manifest.lua` walks:
 | | C2 | everybody on the raid's settings |
 | first boss | C4 | the item is force-won |
 | | C5 | everybody sees it, answers reach the council |
+| | C14 | and nothing is lost quietly on the way |
+| | C13 | the rolls are complete before anyone decides |
 | | C7 | the award converges, the holder owes it |
 | between bosses | C3 | somebody turns up mid-session |
 | | C6 | trash drops collectibles, BoEs, blues -- KART stays out |
@@ -172,6 +178,38 @@ the same item class and are told apart only by subclass. Getting that wrong once
 were skipped entirely and rolled on the normal way by nobody. Worth its own attempt precisely because
 C6 and C12 are two sides of one check: C6 must exclude, C12 must not.
 
+## C13 — The rolls are complete before anyone decides
+
+With rolls turned on, every raider in the council list carries a number by the time the council reads
+them. Include somebody Blizzard gave no roll window to at all — dead, released, out of range, or
+ineligible — and somebody who reloaded between the drop and the vote.
+
+An empty roll cell must mean "this person is not in this decision", never "their number did not make
+it". If a number is genuinely unknown, the panel has to say so rather than render the same dash a
+non-participant gets.
+
+*Protects:* the tie-breaker being scored on a partial set. The council cannot see that a column is
+incomplete — a missing 97 and a missing 3 look identical — so the whole value of the feature depends
+on the set being whole. Added 2026-08-03 after the live test, where the rolls were incomplete for a
+second time (B121, and B71 before it).
+
+## C14 — Nothing is lost quietly
+
+Run C5 again with the raid as it actually is: everybody answering within a few seconds of each other,
+and people porting out, zoning and relogging while it happens. Afterwards the council's tally equals
+the number of raiders who actually pressed something — ask them, do not read it off the same screen
+that might be wrong.
+
+And where something IS lost, some client says so. A raider whose answer never left, a council member
+whose panel never heard about an item, a client that missed End Round: each of those must be visible
+to somebody. A defect nobody can see is one that gets diagnosed for a whole evening.
+
+*Protects:* the failure this whole list exists for. On 2026-08-03 four raiders pressed a button and
+their votes never arrived, one raider never learned an item existed and lost it outright, and one
+council member kept three rounds of cards because End Round never reached him -- and every one of
+those clients was quietly certain it was fine (B118). This is deliberately not folded into C5: C5
+proves the path works, C14 proves it survives twenty-five people and a normal evening.
+
 ---
 
 ## What a failure means
@@ -198,9 +236,44 @@ measured. Do not let the raid test cost a fourth.
 | run | version | date | scope | result |
 |---|---|---|---|---|
 | three-man `/kart add` | 3.2.0 | 2026-07-31 | C1, C2, C5, C7, C11 | clean, no complaint |
-| _(a real raid)_ | | | | |
+| **guild raid, ~20 people** | **3.3.0** | **2026-08-03** | C1, C2, C4, C5, C7, C11, C12, C13, C14 | **C5, C11, C13 and C14 failed. C7 and C12 damaged.** See below |
 
-Fill this in. A Manifest with no recorded run is a list of intentions.
+A Manifest with no recorded run is a list of intentions. This one now has one, and it is not a pass.
+
+### The 2026-08-03 raid, item by item
+
+Fifteen reports from the raid and GitHub issues #18-#25, traced to nine defects in `BACKLOG.md`
+(B118-B126). What each item did:
+
+**Failed.**
+
+* **C5** -- one raider never learned an item existed (no card, no Auto-Pass, Blizzard's window left to
+  him alone) while other raiders had it; four raiders pressed a button and their votes never reached
+  the council. B118.
+* **C11** -- End Round did not end it for one council member, three rounds running. He finished the
+  evening with seven cards for three items. B118.
+* **C13** -- rolls missing for part of the list, for the second time. B121.
+* **C14** -- every one of the above happened silently. Nothing on any screen said a message had been
+  lost, which is why it took the whole evening to tell four symptoms apart. B118.
+
+**Damaged, not clean.**
+
+* **C7** -- the award converged, but the handover did not: a raider who won two items got one placed in
+  the trade window (B122), and one obligation was never ticked off. The "items you still need to
+  collect" window then could not be closed at all (B125).
+* **C12** -- a set token was announced and voted on, but shown as a different item, because items
+  travel without their bonus IDs (B119). The same defect put "Item Level 44" on a 285 item across the
+  raid.
+
+**Held, as far as this evening reached.** C1 and C2: every `/kart status` seen said the session was on
+and named the raid's own settings as in force. C4: the lootmaster held what he was supposed to hold.
+
+**Not reached at all.** C3, C6, C8, C9, C10 -- nobody joined mid-session, no collectible or BoE dropped
+where it was watched, nobody's reload was checked, the lootmaster did not walk out, lead did not move.
+
+**The procedure worked.** `/kart status` from the affected client is what turned "items are doubled"
+into a traced cause in one screenshot -- the tab list and `Council: 2 resolved, 3 not yet matched` were
+both in it. Keep asking for it; it saved an evening of guessing here.
 
 ### What the three-man run does and does not say
 

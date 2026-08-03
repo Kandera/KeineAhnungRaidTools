@@ -1,5 +1,11 @@
 -- The Manifest, walked end to end: docs/MANIFEST.md, C1 through C12.
 --
+-- C13 and C14 were added to the Manifest on 2026-08-03 and are NOT walked here yet. Both name
+-- failures from that raid that the harness cannot currently produce: C13 needs a client Blizzard gave
+-- no roll to (B121), C14 needs a message to go missing between two clients that both stay in the raid
+-- (B118). Each lands with the fix for its backlog entry, not before -- a test written against today's
+-- behaviour would assert the defect. Do not read the twelve below as full Manifest coverage.
+--
 -- Every one of these twelve is already covered somewhere in tests/ -- as a scenario built for the
 -- defect that produced it. This file is not that, and it is not a copy of it. It runs ONE raid
 -- through ONE session and takes the twelve in order, the way an evening actually goes: items drop
