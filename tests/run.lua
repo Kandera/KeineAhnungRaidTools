@@ -140,6 +140,7 @@ dofile("tests/test_lc_equipexchange.lua")
 dofile("tests/test_manifest.lua")
 dofile("tests/test_diagnostics.lua")
 dofile("tests/test_lc_itemwire.lua")
+dofile("tests/test_hello.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))

@@ -162,6 +162,13 @@ KASC.Dispatch("KA_HELLO_REQ", "RAID", "Ann-TarrenMill")
 -- consumer's version check prints a line only for clients that actually received its request
 -- (B10). It rides in the normal entry grammar on purpose: a 3.0.x client parses it into a
 -- peers.ACK nobody reads, where a new message token would have been invisible to it entirely.
+--
+-- Answered in this client's own slot inside a three-second window rather than in the instant the
+-- request lands: two dozen clients answering together is what Blizzard's rate limiter drops, and the
+-- raid then reads half its own members as not running KART (B120). tests/test_hello.lua asserts the
+-- spreading itself; here it only has to be waited out.
+T.eq(#KARTTEST.sent, 0, "a hello request is not answered in the instant it arrives")
+KARTTEST.AdvanceTime(3)
 T.eq(KARTTEST.sent[1].msg, "KA_HELLO:TESTADDON=9.9.9+CAP,TESTOFF=1.0.0,ACK=1",
     "a KA_HELLO_REQ is answered with the exact hello payload, in registration order, marked as a reply")
 T.eq(KARTTEST.sent[1].channel, "RAID", "a non-whisper request is answered on the same channel")
@@ -170,6 +177,7 @@ T.is_nil(KARTTEST.sent[1].target, "a non-whisper reply is not targeted at anyone
 -- A whispered request is answered back to the whisperer specifically, not broadcast.
 KARTTEST.ClearSent()
 KASC.Dispatch("KA_HELLO_REQ", "WHISPER", "Ann-TarrenMill")
+KARTTEST.AdvanceTime(3)
 T.eq(KARTTEST.sent[1].channel, "WHISPER", "a whispered request is answered by whisper")
 T.eq(KARTTEST.sent[1].target, "Ann-TarrenMill", "the whisper reply targets the requester")
 
@@ -202,7 +210,11 @@ KARTTEST.ClearSent()
 KASC:AnnounceHello()
 KASC:AnnounceHelloIfChanged()
 T.eq(#KARTTEST.sent, 1, "an unchanged handshake is not announced twice")
+-- Past the per-asker answer cooldown first (B120), or the reply below never goes out and the
+-- assertion would pass on an announce that never happened.
+KARTTEST.AdvanceTime(6)
 KARTTEST.ClearSent()
 KASC.Dispatch("KA_HELLO_REQ", "RAID", "Ann-TarrenMill")
+KARTTEST.AdvanceTime(3)
 KASC:AnnounceHelloIfChanged()
 T.eq(#KARTTEST.sent, 1, "answering a request does not make the next announce look changed")

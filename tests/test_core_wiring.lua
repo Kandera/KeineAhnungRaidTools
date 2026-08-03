@@ -86,3 +86,9 @@ Wired('pcall(frame.RegisterEvent, frame, "LOOT_HISTORY_UPDATE_DROP")',
     "the roll outcome event is registered, and registered safely")
 Wired('elseif event == "LOOT_HISTORY_UPDATE_DROP" then', "and routed in the event handler")
 Wired("KART.LC.HandleLootHistoryDrop(arg1, arg2)", "with both ids, which the lookup needs")
+
+-- Asking again for the handshakes that never arrived (B120) -----------------------------------------
+-- KART.RequestMissingHellos is tested directly in tests/test_sync.lua, and it is worth nothing at all
+-- unless something calls it. The roster event is the only hook that fires all evening, which is the
+-- point: the raid loses a handshake mid-evening, not only while forming.
+Wired("KART.RequestMissingHellosThrottled()", "the missing handshakes are asked for again")

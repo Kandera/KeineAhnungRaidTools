@@ -339,6 +339,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             else
                 KASC:AnnounceHelloIfChanged()
             end
+            -- ...and ask again for whatever never arrived. The announce above happens once per
+            -- channel change, in the middle of raid formation, and an answer lost to Blizzard's rate
+            -- limiter there stayed lost for the evening (B120). Self-limiting: it asks only about
+            -- peers with no version recorded, so it goes quiet as soon as the table is complete.
+            KART.RequestMissingHellosThrottled()
         else
             KART.announcedChannel = nil
         end

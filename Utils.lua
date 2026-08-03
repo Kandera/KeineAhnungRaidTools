@@ -1,6 +1,7 @@
 local addonName, KART = ...
 local KAGS = LibStub("KAGS-1.0")
 local KASC = LibStub("KASC-1.0")
+local KAUtil = LibStub("KAUtil-1.0")
 
 local KAUI = LibStub("KAUI-1.0")
 KART.UI = KAUI:NewNamespace("KART")
@@ -92,6 +93,62 @@ function KART.IsOlderVersion(ver, current)
     if a1 ~= b1 then return a1 < b1 end
     if a2 ~= b2 then return a2 < b2 end
     return a3 < b3
+end
+
+-- ==========================================================================
+--  B120: asking again for the handshakes that never arrived
+-- ==========================================================================
+--
+-- KART asks the raid to introduce itself exactly once, when the group channel changes (Core.lua's
+-- roster handler) -- which is during raid formation, the single noisiest minute of the evening. Every
+-- client is doing the same thing, every answer goes out in the same instant, and whatever Blizzard's
+-- rate limiter drops is gone for good: nothing asks again. The result is a council panel that marks
+-- half the raid as not running KART while they plainly are, all evening, until somebody types
+-- /kart v by hand -- which is exactly what happened on 2026-08-03 and exactly what cleared it.
+--
+-- So ask again, but only about the people we are actually missing, and only ever about them: once the
+-- table is complete this costs nothing at all, which is what makes it safe to hang on an event that
+-- fires all evening.
+local HELLO_WHISPER_MAX = 5
+
+-- Deliberately two shapes, because the two situations are not the same one:
+--   * a whole raid unknown -- formation, or our own reload -- is one broadcast. Whispering 24 people
+--     individually there would be the very burst this is trying to survive.
+--   * a handful unknown -- the ordinary mid-evening loss -- is a whisper each. Nobody else is asked
+--     to answer, and no other client has to hear about it.
+function KART.RequestMissingHellos()
+    if not IsInGroup() then return end
+    local missing = {}
+    for unit in KAUtil.EachGroupUnit() do
+        -- Never ourselves: we do not process our own broadcast, so PlayerVersions has no entry for us
+        -- by design and asking would produce one request per roster change, forever.
+        if not UnitIsUnit(unit, "player") then
+            local name, realm = UnitName(unit)
+            local short = name and name:match("([^%-]+)")
+            if short and not (KART.PlayerVersions and KART.PlayerVersions[short]) then
+                missing[#missing + 1] = (realm and realm ~= "") and (name .. "-" .. realm) or name
+            end
+        end
+    end
+    if #missing == 0 then return end
+    if #missing > HELLO_WHISPER_MAX then
+        KASC:RequestHello()
+        return
+    end
+    for _, full in ipairs(missing) do KASC:RequestHello("WHISPER", full) end
+end
+
+-- GROUP_ROSTER_UPDATE fires in bursts while a raid fills up, and the answer cannot change between two
+-- firings in the same second. Same leading-edge throttle as KART.HandleAutoPromoteThrottled, with a
+-- window long enough that a raid forming asks once rather than once per arrival.
+local missingHellosThrottled = false
+function KART.RequestMissingHellosThrottled()
+    if missingHellosThrottled then return end
+    missingHellosThrottled = true
+    C_Timer.After(15, function()
+        missingHellosThrottled = false
+        KART.RequestMissingHellos()
+    end)
 end
 
 -- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside

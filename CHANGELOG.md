@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - **Items now show their real item level and stats for everyone**, including raiders who never got Blizzard's own roll window.
+- **Raiders no longer show up as "No KART detected" for the rest of the evening** — the version check repairs itself now.
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**

@@ -527,12 +527,38 @@ function KASC:AnnounceHelloIfChanged(channel, target)
     self:AnnounceHello(channel, target)
 end
 
+-- Answers are spread over this, and the reason is the same one written above the four other
+-- responders' cooldown -- it was simply never applied here. One request in a 25-man raid is answered
+-- by 24 clients in the same instant; Blizzard's rate limiter drops the overflow silently, nothing
+-- retries, and the peers whose answer was lost show up on every council panel in the raid as "no KART
+-- detected" for the rest of the evening. That is not a reconstruction: it happened on 2026-08-03, and
+-- one manual /kart v cleared the whole raid (B120).
+local HELLO_ANSWER_SPREAD = 3
+
+-- Each client's own slot in that window, from its NAME rather than from math.random. Two reasons, and
+-- the second is the stronger one:
+--   * randomness can collide -- twenty draws out of one window put several answers in the same
+--     fraction of a second by chance, which is the thing being avoided;
+--   * every client in a raid has a different name, so hashing it spreads them by construction, and
+--     the same client answers in the same slot every time, which makes this testable at all.
+local function SelfAnswerSlot()
+    local name = UnitName("player") or ""
+    local h = 0
+    for i = 1, #name do h = (h * 31 + name:byte(i)) % 997 end
+    return (h / 997) * HELLO_ANSWER_SPREAD
+end
+
+-- Cooled PER ASKER, not per token. The four responders above broadcast their answer, so the first
+-- reply already served everyone and a second is pure duplication -- but a hello answered by whisper
+-- goes to exactly one client, and a shared cooldown would silence every asker after the first.
 KASC:RegisterMessage("KA_HELLO_REQ", {}, function(_, ctx)
-    if ctx.channel == "WHISPER" then
-        KASC:AnnounceHello("WHISPER", ctx.sender, true)
-    else
-        KASC:AnnounceHello(ctx.channel, nil, true)
-    end
+    local whisper = ctx.channel == "WHISPER"
+    if OnAnswerCooldown("KA_HELLO:" .. (whisper and ctx.sender or "GROUP")) then return end
+    local channel = whisper and "WHISPER" or ctx.channel
+    local target  = whisper and ctx.sender or nil
+    C_Timer.After(SelfAnswerSlot(), function()
+        KASC:AnnounceHello(channel, target, true)
+    end)
 end)
 
 KASC:RegisterMessage("KA_HELLO", { payload = true }, function(payload, ctx)

@@ -2421,7 +2421,34 @@ The manual path is the working precedent: send the full link, fall back to the c
 when the 255-byte cap would be hit (`LootCouncil.lua:3458-3465`) — and `KAUtil.GetItemString` keeps the
 bonus list, so even that fallback is bonus-exact.
 
-## B120 — OPEN 2026-08-03 — the handshake is announced once, in the noisiest minute of the evening
+## B120 — FIXED 2026-08-03 — the handshake is announced once, in the noisiest minute of the evening
+
+**Fixed the same evening**, on both halves.
+
+*Answering:* the `KA_HELLO_REQ` responder now takes the per-asker answer cooldown the four other
+responders have always had, and answers in its own slot inside a three-second window. The slot comes
+from a hash of the client's own NAME rather than from `math.random` — random draws collide, every
+raider's name is different, and a deterministic slot is the only version of this that can be asserted
+at all (it also keeps the suite's random stream where `tests/test_lc_churn.lua` needs it, see the note
+in `tests/run.lua`). Cooled per asker rather than per token, because unlike the four broadcast
+responders a hello can be answered by whisper to exactly one client — a shared cooldown would silence
+every asker after the first.
+
+*Asking:* `KART.RequestMissingHellos` (Utils.lua), hung on the roster event through a 15-second
+leading-edge throttle. It asks only about peers with no version recorded, so it goes quiet the moment
+the table is complete — which is what makes it affordable on an event that fires all evening. Two
+shapes on purpose: more than five unknown is one broadcast (formation, or our own reload — whispering
+two dozen people there would BE the burst), a handful is one whisper each (the ordinary mid-evening
+loss, which nobody else needs to hear about).
+
+Held by `tests/test_hello.lua` and the wiring line in `tests/test_core_wiring.lua` — Core.lua cannot be
+loaded by the harness, and this feature is one missing call away from doing nothing while its own
+tests stay green.
+
+**Still unmeasured, and deliberately left that way:** whether the losses were the throttle at all. The
+send probe never ran. B118's counters answer it from the next raid without anyone having to type
+anything, and this fix is worth having either way — nothing here depends on the cause being the
+limiter, only on answers not arriving.
 
 Reports #8 and #9, which are one marker and not two: the red `!` on a council row IS the
 `LC_STATUS_NO_KART` warning (`LootCouncilPanel.lua:1062-1063`).
