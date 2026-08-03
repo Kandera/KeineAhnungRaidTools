@@ -14,6 +14,10 @@ frame:RegisterEvent("CHAT_MSG_GUILD")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- The council panel's guild rank column (B124). The data arrives asynchronously after
+-- KART.RequestGuildRoster, long after the rows were drawn, so without this the ranks appear only on
+-- the next refresh that happens to follow -- or never, on a panel nobody touches.
+frame:RegisterEvent("GUILD_ROSTER_UPDATE")
 frame:RegisterEvent("READY_CHECK")
 frame:RegisterEvent("READY_CHECK_CONFIRM")
 frame:RegisterEvent("READY_CHECK_FINISHED")
@@ -283,9 +287,28 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Styles nach der Erstellung aller Frames final anwenden
         KART.UpdateStyles()
 
+    elseif event == "ADDON_LOADED" then
+        -- Some OTHER addon finished loading, which is a moment a nickname source can appear without
+        -- the roster moving (B126). KART resolves council and lootmaster entries through NSRT's
+        -- nickname API, and that global does not exist until NSRT has set itself up -- so a client
+        -- that loaded first held plain text where everybody else held keys, and stayed that way: the
+        -- retry pass is driven by GROUP_ROSTER_UPDATE and by nothing else. It was reported as "the
+        -- council member could only be resolved after opening and closing NSRT once", and what
+        -- actually healed it was whatever roster event happened to come next.
+        if KART.LC and KART.LC.RetryPendingResolutionsThrottled then
+            KART.LC.RetryPendingResolutionsThrottled()
+        end
+
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
         if event ~= "CHAT_MSG_GUILD" or KART_Settings.inviteViaGuildChat then
             KART.HandleChatInvite(arg1, arg2, event, ...)
+        end
+
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Only what is on screen: the ranks are display-only, and a hidden panel redraws itself when
+        -- it comes back anyway (B124).
+        if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
+            KART.LC.Council.RefreshCouncilRowsThrottled()
         end
 
     elseif event == "START_LOOT_ROLL" then
@@ -463,6 +486,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             C_Timer.After(5, function()
                 if IsInGuild() then
                     KASC:AnnounceHello("GUILD")
+                end
+                -- Same moment, second reason (B126): an optional dependency that loads on demand is
+                -- ready by now, so anything still stuck on plain config text can be placed. Cheap and
+                -- silent when there is nothing pending.
+                if KART.LC and KART.LC.RetryPendingResolutions then
+                    KART.LC.RetryPendingResolutions()
                 end
             end)
         end

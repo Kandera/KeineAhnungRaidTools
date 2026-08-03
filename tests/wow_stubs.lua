@@ -100,10 +100,18 @@ function _G.GetTradeTargetItemLink(i) return KARTTEST.tradeTargetItems[i] end
 -- The cursor, and the two calls that put a bag item into a trade slot. Both were absent, so the
 -- two lines in Trade.OnTradeShow that actually hand an item over had never run.
 --
--- The trade slot is filled the INSTANT ClickTradeButton is called here -- the reading most
+-- The trade slot was filled the INSTANT ClickTradeButton was called here -- the reading most
 -- favourable to the addon, since the real client only shows the item once the server answers
--- (TRADE_PLAYER_ITEM_CHANGED). Anything this finds is therefore not an artefact of the timing.
+-- (TRADE_PLAYER_ITEM_CHANGED). That favourable reading hid a real defect for as long as it existed:
+-- two items owed to one person went into the same slot on a live client, because the code asked
+-- GetTradePlayerItemLink for a free slot before the previous click had been acknowledged (B122).
+--
+-- KARTTEST.tradeSlotLag = true holds every placement until the next KARTTEST.AdvanceTime, which is
+-- what the live client does. Off by default so every test written against the old behaviour keeps
+-- meaning what it meant.
 KARTTEST.cursorItem = nil
+KARTTEST.tradeSlotLag = false
+local pendingTradeSlots = {}
 function _G.GetCursorInfo()
     if not KARTTEST.cursorItem then return nil end
     return "item", nil, nil, KARTTEST.cursorItem
@@ -111,8 +119,20 @@ end
 function _G.ClearCursor() KARTTEST.cursorItem = nil end
 function _G.ClickTradeButton(slot)
     if not KARTTEST.cursorItem then return end
-    KARTTEST.tradePlayerItems[slot] = KARTTEST.cursorItem
+    if KARTTEST.tradeSlotLag then
+        pendingTradeSlots[#pendingTradeSlots + 1] = { slot = slot, item = KARTTEST.cursorItem }
+    else
+        KARTTEST.tradePlayerItems[slot] = KARTTEST.cursorItem
+    end
     KARTTEST.cursorItem = nil
+end
+
+-- Called from KARTTEST.AdvanceTime: the server has answered by then. Placements land in the order
+-- they were made, so two items dropped into one slot end with the later one visible -- which is
+-- exactly what the raid saw: one item handed over, the other silently swapped back out.
+function KARTTEST.FlushTradeSlots()
+    for _, p in ipairs(pendingTradeSlots) do KARTTEST.tradePlayerItems[p.slot] = p.item end
+    pendingTradeSlots = {}
 end
 _G.LE_GAME_ERR_TRADE_COMPLETE = 401
 
@@ -228,6 +248,9 @@ _G.C_Timer = {
 
 -- Advances the clock by `seconds` and fires everything due, in time order. Returns how many ran.
 function KARTTEST.AdvanceTime(seconds)
+    -- Whatever was dropped into a trade slot since the last call is now acknowledged by the server
+    -- (see KARTTEST.tradeSlotLag). First, so a timer that runs below already sees the filled slots.
+    if KARTTEST.FlushTradeSlots then KARTTEST.FlushTradeSlots() end
     local target = KARTTEST.now + (seconds or 0)
     local ran = 0
     while true do

@@ -1392,6 +1392,8 @@ function LC.ReopenTrackedWindow()
         if not LC.councilPanel then KART.LC.Council.CreateCouncilPanel() end
         KART.LC.Council.RefreshCouncilRows()
         KART.LC.Council.RefreshCouncilTabs()
+        -- Asked for by hand, so whatever was put away is being taken back out on purpose (B123).
+        LC.councilPanelDismissed = nil
         LC.councilPanel:Show()
     elseif #LC.voteListRolls > 0 then
         -- The dispatcher rather than :Show(): it rebuilds the rows, sizes the window and shows it

@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Everybody's roll reaches the council**, including raiders who never got Blizzard's own roll window.
 - **An item you never heard about now finds you anyway** — the lootmaster keeps saying what is on the table, and your client asks for whatever it is missing.
 - **End Round is said more than once**, so a client that misses it no longer keeps last round's cards.
+- **Two items won by the same raider both land in the trade window.**
+- **A council panel you closed stays closed** until a new item drops.
+- **Guild ranks show up in the council panel** without opening the guild window first.
+- **The "items you still need to collect" window has a close button.**
+- **Council members are recognised without opening Northern Sky Raid Tools first.**
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**

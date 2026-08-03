@@ -178,3 +178,28 @@ do
     LC.councilTabs = saved
     RaidSim.As(lm, Council.RefreshCouncilTabs)
 end
+
+-- A panel the player closed stays closed (B123) -------------------------------------------------------
+-- The config owner re-broadcasts on every roster change, and an accepted config opens a tab for
+-- everything already on the table (B61). For a council member who had closed the panel that meant it
+-- came back on every port-out, relog and promotion in the raid -- which in this guild is constantly.
+-- Reported as "he votes on everything, closes the window, and it opens again immediately".
+do
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 96, F.GLOVES, { bop = true })
+    T.truthy(council.KART.LC.councilPanel and council.KART.LC.councilPanel:IsShown(),
+        "the council member's panel is up for the item")
+
+    RaidSim.As(council, function() council.KART.LC.councilPanel:Hide() end)
+
+    -- The roster moves: somebody ports out, relogs, is promoted. The config goes out again and is
+    -- accepted again, exactly as before.
+    RaidSim.As(lm, function() lm.KART.LC.BroadcastRaidConfig() end)
+    KARTTEST.AdvanceTime(0)
+    T.truthy(not council.KART.LC.councilPanel:IsShown(),
+        "a re-broadcast config does not force the window back open")
+
+    -- A genuinely new item does, which is the whole job of the function that was doing the forcing.
+    F.Drop(sim, 97, F.WEAPON, { bop = true })
+    T.truthy(council.KART.LC.councilPanel:IsShown(), "but a new item brings it back")
+end

@@ -147,3 +147,26 @@ do
         "an item still in our bags is still owed after a trade that carried nothing")
     T.eq(lm.KART.LC.pendingTrades[1].winnerKey, alric.guid, "to the same person")
 end
+
+-- The slot the client has not acknowledged yet (B122) ------------------------------------------------
+-- Everything above runs against a harness that fills a trade slot the instant it is clicked. The live
+-- client fills it when the SERVER answers, and between those two moments GetTradePlayerItemLink still
+-- says the slot is empty. That gap is what put two items owed to one raider into one slot on a live
+-- client: the first was swapped straight back out, the lootmaster's list showed both as dealt with,
+-- and the raider was handed one item. Reported 2026-08-03, seen failing and succeeding in one evening,
+-- which is what a race looks like from outside.
+do
+    KARTTEST.tradeSlotLag = true
+    TradeWith(function(a)
+        return {
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 70 },
+            { itemLink = WEAPON, winnerKey = a.guid, rollID = 71 },
+        }
+    end, { [0] = { GLOVES, WEAPON } })
+    KARTTEST.AdvanceTime(0) -- the server answers
+    KARTTEST.tradeSlotLag = false
+
+    T.eq(KARTTEST.tradePlayerItems[1], GLOVES, "the first item is still in the first slot")
+    T.eq(KARTTEST.tradePlayerItems[2], WEAPON,
+        "and the second took the next one, even though the client had not shown the first yet")
+end

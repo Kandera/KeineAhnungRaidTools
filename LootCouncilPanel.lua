@@ -277,6 +277,10 @@ function Council.ShowCouncilPanel(rollID, seconds)
     end
     if not alreadyTabbed then
         table.insert(LC.councilTabs, rollID)
+        -- A genuinely new item overrides "I put this window away" (B123). Re-showing for an item that
+        -- is already tabbed is what made the panel unusable; re-showing for one that is not is the
+        -- entire job of this function.
+        LC.councilPanelDismissed = nil
         if LC.activeRollID and LC.activeRollID ~= rollID then
             LC.councilTabsNew[rollID] = true
         end
@@ -294,7 +298,9 @@ function Council.ShowCouncilPanel(rollID, seconds)
         Council.RefreshCouncilTabs()
     end
 
-    panel:Show()
+    -- Rebuilt either way above, so a panel the player opens again is never the stale picture B51 was
+    -- about — but not forced back on screen for an item it is already showing (B123).
+    if not LC.councilPanelDismissed then panel:Show() end
 end
 
 -- Switches the panel's row list over to rollID and clears its "new" marker.
@@ -589,6 +595,17 @@ function Council.CreateCouncilPanel()
         end
     end)
     table.insert(UISpecialFrames, f:GetName())
+
+    -- "The player has put this window away." Every route out of the panel ends here -- the Close
+    -- button, the window's own x, Escape -- which is why the flag is set on the frame rather than in
+    -- each of them (B123).
+    --
+    -- What it is for: the config owner re-broadcasts on every roster change, and an accepted config
+    -- runs LC.CatchUpCouncilPanel, which opens a tab for everything already on the table (B61). For a
+    -- council member who had closed the panel that meant it reappeared on every port-out, relog and
+    -- promotion in the raid -- which in this guild is constantly. A genuinely NEW item clears the flag
+    -- again (see Council.ShowCouncilPanel), so nothing that matters stays hidden.
+    f:SetScript("OnHide", function() LC.councilPanelDismissed = true end)
 
     -- Vertical tab strip protruding from the left edge — one tab per active roll (see
     -- RefreshCouncilTabs). Lives outside f's own backdrop/width on purpose, like a browser's
@@ -1024,6 +1041,11 @@ function Council.RefreshCouncilRows()
         -- intentional: "Item Level" prefix kept un-localized by design (review 2026-07-24)
         panel.ilvlText:SetText(rollItemIlvl and ("Item Level " .. rollItemIlvl) or "")
     end
+
+    -- The guild rank column below reads GetGuildInfo(unit), which answers nothing until this client
+    -- holds guild data -- and nothing in KART ever asked for any (B124). Throttled inside, so this
+    -- costs nothing on the refreshes that land several times a second while an item is decided.
+    KART.RequestGuildRoster()
 
     local members = {}
     for unit in KAUtil.EachGroupUnit() do

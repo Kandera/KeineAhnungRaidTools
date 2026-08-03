@@ -522,6 +522,17 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     f.title:SetPoint("TOPLEFT", 10, -8)
     f.title:SetText(titleText)
 
+    -- These two windows shipped without one (B125, GitHub #24). Escape closed them -- they are in
+    -- UISpecialFrames -- but nothing on screen said so, and the reporter drew the obvious conclusion
+    -- instead: "no x, probably because the items are never handed over". Which was half right, and
+    -- the other half is B122.
+    --
+    -- Closing HIDES and nothing more: the list is the obligation, not the window. Everything that
+    -- removes an entry already refuses to reopen a closed window (Trade.RefreshTradeReminderIfShown),
+    -- and `/kart trade` and `/kart owed` bring it back rebuilt.
+    f.closeBtn = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
+    f.closeBtn:SetPoint("TOPRIGHT", -4, -4)
+
     f.rows = {}
 
     local pos = KART_Settings and KART_Settings[posKey]
@@ -781,6 +792,13 @@ function Trade.OnTradeShow()
     -- first bag slot (the first gets locked into the trade, the second no-ops) — track placed slots
     -- so each copy takes a distinct one.
     local usedSlots = {}
+    -- The trade slots this function has already dropped something into. Asking the client instead --
+    -- which is what this did -- is a race it loses on any latency worth the name: the slot only fills
+    -- once the server answers, so the second item owed to the same person found slot 1 still empty
+    -- and took it, swapping the first one back out. The lootmaster's list then showed both as dealt
+    -- with while the raider had been handed one (B122). Seen failing and succeeding in the same
+    -- evening, which is what a race looks like from the outside.
+    local placedSlots = {}
     for _, entry in ipairs(LC.pendingTrades) do
         -- Bail if the cursor is already carrying something (e.g. the player was mid-drag of an
         -- unrelated item) — picking up our item now would swap it into whatever slot that is.
@@ -789,7 +807,9 @@ function Trade.OnTradeShow()
             if bag then
                 local freeSlot
                 for i = 1, 6 do -- MAX_TRADE_ITEMS is 7; slots 1-6 are the tradeable slots (slot 7 is the "will not be traded" slot)
-                    if not GetTradePlayerItemLink(i) then ---@diagnostic disable-line: undefined-global
+                    -- Both questions, and the second one is the fix: what the client already shows,
+                    -- and what we have put there ourselves since it last answered.
+                    if not GetTradePlayerItemLink(i) and not placedSlots[i] then ---@diagnostic disable-line: undefined-global
                         freeSlot = i
                         break
                     end
@@ -797,6 +817,7 @@ function Trade.OnTradeShow()
                 if freeSlot then
                     C_Container.PickupContainerItem(bag, slot)
                     ClickTradeButton(freeSlot) ---@diagnostic disable-line: undefined-global
+                    placedSlots[freeSlot] = true
                     usedSlots[bag .. ":" .. slot] = true
                     -- Not removed here anymore — only once the trade actually completes (see
                     -- LC.OnTradeClosed), so a cancelled trade doesn't silently drop the reminder.

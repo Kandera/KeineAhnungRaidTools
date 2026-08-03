@@ -92,3 +92,19 @@ Wired("KART.LC.HandleLootHistoryDrop(arg1, arg2)", "with both ids, which the loo
 -- unless something calls it. The roster event is the only hook that fires all evening, which is the
 -- point: the raid loses a handshake mid-evening, not only while forming.
 Wired("KART.RequestMissingHellosThrottled()", "the missing handshakes are asked for again")
+
+-- The guild ranks nobody asked for (B124) -----------------------------------------------------------
+-- The data arrives asynchronously, long after the rows were drawn. Without the event the ranks appear
+-- only on whatever refresh happens to come next, which on a panel nobody touches is never.
+Wired('frame:RegisterEvent("GUILD_ROSTER_UPDATE")', "the guild roster event is registered")
+Wired('elseif event == "GUILD_ROSTER_UPDATE" then', "and routed in the event handler")
+
+-- Identity resolution after an optional dependency loads (B126) --------------------------------------
+-- NSRT's nickname API does not exist until NSRT has set itself up, and KART's retry pass is driven by
+-- the roster event alone -- so a client that loaded first held plain text where everybody else held
+-- keys, until some unrelated roster change happened to heal it.
+do
+    local addonLoaded = code:find('elseif event == "ADDON_LOADED" then', 1, true)
+    T.truthy(addonLoaded, "another addon finishing its load is handled at all")
+    Wired("KART.LC.RetryPendingResolutionsThrottled()", "and re-runs the pending identity resolutions")
+end

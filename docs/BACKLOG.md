@@ -2564,7 +2564,16 @@ column, so the two are told apart by WHICH raiders are affected, not by the symp
 
 The Manifest gains an item for this — see C13.
 
-## B122 — OPEN 2026-08-03 — the second item into a trade window is a race, and the harness always lets it win
+## B122 — FIXED 2026-08-03 — the second item into a trade window is a race, and the harness always lets it win
+
+**Fixed the same evening.** `Trade.OnTradeShow` counts the slots it has placed into itself instead of
+asking the client, exactly the way `usedSlots` already tracked bag slots two lines above. The client's
+answer is still consulted — a slot the player filled by hand is still occupied — but it is no longer
+the only source.
+
+The harness learned the timing rather than gaining another assertion against the old behaviour:
+`KARTTEST.tradeSlotLag` holds a placement until the next `AdvanceTime`, which is what the live client
+does. Off by default, so every test written before this keeps meaning what it meant.
 
 Reports #5 and #10. Seen failing early in the evening (two items won, one placed) and succeeding later
 the same evening with the same shape — which is the finding: it is timing, not logic.
@@ -2583,7 +2592,15 @@ Fix: count the slots this function has placed into itself rather than asking the
 `usedSlots` already tracks bag slots two lines above. The harness change is to stop answering instantly,
 not to add another assertion against the current behaviour.
 
-## B123 — OPEN 2026-08-03 — the council panel reopens itself on every roster change
+## B123 — FIXED 2026-08-03 — the council panel reopens itself on every roster change
+
+**Fixed the same evening.** The panel records that the player put it away (`OnHide`, so every route
+out counts — the Close button, the window's x, Escape), and `Council.ShowCouncilPanel` no longer forces
+it back on screen for an item it is already showing. A genuinely new item clears the flag, and so does
+`/kart lc`, which is somebody asking for it by hand.
+
+B61's catch-up is untouched: a client whose config lands late still gets its tabs built. It just does
+not get the window pushed into its face for the twentieth time.
 
 Report #6: a council member votes on everything, closes the panel, and it is back immediately.
 
@@ -2601,7 +2618,12 @@ reality), so the panel reopens over and over.
 Fix: catch up only when membership or the tracked set actually changed, and never re-show a panel the
 player closed while its tabs are unchanged.
 
-## B124 — OPEN 2026-08-03 — guild ranks are read from data nobody asked the client to load
+## B124 — FIXED 2026-08-03 — guild ranks are read from data nobody asked the client to load
+
+**Fixed the same evening.** `KART.RequestGuildRoster` (throttled to Blizzard's own ten-second limit)
+runs from the council panel's row refresh, and `GUILD_ROSTER_UPDATE` redraws the rows when the data
+lands — asynchronously, long after the rows were first drawn, which is why asking alone would not have
+been enough. Display only, no wire traffic. Wiring held by `tests/test_core_wiring.lua`.
 
 Report #4. The council panel reads `select(2, GetGuildInfo(unit))` per row
 (`LootCouncilPanel.lua:1082`, `:1117`) and renders `-` when that comes back nil.
@@ -2614,7 +2636,14 @@ open, which is exactly the reported pattern: missing for the raid, present on so
 Fix: request the roster once when the panel is first built, and refresh the rows on
 `GUILD_ROSTER_UPDATE`. Display only, no wire traffic.
 
-## B125 — OPEN 2026-08-03 — the owed-items window cannot be closed
+## B125 — FIXED 2026-08-03 — the owed-items window cannot be closed
+
+**Fixed the same evening.** Both reminder windows get the same header close button every other KART
+window has (`KAUI:CreateHeaderIconButton`). Closing hides and nothing more — the list is the
+obligation, not the window — and `/kart trade` / `/kart owed` bring it back rebuilt.
+
+The reporter's second guess was right and is a different entry: while an item is never ticked off, the
+window has nothing to empty itself with. That is B122.
 
 GitHub #24. `CreateReminderFrame` builds a title and rows and no close button at all
 (`LootCouncilTrade.lua:491-528`). The frame is in `UISpecialFrames`, so Escape closes it; nothing on
@@ -2629,7 +2658,15 @@ about what closing it means — "hide until the next change" or "stop reminding 
 reminder windows deliberately refuse to reopen themselves today
 (`Trade.RefreshTradeReminderIfShown`), so that answer has to be written down rather than assumed.
 
-## B126 — OPEN 2026-08-03 — identity resolution is never retried when NSRT finishes loading
+## B126 — FIXED 2026-08-03 — identity resolution is never retried when NSRT finishes loading
+
+**Fixed the same evening.** `ADDON_LOADED` for any OTHER addon now re-runs the pending resolutions
+(throttled), and a delayed pass follows the login/reload branch of `PLAYER_ENTERING_WORLD`. Both are
+moments a nickname source can appear without the roster moving, which was the whole gap: the retry
+hung on `GROUP_ROSTER_UPDATE` alone, so what actually healed it in the raid was an unrelated roster
+change that happened to follow.
+
+Wiring held by `tests/test_core_wiring.lua`; Core.lua cannot be loaded by the harness.
 
 Report #2, and visible in the same `/kart status` as B118: **`Council: 2 resolved, 3 not yet matched`**.
 Reported as "a council member could only be resolved after opening and closing NSRT once".

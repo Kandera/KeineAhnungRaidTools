@@ -13,6 +13,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Wurf jedes Raiders erreicht das Council** — auch der von Leuten ohne eigenes Würfelfenster von Blizzard.
 - **Ein Item, von dem du nie erfahren hast, findet dich jetzt trotzdem** — der Lootmaster sagt laufend, was auf dem Tisch liegt, und dein Client fordert Fehlendes nach.
 - **„End Round" wird mehrfach gesendet**, damit niemand mehr die Karten der letzten Runde behält.
+- **Zwei Items für denselben Raider landen jetzt beide im Handelsfenster.**
+- **Ein geschlossenes Council-Fenster bleibt zu**, bis ein neues Item droppt.
+- **Gildenränge erscheinen im Council-Fenster**, ohne vorher das Gildenfenster zu öffnen.
+- **Das Fenster „Items you still need to collect" hat einen Schließen-Knopf.**
+- **Councilmitglieder werden erkannt, ohne dass vorher Northern Sky Raid Tools geöffnet werden muss.**
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
