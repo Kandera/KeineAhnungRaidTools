@@ -683,13 +683,32 @@ local function itemOf(v)
     return id and KARTTEST.items[id] or nil
 end
 
+-- The live client answers about the VARIANT it was asked about, and a stub keyed on the bare item id
+-- alone cannot: "item:249326" is the BASE version of the item -- base item level, base stats -- while
+-- the same id carrying bonus ids is the 285 that actually dropped. A whole raid read the base version
+-- off their vote windows on 2026-08-03 because only the id travelled between clients (B119), and no
+-- test could see it: both forms answered with the same link here.
+--
+-- Opt-in per fixture item, via def.baseIlvl. Without it nothing changes, so the items every other
+-- test was written against behave exactly as before.
+local function variantFor(it, v)
+    if it.baseIlvl == nil then return it.link, it.ilvl end
+    local asked = type(v) == "string"
+        and (v:match("|H(item:[^|]+)|h") or v:match("^(item:.+)$"))
+        or nil
+    -- Anything beyond the plain id is the real drop; the plain id, a number, or "item:ID" is the base.
+    if asked and not asked:match("^item:%d+$") then return it.link, it.ilvl end
+    return "|cffa335ee|Hitem:" .. it.id .. "|h[" .. it.name .. "]|h|r", it.baseIlvl
+end
+
 -- An uncached item answers nil from GetItemInfo, exactly as the live client does before the server
 -- has sent it -- which is the state the "???" bug lived in.
 _G.C_Item = {
     GetItemInfo = function(v)
         local it = itemOf(v)
         if not it or it.cached == false then return nil end
-        return it.name, it.link, it.quality, it.ilvl, nil, nil, nil, nil, it.equipLoc,
+        local link, ilvl = variantFor(it, v)
+        return it.name, link, it.quality, ilvl, nil, nil, nil, nil, it.equipLoc,
                nil, nil, it.classID, it.subclassID, it.bind
     end,
     GetItemInfoInstant = function(v)

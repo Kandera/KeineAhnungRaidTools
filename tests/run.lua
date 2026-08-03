@@ -139,6 +139,7 @@ dofile("tests/test_lc_equipexchange.lua")
 -- because it is the statement of what must hold and the soak is the search for what does not.
 dofile("tests/test_manifest.lua")
 dofile("tests/test_diagnostics.lua")
+dofile("tests/test_lc_itemwire.lua")
 dofile("tests/test_lc_soak.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))

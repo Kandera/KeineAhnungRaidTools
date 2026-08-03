@@ -1,6 +1,6 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 4
+local MAJOR, MINOR = "KAUtil-1.0", 5
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
 
@@ -158,6 +158,22 @@ end
 -- interchangeable (see the auto-trade and history-export call sites).
 function KAUtil.GetItemString(link)
     return KAUtil.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
+end
+
+-- The item string EXACTLY as the client wrote it, from "item:" to the closing "|h" — every bonus id,
+-- every modifier, whatever separators the client used. GetItemString above stops at the first
+-- character outside [-0-9:], which on a live Midnight link is the comma inside the bonus list, so it
+-- returns a PREFIX of the string rather than all of it (see B127). That prefix is fine for its own
+-- job, comparing two drops for sameness, and useless for this one.
+--
+-- Used where the string has to be rebuildable into the same item somewhere else: an item that travels
+-- to another client as an itemID alone comes back as the BASE version of itself -- item level, stats
+-- and all -- which is what a whole raid read off their vote windows on 2026-08-03 (B119).
+--
+-- Matched by delimiter rather than by character class on purpose: no assumption about which
+-- separators a client build uses inside the string, only that a link ends its payload at "|h".
+function KAUtil.GetFullItemString(link)
+    return KAUtil.IsRealItemLink(link) and link:match("|H(item:[^|]+)|h") or nil
 end
 
 -- Iterates every complete item hyperlink found in text, in the order they appear. Matches

@@ -1690,6 +1690,22 @@ end
 -- raid decides a handful of items at a time, not thirty.
 local ROLL_CATCHUP_MAX = 5
 
+-- What an item looks like on the wire, for the two messages that announce a real drop (LC_START and
+-- its catch-up). The full item string, so a client that never saw Blizzard's own roll can rebuild the
+-- SAME item rather than the base version of it -- an itemID alone carries no bonus ids, so the whole
+-- raid read "Item Level 44" off a 285 item on 2026-08-03 (B119).
+--
+-- Falls back to the bare itemID when there is no real link to take a string from, and again when the
+-- string would push the message past the transport's 255-byte cap: the old, lossy payload is worth
+-- far more than a message that is silently dropped for being too long. The cap is checked against the
+-- longest prefix any caller puts in front of it, not against the string alone.
+local WIRE_HEADROOM = 60 -- "LC_ROLL_CATCHUP:" + rollID + seconds + separators, with room to spare
+function LC.ItemPayload(link, itemID)
+    local full = KAUtil.GetFullItemString(link)
+    if full and #full + WIRE_HEADROOM <= 255 then return full end
+    return itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
+end
+
 function LC.SendOpenRolls(target)
     if not (IsInGroup() and target and LC.sessionActive and LC.IsLootOwner()) then return end
     local now, sent = GetTime(), 0
@@ -1702,7 +1718,8 @@ function LC.SendOpenRolls(target)
         -- exists to avoid.
         if itemID and deadline > now and not LC.IsTestRoll(rollID) then
             local secs = math.max(1, math.floor(deadline - now))
-            LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. secs .. ":" .. itemID, target)
+            LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. secs .. ":"
+                .. LC.ItemPayload(link, itemID), target)
             sent = sent + 1
         end
     end
@@ -2333,7 +2350,7 @@ end
 -- Nothing here can repair that -- the broken half is running code we cannot change. What it can do
 -- is stop it being a mystery: name the raiders concerned, on the one screen that can act on it,
 -- before the first boss rather than during it.
-LC.PROTOCOL_VERSION = "3.3.0" -- release whose loot-council wire protocol this client requires of peers
+LC.PROTOCOL_VERSION = "3.3.1" -- release whose loot-council wire protocol this client requires of peers
 LC.outdatedWarned = LC.outdatedWarned or {} -- short name -> true, so a raid is named once, not per hello
 
 -- Group members whose KART is older than the protocol above, sorted. Skipped on purpose:
@@ -2724,8 +2741,11 @@ local function ResolveRollItemLink(rollID, attempt)
     attempt = attempt or 1
     local link = GetLootRollItemLink(rollID)
     if not link then
-        local itemID = tostring(current):match("item:(%d+)")
-        if itemID then link = select(2, C_Item.GetItemInfo(itemID)) end
+        -- The parked value itself, not the id inside it: what LC.HandleStart leaves behind is the
+        -- item STRING it was sent, bonus ids and all, and asking about the id alone would resolve it
+        -- into the base version of the item (B119).
+        local parked = tostring(current):match("^(item:.+)$") or tostring(current):match("item:(%d+)")
+        if parked then link = select(2, C_Item.GetItemInfo(parked)) end
     end
     if link then
         LC.rollItems[rollID] = link
@@ -2750,7 +2770,10 @@ local function ResolveRollItemLink(rollID, attempt)
                 -- cleared or replaced during the wait (session end, tab close, reused rollID).
                 local now = LC.rollItems[rollID]
                 if now ~= current then return end
-                local full = select(2, C_Item.GetItemInfo(itemID))
+                -- Loaded BY id (that is what the loader takes), resolved by the string we are
+                -- holding: the load is about the item being in the cache at all, the lookup is about
+                -- which variant of it we want back (B119).
+                local full = select(2, C_Item.GetItemInfo(current))
                 if not full then return end
                 LC.rollItems[rollID] = full
                 LC.Vote.RefreshVoteListRows()
@@ -3124,7 +3147,7 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- raid, while the lootmaster kept force-winning items nobody could vote on.
     local secs = KART_Settings.lcVoteSeconds or 20
     if isLootmaster then
-        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. newItemID)
+        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. LC.ItemPayload(itemLink, newItemID))
         LC.Vote.ScheduleVoteCatchup(rollID, secs)
     end
 
@@ -3323,11 +3346,21 @@ function LC.HandleStart(payload, senderKey)
     -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
     -- would pop fake vote windows on every client.
     if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
-    -- payload = "rollID:seconds:itemID"
-    local rollID, secs, itemID = payload:match("^(%d+):(%d+):?(%d*)$")
+    -- payload = "rollID:seconds:item", where item is the full item string ("item:249326::…:11946,…")
+    -- since 3.3.1 and a bare itemID before it. Both are accepted: during a rollout the raid runs both
+    -- builds for an evening, and refusing the old shape would take the item away from everyone still
+    -- on it — the exact failure this whole message is being changed for.
+    local rollID, secs, itemPart = payload:match("^(%d+):(%d+):?(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
     if not rollID then return end
+    itemPart = itemPart or ""
+    -- The bare id is what everything downstream compares on (PurgeStaleRoll, the duplicate ordinal,
+    -- the stale-result guards); the string is what the item is REBUILT from.
+    local itemID = itemPart:match("^item:(%d+)") or itemPart:match("^(%d+)$") or ""
+    local itemString = (itemPart:match("^item:") and itemPart)
+        or (itemID ~= "" and ("item:" .. itemID))
+        or nil
 
     PurgeStaleRoll(rollID, itemID)
 
@@ -3362,9 +3395,15 @@ function LC.HandleStart(payload, senderKey)
     -- The payload carried the itemID the entire time; it was parsed above for PurgeStaleRoll and then
     -- thrown away. Rebuild from it, exactly as Trade.HandleResult already does at award time — full
     -- link once the item is cached, bare item string until then, which still renders a name and icon.
+    --
+    -- Rebuilt from the WHOLE string, not from the id inside it (B119). Asking the client about an
+    -- itemID answers with the base version of that item: base item level, base stats, no upgrade — so
+    -- every raider who did not get Blizzard's own roll window was voting on a different item than the
+    -- one on the floor, and the Droptimizer column next to it stayed empty because that lookup is
+    -- variant-exact. The string carries the bonus ids; the id alone never did.
     LC.rollItems[rollID] = GetLootRollItemLink(rollID) or LC.rollItems[rollID]
-    if not LC.IsRealItemLink(LC.rollItems[rollID]) and itemID ~= "" then
-        LC.rollItems[rollID] = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
+    if not LC.IsRealItemLink(LC.rollItems[rollID]) and itemString then
+        LC.rollItems[rollID] = select(2, C_Item.GetItemInfo(itemString)) or itemString
     end
     LC.rollItems[rollID] = LC.rollItems[rollID] or "???"
     if not LC.IsRealItemLink(LC.rollItems[rollID]) then ResolveRollItemLink(rollID) end

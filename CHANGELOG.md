@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- **Items now show their real item level and stats for everyone**, including raiders who never got Blizzard's own roll window.
+
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**
 

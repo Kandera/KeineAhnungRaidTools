@@ -7,6 +7,9 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unveröffentlicht]
+### Behoben
+- **Items zeigen jetzt bei allen das echte Itemlevel und die echten Werte** — auch bei Raidern, die kein eigenes Würfelfenster von Blizzard bekommen haben.
+
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
 

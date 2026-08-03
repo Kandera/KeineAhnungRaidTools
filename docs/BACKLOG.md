@@ -2375,7 +2375,25 @@ Note for whoever builds (2): a manually added item cannot prove entitlement the 
 `HandleRollCatchup` asks Blizzard for the roll, and `/kart add` items have no Blizzard roll. B79 records
 that problem and the rule decision it needs; this entry does not re-open it.
 
-## B119 — OPEN 2026-08-03 — items arrive without their bonus IDs, so half the raid votes on a different item
+## B119 — FIXED 2026-08-03 — items arrive without their bonus IDs, so half the raid votes on a different item
+
+**Fixed the same evening.** `LC_START` and `LC_ROLL_CATCHUP` now carry the full item string
+(`LC.ItemPayload`), the receiver rebuilds from that string rather than from the id inside it, and both
+resolver paths follow. A bare id is still accepted on the way in, so a raid running two builds for one
+evening does not lose the item on the older half — and the payload falls back to the bare id when the
+string would push the message past 255 bytes, because a lossy item beats a dropped message.
+
+The wire format changed, so `LC.PROTOCOL_VERSION` moves to 3.3.1 with it: a 3.3.0 client cannot parse
+the new payload at all, and `/kart status` naming them is how that gets noticed in ten seconds instead
+of over an evening (B62).
+
+Held by `tests/test_lc_itemwire.lua`, which needed the harness to learn something first: its item
+database was keyed on the bare id, so both forms of the same item answered with the same link and no
+test could see this defect. `def.baseIlvl` now models the base variant, opt-in per fixture item, and
+one assertion in the file exists purely to prove the harness can tell the two apart — without it every
+other assertion there would also pass on the old payload.
+
+**Still owed:** an in-game confirmation. The Manifest counts C5 and C12 in the raid, not in the suite.
 
 Report #12; GitHub #20, #22, #23. Measured from a screenshot: the vote window's tooltip read
 *Light's March Bracers, **Item Level 44**, Item ID 249326* next to an equipped 285 — the base version of
@@ -2526,3 +2544,37 @@ unmatched.
 
 Fix: retry on `ADDON_LOADED` for the optional dependency as well, and once more a few seconds after
 `PLAYER_ENTERING_WORLD` — both are moments a nickname source can appear without the roster moving.
+
+## B127 — OPEN 2026-08-03 — GetItemString returns a prefix of the item string, and its comment says otherwise
+
+Found while fixing B119, not reported by anybody — which is the concerning part.
+
+`KAUtil.GetItemString` matches `(item:[%-%d:]+)`. That character class has no comma in it, and a live
+Midnight link carries commas inside its bonus list (`…:14:8:11946,10390,12043,…`, the shape the harness
+fixture takes from a real loot history). So the match stops at the first comma and the function returns
+`item:249326::::::::80:268::14:8:11946` — the item id, some of the modifiers, and exactly one bonus id
+out of seven.
+
+Its own comment claims the opposite: *"Full item string (itemID + every bonus ID)"*. B114 recorded the
+truncation as a length measurement — "the reply still goes out in 57, because `KAUtil.GetItemString`
+keeps the item id and drops the bonus list" — without noticing that dropping the bonus list is not what
+the function is documented to do.
+
+**What it can cost.** Two callers compare items with it:
+
+* `Trade.OnTradeAcceptUpdate` / `Trade.OnTradeClosed` — which item in the trade window was handed over.
+  Two variants of one item that share their first bonus id compare EQUAL, so the wrong obligation is
+  ticked off. Both would have to be in one trade at once, which is rare and not impossible: a boss
+  dropping the same slot twice at two levels is an ordinary evening.
+* the loot-history export and its duplicate matching, same shape.
+
+`Council.RequestEquipForRoll` uses it as a size guard, where a prefix is harmless and the shortening is
+in fact the point.
+
+**Not fixed here, deliberately.** `KAUtil.GetFullItemString` was added for B119 rather than widening
+this one, because widening it changes what "the same item" means in the trade and history paths at the
+same time — including for entries already persisted in `KART_LCTrades` and `KART_LootHistory`, which
+were written with truncated strings. That is a migration question, not a one-line pattern fix, and it
+wants its own change with its own tests.
+
+Whoever takes it: the comment is the first thing to correct, whatever is decided about the code.

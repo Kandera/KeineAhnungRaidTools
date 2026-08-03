@@ -242,7 +242,13 @@ do
     local sim, lm, council, raider = NewRaid()
     KARTTEST.items[249293].cached = false
     Drop(sim, 40, 249293, { noRollFor = { Alric = true } })
-    T.eq(raider.KART.LC.rollItems[40], "item:249293", "the raider holds the item by ID, uncached")
+    -- Parked as the item STRING the announcement carried, not as the bare id it used to be reduced to:
+    -- the id alone would come back as the base version of the item once it caches (B119). Still not a
+    -- real link, which is the state this whole scenario is about.
+    T.truthy(tostring(raider.KART.LC.rollItems[40]):match("^item:249293"),
+        "the raider holds the item as a string, uncached")
+    T.truthy(not raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[40]),
+        "and not as a link it cannot render yet")
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(40, 1) end)
     T.truthy((lm.KART.LC.votes[40] or {})[raider.guid], "and votes on it")
     KARTTEST.items[249293].cached = nil
