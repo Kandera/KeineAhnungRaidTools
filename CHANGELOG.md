@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Guild ranks show up in the council panel** without opening the guild window first.
 - **The "items you still need to collect" window has a close button.**
 - **Council members are recognised without opening Northern Sky Raid Tools first.**
+- **Nothing is lost while the game blocks addon traffic during a boss** — it is held and sent the moment the fight releases it.
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**

@@ -506,12 +506,34 @@ end
 -- target (optional): whisper this one player instead of broadcasting to the group. Used for replies
 -- to a directed request (see LC.HandleStateRequest), so answering one person doesn't push state at
 -- everyone else.
+-- Which of these messages must survive an addon-comm restriction (see KASC's CommsRestricted) rather
+-- than be lost to it. The rule is "would the raid be wrong afterwards if this never arrived?":
+--
+--   * the ones listed here change what a client BELIEVES -- an item is on the table, the round ended,
+--     somebody voted, somebody won. Losing one leaves two clients disagreeing, with nothing to notice
+--     it. They are held and sent when comms come back.
+--   * everything else is a QUESTION (state requests, the table heartbeat, roll requests) or a
+--     broadcast that repeats anyway. A question answered forty seconds late is noise: the asker has
+--     asked again by then.
+--
+-- Loot drops at the END of an encounter, which is exactly the window this is about, so the top half
+-- of this list is the loot flow itself.
+local GUARANTEED_TOKENS = {
+    LC_START = true, LC_MANUAL_START = true, LC_ROLL_CATCHUP = true,
+    LC_END_ROUND = true, LC_ACTIVE = true, LC_SESSION_RESUME = true,
+    LC_CONFIG = true, LC_CONFIG_RELAY = true,
+    LC_VOTE = true, LC_CVOTE = true, LC_ROLL = true,
+    LC_RESULT = true, LC_ONOTE = true,
+}
+
 function LC.SendLC(msg, target)
     if not IsInGroup() then return end
+    local token = msg:match("^([^:]+)")
+    local opts = GUARANTEED_TOKENS[token] and { guaranteed = true } or nil
     if target then
-        KASC:Send(msg, "WHISPER", target)
+        KASC:Send(msg, "WHISPER", target, opts)
     else
-        KASC:Send(msg)
+        KASC:Send(msg, nil, nil, opts)
     end
 end
 
@@ -1273,10 +1295,11 @@ function LC.PrintStatus()
     -- raider is missing an item means the message never arrived at all — which is Blizzard's delivery,
     -- and needs the catch-up rather than a guard change.
     local kd = KASC:Diagnostics()
-    if kd.dropNotInGroup + kd.dropUnknownToken + kd.sendRejected
-        + LC.diag.refusedSender + LC.diag.unknownRoll > 0 then
+    if kd.dropNotInGroup + kd.dropUnknownToken + kd.sendRejected + kd.sendHeldBack
+        + kd.sendDroppedRestricted + LC.diag.refusedSender + LC.diag.unknownRoll > 0 then
         print("  " .. string.format(L.LC_STATUS_DROPS, LC.diag.refusedSender, kd.dropNotInGroup,
-            LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendThrottled))
+            LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendThrottled,
+            kd.sendHeldBack, kd.sendDroppedRestricted))
     end
 end
 

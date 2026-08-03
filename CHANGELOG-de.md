@@ -18,6 +18,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Gildenränge erscheinen im Council-Fenster**, ohne vorher das Gildenfenster zu öffnen.
 - **Das Fenster „Items you still need to collect" hat einen Schließen-Knopf.**
 - **Councilmitglieder werden erkannt, ohne dass vorher Northern Sky Raid Tools geöffnet werden muss.**
+- **Während das Spiel im Bosskampf den Addon-Funk sperrt, geht nichts mehr verloren** — es wird zurückgehalten und danach gesendet.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**

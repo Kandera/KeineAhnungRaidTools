@@ -166,3 +166,35 @@ do
     local again = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
     T.eq(Lines(again), Lines(clean), "a client that lost nothing prints no such line at all")
 end
+
+-- Addon restrictions ---------------------------------------------------------------------------------
+-- Midnight stops addon messages while an encounter or a Mythic+ run is active. Loot drops at the END
+-- of an encounter, so this is not a corner case for a loot addon -- it is the exact window every roll
+-- announcement goes out in. A message lost there is not delayed, it is gone (B118, B128).
+do
+    local sim, lm = F.NewRaid()
+    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
+
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, ACTIVE) end)
+    RaidSim.ClearLog(sim)
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.SendLC("LC_START:900:20:item:249331")
+        lm.KART.LC.SendLC("LC_TABLE:1:900")
+    end)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "an announcement is not sent while comms are restricted")
+    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 0, "and neither is a heartbeat")
+
+    -- Sent twice inside the window, as a retry would be.
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:900:20:item:249331") end)
+
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 1,
+        "the announcement goes out once the encounter releases the comms, exactly once")
+    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 0,
+        "while the heartbeat is dropped rather than delivered late -- the asker has moved on")
+
+    local diag = lm.KASC:Diagnostics()
+    T.truthy(diag.sendHeldBack >= 1, "what was held is counted")
+    T.truthy(diag.sendDroppedRestricted >= 1, "and so is what was dropped")
+end

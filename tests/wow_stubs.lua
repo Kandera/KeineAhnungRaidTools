@@ -643,6 +643,26 @@ _G.PixelUtil = {
     end,
 }
 
+-- Addon restrictions --------------------------------------------------------------------
+-- The Midnight-era gate on what an addon may do while an encounter or a Mythic+ run is active
+-- (Enum.AddOnRestrictionType, ADDON_RESTRICTION_STATE_CHANGED). Addon messages are among the things
+-- that stop going out, which is a strong candidate for the losses of 2026-08-03: loot drops at the
+-- END of an encounter, which is exactly when this is still active or just switching off.
+--
+-- KARTTEST.restrictions[type] = state. A test sets it and raises the event; nothing is inferred here.
+_G.Enum = _G.Enum or {}
+_G.Enum.AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4 }
+_G.Enum.AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 }
+KARTTEST.restrictions = {}
+_G.C_RestrictedActions = {
+    GetAddOnRestrictionState = function(t) return KARTTEST.restrictions[t] or 0 end,
+}
+
+function KARTTEST.SetRestriction(restrictionType, state)
+    KARTTEST.restrictions[restrictionType] = state
+    KARTTEST.FireEvent("ADDON_RESTRICTION_STATE_CHANGED", restrictionType, state)
+end
+
 -- Chat --------------------------------------------------------------------------------
 KARTTEST.sent = {}
 -- What the live API answers with (Enum.SendAddonMessageResult): 0 success, 3 AddonMessageThrottle,

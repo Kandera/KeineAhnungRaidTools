@@ -50,7 +50,61 @@ KASC.diag = KASC.diag or {
     lastSendResult = nil,
     dropNotInGroup = 0, -- an otherwise valid message refused because its sender is not in our group
     dropUnknownToken = 0, -- a message in our prefix whose token this client has no handler for
+    sendHeldBack = 0,   -- held while addon comms were restricted, and sent afterwards
+    sendDroppedRestricted = 0, -- not worth holding, so dropped while restricted (heartbeats, requests)
 }
+
+-- =====================================================================
+--  Addon restrictions
+-- =====================================================================
+-- Midnight gates parts of what an addon may do while an encounter or a Mythic+ run is active, and
+-- announces it with ADDON_RESTRICTION_STATE_CHANGED (Enum.AddOnRestrictionType /
+-- Enum.AddOnRestrictionState, both present in the 12.0.1 annotations). Addon messages are among the
+-- things that stop going out.
+--
+-- Which matters here more than it looks: loot drops at the END of an encounter. A roll announcement
+-- sent in that window is not delayed, it is gone -- and every client that missed it is left with an
+-- item it never heard of, which is the shape of the losses on 2026-08-03 (B118).
+--
+-- ENCOUNTER and CHALLENGEMODE only, and that reading is taken from the addon that has been living
+-- with this in production (RCLootCouncil's own comment: combat is the exception, and comms still work
+-- inside instances with the map restriction on). It is an observation, not documentation -- so this
+-- is written to fail SAFE in both directions: if the reading is too narrow the counters in
+-- /kart status show sends being rejected anyway, and if it is too wide the only cost is that a
+-- message waits for the encounter to end.
+local RESTRICT_ENCOUNTER      = 1 -- Enum.AddOnRestrictionType.Encounter
+local RESTRICT_CHALLENGE_MODE = 2 -- Enum.AddOnRestrictionType.ChallengeMode
+
+local activeRestrictions = {}
+
+local function CommsRestricted()
+    return activeRestrictions[RESTRICT_ENCOUNTER] or activeRestrictions[RESTRICT_CHALLENGE_MODE] or false
+end
+KASC.CommsRestricted = CommsRestricted
+
+-- Messages that must survive the restriction rather than be lost by it. Capped, deduplicated, and
+-- flushed in order once comms come back. Everything else is dropped while restricted: a heartbeat or
+-- a state request that arrives forty seconds late is noise, not repair.
+local GUARANTEED_MAX = 40
+local guaranteedQueue = {}
+
+local function FlushGuaranteed()
+    if #guaranteedQueue == 0 then return end
+    local pending = guaranteedQueue
+    guaranteedQueue = {}
+    for _, m in ipairs(pending) do
+        KASC:Send(m.msg, m.channel, m.target)
+    end
+end
+
+function KASC:OnRestrictionChanged(restrictionType, state)
+    -- "Activating" counts as active: the client raises it before the restriction is enforced, which is
+    -- the one moment a send would still succeed -- and a message that goes out at the very start of an
+    -- encounter is not what this is protecting.
+    local active = (state == 2) or (state == 1) -- Active / Activating
+    activeRestrictions[restrictionType] = active or nil
+    if not CommsRestricted() then FlushGuaranteed() end
+end
 
 function KASC:Diagnostics()
     return KASC.diag
@@ -63,7 +117,26 @@ local SEND_SUCCESS           = 0
 local SEND_ADDON_THROTTLE    = 3 -- Enum.SendAddonMessageResult.AddonMessageThrottle
 local SEND_CHANNEL_THROTTLE  = 8 -- Enum.SendAddonMessageResult.ChannelThrottle
 
-function KASC:Send(msg, channel, target)
+-- opts.guaranteed: this message is worth holding until comms come back (see CommsRestricted). Loot
+-- announcements, awards, votes and the session flag are; heartbeats and requests are not.
+function KASC:Send(msg, channel, target, opts)
+    if CommsRestricted() then
+        if opts and opts.guaranteed and #guaranteedQueue < GUARANTEED_MAX then
+            for _, m in ipairs(guaranteedQueue) do
+                -- Identical message, same destination: the sender is retrying inside the window, and
+                -- delivering it twice afterwards is at best noise.
+                if m.msg == msg and m.channel == channel and m.target == target then
+                    return
+                end
+            end
+            guaranteedQueue[#guaranteedQueue + 1] = { msg = msg, channel = channel, target = target }
+            KASC.diag.sendHeldBack = KASC.diag.sendHeldBack + 1
+        else
+            KASC.diag.sendDroppedRestricted = KASC.diag.sendDroppedRestricted + 1
+        end
+        return
+    end
+
     local result = C_ChatInfo.SendAddonMessage(prefix, msg, channel or self:DefaultChannel(), target)
     if result ~= nil and result ~= SEND_SUCCESS then
         local diag = KASC.diag
@@ -349,9 +422,17 @@ KASC.Dispatch = Dispatch -- exposed for the offline harness
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("CHAT_MSG_ADDON")
-frame:SetScript("OnEvent", function(_, event, msgPrefix, msg, ...)
-    if event == "CHAT_MSG_ADDON" and msgPrefix == prefix then
-        Dispatch(msg, (select(1, ...)), (select(2, ...)))
+-- pcall'd for the same reason Core.lua guards LOOT_HISTORY_UPDATE_DROP: RegisterEvent throws on a
+-- name the client does not know, this one comes from annotations for a version the live client may
+-- not be on yet, and the cost of being wrong must be "this one guard is inert", never "the library
+-- fails to load and takes the addon with it".
+pcall(frame.RegisterEvent, frame, "ADDON_RESTRICTION_STATE_CHANGED")
+frame:SetScript("OnEvent", function(_, event, a, b, ...)
+    -- CHAT_MSG_ADDON: prefix, text, channel, sender. ADDON_RESTRICTION_STATE_CHANGED: type, state.
+    if event == "CHAT_MSG_ADDON" and a == prefix then
+        Dispatch(b, (select(1, ...)), (select(2, ...)))
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+        KASC:OnRestrictionChanged(a, b)
     end
 end)
 

@@ -2718,3 +2718,39 @@ were written with truncated strings. That is a migration question, not a one-lin
 wants its own change with its own tests.
 
 Whoever takes it: the comment is the first thing to correct, whatever is decided about the code.
+
+## B128 — FIXED 2026-08-03 — Midnight blocks addon messages during an encounter, and KART never knew
+
+Found by comparing against RCLootCouncil, at the maintainer's suggestion — *"man muss das Rad nicht
+immer neu erfinden"* — and it is the single most likely explanation for the losses B118 records.
+
+Midnight gates what an addon may do while certain states are active and announces it with
+`ADDON_RESTRICTION_STATE_CHANGED` (`Enum.AddOnRestrictionType` = Combat, **Encounter**,
+**ChallengeMode**, PvPMatch, Map; `Enum.AddOnRestrictionState` = Inactive/Activating/Active). Addon
+messages are among the things that stop going out. Both enums and `C_RestrictedActions` are in the
+12.0.1 annotations, so this is not a 12.1 problem — it is live now.
+
+**Why it lands exactly on this addon:** loot drops at the END of an encounter. Every roll
+announcement KART sends goes out in the one window where this is either still active or in the middle
+of switching off. A message sent then is not delayed, it is gone, and nothing retried.
+
+Before this, KART contained zero occurrences of the event, the enums, or `C_RestrictedActions`.
+
+**The fix.** `KASC` tracks the state and refuses to send while Encounter or ChallengeMode is active.
+Messages marked `guaranteed` are held (capped at 40, deduplicated) and flushed in order the moment the
+restriction lifts; everything else is dropped and counted. `LC.SendLC` decides which is which by
+token, and the rule is *"would the raid be wrong afterwards if this never arrived?"* — announcements,
+awards, votes, the session flag and the config are held; heartbeats and requests are not, because a
+question answered forty seconds late is noise.
+
+**Which two restriction types count is an OBSERVATION, not documentation.** It follows the addon that
+has been living with this in production, whose own comment says combat is the exception and comms
+still work inside instances with the map restriction on. Written to fail safe both ways: too narrow
+and the send counters in `/kart status` show the rejections anyway, too wide and a message waits for
+the encounter to end.
+
+`/kart status` reports both new counters. **That is what settles whether this was the cause of
+2026-08-03** — if held-back and dropped-in-restriction are non-zero next raid, the evening is
+explained; if they stay at zero while an item goes missing, it was not this.
+
+Held by `tests/test_diagnostics.lua`, with `KARTTEST.SetRestriction` driving the real event.
