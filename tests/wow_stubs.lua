@@ -622,11 +622,23 @@ _G.PixelUtil = {
 
 -- Chat --------------------------------------------------------------------------------
 KARTTEST.sent = {}
+-- What the live API answers with (Enum.SendAddonMessageResult): 0 success, 3 AddonMessageThrottle,
+-- 8 ChannelThrottle. The real client refuses to send when it is over the rate limit and says so in
+-- this return value -- which is the only way an addon can find out, since nothing else is raised.
+-- Default 0 so every existing test keeps its current meaning; a test that wants a refusal sets
+-- KARTTEST.sendResult (a number, or a function taking the message).
+--
+-- Deliberately still RECORDS a refused send in KARTTEST.sent: a test asserting "this message was
+-- refused" needs to see the attempt, and the addon's own counters are what prove it was noticed.
+KARTTEST.sendResult = nil
 _G.C_ChatInfo = {
     RegisterAddonMessagePrefix = function() return true end,
     SendAddonMessage = function(prefix, msg, channel, target)
         KARTTEST.sent[#KARTTEST.sent + 1] =
             { prefix = prefix, msg = msg, channel = channel, target = target }
+        local r = KARTTEST.sendResult
+        if type(r) == "function" then return r(msg) end
+        return r or 0
     end,
 }
 function KARTTEST.ClearSent() KARTTEST.sent = {} end

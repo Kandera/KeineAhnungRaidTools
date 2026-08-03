@@ -15,7 +15,7 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 2
+local MAJOR, MINOR = "KASC-1.0", 3
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
@@ -37,8 +37,43 @@ function KASC:DefaultChannel()
     return IsInRaid() and "RAID" or "PARTY"
 end
 
+-- Why any of this exists: on 2026-08-03 a raid lost four different messages -- an End Round, two roll
+-- announcements and four votes -- and not one client anywhere said so. Every loss looked like a
+-- different bug on a different screen, and telling them apart took the whole evening (B118, B120).
+-- These counters are deliberately NOT a fix: they are what makes the next raid say which of the
+-- possible causes it actually was, instead of another round of inference.
+--
+-- Read back through KASC:Diagnostics(); KART prints them in /kart status when any of them is non-zero.
+KASC.diag = KASC.diag or {
+    sendRejected = 0,   -- SendAddonMessage answered with anything other than success
+    sendThrottled = 0,  -- ...and the reason was one of the two throttles (subset of sendRejected)
+    lastSendResult = nil,
+    dropNotInGroup = 0, -- an otherwise valid message refused because its sender is not in our group
+    dropUnknownToken = 0, -- a message in our prefix whose token this client has no handler for
+}
+
+function KASC:Diagnostics()
+    return KASC.diag
+end
+
+-- By value rather than through Enum.SendAddonMessageResult: the enum is absent in the offline harness
+-- and its numbers are stable API (12.0.1 annotations). A client that returns nothing at all counts as
+-- success -- "no answer" must never read as "everything failed".
+local SEND_SUCCESS           = 0
+local SEND_ADDON_THROTTLE    = 3 -- Enum.SendAddonMessageResult.AddonMessageThrottle
+local SEND_CHANNEL_THROTTLE  = 8 -- Enum.SendAddonMessageResult.ChannelThrottle
+
 function KASC:Send(msg, channel, target)
-    C_ChatInfo.SendAddonMessage(prefix, msg, channel or self:DefaultChannel(), target)
+    local result = C_ChatInfo.SendAddonMessage(prefix, msg, channel or self:DefaultChannel(), target)
+    if result ~= nil and result ~= SEND_SUCCESS then
+        local diag = KASC.diag
+        diag.sendRejected = diag.sendRejected + 1
+        diag.lastSendResult = result
+        if result == SEND_ADDON_THROTTLE or result == SEND_CHANNEL_THROTTLE then
+            diag.sendThrottled = diag.sendThrottled + 1
+        end
+    end
+    return result
 end
 
 function KASC:AttachCache(tbl)
@@ -292,12 +327,19 @@ local function Dispatch(msg, channel, sender)
 
     local token, payload = msg:match("^([^:]+):(.*)$")
     local entry = (token and handlers.payload[token]) or handlers.exact[msg]
-    if not entry then return end
+    -- Counted, because this is what a peer on a newer protocol looks like from here: the message
+    -- arrives, is dropped without a word, and the two clients disagree about the evening (B62).
+    if not entry then KASC.diag.dropUnknownToken = KASC.diag.dropUnknownToken + 1 return end
     if entry.enabled and not entry.enabled() then return end
     -- The resolved key alone is NOT proof of membership: resolution is short-name based, so an
     -- out-of-group player sharing a short name with a council member would otherwise resolve
     -- onto their GUID and pass every authority check. IsFullNameInGroup compares the realm too.
-    if entry.group and not KAUtil.IsFullNameInGroup(sender) then return end
+    -- Counted for the same reason: a roster that is briefly stale refuses the real sender's message,
+    -- and the refusal is indistinguishable from the message never arriving (B118).
+    if entry.group and not KAUtil.IsFullNameInGroup(sender) then
+        KASC.diag.dropNotInGroup = KASC.diag.dropNotInGroup + 1
+        return
+    end
 
     entry.fn(payload, setmetatable(
         { sender = sender, shortName = shortName, channel = channel }, ctxMeta))

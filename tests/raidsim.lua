@@ -415,10 +415,23 @@ function RaidSim.Install(sim)
             sim.oversized[#sim.oversized + 1] = { from = from.name, bytes = #msg, msg = msg }
             return
         end
-        -- A message that leaves but never lands. Blizzard's chat rate limiter drops the overflow
-        -- SILENTLY and SendAddonMessage's return code is discarded, so the sender cannot tell -- and
-        -- an addon whose recovery depends on one unacknowledged message has no way back. Anything
-        -- important enough to lose has to be tested against losing it.
+        -- The client REFUSING to send, which is a different failure from every one below: the message
+        -- never leaves at all, and the live API says so in its return value
+        -- (Enum.SendAddonMessageResult; 0 success, 3 AddonMessageThrottle, 8 ChannelThrottle). That
+        -- return value is the one thing a sender can actually observe about the rate limiter, and
+        -- KASC reads it now (B120) -- so the harness has to be able to answer with it.
+        --
+        -- Set sim.sendResult to a number, or to a function taking the message. Refused messages are
+        -- still logged above: the attempt happened, and a test asserting "this was refused" needs to
+        -- see it.
+        local refusal = sim.sendResult
+        if type(refusal) == "function" then refusal = refusal(msg) end
+        if refusal and refusal ~= 0 then return refusal end
+
+        -- A message that leaves but never lands. Blizzard's chat rate limiter can also drop overflow
+        -- SILENTLY, after accepting it -- so the sender is told nothing at all, and an addon whose
+        -- recovery depends on one unacknowledged message has no way back. Anything important enough
+        -- to lose has to be tested against losing it.
         for token in pairs(sim.blackholed or {}) do
             if msg:sub(1, #token) == token then return end
         end
@@ -454,6 +467,7 @@ function RaidSim.Install(sim)
                 RaidSim.As(to, function() to.KASC.Dispatch(msg, channel, sender) end)
             end
         end
+        return 0 -- Enum.SendAddonMessageResult.Success, the same answer the live client gives
     end
 end
 

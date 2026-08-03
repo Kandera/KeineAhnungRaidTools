@@ -286,6 +286,7 @@ KART.L_enUS = {
     LC_ROLL_UNANNOUNCED    ="%s was never announced to the loot council, so it was not passed for you -- roll on Blizzard's window yourself if you want it.",
     LC_FORCEWIN_LOST       = "%s went to %s, not to you -- check your bags before you promise it to anybody.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
+    LC_STATUS_DROPS        = "Messages refused here: %d sender, %d not in group, %d unknown item, %d unknown token -- own sends rejected: %d (%d throttled)",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",

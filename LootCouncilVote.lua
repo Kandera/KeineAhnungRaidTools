@@ -1137,14 +1137,17 @@ end
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
-    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
     local rollID, idx, count, note, itemID = ParseVotePayload(payload)
     if not rollID or not idx then return end
     -- Ignore votes for a roll we're no longer tracking (already resolved/pruned): a late straggler
     -- would otherwise re-create LC.votes[rollID] as an orphan that no cleanup path ever frees. Every
     -- peer processes LC_START (which sets rollItems) before any vote can be cast, so a legitimate
     -- vote never arrives before this is set.
-    if not LC.rollItems[rollID] then return end
+    if not LC.rollItems[rollID] then LC.diag.unknownRoll = LC.diag.unknownRoll + 1 return end
     -- Which ITEM the vote was cast for travels with it (B46). Blizzard reuses a rollID for a
     -- genuinely different drop within seconds on trash, so a vote delayed by the network landed in
     -- the new item's tally, under a name that had never seen it.
@@ -1174,7 +1177,10 @@ end
 -- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
 -- anything automatically.
 function Vote.HandleRoll(payload, senderKey)
-    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
     local rollID, value, itemID = payload:match("^(%d+):(%d+):@(%d*)$")
     rollID = tonumber(rollID)
     value  = tonumber(value)
@@ -1215,7 +1221,10 @@ end
 function Vote.HandleCouncilVote(payload, senderKey)
     -- Council membership is intentionally trusted (see above), but the sender must at least be in
     -- our group — a bare whisper from outside must not land in the council straw-poll tally.
-    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
     -- "rollID:@itemID:candidate" since B46; "rollID:candidate" from older clients. The marker keeps
     -- the item apart from a candidate key, which is free-form text on the wire.
     local rollID, itemID, candidateKey = payload:match("^(%d+):@(%d*):(.*)$")
@@ -1226,7 +1235,7 @@ function Vote.HandleCouncilVote(payload, senderKey)
     if not rollID then return end
     -- Ignore council votes for an untracked (already resolved/pruned) roll — see HandleVote:
     -- prevents an orphan LC.councilVotes[rollID] that no cleanup path frees.
-    if not LC.rollItems[rollID] then return end
+    if not LC.rollItems[rollID] then LC.diag.unknownRoll = LC.diag.unknownRoll + 1 return end
     -- Same reused-rollID question as Vote.HandleVote, and answered the same way: a pick that names a
     -- different item than we are holding is kept, not dropped, and filtered when it is read.
 

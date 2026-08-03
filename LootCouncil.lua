@@ -26,6 +26,19 @@ LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt
 LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
 LC.rollItems            = {}  -- [rollID] = itemLink
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
+-- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
+-- that happen one layer below (not in our group, unknown token) — together they are the whole set of
+-- ways a message can reach this client and still do nothing.
+--
+-- Both counters exist because of B118: a raid lost an End Round, two roll announcements and four
+-- votes in one evening, and every one of those losses was silent on both ends. A refused message and
+-- a message that never arrived look identical from outside, and they need completely different fixes.
+-- Printed by /kart status whenever anything here is non-zero.
+LC.diag = LC.diag or {
+    refusedSender = 0, -- the sender is not who this client believes may send that message
+    unknownRoll   = 0, -- a vote/roll/result for an item this client has never heard of
+}
+
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
 LC.councilTabsNew       = {}  -- [rollID] = true while a tab hasn't been switched to yet (unseen-item marker)
 LC.rollDeadlines        = {}  -- [rollID] = GetTime() timestamp when voting closes, shared by both UIs
@@ -1252,6 +1265,19 @@ function LC.PrintStatus()
     local outdated = LC.OutdatedRaiders()
     print("  " .. string.format(L.LC_STATUS_OUTDATED, LC.PROTOCOL_VERSION, #outdated)
         .. (#outdated > 0 and (": " .. table.concat(outdated, ",")) or ""))
+
+    -- Printed only when something actually went missing. On a clean evening this line is noise; on a
+    -- broken one it is the first thing worth reading, because it separates the three causes that were
+    -- indistinguishable on 2026-08-03 (B118): a message this client refused, a message it never
+    -- recognised, and one of its own that never left. All four "refused" counters being zero while a
+    -- raider is missing an item means the message never arrived at all — which is Blizzard's delivery,
+    -- and needs the catch-up rather than a guard change.
+    local kd = KASC:Diagnostics()
+    if kd.dropNotInGroup + kd.dropUnknownToken + kd.sendRejected
+        + LC.diag.refusedSender + LC.diag.unknownRoll > 0 then
+        print("  " .. string.format(L.LC_STATUS_DROPS, LC.diag.refusedSender, kd.dropNotInGroup,
+            LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendThrottled))
+    end
 end
 
 -- ==========================================================================
@@ -3238,7 +3264,7 @@ function LC.HandleActive(value, senderKey)
     -- member could turn Loot Council off for the whole raid with a forged LC_ACTIVE. On a client
     -- that hasn't received a config yet the lootmaster reads "" and IsSenderLootOwner falls back to
     -- the leader, which is the bootstrap path anyway.
-    if not LC.IsSenderLootOwner(senderKey) then return end
+    if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
     local wasActive = LC.sessionActive
     LC.sessionActive = (value == "1")
     -- The owner told us, so our flag is an answer now (see LC.sessionStateKnown).
@@ -3289,14 +3315,14 @@ end
 -- an item outright, which is far more authority than clearing a list. IsSenderCouncil accepts the
 -- loot owner too, so this is strictly wider than what it replaces.
 function LC.HandleEndRound(senderKey)
-    if not LC.IsSenderCouncil(senderKey) then return end
+    if not LC.IsSenderCouncil(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
     LC.ClearAllRolls()
 end
 
 function LC.HandleStart(payload, senderKey)
     -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
     -- would pop fake vote windows on every client.
-    if not LC.IsSenderLootOwner(senderKey) then return end
+    if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
     -- payload = "rollID:seconds:itemID"
     local rollID, secs, itemID = payload:match("^(%d+):(%d+):?(%d*)$")
     rollID = tonumber(rollID)
@@ -3493,7 +3519,7 @@ function LC.HandleManualStart(payload, senderKey)
     -- GUID, but the stored lootmaster can still be pending config text if they weren't in our roster
     -- when LC_CONFIG was parsed, which would drop a legitimate manual roll inside the
     -- GROUP_ROSTER_UPDATE throttle window (LC_STATE_REQ only covers a fresh raid join).
-    if not LC.IsSenderLootOwner(senderKey) then return end
+    if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
     local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
