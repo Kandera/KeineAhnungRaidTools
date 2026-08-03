@@ -465,6 +465,12 @@ function Trade.ClearRollState(rollID)
     LC.relevanceHandled[rollID]  = nil
     LC.hiddenIrrelevant[rollID]  = nil
     LC.autoVotedByMe[rollID]     = nil
+    -- Who was in the raid when this roll was announced (B118). Owner-side only, and it has to survive
+    -- a reload with the roll it belongs to -- an owner that comes back without it would refuse every
+    -- catch-up for an item still on the table.
+    if LC.rollEligible then LC.rollEligible[rollID] = nil end
+    -- "we have already asked the owner about this one", a timestamp and nothing else.
+    if LC.rollReqSent then LC.rollReqSent[rollID] = nil end
     -- LC.relevanceSnapshot is deliberately NOT cleared here, unlike the three above. On a reused
     -- rollID this runs from PurgeStaleRoll AFTER the relevance frame has already snapshotted the new
     -- item — that frame registers for START_LOOT_ROLL before Core.lua's dispatcher and therefore

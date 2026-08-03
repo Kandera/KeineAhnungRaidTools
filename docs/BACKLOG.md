@@ -124,6 +124,20 @@ what a late JOINER sends**, and a late arrival must not be pulled into a distrib
 running. Real rolls tell the two apart by asking Blizzard; manual rolls have nothing to ask. That is
 a rule decision, not a patch.
 
+### Answered 2026-08-03, both halves
+
+**The rule, from the maintainer:** a late arrival is not handed a running item — *"der ist ja nicht mal
+lootberechtigt"*. It is now enforced where it can actually be known: `LC.rollEligible[rollID]` records
+the roster at the moment the owner announces, and every catch-up path requires a strict yes before
+answering (B118). A manually added item is covered by the same record, which is what the Blizzard check
+could never do for it.
+
+**And "the plain raider was sent a catch-up and did not apply it" is explained.** It was
+`LC.HandleRollCatchup`'s own guard, `if not GetLootRollItemLink(rollID) then return end`: after a
+reload that answers nil, so the catch-up was discarded by the client that had asked for it. The guard
+was the entitlement proof, and now that entitlement is decided by the sender it is gone. Measured
+against no live raid yet — the suite covers it, the Manifest counts C8 in the game.
+
 ## B80 — OPEN, by choice — the raid leader is not in the council list
 
 Reported from the live v3.2.2-beta1 test, 2026-07-31, and explicitly NOT blocking the guild release:
@@ -2326,7 +2340,51 @@ Where a cause was traced to the line, it says so. Where it is still a hypothesis
 names the measurement that would settle it — the evening ended before the send probe could be run, and
 guessing past that point is how B70 cost three attempts.
 
-## B118 — OPEN 2026-08-03 — a lost addon message costs the item, and nothing in a running session notices
+## B118 — NARROWED 2026-08-03 — a lost addon message costs the item, and nothing in a running session notices
+
+**Two of the three halves are fixed; the third is written down at the bottom of this entry.**
+
+*The item.* The loot owner now broadcasts what is on the table every ten seconds while anything is on
+it (`LC_TABLE`), a client missing one of those rolls asks for it (`LC_ROLL_REQ`, at most once per roll
+per 30s), and the owner answers with the catch-up that already existed. `LC.HandleRollCatchup` no
+longer demands that Blizzard gave this client the same roll — that demand was the defect: it threw the
+catch-up away on exactly the clients that needed it (dead, released, out of range have no roll either)
+and could never be satisfied at all by a manually added item.
+
+*Who may be caught up.* Entitlement moved to the one client that can know it. `LC.rollEligible[rollID]`
+records the roster at the moment the owner announces, and both catch-up paths require a strict yes
+before answering — **the maintainer's rule, 2026-08-03: a late arrival is not handed a running item,
+"der ist ja nicht mal lootberechtigt".** A roll with no record is refused rather than given the benefit
+of the doubt. This is also what finally closes B79.
+
+*End Round.* Sent three times over five seconds instead of once, and the repeat is dropped if an item
+has appeared in the meantime.
+
+**The half that was designed, written, and taken back out before it ever ran:** the heartbeat's
+mirror image, "you are holding a card I did not list, drop it". It loses a whole distribution in the
+case this guild has every raid — the lootmaster ports out mid-round, the stand-in's own table is empty
+at that moment, and one heartbeat from them would tell every council member to drop the item they are
+voting on. C5 and C11 broken by the mechanism meant to protect them. **Deletion has to come from
+somebody deciding it, never from somebody else's silence.** Do not re-propose it; that is what the End
+Round repeat is for.
+
+The convergence soak caught the first version of the repeat immediately (seed 93): a roll starting
+inside those five seconds was cleared off every peer while the sender kept it. 2000 seeds clean after
+the guard.
+
+Held by `tests/test_lc_table.lua`, and by `tests/test_lc_persistedtables.lua` for the new per-roll
+table — an owner who reloads mid-round without `rollEligible` would refuse every catch-up for the
+items still on their own table.
+
+**Still open, and it is the fourth measurement in the table below: the votes.** Four raiders pressed a
+button and the council never saw it. `LC_VOTE` is still sent exactly once; the vote catch-up
+(`LC_VOTE_REQ`, four seconds before the window closes) is the only thing that re-asks, it comes from
+the owner alone, and losing that request loses the repair with it. The shape of the answer is probably
+the same one as here — the tally is known to every council member, so "who has not answered" is
+answerable locally — but it is a different message and a different design, and it wants its own entry
+rather than being bolted onto this one.
+
+### The original diagnosis, kept for the measurements
 
 Reports #1, #7, #11, #13, #15; GitHub #18, #19, #21, #25. The most expensive defect of the evening, and
 the reason four different symptoms looked like four different bugs.

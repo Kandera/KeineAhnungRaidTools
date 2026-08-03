@@ -50,9 +50,14 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --                          only to tell an early roll from an orphan. After a restore the item is
 --                          back, so the roll is not pending at all.
 --   pendingItemLoads    -- an item load waiting on the client. No callback survives a reload.
+--   rollReqSent         -- "we already asked the owner about this roll", a timestamp read only to
+--                          stop a ten-second heartbeat turning into a ten-second request (B118).
+--                          GetTime()-based, so it does not survive a logout in any meaningful form,
+--                          and a restored client SHOULD ask again -- that is the whole point of it.
 local EXEMPT = {
     rollDeadlines = true, rollLootedAt = true,
     equipRequestedRolls = true, rollsPendingSince = true, pendingItemLoads = true,
+    rollReqSent = true,
 }
 
 for name in pairs(cleared) do

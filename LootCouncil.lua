@@ -1675,7 +1675,11 @@ function LC.HandleStateRequest(requester, requesterKey)
     -- Last, and only from the loot owner: the items still on the table, for a client that was deaf
     -- when they were announced (B66). After the session flag, because a client that does not know
     -- there is a session has nothing to hang them on.
-    LC.SendOpenRolls(requester)
+    --
+    -- The key goes with the name now: a state request is also what a late JOINER sends, and the rule
+    -- settled on 2026-08-03 is that they do not get a running item. Who was here when each item
+    -- dropped is recorded at the source (LC.rollEligible), and this is where it is applied (B118, B79).
+    LC.SendOpenRolls(requester, requesterKey)
 end
 
 -- The rolls still open, listed to one client that has just asked for the raid's state (B66).
@@ -1706,7 +1710,40 @@ function LC.ItemPayload(link, itemID)
     return itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
 end
 
-function LC.SendOpenRolls(target)
+-- Who was in the raid when this roll was announced, by identity key. Written by the loot owner only,
+-- at the moment it announces, and it is the whole of the rule the maintainer settled on 2026-08-03:
+--
+--     a late arrival is not handed a running item -- "der ist ja nicht mal lootberechtigt".
+--
+-- Until now that rule was enforced by asking BLIZZARD: a catch-up was only applied if this client had
+-- the same roll open, which proves it was there. That proof fails for exactly the people the catch-up
+-- exists for (dead, released, out of range -- Blizzard gave them no roll either) and cannot exist at
+-- all for a manually added item, which is why B79 was stuck. Recording the roster at the source
+-- answers it for both, and answers it on the client that actually knows.
+LC.rollEligible = LC.rollEligible or {}
+
+local function SnapshotEligible(rollID)
+    local set = {}
+    for unit in KAUtil.EachGroupUnit() do
+        local key = (KASC.Identity.ResolvePlayer(unit))
+        -- Pending text keys are kept deliberately: a raider whose name has not resolved yet was still
+        -- standing there, and refusing them later would be the same silent exclusion this fixes.
+        if key and key ~= "" then set[key] = true end
+    end
+    LC.rollEligible[rollID] = set
+end
+LC.SnapshotEligible = SnapshotEligible
+
+-- Whether we may hand rollID's details to this asker. Nothing recorded means the roll predates this
+-- mechanism (an owner mid-upgrade, or a roll restored from a snapshot written by an older build), and
+-- the old proof stands in for it: a client Blizzard gave the same roll to was demonstrably there.
+function LC.MayCatchUp(rollID, askerKey)
+    local set = LC.rollEligible[rollID]
+    if not set then return nil end
+    return set[askerKey] == true
+end
+
+function LC.SendOpenRolls(target, targetKey)
     if not (IsInGroup() and target and LC.sessionActive and LC.IsLootOwner()) then return end
     local now, sent = GetTime(), 0
     for rollID, deadline in pairs(LC.rollDeadlines or {}) do
@@ -1716,7 +1753,16 @@ function LC.SendOpenRolls(target)
         -- Only rolls still open, and only once the item is actually known: an unresolved one would
         -- arrive as a question mark the receiver could not repair, which is the state LC.HandleStart
         -- exists to avoid.
-        if itemID and deadline > now and not LC.IsTestRoll(rollID) then
+        --
+        -- And only to somebody who was here for it. A state request is also what a late JOINER sends,
+        -- which is why this used to lean on the receiver's own Blizzard roll to sort the two apart.
+        -- Strictly "yes", not "not no". A roll with no record at all is one this client cannot vouch
+        -- for -- announced by a previous owner before the role moved, or restored from an older
+        -- build's snapshot -- and the rule settled on 2026-08-03 does not have a maybe in it. The cost
+        -- of being wrong here is a raider who has to be told about an item by voice; the cost of
+        -- guessing the other way is somebody who was not in the raid taking part in its loot.
+        if itemID and deadline > now and not LC.IsTestRoll(rollID)
+            and LC.MayCatchUp(rollID, targetKey) == true then
             local secs = math.max(1, math.floor(deadline - now))
             LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. secs .. ":"
                 .. LC.ItemPayload(link, itemID), target)
@@ -1725,10 +1771,13 @@ function LC.SendOpenRolls(target)
     end
 end
 
--- The receiving half, and the reason this does not break the rule that a late arrival stays out of a
--- distribution already running: the roll is rebuilt only if BLIZZARD gave this client the same roll.
--- That is its own proof of having been in the raid when the boss died -- someone who joined
--- afterwards has no such roll, GetLootRollItemLink answers nil for them, and nothing happens.
+-- The receiving half. Entitlement is now decided by the SENDER, which is the only client that knows
+-- who was standing there when the item dropped (see LC.rollEligible) -- so this no longer demands
+-- that Blizzard gave us the same roll.
+--
+-- That demand was the bug B118 kept running into: a client that was dead, released or out of range
+-- has no roll of its own, which is precisely why it needed catching up, and the guard threw the
+-- catch-up away on exactly those clients. A manually added item never has a Blizzard roll at all.
 --
 -- Deliberately does NOT roll 1-100 on their behalf. The roll belongs to the moment the item dropped;
 -- inventing one now would put a number in the council's tally that never existed, and the column
@@ -1737,8 +1786,130 @@ function LC.HandleRollCatchup(payload, senderKey)
     local rollID = tonumber(payload:match("^(%d+):"))
     if not rollID then return end
     if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
-    if not GetLootRollItemLink(rollID) then return end
     LC.HandleStart(payload, senderKey)
+end
+
+-- ==========================================================================
+--  B118: the table, said out loud
+-- ==========================================================================
+--
+-- Every message that puts an item on the table or takes it off is sent exactly once, with no
+-- acknowledgement and nothing that notices the silence. On 2026-08-03 that cost a raid four separate
+-- things in one evening: a raider never learned an item existed and lost it outright, and a council
+-- member kept three rounds of cards because End Round never reached him.
+--
+-- So the loot owner says what is on the table, over and over, while there is anything on it, and a
+-- client missing one of those rolls asks for it. One message every ten seconds, from one client in the
+-- raid -- and unlike a retry it also repairs the client that was not even listening when the original
+-- went out.
+--
+-- IT ONLY EVER ADDS. The obvious other half -- "you are holding a card I did not list, drop it" --
+-- was designed, written, and taken back out before it ever ran, because it can lose a whole
+-- distribution in the case this guild has every raid: the lootmaster ports out mid-round and the raid
+-- leader stands in. The stand-in's own table is empty at that moment. One heartbeat from them would
+-- have told every council member to drop the items they are voting on, which is C5 and C11 broken by
+-- the very mechanism meant to protect them. Deletion has to come from somebody deciding it, never
+-- from somebody else's silence -- so End Round repeats its own message instead (see LC.EndRound).
+local TABLE_HEARTBEAT_SECONDS = 10
+-- Enough for any real distribution (a boss drops a handful), and short enough that the message stays
+-- far inside the transport's cap. Nothing is inferred from an item's ABSENCE here, so a truncated
+-- list costs at most a slower catch-up for the twelfth item.
+local TABLE_MAX_IDS = 12
+-- A client re-asks for the same missing roll at most this often, so a heartbeat every ten seconds
+-- cannot turn into a request every ten seconds while an answer is on its way.
+local ROLL_REQ_COOLDOWN = 30
+
+local tableTicker
+local lastTableWasEmpty = true
+
+function LC.OpenRollIDs()
+    local now, ids = GetTime(), {}
+    for rollID, deadline in pairs(LC.rollDeadlines or {}) do
+        if not LC.IsTestRoll(rollID) and deadline > now and LC.rollItems[rollID] then
+            ids[#ids + 1] = rollID
+        end
+    end
+    table.sort(ids)
+    return ids
+end
+
+function LC.SendTableHeartbeat()
+    if not (IsInGroup() and LC.sessionActive and LC.IsLootOwner()) then return end
+    local ids = LC.OpenRollIDs()
+    -- One empty heartbeat after the table clears, then silence. That message is what lets a client
+    -- which missed End Round drop its cards; sending it forever would be noise on an idle raid.
+    if #ids == 0 and lastTableWasEmpty then return end
+    lastTableWasEmpty = (#ids == 0)
+
+    local shown = {}
+    for i = 1, math.min(#ids, TABLE_MAX_IDS) do shown[i] = ids[i] end
+    LC.SendLC("LC_TABLE:" .. #ids .. ":" .. table.concat(shown, ","))
+end
+
+-- Started by the loot owner when it announces a roll, and it stops itself once the table has been
+-- reported empty. Cheap either way: the send above returns immediately on any client that is not the
+-- owner, which is what keeps a role change mid-round from producing two broadcasters.
+function LC.EnsureTableTicker()
+    if tableTicker then return end
+    lastTableWasEmpty = false
+    tableTicker = C_Timer.NewTicker(TABLE_HEARTBEAT_SECONDS, function()
+        LC.SendTableHeartbeat()
+        if lastTableWasEmpty and tableTicker then
+            tableTicker:Cancel()
+            tableTicker = nil
+        end
+    end)
+end
+
+function LC.StopTableTicker()
+    if tableTicker then tableTicker:Cancel() end
+    tableTicker = nil
+    lastTableWasEmpty = true
+end
+
+-- The receiving half of the heartbeat: ask for what we are missing, and nothing else. Deliberately
+-- has no branch that removes anything -- see the comment above the constants for what that branch
+-- would cost the first time the loot role moves mid-round.
+function LC.HandleTable(payload, senderKey, sender)
+    if not LC.IsSenderLootOwner(senderKey) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
+    local _, list = payload:match("^(%d+):?(.*)$")
+
+    -- Asked for one at a time, only from the owner, and at most once every ROLL_REQ_COOLDOWN per
+    -- roll -- so a heartbeat every ten seconds cannot become a request every ten seconds while an
+    -- answer is already on its way, and a raid that all missed the same announcement does not answer
+    -- itself into another burst.
+    LC.rollReqSent = LC.rollReqSent or {}
+    local now = GetTime()
+    for id in tostring(list):gmatch("%d+") do
+        local rollID = tonumber(id)
+        if rollID and not LC.rollItems[rollID]
+            and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
+            LC.rollReqSent[rollID] = now
+            LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
+        end
+    end
+end
+
+-- Somebody asking for a roll they are missing. The eligibility rule lives here, on the one client
+-- that knows who was in the raid when the item dropped.
+function LC.HandleRollRequest(payload, senderKey, sender)
+    if not (LC.sessionActive and LC.IsLootOwner()) then return end
+    local rollID = tonumber(payload:match("^(%d+)$"))
+    if not rollID then return end
+    local link = LC.rollItems[rollID]
+    local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
+    if not itemID or LC.IsTestRoll(rollID) then return end
+    local deadline = LC.rollDeadlines and LC.rollDeadlines[rollID]
+    if not deadline or deadline <= GetTime() then return end
+    -- The rule, and the only place it is decided: somebody who was not in the raid when this was
+    -- announced does not get it now. Strictly "yes" -- see LC.SendOpenRolls for why a roll with no
+    -- record at all is refused rather than given the benefit of the doubt.
+    if LC.MayCatchUp(rollID, senderKey) ~= true then return end
+    LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. math.max(1, math.floor(deadline - GetTime()))
+        .. ":" .. LC.ItemPayload(link, itemID), sender)
 end
 
 -- A council member (or the raid leader) telling us the session we own is still running, because we
@@ -2144,6 +2315,12 @@ function LC.ClearAllRolls()
     if LC.equipRequestedRolls then wipe(LC.equipRequestedRolls) end
     if LC.rollsPendingSince then wipe(LC.rollsPendingSince) end
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
+    if LC.rollEligible then wipe(LC.rollEligible) end
+    if LC.rollReqSent then wipe(LC.rollReqSent) end
+    -- Nothing left on the table, so nothing left to say about it (B118). The ticker also stops itself
+    -- after one empty heartbeat; this is the direct route for the case that skips that -- a session
+    -- ending, or the round being cleared from under it.
+    if LC.StopTableTicker then LC.StopTableTicker() end
     LC.showAllOverride = nil
     LC.activeRollID = nil
     if LC.councilPanel then LC.councilPanel:Hide() end
@@ -2210,6 +2387,10 @@ local PERSISTED_ROLL_TABLES = {
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
     "rollNotInOurBags", "rollAnnounced", "rollSeenHere", "relevanceHandled",
     "hiddenIrrelevant", "autoVotedByMe", "councilTabsNew",
+    -- Owner-side, and load-bearing across a reload: without it a lootmaster who reloads mid-round can
+    -- no longer tell who was in the raid when each item dropped, and refuses every catch-up for the
+    -- items still on the table (B118).
+    "rollEligible",
 }
 
 -- Called from PLAYER_LOGOUT, which the client raises for /reload, a logout and a quit alike -- so
@@ -2474,8 +2655,33 @@ end
 -- LC.SetSessionActive is for (the settings-tab toggle, and the leave-raid path in
 -- LC.CheckRaidJoin). Mirrors LC.SetSessionActive's broadcast-then-clear shape, minus the LC_ACTIVE
 -- flip and the config re-broadcast, since neither the session flag nor the config changes here.
+-- Sent more than once, on purpose (B118). This is the message a council member did not get on
+-- 2026-08-03: his cards from the previous round stayed, the next /kart add put the same items on top
+-- of them, and his panel finished the evening showing three rounds at once.
+--
+-- Repetition rather than an acknowledgement, and rather than peers inferring the end from a heartbeat
+-- that stops listing an item: receiving this twice does exactly what receiving it once does
+-- (LC.ClearAllRolls is idempotent), while inferring deletion from somebody else's silence can wipe a
+-- live distribution the moment the loot role moves. Three copies over five seconds is two more
+-- chances at a message that costs a raid an evening when it goes missing.
+local END_ROUND_REPEATS = { 2, 5 }
+
 function LC.EndRound()
     LC.SendLC("LC_END_ROUND")
+    for _, delay in ipairs(END_ROUND_REPEATS) do
+        C_Timer.After(delay, function()
+            -- The round has restarted -- an item dropped inside those five seconds -- so the repeat
+            -- is no longer about anything that is still true. Sending it would clear the NEW item off
+            -- every peer while the sender, which already ran its own ClearAllRolls once, keeps it:
+            -- half a raid voting on something the other half cannot see. Found by the convergence
+            -- soak at seed 93, on the first run after this repeat was added.
+            if next(LC.rollItems) ~= nil then return end
+            -- Only while we still have the standing to say it: the role can move in those five
+            -- seconds, and a message the raid would now reject is not worth sending. Council rather
+            -- than loot owner, matching exactly who the receiving side accepts this from (B57).
+            if LC.IsCouncil() then LC.SendLC("LC_END_ROUND") end
+        end)
+    end
     LC.ClearAllRolls()
 end
 
@@ -3153,8 +3359,12 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- raid, while the lootmaster kept force-winning items nobody could vote on.
     local secs = KART_Settings.lcVoteSeconds or 20
     if isLootmaster then
+        -- Who is standing here right now, before anything else: this is what decides later who may be
+        -- handed this roll after missing its announcement, and who joined too late for it (B118).
+        SnapshotEligible(rollID)
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. LC.ItemPayload(itemLink, newItemID))
         LC.Vote.ScheduleVoteCatchup(rollID, secs)
+        LC.EnsureTableTicker()
     end
 
     -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
@@ -3533,6 +3743,11 @@ function LC.StartManualRoll(itemsText)
         LC.rollLootedAt = LC.rollLootedAt or {}
         LC.rollLootedAt[rollID] = time()
 
+        -- Same roster snapshot a real drop takes, and the reason B79 could never be answered before:
+        -- a manually added item has no Blizzard roll behind it, so there was nothing to prove with
+        -- who was in the raid at the time. Now there is (B118).
+        SnapshotEligible(rollID)
+
         local msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink
         -- Guard the 255-byte SendAddonMessage cap: a very long item link (many bonus IDs) would be
         -- silently dropped, desyncing peers while the lootmaster's own windows still open below.
@@ -3630,6 +3845,10 @@ KASC:RegisterMessage("LC_CONFIG_RELAY", { payload = true, group = true, enabled 
     function(payload, ctx) LC.HandleConfigRelay(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_ROLL_CATCHUP", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleRollCatchup(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_TABLE", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleTable(payload, ctx:Key(), ctx.sender) end)
+KASC:RegisterMessage("LC_ROLL_REQ", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleRollRequest(payload, ctx:Key(), ctx.sender) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },

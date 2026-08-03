@@ -11,6 +11,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Items zeigen jetzt bei allen das echte Itemlevel und die echten Werte** — auch bei Raidern, die kein eigenes Würfelfenster von Blizzard bekommen haben.
 - **Raider werden nicht mehr den ganzen Abend als „Kein KART erkannt" angezeigt** — die Versionsabfrage repariert sich jetzt selbst.
 - **Der Wurf jedes Raiders erreicht das Council** — auch der von Leuten ohne eigenes Würfelfenster von Blizzard.
+- **Ein Item, von dem du nie erfahren hast, findet dich jetzt trotzdem** — der Lootmaster sagt laufend, was auf dem Tisch liegt, und dein Client fordert Fehlendes nach.
+- **„End Round" wird mehrfach gesendet**, damit niemand mehr die Karten der letzten Runde behält.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
