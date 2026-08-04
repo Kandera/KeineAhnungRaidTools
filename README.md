@@ -93,6 +93,12 @@ Coordinated loot distribution directly inside the addon, no external tools requi
 ## Contributors
 *   **Author:** Kandera
 
+## Third-party libraries
+Bundled unmodified, each under its own license:
+
+*   **[Ace3](https://www.wowace.com/projects/ace3)** (AceComm-3.0, CallbackHandler-1.0) — © Ace3 Development Team, BSD-style license.
+*   **ChatThrottleLib** by Mikk — released into the Public Domain.
+
 ## License
 This project is licensed under the MIT License - see the LICENSE.md file for details.
 
