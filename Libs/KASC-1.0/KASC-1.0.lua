@@ -15,12 +15,15 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 3
+local MAJOR, MINOR = "KASC-1.0", 4
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
 local KAUtil = LibStub("KAUtil-1.0")
 local KAGS   = LibStub("KAGS-1.0")
+-- The transport. Everything this library sends goes through ChatThrottleLib's queue underneath it,
+-- and everything it receives comes back out of AceComm already reassembled (see Send and Init).
+local AceComm = LibStub("AceComm-3.0")
 
 KASC.Identity = KASC.Identity or {}
 local Identity = KASC.Identity
@@ -43,11 +46,22 @@ end
 -- These counters are deliberately NOT a fix: they are what makes the next raid say which of the
 -- possible causes it actually was, instead of another round of inference.
 --
+-- Since the transport moved onto ChatThrottleLib, a throttled send is retried rather than lost, so
+-- "throttled" stopped being a loss and is not counted any more. What is left worth asking is whether
+-- a message had to WAIT, which is what sendQueued answers -- and the library never reports a throttle
+-- to its caller anyway (it re-queues silently), so the old counter could not have survived.
+--
+-- The RESULT CODE is gone with it, and not by choice: ChatThrottleLib hands its callback
+-- (didSend, sendResult), but AceComm's shim takes only two arguments and drops the code on the way
+-- through (AceComm-3.0 r14). What reaches a consumer is the boolean, so "it was refused" survives
+-- and "this is what the client answered" does not. Patching the bundled library is the wrong trade:
+-- it would have to be re-patched on every update, and the counter below already separates the three
+-- causes that mattered on 2026-08-03.
+--
 -- Read back through KASC:Diagnostics(); KART prints them in /kart status when any of them is non-zero.
 KASC.diag = KASC.diag or {
-    sendRejected = 0,   -- SendAddonMessage answered with anything other than success
-    sendThrottled = 0,  -- ...and the reason was one of the two throttles (subset of sendRejected)
-    lastSendResult = nil,
+    sendRejected = 0,   -- the transport reported the message as not sent
+    sendQueued = 0,     -- ...or it did not leave at once and waited in ChatThrottleLib's queue
     dropNotInGroup = 0, -- an otherwise valid message refused because its sender is not in our group
     dropUnknownToken = 0, -- a message in our prefix whose token this client has no handler for
     sendHeldBack = 0,   -- held while addon comms were restricted, and sent afterwards
@@ -93,7 +107,9 @@ local function FlushGuaranteed()
     local pending = guaranteedQueue
     guaranteedQueue = {}
     for _, m in ipairs(pending) do
-        KASC:Send(m.msg, m.channel, m.target)
+        -- Options carried through, not dropped: a held message keeps the priority it was sent with,
+        -- and the release is exactly the burst where that priority decides who waits for whom.
+        KASC:Send(m.msg, m.channel, m.target, m.opts)
     end
 end
 
@@ -110,15 +126,16 @@ function KASC:Diagnostics()
     return KASC.diag
 end
 
--- By value rather than through Enum.SendAddonMessageResult: the enum is absent in the offline harness
--- and its numbers are stable API (12.0.1 annotations). A client that returns nothing at all counts as
--- success -- "no answer" must never read as "everything failed".
-local SEND_SUCCESS           = 0
-local SEND_ADDON_THROTTLE    = 3 -- Enum.SendAddonMessageResult.AddonMessageThrottle
-local SEND_CHANNEL_THROTTLE  = 8 -- Enum.SendAddonMessageResult.ChannelThrottle
-
 -- opts.guaranteed: this message is worth holding until comms come back (see CommsRestricted). Loot
 -- announcements, awards, votes and the session flag are; heartbeats and requests are not.
+-- opts.prio: ChatThrottleLib's priority -- "ALERT", "NORMAL" (the default) or "BULK". The three get
+-- an equal share of the available bandwidth, so this decides who waits for whom when the pipe is
+-- full. WHICH message deserves which is the consumer's knowledge and deliberately stays out of here;
+-- see LC.SendLC for the table that holds it.
+--
+-- No return value any more. The transport answers asynchronously: a message can be queued now and
+-- sent a moment later, so there is nothing truthful to hand back at the call site. What the send did
+-- is recorded in KASC.diag instead.
 function KASC:Send(msg, channel, target, opts)
     if CommsRestricted() then
         if opts and opts.guaranteed and #guaranteedQueue < GUARANTEED_MAX then
@@ -129,7 +146,8 @@ function KASC:Send(msg, channel, target, opts)
                     return
                 end
             end
-            guaranteedQueue[#guaranteedQueue + 1] = { msg = msg, channel = channel, target = target }
+            guaranteedQueue[#guaranteedQueue + 1] =
+                { msg = msg, channel = channel, target = target, opts = opts }
             KASC.diag.sendHeldBack = KASC.diag.sendHeldBack + 1
         else
             KASC.diag.sendDroppedRestricted = KASC.diag.sendDroppedRestricted + 1
@@ -137,16 +155,26 @@ function KASC:Send(msg, channel, target, opts)
         return
     end
 
-    local result = C_ChatInfo.SendAddonMessage(prefix, msg, channel or self:DefaultChannel(), target)
-    if result ~= nil and result ~= SEND_SUCCESS then
-        local diag = KASC.diag
-        diag.sendRejected = diag.sendRejected + 1
-        diag.lastSendResult = result
-        if result == SEND_ADDON_THROTTLE or result == SEND_CHANNEL_THROTTLE then
-            diag.sendThrottled = diag.sendThrottled + 1
+    -- ChatThrottleLib calls this back SYNCHRONOUSLY when it sent straight away, and later -- or, if
+    -- it re-queues after a throttle, not until the retry succeeds -- when it had to wait. That timing
+    -- is the only signal a caller gets about which of the two happened, and it is what sendQueued is
+    -- read from below.
+    --
+    -- The last argument is AceComm's, not CTL's: a BOOLEAN saying whether the message went out (see
+    -- the note on KASC.diag). Only an explicit false counts -- a client that answers nothing at all
+    -- reaches here as true, and "no answer" must never read as "everything failed".
+    local sentAtOnce = false
+    local function OnSent(_, _, _, didSend)
+        sentAtOnce = true
+        if didSend == false then
+            KASC.diag.sendRejected = KASC.diag.sendRejected + 1
         end
     end
-    return result
+
+    AceComm:SendCommMessage(prefix, msg, channel or self:DefaultChannel(), target,
+                            (opts and opts.prio) or "NORMAL", OnSent)
+
+    if not sentAtOnce then KASC.diag.sendQueued = KASC.diag.sendQueued + 1 end
 end
 
 function KASC:AttachCache(tbl)
@@ -420,18 +448,18 @@ end
 
 KASC.Dispatch = Dispatch -- exposed for the offline harness
 
+-- CHAT_MSG_ADDON is AceComm's from here on (see Init): it owns the reassembly of anything longer
+-- than one addon message, and a second listener on the raw event would hand the chunks of a
+-- multipart message to Dispatch as if each were a message of its own.
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("CHAT_MSG_ADDON")
 -- pcall'd for the same reason Core.lua guards LOOT_HISTORY_UPDATE_DROP: RegisterEvent throws on a
 -- name the client does not know, this one comes from annotations for a version the live client may
 -- not be on yet, and the cost of being wrong must be "this one guard is inert", never "the library
 -- fails to load and takes the addon with it".
 pcall(frame.RegisterEvent, frame, "ADDON_RESTRICTION_STATE_CHANGED")
-frame:SetScript("OnEvent", function(_, event, a, b, ...)
-    -- CHAT_MSG_ADDON: prefix, text, channel, sender. ADDON_RESTRICTION_STATE_CHANGED: type, state.
-    if event == "CHAT_MSG_ADDON" and a == prefix then
-        Dispatch(b, (select(1, ...)), (select(2, ...)))
-    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+frame:SetScript("OnEvent", function(_, event, a, b)
+    -- ADDON_RESTRICTION_STATE_CHANGED: type, state.
+    if event == "ADDON_RESTRICTION_STATE_CHANGED" then
         KASC:OnRestrictionChanged(a, b)
     end
 end)
@@ -444,7 +472,12 @@ function KASC:Init(p)
     -- its own channel instead, so fail loudly rather than let that happen quietly.
     assert(prefix == nil or prefix == p, "KASC: Init already called with a different prefix")
     prefix = p
-    C_ChatInfo.RegisterAddonMessagePrefix(p)
+    -- AceComm registers the prefix itself, owns the event frame, and hands over a message that is
+    -- already reassembled. Dispatch is unchanged behind it: the self-echo drop, the group check and
+    -- the counters all sit where they sat.
+    AceComm.RegisterComm(self, p, function(_, msg, channel, sender)
+        Dispatch(msg, channel, sender)
+    end)
 end
 
 -- =====================================================================

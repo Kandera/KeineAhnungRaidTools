@@ -27,7 +27,11 @@ files["tests/"] = {
                 "UnitIsGroupAssistant", "IsInRaid", "IsInGroup", "GetNumGroupMembers",
                 "Ambiguate", "GetRealmName", "GetNormalizedRealmName", "GetTime",
                 "GetInventoryItemLink", "GetWeaponEnchantInfo", "GetAverageItemLevel",
-                "CreateFrame", "time", "PixelUtil", "GetPhysicalScreenSize" },
+                "CreateFrame", "time", "PixelUtil", "GetPhysicalScreenSize",
+                -- ChatThrottleLib is a plain global, not a LibStub library, and the harness both
+                -- reads and writes it: run.lua relaxes the start-up clamp on its own instance, and
+                -- raidsim.lua pre-seeds one per simulated client.
+                "ChatThrottleLib" },
 }
 
 -- MainFrame.lua:850 shadows the upvalue `L` (the locale table) from line 2. Single occurrence

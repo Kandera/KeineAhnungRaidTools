@@ -33,8 +33,10 @@ local function Capture(fn)
 end
 
 -- The send side ------------------------------------------------------------------------------------
--- The live API answers every send with Enum.SendAddonMessageResult and KASC threw it away, so a
--- message the client REFUSED TO SEND was indistinguishable from one that was sent and ignored.
+-- The live API answers every send with Enum.SendAddonMessageResult. Since the transport moved onto
+-- ChatThrottleLib the two kinds of refusal have different fates, and the counters have to keep them
+-- apart: one the library can retry its way out of (a throttle -- it re-queues and tries again), and
+-- one it cannot (NotInGroup and the rest -- that message is simply refused).
 do
     local sim, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
@@ -42,27 +44,15 @@ do
     local before = diag.sendRejected
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
     T.eq(diag.sendRejected, before, "a send the client accepts is not counted as rejected")
+    T.eq(diag.sendQueued, 0, "and not counted as queued either")
 
-    sim.sendResult = 3 -- AddonMessageThrottle
+    sim.sendResult = 5 -- NotInGroup: a refusal no retry can fix
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
     sim.sendResult = nil
-    T.eq(diag.sendRejected, before + 1, "a throttled send is counted")
-    T.eq(diag.sendThrottled, 1, "and counted again as a throttle specifically")
-    T.eq(diag.lastSendResult, 3, "with the code kept, so the reason is readable afterwards")
+    T.eq(diag.sendRejected, before + 1, "a refusal the transport cannot fix is counted")
 
-    sim.sendResult = 8 -- ChannelThrottle, the other one that means "too much traffic"
-    RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
-    sim.sendResult = nil
-    T.eq(diag.sendThrottled, 2, "the channel throttle counts as a throttle too")
-
-    sim.sendResult = 5 -- NotInGroup: a refusal, but not a throttle
-    RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
-    sim.sendResult = nil
-    T.eq(diag.sendRejected, before + 3, "any non-success answer counts as rejected")
-    T.eq(diag.sendThrottled, 2, "but only the two throttles count as throttled")
-
-    -- The refusal has to stop the message, not merely label it: a throttled send never reaches a
-    -- peer, and a harness that delivers it anyway would make every recovery test pass for free.
+    -- The refusal has to stop the message reaching anybody, not merely label it: a harness that
+    -- delivered it anyway would make every recovery test pass for free.
     local heard = 0
     for _, c in ipairs(sim.clients) do
         RaidSim.As(c, function()
@@ -75,22 +65,38 @@ do
     local delivered = heard
     T.truthy(delivered > 0, "the probe reaches the raid when the client accepts it")
 
-    sim.sendResult = 3
+    sim.sendResult = 5
     RaidSim.As(lm, function() lm.KASC:Send("LC_DIAGPROBE") end)
     sim.sendResult = nil
     T.eq(heard, delivered, "and a refused message reaches nobody")
+
+    -- The throttle goes LAST, because it leaves the queue blocked: every message this client sends
+    -- afterwards waits behind it until the clock lets the retry through, and an assertion about
+    -- delivery placed below this would be measuring the blockage rather than what it says it does.
+    sim.sendResult = 3 -- AddonMessageThrottle: the transport holds on to this one
+    RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
+    sim.sendResult = nil
+    T.eq(diag.sendRejected, before + 2, "a throttle is not counted as a refusal")
+    T.eq(diag.sendQueued, 1, "it is counted as a wait")
+    KARTTEST.AdvanceTime(2)
 end
 
 -- A client that answers with nothing at all --------------------------------------------------------
--- Not hypothetical enough to skip: "no answer" must never read as "everything failed", or the line
--- in /kart status would accuse the transport on every client that does not return the value.
+-- "No answer" must never read as "everything failed", or the line in /kart status would accuse the
+-- transport on every client that does not return the value. ChatThrottleLib maps a send that returned
+-- nothing to Success, and this asserts that KASC agrees rather than counting it as a refusal.
 do
     local _, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
-    -- Replaced directly rather than through the sim: what is under test is KASC's own reading of the
-    -- return value, and the sim always answers with a code.
+    -- Replaced directly rather than through the sim: what is under test is how the transport reads a
+    -- client that says nothing, and the sim always answers with a code.
+    --
+    -- `function() end`, NOT `function() return nil end`, and the difference is real: ChatThrottleLib
+    -- takes the LAST returned value and only treats NO returned value as success (its
+    -- MapToSendResult). A client that returns an explicit nil is read as a failed send. What is being
+    -- modelled here is the client that answers nothing at all, which is the one that exists.
     local realSend = _G.C_ChatInfo.SendAddonMessage
-    _G.C_ChatInfo.SendAddonMessage = function() return nil end
+    _G.C_ChatInfo.SendAddonMessage = function() end
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
     _G.C_ChatInfo.SendAddonMessage = realSend
     T.eq(diag.sendRejected, 0, "a client that returns nothing is not treated as a refusal")

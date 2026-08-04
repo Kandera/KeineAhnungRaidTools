@@ -1298,7 +1298,7 @@ function LC.PrintStatus()
     if kd.dropNotInGroup + kd.dropUnknownToken + kd.sendRejected + kd.sendHeldBack
         + kd.sendDroppedRestricted + LC.diag.refusedSender + LC.diag.unknownRoll > 0 then
         print("  " .. string.format(L.LC_STATUS_DROPS, LC.diag.refusedSender, kd.dropNotInGroup,
-            LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendThrottled,
+            LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendQueued,
             kd.sendHeldBack, kd.sendDroppedRestricted))
     end
 end

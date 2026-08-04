@@ -417,9 +417,6 @@ function RaidSim.Install(sim)
             local frame = to.AceComm and to.AceComm.frame
             local handler = frame and frame:GetScript("OnEvent")
             if handler then handler(frame, "CHAT_MSG_ADDON", prefix, msg, channel, sender) end
-            -- TEMPORARY, removed once KASC listens through AceComm's RegisterComm: until then KASC
-            -- still owns its own CHAT_MSG_ADDON frame, which this harness has never driven.
-            to.KASC.Dispatch(msg, channel, sender)
         end)
     end
 

@@ -77,6 +77,12 @@ dofile("Libs/LibStub/LibStub.lua")
 dofile("Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua")
 dofile("Libs/AceComm-3.0/ChatThrottleLib.lua")
 dofile("Libs/AceComm-3.0/AceComm-3.0.lua")
+-- This instance belongs to the single-client tests -- the ones that use the library loaded here
+-- rather than a simulated raid's own copy (raidsim gives every client its own; see its Boot). Same
+-- treatment for the same reason: CTL clamps its output to 10% for five seconds after loading, and a
+-- test that never moves the clock would get nothing out at all. See raidsim.lua for the long version.
+ChatThrottleLib.HardThrottlingBeginTime = -math.huge
+ChatThrottleLib.avail = ChatThrottleLib.BURST
 
 dofile("Libs/KAUtil-1.0/KAUtil-1.0.lua")
 dofile("Libs/KAGS-1.0/KAGS-1.0.lua")
