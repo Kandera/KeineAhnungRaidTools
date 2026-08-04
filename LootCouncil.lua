@@ -526,10 +526,26 @@ local GUARANTEED_TOKENS = {
     LC_RESULT = true, LC_ONOTE = true,
 }
 
+-- ChatThrottleLib splits the available bandwidth evenly across its three priorities, so this table
+-- is not about speed but about who has to wait for whom when the pipe is full. Two rules, and both
+-- come out of 2026-08-03:
+--
+--   * ALERT is for the two moments the whole raid is standing still for -- an item going on the
+--     table, and the round ending. Everything else can be a second late without anybody noticing.
+--   * BULK is for traffic that arrives in storms. The history catch-up is answered by every peer
+--     with one message per award; the handshake is the other one and carries its own BULK (see
+--     KASC:RequestHello / AnnounceHello).
+--
+-- Everything not listed is NORMAL: votes, rolls, awards, config, session state.
+local TOKEN_PRIO = {
+    LC_START = "ALERT", LC_MANUAL_START = "ALERT", LC_END_ROUND = "ALERT",
+    LC_HIST_REQ = "BULK",
+}
+
 function LC.SendLC(msg, target)
     if not IsInGroup() then return end
     local token = msg:match("^([^:]+)")
-    local opts = GUARANTEED_TOKENS[token] and { guaranteed = true } or nil
+    local opts = { guaranteed = GUARANTEED_TOKENS[token] or nil, prio = TOKEN_PRIO[token] }
     if target then
         KASC:Send(msg, "WHISPER", target, opts)
     else

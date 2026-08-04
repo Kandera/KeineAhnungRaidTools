@@ -1151,7 +1151,9 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                     e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                     winnerKey, winnerSafe, cut, "")
             end
-            KASC:Send(msg, "WHISPER", senderFullName)
+            -- BULK: one catch-up request is answered by every peer with one message per award. None
+            -- of it is urgent, and all of it is exactly the traffic the loot flow must not wait for.
+            KASC:Send(msg, "WHISPER", senderFullName, { prio = "BULK" })
         end)
     end
 end

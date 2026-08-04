@@ -598,8 +598,11 @@ end
 -- caller that needs GUILD (or any other explicit channel) never has to know the wire token to get
 -- it -- both entry points below exist so the "KA_HELLO"/"KA_HELLO_REQ" strings stay inside this
 -- library and never need to be spelled out by a consumer.
+-- BULK on both handshake senders, and this is the storm the priority split exists for: one version
+-- check in a 25-man raid is answered by 24 clients inside three seconds (see HELLO_ANSWER_SPREAD).
+-- None of it is urgent, and all of it used to compete with the loot flow for the same pipe.
 function KASC:RequestHello(channel, target)
-    self:Send("KA_HELLO_REQ", channel, target)
+    self:Send("KA_HELLO_REQ", channel, target, { prio = "BULK" })
 end
 
 -- Marks a handshake sent in ANSWER to a request, so a consumer can tell a reply apart from an
@@ -621,7 +624,7 @@ function KASC:AnnounceHello(channel, target, solicited)
     -- otherwise AnnounceHelloIfChanged would fire an extra announce after every version check.
     lastAnnounced[channel or self:DefaultChannel()] = payload
     if solicited then payload = payload .. "," .. ACK_ENTRY end
-    self:Send("KA_HELLO:" .. payload, channel, target)
+    self:Send("KA_HELLO:" .. payload, channel, target, { prio = "BULK" })
 end
 
 -- Announces only if what we would say has changed since we last said it on this channel, or if we

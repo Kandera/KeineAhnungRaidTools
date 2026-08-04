@@ -77,3 +77,32 @@ do
     T.eq(diag.sendRejected, 0, "and a throttle is not a rejection any more -- it is a delay")
     KARTTEST.AdvanceTime(2)
 end
+
+-- Priority: an End Round does not queue behind a handshake storm ------------------------------------
+-- 2026-08-03: one version check answered by twenty clients filled the pipe, and the loot flow was
+-- behind it. ChatThrottleLib hands each priority an equal share of the bandwidth, so ALERT traffic
+-- gets through a BULK backlog instead of waiting it out.
+do
+    local sim, lm = F.NewRaid()
+
+    -- Squeeze the pipe shut, so everything below has to queue and the order of the queue is what is
+    -- actually being measured.
+    for _, c in ipairs(sim.clients) do c.CTL.avail = 0 end
+
+    -- Both sides go out through the calls the addon really uses, priorities included -- a test that
+    -- passed the priority in itself would be asserting about its own argument, not about the addon.
+    RaidSim.As(lm, function()
+        for _ = 1, 20 do lm.KASC:AnnounceHello("RAID") end
+        lm.KART.LC.SendLC("LC_END_ROUND")
+    end)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(0.4)
+
+    local endRound, bulkBefore = nil, 0
+    for i, e in ipairs(sim.log) do
+        if e.msg == "LC_END_ROUND" then endRound = i break end
+        if e.msg:sub(1, 8) == "KA_HELLO" then bulkBefore = bulkBefore + 1 end
+    end
+    T.truthy(endRound ~= nil, "the End Round leaves while the handshake backlog is still draining")
+    T.truthy(bulkBefore < 20, "and does not wait for all twenty of them")
+end
