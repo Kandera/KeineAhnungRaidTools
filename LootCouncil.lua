@@ -3891,19 +3891,44 @@ end
 --
 -- A single item waits too. One code path, one format, and the shared participant list applies always.
 local DROP_COLLECT = 0.5
-LC.pendingDrop = nil -- { secs = n, keys = {…}, entries = { { rollID = n, itemString = s }, … } }
+LC.pendingDrop = nil -- { id = n, secs = n, keys = {…}, entries = { { rollID = n, itemString = s }, … } }
+local pendingDropSeq = 0
 
-local function FlushPendingDrop()
+-- Whether this roll's own participants are exactly the ones the batch already names.
+--
+-- SnapshotEligible runs per ITEM, against a fresh identity walk of the roster, while the batch's head
+-- is written ONCE and every entry's numbers are ordered by it. So the two can legitimately disagree
+-- inside one boss's half second -- a name resolving from a pending text key to a GUID between two items
+-- is enough, and so is somebody leaving or walking in -- and the message cannot carry both: a key the
+-- head does not name has nowhere to put its number, and a key it does name that this item never drew
+-- for would go out as a 0 nobody rolled. Received from the recorded announcer, that 0 is authoritative:
+-- nothing refuses it, no diagnostic counts it, and the council scores its tie-break on it.
+local function SameParticipants(set, keys)
+    if not set then return false end
+    local n = 0
+    for _ in pairs(set) do n = n + 1 end
+    if n ~= #keys then return false end
+    for _, key in ipairs(keys) do if not set[key] then return false end end
+    return true
+end
+
+-- id: the batch this timer was armed for. A batch flushed EARLY (its participants changed, see
+-- OnStartLootRoll) leaves its own timer behind, and that timer must not cut the next batch's window
+-- short. Called without an id -- the split path, and LC.FlushPendingDrop -- it flushes whatever is
+-- pending, which is exactly what those callers mean.
+local function FlushPendingDrop(id)
     local drop = LC.pendingDrop
+    if id and (not drop or drop.id ~= id) then return end
     LC.pendingDrop = nil
     if not drop or #drop.entries == 0 then return end
-    -- Before the send, not after: the heartbeat has to be the older ticker of the two this drop
-    -- starts, exactly as it was when the announcement went out from inside OnStartLootRoll. A
-    -- receiver's own expiry sweep is started by the announcement, so with the same period on both
-    -- and a vote window that is a whole number of heartbeats, the two land on the same second --
-    -- and whichever was created first runs first. Sweeping BEFORE the heartbeat means the owner
-    -- hears "I have nothing under that number" from a client that had it a moment ago and hands it
-    -- straight back, which is a round trip nobody needs.
+    -- Before the send, and that is a deliberate change of order -- the old block called this AFTER
+    -- both of its sends. A receiver's expiry sweep is started by the announcement it receives, so the
+    -- sweep and this heartbeat are two tickers of the same period anchored to the same instant, and at
+    -- a vote window that is a whole number of heartbeats (the default 20s against 10s) they fall due on
+    -- the same second for the rest of the round. Which of them runs first is decided by which was
+    -- created first, and sweep-first is the bad half: the client frees the roll, the heartbeat a
+    -- moment later finds it missing, it asks, and the owner hands back an item it was about to expire
+    -- anyway. Creating the heartbeat first puts it on the safe side of every one of those collisions.
     LC.EnsureTableTicker()
     LC.SendLC(LC.SerializeDrop("r", drop.secs, drop.keys, drop.entries))
     for _, e in ipairs(drop.entries) do
@@ -4054,23 +4079,44 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
         LC.DrawRollTable(rollID, newItemID, true)
 
+        -- This item's own participants against the ones the batch already names. They can differ
+        -- inside one boss's half second (see SameParticipants), and the message cannot carry both --
+        -- so the batch is closed here and this item opens a new one. Split rather than reconciled:
+        -- two messages are cheap, and the alternative is a number attributed to the wrong raider.
+        if LC.pendingDrop and not SameParticipants(LC.rollEligible[rollID], LC.pendingDrop.keys) then
+            FlushPendingDrop()
+        end
+
         if not LC.pendingDrop then
             local keys = {}
             for key in pairs(LC.rollEligible[rollID] or {}) do keys[#keys + 1] = key end
             -- Sorted for the same reason LC.DrawRollTable sorts: the numbers are matched to this
             -- list by position on the receiving side, so both sides must walk it the same way.
             table.sort(keys)
-            LC.pendingDrop = { secs = secs, keys = keys, entries = {} }
-            C_Timer.After(DROP_COLLECT, FlushPendingDrop)
+            pendingDropSeq = pendingDropSeq + 1
+            local id = pendingDropSeq
+            LC.pendingDrop = { id = id, secs = secs, keys = keys, entries = {} }
+            C_Timer.After(DROP_COLLECT, function() FlushPendingDrop(id) end)
         end
-        local entries = LC.pendingDrop.entries
-        entries[#entries + 1] = {
+
+        local entry = {
             rollID = rollID,
             -- The full string, not LC.ItemPayload's cap-driven fallback: this message is split and
             -- reassembled by the transport, so there is no 255-byte cliff to degrade against, and a
             -- bare itemID would lose the bonus ids B119 is about.
             itemString = KAUtil.GetFullItemString(itemLink) or LC.ItemPayload(itemLink, newItemID),
         }
+        -- Replaced, not appended a second time. Blizzard re-raises START_LOOT_ROLL for a roll that is
+        -- still running, and LC.DrawRollTable's own guard returns before redrawing -- but nothing here
+        -- would stop the same rollID being serialized twice in one message, which is duplicated bytes
+        -- and LC.Vote.ScheduleVoteCatchup running twice for it. Overwriting rather than skipping is for
+        -- the other re-raise: one carrying a genuinely different item, where PurgeStaleRoll has already
+        -- redrawn above and the newer item string is the right one to send.
+        local entries = LC.pendingDrop.entries
+        for i = 1, #entries do
+            if entries[i].rollID == rollID then entries[i] = entry entry = nil break end
+        end
+        if entry then entries[#entries + 1] = entry end
     end
 
     -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
@@ -4565,13 +4611,26 @@ function LC.HandleDrop(payload, senderKey)
             -- After the announcement, never before it: LC.HandleRolls accepts a table from the
             -- ANNOUNCER of that item, and the line above is what records who that is.
             if nums ~= "" then
-                local pairsOut, i = {}, 0
-                for n in nums:gmatch("[^,]+") do
-                    i = i + 1
-                    if keys[i] then pairsOut[#pairsOut + 1] = keys[i] .. "=" .. n end
+                local drawn = {}
+                for n in nums:gmatch("[^,]+") do drawn[#drawn + 1] = n end
+                -- One number per participant, or none of them. The head names the participants once
+                -- and the entry lists its numbers in that order, so a length that does not match means
+                -- the two halves were built against different rosters -- and then every position after
+                -- the first difference names somebody else's raider. The sender splits its batch
+                -- exactly so this cannot happen (see SameParticipants); this is the half that makes a
+                -- sender which does it anyway -- an older build, a future one -- detectable instead of
+                -- silent.
+                --
+                -- Refused WHOLE rather than stored up to the gap, for the reason LC.HandleRolls
+                -- refuses an empty table: LC.rolls[rollID] ~= nil is what "we hold the numbers" means
+                -- everywhere else, so a partial table is indistinguishable from a real draw and would
+                -- permanently stop this client asking for the real one. Refusing leaves the gap
+                -- visible, and the heartbeat's repair path fetches the table it is missing.
+                if #drawn == #keys then
+                    for i = 1, #drawn do drawn[i] = keys[i] .. "=" .. drawn[i] end
+                    LC.HandleRolls(rollID .. ":@" .. LC.PayloadItemID(itemString) .. ":"
+                        .. table.concat(drawn, ","), senderKey)
                 end
-                LC.HandleRolls(rollID .. ":@" .. LC.PayloadItemID(itemString) .. ":"
-                    .. table.concat(pairsOut, ","), senderKey)
             end
         end
     end

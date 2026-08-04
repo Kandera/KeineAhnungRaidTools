@@ -93,6 +93,38 @@ do
         "the receiver rebuilds the same item the announcer sent")
 end
 
+-- Two items of one boss whose participants differ ---------------------------------------------------
+-- The head names the participants ONCE and every entry's numbers are ordered by it, so an item drawn
+-- against a different set of people cannot ride in the same message: a key the head does not carry has
+-- nowhere to put its number, and a key it carries that this item never drew for would travel as a 0
+-- nobody rolled -- accepted as authoritative, because it came from the recorded announcer.
+--
+-- SnapshotEligible runs per item against a fresh identity walk, so this is not exotic: somebody
+-- walking in between two items of one boss does it, and so does a name resolving from a pending text
+-- key to a GUID in the same half second. Splitting the batch is a fine answer; a silent 0 is not.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 959, F.GLOVES)
+    RaidSim.Join(sim, { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42",
+                        class = "MAGE", locale = "enUS" })
+    F.Drop(sim, 960, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+
+    for _, id in ipairs({ 959, 960 }) do
+        for _, c in ipairs(sim.clients) do
+            local held = c.KART.LC.rolls[id]
+            if held then
+                T.deep_eq(held, lm.KART.LC.rolls[id],
+                    c.name .. " holds the announcer's own table for " .. id)
+            end
+            for who, value in pairs(held or {}) do
+                T.truthy(value >= 1 and value <= 100,
+                    "and nobody is handed a number they never rolled (" .. id .. "/" .. who .. ")")
+            end
+        end
+    end
+end
+
 -- Rolls switched off raid-wide ----------------------------------------------------------------------
 do
     local sim, lm = F.NewRaid()
