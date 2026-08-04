@@ -141,11 +141,11 @@ do
 end
 
 -- An ownership disagreement must not cost a raider the whole raid's numbers (B129) ------------------
--- The propagation window: a promoted client that reloads comes back with its OWN config wiped --
--- empty Lootmaster field, LC.RelayRaidConfig's "ownership stays derived" -- and reads itself as loot
--- owner through the raid-leader fallback, before RaidSim.EnterWorld's LC.CheckRaidJoin has had a
--- chance to run and catch it up (in the game this is the sub-second gap between a reload finishing
--- and PLAYER_ENTERING_WORLD firing). For that gap the named lootmaster is still out there, unaware,
+-- The test holds the disagreement open deliberately: a promoted client reloads with its config wiped --
+-- (empty Lootmaster field, LC.RelayRaidConfig's "ownership stays derived") and reads itself as loot
+-- owner through the raid-leader fallback. The disagreement stays unresolved for the whole test
+-- because what is under test is LC.HandleRolls's behavior DURING such disagreement, not how long
+-- the disagreement persists in a real raid. The named lootmaster is still out there, unaware,
 -- still drawing and sending tables under the old config. Before the roll table became one
 -- authoritative message this cost nothing: every client drew its own number with no sender check at
 -- all. Now the table is a single writer's state, and disagreeing about who that writer is used to

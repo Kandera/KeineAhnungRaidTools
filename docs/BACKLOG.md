@@ -2789,8 +2789,9 @@ has already confirmed the sender is in the raid before the handler ever runs; no
 checking. `LC.HandleTable` and the catch-up path are untouched — this is the smaller of the two holes
 the diagnosis found, and the only one that needed closing.
 
-Held by a new case in `tests/test_lc_rolltable.lua`: a client is promoted and reloaded without letting
-`LC.CheckRaidJoin` catch it up first — the sub-second gap between a reload finishing and
-`PLAYER_ENTERING_WORLD` firing in the real game — so it disagrees about loot ownership at the exact
-moment an item drops, and is asserted to end up holding the same numbers as the lootmaster anyway. The
-deep soak (2000 seeds, seed 1728 included) is clean.
+Held by a new case in `tests/test_lc_rolltable.lua`: a client is promoted and reloaded, then the test
+holds the ownership disagreement open deliberately — the client reads itself as loot owner while the
+named lootmaster still holds the real authority — because what is under test is `LC.HandleRolls`'s
+behaviour DURING such a disagreement, not how long it persists in a real raid. The client is asserted
+to end up holding the same numbers as the lootmaster anyway. The deep soak (2000 seeds, seed 1728
+included) is clean.
