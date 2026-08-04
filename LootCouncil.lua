@@ -3093,27 +3093,17 @@ end
 local ROLL_ORPHAN_GRACE = 15
 
 -- [rollID] = the itemID the rolls currently stored under it were cast for. Blizzard reuses a rollID
--- for a genuinely different drop within seconds on trash, and every client purges the old state when
--- it processes its own START_LOOT_ROLL -- but peers broadcast their new rolls at that same instant,
--- so a client that had already RECEIVED some of them wiped them a moment later with its own purge.
--- Whoever ran their handler first lost the rolls of everybody behind them, and the council scored a
--- tie-break on a partial set. Found by the soak once it learned to reuse a rollID.
+-- for a genuinely different drop within seconds on trash, and every client purged the old state when
+-- it processed its own START_LOOT_ROLL -- but back when every client drew and broadcast its own
+-- number, peers broadcast theirs at that same instant, so a client that had already RECEIVED some of
+-- them wiped them a moment later with its own purge. Whoever ran their handler first lost the rolls
+-- of everybody behind them, and the council scored a tie-break on a partial set. Found by the soak
+-- once it learned to reuse a rollID. The single-writer draw this module moved to does not have that
+-- race, but PurgeStaleRoll's keepRolls still needs to know which item the current rolls belong to.
 LC.rollsFor = LC.rollsFor or {}
 
--- The whole raid's rolls, drawn once by the client that announces the item.
---
--- Every client used to draw its own number and broadcast it, which is three problems in one: 25
--- messages in the same instant for one drop (the biggest burst this addon makes, and it lands in the
--- window the encounter restriction has just opened), 25 separate things to lose with no way to ask
--- for one back, and regular ties, because 25 independent draws out of 1-100 collide often.
---
--- Drawn WITHOUT replacement, so no two raiders can be handed the same number and the council never
--- has to break a tie the addon invented. A group cannot hold more than 40 players, so a pool of 100
--- is never exhausted.
---
--- The set of participants is LC.rollEligible[rollID] -- the roster snapshot SnapshotEligible already
--- takes when announcing. One answer to "who was standing there", used both for who gets a number and
--- for who may be caught up later (LC.MayCatchUp).
+-- Blizzard's roll range is 1-100, and a group cannot hold more than 40 players, so a pool of this
+-- size is never exhausted by LC.DrawRollTable's draw-without-replacement below.
 local ROLL_MAX = 100
 
 -- The wire form, kept in one place because two callers need it: the draw below, and the catch-up
@@ -3130,6 +3120,20 @@ function LC.SerializeRollTable(rollID)
         .. ":" .. table.concat(parts, ",")
 end
 
+-- The whole raid's rolls, drawn once by the client that announces the item.
+--
+-- Every client used to draw its own number and broadcast it, which is three problems in one: 25
+-- messages in the same instant for one drop (the biggest burst this addon makes, and it lands in the
+-- window the encounter restriction has just opened), 25 separate things to lose with no way to ask
+-- for one back, and regular ties, because 25 independent draws out of 1-100 collide often.
+--
+-- Drawn WITHOUT replacement, so no two raiders can be handed the same number and the council never
+-- has to break a tie the addon invented. A group cannot hold more than 40 players, so a pool of 100
+-- is never exhausted.
+--
+-- The set of participants is LC.rollEligible[rollID] -- the roster snapshot SnapshotEligible already
+-- takes when announcing. One answer to "who was standing there", used both for who gets a number and
+-- for who may be caught up later (LC.MayCatchUp).
 function LC.DrawRollTable(rollID, itemID)
     if not LC.GetRollsEnabled() then return end
     -- Blizzard re-raises START_LOOT_ROLL for a roll still in progress -- OnStartLootRoll runs again,
@@ -3206,6 +3210,13 @@ function LC.HandleRolls(payload, senderKey)
 
     local rolls = {}
     for key, value in list:gmatch("([^=,]+)=(%d+)") do rolls[key] = tonumber(value) end
+    -- An empty table is still a TABLE, and LC.rolls[rollID] == nil is exactly what needRolls (and the
+    -- isVoid check above) uses to mean "nothing held yet". Storing one here would be indistinguishable
+    -- from a real draw and would permanently stop this client from ever asking for the real numbers.
+    -- LC.SerializeRollTable cannot currently produce such a payload (it refuses to serialize an empty
+    -- LC.rolls[rollID] in the first place), so this is a defence against a message shape that does not
+    -- happen today, not a fix for one that does.
+    if next(rolls) == nil then return end
     LC.rolls[rollID] = rolls
     LC.rollsFor[rollID] = itemID or ""
 

@@ -16,7 +16,11 @@ do
     F.Drop(sim, 900, F.GLOVES)
     KARTTEST.AdvanceTime(0.5)
 
-    T.eq(#RaidSim.Sent(sim, "LC_ROLL:"), 0, "nobody broadcasts a roll of their own any more")
+    -- RaidSim.Sent matches on the raw bytes handed to C_ChatInfo.SendAddonMessage, which for a
+    -- multipart message is a chunk carrying AceComm's own control byte before the token -- a prefix
+    -- match would find nothing. This only works because the fixture's payload here stays under the
+    -- single-part size limit; it will fail loudly, not silently, the day this message's payload grows
+    -- past that limit.
     T.eq(#RaidSim.Sent(sim, "LC_ROLLS:"), 1, "the whole raid's rolls travel as one message")
     T.eq(RaidSim.Sent(sim, "LC_ROLLS:")[1].from, lm.name, "and the lootmaster is the one who sent it")
 end

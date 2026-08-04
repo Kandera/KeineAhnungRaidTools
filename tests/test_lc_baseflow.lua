@@ -403,6 +403,12 @@ do
 
     -- Exactly one table for the whole raid, drawn once: a second draw would replace a number the
     -- raid has already been shown, on the one screen that decides who gets the item.
+    --
+    -- RaidSim.Sent matches on the raw bytes handed to C_ChatInfo.SendAddonMessage, which for a
+    -- multipart message is a chunk carrying AceComm's own control byte before the token -- a prefix
+    -- match would find nothing. This only works because the fixture's payload here stays under the
+    -- single-part size limit; it will fail loudly, not silently, the day this message's payload grows
+    -- past that limit.
     T.eq(#RaidSim.Sent(sim, "LC_ROLLS:50:"), 1,
         "the whole raid's rolls travel as one message, not one per client")
 end
