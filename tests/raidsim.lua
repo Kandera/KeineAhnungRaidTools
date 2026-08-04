@@ -406,6 +406,38 @@ end
 -- The echo is queued rather than delivered inline: a real one comes back over the server, so it
 -- can never land in the middle of the sending function. Delivering it inline would let a handler
 -- observe its own sender's half-finished state, which is a failure mode the game cannot produce.
+-- The message text a chunk should be MATCHED against, for the two primitives that decide a message's
+-- fate by its token (RaidSim.Blackhole and RaidSim.Hold).
+--
+-- Not the raw bytes, and that is the whole point. Anything over 255 bytes leaves as SEVERAL chunks,
+-- each carrying AceComm's own control byte in front of the payload, and only the first of them
+-- contains the token at all -- so a bare prefix match on the raw chunk misses a split message
+-- entirely. Both primitives silently did nothing for one, which is the worst thing a test primitive
+-- can do: the test still passes, and it passes for a reason that has nothing to do with what it
+-- claims to prove. Exactly the blind spot RaidSim.Messages was added for on the counting side.
+--
+-- The continuation chunks carry no token of their own, so they are matched by REMEMBERING what their
+-- message's first chunk was. Keyed by sender + prefix + channel, which is the key AceComm's own
+-- reassembler spools on: what it cannot tell apart, this must not pretend to either. Dropping only
+-- the first chunk of a message would be worse than dropping none -- the receiver would spool
+-- continuations onto nothing.
+local MULTI_FIRST, MULTI_NEXT, MULTI_LAST = "\001", "\002", "\003"
+local function chunkText(sim, from, prefix, channel, msg)
+    local key = from.name .. "\031" .. tostring(prefix) .. "\031" .. tostring(channel)
+    sim.chunkHead = sim.chunkHead or {}
+    local lead = msg:sub(1, 1)
+    if lead == MULTI_NEXT or lead == MULTI_LAST then
+        local head = sim.chunkHead[key]
+        if lead == MULTI_LAST then sim.chunkHead[key] = nil end
+        -- No first chunk on record means this harness never saw one -- a continuation matches nothing
+        -- rather than everything.
+        return head or msg
+    end
+    local text = (lead == MULTI_FIRST) and msg:sub(2) or msg
+    if lead == MULTI_FIRST then sim.chunkHead[key] = text end
+    return text
+end
+
 function RaidSim.Install(sim)
     sim.echoQueue = {}
 
@@ -472,8 +504,11 @@ function RaidSim.Install(sim)
         -- SILENTLY, after accepting it -- so the sender is told nothing at all, and an addon whose
         -- recovery depends on one unacknowledged message has no way back. Anything important enough
         -- to lose has to be tested against losing it.
+        -- Matched against the message this chunk BELONGS to, not against its raw bytes -- see
+        -- chunkText. Resolved once, because it advances the multipart bookkeeping.
+        local text = chunkText(sim, from, prefix, channel, msg)
         for token in pairs(sim.blackholed or {}) do
-            if msg:sub(1, #token) == token then return end
+            if text:sub(1, #token) == token then return end
         end
         -- HELD, not dropped: parked until RaidSim.Release, then delivered in send order.
         --
@@ -483,9 +518,13 @@ function RaidSim.Install(sim)
         -- built out of drops at all: the harness delivers to peers immediately, so the second client
         -- always sees the first one's decision and takes a different path entirely.
         for token in pairs(sim.held or {}) do
-            if msg:sub(1, #token) == token then
+            if text:sub(1, #token) == token then
+                -- `text` travels with the entry: RaidSim.Release picks the chunks to let go by token
+                -- too, and a continuation chunk cannot be matched a second time -- by then its first
+                -- chunk is no longer on record.
                 sim.heldQueue[#sim.heldQueue + 1] =
-                    { prefix = prefix, msg = msg, channel = channel, target = target, from = from }
+                    { prefix = prefix, msg = msg, text = text,
+                      channel = channel, target = target, from = from }
                 return
             end
         end
@@ -577,7 +616,9 @@ function RaidSim.Release(sim, token)
     sim.heldQueue = {}
     local n = 0
     for _, m in ipairs(queue) do
-        if m.msg:sub(1, #token) == token then
+        -- m.text, not m.msg: a continuation chunk of a split message carries no token of its own (see
+        -- chunkText), so matching the raw bytes would release the first chunk and strand the rest.
+        if (m.text or m.msg):sub(1, #token) == token then
             n = n + 1
             RaidSim.As(m.from, function()
                 _G.C_ChatInfo.SendAddonMessage(m.prefix, m.msg, m.channel, m.target)

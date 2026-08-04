@@ -391,3 +391,55 @@ do
     T.truthy(plain.KART.LC.rolls[778] ~= nil,
         "but the numbers still fill a void, or the disagreement would cost them permanently (B129)")
 end
+
+-- The primitives that drop and hold a message can see a SPLIT one -----------------------------------
+-- A three-item batch in this fixture is already two chunks on the wire, and only the FIRST of them
+-- carries the token -- the rest lead with AceComm's control byte. RaidSim.Blackhole and RaidSim.Hold
+-- matched the raw chunk, so they silently no-opped for exactly the message this file is about: a test
+-- asserting "the repair reaches it anyway" would have passed without anything ever being dropped.
+-- A silent no-op in a test primitive is worse than a broken one, so it is held to a test of its own.
+do
+    local sim = F.NewRaid()
+    RaidSim.Blackhole(sim, "LC_DROP")
+    RaidSim.ClearLog(sim)
+
+    F.Drop(sim, 980, F.GLOVES)
+    F.Drop(sim, 981, F.WEAPON)
+    F.Drop(sim, 982, F.TOKEN)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(#Announced(sim), 1, "the batch was sent")
+    T.truthy(#RaidSim.Sent(sim, "\001LC_DROP") > 0, "and was too long to fit in one chunk")
+
+    -- Probed on what only the MESSAGE can deliver. Every client in the raid gets its own
+    -- START_LOOT_ROLL and tracks the item from that, so LC.rollItems says nothing about whether the
+    -- announcement arrived -- the numbers and the recorded announcer come from nowhere else.
+    local council = sim.byName.Merrit
+    for _, id in ipairs({ 980, 981, 982 }) do
+        T.eq(council.KART.LC.rolls[id], nil,
+            "a blackholed split message reaches nobody (" .. id .. ")")
+        T.eq(council.KART.LC.rollAnnouncedBy[id], nil, "nor does its announcement (" .. id .. ")")
+    end
+end
+
+-- ...and the same message, merely SLOW, arrives whole once it is let go.
+do
+    local sim = F.NewRaid()
+    RaidSim.Hold(sim, "LC_DROP")
+
+    F.Drop(sim, 983, F.GLOVES)
+    F.Drop(sim, 984, F.WEAPON)
+    F.Drop(sim, 985, F.TOKEN)
+    KARTTEST.AdvanceTime(1)
+
+    local council = sim.byName.Merrit
+    T.eq(council.KART.LC.rolls[983], nil, "a held split message has not arrived yet")
+
+    RaidSim.Release(sim, "LC_DROP")
+    KARTTEST.AdvanceTime(0)
+
+    for _, id in ipairs({ 983, 984, 985 }) do
+        T.truthy(council.KART.LC.rolls[id] ~= nil,
+            "and every chunk of it is let go together, so it reassembles (" .. id .. ")")
+    end
+end
