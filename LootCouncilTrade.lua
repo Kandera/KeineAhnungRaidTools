@@ -470,6 +470,16 @@ function Trade.ClearRollState(rollID)
     -- a reload with the roll it belongs to -- an owner that comes back without it would refuse every
     -- catch-up for an item still on the table.
     if LC.rollEligible then LC.rollEligible[rollID] = nil end
+    -- The same roll waiting out the drop's collection window on the owner's client (LC.pendingDrop).
+    -- A roll dismissed, decided or swept before its announcement has left must not be announced
+    -- afterwards -- every peer would open a card for a roll this client no longer tracks, and the
+    -- heartbeat never names it, so nothing takes it back down again.
+    local pending = LC.pendingDrop
+    if pending then
+        for i = #pending.entries, 1, -1 do
+            if pending.entries[i].rollID == rollID then table.remove(pending.entries, i) end
+        end
+    end
     -- "we have already asked the owner about this one", a timestamp and nothing else.
     if LC.rollReqSent then LC.rollReqSent[rollID] = nil end
     if LC.rollsAnswerAt then LC.rollsAnswerAt[rollID] = nil end

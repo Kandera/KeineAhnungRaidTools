@@ -35,6 +35,10 @@ end
 Wired('frame:RegisterEvent("PLAYER_LOGOUT")', "PLAYER_LOGOUT is registered")
 Wired('elseif event == "PLAYER_LOGOUT" then', "and routed in the event handler")
 Wired("KART.LC.SaveSessionSnapshot()", "the snapshot is taken there")
+-- The other thing that moment is the last chance for: a boss's items are collected for half a second
+-- before they are announced together, and a reload inside that window is the only way the raid never
+-- hears about a boss at all (B134).
+Wired("KART.LC.FlushPendingDrop()", "and the drop still waiting to be announced goes out with it")
 Wired("KART.LC.RestoreSessionSnapshot()", "and read back on ADDON_LOADED")
 
 do

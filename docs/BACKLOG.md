@@ -3112,3 +3112,49 @@ council's decision and every other client's copy of both are untouched.
 `TABLE_HEARTBEAT_SECONDS` — a heartbeat still never takes an item off anybody's screen — and
 `LC.ForgetDismissalIfReused`, which `LC.HandleRolls` and `Trade.HandleResult` still use where they name
 an item themselves.
+
+## B133 — OPEN 2026-08-04 — a client that joins inside the collection window is handed the boss it missed
+
+Found in review of the one-message-per-boss change (`LC_DROP`), not by a raid.
+
+A boss's items are now collected for half a second and announced together, so the announcement leaves
+up to 500 ms after the loot event instead of inside the same frame. A client that joins the group in
+that gap receives it like everybody else — it is an ordinary group broadcast — and `LC.HandleStart`
+gives them a vote row and a popup for a boss they were not standing at.
+
+**What is NOT affected, and it is worth being exact.** `SnapshotEligible` runs at the loot event, so
+the joiner is not in `LC.rollEligible` and `LC.MayCatchUp` still refuses them every catch-up. B118's
+strict rule is untouched and so is `docs/OWNERSHIP.md`. They also hold no number of their own: the
+table was drawn against the snapshot they are not in, and they store it exactly as the rest of the
+raid does — with no entry for themselves. So the shape in the raid is a person on the council panel
+with a vote and an empty roll column.
+
+**Why it is not fixed here.** The item is not misassigned — the council still decides, and it can see
+that this raider has no roll number. Fixing it properly means naming the participants in the message
+and having the receiver check itself against that list before opening anything, which is a rule about
+who may hold a card at all; that rule currently lives on the SENDER (`LC.rollEligible`) and moving
+half of it to the receiver is a design decision, not a patch. Before the batch the window was one
+frame, i.e. unreachable, so this is new — but it needs the same reproduction standard as everything
+else here, and nothing reproduces it yet: no test covers it and no raid has reported it.
+
+## B134 — OPEN 2026-08-04 — a reload inside the collection window loses a whole boss, and the belt only mostly works
+
+Found in the same review as B133.
+
+`LC.pendingDrop` is runtime state. A loot owner who reloads, disconnects or crashes inside the half
+second between the loot event and the flush comes back without the batch, and the announcement is
+simply never made. `ForceWinRoll` has already run by then, so the items are physically in the
+lootmaster's bags while nobody in the raid — the lootmaster included — has a card for the boss that
+just died.
+
+**Loud, not silent,** which is why it is recorded rather than engineered around: the whole raid can
+see that a boss dropped nothing, and `/kart add` is the standing manual recovery for exactly this.
+Weighed against the trigger — a reload landing inside one 0.5 s window per boss — persisting the batch
+would be more machinery than the risk earns.
+
+**The cheap belt, taken.** Core.lua already handles `PLAYER_LOGOUT`, which fires for a /reload, a
+logout and a quit alike, so flushing there is one line next to `SaveSessionSnapshot` and it is in.
+Recorded honestly: it is a belt, not a fix. `ChatThrottleLib` sends inline when there is bandwidth
+free and queues otherwise, and a queued message is despooled from an `OnUpdate` that will not run
+again — so a batch that goes out during a quiet moment survives the reload, and one sent while the
+pipe is already congested does not. A crash raises no `PLAYER_LOGOUT` at all.

@@ -94,7 +94,7 @@ do
     Drop(sim, 52, F.GLOVES, { noRollFor = { Bramor = true } })
     KARTTEST.AdvanceTime(1)
 
-    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "nobody announces the item, because only the owner ever does")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP"), 0, "nobody announces the item, because only the owner ever does")
     T.is_nil(lm.KART.LC.rollItems[52], "and the owner is not tracking an item they never saw")
 
     -- The defect: every one of these used to pass, handing the item to whoever is not running KART.
@@ -165,7 +165,7 @@ do
     Drop(sim, 56, F.RARE)
     KARTTEST.AdvanceTime(1)
 
-    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "a rare is below the threshold and is never announced")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP"), 0, "a rare is below the threshold and is never announced")
     for _, name in ipairs(AUTOPASSERS) do
         T.eq(PassedBy(sim, 56, name), 0, name .. " still passes it straight away")
     end

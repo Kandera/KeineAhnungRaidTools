@@ -99,7 +99,7 @@ do
         local same, field = Same(before, Snapshot(lm))
         T.truthy(same, label .. " from a key that is in no group changes nothing"
             .. (field and (" (" .. field .. " moved)") or ""))
-        T.eq(#RaidSim.Sent(sim), 0, label .. " from that key is not answered either")
+        T.eq(#RaidSim.Sent(sim, ""), 0, label .. " from that key is not answered either")
     end
 end
 

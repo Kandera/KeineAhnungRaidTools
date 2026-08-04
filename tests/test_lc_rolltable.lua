@@ -23,8 +23,8 @@ do
     -- past that limit.
     -- The numbers ride inside the drop's own announcement, so that message IS the roll table on the
     -- wire; LC_ROLLS is left as the repair form (see the catch-up cases further down).
-    T.eq(#RaidSim.Sent(sim, "LC_DROP:"), 1, "the whole raid's rolls travel as one message")
-    T.eq(RaidSim.Sent(sim, "LC_DROP:")[1].from, lm.name, "and the lootmaster is the one who sent it")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP:"), 1, "the whole raid's rolls travel as one message")
+    T.eq(RaidSim.Messages(sim, "LC_DROP:")[1].from, lm.name, "and the lootmaster is the one who sent it")
 end
 
 -- Everybody has a number, and no two are the same ------------------------------------------------

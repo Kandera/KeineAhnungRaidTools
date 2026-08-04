@@ -2609,6 +2609,13 @@ end
 -- (SetSessionActive) and a peer receiving LC_ACTIVE:0, so both sides converge to a clean slate
 -- instead of the peer keeping stale tabs/votes/showall state around.
 function LC.ClearAllRolls()
+    -- The batch still waiting out its collection window goes with them. Nothing else cancels it, so
+    -- End Round, a session ending and an LC_ACTIVE:0 all used to leave the timer armed and announce,
+    -- half a second later, items this client has just stopped tracking: every peer opens a card for a
+    -- roll the owner no longer has, and since the owner's heartbeat never names it, that card sits
+    -- there until its vote window runs out. The timer itself is left to fire and find nothing (see
+    -- FlushPendingDrop), which is cheaper than carrying a handle around for it.
+    LC.pendingDrop = nil
     for i = #LC.councilTabs, 1, -1 do
         LC.Trade.ClearRollState(LC.councilTabs[i])
     end

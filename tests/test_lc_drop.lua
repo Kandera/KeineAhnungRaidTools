@@ -8,19 +8,9 @@
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 
--- Every announcement on the wire, however many chunks it took.
---
--- RaidSim.Sent matches the raw bytes handed to C_ChatInfo.SendAddonMessage, and this message is the
--- first in the addon that routinely exceeds 255 bytes: three items in a five-man fixture is already
--- two chunks, and the transport stamps AceComm's own control byte in front of each. So a prefix match
--- on the token alone finds NOTHING for a batch that had to be split -- which would read as "nothing
--- was sent" rather than as "it was sent in two pieces". One message is one unsplit send or one FIRST
--- chunk ("\001"); the continuation chunks carry "\002"/"\003" and are deliberately not counted.
-local function Announced(sim)
-    local out = RaidSim.Sent(sim, "LC_DROP:")
-    for _, e in ipairs(RaidSim.Sent(sim, "\001LC_DROP:")) do out[#out + 1] = e end
-    return out
-end
+-- Counted with RaidSim.Messages, not RaidSim.Sent: a batch of three items in this five-client fixture
+-- is already two chunks on the wire, and a prefix match on the token would find neither of them.
+local function Announced(sim) return RaidSim.Messages(sim, "LC_DROP:") end
 
 -- Three items, one message ------------------------------------------------------------------------
 do

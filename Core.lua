@@ -327,6 +327,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC then KART.LC.Trade.OnTradeAcceptUpdate() end
 
     elseif event == "PLAYER_LOGOUT" then
+        -- A boss's items wait half a second to be announced together (LC.pendingDrop), and a reload
+        -- landing inside that window would take the whole batch with it -- the lootmaster has already
+        -- force-won them, so nobody in the raid would see a card for a boss that just died (B134).
+        -- Sent before the snapshot for no ordering reason; it is simply the outbound half, and
+        -- ChatThrottleLib sends inline whenever there is bandwidth, which at this moment there
+        -- usually is.
+        if KART.LC and KART.LC.FlushPendingDrop then KART.LC.FlushPendingDrop() end
         -- The last thing that runs before SavedVariables are written, and it fires for a
         -- /reload, a logout and a quit alike -- so one write site keeps the items on the table
         -- across every ordinary interruption (B81).

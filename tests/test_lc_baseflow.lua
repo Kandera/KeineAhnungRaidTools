@@ -226,14 +226,14 @@ do
     -- nothing printed.
     KARTTEST.AdvanceTime(10)
 
-    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "nothing is decided while the item is unidentifiable")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP"), 0, "nothing is decided while the item is unidentifiable")
     T.truthy(not (KARTTEST.rolled[59] or {})[lm.unit], "and nothing is force-won on a guess")
 
     -- It arrives, late. The roll must still be picked up rather than abandoned.
     KARTTEST.lootRolls[59].linkPending = nil
     KARTTEST.AdvanceTime(10)
 
-    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 1, "the roll is picked up once the item is identifiable")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP"), 1, "the roll is picked up once the item is identifiable")
     T.eq(KARTTEST.rolled[59] and KARTTEST.rolled[59][lm.unit], 1, "and force-won then")
     for _, c in ipairs(sim.clients) do
         T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[59]), c.name .. " gets the item")
@@ -418,7 +418,7 @@ do
     -- match would find nothing. This only works because the fixture's payload here stays under the
     -- single-part size limit; it will fail loudly, not silently, the day this message's payload grows
     -- past that limit.
-    T.eq(#RaidSim.Sent(sim, "LC_DROP:"), 1,
+    T.eq(#RaidSim.Messages(sim, "LC_DROP:"), 1,
         "the whole raid's rolls travel as one message, not one per client")
 end
 

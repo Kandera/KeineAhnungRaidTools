@@ -531,6 +531,25 @@ function RaidSim.Sent(sim, token)
     return out
 end
 
+-- The same thing, counting a SPLIT message once.
+--
+-- sim.log holds the raw bytes handed to C_ChatInfo.SendAddonMessage, so anything over 255 bytes is
+-- several entries, each carrying AceComm's own control byte in front of the token -- and a prefix
+-- match on the token alone therefore finds NOTHING for a message that had to be split. That reads as
+-- "nothing was sent", which is the wrong answer in both directions: silently wrong for an assertion
+-- about absence, and loudly wrong for one about presence. LC_DROP is the first message in this addon
+-- that routinely crosses the cap (three items in this fixture is already two chunks), so anything
+-- counting it asks here rather than at RaidSim.Sent.
+--
+-- One message is one unsplit send or one FIRST chunk ("\001", AceComm's MSG_MULTI_FIRST); the
+-- continuation chunks ("\002"/"\003") are deliberately not counted. The entries carry the chunk's own
+-- bytes, so .msg is the whole message only when it fit in one.
+function RaidSim.Messages(sim, token)
+    local out = RaidSim.Sent(sim, token)
+    for _, e in ipairs(RaidSim.Sent(sim, "\001" .. token)) do out[#out + 1] = e end
+    return out
+end
+
 function RaidSim.ClearLog(sim) sim.log = {} end
 
 -- Messages starting with `token` are sent but never delivered, until Deliver puts them back.

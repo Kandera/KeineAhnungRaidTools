@@ -128,7 +128,9 @@ do
     local corvin, alric = sim.byName.Corvin, sim.byName.Alric
     for _, id in ipairs({ 130, 131, 132, 133 }) do F.Drop(sim, id, F.GLOVES) end
     -- Past the window they are collected in, so all four are on the council's panels before any of
-    -- them is dismissed.
+    -- them is dismissed. Load-bearing rather than cosmetic: a roll dismissed while its announcement is
+    -- still buffered is taken back out of it (Trade.ClearRollState), so without this the raid would
+    -- correctly never hear about any of the four and there would be nothing for the x to be local ABOUT.
     KARTTEST.AdvanceTime(1)
 
     RaidSim.As(owner, function()
