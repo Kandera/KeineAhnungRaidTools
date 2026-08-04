@@ -2183,7 +2183,13 @@ function LC.HandleSyncRequest(payload, sender, senderShort)
         buttonLabels = buttons,
         rollsEnabled = (rolls == "1"),
         lootmaster = lootmaster,
-        voteSeconds = tonumber(voteSeconds),
+        -- Clamped to the range the slider itself allows (5-180, see SldVoteTimer in
+        -- LootCouncilSettings.lua). This is the one inlet that takes a vote length from another
+        -- player's whisper, and the field is no longer just a duration: 0 is the control value meaning
+        -- "voting on this one is already over" (LC.SendOpenRolls writes it, LC.HandleStart reads it).
+        -- A 0 accepted here would be handed on by every LC_START this client later sends, silently
+        -- telling the whole raid that every item is closed the moment it drops.
+        voteSeconds = math.min(180, math.max(5, tonumber(voteSeconds))),
         councilMembers = council,
     })
 end
@@ -3535,10 +3541,18 @@ local function PurgeStaleRoll(rollID, newItemID)
         if LC.councilTabs[i] == rollID then table.remove(LC.councilTabs, i) end
     end
     if LC.activeRollID == rollID then LC.activeRollID = nil end
-    -- LC.rollLootedAt needs no clearing here even though this IS the rollID-reuse case: both callers
-    -- (LC.OnStartLootRoll, LC.HandleStart) re-stamp it unconditionally right after this returns, so
-    -- the new roll always gets its own time(). See Trade.PruneExpiredLootStamps for why the stamp
-    -- otherwise outlives Trade.ClearRollState.
+    -- LC.rollLootedAt is not cleared here even though this IS the rollID-reuse case. Both callers
+    -- (LC.OnStartLootRoll, LC.HandleStart) re-stamp it right after this returns -- but no longer
+    -- unconditionally, as this comment used to claim: LC.HandleRollCatchup puts a stamp it saved back
+    -- afterwards, on purpose, because a repair can land minutes after the drop and dating the
+    -- four-hour trade window from the repair would promise a hand-over that can no longer happen.
+    --
+    -- So a reused rollID CAN keep the previous roll's stamp, in the one case where this function is
+    -- blind anyway: a catch-up finds nothing tracked under the ID and returns below at "nothing
+    -- tracked", with no old link to compare. Accepted, because the error only ever runs one way. A
+    -- preserved stamp is older than the true drop, never newer, so the reminder ends early rather than
+    -- late -- and an early end to a promise about a trade is the safe direction. Age bounds it
+    -- regardless: see Trade.PruneExpiredLootStamps for why the stamp outlives Trade.ClearRollState.
     -- Rolls already cast FOR THE ITEM NOW ARRIVING survive the purge. Everything else about this
     -- rollID belongs to the previous item and goes.
     local keepRolls = (LC.rollsFor[rollID] == newItemID) and LC.rolls[rollID] or nil

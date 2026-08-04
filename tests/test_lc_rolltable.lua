@@ -410,12 +410,20 @@ do
         taken[slot] = true
     end
 
-    -- The property that actually has to hold across CLIENTS, and the one the reversed-roster check
-    -- could never show: two clients that sorted the same membership independently must give one key
-    -- the same slot. If they disagree the spread degrades to a hash's luck (see LC.RollsAnswerSlot).
-    local copy = {}
-    for i, key in ipairs(keys) do copy[#keys - i + 1] = key end
-    table.sort(copy)
-    T.eq(LC.RollsAnswerSlot(copy, keys[7]), LC.RollsAnswerSlot(keys, keys[7]),
-        "two independently sorted copies of one roster place the same client in the same slot")
+    -- What makes two clients agree, stated as something that can actually be measured: the slot
+    -- follows a key's POSITION in a roster every client sorts the same way, and nothing whatsoever
+    -- about the key itself. That is the whole difference from the name hash (7123117) -- two clients
+    -- holding one roster now agree by construction rather than by luck.
+    --
+    -- The second list is built independently, and from a DIFFERENT raid: forty names sharing nothing
+    -- with the ones above. Reversing `keys` and re-sorting it, which is what stood here, cannot fail
+    -- -- sorting a permutation of a sorted list gives that same list back, so the assertion compared
+    -- the function against itself on one list and proved only that table.sort is deterministic.
+    -- Whoever sits seventh in this second roster has to get the same slot as whoever sits seventh in
+    -- the first, and a hash of the name gets that wrong on the first line.
+    local otherRaid = {}
+    for i = 1, 40 do otherRaid[i] = string.format("Player-2711-%08X", i * 3) end
+    table.sort(otherRaid)
+    T.eq(LC.RollsAnswerSlot(otherRaid, otherRaid[7]), LC.RollsAnswerSlot(keys, keys[7]),
+        "the slot follows a client's position in the sorted roster, not anything about its name")
 end

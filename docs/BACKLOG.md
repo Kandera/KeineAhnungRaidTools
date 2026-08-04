@@ -2934,6 +2934,29 @@ is 250ms at a 40-man and the same order as the jitter it has to beat.
 question, and a question that arrives forty seconds late is noise — the asker has already asked again by
 then.
 
+**Knowingly left open: a plain raider never lets go of a caught-up expired item.** An item is now askable
+for as long as it is still tracked rather than only while its timer runs, so a raider can be handed one
+whose voting has already closed. `LC.HandleStart`'s `secs == 0` branch tracks it deliberately without a
+vote row — the row would flash up and `Vote.PruneExpiredRolls` would tear the whole repair back down a
+tick later — and that sweep walks `LC.voteListRolls` and nothing else. So the roll has no way out: it
+stays tracked on that client until the round or the session ends, on somebody who is not on the council
+and has nothing left to decide about it.
+
+The consequence is bounded but real. If that same client later stands in as loot owner — the lootmaster
+ports out, this guild's normal operating event — its own heartbeat then names those long-dead rollIDs to
+the whole raid, and every peer that pruned them properly reads that as "I am missing this" and asks. What
+it does NOT do is put the items back: answering a request needs `LC.rollEligible` for that rollID, and a
+client that received the item as a catch-up never announced it and therefore never had that snapshot, so
+`LC.MayCatchUp` refuses — the strict-yes rule from B118, doing here exactly what this entry is about
+elsewhere. The cost is a question and a refusal per pruned peer every `ROLL_REQ_COOLDOWN` until End Round
+or the session end clears the table, not a resurrected item.
+
+Left open rather than fixed, because every fix on offer is worse than the noise. Ageing a tracked roll out
+by its own deadline is the deletion-from-silence the whole heartbeat design refuses (see the comment above
+`TABLE_HEARTBEAT_SECONDS`), and dropping the catch-up for closed items instead gives back the very repair
+this change exists for. `LC.rollDismissed` does not help here either: nobody dismissed anything — this
+client was handed something it never asked to keep.
+
 One related gap closed alongside it: `LC.EnsureTableTicker` only ever started on the client that first
 announced an item, so a departed lootmaster's own heartbeat died with them and nothing replaced it —
 leaving the second request above unreachable for anything announced before a handover, exactly the B131
