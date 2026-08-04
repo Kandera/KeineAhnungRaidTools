@@ -4388,10 +4388,24 @@ function LC.HandleEndRound(senderKey)
     LC.ClearAllRolls()
 end
 
+-- Returns whether the payload described an item this client could act on AT ALL -- which is what
+-- LC.HandleDrop needs to know before applying the numbers that travelled beside it in the same entry.
+--
+-- Deliberately NOT "was the announcement accepted". A refusal on OWNERSHIP grounds still answers yes,
+-- because the numbers have their own, weaker rule for exactly that case and it is load-bearing: see
+-- the "fills a void, never replaces" arm of LC.HandleRolls. A client whose ownership view disagrees
+-- with the real owner's refuses the announcement here and would then be left with no numbers for that
+-- item, permanently, since the heartbeat that could prompt it to ask again gates on the same check
+-- (B129, B131 -- and tests/test_lc_rolltable.lua holds that disagreement open on purpose). The two
+-- halves of one message therefore share one verdict about what the message SAID, and keep their own
+-- answers about who may say it, which is the design and not an oversight.
 function LC.HandleStart(payload, senderKey)
     -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
     -- would pop fake vote windows on every client.
-    if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
+    if not LC.IsSenderLootOwner(senderKey) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return true
+    end
     -- payload = "rollID:seconds:item", where item is the full item string ("item:249326::…:11946,…")
     -- since 3.3.1 and a bare itemID before it. Both are accepted: during a rollout the raid runs both
     -- builds for an evening, and refusing the old shape would take the item away from everyone still
@@ -4399,7 +4413,7 @@ function LC.HandleStart(payload, senderKey)
     local rollID, secs, itemPart = payload:match("^(%d+):(%d+):?(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
-    if not rollID then return end
+    if not rollID then return false end
     itemPart = itemPart or ""
     -- The bare id is what everything downstream compares on (PurgeStaleRoll, the duplicate ordinal,
     -- the stale-result guards); the string is what the item is REBUILT from.
@@ -4477,7 +4491,7 @@ function LC.HandleStart(payload, senderKey)
     if secs == 0 then
         LC.rollDeadlines[rollID] = GetTime()
         if LC.IsCouncil() then KART.LC.Council.ShowCouncilPanel(rollID, 0) end
-        return
+        return true
     end
 
     if LC.IsCouncil() then
@@ -4487,6 +4501,7 @@ function LC.HandleStart(payload, senderKey)
     -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
     -- gets the panel above.
     LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
+    return true
 end
 
 -- Entry point for /kart add <item1> <item2> ... — lets the designated lootmaster hand item(s)
@@ -4640,11 +4655,20 @@ function LC.HandleManualStart(payload, senderKey)
     -- GUID, but the stored lootmaster can still be pending config text if they weren't in our roster
     -- when LC_CONFIG was parsed, which would drop a legitimate manual roll inside the
     -- GROUP_ROSTER_UPDATE throttle window (LC_STATE_REQ only covers a fresh raid join).
-    if not LC.IsSenderLootOwner(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
+    if not LC.IsSenderLootOwner(senderKey) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        -- Same verdict, same reason as LC.HandleStart's: refusing the announcer does not refuse the
+        -- numbers. See the comment there.
+        return true
+    end
     local rollID, secs, itemLink = payload:match("^(%d+):(%d+):(.*)$")
     rollID = tonumber(rollID)
     secs   = tonumber(secs)
-    if not rollID or not itemLink or itemLink == "" then return end
+    -- No item at all, so there is nothing to announce and nothing the numbers could belong to. A
+    -- manual item has no Blizzard roll behind it to rebuild a link from -- unlike a real drop, which
+    -- legitimately arrives with an empty item part and resolves it locally -- so this is the one entry
+    -- shape whose numbers would be stored against an item that can never appear on any screen.
+    if not rollID or not itemLink or itemLink == "" then return false end
     -- The sender may have sent a compact item string instead of the full link (oversized-link
     -- fallback, see LC.StartManualRoll). Rebuild a full link when the item is cached so it displays.
     if not LC.IsRealItemLink(itemLink) and itemLink:match("^item:") then
@@ -4673,6 +4697,8 @@ function LC.HandleManualStart(payload, senderKey)
     -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
     -- gets the panel above.
     LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
+    -- Taken. Same verdict LC.HandleStart returns, and for the same reason -- see the comment there.
+    return true
 end
 
 -- The receiving half, and deliberately thin: it rebuilds the two payloads the existing handlers
@@ -4688,20 +4714,39 @@ function LC.HandleDrop(payload, senderKey)
     local keys = {}
     for key in head:gmatch("[^,]+") do keys[#keys + 1] = key end
 
+    local seen = 0
     for entry in entries:gmatch("[^;]+") do
+        -- One message used to be one item, so one message was one popup. It is now a list, and an
+        -- unbounded list opens as many windows as the sender cares to write.
+        --
+        -- Bounded by TABLE_MAX_IDS deliberately, rather than by a number of its own. That is how many
+        -- rolls the table heartbeat can name at once, which makes it the most items this raid can hold
+        -- a shared view of: a batch longer than that describes a table the repair path could never
+        -- re-state, so the entries past it are ones no client could be brought back into agreement
+        -- about anyway. A boss drops a handful, and /kart add is a line somebody types, so nothing
+        -- legitimate comes near it -- and tying the two means a future change to the heartbeat's
+        -- budget cannot leave this one behind.
+        seen = seen + 1
+        if seen > TABLE_MAX_IDS then break end
         -- The item string is the last field precisely so that its own colons and commas cannot reach
         -- this pattern.
         local rollID, nums, itemString = entry:match("^(%d+)#([^#]*)#(.*)$")
         if rollID then
             local startPayload = rollID .. ":" .. secs .. ":" .. itemString
+            -- One verdict for the whole entry: whether it described an item at all. The two halves of
+            -- an entry are one message and must not disagree about THAT -- numbers stored under a
+            -- rollID whose announcement half found nothing to announce are an orphan table no screen
+            -- can ever show and no repair can ever resolve. What the two halves keep separate, on
+            -- purpose, is who may write each of them; see the comment on LC.HandleStart.
+            local usable
             if kind == "m" then
-                LC.HandleManualStart(startPayload, senderKey)
+                usable = LC.HandleManualStart(startPayload, senderKey)
             else
-                LC.HandleStart(startPayload, senderKey)
+                usable = LC.HandleStart(startPayload, senderKey)
             end
             -- After the announcement, never before it: LC.HandleRolls accepts a table from the
-            -- ANNOUNCER of that item, and the line above is what records who that is.
-            if nums ~= "" then
+            -- ANNOUNCER of that item, and the call above is what records who that is.
+            if usable and nums ~= "" then
                 local drawn = {}
                 for n in nums:gmatch("[^,]+") do drawn[#drawn + 1] = n end
                 -- One number per participant, or none of them. The head names the participants once

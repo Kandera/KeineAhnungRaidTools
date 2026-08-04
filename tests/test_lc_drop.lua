@@ -313,3 +313,81 @@ do
     end
     T.truthy(tracked >= 2, "and both of them arrive")
 end
+
+-- What one message may do to a client that receives it ----------------------------------------------
+-- LC_START was one item per message, so one message was one popup. A batch is a list, and both of the
+-- things a list can do that a single item could not are answered here. Driven through LC.HandleDrop
+-- directly: what is under test is what the RECEIVER accepts, and no sender in this addon builds either
+-- of these shapes.
+local function ReceiveDrop(lm, to, payload)
+    RaidSim.As(to, function() to.KART.LC.HandleDrop(payload, lm.guid) end)
+end
+
+local function HeadAndNums(sim)
+    local keys = {}
+    for _, c in ipairs(sim.clients) do keys[#keys + 1] = c.guid end
+    table.sort(keys)
+    local nums = {}
+    for i = 1, #keys do nums[i] = i end
+    return table.concat(keys, ","), table.concat(nums, ",")
+end
+
+-- The entry count is bounded, so one message cannot open windows without end ------------------------
+-- Bounded by TABLE_MAX_IDS (12), the number of rolls the heartbeat can name at once: past that the
+-- raid could not be repaired back into agreement about the extra items anyway.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+    local head, nums = HeadAndNums(sim)
+
+    local parts = {}
+    for i = 1, 20 do
+        parts[#parts + 1] = (800 + i) .. "#" .. nums .. "#item:" .. F.GLOVES
+    end
+    ReceiveDrop(lm, council, "20:r:" .. head .. ";" .. table.concat(parts, ";"))
+
+    local tracked = 0
+    for i = 1, 20 do if council.KART.LC.rollItems[800 + i] then tracked = tracked + 1 end end
+    T.eq(tracked, 12, "a batch of twenty items opens twelve, not twenty")
+end
+
+-- An entry that names no item leaves nothing behind ------------------------------------------------
+-- The two halves of an entry are one message and must agree about whether it described an item at
+-- all. A manual item has no Blizzard roll behind it to rebuild a link from, so an empty item string
+-- announces nothing -- and its numbers, applied anyway, would be an orphan table under a rollID no
+-- screen can show and no repair can resolve.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+    local head, nums = HeadAndNums(sim)
+
+    ReceiveDrop(lm, council, "20:m:" .. head .. ";777#" .. nums .. "#")
+
+    T.eq(council.KART.LC.rollItems[777], nil, "an entry naming no item announces nothing")
+    T.eq(council.KART.LC.rolls[777], nil, "and leaves no numbers behind under it either")
+end
+
+-- ...but a refused ANNOUNCER still does not cost a raider the numbers (B129) -----------------------
+-- The other half of that verdict, and the half that must NOT be shared. A client whose ownership view
+-- disagrees with the real owner's refuses the announcement and would be left with no numbers for that
+-- item permanently -- the heartbeat that could prompt it to ask again gates on the same check. The
+-- numbers have their own weaker rule for exactly this ("fills a void, never replaces").
+do
+    local sim = F.NewRaid()
+    local plain, notOwner = sim.byName.Alric, sim.byName.Sinja
+    local head, nums = HeadAndNums(sim)
+    local before = plain.KART.LC.diag.refusedSender
+
+    -- From a group member who is NOT the loot owner, which is what an ownership disagreement looks
+    -- like from the receiving end -- the real owner sending under a config this client no longer
+    -- agrees with reaches it in exactly this shape.
+    RaidSim.As(plain, function()
+        plain.KART.LC.HandleDrop("20:r:" .. head .. ";778#" .. nums .. "#item:" .. F.GLOVES,
+            notOwner.guid)
+    end)
+
+    T.eq(plain.KART.LC.diag.refusedSender, before + 1, "the announcement itself is refused")
+    T.eq(plain.KART.LC.rollItems[778], nil, "so no window opens for it")
+    T.truthy(plain.KART.LC.rolls[778] ~= nil,
+        "but the numbers still fill a void, or the disagreement would cost them permanently (B129)")
+end
