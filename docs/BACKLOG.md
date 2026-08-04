@@ -2795,3 +2795,70 @@ named lootmaster still holds the real authority — because what is under test i
 behaviour DURING such a disagreement, not how long it persists in a real raid. The client is asserted
 to end up holding the same numbers as the lootmaster anyway. The deep soak (2000 seeds, seed 1728
 included) is clean.
+
+## B130 — OPEN, deferred to the maintainer — the same disagreement B129 fixed on the receive side is still open on the send side
+
+Found in review of the fix above, not by the soak — see "why the soak did not catch it" below for why
+2000 clean seeds do not rule it out.
+
+**The mechanism.** `LC.IsLootOwner()` falls back to `UnitIsGroupLeader('player')` whenever
+`LC.GetLootmaster()` answers `""`. A raid leader whose `raidConfig.lootmaster` was blanked by the relay
+— the same "ownership stays derived" shape B129 names, `LC.HandleConfigRelay` — reads an empty key.
+`LootmasterAbsent()` returns false for an empty key (there is no absent NAMED lootmaster to be absent),
+so the stand-in-consent gate that would otherwise ask before taking over is skipped entirely, and the
+raid-leader fallback answers `true` on its own. Once `LC_ACTIVE` has restored `sessionActive` for that
+client — which happens within seconds in a real raid — a drop arriving in this window makes it run the
+FULL owner branch: `SnapshotEligible`, `LC_START`, and `LC.DrawRollTable` plus its broadcast.
+
+**The outcome.** Two `LC_ROLLS` for one rollID, with different numbers. Every client with the correct
+view of who owns loot converges on the real owner's table — B129 saw to that. The disagreeing client
+itself does not converge: it drew its own table locally, so `isVoid` is false for it; `IsSenderLootOwner`
+answers false for the real owner's message, as far as this client is concerned; it refuses the real
+table for the same reason it refuses the `LC_TABLE` heartbeat that would otherwise make it notice and
+ask (B118's mechanism, same guard); and `needRolls` is false regardless, because it is holding *a*
+table. It ends the item holding numbers nobody else in the raid holds, permanently — and it is the raid
+leader, so most likely the person looking straight at the council panel that scores the tie-break
+against those numbers.
+
+**Why it lands exactly on this addon.** Before the roll table became one authoritative message this
+window cost nothing — every client drew independently with no sender check at all (see B129's own "why
+it lands exactly on this addon"). B129's write-up named the receive side and `LC.HandleTable` as "the
+two holes" the disagreement opens; this is a third, on the send side, created by the same single-writer
+property, and B129 deliberately did not close it — "this is the smaller of the two holes the diagnosis
+found, and the only one that needed closing."
+
+**Why the soak did not catch it, and does not rule it out.** The B129 test only reaches
+`LC.HandleRolls`'s receive-side guard because a freshly reloaded client has `sessionActive == false` and
+`LC.OnStartLootRoll` returns before ever reaching `LC.DrawRollTable`. Restore `sessionActive` first —
+which `LC_ACTIVE` does within seconds of a reload in a real raid, and which the deep soak's own
+convergence checks do not model as a separate step — and the send-side branch above is live. The clean
+2000-seed run says this exact sequence has not happened in the soak's random walk, not that it cannot.
+
+**Candidate containments**, both named in review, neither implemented here:
+
+* have `LC.DrawRollTable` refuse to draw for a rollID this client did not itself announce (i.e. was not
+  the one that just sent the `LC_START` for it);
+* accept an incoming roll table only from the sender whose `LC_START` we accepted for that same rollID,
+  rather than re-asking `LC.IsSenderLootOwner` a second time.
+
+Either changes who is allowed to originate a roll table under a live ownership disagreement, which is a
+question about loot ownership — settled in `docs/OWNERSHIP.md`, and the maintainer's decision, not a
+call to make inside a roll-table bugfix. Deliberately left open.
+
+## B131 — OPEN, inherited — a lost roll table cannot always be asked for again after a lootmaster handover
+
+Found in review of the roll table change; not new to it.
+
+`LC.MayCatchUp` returns `nil` — not `false` — when `LC.rollEligible[rollID]` was never recorded for that
+rollID, and `LC.HandleRollRequest` requires the strict `true` that rule was written for (B118: "a late
+arrival is not handed a running item"). A stand-in owner — the raid leader who takes over when the named
+lootmaster ports out, this guild's normal operating event — never ran `SnapshotEligible` for items the
+PREVIOUS owner announced before the handover, because that snapshot is taken once, by whoever announces,
+at announce time. So after the handover, no client can recover a lost roll table for anything announced
+earlier: it just re-asks every `ROLL_REQ_COOLDOWN` and is silently refused, forever, for that item.
+
+This is not a defect the roll table introduced — it is B118's settled strict-yes rule doing exactly the
+job it was written for, applied to data (`LC.rollEligible`) that rule already governed before this
+change existed. It does mean the promise "a lost table can always be asked for again" reads more broadly
+than it holds in practice once a handover has happened. Noted, not investigated further, and not fixed:
+the strict rule stays as B118 settled it.
