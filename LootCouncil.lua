@@ -3175,31 +3175,29 @@ function LC.DrawRollTable(rollID, itemID)
     if msg then LC.SendLC(msg) end
 end
 
--- Receives the whole raid's rolls from the loot owner. REPLACES what we hold rather than writing
--- single entries, which is the point of the change: one writer instead of 25, so there is no longer
--- a state where two clients know a different number of rolls and neither of them can tell.
+-- Receives the whole raid's rolls for an item and writes them wholesale rather than one entry at a
+-- time, which is the point of the change: one writer instead of 25, so there is no longer a state
+-- where two clients know a different number of rolls and neither of them can tell.
+--
+-- Who may write this item's numbers, strongest first:
+--   1. whoever announced this item to us -- the numbers belong to that announcement, and this is
+--      the only client whose claim survives a disagreement about who is lootmaster right now
+--      (B130: two clients disagreeing about who is lootmaster right now used to mean two different
+--      "owners" each convinced they could overwrite the other's table, reachable for a few seconds
+--      around any lead change -- see HandleConfigRelay's fromSelf comment);
+--   2. anybody in our group, but only into a VOID -- the "fills a gap, never replaces" rule
+--      LC.HandleConfigRelay uses. Without it, a client whose ownership view disagrees with the real
+--      owner's refuses the table and is left with nothing for that item, permanently:
+--      LC.HandleTable, the only path that could otherwise prompt it to ask again, gates on
+--      LC.IsSenderLootOwner too and would refuse the very heartbeat that could fix it (B129, B131);
+--   3. nobody else.
+-- Group membership is enforced upstream by KASC's dispatcher (this token is registered with
+-- group = true), so case 2 needs no check of its own.
 --
 -- Deliberately NOT gated on LC.rollItems[rollID], for the same reason the old per-client handler was
 -- not: the table is sent right after the announcement, and a client that learns of the roll only
 -- from LC_START can legitimately see the two in either order.
---
--- The sender guard has the same fill-a-void exception LC.HandleConfigRelay uses above: a recognised
--- owner still REPLACES whatever we hold, but a client holding no table at all for this rollID takes
--- what it is offered. Without it, a client whose ownership view disagrees with the real owner's --
--- reachable for a few seconds around any lead change, see HandleConfigRelay's fromSelf comment --
--- refuses the table and is left with nothing for that item, permanently: LC.HandleTable, the only
--- path that could ask again, is gated on this same guard (B129). Group membership is already
--- enforced by KASC's dispatcher -- LC_ROLLS is registered group = true -- so nothing else needs
--- checking here.
 function LC.HandleRolls(payload, senderKey)
-    -- Who may write this item's numbers, strongest first:
-    --   1. whoever announced this item to us -- the numbers belong to that announcement, and this is
-    --      the only client whose claim survives a disagreement about who is lootmaster right now;
-    --   2. anybody in our group, but only into a VOID -- the "fills a gap, never replaces" rule
-    --      LC.HandleConfigRelay uses, and what makes a peer's repair safe (B129, B131);
-    --   3. nobody else.
-    -- Group membership is enforced upstream by KASC's dispatcher (this token is registered with
-    -- group = true), so case 2 needs no check of its own.
     local rollID = tonumber(payload:match("^(%d+):"))
     local isAnnouncer = rollID ~= nil and LC.rollAnnouncedBy[rollID] == senderKey
     local isVoid = rollID ~= nil and LC.rolls[rollID] == nil

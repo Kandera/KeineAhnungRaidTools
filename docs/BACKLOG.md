@@ -2848,16 +2848,19 @@ which `LC_ACTIVE` does within seconds of a reload in a real raid, and which the 
 convergence checks do not model as a separate step — and the send-side branch above is live. The clean
 2000-seed run says this exact sequence has not happened in the soak's random walk, not that it cannot.
 
-**Candidate containments**, both named in review, neither implemented here:
+**Candidate containments**, both named in review at the time this was written:
 
 * have `LC.DrawRollTable` refuse to draw for a rollID this client did not itself announce (i.e. was not
-  the one that just sent the `LC_START` for it);
-* accept an incoming roll table only from the sender whose `LC_START` we accepted for that same rollID,
-  rather than re-asking `LC.IsSenderLootOwner` a second time.
-
-Either changes who is allowed to originate a roll table under a live ownership disagreement, which is a
-question about loot ownership — settled in `docs/OWNERSHIP.md`, and the maintainer's decision, not a
-call to make inside a roll-table bugfix. Deliberately left open.
+  the one that just sent the `LC_START` for it) — still not implemented. This one really does change
+  who is allowed to ORIGINATE a roll table under a live ownership disagreement, which is a question
+  about loot ownership — settled in `docs/OWNERSHIP.md`, and the maintainer's decision, not a call to
+  make inside a roll-table bugfix. Deliberately left open;
+* accept an incoming roll table only from the sender whose `LC_START` we accepted for that same
+  rollID, rather than re-asking `LC.IsSenderLootOwner` a second time — this is what **The fix** above
+  implements (`LC.rollAnnouncedBy`, generalized to manual rolls too). It turned out narrower than
+  expected: accepting by announcer changes nothing about who may originate a table or who hands out
+  loot, so it did not need the ownership call this section originally worried about for both
+  candidates, and is no longer open.
 
 ## B131 — OPEN, inherited — a lost roll table cannot always be asked for again after a lootmaster handover
 
