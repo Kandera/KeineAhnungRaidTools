@@ -1941,11 +1941,15 @@ end
 local TABLE_HEARTBEAT_SECONDS = 10
 -- Enough for any real distribution (a boss drops a handful), and short enough that the message stays
 -- far inside the transport's cap. Nothing is inferred from an item's ABSENCE here, so a truncated
--- list costs at most a slower catch-up for the twelfth item.
+-- list costs a slower catch-up for whatever it drops -- and LC.OpenRollIDs sorts ASCENDING, so what
+-- it drops is the HIGHEST rollIDs: the newest drops on the table, not "the twelfth item". Whether
+-- that is the right end to lose is a separate question from this budget and has not been decided.
 --
 -- Unchanged when the message started naming items as well (B132), because it still fits: an entry is
--- a rollID, "=" and an itemID, so twelve of them is about 160 bytes with the token and the count in
--- front -- well inside one 255-byte addon message. AceComm would split a longer one rather than lose
+-- a rollID, "=" and an itemID, and the widest rollID this addon can produce is six digits
+-- (MANUAL_ROLL_ID_BASE + a five-digit remainder), so twelve entries and their commas is 167 bytes,
+-- about 180 with the token and the count in front -- inside one 255-byte addon message with room to
+-- spare, but not the "about 160" first recorded here. AceComm would split a longer one rather than lose
 -- it, but a heartbeat that costs three chunks every ten seconds for the rest of the evening is a bad
 -- trade for a message whose whole point is to be cheap enough to repeat. That budget is why the item
 -- travels as an itemID and never as a link: an itemID is six digits, and the same item's LINK is
@@ -2031,9 +2035,13 @@ function LC.SendTableHeartbeat()
 
     -- "<rollID>=<itemID>", comma-separated, behind the count of what is REALLY on the table (which
     -- can be more than TABLE_MAX_IDS lists). Nothing reads that count -- one thing briefly did, and
-    -- LC.HandleTable says at its foot why that reader is gone -- but it stays on the wire: it is the
-    -- only thing that tells a receiver its list was truncated, and it keeps the payload's leading
-    -- field the same shape a 3.3.0 client parses.
+    -- LC.HandleTable says at its foot why that reader is gone -- and it stays on the wire because the
+    -- FIELD is load-bearing even though its value is not: the receiver splits on "^(%d+):?(.*)$", so
+    -- dropping the count would feed it "980=249331,981=..." and it would swallow the first entry
+    -- whole, reading 980 as the count and "=249331,981=..." as the list. (The reason first written
+    -- here -- "it tells a receiver its list was truncated" -- is inert: no 3.3.1 reader looks at it,
+    -- and the 3.3.0 reader's `shown == total` guard can never hold against a doubled list.) It also
+    -- keeps the payload's leading field the same shape a 3.3.0 client parses.
     --
     -- "=0" for a roll whose item this client cannot name, which happens: an LC_START that carried no
     -- itemID leaves "???" tracked here (B40). It is still listed, deliberately -- a roll the owner is
@@ -2119,6 +2127,15 @@ function LC.HandleTable(payload, senderKey, sender)
         --   client's whole card for the item, the raid's votes included, and depending on a round trip
         --   a stand-in can refuse (LC.MayCatchUp wants an LC.rollEligible snapshot only the announcing
         --   client ever takes). The item is named right here instead -- see the repair below.
+        --
+        -- And what comparing at all costs, so the next reader knows it: this message is now
+        -- AUTHORITATIVE about which item a number belongs to. Before B132 no heartbeat could touch a
+        -- tracked item or a dismissal note at all -- it could only ever cause an ask. Now an owner
+        -- that is ITSELF stale (it missed the LC_START for a reuse and still tracks the previous item)
+        -- names the old item, and a client that dismissed or holds the NEW one drops that and asks
+        -- again on the strength of it. Narrow and self-limiting -- the answer to that ask is whatever
+        -- is really on the table, and both clients agree again on the next heartbeat -- but it is a
+        -- new channel for one client's staleness to reach the rest of the raid.
         if rollID and itemID then
             local link = LC.rollItems[rollID]
             local held = type(link) == "string" and link:match("item:(%d+)") or nil

@@ -3006,17 +3006,23 @@ alongside each rollID: `LC_TABLE:<count>:<rollID>=<itemID>,<rollID>=<itemID>,...
 
 * An **itemID, never a link**. Six digits against fifty-plus, and the same item's link differs per
   drop by its bonus ids — which is the comparison this message must never make (`LC.PayloadItemID`
-  exists for that reason). Twelve entries is about 160 bytes with the token in front, so
-  `TABLE_MAX_IDS` is unchanged at 12 and the heartbeat still fits a single addon message. AceComm
-  would split a longer one rather than lose it, but a heartbeat costing three chunks every ten
-  seconds all evening is a bad trade for a message whose whole point is being cheap enough to repeat.
+  exists for that reason). At the widest rollID this addon can produce (six digits:
+  `MANUAL_ROLL_ID_BASE` plus a five-digit remainder) twelve entries and their commas are 167 bytes,
+  about 180 with the token and count in front — so `TABLE_MAX_IDS` is unchanged at 12 and the
+  heartbeat still fits a single addon message. (Recorded as "about 160" when the change went in;
+  corrected in review, same conclusion.) AceComm would split a longer one rather than lose it, but a
+  heartbeat costing three chunks every ten seconds all evening is a bad trade for a message whose
+  whole point is being cheap enough to repeat.
 * **`=0` for a roll the owner cannot name itself** — an `LC_START` that carried no itemID leaves
   "???" tracked (B40). Still listed, deliberately: a roll the owner is vague about is exactly the one
   a receiver most needs to hear exists. The receiver reads it as "unknown", never as a mismatch, so
   the ask still happens and no comparison is made.
-* The leading **count stays**, unread. Nothing has read it since B118 except the sweep removed below;
-  it is the only thing that tells a receiver its list was truncated, and it keeps the payload's first
-  field the shape a 3.3.0 client parses.
+* The leading **count stays**, unread — but for the reason found in review, not the one first written
+  down. Its VALUE is inert (no 3.3.1 reader looks at it, and the 3.3.0 reader's `shown == total` guard
+  can never hold against a doubled list); its FIELD is load-bearing. The receiver splits the payload
+  with `^(%d+):?(.*)$`, so a message without the count would parse `980=249331,981=…` as count 980 and
+  list `=249331,981=…` — swallowing the first entry silently. It also keeps the payload's first field
+  the shape a 3.3.0 client parses.
 
 **What the receiver does with it.**
 
@@ -3030,9 +3036,33 @@ alongside each rollID: `LC_TABLE:<count>:<rollID>=<itemID>,<rollID>=<itemID>,...
   it missed. That is `PurgeStaleRoll`'s transition already — it drops the dismissal note, the previous
   item's votes, tab and vote row, and keeps rolls already cast for the item now arriving — so it is
   called (`LC.PurgeStaleRoll`) rather than reimplemented, and there is one answer to "this id belongs
-  to a different item now" instead of two that can drift. Called only on a proven difference:
-  `PurgeStaleRoll` clears the dismissal unconditionally at its top, which is right for a roll START
-  and wrong for a heartbeat repeating the item this client deliberately closed.
+  to a different item now" instead of two that can drift. Called only on a proven difference, which
+  means a COMPARABLE PAIR on both sides: `PurgeStaleRoll` clears the dismissal unconditionally at its
+  top, which is right for a roll START and wrong for a heartbeat repeating the item this client
+  deliberately closed — and a held `"???"` is not a difference at all (below).
+* A client holding an unreadable **`"???"`** (B40) under an id the heartbeat names is **repaired in
+  place**, never purged (corrected in review, 2026-08-04; the first version of this change purged).
+  `PurgeStaleRoll`'s B40 branch states its own premise — a new item IS arriving under this ID — and
+  both of its other callers are roll starts that re-track the arriving item immediately afterwards. A
+  heartbeat is the opposite: a repeat of the same roll, re-tracking nothing. Purging there cost the
+  raid's whole vote for that item (`LC.votes`, `LC.councilVotes`, the tab, the vote row, the deadline)
+  and left the client depending on a round trip a stand-in can refuse — `LC.MayCatchUp` wants an
+  `LC.rollEligible` snapshot only the announcing client ever takes, and `Vote.ScheduleVoteCatchup`
+  fires once shortly before the deadline, so council cards lost after that point never come back. The
+  itemID is in the message, so `LC.rollItems[rollID]` is rebuilt from it exactly as
+  `Trade.HandleResult` does at award time and nothing is cleared.
+* `LC.rollReqSent[rollID]` is **cleared where a purge happens**. The ask that follows is about a
+  different item than the one that stamped it; `PurgeStaleRoll` cannot do it (on the dismissal-only
+  path it returns at "nothing tracked under this ID", before `Trade.ClearRollState`, the only other
+  clearer), and `LC.HandleRollsRequest` pushes an existing stamp forward every time a peer escalates
+  `LC_ROLLS_REQ` for that number — so the deferral was never bounded by `ROLL_REQ_COOLDOWN`, as first
+  recorded. Clearing also puts the first question back to the owner instead of the group.
+* The heartbeat is therefore now **authoritative about item identity**, which is a new surface and is
+  named as such in the code: an owner that is itself stale — it missed the `LC_START` for a reuse and
+  still tracks the previous item — names the old item and makes a client that dismissed or holds the
+  new one drop that and ask again. Before this change no heartbeat could touch a tracked item or a
+  note at all. Self-limiting (the answer is whatever is really on the table, and the next heartbeat
+  agrees), but it is a channel for one client's staleness to reach the rest of the raid.
 
 **Protocol version stays `3.3.1`.** The last release tag is `v3.3.0`, 3.3.1 is unreleased, and a
 3.3.0 client is already reported as outdated by this build. What a 3.3.0 client actually does with the
@@ -3050,11 +3080,33 @@ behaviour.
 
 **Covered by** `tests/test_lc_rolltable.lua`, next to B131's own: a dismissed id reused for a
 different item, with rolls switched off so the heartbeat is the only witness — no `LC_START`, no roll
-table — and a stand-in whose table is genuinely shorter (a plain raider, whose `Vote.PruneExpiredRolls`
-has dropped the roll) not costing a valid dismissal. The second replaces the case that asserted the
-opposite. Both fail before the change; the second carries its own proof that the client is reading the
-stand-in's heartbeat rather than ignoring its sender. `luacheck` 5 warnings / 0 errors, the suite 0
-failures, and the deep soak at `KART_SOAK_SEEDS=2000` 0 failures.
+table — a client parked on `"???"` whose card keeps its votes, its tab and its deadline through the
+heartbeat that names the item, and a stand-in whose table is genuinely shorter (a plain raider, whose
+`Vote.PruneExpiredRolls` has dropped the roll) not costing a valid dismissal. The last replaces the
+case that asserted the opposite. All three fail before the change they belong to; the `"???"` case
+fails on the votes it loses and on having to ask at all, and the stand-in case carries its own proof
+that the client is reading the stand-in's heartbeat rather than ignoring its sender. `luacheck` 5
+warnings / 0 errors, the suite 0 failures, and the deep soak at `KART_SOAK_SEEDS=2000` 0 failures.
+
+**What is left.** One branch, and it is the one the note format cannot express:
+`Council.CloseCouncilTab` stores `true` rather than an itemID when the item was never resolved, and
+every reader needs a comparable string — the heartbeat clause above, `LC.ForgetDismissalIfReused` and
+`LC.HandleRollCatchup` all skip or refuse on a boolean. So: a council member closes an unidentifiable
+tab under N (`LC.rollDismissed[N] = true`), Blizzard reuses N for a real item, and that client misses
+the `LC_START`. The heartbeat lists `N=249331`, the purge clause is skipped (nothing tracked, and a
+boolean cannot be shown to differ), the request gate refuses to ask, and an unsolicited catch-up is
+refused on arrival. That client is deaf to the item until End Round, `LC.ClearAllRolls` or a reload —
+the original B132 symptom, surviving on the one branch above. Until this change the absence sweep was
+the only thing that could ever drop such a note, and the sweep is gone with the inference it rested on.
+
+**Why it is deliberately not patched.** The obvious fix — forget a `true` note as soon as the
+heartbeat names any concrete item under that id — re-breaks B131 for exactly the raider it protects:
+the client that closed a tab it could not read is the one whose note would be discarded on the very
+next heartbeat, putting the item it deliberately finished with back on its screen every thirty
+seconds. That is a worse failure than the one being fixed, and it lands on the same person. This is
+also not a regression against the last release: 3.3.0 behaved this way for **every** dismissal, not
+just the unreadable ones. It costs one client the visibility of one item; the roll table, the
+council's decision and every other client's copy of both are untouched.
 
 **What is not changed.** `LC.MayCatchUp` and B118's strict-yes rule, the "it only ever adds" rule above
 `TABLE_HEARTBEAT_SECONDS` — a heartbeat still never takes an item off anybody's screen — and
