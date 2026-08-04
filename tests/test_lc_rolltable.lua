@@ -455,6 +455,59 @@ do
         "and the item nobody here ever dismissed reaches it, off the heartbeat alone")
 end
 
+-- ...and an item it cannot READ is repaired in place, not thrown away (B132) -------------------------
+-- A client that was dead or out of range at the drop can be handed an announcement that names no item
+-- at all -- the owner had not resolved the link when it sent it -- and it parks "???" (B40). When the
+-- heartbeat later names that item concretely, "I cannot show what I hold is the same item" looks like
+-- a reuse and is not: a heartbeat is a REPEAT of the roll, not a start, and unlike LC.HandleStart it
+-- re-tracks nothing afterwards. Purging there costs this client the whole raid's cards for an item
+-- nobody ever reused, and the round trip that would repair it is refusable -- a stand-in has no
+-- LC.rollEligible for a roll it never announced (LC.MayCatchUp). The itemID is in the message, so the
+-- card is repaired from it and nothing is cleared.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+    local raider, sinja = sim.byName.Alric, sim.byName.Sinja
+
+    local function tabbed(client, rollID)
+        for _, id in ipairs(client.KART.LC.councilTabs) do if id == rollID then return true end end
+        return false
+    end
+
+    -- Blizzard raises no roll on this client, and the announcement that reaches it carries no item.
+    RaidSim.Blackhole(sim, "LC_START")
+    F.Drop(sim, 980, F.GLOVES, { noRollFor = { Merrit = true } })
+    RaidSim.Deliver(sim, "LC_START")
+    RaidSim.As(council, function() council.KART.LC.HandleStart("980:20:", lm.guid) end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(council.KART.LC.rollItems[980], "???", "the council member holds an item it cannot read")
+    T.eq(tabbed(council, 980), true, "tabbed all the same, because the decision is still its own")
+
+    -- The raid votes on it. This is what a purge would take with it.
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(980, 1) end)
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(980, 2) end)
+    KARTTEST.AdvanceTime(0)
+    local cards = {}
+    for key, vote in pairs(council.KART.LC.votes[980] or {}) do cards[key] = vote end
+    T.truthy(next(cards) ~= nil, "and the raid's cards for it reach the council member")
+    local deadline = council.KART.LC.rollDeadlines[980]
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(11) -- one heartbeat, naming 980 as the gloves it always was
+
+    T.truthy(tostring(council.KART.LC.rollItems[980]):match("item:" .. F.GLOVES),
+        "the heartbeat names the item, and the card it could not read becomes readable")
+    T.deep_eq(council.KART.LC.votes[980], cards, "with every card that was cast on it still there")
+    T.eq(council.KART.LC.rollDeadlines[980], deadline, "the deadline it always had")
+    T.eq(tabbed(council, 980), true, "and the tab it decides on still on the panel")
+
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == council.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "nothing had to be asked for: the repair was in the message")
+end
+
 -- A stand-in's shorter table is not evidence a dismissal is over -------------------------------------
 -- The reverse of the rule that used to stand here. Absence was read as "the roll has left the table,
 -- so the note about it can go" -- and a stand-in's table is legitimately SHORTER than the previous

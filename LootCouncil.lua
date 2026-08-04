@@ -2105,16 +2105,56 @@ function LC.HandleTable(payload, senderKey, sender)
         -- than reimplemented, so there is one answer to "this id belongs to a different item now" and
         -- not two that can drift.
         --
-        -- Only ever on a proven difference. PurgeStaleRoll clears the dismissal unconditionally at its
-        -- top, which is right for a roll START and wrong for a heartbeat repeating the item this
-        -- client deliberately closed -- that is the tab that must stay closed (B131).
+        -- Only ever on a proven difference, and a difference needs a COMPARABLE PAIR on both sides.
+        -- Two things follow from that:
+        --
+        -- * PurgeStaleRoll clears the dismissal unconditionally at its top, which is right for a roll
+        --   START and wrong for a heartbeat repeating the item this client deliberately closed -- that
+        --   is the tab that must stay closed (B131).
+        -- * A held "???" is NOT evidence of a reuse here, and must not purge. PurgeStaleRoll's other
+        --   callers are roll starts and re-track the arriving item in the lines right after it
+        --   returns, which is the premise its B40 branch states for itself: a new item IS arriving
+        --   under this ID. A heartbeat states the opposite -- it is a REPEAT of the same roll -- and
+        --   re-tracks nothing, so "we cannot read what we hold" would there mean throwing away this
+        --   client's whole card for the item, the raid's votes included, and depending on a round trip
+        --   a stand-in can refuse (LC.MayCatchUp wants an LC.rollEligible snapshot only the announcing
+        --   client ever takes). The item is named right here instead -- see the repair below.
         if rollID and itemID then
             local link = LC.rollItems[rollID]
             local held = type(link) == "string" and link:match("item:(%d+)") or nil
             local dismissed = LC.rollDismissed[rollID]
-            if (link ~= nil and held ~= itemID)
+            if (link ~= nil and held ~= nil and held ~= itemID)
                 or (type(dismissed) == "string" and dismissed ~= itemID) then
+                -- The ask further down is about a DIFFERENT item than the one that stamped this, so
+                -- the previous roll's cooldown must not defer it. PurgeStaleRoll cannot do it: on the
+                -- dismissal-only path it returns at "nothing tracked under this ID" long before
+                -- Trade.ClearRollState, which is the only other clearer -- and while peers are still
+                -- escalating LC_ROLLS_REQ for that number LC.HandleRollsRequest keeps pushing the
+                -- stamp forward, so the deferral is not bounded by ROLL_REQ_COOLDOWN either. Clearing
+                -- also resets the escalation state below, which is right: nobody has been asked about
+                -- THIS item yet, so the owner gets the first question.
+                LC.rollReqSent[rollID] = nil
                 LC.PurgeStaleRoll(rollID, itemID)
+            elseif link ~= nil and held == nil then
+                -- We hold something we never managed to identify -- "???" from an LC_START that
+                -- carried no itemID either (B40) -- and the owner can name it. Repaired IN PLACE from
+                -- the id that just arrived, exactly as Trade.HandleResult rebuilds one at award time:
+                -- the full link once the item is cached, the bare item string until then, which still
+                -- renders a name and an icon.
+                --
+                -- Nothing is cleared, deliberately. The votes cast on this card, its council tab, its
+                -- vote row and its deadline all belong to this same roll -- the heartbeat has just
+                -- confirmed it is still the one on the table -- and they are what a purge would cost.
+                -- Votes stamped with the item now match instead of merely being unrefutable
+                -- (LC.VoteIsForItem), so the repair only ever sharpens what is already here.
+                LC.rollItems[rollID] = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
+                -- The rows are the whole point: an unreadable card that stays unreadable on screen is
+                -- what this repair exists to end. Same refresh the link resolver does when it wins.
+                LC.Vote.RefreshVoteListRows()
+                if LC.councilPanel and LC.councilPanel:IsShown() then
+                    KART.LC.Council.RefreshCouncilRows()
+                    KART.LC.Council.RefreshCouncilTabs()
+                end
             end
         end
 
