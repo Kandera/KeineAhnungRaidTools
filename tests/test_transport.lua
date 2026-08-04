@@ -106,3 +106,28 @@ do
     T.truthy(endRound ~= nil, "the End Round leaves while the handshake backlog is still draining")
     T.truthy(bulkBefore < 20, "and does not wait for all twenty of them")
 end
+
+-- Two buffers in a row ------------------------------------------------------------------------
+-- What an encounter held back (B128) is released all at once, into a pipe that is narrow at exactly
+-- that moment -- loot drops at the END of a boss, which is when everything else is talking too. Held
+-- first, queued second, and nothing may fall between the two.
+do
+    local sim, lm = F.NewRaid()
+    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
+
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, ACTIVE) end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        for i = 1, 8 do lm.KART.LC.SendLC("LC_START:" .. i .. ":20:item:249331") end
+    end)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "nothing goes out while the encounter holds the comms")
+
+    -- Everything is released in the same instant, and the pipe is shut.
+    for _, c in ipairs(sim.clients) do c.CTL.avail = 0 end
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
+    T.truthy(#RaidSim.Sent(sim, "LC_START") < 8, "the release does not force the whole burst out at once")
+
+    KARTTEST.AdvanceTime(3)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 8,
+        "and every one of the eight held announcements leaves once the queue drains")
+end

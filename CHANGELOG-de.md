@@ -19,6 +19,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Fenster „Items you still need to collect" hat einen Schließen-Knopf.**
 - **Councilmitglieder werden erkannt, ohne dass vorher Northern Sky Raid Tools geöffnet werden muss.**
 - **Während das Spiel im Bosskampf den Addon-Funk sperrt, geht nichts mehr verloren** — es wird zurückgehalten und danach gesendet.
+- **Nachrichten gehen nicht mehr verloren, wenn im Spiel viel los ist** — sie warten und gehen danach raus, und die Lootverteilung hat Vorfahrt vor Versionsabfragen.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
