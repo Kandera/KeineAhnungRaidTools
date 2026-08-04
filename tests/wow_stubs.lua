@@ -219,6 +219,11 @@ KARTTEST.timers = {}
 KARTTEST.CaptureContext = nil   -- () -> token describing whoever is executing now
 KARTTEST.RestoreContext = nil   -- (token) -> the token that was in force before
 
+-- ChatThrottleLib despools from an OnUpdate, and this harness has no frames that tick. The clock
+-- drives it instead: raidsim fills this in, and AdvanceTime hands it each elapsed slice. With no
+-- simulator loaded it stays nil and nothing pumps -- which is correct, because nothing queues either.
+KARTTEST.PumpComms = nil        -- (delta) -> run every client's despool for that much time
+
 local function captureContext()
     return KARTTEST.CaptureContext and KARTTEST.CaptureContext() or nil
 end
@@ -246,6 +251,24 @@ _G.C_Timer = {
     end,
 }
 
+-- Moves the clock to `to`, handing ChatThrottleLib the elapsed time in slices on the way.
+-- Slices matter: CTL despools once per 0.08 s of accumulated delay and only lets a throttled queue
+-- back in every 0.35 s, so a single jump of ten seconds would despool exactly once and measure
+-- something no client ever does.
+local PUMP_SLICE = 0.1
+local function PumpTo(to)
+    if not KARTTEST.PumpComms then
+        KARTTEST.now = to
+        return
+    end
+    while KARTTEST.now < to do
+        local step = math.min(PUMP_SLICE, to - KARTTEST.now)
+        KARTTEST.now = KARTTEST.now + step
+        KARTTEST.PumpComms(step)
+    end
+    KARTTEST.now = to
+end
+
 -- Advances the clock by `seconds` and fires everything due, in time order. Returns how many ran.
 function KARTTEST.AdvanceTime(seconds)
     -- Whatever was dropped into a trade slot since the last call is now acknowledged by the server
@@ -258,7 +281,7 @@ function KARTTEST.AdvanceTime(seconds)
         local next_ = KARTTEST.timers[1]
         if not next_ or next_.at > target then break end
         table.remove(KARTTEST.timers, 1)
-        KARTTEST.now = next_.at
+        PumpTo(next_.at)
         local restore = KARTTEST.RestoreContext
         local prev = restore and restore(next_.ctx)
         next_.fn()
@@ -272,7 +295,7 @@ function KARTTEST.AdvanceTime(seconds)
             KARTTEST.timers[#KARTTEST.timers + 1] = next_
         end
     end
-    KARTTEST.now = target
+    PumpTo(target)
     return ran
 end
 -- One client's group APIs can be made to disagree with the rest of the raid's. Two real situations
@@ -685,6 +708,30 @@ _G.C_ChatInfo = {
     end,
 }
 function KARTTEST.ClearSent() KARTTEST.sent = {} end
+
+-- What ChatThrottleLib needs from the client, and nothing beyond it ---------------------
+-- CTL halves its own output when the client is below its MIN_FPS of 20. 60 is a healthy client;
+-- anything lower would change how much a test gets through for reasons no test is about.
+function _G.GetFramerate() return 60 end
+
+-- Blizzard's protected-call wrappers. CTL routes every send and every send callback through these,
+-- and CallbackHandler dispatches through securecallfunction too; here a plain call is the whole
+-- behaviour. The error handler rethrows rather than swallowing -- a send that blows up inside the
+-- library has to fail the suite, not disappear into it.
+function _G.securecallfunction(fn, ...) return fn(...) end
+function _G.geterrorhandler() return function(err) error(err, 0) end end
+
+-- The real numbers (12.0.1 annotations). CTL carries its own copy for clients that lack the enum,
+-- so this exists to keep the harness and the library reading one table instead of two.
+_G.Enum.SendAddonMessageResult = {
+    Success = 0, InvalidPrefix = 1, InvalidMessage = 2, AddonMessageThrottle = 3,
+    InvalidChatType = 4, NotInGroup = 5, TargetRequired = 6, InvalidTarget = 7,
+    ChannelThrottle = 8, GeneralError = 9,
+}
+
+-- AceComm's lost-data warning writes here. Its call sites are commented out upstream, so this only
+-- has to exist.
+_G.DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 
 -- Items -------------------------------------------------------------------------------
 KARTTEST.inventory = {}   -- [slot] = itemLink

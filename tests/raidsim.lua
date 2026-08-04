@@ -40,6 +40,9 @@ local CLIENT_FILES = {
 }
 
 local LIB_FILES = {
+    "Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua",
+    "Libs/AceComm-3.0/ChatThrottleLib.lua",
+    "Libs/AceComm-3.0/AceComm-3.0.lua",
     "Libs/KAUtil-1.0/KAUtil-1.0.lua",
     "Libs/KAGS-1.0/KAGS-1.0.lua",
     "Libs/KASC-1.0/KASC-1.0.lua",
@@ -153,7 +156,33 @@ local function Boot(client, saved)
     -- no way to tell two clients apart.
     wipe(LibStub.libs)
     wipe(LibStub.minors)
+
+    -- ChatThrottleLib is NOT a LibStub library: it lives in _G behind a version guard, so loading
+    -- the file a second time is a no-op. Left alone, all twenty clients would share one queue --
+    -- and a message despooled later would be attributed to whoever happens to be executing at that
+    -- moment, not to whoever sent it.
+    --
+    -- Pre-seeded rather than merely cleared, for two reasons: the guard compares `version` against a
+    -- number, so it has to BE a number; and the securelyHooked flags stop CTL from hooking
+    -- C_ChatInfo.SendAddonMessage once per client. Those hooks exist only to measure traffic that
+    -- bypasses the library, twenty of them would nest, and each one would report its bypass against
+    -- whichever instance loaded last -- so one client's ordinary sends would starve another's queue.
+    _G.ChatThrottleLib = { version = 0, securelyHooked = true,
+                           securelyHookedLogged = true, securelyHookedBNGameData = true }
+
     for _, path in ipairs(LIB_FILES) do loadInto(client, path) end
+
+    client.CTL     = client.env.ChatThrottleLib
+    client.AceComm = client.env.LibStub("AceComm-3.0")
+
+    -- CTL clamps its own output to 10% for the first five seconds after loading -- a real thing a
+    -- freshly logged-in client does, and a thing no test here is about: it would mean five seconds
+    -- of clock before the first message moves, and spinning the clock that far fires heartbeats,
+    -- vote windows and trade timeouts along with it. A booted test client is treated as one that has
+    -- been sitting quietly instead. Everything else about the throttle -- bandwidth, queue, blocked
+    -- ring, despooling -- stays exactly as it is in the game.
+    client.CTL.HardThrottlingBeginTime = -math.huge
+    client.CTL.avail = client.CTL.BURST
 
     client.KASC  = client.env.LibStub("KASC-1.0")
     client.KAUtil = client.env.LibStub("KAUtil-1.0")
@@ -380,6 +409,20 @@ end
 function RaidSim.Install(sim)
     sim.echoQueue = {}
 
+    -- Through AceComm's own event handler rather than straight into KASC.Dispatch: multipart
+    -- messages are reassembled there, and a harness that skipped it would never see a payload longer
+    -- than 255 bytes arrive in one piece.
+    local function DeliverTo(to, prefix, msg, channel, sender)
+        RaidSim.As(to, function()
+            local frame = to.AceComm and to.AceComm.frame
+            local handler = frame and frame:GetScript("OnEvent")
+            if handler then handler(frame, "CHAT_MSG_ADDON", prefix, msg, channel, sender) end
+            -- TEMPORARY, removed once KASC listens through AceComm's RegisterComm: until then KASC
+            -- still owns its own CHAT_MSG_ADDON frame, which this harness has never driven.
+            to.KASC.Dispatch(msg, channel, sender)
+        end)
+    end
+
     -- Drains the echo queue. Delivering an echo can send more messages, which queue more echoes,
     -- so this loops -- with a cap, because a handler that answers its own echo would otherwise
     -- spin here forever, and that is a bug worth failing loudly on rather than hanging on.
@@ -397,7 +440,7 @@ function RaidSim.Install(sim)
             local pending = sim.echoQueue
             sim.echoQueue = {}
             for _, e in ipairs(pending) do
-                RaidSim.As(e.to, function() e.to.KASC.Dispatch(e.msg, e.channel, e.sender) end)
+                DeliverTo(e.to, e.prefix, e.msg, e.channel, e.sender)
             end
         end
         flushing = false
@@ -455,7 +498,7 @@ function RaidSim.Install(sim)
         if channel ~= "WHISPER" or target == from.name
                                 or target == from.name .. "-" .. from.realm then
             sim.echoQueue[#sim.echoQueue + 1] =
-                { to = from, msg = msg, channel = channel, sender = sender }
+                { to = from, prefix = prefix, msg = msg, channel = channel, sender = sender }
         end
         for _, to in ipairs(sim.clients) do
             -- A whisper reaches its target and nobody else. `target == sender` used to be accepted
@@ -464,10 +507,21 @@ function RaidSim.Install(sim)
             -- where nobody in the game receives the answer looked like a pass.
             if to ~= from and (channel ~= "WHISPER" or target == to.name
                                or target == to.name .. "-" .. to.realm) then
-                RaidSim.As(to, function() to.KASC.Dispatch(msg, channel, sender) end)
+                DeliverTo(to, prefix, msg, channel, sender)
             end
         end
         return 0 -- Enum.SendAddonMessageResult.Success, the same answer the live client gives
+    end
+
+    -- What an OnUpdate frame does in the game. Runs each client's despool AS that client, because a
+    -- queued message is sent by whoever queued it -- not by whoever the clock happened to stop on.
+    KARTTEST.PumpComms = function(delta)
+        for _, c in ipairs(sim.clients) do
+            if c.CTL and c.CTL.Frame then
+                RaidSim.As(c, function() c.CTL.OnUpdate(c.CTL.Frame, delta) end)
+            end
+        end
+        KARTTEST.FlushEcho()
     end
 end
 

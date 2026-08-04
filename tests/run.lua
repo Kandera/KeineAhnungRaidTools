@@ -73,6 +73,11 @@ dofile("Libs/LibStub/LibStub.lua")
 
 -- Library files, in dependency order. Extended by each task that adds a library.
 -- (Task 2 adds KAUtil, Task 3 KAGS, Task 4 KAUI, Task 7 KASC.)
+-- The transport, in the order the .toc loads it: AceComm needs both of these at load time.
+dofile("Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua")
+dofile("Libs/AceComm-3.0/ChatThrottleLib.lua")
+dofile("Libs/AceComm-3.0/AceComm-3.0.lua")
+
 dofile("Libs/KAUtil-1.0/KAUtil-1.0.lua")
 dofile("Libs/KAGS-1.0/KAGS-1.0.lua")
 dofile("Libs/KASC-1.0/KASC-1.0.lua")
@@ -144,6 +149,7 @@ dofile("tests/test_hello.lua")
 dofile("tests/test_lc_rolls.lua")
 dofile("tests/test_lc_table.lua")
 dofile("tests/test_lc_soak.lua")
+dofile("tests/test_transport.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 
