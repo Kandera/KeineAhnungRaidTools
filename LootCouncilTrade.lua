@@ -461,6 +461,7 @@ function Trade.ClearRollState(rollID)
     LC.votedNoteByMe[rollID]   = nil
     LC.rollNotInOurBags[rollID]  = nil
     LC.rollAnnounced[rollID]     = nil
+    LC.rollAnnouncedBy[rollID]   = nil
     LC.rollSeenHere[rollID]      = nil
     LC.relevanceHandled[rollID]  = nil
     LC.hiddenIrrelevant[rollID]  = nil

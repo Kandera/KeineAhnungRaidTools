@@ -166,3 +166,45 @@ do
     T.deep_eq(alric.KART.LC.rolls[905], lm.KART.LC.rolls[905],
         "the promoted-and-reloaded client ends up holding the same numbers as the lootmaster")
 end
+
+-- Two announcers, and everybody keeps the numbers of the one they listened to ---------------------
+-- The window is B129's: a raid leader who picked its config back up from a peer has an empty
+-- lootmaster field, so it reads itself as the loot owner while the real lootmaster does too. Before
+-- this, both drew a table and the raid leader ended up holding numbers nobody else had -- for good,
+-- because it refused the real owner's table AND the heartbeat that would have made it ask.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric") or sim.byName.Alric
+    RaidSim.As(leader, function() leader.KART.LC.SetSessionActive(true) end)
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 910, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    -- Merrit accepted an announcement from somebody. Whoever that was, Merrit's numbers are theirs.
+    local merrit = sim.byName.Merrit
+    local announcer = merrit.KART.LC.rollAnnouncedBy[910]
+    T.truthy(announcer ~= nil, "a client records who announced the item it accepted")
+    local source = (announcer == lm.guid) and lm or leader
+    T.deep_eq(merrit.KART.LC.rolls[910], source.KART.LC.rolls[910],
+        "and holds the table of that announcer, not of whoever it thinks is lootmaster")
+end
+
+-- A table from somebody who did not announce it cannot overwrite one that is there ----------------
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 911, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local merrit, alric = sim.byName.Merrit, sim.byName.Alric
+    local before = {}
+    for k, v in pairs(merrit.KART.LC.rolls[911]) do before[k] = v end
+
+    -- Alric never announced 911. Hand Merrit a table from Alric by hand.
+    RaidSim.As(merrit, function()
+        merrit.KART.LC.HandleRolls("911:@" .. F.GLOVES .. ":" .. lm.guid .. "=1", alric.guid)
+    end)
+    T.deep_eq(merrit.KART.LC.rolls[911], before,
+        "a table from somebody who did not announce the item leaves the existing one alone")
+end

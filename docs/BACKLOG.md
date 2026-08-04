@@ -2796,7 +2796,7 @@ behaviour DURING such a disagreement, not how long it persists in a real raid. T
 to end up holding the same numbers as the lootmaster anyway. The deep soak (2000 seeds, seed 1728
 included) is clean.
 
-## B130 — OPEN, deferred to the maintainer — the same disagreement B129 fixed on the receive side is still open on the send side
+## B130 — FIXED 2026-08-04 — the same disagreement B129 fixed on the receive side is still open on the send side
 
 Found in review of the fix above, not by the soak — see "why the soak did not catch it" below for why
 2000 clean seeds do not rule it out.
@@ -2826,6 +2826,20 @@ it lands exactly on this addon"). B129's write-up named the receive side and `LC
 two holes" the disagreement opens; this is a third, on the send side, created by the same single-writer
 property, and B129 deliberately did not close it — "this is the smaller of the two holes the diagnosis
 found, and the only one that needed closing."
+
+**The fix.** `LC.HandleRolls` no longer asks "is the sender the loot owner?" — it asks "did the sender
+announce this item to us?", per item rather than per raid. `LC.rollAnnouncedBy[rollID]` records the
+identity key of whoever's `LC_START`/`LC_MANUAL_START` this client accepted for that roll (or its own
+key, for the two paths where a client announces to itself and never processes the echo); a later
+`LC_ROLLS` is only accepted from that same key, or into a void the client holds nothing for yet, the
+same fill-a-gap exception B129 relies on. The two clients in the disagreement window never agree on
+who owns loot, but each still has exactly one client it heard the announcement from, so each converges
+on that announcer's table instead of on two different guesses about the current lootmaster. This is the
+second candidate containment above, generalized to manual rolls. The ownership derivation itself —
+`LC.IsLootOwner` / `LC.IsSenderLootOwner`, and who may hand out loot right now — is untouched;
+`docs/OWNERSHIP.md` still holds as written, so the question both candidates deferred to the maintainer
+never had to be answered to close this: accepting a table by announcer is narrower than a rule about who
+owns loot, and does not require deciding one.
 
 **Why the soak did not catch it, and does not rule it out.** The B129 test only reaches
 `LC.HandleRolls`'s receive-side guard because a freshly reloaded client has `sessionActive == false` and

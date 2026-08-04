@@ -2361,6 +2361,7 @@ function LC.ClearAllRolls()
     wipe(LC.councilTabsNew)
     wipe(LC.rollNotInOurBags)
     wipe(LC.rollAnnounced)
+    wipe(LC.rollAnnouncedBy)
     wipe(LC.rollSeenHere)
     -- Keyed by encounter and loot list rather than by rollID, so it is not one of the per-roll tables
     -- ClearRollState walks -- but a session ending ends every drop it could still be about.
@@ -2438,7 +2439,7 @@ local RESTORE_CONFIRM_SECONDS = 60
 local PERSISTED_ROLL_TABLES = {
     "votes", "rolls", "rollsFor", "councilVotes", "rollItems", "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
-    "rollNotInOurBags", "rollAnnounced", "rollSeenHere", "relevanceHandled",
+    "rollNotInOurBags", "rollAnnounced", "rollAnnouncedBy", "rollSeenHere", "relevanceHandled",
     "hiddenIrrelevant", "autoVotedByMe", "councilTabsNew",
     -- Owner-side, and load-bearing across a reload: without it a lootmaster who reloads mid-round can
     -- no longer tell who was in the raid when each item dropped, and refuses every catch-up for the
@@ -3191,12 +3192,23 @@ end
 -- enforced by KASC's dispatcher -- LC_ROLLS is registered group = true -- so nothing else needs
 -- checking here.
 function LC.HandleRolls(payload, senderKey)
-    local isVoid = LC.rolls[tonumber(payload:match("^(%d+):"))] == nil
-    if not LC.IsSenderLootOwner(senderKey) and not isVoid then
+    -- Who may write this item's numbers, strongest first:
+    --   1. whoever announced this item to us -- the numbers belong to that announcement, and this is
+    --      the only client whose claim survives a disagreement about who is lootmaster right now;
+    --   2. anybody in our group, but only into a VOID -- the "fills a gap, never replaces" rule
+    --      LC.HandleConfigRelay uses, and what makes a peer's repair safe (B129, B131);
+    --   3. nobody else.
+    -- Group membership is enforced upstream by KASC's dispatcher (this token is registered with
+    -- group = true), so case 2 needs no check of its own.
+    local rollID = tonumber(payload:match("^(%d+):"))
+    local isAnnouncer = rollID ~= nil and LC.rollAnnouncedBy[rollID] == senderKey
+    local isVoid = rollID ~= nil and LC.rolls[rollID] == nil
+    if not isAnnouncer and not isVoid then
         LC.diag.refusedSender = LC.diag.refusedSender + 1
         return
     end
-    local rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
+    local itemID, list
+    rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
 
@@ -3329,6 +3341,12 @@ local START_ROLL_RETRY_MAX    = 2
 -- when a state request follows.
 LC.rollAnnounced = LC.rollAnnounced or {} -- [rollID] = true once the LOOT OWNER's LC_START landed here
 LC.rollSeenHere  = LC.rollSeenHere  or {} -- [rollID] = true once WE have processed our own START_LOOT_ROLL
+
+-- [rollID] = the identity key of whoever announced this item to us. NOT the same question as "who
+-- hands out the loot": that one is about the raid right now, this one is about a moment in the past,
+-- and the numbers belong to that moment. Keeping them apart is what stops a client that disagrees
+-- about the current lootmaster from also disagreeing about the rolls (B130).
+LC.rollAnnouncedBy = LC.rollAnnouncedBy or {}
 
 -- How long to wait for that announcement before saying it never came. Derived from the owner's own
 -- link retry above rather than picked: they can legitimately spend that whole budget before sending
@@ -3513,6 +3531,9 @@ function LC.OnStartLootRoll(rollID, attempt)
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. LC.ItemPayload(itemLink, newItemID))
         -- After the announcement, never before it: a client that never gets its own START_LOOT_ROLL
         -- learns the roll exists from LC_START, and the two messages travel on different priorities.
+        -- The sender does not process its own LC_START (KASC drops the echo, see Dispatch), so this
+        -- client has to record its own announcement here rather than through LC.HandleStart.
+        LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
         LC.DrawRollTable(rollID, newItemID)
         LC.Vote.ScheduleVoteCatchup(rollID, secs)
         LC.EnsureTableTicker()
@@ -3776,6 +3797,7 @@ function LC.HandleStart(payload, senderKey)
     -- whichever of the two paths completes the pair. A client with no roll of its own -- dead,
     -- released, out of range -- has nothing to pass and AutoPassAnnounced returns without acting.
     LC.rollAnnounced[rollID] = true
+    LC.rollAnnouncedBy[rollID] = senderKey
     AutoPassAnnounced(rollID)
 
     if LC.IsCouncil() then
@@ -3900,6 +3922,9 @@ function LC.StartManualRoll(itemsText)
 
         -- The whole raid's rolls, drawn here for the same reason the announcement is sent here: this
         -- is the client that knows who is standing in the raid right now.
+        -- The sender does not process its own LC_MANUAL_START (KASC drops the echo, see Dispatch), so
+        -- this client has to record its own announcement here rather than through LC.HandleManualStart.
+        LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
         LC.DrawRollTable(rollID, (itemLink:match("item:(%d+)")))
 
         -- KASC drops our own message when it comes back (see Dispatch), so the lootmaster has to open
@@ -3942,6 +3967,7 @@ function LC.HandleManualStart(payload, senderKey)
     -- it, so it arrives intact) — take it unconditionally rather than preferring possibly-stale
     -- state left over from an earlier roll that reused this ID.
     LC.rollItems[rollID] = itemLink
+    LC.rollAnnouncedBy[rollID] = senderKey
 
     -- Same BoP trade clock LC.HandleStart sets for a real roll. The SENDER stamps this in
     -- LC.StartManualRoll, but the receiving side was missing it entirely, so the winner's owedToMe
