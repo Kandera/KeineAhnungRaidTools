@@ -364,12 +364,20 @@ do
     -- happens to work out to.
     T.truthy(minGap > 0.2, "a full 40-player raid still keeps every answer at least 200ms apart")
 
-    -- The order of the roster does not matter, only membership: a different sort of the same 40 keys
-    -- still divides the same window into the same equal gaps.
-    local shuffled = {}
-    for i, key in ipairs(keys) do shuffled[#keys - i + 1] = key end
-    local slots2 = {}
-    for i, key in ipairs(keys) do slots2[i] = LC.RollsAnswerSlot(shuffled, key) end
-    table.sort(slots2)
-    T.deep_eq(slots, slots2, "the gaps are the same however the caller happens to list the roster")
+    -- No two clients share a slot. This is what the stand-down actually rests on -- a gap floor says
+    -- nothing about two keys landing on the SAME instant, which is the failure the name hash had.
+    local taken = {}
+    for _, slot in ipairs(slots) do
+        T.eq(taken[slot], nil, "no two clients in a full raid are scheduled for the same instant")
+        taken[slot] = true
+    end
+
+    -- The property that actually has to hold across CLIENTS, and the one the reversed-roster check
+    -- could never show: two clients that sorted the same membership independently must give one key
+    -- the same slot. If they disagree the spread degrades to a hash's luck (see LC.RollsAnswerSlot).
+    local copy = {}
+    for i, key in ipairs(keys) do copy[#keys - i + 1] = key end
+    table.sort(copy)
+    T.eq(LC.RollsAnswerSlot(copy, keys[7]), LC.RollsAnswerSlot(keys, keys[7]),
+        "two independently sorted copies of one roster place the same client in the same slot")
 end

@@ -2445,6 +2445,11 @@ function LC.ClearAllRolls()
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
     if LC.rollEligible then wipe(LC.rollEligible) end
     if LC.rollReqSent then wipe(LC.rollReqSent) end
+    -- Same block, same convention as everything above it -- and it was missing. A planned LC_ROLLS_REQ
+    -- answer surviving an End Round makes this client refuse a genuine request for a rollID Blizzard
+    -- has since reused, because LC.HandleRollsRequest reads a leftover stamp as "we are already about
+    -- to answer that".
+    if LC.rollsAnswerAt then wipe(LC.rollsAnswerAt) end
     -- Nothing left on the table, so nothing left to say about it (B118). The ticker also stops itself
     -- after one empty heartbeat; this is the direct route for the case that skips that -- a session
     -- ending, or the round being cleared from under it.
@@ -3346,22 +3351,41 @@ end
 -- congestion, which is exactly when this fires. A hash spreads by luck, and luck is what collides.
 --
 -- What every client in the group CAN see identically is the roster itself: sorted resolved identity
--- keys, the same canonical ordering LC.DrawRollTable already draws its own pool from. A client's slot
--- is its POSITION in that order, which spaces N clients across the window into N EQUAL gaps by
--- construction -- gap = ROLLS_ANSWER_SPREAD / N, guaranteed, not merely likely. At the addon's own
--- maximum group size (40 -- see LC.DrawRollTable's comment on why its roll pool is sized that way)
--- that is 10000ms / 40 = 250ms: comfortably above the "tens to hundreds of milliseconds" a busy loot
--- round's message queue can add, which is what the stand-down below needs to actually see the other
--- answer before firing its own.
+-- keys. A client's slot is its POSITION in that order, which divides the window among N clients into
+-- N EQUAL gaps by construction -- gap = ROLLS_ANSWER_SPREAD / N, guaranteed, not merely likely.
+--
+-- What that requires is stronger than anything the addon needed before, and it is worth naming rather
+-- than leaning on LC.DrawRollTable as a precedent: DrawRollTable sorts ONE snapshot on ONE client and
+-- only has to be stable there, while this needs every client in the raid to independently produce the
+-- SAME list. It does not, always: identity keys resolve at different moments (KASC.Identity), so a
+-- client whose view of a raider is still a pending text key sorts them somewhere else, and two clients
+-- can briefly disagree about the roster's membership entirely. When that happens the ordering is not
+-- shared and the spacing degrades to what a hash gave -- two clients may land on the same slot. That
+-- is the whole of the damage: the stand-down below is an OPTIMISATION, not a correctness rule. Two
+-- answers to one request means one extra group broadcast, and the second one is an agreeing duplicate
+-- the receiver now ignores in silence (see SameRolls in LC.HandleRolls). Nothing is lost, nobody is
+-- counted as refused, and the asker is repaired either way.
+--
+-- The honest margin, since 250ms was claimed here and is not what the code has: at the addon's own
+-- maximum group size (40 -- see LC.DrawRollTable's comment on why its roll pool is sized that way) the
+-- gap is 10000ms / 40 = 250ms, and at this guild's 25 it is 400ms. A busy loot round's message queue
+-- can add tens to hundreds of milliseconds, so at a full 40-man the gap is the same order as the
+-- jitter it has to beat and the stand-down will sometimes lose the race. Widening the window was the
+-- alternative and was not taken: it would delay every repair by seconds to buy margin against an
+-- outcome that costs one duplicate broadcast.
 local ROLLS_ANSWER_SPREAD = 10
-LC.rollsAnswerAt = LC.rollsAnswerAt or {} -- [rollID] = GetTime() we intend to answer, or nil
+LC.rollsAnswerAt = LC.rollsAnswerAt or {} -- [rollID] = true while an answer of ours is scheduled
 
 -- The pure half: given the sorted identity keys currently in the group and one of them, the slot it
 -- gets. Kept apart from SelfAnswerSlot below so a test can prove the spacing at a full raid's size
 -- without spinning up a simulated one -- this needs no roster, no client, nothing but the two lists.
 function LC.RollsAnswerSlot(keys, ownKey)
     local n = math.max(#keys, 1)
-    local index = 1
+    -- Last, not first, when we cannot find ourselves in the roster. A client that cannot resolve its
+    -- own key is the one least able to agree with anybody else about the ordering, so it is the one
+    -- that should be beaten to the answer by a client that can -- and it will still answer if none of
+    -- them does. Defaulting to slot 1 made the least-coordinated client the most eager.
+    local index = n
     for i, key in ipairs(keys) do
         if key == ownKey then index = i break end
     end
