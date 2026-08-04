@@ -22,6 +22,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Nachrichten gehen nicht mehr verloren, wenn im Spiel viel los ist** — sie warten und gehen danach raus, und die Lootverteilung hat Vorfahrt vor Versionsabfragen.
 - **Zwei Raider können nicht mehr dieselbe Wurfzahl bekommen**, und ein Wurf, den niemand gesehen hat, lässt sich nachfordern.
 - **Ein fehlender Wurf wird von dem repariert, der ihn noch hat** — auch wenn der Lootmaster weg ist.
+- **Ein Boss überflutet den Raid nicht mehr mit einer Nachricht pro Item** — was zusammen fällt, wird zusammen angekündigt.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
