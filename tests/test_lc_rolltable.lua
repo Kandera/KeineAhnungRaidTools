@@ -139,3 +139,26 @@ do
     T.eq(blindAsks, 1,
         "the cooldown keeps it from asking again at the second heartbeat while unanswered")
 end
+
+-- An ownership disagreement must not cost a raider the whole raid's numbers (B129) ------------------
+-- The propagation window: a promoted client that reloads comes back with its OWN config wiped --
+-- empty Lootmaster field, LC.RelayRaidConfig's "ownership stays derived" -- and reads itself as loot
+-- owner through the raid-leader fallback, before RaidSim.EnterWorld's LC.CheckRaidJoin has had a
+-- chance to run and catch it up (in the game this is the sub-second gap between a reload finishing
+-- and PLAYER_ENTERING_WORLD firing). For that gap the named lootmaster is still out there, unaware,
+-- still drawing and sending tables under the old config. Before the roll table became one
+-- authoritative message this cost nothing: every client drew its own number with no sender check at
+-- all. Now the table is a single writer's state, and disagreeing about who that writer is used to
+-- mean getting none of it -- permanently, for that item (seed 1728 in the deep soak).
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local alric = RaidSim.Reload(sim, "Alric")
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 905, F.WEAPON)
+    KARTTEST.AdvanceTime(0.5)
+
+    T.deep_eq(alric.KART.LC.rolls[905], lm.KART.LC.rolls[905],
+        "the promoted-and-reloaded client ends up holding the same numbers as the lootmaster")
+end

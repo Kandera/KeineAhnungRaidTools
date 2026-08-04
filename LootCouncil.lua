@@ -3165,8 +3165,18 @@ end
 -- Deliberately NOT gated on LC.rollItems[rollID], for the same reason the old per-client handler was
 -- not: the table is sent right after the announcement, and a client that learns of the roll only
 -- from LC_START can legitimately see the two in either order.
+--
+-- The sender guard has the same fill-a-void exception LC.HandleConfigRelay uses above: a recognised
+-- owner still REPLACES whatever we hold, but a client holding no table at all for this rollID takes
+-- what it is offered. Without it, a client whose ownership view disagrees with the real owner's --
+-- reachable for a few seconds around any lead change, see HandleConfigRelay's fromSelf comment --
+-- refuses the table and is left with nothing for that item, permanently: LC.HandleTable, the only
+-- path that could ask again, is gated on this same guard (B129). Group membership is already
+-- enforced by KASC's dispatcher -- LC_ROLLS is registered group = true -- so nothing else needs
+-- checking here.
 function LC.HandleRolls(payload, senderKey)
-    if not LC.IsSenderLootOwner(senderKey) then
+    local isVoid = LC.rolls[tonumber(payload:match("^(%d+):"))] == nil
+    if not LC.IsSenderLootOwner(senderKey) and not isVoid then
         LC.diag.refusedSender = LC.diag.refusedSender + 1
         return
     end

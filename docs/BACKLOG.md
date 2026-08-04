@@ -2754,3 +2754,43 @@ the encounter to end.
 explained; if they stay at zero while an item goes missing, it was not this.
 
 Held by `tests/test_diagnostics.lua`, with `KARTTEST.SetRestriction` driving the real event.
+
+## B129 — FIXED 2026-08-04 — an ownership disagreement used to cost nothing, and now it costs the whole raid's numbers
+
+Found by the deep soak, seed 1728 of 2000: one client in the announcer's own eligibility snapshot,
+entitled to a number, ended up with none — permanently, for that item.
+
+**Why it lands exactly on this addon.** Two commits ago the 1-100 rolls moved from every client
+drawing its own number to the lootmaster drawing the whole raid's numbers once and sending them as a
+single authoritative `LC_ROLLS`. The receiver's rule for accepting it is `LC.IsSenderLootOwner`, and
+that is a question two clients can answer differently: a raid leader who reloads (or turns up late)
+picks up a relayed config with the lootmaster field blanked on purpose — "ownership stays derived",
+see `LC.HandleConfigRelay` — reads itself as loot owner through the raid-leader fallback, and keeps
+reading that way for the seconds until the next roster settle tells it otherwise. The named lootmaster
+is still out there, unaware, still announcing. A client sitting in that window refuses the real
+owner's table outright: wrong sender, as far as it is concerned.
+
+Before the move to a single writer this cost nothing — every client drew independently with no sender
+check at all, so an ownership disagreement was invisible. Now the data has exactly one writer, and
+disagreeing about who that writer is means getting none of it.
+
+**And the repair path could not reach it.** `LC.HandleTable`, the heartbeat that is what makes a
+client notice it is missing a table and ask again, opens with the identical guard. So the client that
+refused the table also refuses the heartbeat that would have made it ask, and the request-again
+promise `00d0d54` made never gets a chance to run.
+
+**The fix.** One condition in `LC.HandleRolls`, the same fill-a-void shape `LC.HandleConfigRelay`
+already uses a few hundred lines above it: `LC.IsSenderLootOwner` still decides whether an incoming
+table REPLACES one we hold, but a client holding no table at all for that rollID now accepts it
+regardless. A sender we do recognise as owner still overwrites whatever is there, so the single-writer
+property is intact for every table that has already landed — the only new behaviour is that a client
+with nothing takes what it is offered. `LC_ROLLS` is registered `group = true`, so KASC's dispatcher
+has already confirmed the sender is in the raid before the handler ever runs; nothing else needed
+checking. `LC.HandleTable` and the catch-up path are untouched — this is the smaller of the two holes
+the diagnosis found, and the only one that needed closing.
+
+Held by a new case in `tests/test_lc_rolltable.lua`: a client is promoted and reloaded without letting
+`LC.CheckRaidJoin` catch it up first — the sub-second gap between a reload finishing and
+`PLAYER_ENTERING_WORLD` firing in the real game — so it disagrees about loot ownership at the exact
+moment an item drops, and is asserted to end up holding the same numbers as the lootmaster anyway. The
+deep soak (2000 seeds, seed 1728 included) is clean.
