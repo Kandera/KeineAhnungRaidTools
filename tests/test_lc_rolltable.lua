@@ -56,3 +56,50 @@ do
     local council = sim.byName.Merrit
     T.is_nil((council.KART.LC.rolls[902] or {})[late.guid], "a raider who joined afterwards has no number")
 end
+
+-- A table that never arrived is asked for, once ---------------------------------------------------
+-- One message carrying the whole raid's rolls is also one message to lose, and losing it costs
+-- everybody's numbers at once instead of one raider's. That is the trade this makes: it can be asked
+-- for again, which 25 separate broadcasts never could.
+do
+    local sim, lm = F.NewRaid()
+    local blind = sim.byName.Corvin
+
+    RaidSim.Blackhole(sim, "LC_ROLLS")
+    F.Drop(sim, 903, F.GLOVES)
+    KARTTEST.AdvanceTime(0.5)
+    T.eq(blind.KART.LC.rolls[903], nil, "the client that lost the table has no rolls for the item")
+
+    -- The heartbeat is what makes it notice. Nothing is re-broadcast: it asks, and the owner answers
+    -- that one client.
+    RaidSim.Deliver(sim, "LC_ROLLS")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(15)
+
+    -- RaidSim.Blackhole drops the broadcast before it reaches ANY recipient, not just Corvin's, so
+    -- every other raid member is equally blind here -- counting the whole raid's requests would count
+    -- them too. What this checks is the one thing the heartbeat promises per client: asked for, not
+    -- re-asked for, while an answer could already be on its way.
+    local blindAsks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == blind.name then blindAsks = blindAsks + 1 end
+    end
+    T.eq(blindAsks, 1, "it asks exactly once")
+    T.deep_eq(blind.KART.LC.rolls[903], lm.KART.LC.rolls[903],
+        "and afterwards it holds the same numbers as the lootmaster")
+    F.AssertAgreed(sim, 903, "about the rolls after the catch-up")
+end
+
+-- ...but not by somebody who was not there ---------------------------------------------------------
+do
+    local sim = F.NewRaid()
+    F.Drop(sim, 904, F.GLOVES)
+    KARTTEST.AdvanceTime(0.5)
+
+    local late = RaidSim.Join(sim, { name = "Torvid", realm = "TarrenMill",
+                                     guid = "Player-1096-0A1B2C98", class = "ROGUE", locale = "enUS" })
+    KARTTEST.AdvanceTime(20)
+
+    T.eq(late.KART.LC.rolls[904], nil,
+        "a raider who joined after the announcement is not caught up with its rolls either")
+end

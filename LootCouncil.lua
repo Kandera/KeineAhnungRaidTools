@@ -1926,7 +1926,13 @@ function LC.HandleTable(payload, senderKey, sender)
     local now = GetTime()
     for id in tostring(list):gmatch("%d+") do
         local rollID = tonumber(id)
-        if rollID and not LC.rollItems[rollID]
+        -- Two reasons to ask, and the second is new: the item itself is missing, or the item is here
+        -- but its roll table never arrived. The table travels as one message for the whole raid, so
+        -- losing it costs everybody's numbers at once -- which is exactly why it has to be askable.
+        local needItem  = rollID and not LC.rollItems[rollID]
+        local needRolls = rollID and LC.rollItems[rollID] and LC.GetRollsEnabled()
+                          and not LC.rolls[rollID]
+        if (needItem or needRolls)
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             LC.rollReqSent[rollID] = now
             LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
@@ -1951,6 +1957,12 @@ function LC.HandleRollRequest(payload, senderKey, sender)
     if LC.MayCatchUp(rollID, senderKey) ~= true then return end
     LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. math.max(1, math.floor(deadline - GetTime()))
         .. ":" .. LC.ItemPayload(link, itemID), sender)
+    -- The rolls go with it, whispered to the asker alone. LC.MayCatchUp above has already decided
+    -- that this person was standing here when the item dropped, and the same decision governs both
+    -- halves of the answer -- there is no state where somebody is entitled to the item but not to
+    -- its numbers.
+    local rollsMsg = LC.SerializeRollTable(rollID)
+    if rollsMsg then LC.SendLC(rollsMsg, sender) end
 end
 
 -- A council member (or the raid leader) telling us the session we own is still running, because we
