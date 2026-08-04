@@ -208,3 +208,62 @@ do
     T.deep_eq(merrit.KART.LC.rolls[911], before,
         "a table from somebody who did not announce the item leaves the existing one alone")
 end
+
+-- A peer answers when the announcer cannot ------------------------------------------------------
+-- After a lootmaster handover the stand-in has no roster snapshot for items the previous owner
+-- announced, so LC.MayCatchUp refuses every catch-up for them -- deliberately (B118). The numbers are
+-- not secret, though: the whole raid holds the same table, so anybody who has it may hand it over.
+--
+-- Blackholing LC_ROLLS (as the earlier "asked once" case above does) would not fit here: that drops
+-- the announcement's one broadcast for the WHOLE raid, so nobody but the announcer -- about to leave
+-- -- ever holds real numbers. What this case needs is everybody holding the table normally and ONE
+-- client losing its own copy, so a peer answering means something.
+do
+    local sim, lm = F.NewRaid()
+    local blind = sim.byName.Corvin
+
+    -- Long past the point LC.OpenRollIDs would otherwise drop the roll from a heartbeat -- what is
+    -- under test is recovery minutes into a distribution, not the ordinary 20-second vote window.
+    lm.env.KART_Settings.lcVoteSeconds = 90
+    F.Drop(sim, 920, F.GLOVES)
+    KARTTEST.AdvanceTime(0.5)
+    RaidSim.As(blind, function() blind.KART.LC.rolls[920] = nil end)
+    T.eq(blind.KART.LC.rolls[920], nil, "the client that lost the table has no rolls for the item")
+
+    -- The announcer goes away and the raid leader stands in. Its heartbeat is what picks the item
+    -- back up (see LC.EnsureTableTicker's OnAccept call) -- but its rollEligible snapshot is Bramor's
+    -- to have, not its own, so MayCatchUp still refuses the ITEM (B118) while the numbers are there
+    -- for anybody to hand over regardless.
+    RaidSim.Leave(sim, "Bramor")
+    local stand = sim.byName.Merrit
+    -- The stand-in becomes the config owner too (docs/OWNERSHIP.md) and re-broadcasts its OWN
+    -- settings on the roster change below; without this the raid-wide roll switch reverts to that
+    -- client's untouched default (off) and needRolls never turns true anywhere.
+    RaidSim.As(stand, function() stand.env.KART_Settings.lcRollsEnabled = true end)
+    RaidSim.RosterUpdate(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(70)
+
+    T.truthy(#RaidSim.Sent(sim, "LC_ROLLS_REQ") >= 1, "the client asks the group, not just the owner")
+    T.truthy(blind.KART.LC.rolls[920] ~= nil, "and a peer that still holds the table answers it")
+end
+
+-- ...and exactly one peer answers ---------------------------------------------------------------
+-- Every client in the raid holds this table. Answering all at once is the message storm this whole
+-- rework exists to remove, so the answer is spread by a hash of the answerer's own name and anybody
+-- who sees somebody else's answer drops their own.
+do
+    local sim = F.NewRaid()
+    F.Drop(sim, 921, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local asker = sim.byName.Alric
+    RaidSim.As(asker, function() asker.KART.LC.rolls[921] = nil end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(asker, function() asker.KART.LC.SendLC("LC_ROLLS_REQ:921") end)
+    KARTTEST.AdvanceTime(5)
+
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:921:"), 1, "one answer reaches the group, not one per peer")
+    T.truthy(asker.KART.LC.rolls[921] ~= nil, "and the asker has the table again")
+end

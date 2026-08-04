@@ -54,10 +54,13 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --                          stop a ten-second heartbeat turning into a ten-second request (B118).
 --                          GetTime()-based, so it does not survive a logout in any meaningful form,
 --                          and a restored client SHOULD ask again -- that is the whole point of it.
+--   rollsAnswerAt       -- a planned LC_ROLLS_REQ answer, GetTime()-based and seconds from now
+--                          (B131). Nothing is still pending three seconds after a reload, and
+--                          restoring it would either fire on a stale clock or never fire at all.
 local EXEMPT = {
     rollDeadlines = true, rollLootedAt = true,
     equipRequestedRolls = true, rollsPendingSince = true, pendingItemLoads = true,
-    rollReqSent = true,
+    rollReqSent = true, rollsAnswerAt = true,
 }
 
 for name in pairs(cleared) do

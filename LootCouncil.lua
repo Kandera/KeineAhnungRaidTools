@@ -1934,8 +1934,16 @@ function LC.HandleTable(payload, senderKey, sender)
                           and not LC.rolls[rollID]
         if (needItem or needRolls)
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
+            local askedBefore = LC.rollReqSent[rollID] ~= nil
             LC.rollReqSent[rollID] = now
-            LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
+            if needRolls and askedBefore then
+                -- The owner had its turn and the table still is not here -- it may be gone, or it may
+                -- be a stand-in who never had the snapshot to vouch for us (B118, B131). The numbers
+                -- are not secret: anybody still holding them may hand them over.
+                LC.SendLC("LC_ROLLS_REQ:" .. rollID)
+            else
+                LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
+            end
         end
     end
 end
@@ -2133,6 +2141,11 @@ KART.UI:RegisterStaticPopup("KART_LC_STAND_IN", {
     -- name that hands the role back when they walk in again.
     OnAccept = function()
         LC.standInAccepted = true
+        -- The departed lootmaster's own ticker dies with them -- nobody else ever started one, so
+        -- items they announced before the handover would otherwise never be heartbeat again at all,
+        -- and a peer could never be prompted to repair a table for one of them (B131). Idempotent:
+        -- a no-op if a ticker from an earlier announcement is already running.
+        LC.EnsureTableTicker()
         print("|cff00ff00KART:|r " .. KART.L.LC_STAND_IN_ACCEPTED)
     end,
 })
@@ -3198,6 +3211,10 @@ end
 -- not: the table is sent right after the announcement, and a client that learns of the roll only
 -- from LC_START can legitimately see the two in either order.
 function LC.HandleRolls(payload, senderKey)
+    -- Somebody else answered a request we were about to answer too.
+    local answeredID = tonumber(payload:match("^(%d+):"))
+    if answeredID then LC.rollsAnswerAt[answeredID] = nil end
+
     local rollID = tonumber(payload:match("^(%d+):"))
     local isAnnouncer = rollID ~= nil and LC.rollAnnouncedBy[rollID] == senderKey
     local isVoid = rollID ~= nil and LC.rolls[rollID] == nil
@@ -3233,6 +3250,38 @@ function LC.HandleRolls(payload, senderKey)
     if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
         KART.LC.Council.RefreshCouncilRows()
     end
+end
+
+-- Every client in the raid holds the same table, so a request could be answered by all of them at
+-- once -- which is the message storm this rework exists to remove. Spread by a hash of our own NAME
+-- rather than by math.random, for the reason KASC's handshake gives for the same trick: random draws
+-- collide, names differ by construction, and the same client answers in the same slot every time,
+-- which is what makes it testable at all.
+local ROLLS_ANSWER_SPREAD = 3
+LC.rollsAnswerAt = LC.rollsAnswerAt or {} -- [rollID] = GetTime() we intend to answer, or nil
+
+local function SelfAnswerSlot()
+    local name = UnitName("player") or ""
+    local h = 0
+    for i = 1, #name do h = (h * 31 + name:byte(i)) % 997 end
+    return (h / 997) * ROLLS_ANSWER_SPREAD
+end
+
+function LC.HandleRollsRequest(payload)
+    local rollID = tonumber(payload:match("^(%d+)$"))
+    if not rollID then return end
+    -- Nothing to give, or we are already about to give it.
+    if not (LC.rolls[rollID] and next(LC.rolls[rollID]) ~= nil) then return end
+    if LC.rollsAnswerAt[rollID] then return end
+
+    LC.rollsAnswerAt[rollID] = GetTime() + SelfAnswerSlot()
+    C_Timer.After(SelfAnswerSlot(), function()
+        -- Somebody faster already answered; LC.HandleRolls clears this when a table lands.
+        if not LC.rollsAnswerAt[rollID] then return end
+        LC.rollsAnswerAt[rollID] = nil
+        local msg = LC.SerializeRollTable(rollID)
+        if msg then LC.SendLC(msg) end
+    end)
 end
 
 local function PurgeStaleRoll(rollID, newItemID)
@@ -4011,6 +4060,8 @@ KASC:RegisterMessage("LC_TABLE", { payload = true, group = true, enabled = lcEna
     function(payload, ctx) LC.HandleTable(payload, ctx:Key(), ctx.sender) end)
 KASC:RegisterMessage("LC_ROLL_REQ", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleRollRequest(payload, ctx:Key(), ctx.sender) end)
+KASC:RegisterMessage("LC_ROLLS_REQ", { payload = true, group = true, enabled = lcEnabled },
+    function(payload) LC.HandleRollsRequest(payload) end)
 KASC:RegisterMessage("LC_STATE_REQ", { payload = false, group = true, enabled = lcEnabled },
     function(_, ctx) LC.HandleStateRequest(ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_SESSION_RESUME", { payload = false, group = true, enabled = lcEnabled },

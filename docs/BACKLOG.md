@@ -2862,7 +2862,7 @@ convergence checks do not model as a separate step — and the send-side branch 
   loot, so it did not need the ownership call this section originally worried about for both
   candidates, and is no longer open.
 
-## B131 — OPEN, inherited — a lost roll table cannot always be asked for again after a lootmaster handover
+## B131 — FIXED 2026-08-04 — a lost roll table cannot always be asked for again after a lootmaster handover
 
 Found in review of the roll table change; not new to it.
 
@@ -2876,6 +2876,29 @@ earlier: it just re-asks every `ROLL_REQ_COOLDOWN` and is silently refused, fore
 
 This is not a defect the roll table introduced — it is B118's settled strict-yes rule doing exactly the
 job it was written for, applied to data (`LC.rollEligible`) that rule already governed before this
-change existed. It does mean the promise "a lost table can always be asked for again" reads more broadly
-than it holds in practice once a handover has happened. Noted, not investigated further, and not fixed:
-the strict rule stays as B118 settled it.
+change existed. `LC.MayCatchUp` and B118's strict-yes rule are untouched by the fix below: they still
+decide, unaltered, who gets the *item*. What changed is that the numbers are no longer tied to that
+decision at all — they are not a secret, since the whole raid already holds the same table, so anybody
+who still has it may hand it over regardless of who currently owns the item.
+
+**The fix.** A second, group-wide request. `LC.HandleTable`'s existing per-roll ask still whispers the
+believed owner first, exactly as before; if `ROLL_REQ_COOLDOWN` (30s) passes with the table still
+missing, the client broadcasts `LC_ROLLS_REQ:<rollID>` to the whole group instead of asking the same
+owner again. Every client still holding a non-empty table for that rollID answers — spread by a hash of
+its own name (`SelfAnswerSlot`, the same construction KASC's handshake uses, and for the same reason: a
+name-hash distributes deterministically where `math.random` would collide and cannot be reproduced in
+the harness) rather than all firing at once, and each drops its own planned answer the moment it sees
+somebody else's `LC_ROLLS` for the same rollID land first. The answer is a normal `LC_ROLLS` broadcast,
+so it runs through the same precedence B130 established: a peer is never the announcer, so its table can
+only ever fill a void, never overwrite what the announcer said.
+
+`LC_ROLLS_REQ` is not on `GUARANTEED_TOKENS`, for the same reason `LC_ROLL_REQ` is not: it is a
+question, and a question that arrives forty seconds late is noise — the asker has already asked again by
+then.
+
+One related gap closed alongside it: `LC.EnsureTableTicker` only ever started on the client that first
+announced an item, so a departed lootmaster's own heartbeat died with them and nothing replaced it —
+leaving the second request above unreachable for anything announced before a handover, exactly the B131
+scenario. Accepting the `KART_LC_STAND_IN` prompt now also calls `LC.EnsureTableTicker`, so the stand-in
+picks up heartbeat duty for whatever is still open the moment it takes over, item eligibility (B118)
+notwithstanding.

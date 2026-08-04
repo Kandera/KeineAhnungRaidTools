@@ -472,6 +472,7 @@ function Trade.ClearRollState(rollID)
     if LC.rollEligible then LC.rollEligible[rollID] = nil end
     -- "we have already asked the owner about this one", a timestamp and nothing else.
     if LC.rollReqSent then LC.rollReqSent[rollID] = nil end
+    if LC.rollsAnswerAt then LC.rollsAnswerAt[rollID] = nil end
     -- LC.relevanceSnapshot is deliberately NOT cleared here, unlike the three above. On a reused
     -- rollID this runs from PurgeStaleRoll AFTER the relevance frame has already snapshotted the new
     -- item — that frame registers for START_LOOT_ROLL before Core.lua's dispatcher and therefore

@@ -21,6 +21,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Während das Spiel im Bosskampf den Addon-Funk sperrt, geht nichts mehr verloren** — es wird zurückgehalten und danach gesendet.
 - **Nachrichten gehen nicht mehr verloren, wenn im Spiel viel los ist** — sie warten und gehen danach raus, und die Lootverteilung hat Vorfahrt vor Versionsabfragen.
 - **Zwei Raider können nicht mehr dieselbe Wurfzahl bekommen**, und ein Wurf, den niemand gesehen hat, lässt sich nachfordern.
+- **Ein fehlender Wurf wird von dem repariert, der ihn noch hat** — auch wenn der Lootmaster weg ist.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
