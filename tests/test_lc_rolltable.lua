@@ -103,3 +103,39 @@ do
     T.eq(late.KART.LC.rolls[904], nil,
         "a raider who joined after the announcement is not caught up with its rolls either")
 end
+
+-- The cooldown holds even while the answer is still missing, across a second heartbeat -------------
+-- The "asks exactly once" test above cannot tell a live cooldown from a deleted one: its own answer
+-- arrives within the same heartbeat tick that triggered the ask, so needRolls turns false before a
+-- second heartbeat could ever fire, and nothing there actually exercises ROLL_REQ_COOLDOWN. Here the
+-- catch-up's LC_ROLLS is held in flight -- never delivered, not lost -- so needRolls stays true past
+-- a SECOND heartbeat, and only the cooldown timer stands between that and asking twice.
+do
+    local sim, lm = F.NewRaid()
+    local blind = sim.byName.Corvin
+
+    -- The default vote window (20s) would close right on top of the second heartbeat (t=20) and
+    -- take the rollID off the table for a reason that has nothing to do with the cooldown -- widen
+    -- it so the only thing keeping the second heartbeat from producing a second ask is the cooldown
+    -- itself.
+    lm.env.KART_Settings.lcVoteSeconds = 60
+
+    RaidSim.Blackhole(sim, "LC_ROLLS")
+    F.Drop(sim, 906, F.GLOVES)
+    KARTTEST.AdvanceTime(0.5)
+    T.eq(blind.KART.LC.rolls[906], nil, "the client that lost the table has no rolls for the item")
+
+    -- Deliveries resume, but the catch-up's own LC_ROLLS is held rather than let through -- so the
+    -- first ask's answer never lands, and the second heartbeat still finds the table missing.
+    RaidSim.Deliver(sim, "LC_ROLLS")
+    RaidSim.Hold(sim, "LC_ROLLS")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(21) -- past both the t=10 and t=20 heartbeat ticks
+
+    local blindAsks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == blind.name then blindAsks = blindAsks + 1 end
+    end
+    T.eq(blindAsks, 1,
+        "the cooldown keeps it from asking again at the second heartbeat while unanswered")
+end
