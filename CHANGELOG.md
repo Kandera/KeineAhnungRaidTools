@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Council members are recognised without opening Northern Sky Raid Tools first.**
 - **Nothing is lost while the game blocks addon traffic during a boss** — it is held and sent the moment the fight releases it.
 - **Messages are no longer lost when the game is busy** — they wait their turn, and the loot flow now has right of way over version checks.
+- **Rolls can no longer come out the same for two raiders**, and a roll nobody saw can be asked for again.
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**
