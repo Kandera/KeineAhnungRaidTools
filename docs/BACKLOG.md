@@ -2963,3 +2963,49 @@ leaving the second request above unreachable for anything announced before a han
 scenario. Accepting the `KART_LC_STAND_IN` prompt now also calls `LC.EnsureTableTicker`, so the stand-in
 picks up heartbeat duty for whatever is still open the moment it takes over, item eligibility (B118)
 notwithstanding.
+
+`LC.rollDismissed`, the dismissal memory this same request loop defers to, has its own reused-rollID gap — left open below as B132.
+
+## B132 — OPEN 2026-08-04 — the dismissal is remembered by rollID, and Blizzard can hand that number to a different item before this client hears about it
+
+Found in review of the request loop above (B131), not by the soak.
+
+**The mechanism.** `LC.HandleRollCatchup` refuses to hand a client anything under a rollID it once
+dismissed (`LootCouncil.lua:1876`), and `LC.HandleTable`'s heartbeat-driven request gate refuses to even
+ask for one (`LootCouncil.lua:2033`) — both deliberately, so a raider who closed the tab is not reopened
+into an item they are finished with. `LC.rollDismissed[rollID]` only comes back down through
+`PurgeStaleRoll` (`LootCouncil.lua:3493`), and that runs from exactly two places, `LC.OnStartLootRoll`
+and `LC.HandleStart` — only from a start for that id this client actually processed. A live `LC_START`
+reaching this client clears the flag the ordinary way. But three things coincide inside one session, no
+reload or session end between them, for that never to happen: this client dismissed some earlier roll
+under rollID N; Blizzard later reuses N for an unrelated item, which happens within seconds on trash;
+and this specific client misses the live `LC_START` for that reuse — the exact broadcast the
+heartbeat/catch-up system exists to stand in for. When it does, both halves of the recovery loop are
+gated shut by the very flag `PurgeStaleRoll` would have cleared: `HandleTable` never sends the request
+that would ask for N again, and even an unsolicited `LC_ROLL_CATCHUP` for it is refused on arrival. The
+new item sits untracked on that one client — nothing on the council panel, nothing to vote on — until
+`LC.ClearAllRolls` runs (End Round or session end) or a reload clears `LC.rollDismissed` outright.
+
+**Why it lands exactly on this addon.** What the raider actually dismissed was an item; what the flag
+remembers is a number. Those stay the same thing only until Blizzard reuses the number, which it does
+routinely inside one trash pull. Every other path that touches this rollID accounts for the reuse —
+`PurgeStaleRoll` exists specifically to clear a stale flag out from under a fresh start, and
+`LC.HandleRollCatchup` already accepts a reused id as a known, bounded risk for the trade timestamp it
+inherits alongside it. This is the one path into that same reuse with no repair available, because it IS
+the repair: the heartbeat/catch-up loop is what a client is supposed to fall back on once the direct
+message is lost, and it is this exact flag that keeps it from ever starting.
+
+**What would close it, and why not now.** The honest fix is to remember the dismissal by item rather
+than by rollID, so a reused id cannot inherit a decision that was never made about it. That needs the
+heartbeat and the catch-up message to name the item alongside the rollID — today both carry ids only,
+and a receiving client has no way to tell a genuine reuse from an ordinary repeat of the same roll. That
+is exactly the shape the next planned step of the comms rework changes: one message per boss instead of
+one per item, which puts item identity on the wire for the first time. Building a narrower wire change
+for this one flag ahead of that step would be work done twice, so it waits on it — whoever picks up the
+comms rework's next step should close this entry at the same time.
+
+**What makes it bounded.** Three things already in place self-heal it — End Round, session end, and a
+reload all clear `LC.rollDismissed` outright — and while it lasts it costs exactly one client the
+visibility of exactly one item. The roll table itself, the council's vote, and every other client's copy
+of both are untouched: the raid's agreement about the item is intact, only this one raider's ability to
+learn it exists is not.
