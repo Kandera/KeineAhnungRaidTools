@@ -3430,6 +3430,44 @@ function LC.SerializeRollTable(rollID)
         .. ":" .. table.concat(parts, ",")
 end
 
+-- ==========================================================================
+--  The one rule LC_DROP has to keep
+-- ==========================================================================
+--
+--   THE HEAD LIST AND EVERY ENTRY'S NUMBERS COME FROM ONE SET, AND THAT SET IS WHATEVER THE
+--   NUMBERS WERE ACTUALLY DRAWN AGAINST.
+--
+-- Breaking it is silent, and it is expensive. The head names the participants once and every entry
+-- lists its numbers in that order, so a head built against a different set than the draw shifts every
+-- position after the first difference onto somebody else's raider -- or, in the shape this keeps
+-- taking, hands a raider the head names but the draw never covered a roll of 0 that nobody cast.
+-- Arriving from the recorded announcer, that 0 is authoritative: nothing refuses it, no diagnostic
+-- counts it, and the council scores its tie-break on it.
+--
+-- It has been broken three times, in three different places, and every time for the same reason: the
+-- two halves were computed INDEPENDENTLY and compared afterwards, and a comparison can be forgotten
+-- at the next site. So the head is no longer computed at all. It is DERIVED from the numbers, here,
+-- and every caller that needs one asks this function. A derivation cannot drift.
+--
+-- The authority is LC.rolls[rollID] and NOT LC.rollEligible[rollID] -- the trap all three instances
+-- fell into. The two agree at the instant LC.DrawRollTable runs and can part company immediately
+-- after: Blizzard re-raises START_LOOT_ROLL for a roll still in progress, SnapshotEligible re-runs
+-- against a fresh identity walk of the roster, and LC.DrawRollTable deliberately refuses to redraw a
+-- table the raid has already been shown. A key resolving from a pending text form to a GUID between
+-- two raises is enough to part them, and so is somebody walking in or porting out.
+--
+-- With rolls switched off raid-wide there is no table, so this answers with an EMPTY list -- which is
+-- exactly what the format asks for (design §B and §F: no numbers, and no name list either).
+function LC.DrawnKeys(rollID)
+    local keys = {}
+    for key in pairs(LC.rolls[rollID] or {}) do keys[#keys + 1] = key end
+    -- Sorted for the same reason LC.DrawRollTable sorts its own walk: the receiver matches numbers to
+    -- this list BY POSITION, so both sides have to walk it the same way -- and pairs() over a set of
+    -- GUIDs has no defined order, in the game or in the harness.
+    table.sort(keys)
+    return keys
+end
+
 -- One message for everything that dropped at once.
 --
 -- Shape: LC_DROP:<secs>:<kind>:<key>,<key>,...;<rollID>#<roll>,<roll>,...#<itemString>;<rollID>#...
@@ -3457,7 +3495,21 @@ function LC.SerializeDrop(kind, secs, keys, entries)
         -- every raider a roll of 0 for an item the raid deliberately does not roll on.
         local rolls = LC.rolls[e.rollID]
         if rolls then
-            for i, key in ipairs(keys) do nums[i] = rolls[key] or 0 end
+            -- The last gate on the invariant above, and the reason there is no `or 0` here any more.
+            -- The caller derives the head from LC.DrawnKeys and splits the batch the moment an entry
+            -- needs a different one, so a mismatch at this point is a programming error -- but the
+            -- cost of writing one out is a number nobody drew, accepted as authoritative by the whole
+            -- raid. So the entry loses its numbers ENTIRELY rather than half of them: an empty field
+            -- is a gap the heartbeat's repair path fills (LC.HandleRolls refuses a partial table for
+            -- exactly this reason), while a 0 is a lie no client can see.
+            local n = 0
+            for _ in pairs(rolls) do n = n + 1 end
+            if n == #keys then
+                for i, key in ipairs(keys) do
+                    if rolls[key] == nil then nums = {} break end
+                    nums[i] = rolls[key]
+                end
+            end
         end
         parts[#parts + 1] = e.rollID .. DROP_FIELD_SEP .. table.concat(nums, ",")
             .. DROP_FIELD_SEP .. e.itemString
@@ -3798,7 +3850,7 @@ local function PurgeStaleRoll(rollID, newItemID)
     --
     -- Flushed rather than kept, because one number cannot carry two items in one message either: the
     -- receiving side runs this same purge, so it would drop whichever of the two it read first. Same
-    -- answer as a batch whose participants changed (see SameParticipants) -- an ambiguous batch is
+    -- answer as a batch whose head changed (see LC.DrawnKeys) -- an ambiguous batch is
     -- closed and the arriving item opens a new one.
     --
     -- Deliberately HERE and not in Trade.ClearRollState. That function is also how a council member
@@ -3928,21 +3980,13 @@ local DROP_COLLECT = 0.5
 LC.pendingDrop = nil -- { id = n, secs = n, keys = {…}, entries = { { rollID = n, itemString = s }, … } }
 local pendingDropSeq = 0
 
--- Whether this roll's own participants are exactly the ones the batch already names.
---
--- SnapshotEligible runs per ITEM, against a fresh identity walk of the roster, while the batch's head
--- is written ONCE and every entry's numbers are ordered by it. So the two can legitimately disagree
--- inside one boss's half second -- a name resolving from a pending text key to a GUID between two items
--- is enough, and so is somebody leaving or walking in -- and the message cannot carry both: a key the
--- head does not name has nowhere to put its number, and a key it does name that this item never drew
--- for would go out as a 0 nobody rolled. Received from the recorded announcer, that 0 is authoritative:
--- nothing refuses it, no diagnostic counts it, and the council scores its tie-break on it.
-local function SameParticipants(set, keys)
-    if not set then return false end
-    local n = 0
-    for _ in pairs(set) do n = n + 1 end
-    if n ~= #keys then return false end
-    for _, key in ipairs(keys) do if not set[key] then return false end end
+-- Whether this roll's own head is the one the batch already names. Both sides come from
+-- LC.DrawnKeys, so this compares like with like -- two sorted lists, walked -- rather than a snapshot
+-- against a head, which is the comparison that went wrong three times. See the invariant on
+-- LC.DrawnKeys for why they can differ inside one boss's half second at all.
+local function SameHead(a, b)
+    if #a ~= #b then return false end
+    for i = 1, #a do if a[i] ~= b[i] then return false end end
     return true
 end
 
@@ -4113,20 +4157,21 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
         LC.DrawRollTable(rollID, newItemID, true)
 
-        -- This item's own participants against the ones the batch already names. They can differ
-        -- inside one boss's half second (see SameParticipants), and the message cannot carry both --
-        -- so the batch is closed here and this item opens a new one. Split rather than reconciled:
-        -- two messages are cheap, and the alternative is a number attributed to the wrong raider.
-        if LC.pendingDrop and not SameParticipants(LC.rollEligible[rollID], LC.pendingDrop.keys) then
+        -- The head this item's numbers require, taken FROM those numbers (see the invariant on
+        -- LC.DrawnKeys) and not from LC.rollEligible[rollID]. A re-raised START_LOOT_ROLL re-snapshots
+        -- the roster a line above while LC.DrawRollTable keeps the table it has already shown the
+        -- raid, so the snapshot is the one thing here that is allowed to be out of date.
+        local keys = LC.DrawnKeys(rollID)
+
+        -- This item's own head against the one the batch already names. They can differ inside one
+        -- boss's half second, and the message cannot carry both -- so the batch is closed here and
+        -- this item opens a new one. Split rather than reconciled: two messages are cheap, and the
+        -- alternative is a number attributed to the wrong raider.
+        if LC.pendingDrop and not SameHead(keys, LC.pendingDrop.keys) then
             FlushPendingDrop()
         end
 
         if not LC.pendingDrop then
-            local keys = {}
-            for key in pairs(LC.rollEligible[rollID] or {}) do keys[#keys + 1] = key end
-            -- Sorted for the same reason LC.DrawRollTable sorts: the numbers are matched to this
-            -- list by position on the receiving side, so both sides must walk it the same way.
-            table.sort(keys)
             pendingDropSeq = pendingDropSeq + 1
             local id = pendingDropSeq
             LC.pendingDrop = { id = id, secs = secs, keys = keys, entries = {} }
@@ -4546,18 +4591,17 @@ function LC.StartManualRoll(itemsText)
         -- who was in the raid at the time. Now there is (B118).
         SnapshotEligible(rollID)
 
-        -- The participant list is taken once, from the first item: /kart add runs in one moment, so
-        -- every item in it has the same snapshot.
-        if not keys then
-            keys = {}
-            for key in pairs(LC.rollEligible[rollID] or {}) do keys[#keys + 1] = key end
-            table.sort(keys)
-        end
         -- The sender does not process its own LC_DROP (KASC drops the echo, see Dispatch), so this
         -- client has to record its own announcement here rather than through LC.HandleManualStart.
         LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
         -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
         LC.DrawRollTable(rollID, (itemLink:match("item:(%d+)")), true)
+        -- The head, derived from the numbers just drawn rather than from the snapshot (see the
+        -- invariant on LC.DrawnKeys). Taken once, from the first item: /kart add runs inside one
+        -- synchronous loop, so nothing can walk in between two items and every one of them draws
+        -- against the same roster. Rolls switched off raid-wide therefore leaves the head empty too,
+        -- which is what design §B asks for -- it used to carry the whole roster for nothing.
+        keys = keys or LC.DrawnKeys(rollID)
         entries[#entries + 1] = {
             rollID = rollID,
             -- The full string, not the old 255-byte fallback: this message is split and reassembled
@@ -4664,7 +4708,7 @@ function LC.HandleDrop(payload, senderKey)
                 -- and the entry lists its numbers in that order, so a length that does not match means
                 -- the two halves were built against different rosters -- and then every position after
                 -- the first difference names somebody else's raider. The sender splits its batch
-                -- exactly so this cannot happen (see SameParticipants); this is the half that makes a
+                -- exactly so this cannot happen (see LC.DrawnKeys); this is the half that makes a
                 -- sender which does it anyway -- an older build, a future one -- detectable instead of
                 -- silent.
                 --

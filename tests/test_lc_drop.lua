@@ -12,6 +12,47 @@ local RaidSim = F.RaidSim
 -- is already two chunks on the wire, and a prefix match on the token would find neither of them.
 local function Announced(sim) return RaidSim.Messages(sim, "LC_DROP:") end
 
+local TORVI = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42",
+                class = "MAGE", locale = "enUS" }
+
+-- Blizzard re-raises START_LOOT_ROLL for a roll that is STILL RUNNING -- the same event again, on the
+-- same client, for the same item. That premise is the whole point: LC.DrawRollTable's guard, and the
+-- batch's own dedupe, exist for exactly this event, and both need the roll to be live to be reached.
+--
+-- The stub closes a roll for whoever has answered it (the real API goes blank the moment you roll),
+-- and the lootmaster force-won this one when it dropped -- so `rolledBy` is cleared to put it back in
+-- the state Blizzard raises the event from. Driven only on the announcer, rather than through F.Drop,
+-- which would re-record who Blizzard raised the roll on and hand a newcomer a roll the game never
+-- would.
+local function ReRaise(lm, rollID)
+    KARTTEST.lootRolls[rollID].rolledBy = nil
+    RaidSim.As(lm, function()
+        KARTTEST.FireEvent("START_LOOT_ROLL", rollID)
+        lm.KART.LC.OnStartLootRoll(rollID)
+    end)
+    KARTTEST.AdvanceTime(1)
+end
+
+-- The invariant, read back off the raid: whatever numbers a client ended up holding for this item are
+-- the ANNOUNCER'S OWN table -- the one that was drawn rather than parsed -- and nobody holds a number
+-- that was never cast. Both halves are needed. A head naming somebody the draw never covered puts a 0
+-- in their row; a head that has lost somebody drops a real number instead; and either way the
+-- announcer is left the only client in the raid holding a different table from everyone else, which
+-- is what every bad raid night has looked like from the inside.
+local function AssertNumbersIntact(sim, lm, rollID, what)
+    for _, c in ipairs(sim.clients) do
+        local held = c.KART.LC.rolls[rollID]
+        if held then
+            T.deep_eq(held, lm.KART.LC.rolls[rollID],
+                c.name .. " holds the announcer's own table (" .. what .. ")")
+        end
+        for who, value in pairs(held or {}) do
+            T.truthy(value >= 1 and value <= 100,
+                "nobody is handed a number they never rolled (" .. what .. "/" .. who .. ")")
+        end
+    end
+end
+
 -- Three items, one message ------------------------------------------------------------------------
 do
     local sim, lm = F.NewRaid()
@@ -95,8 +136,7 @@ end
 do
     local sim, lm = F.NewRaid()
     F.Drop(sim, 959, F.GLOVES)
-    RaidSim.Join(sim, { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42",
-                        class = "MAGE", locale = "enUS" })
+    RaidSim.Join(sim, TORVI)
     F.Drop(sim, 960, F.WEAPON)
     KARTTEST.AdvanceTime(1)
 
@@ -162,6 +202,68 @@ do
     T.eq(written, 1, "and is written into it once, not twice")
 end
 
+-- A roll RE-RAISED after the participant set changed -------------------------------------------------
+-- Blizzard raises START_LOOT_ROLL again for a roll that is still running, and by then the roster walk
+-- can answer differently -- but LC.DrawRollTable refuses to redraw a table the raid has already been
+-- shown, and rightly so. So the numbers belong to the OLD set while the fresh snapshot names the new
+-- one, and a head taken from the snapshot ships numbers drawn against something else. That is the
+-- third instance of one defect (the batch split had already been taught to compare a snapshot against
+-- the batch head -- but this path runs with no batch open at all, so the comparison never happened).
+--
+-- Which is why the head is no longer compared to anything: it is DERIVED from LC.rolls[rollID], the
+-- numbers' own authority (LC.DrawnKeys). Three ways the sets can part, all of them ordinary.
+
+-- (1) A pending text key resolves to a GUID between the two raises. The likeliest live trigger, and
+-- the exact instability the split rule's own comment cites: SnapshotEligible deliberately keeps a
+-- raider whose name has not resolved yet under a text key, and the moment it does resolve the SET
+-- changes without a single person moving.
+do
+    local sim, lm = F.NewRaid()
+    local late = sim.byName.Sinja
+    KARTTEST.guidBlackout[late.unit] = true
+    F.Drop(sim, 989, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    KARTTEST.guidBlackout[late.unit] = nil
+
+    ReRaise(lm, 989)
+    T.truthy(lm.KART.LC.rolls[989][late.guid] == nil,
+        "the draw still belongs to the set it was made against, text key and all")
+    AssertNumbersIntact(sim, lm, 989, "a key resolved between two raises")
+end
+
+-- (2) Somebody walks in between the two raises.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 990, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.Join(sim, TORVI)
+    ReRaise(lm, 990)
+
+    for _, c in ipairs(sim.clients) do
+        T.eq((c.KART.LC.rolls[990] or {})[TORVI.guid], nil,
+            "the newcomer gets no number for an item that dropped before them (" .. c.name .. ")")
+    end
+    AssertNumbersIntact(sim, lm, 990, "a raider joined between two raises")
+end
+
+-- (3) ...and the mirror: somebody ports out between them, which drops a REAL number rather than
+-- inventing one. Just as bad -- the raider it belonged to is missing from every peer's tally while the
+-- announcer still has them.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 992, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+
+    local gone = sim.byName.Sinja
+    RaidSim.Leave(sim, "Sinja")
+    ReRaise(lm, 992)
+
+    T.truthy(lm.KART.LC.rolls[992][gone.guid] ~= nil,
+        "the departed raider's own number is still part of the roll they were there for")
+    AssertNumbersIntact(sim, lm, 992, "a raider left between two raises")
+end
+
 -- Rolls switched off raid-wide ----------------------------------------------------------------------
 do
     local sim, lm = F.NewRaid()
@@ -170,12 +272,20 @@ do
         lm.KART.LC.ApplyOwnConfig()
     end)
     KARTTEST.AdvanceTime(0.5)
+    RaidSim.ClearLog(sim)
     F.Drop(sim, 958, F.GLOVES)
     KARTTEST.AdvanceTime(1)
 
     local council = sim.byName.Merrit
     T.truthy(council.KART.LC.rollItems[958] ~= nil, "the item arrives with rolls switched off")
     T.eq(next(council.KART.LC.rolls[958] or {}), nil, "and carries no numbers")
+    -- ...and no NAME LIST either (design §B/§F). The head exists to order the numbers, so with no
+    -- numbers it orders nothing -- and it is the most expensive part of the message: 25 identity keys
+    -- is ~525 bytes, on the one ALERT message this whole change exists to shrink. It used to carry the
+    -- whole roster because it was built from LC.rollEligible, which SnapshotEligible writes whether or
+    -- not the raid rolls at all.
+    T.eq(#Announced(sim), 1, "the item is still announced")
+    T.truthy(Announced(sim)[1].msg:match("^LC_DROP:%d+:r:;"), "and names nobody in the head")
 end
 
 -- /kart add with several links is one message too --------------------------------------------------
