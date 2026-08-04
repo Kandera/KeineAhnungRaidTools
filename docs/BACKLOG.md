@@ -2964,58 +2964,99 @@ scenario. Accepting the `KART_LC_STAND_IN` prompt now also calls `LC.EnsureTable
 picks up heartbeat duty for whatever is still open the moment it takes over, item eligibility (B118)
 notwithstanding.
 
-`LC.rollDismissed`, the dismissal memory this same request loop defers to, has its own reused-rollID gap — left open below as B132.
+`LC.rollDismissed`, the dismissal memory this same request loop defers to, had its own reused-rollID
+gap, and the first attempt at it weakened the handover case this entry is about: a dismissal was
+forgotten when the owner's heartbeat stopped LISTING that rollID, and a stand-in's table is
+legitimately shorter than the previous owner's, so a closed tab could come back once. Both are closed
+by the wire change in B132 below — absence is no longer read as evidence of anything.
 
-## B132 — OPEN 2026-08-04 — a dismissal now remembers its item, and the heartbeat still names nothing but numbers
+## B132 — FIXED 2026-08-04 — the heartbeat named the number on the table but never the item on it
 
-Found in review of the request loop above (B131), not by the soak. Narrowed 2026-08-04 as far as it can
-be narrowed without touching a message.
+Found in review of the request loop above (B131), not by the soak. Two cases, one root, one fix.
 
-**The mechanism.** `LC.HandleRollCatchup` refuses to hand a client anything under a rollID it once
-dismissed, and `LC.HandleTable`'s heartbeat-driven request gate refuses to even ask for one — both
-deliberately, so a raider who closed the tab is not reopened into an item they are finished with. What
-the raider actually dismissed was an ITEM; what the note remembered was a NUMBER, and Blizzard reuses a
-rollID for an unrelated item within seconds on trash. A client that dismissed roll N, then got a
-genuinely new item under N, and missed that item's `LC_START` — the exact broadcast the heartbeat and
-catch-up exist to stand in for — was deaf to it: nothing asked, and an unsolicited `LC_ROLL_CATCHUP` was
-refused on arrival. The new item sat untracked on that one client, with nothing on the council panel to
-notice it by, until End Round, session end or a reload.
+**The root.** `LC_TABLE` — the loot owner's ten-second "here is what is still on my table" — carried
+rollIDs and nothing else. Blizzard hands the same rollID to an unrelated item within seconds on trash,
+so a receiver reading that list could never tell a repeat of a roll from a REUSE of its number. Both
+cases below are that one blind spot, seen from two sides.
 
-**What is closed.** `LC.rollDismissed[rollID]` now stores the itemID that was dismissed (`true` only
-when this client never resolved what it was holding), so the two cases can be told apart wherever an
-item is actually named:
+**Case 1: a reuse nothing else on the wire named.** `LC.HandleRollCatchup` refuses to hand a client
+anything under a rollID it once dismissed, and `LC.HandleTable`'s request gate refuses to even ask for
+one — both deliberately, so a raider who closed the tab is not reopened into an item they are finished
+with (B131). What the raider dismissed was an ITEM; the gate could only read a NUMBER. A client that
+dismissed roll N, then got a genuinely new item under N, and missed that item's `LC_START` — the exact
+broadcast the heartbeat exists to stand in for — was deaf to it: nothing asked, and an unsolicited
+`LC_ROLL_CATCHUP` was refused on arrival.
 
-* `LC.HandleRollCatchup` refuses a catch-up carrying the SAME item and accepts one carrying a
-  DIFFERENT item — a reuse, not a repeat. `PurgeStaleRoll` then drops the note on the way through
-  `LC.HandleStart`, exactly as it does for a live start.
-* `LC.HandleTable` forgets a dismissal whose rollID the owner no longer lists: the roll has left the
-  table, so the note can only ever block a later reuse of that number. This is not a deletion from
-  silence — nothing the client holds is dropped, and asking is driven entirely by what the heartbeat
-  DOES list, so forgetting a note for an unlisted id cannot make this client ask for anything. Guarded
-  against an empty list (a stand-in that has nothing yet) and a truncated one, either of which would
-  otherwise read as "everything else is gone".
-* `LC.HandleRolls` and `Trade.HandleResult` drop the note when they name a different item under the
-  dismissed id. The roll table is what repairs the case in practice: it reaches the whole raid, so a
-  client that missed the announcement learns of the reuse from it and asks for the item on the next
-  heartbeat.
+Storing the dismissed itemID rather than a bare flag (`LC.rollDismissed[rollID]`, 2026-08-04) fixed
+that everywhere an item is actually named — the catch-up, `LC.HandleRolls`, `Trade.HandleResult` — and
+in practice the roll table repaired the case, since it reaches the whole raid and names its item. It
+left exactly one hole: a raid with rolls switched off, where the heartbeat is the ONLY message that
+ever reaches a client which missed the announcement, and the heartbeat named no items.
 
-Covered by three cases in `tests/test_lc_rolltable.lua`, next to B131's own — a reuse repaired
-end-to-end through the request loop, the accept/refuse asymmetry of the catch-up itself, and the note
-being forgotten once the owner stops listing the roll.
+**Case 2: the stand-in weakening.** The same change made `LC.HandleTable` forget a dismissal whose
+rollID the owner no longer LISTED, so a stale note could not gate a later reuse of that number. That
+inference is wrong for this guild's normal operating event. A stand-in's table holds only what that
+client itself announced, so after a handover it is legitimately shorter than the previous owner's, and
+"absent" is not "gone". Worst case a closed tab reopened once. It was written down against B131 rather
+than hidden, and guards for an empty list and a truncated one could not see it — nothing in the
+message said the list was a stand-in's.
 
-**What is left.** One case, and it is the one the wire cannot answer: a reuse where this client hears
-NOTHING that names the new item — no `LC_START`, no roll table (the raid may have rolls switched off),
-and no result yet — while the owner keeps the reused id on its table throughout. The heartbeat lists
-that id, the gate reads its own note and does not ask, and there is no way for the receiver to tell
-that repeat from a reuse, because the message carries ids and nothing else. It costs that one client
-the visibility of that one item, and it self-heals at End Round, at session end and at a reload.
+**The fix, decided by the maintainer knowing it is a wire change.** `LC_TABLE` now names the item
+alongside each rollID: `LC_TABLE:<count>:<rollID>=<itemID>,<rollID>=<itemID>,...`.
 
-**Why not now.** The next planned step of the comms rework replaces this message with one per boss,
-which puts item identity on the wire for the first time. Once the heartbeat names its items, the gate
-can ask the same question the catch-up already asks and this entry closes with it — whoever picks that
-step up should close it then. A narrower wire change for this one note ahead of that step would be work
-done twice.
+* An **itemID, never a link**. Six digits against fifty-plus, and the same item's link differs per
+  drop by its bonus ids — which is the comparison this message must never make (`LC.PayloadItemID`
+  exists for that reason). Twelve entries is about 160 bytes with the token in front, so
+  `TABLE_MAX_IDS` is unchanged at 12 and the heartbeat still fits a single addon message. AceComm
+  would split a longer one rather than lose it, but a heartbeat costing three chunks every ten
+  seconds all evening is a bad trade for a message whose whole point is being cheap enough to repeat.
+* **`=0` for a roll the owner cannot name itself** — an `LC_START` that carried no itemID leaves
+  "???" tracked (B40). Still listed, deliberately: a roll the owner is vague about is exactly the one
+  a receiver most needs to hear exists. The receiver reads it as "unknown", never as a mismatch, so
+  the ask still happens and no comparison is made.
+* The leading **count stays**, unread. Nothing has read it since B118 except the sweep removed below;
+  it is the only thing that tells a receiver its list was truncated, and it keeps the payload's first
+  field the shape a 3.3.0 client parses.
 
-**What makes it bounded.** Unchanged from the original entry, and now much narrower: the roll table
-itself, the council's vote and every other client's copy of both are untouched. The raid's agreement
-about the item is intact; only this one raider's ability to learn it exists is not.
+**What the receiver does with it.**
+
+* A dismissal is forgotten when the heartbeat shows a **DIFFERENT** item under that id — never when
+  the id is merely absent. That closes case 2 outright: absence stops being evidence, so the
+  absence-based sweep and its guards for an empty and a truncated list are gone with it. Nothing is
+  lost by removing them: a number that leaves the table and comes back for a new item is NAMED on the
+  very next heartbeat, which is strictly more than the sweep could see, and it also catches the reuse
+  the sweep could not — where the number never left the table at all.
+* A client **holding** an item under an id the heartbeat now names differently is looking at a reuse
+  it missed. That is `PurgeStaleRoll`'s transition already — it drops the dismissal note, the previous
+  item's votes, tab and vote row, and keeps rolls already cast for the item now arriving — so it is
+  called (`LC.PurgeStaleRoll`) rather than reimplemented, and there is one answer to "this id belongs
+  to a different item now" instead of two that can drift. Called only on a proven difference:
+  `PurgeStaleRoll` clears the dismissal unconditionally at its top, which is right for a roll START
+  and wrong for a heartbeat repeating the item this client deliberately closed.
+
+**Protocol version stays `3.3.1`.** The last release tag is `v3.3.0`, 3.3.1 is unreleased, and a
+3.3.0 client is already reported as outdated by this build. What a 3.3.0 client actually does with the
+new payload, since its `LC.HandleTable` scans the list with a bare `%d+`: it reads the itemIDs as
+rollIDs too, so `LC_TABLE:2:980=249331,981=249293` is seen as four ids — 980, 249331, 981, 249293 —
+and it asks for the two nonsense ones. **Those asks are refused harmlessly and were confirmed to be**:
+`LC.HandleRollRequest` returns at `not itemID or not LC.RollTracked(rollID)` before it sends anything
+or counts anything, and the group-wide `LC_ROLLS_REQ` escalation is dropped by every peer at "nothing
+to give". Measured against the fixture raid: catch-ups answered for 980 and 981 only, nothing for the
+item ids, `diag.refusedSender` unchanged at 0. A 3.3.0 client also stops running its own absence
+sweep, because its `shown == total` guard never holds against a doubled list — which leaves it on the
+pre-B132 behaviour of keeping notes longer, not on a wrong one. In the other direction a 3.3.0 OWNER's
+item-less list parses on a 3.3.1 receiver as "unknown item" for every entry, which is exactly the old
+behaviour.
+
+**Covered by** `tests/test_lc_rolltable.lua`, next to B131's own: a dismissed id reused for a
+different item, with rolls switched off so the heartbeat is the only witness — no `LC_START`, no roll
+table — and a stand-in whose table is genuinely shorter (a plain raider, whose `Vote.PruneExpiredRolls`
+has dropped the roll) not costing a valid dismissal. The second replaces the case that asserted the
+opposite. Both fail before the change; the second carries its own proof that the client is reading the
+stand-in's heartbeat rather than ignoring its sender. `luacheck` 5 warnings / 0 errors, the suite 0
+failures, and the deep soak at `KART_SOAK_SEEDS=2000` 0 failures.
+
+**What is not changed.** `LC.MayCatchUp` and B118's strict-yes rule, the "it only ever adds" rule above
+`TABLE_HEARTBEAT_SECONDS` — a heartbeat still never takes an item off anybody's screen — and
+`LC.ForgetDismissalIfReused`, which `LC.HandleRolls` and `Trade.HandleResult` still use where they name
+an item themselves.
