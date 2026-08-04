@@ -1784,6 +1784,34 @@ function LC.MayCatchUp(rollID, askerKey)
     return set[askerKey] == true
 end
 
+-- THE RULE, stated once and used by every place that asks "is this roll still askable": an item is
+-- askable for as long as it is still ON THE TABLE here, not only while its voting timer runs.
+--
+-- It used to be "deadline > now", and at the default lcVoteSeconds of 20 that made the repair path
+-- unreachable. The heartbeat ticks every 10s, so the first tick naming a roll lands at t=10 and only
+-- stamps LC.rollReqSent; the escalation to LC_ROLLS_REQ needs another ROLL_REQ_COOLDOWN on top of it,
+-- i.e. t >= 40 — on a rollID that stopped being listed at t = 20. The lootmaster ports out
+-- mid-distribution, a raider's LC_ROLLS chunk is dropped, the whisper at t=10 is refused by the
+-- stand-in (LC.MayCatchUp, B118), and by the time the group-wide ask was due there was nothing left
+-- to trigger it.
+--
+-- The council DECIDES after the timer expires, while the item is still tabbed and waiting to be
+-- assigned. That is exactly when a client that lost the item or its numbers needs repairing, so that
+-- is how long it stays askable. Accepted side effect: a missing ITEM stays catchable after voting
+-- closed too — same question for the other half, same answer (see LC.HandleStart's expired branch for
+-- what the receiver does with one).
+--
+-- "Still on the table" is deliberately not a new flag: it is exactly what Trade.ClearRollState
+-- removes — a deadline entry plus a known item — so a roll this client has forgotten cannot be
+-- heartbeat forever, and nothing has to be cleared by hand. Note what that means per client: a plain
+-- raider is not tabbing anything, so Vote.PruneExpiredRolls frees an expired roll a second after its
+-- deadline and this widening changes nothing for them. It reaches the loot owner and the council —
+-- precisely the clients that still have a decision to make.
+function LC.RollTracked(rollID)
+    return rollID ~= nil and not LC.IsTestRoll(rollID)
+        and (LC.rollDeadlines or {})[rollID] ~= nil and LC.rollItems[rollID] ~= nil
+end
+
 function LC.SendOpenRolls(target, targetKey)
     if not (IsInGroup() and target and LC.sessionActive and LC.IsLootOwner()) then return end
     local now, sent = GetTime(), 0
@@ -1791,9 +1819,9 @@ function LC.SendOpenRolls(target, targetKey)
         if sent >= ROLL_CATCHUP_MAX then break end
         local link = LC.rollItems[rollID]
         local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
-        -- Only rolls still open, and only once the item is actually known: an unresolved one would
-        -- arrive as a question mark the receiver could not repair, which is the state LC.HandleStart
-        -- exists to avoid.
+        -- Only rolls still on the table (LC.RollTracked — the one rule, stated there), and only once
+        -- the item is actually known: an unresolved one would arrive as a question mark the receiver
+        -- could not repair, which is the state LC.HandleStart exists to avoid.
         --
         -- And only to somebody who was here for it. A state request is also what a late JOINER sends,
         -- which is why this used to lean on the receiver's own Blizzard roll to sort the two apart.
@@ -1802,9 +1830,11 @@ function LC.SendOpenRolls(target, targetKey)
         -- build's snapshot -- and the rule settled on 2026-08-03 does not have a maybe in it. The cost
         -- of being wrong here is a raider who has to be told about an item by voice; the cost of
         -- guessing the other way is somebody who was not in the raid taking part in its loot.
-        if itemID and deadline > now and not LC.IsTestRoll(rollID)
+        if itemID and LC.RollTracked(rollID)
             and LC.MayCatchUp(rollID, targetKey) == true then
-            local secs = math.max(1, math.floor(deadline - now))
+            -- 0 means "voting on this one is already over" — see LC.HandleStart, which is what turns
+            -- it into tracking without a vote row rather than into a one-second window.
+            local secs = math.max(0, math.floor(deadline - now))
             LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. secs .. ":"
                 .. LC.ItemPayload(link, itemID), target)
             sent = sent + 1
@@ -1827,7 +1857,24 @@ function LC.HandleRollCatchup(payload, senderKey)
     local rollID = tonumber(payload:match("^(%d+):"))
     if not rollID then return end
     if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
+    -- LC.HandleStart re-stamps the BoP trade clock from time() on purpose (see its comment): for an
+    -- LC_START that is accurate to milliseconds, because the owner sends it from inside its own roll
+    -- handler. It is not accurate here. A catch-up arrives whenever this client got round to asking,
+    -- and since an item stays askable for as long as it is tracked (LC.RollTracked) that can be
+    -- minutes after the drop -- so dating the four-hour trade window from the repair would let the
+    -- reminder outlive the real deadline by exactly how late the repair was, and promise a hand-over
+    -- that can no longer happen.
+    --
+    -- A stamp already sitting under this ID is the one this client took when the item actually
+    -- dropped: Vote.PruneExpiredRolls frees an expired roll but deliberately leaves the stamp behind
+    -- (Trade.PruneExpiredLootStamps owns its lifetime), which is precisely the state a raider is in
+    -- when a closed item is caught up. It cannot be told apart from a PREVIOUS roll's stamp under a
+    -- reused ID -- nothing is tracked under the ID here, so PurgeStaleRoll has nothing to compare --
+    -- and that case is accepted: it is bounded by the four-hour prune and it errs towards a reminder
+    -- that ends early, which is the safe direction for a promise about a trade.
+    local lootedAt = LC.rollLootedAt and LC.rollLootedAt[rollID]
     LC.HandleStart(payload, senderKey)
+    if lootedAt then LC.rollLootedAt[rollID] = lootedAt end
 end
 
 -- ==========================================================================
@@ -1863,10 +1910,13 @@ local ROLL_REQ_COOLDOWN = 30
 local tableTicker
 local lastTableWasEmpty = true
 
+-- Everything still on the table here, by LC.RollTracked's rule — which is where the "why not the
+-- deadline" reasoning lives. The name is historical: "open" means still tracked and undecided, not
+-- "still inside its voting window".
 function LC.OpenRollIDs()
-    local now, ids = GetTime(), {}
-    for rollID, deadline in pairs(LC.rollDeadlines or {}) do
-        if not LC.IsTestRoll(rollID) and deadline > now and LC.rollItems[rollID] then
+    local ids = {}
+    for rollID in pairs(LC.rollDeadlines or {}) do
+        if LC.RollTracked(rollID) then
             ids[#ids + 1] = rollID
         end
     end
@@ -1956,14 +2006,14 @@ function LC.HandleRollRequest(payload, senderKey, sender)
     if not rollID then return end
     local link = LC.rollItems[rollID]
     local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
-    if not itemID or LC.IsTestRoll(rollID) then return end
-    local deadline = LC.rollDeadlines and LC.rollDeadlines[rollID]
-    if not deadline or deadline <= GetTime() then return end
+    if not itemID or not LC.RollTracked(rollID) then return end
+    local deadline = LC.rollDeadlines[rollID]
     -- The rule, and the only place it is decided: somebody who was not in the raid when this was
     -- announced does not get it now. Strictly "yes" -- see LC.SendOpenRolls for why a roll with no
     -- record at all is refused rather than given the benefit of the doubt.
     if LC.MayCatchUp(rollID, senderKey) ~= true then return end
-    LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. math.max(1, math.floor(deadline - GetTime()))
+    -- Same 0-means-closed convention as LC.SendOpenRolls; the receiver's half is in LC.HandleStart.
+    LC.SendLC("LC_ROLL_CATCHUP:" .. rollID .. ":" .. math.max(0, math.floor(deadline - GetTime()))
         .. ":" .. LC.ItemPayload(link, itemID), sender)
     -- The rolls go with it, whispered to the asker alone. LC.MayCatchUp above has already decided
     -- that this person was standing here when the item dropped, and the same decision governs both
@@ -3298,12 +3348,29 @@ end
 function LC.HandleRollsRequest(payload)
     local rollID = tonumber(payload:match("^(%d+)$"))
     if not rollID then return end
-    -- Nothing to give, or we are already about to give it.
-    if not (LC.rolls[rollID] and next(LC.rolls[rollID]) ~= nil) then return end
+    if not (LC.rolls[rollID] and next(LC.rolls[rollID]) ~= nil) then
+        -- Nothing to give -- and somebody else is asking for a table we are missing too. The answer
+        -- is a group broadcast we will receive anyway, so push our own ask out by a full cooldown
+        -- instead of adding a duplicate question to the same burst. That matters now that a roll
+        -- stays askable for as long as it is tracked (LC.RollTracked): a table NOBODY in the raid
+        -- still holds would otherwise have every client asking the group every ROLL_REQ_COOLDOWN for
+        -- the rest of the round, forever, with no answer possible.
+        --
+        -- Only pushed FORWARD, never created: LC.HandleTable also reads the presence of this stamp as
+        -- "the owner has already had its turn" and escalates on the strength of it. Somebody else's
+        -- request says nothing about whether OUR owner has been asked yet.
+        LC.rollReqSent = LC.rollReqSent or {}
+        if LC.rollReqSent[rollID] then LC.rollReqSent[rollID] = GetTime() end
+        return
+    end
+    -- We are already about to give it.
     if LC.rollsAnswerAt[rollID] then return end
 
-    LC.rollsAnswerAt[rollID] = GetTime() + SelfAnswerSlot()
-    C_Timer.After(SelfAnswerSlot(), function()
+    -- One walk of the roster and one identity resolution per member, not two: the slot is decided
+    -- once and the stamp is a plain "an answer of ours is pending", which is all anything reads.
+    local slot = SelfAnswerSlot()
+    LC.rollsAnswerAt[rollID] = true
+    C_Timer.After(slot, function()
         -- Somebody faster already answered; LC.HandleRolls clears this when a table lands.
         if not LC.rollsAnswerAt[rollID] then return end
         LC.rollsAnswerAt[rollID] = nil
@@ -3874,6 +3941,24 @@ function LC.HandleStart(payload, senderKey)
     LC.rollAnnounced[rollID] = true
     LC.rollAnnouncedBy[rollID] = senderKey
     AutoPassAnnounced(rollID)
+
+    -- secs == 0 is a catch-up for an item whose voting time has already run out — reachable since a
+    -- roll stays askable for as long as it is tracked rather than only while its timer runs (see
+    -- LC.RollTracked). It cannot be handled as "one second left": that would flash a vote row up and
+    -- have Vote.PruneExpiredRolls tear the whole roll back down a tick later, taking the numbers that
+    -- arrive with it — the repair undoing itself.
+    --
+    -- What a client actually needs from a closed item is to TRACK it: the link, the roll table that
+    -- follows this message, and — if it is council — the tab the decision is made on, since the
+    -- council scores AFTER the timer expires. What it must not be handed is a vote it can no longer
+    -- cast. So the deadline is set into the past and the vote row is skipped; a council member gets
+    -- the item on the panel with its timer already run out, which is exactly what the clients that
+    -- were there are looking at.
+    if secs == 0 then
+        LC.rollDeadlines[rollID] = GetTime()
+        if LC.IsCouncil() then KART.LC.Council.ShowCouncilPanel(rollID, 0) end
+        return
+    end
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

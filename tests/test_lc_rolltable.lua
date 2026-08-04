@@ -249,6 +249,73 @@ do
     T.truthy(blind.KART.LC.rolls[920] ~= nil, "and a peer that still holds the table answers it")
 end
 
+-- ...at the DEFAULT vote window, which is the only setting that matters -------------------------
+-- The case above widens lcVoteSeconds to 90 to look at recovery minutes in. At the default 20 the
+-- repair could not fire at all, and every raid runs the default: the heartbeat ticks every 10s, so
+-- the first tick naming the roll lands at t=10 and only stamps rollReqSent; the escalation needs
+-- another 30s on top, by which time the roll had dropped out of LC.OpenRollIDs at t=20 and nothing
+-- was left to trigger from. An item is now askable for as long as it is still on the table
+-- (LC.RollTracked), which is precisely the window in which the council is scoring it.
+do
+    local sim = F.NewRaid()
+    local blind = sim.byName.Corvin
+
+    F.Drop(sim, 930, F.GLOVES)
+    KARTTEST.AdvanceTime(0.5)
+    RaidSim.As(blind, function() blind.KART.LC.rolls[930] = nil end)
+    T.eq(blind.KART.LC.rolls[930], nil, "the client that lost the table has no rolls for the item")
+
+    -- Same handover as above: the announcer goes, the stand-in has no roster snapshot for the item
+    -- and refuses the whispered ask (B118), so only the group-wide escalation can repair this.
+    RaidSim.Leave(sim, "Bramor")
+    local stand = sim.byName.Merrit
+    RaidSim.As(stand, function() stand.env.KART_Settings.lcRollsEnabled = true end)
+    RaidSim.RosterUpdate(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(70) -- well past the 20s vote window the old predicate stopped at
+
+    T.truthy(#RaidSim.Sent(sim, "LC_ROLLS_REQ") >= 1,
+        "an item still on the table is asked about after its voting timer has run out")
+    T.deep_eq(blind.KART.LC.rolls[930], stand.KART.LC.rolls[930],
+        "and a peer repairs it at the default vote window, not only at a stretched one")
+end
+
+-- A missing ITEM is catchable after voting closed too, and arrives without a vote row -------------
+-- The accepted other half of the same decision. A raider who is not on the council stops tracking a
+-- roll a second after its deadline (Vote.PruneExpiredRolls), so this is what a lost LC_START looks
+-- like from the outside once the timer is gone. The catch-up must not answer it with a one-second
+-- vote window -- the row would flash up and the prune sweep would tear the whole repair back down a
+-- tick later, numbers included.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    -- Held back only long enough to see the roll actually gone. Without this the repair lands on the
+    -- same heartbeat tick that the expiry sweep runs on, and the test could not tell a client that
+    -- lost the item from one that never did.
+    RaidSim.Blackhole(sim, "LC_ROLL_CATCHUP")
+    F.Drop(sim, 931, F.GLOVES)
+    local lootedAt = raider.KART.LC.rollLootedAt[931]
+    KARTTEST.AdvanceTime(25) -- past the default 20s window: the plain raider has dropped the roll
+    T.eq(raider.KART.LC.rollItems[931], nil, "a plain raider stops tracking a roll once voting closes")
+    T.eq(F.HasVoteRow(raider, 931), false, "and has no row for it")
+
+    RaidSim.Deliver(sim, "LC_ROLL_CATCHUP")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(35) -- past ROLL_REQ_COOLDOWN, then the next heartbeat, ask and answer
+
+    T.truthy(raider.KART.LC.rollItems[931] ~= nil, "the item is handed back while it is still on the table")
+    T.deep_eq(raider.KART.LC.rolls[931], lm.KART.LC.rolls[931], "with the numbers that go with it")
+    T.eq(F.HasVoteRow(raider, 931), false, "and without a vote on something that closed")
+    T.truthy(raider.KART.LC.rollDeadlines[931] <= GetTime(),
+        "its deadline stays in the past rather than being reopened")
+    -- A repair minutes after the drop must not restart the four-hour BoP trade window; the stamp the
+    -- client took when the item really dropped outlives the roll for exactly this reason.
+    T.eq(raider.KART.LC.rollLootedAt[931], lootedAt,
+        "and its trade clock still runs from the drop, not from the repair")
+end
+
 -- ...and exactly one peer answers ---------------------------------------------------------------
 -- Every client in the raid holds this table. Answering all at once is the message storm this whole
 -- rework exists to remove, so the answer is spread by each client's position in the sorted roster and
