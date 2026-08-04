@@ -1762,6 +1762,16 @@ function LC.ItemPayload(link, itemID)
     return itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
 end
 
+-- The other direction, for the handlers that read one of those payloads back. The bare id is what
+-- everything downstream compares on -- PurgeStaleRoll, the dismissal note (LC.rollDismissed), the
+-- stale-result guards -- because it is the only part two clients can be relied on to agree about: the
+-- same item reaches them as different STRINGS, since bonus ids differ per drop. "" when the payload
+-- carries no item at all, which is what a pre-3.3.1 sender or a truncated string leaves behind.
+function LC.PayloadItemID(itemPart)
+    itemPart = itemPart or ""
+    return itemPart:match("^item:(%d+)") or itemPart:match("^(%d+)$") or ""
+end
+
 -- Who was in the raid when this roll was announced, by identity key. Written by the loot owner only,
 -- at the moment it announces, and it is the whole of the rule the maintainer settled on 2026-08-03:
 --
@@ -1868,12 +1878,25 @@ function LC.HandleRollCatchup(payload, senderKey)
     local rollID = tonumber(payload:match("^(%d+):"))
     if not rollID then return end
     if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
-    -- Nor one we put away ourselves (LC.rollDismissed). We stopped asking the moment the tab was
-    -- closed, but an answer to the LAST ask can still be in flight, and taking it would reopen the
-    -- panel for an item this client is finished with -- the exact thing the flag exists to stop.
-    -- Refusing here is also what keeps PurgeStaleRoll's clear of the flag honest: everything that DOES
-    -- reach LC.HandleStart under a dismissed rollID is then a genuinely new roll.
-    if LC.rollDismissed[rollID] then return end
+    -- Nor one we put away ourselves (LC.rollDismissed) -- while it is still the item we put away. We
+    -- stopped asking the moment the tab was closed, but an answer to the LAST ask can still be in
+    -- flight, and taking it would reopen the panel for an item this client is finished with -- the
+    -- exact thing the note exists to stop.
+    --
+    -- The note remembers WHICH item, so a repeat and a REUSE can be told apart right here (B132):
+    -- Blizzard hands the same rollID to an unrelated item within seconds on trash, and nobody ever
+    -- dismissed that one. A different item is therefore taken, and PurgeStaleRoll inside
+    -- LC.HandleStart drops the note on the way through -- which is what keeps that clear honest:
+    -- everything reaching LC.HandleStart under a dismissed rollID is a genuinely new roll.
+    --
+    -- Refused whenever the two cannot be compared -- a dismissal of an item this client never
+    -- resolved (stored as `true`), or a payload carrying no item -- which is the id-only refusal this
+    -- used to make in every case.
+    local dismissed = LC.rollDismissed[rollID]
+    if dismissed then
+        local itemID = LC.PayloadItemID(payload:match("^%d+:%d+:?(.*)$"))
+        if itemID == "" or type(dismissed) ~= "string" or dismissed == itemID then return end
+    end
     -- LC.HandleStart re-stamps the BoP trade clock from time() on purpose (see its comment): for an
     -- LC_START that is accurate to milliseconds, because the owner sends it from inside its own roll
     -- handler. It is not accurate here. A catch-up arrives whenever this client got round to asking,
@@ -1943,12 +1966,34 @@ local ROLL_REQ_COOLDOWN = 30
 -- the clients that still have to be repairable.
 --
 -- Runtime-only, like LC.rollReqSent and LC.rollsAnswerAt beside it and for the same kind of reason:
--- after a reload this client has no panel open and nothing on screen it put away, so a restored flag
+-- after a reload this client has no panel open and nothing on screen it put away, so a restored note
 -- could only ever refuse a repair that should have happened. Deliberately NOT part of
 -- Trade.ClearRollState's per-roll state either -- it has to OUTLIVE the roll it names, which is its
 -- entire job -- so it is in neither of the two lists tests/test_lc_persistedtables.lua keeps in step,
 -- and belongs in neither.
+--
+-- [rollID] = the itemID that was dismissed, or `true` when this client never resolved what it was
+-- holding ("???"). WHAT was put away, not merely that something was: a raider dismisses an ITEM and
+-- the rollID is only how it was addressed, and Blizzard hands that number to an unrelated item within
+-- seconds on trash (B132). Remembering the number alone left this client refusing the NEXT item under
+-- it as well -- deaf to a drop nobody here ever decided about. Everything that reads this compares on
+-- truthiness for the gate and on the item for the question "is this still the roll I closed".
 LC.rollDismissed = LC.rollDismissed or {}
+
+-- The dismissal is about an item, so any message that names a DIFFERENT item under a dismissed
+-- rollID is proof Blizzard reused the number: the roll that was put away no longer exists and the
+-- note about it must not gate the new one (B132). Called from the paths that carry both halves --
+-- LC.HandleRolls and Trade.HandleResult; a roll START clears the note outright (PurgeStaleRoll), and
+-- the catch-up decides for itself because it has to REFUSE the other case rather than just pass it.
+--
+-- Silent when there is nothing to compare: a payload with no item, or a dismissal of an item this
+-- client never resolved, leaves the note exactly as it was.
+function LC.ForgetDismissalIfReused(rollID, itemID)
+    local dismissed = rollID and LC.rollDismissed[rollID]
+    if type(dismissed) == "string" and itemID and itemID ~= "" and dismissed ~= itemID then
+        LC.rollDismissed[rollID] = nil
+    end
+end
 
 local tableTicker
 local lastTableWasEmpty = true
@@ -2009,7 +2054,7 @@ function LC.HandleTable(payload, senderKey, sender)
         LC.diag.refusedSender = LC.diag.refusedSender + 1
         return
     end
-    local _, list = payload:match("^(%d+):?(.*)$")
+    local total, list = payload:match("^(%d+):?(.*)$")
 
     -- Asked for one at a time, only from the owner, and at most once every ROLL_REQ_COOLDOWN per
     -- roll -- so a heartbeat every ten seconds cannot become a request every ten seconds while an
@@ -2017,8 +2062,11 @@ function LC.HandleTable(payload, senderKey, sender)
     -- itself into another burst.
     LC.rollReqSent = LC.rollReqSent or {}
     local now = GetTime()
+    local listed, shown = {}, 0
     for id in tostring(list):gmatch("%d+") do
         local rollID = tonumber(id)
+        listed[rollID] = true
+        shown = shown + 1
         -- Two reasons to ask, and the second is new: the item itself is missing, or the item is here
         -- but its roll table never arrived. The table travels as one message for the whole raid, so
         -- losing it costs everybody's numbers at once -- which is exactly why it has to be askable.
@@ -2030,6 +2078,11 @@ function LC.HandleTable(payload, senderKey, sender)
         -- leave this client asking the raid for the numbers of something it wants nothing to do with,
         -- every thirty seconds for the rest of the round -- the same pointless traffic, just with
         -- nothing on screen to notice it by.
+        --
+        -- Gated on the ID alone, unavoidably: the heartbeat names ids and nothing else, so this is the
+        -- one reader that cannot tell a repeat of the roll we closed from a REUSE of its number
+        -- (B132). What keeps that from lasting is everything that does see an item -- a start, a
+        -- catch-up, a roll table, a result -- plus the sweep below.
         if (needItem or needRolls) and not LC.rollDismissed[rollID]
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             local askedBefore = LC.rollReqSent[rollID] ~= nil
@@ -2042,6 +2095,31 @@ function LC.HandleTable(payload, senderKey, sender)
             else
                 LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
             end
+        end
+    end
+
+    -- A dismissal the owner no longer lists is a note about a roll that has left the table, so it
+    -- goes -- and it has to, or it gates the next item Blizzard hands that same number (B132).
+    --
+    -- This is NOT the deletion-from-silence the rule above the constants forbids, and the difference
+    -- is the whole reason it is allowed to stand here: nothing this client holds is dropped. Asking is
+    -- driven ENTIRELY by what the heartbeat lists, so forgetting a note for an id nobody lists cannot
+    -- make this client ask for anything -- it only stops a stale note from blocking a later reuse of
+    -- that id.
+    --
+    -- Only against a list that can stand for the whole table, though. An EMPTY one is what a stand-in
+    -- sends before it has anything of its own (see LC.EnsureTableTicker's OnAccept call), and a
+    -- TRUNCATED one is short by construction (TABLE_MAX_IDS) -- reading either as "everything else is
+    -- gone" would forget notes for rolls that are still open, and the owner's next heartbeat would put
+    -- the tab this client closed back on its screen.
+    --
+    -- A stand-in's SHORT list is still short in a way nothing here can see: it names its own table,
+    -- which after a handover holds less than the previous owner's. Accepted, and bounded -- the worst
+    -- of it is one closed tab coming back once, if the previous owner ever heartbeats that roll again,
+    -- and closing it a second time notes it again.
+    if shown > 0 and shown == tonumber(total) then
+        for rollID in pairs(LC.rollDismissed) do
+            if not listed[rollID] then LC.rollDismissed[rollID] = nil end
         end
     end
 end
@@ -3345,6 +3423,13 @@ function LC.HandleRolls(payload, senderKey)
     -- nothing left for us to add.
     LC.rollsAnswerAt[rollID] = nil
 
+    -- Read for the same reason and just as early: a table drawn for a DIFFERENT item than the one we
+    -- dismissed under this id names a roll nobody here ever decided about, whether or not we go on to
+    -- store the numbers (B132). This is the message that repairs the case in practice -- it reaches
+    -- the whole raid, so a client that missed the announcement hears the reuse from it and starts
+    -- asking for the item again on the next heartbeat.
+    LC.ForgetDismissalIfReused(rollID, itemID)
+
     local rolls = {}
     for key, value in list:gmatch("([^=,]+)=(%d+)") do rolls[key] = tonumber(value) end
 
@@ -3488,8 +3573,9 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- is a different item, Blizzard having reused the integer. Cleared before every guard below,
     -- because "nothing tracked under this ID" is exactly the state a dismissal leaves behind and the
     -- staleness checks further down cannot see this case at all. Both callers are roll starts
-    -- (LC.OnStartLootRoll, LC.HandleStart), and a catch-up never gets here for a dismissed roll --
-    -- LC.HandleRollCatchup refuses those before it hands over.
+    -- (LC.OnStartLootRoll, LC.HandleStart), and a catch-up only reaches them under a dismissed rollID
+    -- when it names a DIFFERENT item -- LC.HandleRollCatchup still refuses a repeat of the item that
+    -- was dismissed, and a different one IS the reuse this clear exists for (B132).
     LC.rollDismissed[rollID] = nil
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
@@ -4002,7 +4088,7 @@ function LC.HandleStart(payload, senderKey)
     itemPart = itemPart or ""
     -- The bare id is what everything downstream compares on (PurgeStaleRoll, the duplicate ordinal,
     -- the stale-result guards); the string is what the item is REBUILT from.
-    local itemID = itemPart:match("^item:(%d+)") or itemPart:match("^(%d+)$") or ""
+    local itemID = LC.PayloadItemID(itemPart)
     local itemString = (itemPart:match("^item:") and itemPart)
         or (itemID ~= "" and ("item:" .. itemID))
         or nil

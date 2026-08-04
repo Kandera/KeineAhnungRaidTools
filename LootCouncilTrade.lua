@@ -996,6 +996,12 @@ function Trade.HandleResult(payload, senderKey)
     local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:[01]:(.*)$") or ""
     deliberate = deliberate == "1"
 
+    -- A result naming a different item than the one this client dismissed under the same id is proof
+    -- Blizzard reused the number, so the note is about a roll that no longer exists and must not gate
+    -- the new one (B132). Read before the collision guard below, which asks the opposite question --
+    -- what we still TRACK -- and a dismissal is precisely the state where we track nothing.
+    LC.ForgetDismissalIfReused(rollID, itemID)
+
     -- Blizzard's rollID can get reused for a genuinely different item before every client has
     -- finished with the first one (see Trade.AnnounceResult) — if we're still tracking a real
     -- item for this rollID and it doesn't match what this result is actually for, this result

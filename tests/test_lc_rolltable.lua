@@ -354,6 +354,90 @@ do
     T.eq(council.KART.LC.rollItems[940], nil, "and the item stays untracked")
 end
 
+-- ...and what it put away is an ITEM, not the number the item arrived under (B132) ------------------
+-- Blizzard hands the same rollID to an unrelated drop within seconds on trash. The note above was kept
+-- by number alone, so a council member who closed one item's tab was then deaf to the NEXT item under
+-- that number: the heartbeat gate refused to ask for it and an arriving catch-up was refused on top of
+-- that, for the rest of the round. The client that missed the announcement is the one this costs, and
+-- it is exactly the client the whole heartbeat exists for.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 950, F.GLOVES)
+    KARTTEST.AdvanceTime(25) -- voting closed, the item still on the owner's table
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(950) end)
+    T.eq(council.KART.LC.rollItems[950], nil, "the council member is finished with the gloves")
+
+    -- The number comes back for a weapon, and Blizzard raises no roll for it on this one client --
+    -- dead, released or out of range -- so the owner's announcement is the only way it could learn of
+    -- the drop at all. Blackholing that broadcast costs the rest of the raid nothing: every other
+    -- client has its own START_LOOT_ROLL and tracks the weapon from that.
+    RaidSim.Blackhole(sim, "LC_START")
+    F.Drop(sim, 950, F.WEAPON, { noRollFor = { Merrit = true } })
+    RaidSim.Deliver(sim, "LC_START")
+    T.eq(council.KART.LC.rollItems[950], nil, "and hears nothing about the weapon that reuses its number")
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(45) -- heartbeats, and ROLL_REQ_COOLDOWN on top of them
+
+    T.truthy(tostring(council.KART.LC.rollItems[950]):match("item:" .. F.WEAPON),
+        "the repair reaches it anyway, for the item it never dismissed")
+    T.deep_eq(council.KART.LC.rolls[950], lm.KART.LC.rolls[950], "with the numbers that go with it")
+end
+
+-- The two halves of that note, side by side ---------------------------------------------------------
+-- A catch-up naming the item this client put away is an answer to an ask made before the tab was
+-- closed, and taking it would put the tab straight back on screen. One naming a different item is a
+-- roll nobody here has decided anything about. Handed over by hand, because the two differ in nothing
+-- but the item in the payload.
+--
+-- On the client Blizzard raised no roll for, which is who a catch-up is written for in the first
+-- place: with a roll of its own the item comes back off GetLootRollItemLink whatever the payload said,
+-- and the two cases would be indistinguishable here.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 951, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(951) end)
+
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRollCatchup("951:15:item:" .. F.GLOVES, lm.guid)
+    end)
+    T.eq(council.KART.LC.rollItems[951], nil, "the item it dismissed is still refused")
+
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRollCatchup("951:15:item:" .. F.WEAPON, lm.guid)
+    end)
+    T.truthy(tostring(council.KART.LC.rollItems[951]):match("item:" .. F.WEAPON),
+        "and a different item under the same number is taken")
+end
+
+-- A note for a roll the owner no longer lists is forgotten -------------------------------------------
+-- The other narrowing: a dismissal outlives the roll it names on purpose, but once the owner's
+-- heartbeat stops naming that rollID the roll has left the table and the note can only ever block a
+-- later reuse of the number. Forgetting it is not a deletion from silence -- nothing this client holds
+-- is dropped, and asking is driven entirely by what the heartbeat DOES list.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 952, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(952) end)
+    T.truthy(council.KART.LC.rollDismissed[952] ~= nil, "the closed tab is noted")
+
+    -- The owner is finished with it too, so its next heartbeat names an item that is not this one.
+    RaidSim.As(lm, function() lm.KART.LC.Council.CloseCouncilTab(952) end)
+    F.Drop(sim, 953, F.PLATE_CHEST)
+    KARTTEST.AdvanceTime(12) -- one heartbeat, naming 953 and nothing else
+
+    T.eq(council.KART.LC.rollDismissed[952], nil,
+        "and dropped once the owner stops listing the roll it was about")
+end
+
 -- ...and exactly one peer answers ---------------------------------------------------------------
 -- Every client in the raid holds this table. Answering all at once is the message storm this whole
 -- rework exists to remove, so the answer is spread by each client's position in the sorted roster and

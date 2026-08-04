@@ -337,12 +337,19 @@ function Council.CloseCouncilTab(rollID)
     -- whose deadline has passed). Drop the row explicitly, or closing a tab leaves a permanently
     -- stuck "???" row with live vote buttons for a roll everyone else has finished with.
     LC.Vote.RemoveVoteListItem(rollID)
+    -- WHAT is being put away, read before ClearRollState below takes the link with it. A raider
+    -- dismisses an ITEM and the rollID is only how it was addressed, so the number on its own cannot
+    -- tell the roll they closed from the unrelated item Blizzard hands that same number seconds later
+    -- (B132). `true` when the item was never resolved here ("???"): unknown, and every reader falls
+    -- back to refusing on the id alone, exactly as they did before.
+    local link = LC.rollItems[rollID]
+    local dismissedItem = (type(link) == "string" and link:match("item:(%d+)")) or true
     LC.Trade.ClearRollState(rollID)
     -- Every caller of this function is somebody deciding they are done with the item, so this is where
     -- the decision is recorded (see LC.rollDismissed for why it has to be, and for the list of removals
     -- that deliberately are NOT dismissals). After ClearRollState rather than before: that clears the
-    -- state belonging to the roll, and this flag deliberately outlives it.
-    LC.rollDismissed[rollID] = true
+    -- state belonging to the roll, and this note deliberately outlives it.
+    LC.rollDismissed[rollID] = dismissedItem
 
     if LC.activeRollID == rollID then
         if LC.councilTabs[1] then
