@@ -132,8 +132,10 @@ function F.NewSplitRaid()
 end
 
 -- One item drops. Blizzard raises START_LOOT_ROLL on every eligible client independently; the loot
--- owner's handler is what broadcasts LC_START to the rest, so running them in this order is the
--- realistic case and also the awkward one (peers hear about the roll before their own event).
+-- owner's handler collects the item into the batch that announces it to the rest (LC_DROP, half a
+-- second later), so running them in this order is the realistic case and also the awkward one. Note
+-- that this no longer means peers hear about the roll before their own event: nothing goes out until
+-- the collection window closes, so a caller that wants the announcement has to advance the clock.
 function F.Drop(sim, rollID, itemID, opts)
     opts = opts or {}
     -- noRollFor marks the clients Blizzard never raised this roll on. It has to reach the API stub,

@@ -112,8 +112,8 @@ relevanceRollFrame:SetScript("OnEvent", function(_, _, rollID)
     -- been rolled while its vote row can still be open for minutes, which is the entire reason this
     -- snapshot exists in the first place.
     -- LC.rollItems, not LC.voteListRolls (B42). A roll reaches the vote list one round trip after
-    -- the local START_LOOT_ROLL on any client that is not the loot owner -- LC_START has to
-    -- arrive first -- and by then Auto-Pass has already blanked GetLootRollItemInfo. On a boss
+    -- the local START_LOOT_ROLL on any client that is not the loot owner -- the owner's LC_DROP has
+    -- to arrive first -- and by then Auto-Pass has already blanked GetLootRollItemInfo. On a boss
     -- dropping several items each roll's snapshot was therefore deleted while the NEXT one was
     -- being handled, so only the last item kept Blizzard's verdict and the rest fell through to
     -- the armor rule -- which answers nil for weapons and jewellery. LC.rollItems is the
@@ -147,7 +147,8 @@ end
 -- see the snapshot's own comment for why reading it live here would usually be too late. The armor
 -- fallback beneath that exists for the rest: /kart add items, which never had a Blizzard roll at
 -- all, and clients that missed the roll through death or distance and only learned of the item
--- through LC_START. That path cannot judge weapons, so it returns nil for them rather than guessing.
+-- through the LC_DROP announcement. That path cannot judge weapons, so it returns nil for them
+-- rather than guessing.
 local function IsIrrelevantForMe(rollID, itemLink)
     -- Blizzard's canNeed, from the snapshot or live, in that order (see above for why live is
     -- only a fallback).

@@ -523,9 +523,14 @@ end
 --
 -- Loot drops at the END of an encounter, which is exactly the window this is about, so the top half
 -- of this list is the loot flow itself.
--- LC_START and LC_MANUAL_START are no longer SENT (a drop travels as LC_DROP), but LC_ROLL_CATCHUP
--- still routes through LC.HandleStart, and an entry that triggers nothing is cheaper than one that
--- turns out to be missing later.
+-- LC_START and LC_MANUAL_START are no longer sent by any shipping version -- a drop travels as
+-- LC_DROP -- and their entries here and in TOKEN_PRIO below are pure ROLLOUT TOLERANCE: this table is
+-- read by the SENDER, keyed on the token it is about to put on the wire, so nothing in this build can
+-- reach either line. What can is a client still on the previous build sending one at us, or a rollback
+-- to it, and then both tables have to already say what those messages are worth. (LC_ROLL_CATCHUP
+-- routing through LC.HandleStart is a receive-side fact and is NOT the reason: it has its own key.)
+-- Cheaper than an entry that turns out to be missing later; delete them once no build that sends them
+-- can still be in a raid.
 local GUARANTEED_TOKENS = {
     LC_DROP = true,
     LC_START = true, LC_MANUAL_START = true, LC_ROLL_CATCHUP = true,
@@ -1741,8 +1746,8 @@ end
 
 -- The rolls still open, listed to one client that has just asked for the raid's state (B66).
 --
--- LC_START is announced once, inside the loot owner's own START_LOOT_ROLL handler, and never
--- re-requested. A client is deaf at that instant for two ordinary reasons -- it is still coming back
+-- A drop is announced once, in the LC_DROP the loot owner sends when the collection window closes,
+-- and never re-requested. A client is deaf at that instant for two ordinary reasons -- it is still coming back
 -- from a reload, or Blizzard's chat throttle swallowed the message -- and it then had no way back to
 -- that item at all: no vote row, no answer from it, and a council waiting on somebody who never saw
 -- the thing.
@@ -1903,8 +1908,9 @@ function LC.HandleRollCatchup(payload, senderKey)
         if itemID == "" or type(dismissed) ~= "string" or dismissed == itemID then return end
     end
     -- LC.HandleStart re-stamps the BoP trade clock from time() on purpose (see its comment): for an
-    -- LC_START that is accurate to milliseconds, because the owner sends it from inside its own roll
-    -- handler. It is not accurate here. A catch-up arrives whenever this client got round to asking,
+    -- announcement that is accurate to within the collection window, because the owner sends LC_DROP
+    -- at most DROP_COLLECT (half a second) after the loot event, and the transport adds a little more.
+    -- It is not accurate here. A catch-up arrives whenever this client got round to asking,
     -- and since an item stays askable for as long as it is tracked (LC.RollTracked) that can be
     -- minutes after the drop -- so dating the four-hour trade window from the repair would let the
     -- reminder outlive the real deadline by exactly how late the repair was, and promise a hand-over
@@ -3897,8 +3903,8 @@ local START_ROLL_RETRY_MAX    = 2
 --  B63: one broadcaster, and Auto-Pass that did not depend on it
 -- ==========================================================================
 --
--- LC_START for a real drop is sent from exactly one place, inside the loot owner's own
--- START_LOOT_ROLL handler. The owner is subject to the same conditions as everyone else -- out of
+-- A real drop is announced from exactly one place, the LC_DROP the loot owner's own START_LOOT_ROLL
+-- handler collects the item into. The owner is subject to the same conditions as everyone else -- out of
 -- range, dead, released, ineligible -- and there is no second broadcaster. Auto-Pass, meanwhile, ran
 -- on every other client whether or not the owner had acted, so the whole raid passed on an item
 -- nobody had force-won: the item went to whichever raider is NOT running KART, or to nobody at all,
@@ -4400,8 +4406,8 @@ end
 -- halves of one message therefore share one verdict about what the message SAID, and keep their own
 -- answers about who may say it, which is the design and not an oversight.
 function LC.HandleStart(payload, senderKey)
-    -- Only the loot owner broadcasts LC_START (see OnStartLootRoll) — reject forgeries that
-    -- would pop fake vote windows on every client.
+    -- Only the loot owner announces a drop (see OnStartLootRoll; it arrives inside LC_DROP, or as a
+    -- catch-up for one item) — reject forgeries that would pop fake vote windows on every client.
     if not LC.IsSenderLootOwner(senderKey) then
         LC.diag.refusedSender = LC.diag.refusedSender + 1
         return true
@@ -4431,16 +4437,16 @@ function LC.HandleStart(payload, senderKey)
     LC.rollNotInOurBags[rollID] = true
 
     -- Same BoP trade clock as LC.OnStartLootRoll, for clients that never got their own
-    -- START_LOOT_ROLL (dead, out of range, ineligible). LC_START goes out inside the owner's own
-    -- START_LOOT_ROLL handler, so it lands within a fraction of a second of the loot — accurate
-    -- enough for a 4-hour window.
+    -- START_LOOT_ROLL (dead, out of range, ineligible). LC_DROP goes out at most DROP_COLLECT after
+    -- the owner's own roll handler collected the item, so it lands within about a second of the
+    -- loot — accurate enough for a 4-hour window.
     --
     -- Overwrites unconditionally (this used to keep an existing stamp as "closer to the truth").
     -- The stamp now deliberately outlives the roll it belonged to (see Trade.PruneExpiredLootStamps)
     -- and Blizzard reuses rollIDs, so a stamp already sitting under this ID may well be the PREVIOUS
     -- roll's — PurgeStaleRoll above can only detect that when it still has the old link to compare.
     -- Keeping it would date a brand-new roll from the old one; the accuracy it bought in the normal
-    -- case was milliseconds, since the owner sends LC_START from inside its own roll handler.
+    -- case was under a second, since the owner sends LC_DROP within the collection window.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
 
@@ -4787,6 +4793,10 @@ KASC:RegisterMessage("LC_DROP", { payload = true, group = true, enabled = lcEnab
     function(payload, ctx) LC.HandleDrop(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_START", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleStart(payload, ctx:Key()) end)
+-- No shipping version SENDS this any more (/kart add travels as LC_DROP with kind "m"), and
+-- LC.HandleManualStart is reached through LC.HandleDrop instead. The registration stays as rollout
+-- tolerance, for the same reason as the GUARANTEED_TOKENS entry: a client on the previous build can
+-- still put one on the wire, and dropping it would take the item off this client's screen entirely.
 KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleManualStart(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CONFIG", { payload = true, group = true, enabled = lcEnabled },

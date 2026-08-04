@@ -18,7 +18,7 @@ end
 
 
 -- =====================================================================
---  Vote List  (shown to non-council raiders via LC_START message)
+--  Vote List  (shown to non-council raiders off the LC_DROP announcement)
 -- =====================================================================
 -- Every currently active roll gets its own row, all visible at once, so a raider can compare
 -- everything that's dropped before deciding how to vote on each individually (e.g. BIS on one
@@ -1097,7 +1097,7 @@ end
 -- the item. Rolls have LC_ROLL_CATCHUP and history has its own catch-up; votes had neither.
 --
 -- Asked by the LOOT OWNER and nobody else, once per roll -- the same "exactly one broadcaster" rule
--- LC_START follows, so N council members cannot turn this into N rounds. Everyone who voted answers,
+-- the LC_DROP announcement follows, so N council members cannot turn this into N rounds. Everyone who voted answers,
 -- which is at most the votes that already exist and never more, and the answer goes to the whole
 -- raid rather than to the asker: every client's tally converges, not just the one that noticed.
 local VOTE_CATCHUP_LEAD   = 4    -- seconds before the window closes; long enough for the answers
