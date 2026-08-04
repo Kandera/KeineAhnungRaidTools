@@ -415,27 +415,88 @@ do
         "and a different item under the same number is taken")
 end
 
--- A note for a roll the owner no longer lists is forgotten -------------------------------------------
--- The other narrowing: a dismissal outlives the roll it names on purpose, but once the owner's
--- heartbeat stops naming that rollID the roll has left the table and the note can only ever block a
--- later reuse of the number. Forgetting it is not a deletion from silence -- nothing this client holds
--- is dropped, and asking is driven entirely by what the heartbeat DOES list.
+-- ...and the heartbeat alone is enough, with nothing else on the wire that names the item (B132) -----
+-- The case above is repaired in practice by LC_ROLLS: the roll table names its item, so a client that
+-- missed the announcement learns of the reuse from it. A raid can simply have rolls switched off, and
+-- then the heartbeat is the ONLY message that reaches this client at all -- so it has to carry the
+-- item itself. While it named nothing but numbers, this client was deaf to the new drop for the rest
+-- of the round: its own note refused the ask, and nothing else was ever going to tell it otherwise.
 do
     local sim, lm = F.NewRaid()
     local council = sim.byName.Merrit
 
-    F.Drop(sim, 952, F.GLOVES)
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 960, F.GLOVES)
+    KARTTEST.AdvanceTime(25) -- voting closed, the item still on the owner's table
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(960) end)
+    T.truthy(council.KART.LC.rollDismissed[960] ~= nil, "the council member is finished with the gloves")
+
+    -- Same shape as the case above: the number comes back for a weapon and Blizzard raises no roll for
+    -- it here, so the owner is this client's only possible source for the drop -- and its announcement
+    -- is lost.
+    RaidSim.Blackhole(sim, "LC_START")
+    F.Drop(sim, 960, F.WEAPON, { noRollFor = { Merrit = true } })
+    RaidSim.Deliver(sim, "LC_START")
+    T.eq(council.KART.LC.rollItems[960], nil, "and hears nothing about the weapon that reuses its number")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:"), 0, "with no roll table anywhere to learn the reuse from")
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(45) -- heartbeats, and ROLL_REQ_COOLDOWN on top of them
+
+    T.eq(council.KART.LC.rollDismissed[960], nil,
+        "the heartbeat naming a DIFFERENT item under that number is what drops the note")
+    T.truthy(tostring(council.KART.LC.rollItems[960]):match("item:" .. F.WEAPON),
+        "and the item nobody here ever dismissed reaches it, off the heartbeat alone")
+end
+
+-- A stand-in's shorter table is not evidence a dismissal is over -------------------------------------
+-- The reverse of the rule that used to stand here. Absence was read as "the roll has left the table,
+-- so the note about it can go" -- and a stand-in's table is legitimately SHORTER than the previous
+-- owner's, because it holds only what this client itself announced. Reading that as "everything else
+-- is gone" forgets a note that is still valid, and the previous owner's next heartbeat then puts the
+-- closed tab back on screen. The note now goes only when an item is actually named under that number,
+-- so a list that simply does not mention it says nothing at all.
+do
+    local sim = F.NewRaid()
+    local council = sim.byName.Merrit
+    -- The raid leader is a plain RAIDER here, which is the shortest table there is: nobody tabs
+    -- anything for them, so Vote.PruneExpiredRolls frees a roll a second after its deadline. That is
+    -- the stand-in this guild actually gets when the lootmaster ports out mid-distribution.
+    RaidSim.Promote(sim, "Alric")
+
+    F.Drop(sim, 970, F.GLOVES)
     KARTTEST.AdvanceTime(1)
-    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(952) end)
-    T.truthy(council.KART.LC.rollDismissed[952] ~= nil, "the closed tab is noted")
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(970) end)
+    T.truthy(council.KART.LC.rollDismissed[970] ~= nil, "the closed tab is noted")
 
-    -- The owner is finished with it too, so its next heartbeat names an item that is not this one.
-    RaidSim.As(lm, function() lm.KART.LC.Council.CloseCouncilTab(952) end)
-    F.Drop(sim, 953, F.PLATE_CHEST)
-    KARTTEST.AdvanceTime(12) -- one heartbeat, naming 953 and nothing else
+    RaidSim.Leave(sim, "Bramor")
+    local stand = sim.byName.Alric
+    RaidSim.RosterUpdate(sim)
+    RaidSim.As(stand, KARTTEST.AcceptPopup, "KART_LC_STAND_IN")
+    KARTTEST.AdvanceTime(25) -- past 970's window: the stand-in has dropped it, the council has not
+    T.eq(stand.KART.LC.rollItems[970], nil, "the stand-in no longer holds the roll the note is about")
 
-    T.eq(council.KART.LC.rollDismissed[952], nil,
-        "and dropped once the owner stops listing the roll it was about")
+    -- It announces one of its own, and Blizzard raises no roll for it on the council member -- so the
+    -- ask that follows is proof this client read the heartbeat rather than ignored its sender.
+    RaidSim.Blackhole(sim, "LC_START")
+    F.Drop(sim, 971, F.PLATE_CHEST, { noRollFor = { Merrit = true } })
+    RaidSim.Deliver(sim, "LC_START")
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(12) -- one heartbeat from the stand-in, naming 971 and nothing else
+
+    local asked = false
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == council.name then asked = true end
+    end
+    T.eq(asked, true, "the council member acts on the stand-in's own, shorter table")
+    T.truthy(council.KART.LC.rollDismissed[970] ~= nil,
+        "and a roll that table never mentions leaves the dismissal exactly where it was")
 end
 
 -- ...and exactly one peer answers ---------------------------------------------------------------

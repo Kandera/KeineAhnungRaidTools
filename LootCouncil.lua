@@ -1942,6 +1942,15 @@ local TABLE_HEARTBEAT_SECONDS = 10
 -- Enough for any real distribution (a boss drops a handful), and short enough that the message stays
 -- far inside the transport's cap. Nothing is inferred from an item's ABSENCE here, so a truncated
 -- list costs at most a slower catch-up for the twelfth item.
+--
+-- Unchanged when the message started naming items as well (B132), because it still fits: an entry is
+-- a rollID, "=" and an itemID, so twelve of them is about 160 bytes with the token and the count in
+-- front -- well inside one 255-byte addon message. AceComm would split a longer one rather than lose
+-- it, but a heartbeat that costs three chunks every ten seconds for the rest of the evening is a bad
+-- trade for a message whose whole point is to be cheap enough to repeat. That budget is why the item
+-- travels as an itemID and never as a link: an itemID is six digits, and the same item's LINK is
+-- fifty-plus bytes and differs per drop by its bonus ids, which is exactly the comparison this
+-- message must not make (see LC.PayloadItemID).
 local TABLE_MAX_IDS = 12
 -- A client re-asks for the same missing roll at most this often, so a heartbeat every ten seconds
 -- cannot turn into a request every ten seconds while an answer is on its way.
@@ -2020,8 +2029,23 @@ function LC.SendTableHeartbeat()
     if #ids == 0 and lastTableWasEmpty then return end
     lastTableWasEmpty = (#ids == 0)
 
+    -- "<rollID>=<itemID>", comma-separated, behind the count of what is REALLY on the table (which
+    -- can be more than TABLE_MAX_IDS lists). Nothing reads that count -- one thing briefly did, and
+    -- LC.HandleTable says at its foot why that reader is gone -- but it stays on the wire: it is the
+    -- only thing that tells a receiver its list was truncated, and it keeps the payload's leading
+    -- field the same shape a 3.3.0 client parses.
+    --
+    -- "=0" for a roll whose item this client cannot name, which happens: an LC_START that carried no
+    -- itemID leaves "???" tracked here (B40). It is still listed, deliberately -- a roll the owner is
+    -- vague about is exactly the one a receiver most needs to hear exists -- and the receiver reads it
+    -- as "unknown", never as a mismatch.
     local shown = {}
-    for i = 1, math.min(#ids, TABLE_MAX_IDS) do shown[i] = ids[i] end
+    for i = 1, math.min(#ids, TABLE_MAX_IDS) do
+        local rollID = ids[i]
+        local link = LC.rollItems[rollID]
+        local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
+        shown[i] = rollID .. "=" .. (itemID or 0)
+    end
     LC.SendLC("LC_TABLE:" .. #ids .. ":" .. table.concat(shown, ","))
 end
 
@@ -2054,7 +2078,7 @@ function LC.HandleTable(payload, senderKey, sender)
         LC.diag.refusedSender = LC.diag.refusedSender + 1
         return
     end
-    local total, list = payload:match("^(%d+):?(.*)$")
+    local _, list = payload:match("^(%d+):?(.*)$")
 
     -- Asked for one at a time, only from the owner, and at most once every ROLL_REQ_COOLDOWN per
     -- roll -- so a heartbeat every ten seconds cannot become a request every ten seconds while an
@@ -2062,14 +2086,43 @@ function LC.HandleTable(payload, senderKey, sender)
     -- itself into another burst.
     LC.rollReqSent = LC.rollReqSent or {}
     local now = GetTime()
-    local listed, shown = {}, 0
-    for id in tostring(list):gmatch("%d+") do
+    for entry in tostring(list):gmatch("[^,]+") do
+        local id, item = entry:match("^(%d+)=?(%d*)$")
         local rollID = tonumber(id)
-        listed[rollID] = true
-        shown = shown + 1
+        -- "the owner cannot name this one either", in both spellings it can arrive in: "=0" from a
+        -- 3.3.1 owner holding "???", and a bare id from a 3.3.0 owner, whose heartbeat carried no
+        -- items at all. Unknown is not a mismatch -- it says nothing about the item under that
+        -- number, so every comparison below is simply skipped and the ask still happens, which is
+        -- what makes a mixed-version raid degrade to exactly the old behaviour rather than to a
+        -- wrong one.
+        local itemID = (item ~= "" and item ~= "0") and item or nil
+
+        -- What the owner says is under that number, against what this client has under it -- held, or
+        -- merely remembered as dismissed. A DIFFERENT item is proof Blizzard handed the number on and
+        -- this client missed the LC_START that said so (B132), and that is the transition
+        -- PurgeStaleRoll already owns: it drops the dismissal note, the previous item's votes, tab and
+        -- vote row, and leaves the numbers that were cast for the item now arriving. Called rather
+        -- than reimplemented, so there is one answer to "this id belongs to a different item now" and
+        -- not two that can drift.
+        --
+        -- Only ever on a proven difference. PurgeStaleRoll clears the dismissal unconditionally at its
+        -- top, which is right for a roll START and wrong for a heartbeat repeating the item this
+        -- client deliberately closed -- that is the tab that must stay closed (B131).
+        if rollID and itemID then
+            local link = LC.rollItems[rollID]
+            local held = type(link) == "string" and link:match("item:(%d+)") or nil
+            local dismissed = LC.rollDismissed[rollID]
+            if (link ~= nil and held ~= itemID)
+                or (type(dismissed) == "string" and dismissed ~= itemID) then
+                LC.PurgeStaleRoll(rollID, itemID)
+            end
+        end
+
         -- Two reasons to ask, and the second is new: the item itself is missing, or the item is here
         -- but its roll table never arrived. The table travels as one message for the whole raid, so
         -- losing it costs everybody's numbers at once -- which is exactly why it has to be askable.
+        -- Read AFTER the purge above, so a reuse this client just learned about is asked for on the
+        -- same heartbeat rather than the next one.
         local needItem  = rollID and not LC.rollItems[rollID]
         local needRolls = rollID and LC.rollItems[rollID] and LC.GetRollsEnabled()
                           and not LC.rolls[rollID]
@@ -2079,10 +2132,9 @@ function LC.HandleTable(payload, senderKey, sender)
         -- every thirty seconds for the rest of the round -- the same pointless traffic, just with
         -- nothing on screen to notice it by.
         --
-        -- Gated on the ID alone, unavoidably: the heartbeat names ids and nothing else, so this is the
-        -- one reader that cannot tell a repeat of the roll we closed from a REUSE of its number
-        -- (B132). What keeps that from lasting is everything that does see an item -- a start, a
-        -- catch-up, a roll table, a result -- plus the sweep below.
+        -- A note that survives the purge above is one the heartbeat has just confirmed: the item
+        -- under that number is still the item this client closed. So the gate reads on truthiness
+        -- alone, and it is no longer the blind reader it used to be (B132).
         if (needItem or needRolls) and not LC.rollDismissed[rollID]
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             local askedBefore = LC.rollReqSent[rollID] ~= nil
@@ -2097,31 +2149,15 @@ function LC.HandleTable(payload, senderKey, sender)
             end
         end
     end
-
-    -- A dismissal the owner no longer lists is a note about a roll that has left the table, so it
-    -- goes -- and it has to, or it gates the next item Blizzard hands that same number (B132).
-    --
-    -- This is NOT the deletion-from-silence the rule above the constants forbids, and the difference
-    -- is the whole reason it is allowed to stand here: nothing this client holds is dropped. Asking is
-    -- driven ENTIRELY by what the heartbeat lists, so forgetting a note for an id nobody lists cannot
-    -- make this client ask for anything -- it only stops a stale note from blocking a later reuse of
-    -- that id.
-    --
-    -- Only against a list that can stand for the whole table, though. An EMPTY one is what a stand-in
-    -- sends before it has anything of its own (see LC.EnsureTableTicker's OnAccept call), and a
-    -- TRUNCATED one is short by construction (TABLE_MAX_IDS) -- reading either as "everything else is
-    -- gone" would forget notes for rolls that are still open, and the owner's next heartbeat would put
-    -- the tab this client closed back on its screen.
-    --
-    -- A stand-in's SHORT list is still short in a way nothing here can see: it names its own table,
-    -- which after a handover holds less than the previous owner's. Accepted, and bounded -- the worst
-    -- of it is one closed tab coming back once, if the previous owner ever heartbeats that roll again,
-    -- and closing it a second time notes it again.
-    if shown > 0 and shown == tonumber(total) then
-        for rollID in pairs(LC.rollDismissed) do
-            if not listed[rollID] then LC.rollDismissed[rollID] = nil end
-        end
-    end
+    -- No sweep over the unlisted ids, deliberately. One stood here and read "the owner no longer
+    -- names this number" as "the roll it was about is over, so the note may go" -- which needed
+    -- guards against an empty list and a truncated one, and STILL could not see the case it was
+    -- guarding against: a stand-in's list is short because it holds only what that client itself
+    -- announced, and nothing in the message says so. The rule above needs none of that, because
+    -- absence is no longer evidence of anything: a note goes when an item is NAMED under its number
+    -- and it is a different one. That covers everything the sweep covered -- a number that leaves the
+    -- table and comes back for a new item is named on the very next heartbeat -- and it covers the
+    -- reuse the sweep could not, where the number never left the table at all.
 end
 
 -- Somebody asking for a roll they are missing. The eligibility rule lives here, on the one client
@@ -3648,6 +3684,11 @@ local function PurgeStaleRoll(rollID, newItemID)
         LC.rollsFor[rollID] = newItemID
     end
 end
+-- Exposed for LC.HandleTable, which sits far above this in the file and now meets the same
+-- transition from the other side: the heartbeat names a different item under a number this client
+-- still holds, or still remembers dismissing (B132). Called through LC.* rather than forward-declared
+-- because the call happens at runtime, long after both halves have loaded.
+LC.PurgeStaleRoll = PurgeStaleRoll
 
 -- How often LC.OnStartLootRoll re-checks for the item link before giving up, and the per-attempt
 -- backoff — same schedule as ResolveRollItemLink, for the same reason (see the retry block there).
