@@ -37,6 +37,11 @@ LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows
 LC.diag = LC.diag or {
     refusedSender = 0, -- the sender is not who this client believes may send that message
     unknownRoll   = 0, -- a vote/roll/result for an item this client has never heard of
+    -- A peer's roll table for an item we already hold, whose numbers are NOT the ones we hold. Not a
+    -- refusal like the two above -- it is a positive finding, and the only one in the addon that
+    -- proves two clients scored one item off different numbers (see LC.HandleRolls). An agreeing
+    -- duplicate is ordinary traffic since B131 and is not counted anywhere.
+    rollsConflict = 0,
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -1316,6 +1321,12 @@ function LC.PrintStatus()
         print("  " .. string.format(L.LC_STATUS_DROPS, LC.diag.refusedSender, kd.dropNotInGroup,
             LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendQueued,
             kd.sendHeldBack, kd.sendDroppedRestricted))
+    end
+    -- On its own line and on its own condition: this one is not a "message went nowhere" count at
+    -- all. A non-zero here means two clients demonstrably held different numbers for one item, which
+    -- is worth reading even on an evening where nothing else was refused.
+    if LC.diag.rollsConflict > 0 then
+        print("  " .. string.format(L.LC_STATUS_ROLLCONFLICT, LC.diag.rollsConflict))
     end
 end
 
@@ -3260,22 +3271,46 @@ end
 -- Deliberately NOT gated on LC.rollItems[rollID], for the same reason the old per-client handler was
 -- not: the table is sent right after the announcement, and a client that learns of the roll only
 -- from LC_START can legitimately see the two in either order.
-function LC.HandleRolls(payload, senderKey)
-    -- Somebody else answered a request we were about to answer too.
-    local answeredID = tonumber(payload:match("^(%d+):"))
-    if answeredID then LC.rollsAnswerAt[answeredID] = nil end
+--
+-- Same numbers, twice: NOT a refusal. Since B131 every answer to an LC_ROLLS_REQ is a group
+-- broadcast, so one repair in a 25-man raid lands on 24 clients that already hold that exact table.
+-- Counting those bumped LC.diag.refusedSender by 24 per repair and buried the one diagnostic that
+-- exists to surface an ownership disagreement (B129/B130) under entirely expected traffic.
+local function SameRolls(a, b)
+    if a == nil or b == nil then return false end
+    for key, value in pairs(a) do if b[key] ~= value then return false end end
+    for key in pairs(b) do if a[key] == nil then return false end end
+    return true
+end
 
-    local rollID = tonumber(payload:match("^(%d+):"))
-    local isAnnouncer = rollID ~= nil and LC.rollAnnouncedBy[rollID] == senderKey
-    local isVoid = rollID ~= nil and LC.rolls[rollID] == nil
-    if not isAnnouncer and not isVoid then
-        LC.diag.refusedSender = LC.diag.refusedSender + 1
-        return
-    end
-    local itemID, list
-    rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
+function LC.HandleRolls(payload, senderKey)
+    local rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
     rollID = tonumber(rollID)
     if not rollID then return end
+
+    -- Somebody else answered a request we were about to answer too. Before the sender check on
+    -- purpose: a table we will not STORE is still proof that the group has been answered, so there is
+    -- nothing left for us to add.
+    LC.rollsAnswerAt[rollID] = nil
+
+    local rolls = {}
+    for key, value in list:gmatch("([^=,]+)=(%d+)") do rolls[key] = tonumber(value) end
+
+    local isAnnouncer = LC.rollAnnouncedBy[rollID] == senderKey
+    local isVoid = LC.rolls[rollID] == nil
+    if not isAnnouncer and not isVoid then
+        -- A peer's table for an item we already hold. Expected traffic when it AGREES (see SameRolls
+        -- above) -- silent, because it is not a refusal in any sense a diagnostic should report.
+        --
+        -- When it disagrees it is the opposite: this is the first place in the addon that can PROVE
+        -- two clients hold different numbers for one item. Nothing else notices -- the raid simply
+        -- scores a tie-break on numbers half of it does not have. So it gets its own counter rather
+        -- than sharing one with "the sender is not who I expected", which is a different question.
+        if not SameRolls(LC.rolls[rollID], rolls) then
+            LC.diag.rollsConflict = LC.diag.rollsConflict + 1
+        end
+        return
+    end
 
     -- Same orphan stamp the old handler set: a table for a roll this client never hears about would
     -- otherwise sit here forever, and PurgeStaleRoll needs to tell "arrived a moment early" from
@@ -3285,8 +3320,6 @@ function LC.HandleRolls(payload, senderKey)
         LC.rollsPendingSince[rollID] = LC.rollsPendingSince[rollID] or GetTime()
     end
 
-    local rolls = {}
-    for key, value in list:gmatch("([^=,]+)=(%d+)") do rolls[key] = tonumber(value) end
     -- An empty table is still a TABLE, and LC.rolls[rollID] == nil is exactly what needRolls (and the
     -- isVoid check above) uses to mean "nothing held yet". Storing one here would be indistinguishable
     -- from a real draw and would permanently stop this client from ever asking for the real numbers.

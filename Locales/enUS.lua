@@ -287,6 +287,7 @@ KART.L_enUS = {
     LC_FORCEWIN_LOST       = "%s went to %s, not to you -- check your bags before you promise it to anybody.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_STATUS_DROPS        = "Messages refused here: %d sender, %d not in group, %d unknown item, %d unknown token -- own sends rejected: %d (%d queued), held while restricted: %d, dropped in them: %d",
+    LC_STATUS_ROLLCONFLICT = "Roll tables that disagreed with this client's: %d -- somebody in the raid held different numbers for an item scored here.",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
