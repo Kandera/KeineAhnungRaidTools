@@ -338,6 +338,11 @@ function Council.CloseCouncilTab(rollID)
     -- stuck "???" row with live vote buttons for a roll everyone else has finished with.
     LC.Vote.RemoveVoteListItem(rollID)
     LC.Trade.ClearRollState(rollID)
+    -- Every caller of this function is somebody deciding they are done with the item, so this is where
+    -- the decision is recorded (see LC.rollDismissed for why it has to be, and for the list of removals
+    -- that deliberately are NOT dismissals). After ClearRollState rather than before: that clears the
+    -- state belonging to the roll, and this flag deliberately outlives it.
+    LC.rollDismissed[rollID] = true
 
     if LC.activeRollID == rollID then
         if LC.councilTabs[1] then

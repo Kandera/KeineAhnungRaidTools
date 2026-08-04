@@ -316,6 +316,44 @@ do
         "and its trade clock still runs from the drop, not from the repair")
 end
 
+-- ...but what a client PUT AWAY is not what a client lost -------------------------------------------
+-- The other side of the same widening. A council member awards the item and closes its tab, which is
+-- the ordinary end-of-item gesture and now happens well after voting closed -- leaving that client
+-- looking exactly like one that never received the roll: no item, no deadline, nothing tracked. The
+-- owner still has its own tab, so its heartbeat keeps naming the roll, and before LC.rollDismissed the
+-- request that produced put the tab straight back on screen (panel un-minimized, LC.councilPanelDismissed
+-- cleared with it) every thirty seconds for the rest of the distribution.
+do
+    local sim = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    local function tabbed(client, rollID)
+        for _, id in ipairs(client.KART.LC.councilTabs) do if id == rollID then return true end end
+        return false
+    end
+
+    F.Drop(sim, 940, F.GLOVES)
+    KARTTEST.AdvanceTime(25) -- past the default 20s window: voting is closed, the item is not
+    T.eq(tabbed(council, 940), true, "a council member still has the item tabbed after voting closes")
+
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(940) end)
+    T.eq(tabbed(council, 940), false, "and closing the tab takes it off the panel")
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(45) -- several heartbeats, and past ROLL_REQ_COOLDOWN on top of them
+
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == council.name then asks = asks + 1 end
+    end
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLLS_REQ")) do
+        if e.from == council.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "it never asks for an item it threw away itself")
+    T.eq(tabbed(council, 940), false, "so the tab it closed stays closed")
+    T.eq(council.KART.LC.rollItems[940], nil, "and the item stays untracked")
+end
+
 -- ...and exactly one peer answers ---------------------------------------------------------------
 -- Every client in the raid holds this table. Answering all at once is the message storm this whole
 -- rework exists to remove, so the answer is spread by each client's position in the sorted roster and

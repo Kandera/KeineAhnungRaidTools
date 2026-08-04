@@ -1868,6 +1868,12 @@ function LC.HandleRollCatchup(payload, senderKey)
     local rollID = tonumber(payload:match("^(%d+):"))
     if not rollID then return end
     if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
+    -- Nor one we put away ourselves (LC.rollDismissed). We stopped asking the moment the tab was
+    -- closed, but an answer to the LAST ask can still be in flight, and taking it would reopen the
+    -- panel for an item this client is finished with -- the exact thing the flag exists to stop.
+    -- Refusing here is also what keeps PurgeStaleRoll's clear of the flag honest: everything that DOES
+    -- reach LC.HandleStart under a dismissed rollID is then a genuinely new roll.
+    if LC.rollDismissed[rollID] then return end
     -- LC.HandleStart re-stamps the BoP trade clock from time() on purpose (see its comment): for an
     -- LC_START that is accurate to milliseconds, because the owner sends it from inside its own roll
     -- handler. It is not accurate here. A catch-up arrives whenever this client got round to asking,
@@ -1917,6 +1923,32 @@ local TABLE_MAX_IDS = 12
 -- A client re-asks for the same missing roll at most this often, so a heartbeat every ten seconds
 -- cannot turn into a request every ten seconds while an answer is on its way.
 local ROLL_REQ_COOLDOWN = 30
+
+-- What this client CHOSE to be finished with -- the one thing the repair path cannot work out for
+-- itself. "I closed this on purpose" and "I never received this" leave a client in exactly the same
+-- state: no item, no deadline, nothing tracked. The catch-up read both as the second one, and once an
+-- item stayed askable for as long as it is tracked (LC.RollTracked) rather than only while its timer
+-- ran, that mistake reached the ordinary end-of-item gesture -- award, then close the tab -- for a
+-- whole distribution. The owner still holds its own tab, so its heartbeat kept naming the roll, this
+-- client kept asking for it, and the answer put the tab back on screen every thirty seconds, clearing
+-- LC.councilPanelDismissed and un-minimizing the panel with it. That is B123's complaint through a new
+-- door. Only the client that closed the thing knows which of the two happened, so it is the one that
+-- remembers.
+--
+-- Set ONLY where a person got rid of a roll on purpose, which is Council.CloseCouncilTab and nothing
+-- else: the tab's own "x", the panel's "No Winner", the peer side of somebody else's "No Winner", and
+-- a manual re-decision revoking an award. A roll that goes because it EXPIRED
+-- (Vote.PruneExpiredRolls), because a reused rollID was purged (PurgeStaleRoll) or because the round
+-- ended (LC.ClearAllRolls) is not a dismissal and must never be recorded here -- those are precisely
+-- the clients that still have to be repairable.
+--
+-- Runtime-only, like LC.rollReqSent and LC.rollsAnswerAt beside it and for the same kind of reason:
+-- after a reload this client has no panel open and nothing on screen it put away, so a restored flag
+-- could only ever refuse a repair that should have happened. Deliberately NOT part of
+-- Trade.ClearRollState's per-roll state either -- it has to OUTLIVE the roll it names, which is its
+-- entire job -- so it is in neither of the two lists tests/test_lc_persistedtables.lua keeps in step,
+-- and belongs in neither.
+LC.rollDismissed = LC.rollDismissed or {}
 
 local tableTicker
 local lastTableWasEmpty = true
@@ -1993,7 +2025,12 @@ function LC.HandleTable(payload, senderKey, sender)
         local needItem  = rollID and not LC.rollItems[rollID]
         local needRolls = rollID and LC.rollItems[rollID] and LC.GetRollsEnabled()
                           and not LC.rolls[rollID]
-        if (needItem or needRolls)
+        -- ...and one reason not to ask at all: a roll this client threw away itself
+        -- (LC.rollDismissed). It gates BOTH asks deliberately. Stopping only the item request would
+        -- leave this client asking the raid for the numbers of something it wants nothing to do with,
+        -- every thirty seconds for the rest of the round -- the same pointless traffic, just with
+        -- nothing on screen to notice it by.
+        if (needItem or needRolls) and not LC.rollDismissed[rollID]
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             local askedBefore = LC.rollReqSent[rollID] ~= nil
             LC.rollReqSent[rollID] = now
@@ -2450,6 +2487,10 @@ function LC.ClearAllRolls()
     -- has since reused, because LC.HandleRollsRequest reads a leftover stamp as "we are already about
     -- to answer that".
     if LC.rollsAnswerAt then wipe(LC.rollsAnswerAt) end
+    -- Same block, same convention. The round is over for the whole raid, so there is nothing left for
+    -- this client to be refusing to ask about -- and a flag kept past that would silence the repair
+    -- for whatever rollID Blizzard hands out next (LC.rollDismissed).
+    if LC.rollDismissed then wipe(LC.rollDismissed) end
     -- Nothing left on the table, so nothing left to say about it (B118). The ticker also stops itself
     -- after one empty heartbeat; this is the direct route for the case that skips that -- a session
     -- ending, or the round being cleared from under it.
@@ -3437,6 +3478,13 @@ function LC.HandleRollsRequest(payload)
 end
 
 local function PurgeStaleRoll(rollID, newItemID)
+    -- A roll is STARTING under this ID, so whatever this client once put away under it is over: this
+    -- is a different item, Blizzard having reused the integer. Cleared before every guard below,
+    -- because "nothing tracked under this ID" is exactly the state a dismissal leaves behind and the
+    -- staleness checks further down cannot see this case at all. Both callers are roll starts
+    -- (LC.OnStartLootRoll, LC.HandleStart), and a catch-up never gets here for a dismissed roll --
+    -- LC.HandleRollCatchup refuses those before it hands over.
+    LC.rollDismissed[rollID] = nil
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
     -- numbers would render as the NEW item's rolls on the council panel.
