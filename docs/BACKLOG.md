@@ -3158,3 +3158,19 @@ Recorded honestly: it is a belt, not a fix. `ChatThrottleLib` sends inline when 
 free and queues otherwise, and a queued message is despooled from an `OnUpdate` that will not run
 again — so a batch that goes out during a quiet moment survives the reload, and one sent while the
 pipe is already congested does not. A crash raises no `PLAYER_LOGOUT` at all.
+
+## B135 — OPEN 2026-08-04 — a batch can flush after a peer's table for the same rollID has already landed
+
+Found in review of the one-message-per-boss change (`LC_DROP`), not by a raid.
+
+`FlushPendingDrop` serializes from `LC.rolls[rollID]` at send time, so in the B130
+ownership-disagreement corner — where a peer's table for the arriving item is already stored under
+that id when the batch flushes — the departing entry could carry the wrong numbers. Unreachable on
+the owner's own path (it draws its own table), and the receiver's length check does not catch it
+since the lengths match.
+
+**Why it is not fixed here.** It is a narrow wrinkle on top of the already-open B130 disagreement
+scenario — a client already known to end up "holding numbers nobody else holds" per B130's own text —
+rather than a new independent failure mode, so deferring the fix is reasonable. What is not reasonable
+is leaving it recorded nowhere but a review report that will get archived, which is the only reason
+this entry exists.
