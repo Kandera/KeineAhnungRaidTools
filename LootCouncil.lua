@@ -3132,6 +3132,18 @@ end
 
 function LC.DrawRollTable(rollID, itemID)
     if not LC.GetRollsEnabled() then return end
+    -- Blizzard re-raises START_LOOT_ROLL for a roll still in progress -- OnStartLootRoll runs again,
+    -- PurgeStaleRoll sees the SAME item and deliberately keeps the rolls already cast for it (see its
+    -- comment), and the call site right after it reaches this function a second time regardless. A
+    -- second draw would replace a number the raid has already been shown, which is the one thing a
+    -- tie-breaker must never do -- RollForSelf carried this exact guard before the draw became a
+    -- single table; it did not stop mattering when the draw moved to one client instead of everybody.
+    -- A rollID reused for a genuinely DIFFERENT item must still redraw: PurgeStaleRoll has already
+    -- emptied LC.rolls[rollID] for that case by the time this runs, so the itemID comparison below is
+    -- what tells the two apart, not the emptiness check alone.
+    if LC.rolls[rollID] and next(LC.rolls[rollID]) ~= nil and LC.rollsFor[rollID] == (itemID or "") then
+        return
+    end
     local set = LC.rollEligible[rollID]
     if not set then return end
 

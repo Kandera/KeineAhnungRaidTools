@@ -43,25 +43,45 @@ do
 end
 
 -- Never twice ---------------------------------------------------------------------------------------
--- The table is drawn once, by the announcer, and HandleStart never draws (see LC.DrawRollTable) -- so
--- a late duplicate of the announcement must not disturb a table the raid has already been shown.
+-- The table is drawn once, by the ANNOUNCER (LC.DrawRollTable), and HandleStart never draws -- so the
+-- risk this guards is on the announcer's own client, not on a raider receiving LC_START a second time.
+-- Blizzard re-raises START_LOOT_ROLL for a roll still in progress, which reaches OnStartLootRoll and
+-- then LC.DrawRollTable again on the same client; a second draw must not replace the numbers the raid
+-- has already been shown.
 do
-    local sim, lm, council, raider = F.NewRaid()
+    local sim, lm = F.NewRaid()
     RollsOn(sim)
     RaidSim.As(lm, function() lm.KART.LC.ApplyOwnConfig() lm.KART.LC.BroadcastRaidConfig() end)
     KARTTEST.AdvanceTime(0)
 
     F.Drop(sim, 71, F.GLOVES, { bop = true })
-    local first = (council.KART.LC.rolls[71] or {})[raider.guid]
-    T.truthy(first, "the raider rolled")
+    local first = lm.KART.LC.rolls[71]
+    T.truthy(first and next(first), "the table was drawn")
 
-    -- The announcement again, as a late duplicate would arrive.
-    RaidSim.As(raider, function()
-        raider.KART.LC.HandleStart("71:20:" .. F.GLOVES, lm.guid)
-    end)
+    -- Blizzard re-raising START_LOOT_ROLL for the SAME rollID and item, still running.
+    F.Drop(sim, 71, F.GLOVES, { bop = true })
+    T.deep_eq(lm.KART.LC.rolls[71], first, "and a second announcement does not redraw the table")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:71:"), 1, "nor broadcast it a second time")
+end
+
+-- ...but a rollID reused for a DIFFERENT item must draw a NEW table -----------------------------------
+-- The other half of the same rule: PurgeStaleRoll has already emptied the table for a genuinely
+-- different drop under this rollID by the time LC.DrawRollTable runs, so the guard above must not
+-- catch this case too.
+do
+    local sim, lm = F.NewRaid()
+    RollsOn(sim)
+    RaidSim.As(lm, function() lm.KART.LC.ApplyOwnConfig() lm.KART.LC.BroadcastRaidConfig() end)
     KARTTEST.AdvanceTime(0)
-    T.eq((council.KART.LC.rolls[71] or {})[raider.guid], first,
-        "and a second announcement does not make them roll again")
+
+    F.Drop(sim, 73, F.GLOVES, { bop = true })
+    local first = lm.KART.LC.rolls[73]
+    T.truthy(first and next(first), "the table was drawn")
+
+    F.Drop(sim, 73, F.WEAPON, { bop = true })
+    local second = lm.KART.LC.rolls[73]
+    T.truthy(second and next(second), "a fresh table was drawn for the new item")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:73:"), 2, "and it was broadcast, once per drop")
 end
 
 -- Rolls switched off stay off -----------------------------------------------------------------------
