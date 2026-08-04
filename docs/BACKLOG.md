@@ -2966,46 +2966,56 @@ notwithstanding.
 
 `LC.rollDismissed`, the dismissal memory this same request loop defers to, has its own reused-rollID gap — left open below as B132.
 
-## B132 — OPEN 2026-08-04 — the dismissal is remembered by rollID, and Blizzard can hand that number to a different item before this client hears about it
+## B132 — OPEN 2026-08-04 — a dismissal now remembers its item, and the heartbeat still names nothing but numbers
 
-Found in review of the request loop above (B131), not by the soak.
+Found in review of the request loop above (B131), not by the soak. Narrowed 2026-08-04 as far as it can
+be narrowed without touching a message.
 
 **The mechanism.** `LC.HandleRollCatchup` refuses to hand a client anything under a rollID it once
-dismissed (`LootCouncil.lua:1876`), and `LC.HandleTable`'s heartbeat-driven request gate refuses to even
-ask for one (`LootCouncil.lua:2033`) — both deliberately, so a raider who closed the tab is not reopened
-into an item they are finished with. `LC.rollDismissed[rollID]` only comes back down through
-`PurgeStaleRoll` (`LootCouncil.lua:3493`), and that runs from exactly two places, `LC.OnStartLootRoll`
-and `LC.HandleStart` — only from a start for that id this client actually processed. A live `LC_START`
-reaching this client clears the flag the ordinary way. But three things coincide inside one session, no
-reload or session end between them, for that never to happen: this client dismissed some earlier roll
-under rollID N; Blizzard later reuses N for an unrelated item, which happens within seconds on trash;
-and this specific client misses the live `LC_START` for that reuse — the exact broadcast the
-heartbeat/catch-up system exists to stand in for. When it does, both halves of the recovery loop are
-gated shut by the very flag `PurgeStaleRoll` would have cleared: `HandleTable` never sends the request
-that would ask for N again, and even an unsolicited `LC_ROLL_CATCHUP` for it is refused on arrival. The
-new item sits untracked on that one client — nothing on the council panel, nothing to vote on — until
-`LC.ClearAllRolls` runs (End Round or session end) or a reload clears `LC.rollDismissed` outright.
+dismissed, and `LC.HandleTable`'s heartbeat-driven request gate refuses to even ask for one — both
+deliberately, so a raider who closed the tab is not reopened into an item they are finished with. What
+the raider actually dismissed was an ITEM; what the note remembered was a NUMBER, and Blizzard reuses a
+rollID for an unrelated item within seconds on trash. A client that dismissed roll N, then got a
+genuinely new item under N, and missed that item's `LC_START` — the exact broadcast the heartbeat and
+catch-up exist to stand in for — was deaf to it: nothing asked, and an unsolicited `LC_ROLL_CATCHUP` was
+refused on arrival. The new item sat untracked on that one client, with nothing on the council panel to
+notice it by, until End Round, session end or a reload.
 
-**Why it lands exactly on this addon.** What the raider actually dismissed was an item; what the flag
-remembers is a number. Those stay the same thing only until Blizzard reuses the number, which it does
-routinely inside one trash pull. Every other path that touches this rollID accounts for the reuse —
-`PurgeStaleRoll` exists specifically to clear a stale flag out from under a fresh start, and
-`LC.HandleRollCatchup` already accepts a reused id as a known, bounded risk for the trade timestamp it
-inherits alongside it. This is the one path into that same reuse with no repair available, because it IS
-the repair: the heartbeat/catch-up loop is what a client is supposed to fall back on once the direct
-message is lost, and it is this exact flag that keeps it from ever starting.
+**What is closed.** `LC.rollDismissed[rollID]` now stores the itemID that was dismissed (`true` only
+when this client never resolved what it was holding), so the two cases can be told apart wherever an
+item is actually named:
 
-**What would close it, and why not now.** The honest fix is to remember the dismissal by item rather
-than by rollID, so a reused id cannot inherit a decision that was never made about it. That needs the
-heartbeat and the catch-up message to name the item alongside the rollID — today both carry ids only,
-and a receiving client has no way to tell a genuine reuse from an ordinary repeat of the same roll. That
-is exactly the shape the next planned step of the comms rework changes: one message per boss instead of
-one per item, which puts item identity on the wire for the first time. Building a narrower wire change
-for this one flag ahead of that step would be work done twice, so it waits on it — whoever picks up the
-comms rework's next step should close this entry at the same time.
+* `LC.HandleRollCatchup` refuses a catch-up carrying the SAME item and accepts one carrying a
+  DIFFERENT item — a reuse, not a repeat. `PurgeStaleRoll` then drops the note on the way through
+  `LC.HandleStart`, exactly as it does for a live start.
+* `LC.HandleTable` forgets a dismissal whose rollID the owner no longer lists: the roll has left the
+  table, so the note can only ever block a later reuse of that number. This is not a deletion from
+  silence — nothing the client holds is dropped, and asking is driven entirely by what the heartbeat
+  DOES list, so forgetting a note for an unlisted id cannot make this client ask for anything. Guarded
+  against an empty list (a stand-in that has nothing yet) and a truncated one, either of which would
+  otherwise read as "everything else is gone".
+* `LC.HandleRolls` and `Trade.HandleResult` drop the note when they name a different item under the
+  dismissed id. The roll table is what repairs the case in practice: it reaches the whole raid, so a
+  client that missed the announcement learns of the reuse from it and asks for the item on the next
+  heartbeat.
 
-**What makes it bounded.** Three things already in place self-heal it — End Round, session end, and a
-reload all clear `LC.rollDismissed` outright — and while it lasts it costs exactly one client the
-visibility of exactly one item. The roll table itself, the council's vote, and every other client's copy
-of both are untouched: the raid's agreement about the item is intact, only this one raider's ability to
-learn it exists is not.
+Covered by three cases in `tests/test_lc_rolltable.lua`, next to B131's own — a reuse repaired
+end-to-end through the request loop, the accept/refuse asymmetry of the catch-up itself, and the note
+being forgotten once the owner stops listing the roll.
+
+**What is left.** One case, and it is the one the wire cannot answer: a reuse where this client hears
+NOTHING that names the new item — no `LC_START`, no roll table (the raid may have rolls switched off),
+and no result yet — while the owner keeps the reused id on its table throughout. The heartbeat lists
+that id, the gate reads its own note and does not ask, and there is no way for the receiver to tell
+that repeat from a reuse, because the message carries ids and nothing else. It costs that one client
+the visibility of that one item, and it self-heals at End Round, at session end and at a reload.
+
+**Why not now.** The next planned step of the comms rework replaces this message with one per boss,
+which puts item identity on the wire for the first time. Once the heartbeat names its items, the gate
+can ask the same question the catch-up already asks and this entry closes with it — whoever picks that
+step up should close it then. A narrower wire change for this one note ahead of that step would be work
+done twice.
+
+**What makes it bounded.** Unchanged from the original entry, and now much narrower: the roll table
+itself, the council's vote and every other client's copy of both are untouched. The raid's agreement
+about the item is intact; only this one raider's ability to learn it exists is not.
