@@ -169,25 +169,58 @@ local function runOne(seed)
     end
 
     local actions = {
+        -- A boss hands its items over in ONE moment and they travel in ONE message: the head names the
+        -- participants once, and every item's numbers are ordered by that list.
+        --
+        -- This step used to advance past the collection window after every single drop, so 2000 seeds
+        -- produced nothing but single-item messages -- the batching path rested entirely on the
+        -- handful of cases in tests/test_lc_drop.lua, and the convergence machinery, which is the only
+        -- thing in this suite that compares the whole raid against itself, was never pointed at a
+        -- message carrying more than one item. Three defects of one shape got through that gap.
+        --
+        -- The batch SIZE is drawn from the walk's own stream (rnd -- see the long note on why it is
+        -- not math.random), so a seed still reproduces whatever the addon does with its own draws.
+        -- Weighted towards one item, because that is still what most drops look like.
         { "drop", function()
-            local id = nextRoll
-            nextRoll = nextRoll + 1
-            Drop(sim, id, pick(ITEMS))
+            local batch = {}
+            for _ = 1, ({ 1, 1, 1, 2, 2, 3 })[rnd(6)] do
+                local id = nextRoll
+                nextRoll = nextRoll + 1
+                Drop(sim, id, pick(ITEMS))
+                batch[#batch + 1] = id
+            end
+            -- ONE window for the whole batch, and the clock is only moved after the last item. Moving
+            -- it between two of them is exactly what closed the batch before; F.Drop's own
+            -- AdvanceTime(0) settles the event without opening the window's exit.
+            --
             -- Exactly the window a drop is collected in, so the clock now reads the moment the
             -- announcement went out: that is what the vote deadline and "who was party to this roll"
             -- below are both measured from, and half a second of drift either way would have the walk
             -- voting on rolls the raid has already pruned.
             KARTTEST.AdvanceTime(DROP_COLLECT)
-            rolls[#rolls + 1] = id
-            expiresAt[id] = KARTTEST.now + VOTE_WINDOW
-            if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
-            present[id] = {}
-            for _, c in ipairs(sim.clients) do
-                if KARTTEST.now >= (recovering[c.name] or 0) then
-                    present[id][#present[id] + 1] = c
+            -- ...and then until it has actually LANDED. That window ends when the message is handed to
+            -- the transport, not when the raid has it: ChatThrottleLib despools over the following
+            -- ticks, and a batch of several items is several chunks that go one after another. Without
+            -- this the walk compares the raid against itself before the announcement could have
+            -- arrived and calls the wait a disagreement -- measured at seed 1376, where three clients
+            -- had the numbers and two did not, and five seconds later all six agreed.
+            --
+            -- Invisible until now because a single-item message fits in one chunk and cleared inside
+            -- the same tick. Not a weakening: convergence is what this file measures, and it can only
+            -- be measured once the thing being converged on has been delivered.
+            RaidSim.Drain(sim)
+            for _, id in ipairs(batch) do
+                rolls[#rolls + 1] = id
+                expiresAt[id] = KARTTEST.now + VOTE_WINDOW
+                if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
+                present[id] = {}
+                for _, c in ipairs(sim.clients) do
+                    if KARTTEST.now >= (recovering[c.name] or 0) then
+                        present[id][#present[id] + 1] = c
+                    end
                 end
+                check(id, "it dropped")
             end
-            check(id, "it dropped")
         end },
         { "vote", function()
             local id = openRoll()
@@ -294,6 +327,8 @@ local function runOne(seed)
             end
             F.Drop(sim, id, items[rnd(#items)])
             KARTTEST.AdvanceTime(DROP_COLLECT)
+            -- Landed, not merely sent -- same reason as the plain drop above.
+            RaidSim.Drain(sim)
             -- The population is re-recorded exactly as the plain drop does it. Everything already
             -- tracked under this ID belonged to the PREVIOUS item and has been purged, so who is
             -- party to this roll is decided fresh here -- a client still recovering from a reload

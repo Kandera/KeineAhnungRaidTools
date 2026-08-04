@@ -591,6 +591,35 @@ end
 
 function RaidSim.ClearLog(sim) sim.log = {} end
 
+-- Advances the clock until nothing is left queued in any client's transport, and answers how long
+-- that took. Capped, because a handler that keeps answering itself must fail loudly rather than hang.
+--
+-- The distinction this exists for: KARTTEST.AdvanceTime moves the clock to the moment a message is
+-- HANDED TO the transport, which is not the moment it lands. ChatThrottleLib despools over the
+-- following ticks, and a message AceComm had to split is several chunks that despool one after
+-- another -- so "wait a fixed half second and compare" silently asks the raid a question before the
+-- answer could possibly have reached it. That was invisible while every message fit in one chunk.
+--
+-- Deliberately drains everything rather than one token: a client answering what it just received is
+-- part of the same settling, and stopping at the first quiet tick would measure the middle of it.
+function RaidSim.Drain(sim, maxSeconds)
+    local step, waited = 0.1, 0
+    maxSeconds = maxSeconds or 10
+    while waited < maxSeconds do
+        local pending = false
+        for _, c in ipairs(sim.clients) do
+            for _, prio in pairs(c.CTL and c.CTL.Prio or {}) do
+                if prio.Ring.pos or prio.Blocked.pos then pending = true break end
+            end
+            if pending then break end
+        end
+        if not pending then return waited end
+        KARTTEST.AdvanceTime(step)
+        waited = waited + step
+    end
+    return waited
+end
+
 -- Messages starting with `token` are sent but never delivered, until Deliver puts them back.
 function RaidSim.Blackhole(sim, token)
     sim.blackholed = sim.blackholed or {}
