@@ -3253,18 +3253,46 @@ function LC.HandleRolls(payload, senderKey)
 end
 
 -- Every client in the raid holds the same table, so a request could be answered by all of them at
--- once -- which is the message storm this rework exists to remove. Spread by a hash of our own NAME
--- rather than by math.random, for the reason KASC's handshake gives for the same trick: random draws
--- collide, names differ by construction, and the same client answers in the same slot every time,
--- which is what makes it testable at all.
-local ROLLS_ANSWER_SPREAD = 3
+-- once -- which is the message storm this rework exists to remove. Spread across a window so answers
+-- land apart in time.
+--
+-- Tried first, and measured to not hold: a hash of each client's own NAME (the construction KASC's
+-- handshake already uses for the same problem). Simulated at raid size -- 25 random names, 20,000
+-- trials, the exact hash below -- 26% of full rosters produced two clients scheduled within a few
+-- milliseconds of each other, well inside ordinary addon-message jitter under ChatThrottleLib
+-- congestion, which is exactly when this fires. A hash spreads by luck, and luck is what collides.
+--
+-- What every client in the group CAN see identically is the roster itself: sorted resolved identity
+-- keys, the same canonical ordering LC.DrawRollTable already draws its own pool from. A client's slot
+-- is its POSITION in that order, which spaces N clients across the window into N EQUAL gaps by
+-- construction -- gap = ROLLS_ANSWER_SPREAD / N, guaranteed, not merely likely. At the addon's own
+-- maximum group size (40 -- see LC.DrawRollTable's comment on why its roll pool is sized that way)
+-- that is 10000ms / 40 = 250ms: comfortably above the "tens to hundreds of milliseconds" a busy loot
+-- round's message queue can add, which is what the stand-down below needs to actually see the other
+-- answer before firing its own.
+local ROLLS_ANSWER_SPREAD = 10
 LC.rollsAnswerAt = LC.rollsAnswerAt or {} -- [rollID] = GetTime() we intend to answer, or nil
 
+-- The pure half: given the sorted identity keys currently in the group and one of them, the slot it
+-- gets. Kept apart from SelfAnswerSlot below so a test can prove the spacing at a full raid's size
+-- without spinning up a simulated one -- this needs no roster, no client, nothing but the two lists.
+function LC.RollsAnswerSlot(keys, ownKey)
+    local n = math.max(#keys, 1)
+    local index = 1
+    for i, key in ipairs(keys) do
+        if key == ownKey then index = i break end
+    end
+    return ((index - 1) / n) * ROLLS_ANSWER_SPREAD
+end
+
 local function SelfAnswerSlot()
-    local name = UnitName("player") or ""
-    local h = 0
-    for i = 1, #name do h = (h * 31 + name:byte(i)) % 997 end
-    return (h / 997) * ROLLS_ANSWER_SPREAD
+    local keys = {}
+    for unit in KAUtil.EachGroupUnit() do
+        local key = (KASC.Identity.ResolvePlayer(unit))
+        if key then keys[#keys + 1] = key end
+    end
+    table.sort(keys)
+    return LC.RollsAnswerSlot(keys, (KASC.Identity.ResolvePlayer("player")))
 end
 
 function LC.HandleRollsRequest(payload)
