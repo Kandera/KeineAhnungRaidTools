@@ -3785,6 +3785,33 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- preserved stamp is older than the true drop, never newer, so the reminder ends early rather than
     -- late -- and an early end to a promise about a trade is the safe direction. Age bounds it
     -- regardless: see Trade.PruneExpiredLootStamps for why the stamp outlives Trade.ClearRollState.
+    -- NOTHING THAT ENTERED A BATCH MAY DISAPPEAR UNSENT, and this is the one place that could take
+    -- something out of one.
+    --
+    -- Reaching here means the number is being REUSED, so an entry still waiting out the collection
+    -- window under it (LC.pendingDrop) is the previous item's -- and Trade.ClearRollState below takes
+    -- it out of the batch along with everything else this client tracks under the id. It would then
+    -- never be announced at all: the lootmaster force-won it before the batch was even built, so the
+    -- raid would simply never see a card for an item sitting in his bags, with nothing on any screen
+    -- to notice it by. Blizzard reusing a number within seconds is exactly what this function exists
+    -- for, so the window is not an exotic place for it to happen.
+    --
+    -- Flushed rather than kept, because one number cannot carry two items in one message either: the
+    -- receiving side runs this same purge, so it would drop whichever of the two it read first. Same
+    -- answer as a batch whose participants changed (see SameParticipants) -- an ambiguous batch is
+    -- closed and the arriving item opens a new one.
+    --
+    -- Deliberately HERE and not in Trade.ClearRollState. That function is also how a council member
+    -- withdraws an item from an un-sent batch by closing its tab, which is meant to work (see
+    -- tests/test_lc_chrome.lua), and it cannot tell "the owner dropped this" from "the number is
+    -- being reused". This can.
+    local pending = LC.pendingDrop
+    if pending then
+        for _, e in ipairs(pending.entries) do
+            if e.rollID == rollID then LC.FlushPendingDrop() break end
+        end
+    end
+
     -- Rolls already cast FOR THE ITEM NOW ARRIVING survive the purge. Everything else about this
     -- rollID belongs to the previous item and goes.
     local keepRolls = (LC.rollsFor[rollID] == newItemID) and LC.rolls[rollID] or nil
@@ -4116,9 +4143,12 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- Replaced, not appended a second time. Blizzard re-raises START_LOOT_ROLL for a roll that is
         -- still running, and LC.DrawRollTable's own guard returns before redrawing -- but nothing here
         -- would stop the same rollID being serialized twice in one message, which is duplicated bytes
-        -- and LC.Vote.ScheduleVoteCatchup running twice for it. Overwriting rather than skipping is for
-        -- the other re-raise: one carrying a genuinely different item, where PurgeStaleRoll has already
-        -- redrawn above and the newer item string is the right one to send.
+        -- and LC.Vote.ScheduleVoteCatchup running twice for it.
+        --
+        -- Only ever the SAME item reaches this: a re-raise carrying a different one is the number being
+        -- reused, and PurgeStaleRoll has already closed the batch over it a few lines up rather than
+        -- let one number carry two items. So replacing and skipping are the same thing here, and
+        -- replacing is written because it stays correct if that ever stops being true.
         local entries = LC.pendingDrop.entries
         for i = 1, #entries do
             if entries[i].rollID == rollID then entries[i] = entry entry = nil break end

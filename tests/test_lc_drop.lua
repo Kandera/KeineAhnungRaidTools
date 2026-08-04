@@ -115,6 +115,53 @@ do
     end
 end
 
+-- A rollID reused for a different item INSIDE the window ---------------------------------------------
+-- Blizzard hands the same number to an unrelated drop within seconds -- several trash corpses looted in
+-- the same second is the documented trigger -- so it lands inside a collection window as readily as
+-- outside one. One number cannot carry two items in one message: the receiver's own reuse rule would
+-- purge whichever of them it read first. So the batch splits, and the rule that has to hold is that
+-- NOTHING THAT ENTERED A BATCH DISAPPEARS UNSENT. The lootmaster has already force-won the first item,
+-- so an entry dropped here is an item sitting in his bags that the raid never saw a card for -- silent,
+-- with nothing on any screen to notice it by.
+do
+    local sim = F.NewRaid()
+    RaidSim.ClearLog(sim)
+
+    F.Drop(sim, 970, F.GLOVES)
+    F.Drop(sim, 970, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+
+    local sent = Announced(sim)
+    T.eq(#sent, 2, "the item that had the number first is still announced, in a message of its own")
+    T.truthy(sent[1] and sent[1].msg:find("item:" .. F.GLOVES, 1, true),
+        "the first message names the item that dropped first")
+    T.truthy(sent[2] and sent[2].msg:find("item:" .. F.WEAPON, 1, true),
+        "and the second names the one that took its number")
+
+    local council = sim.byName.Merrit
+    T.truthy(tostring(council.KART.LC.rollItems[970]):find("item:" .. F.WEAPON, 1, true),
+        "the raid ends up on the item the number belongs to now")
+    F.AssertAgreed(sim, 970, "about a number that changed hands inside one window")
+end
+
+-- ...and the SAME item re-raised inside the window is not written into it twice -----------------------
+-- Blizzard re-raises START_LOOT_ROLL for a roll that is still running. That is not a reuse and the
+-- batch stays whole -- but the entry must not be added a second time either: duplicated bytes, and the
+-- vote catch-up scheduled twice for one item.
+do
+    local sim = F.NewRaid()
+    RaidSim.ClearLog(sim)
+
+    F.Drop(sim, 971, F.GLOVES)
+    F.Drop(sim, 971, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local sent = Announced(sim)
+    T.eq(#sent, 1, "a roll re-raised for the same item stays in the one message")
+    local _, written = sent[1].msg:gsub("971#", "")
+    T.eq(written, 1, "and is written into it once, not twice")
+end
+
 -- Rolls switched off raid-wide ----------------------------------------------------------------------
 do
     local sim, lm = F.NewRaid()
