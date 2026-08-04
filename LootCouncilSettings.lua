@@ -344,7 +344,7 @@ function LC.BuildSettingsPanel(parent)
     })
 
     -- Opt-in random 1-100 roll per raider, shown as its own column in the council panel —
-    -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.Vote.HandleRoll).
+    -- analogous to RCLootCouncil's Need roll. Purely informational (see LC.DrawRollTable).
     KART.LC.CbRollsEnabled = KART.UI:CreateSettingsCheckbox(raidBox, {
         name = "KART_LCRollsEnabled", label = L.LC_SET_ROLLS_ENABLED,
         store = SettingsStore, key = "lcRollsEnabled", y = -140,

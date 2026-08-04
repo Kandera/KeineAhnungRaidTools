@@ -1173,47 +1173,6 @@ function Vote.HandleVote(payload, senderKey)
     LC.RefreshCouncilIfShown(rollID)
 end
 
--- Receives another raider's automatic 1-100 roll (see LC.OnStartLootRoll) — opt-in, analogous to
--- RCLootCouncil's Need roll. Purely informational, shown as its own column; never used to decide
--- anything automatically.
-function Vote.HandleRoll(payload, senderKey)
-    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then
-        LC.diag.refusedSender = LC.diag.refusedSender + 1
-        return
-    end
-    local rollID, value, itemID = payload:match("^(%d+):(%d+):@(%d*)$")
-    rollID = tonumber(rollID)
-    value  = tonumber(value)
-    if not rollID or not value then return end
-    -- Deliberately NOT gated on LC.rollItems[rollID] the way HandleVote/HandleCouncilVote are: a
-    -- roll is auto-broadcast from START_LOOT_ROLL, so it can legitimately arrive before this client
-    -- knows the roll exists (a client that gets no local START_LOOT_ROLL learns it only from
-    -- LC_START, and other raiders broadcast their rolls at the same instant the leader does). Rolls
-    -- are sent exactly once with no retry, so dropping one loses it permanently.
-    --
-    -- Accepting them means an untracked rollID can hold roll data indefinitely if the roll never
-    -- materializes here at all. Stamp when that started so PurgeStaleRoll can tell a legitimately
-    -- early roll (sub-second, its LC_START is already on the way) from an orphan left over from a
-    -- previous roll that used this same ID. ClearAllRolls sweeps the rest at session end.
-    if not LC.rollItems[rollID] then
-        LC.rollsPendingSince = LC.rollsPendingSince or {}
-        LC.rollsPendingSince[rollID] = LC.rollsPendingSince[rollID] or GetTime()
-    end
-    -- A roll for a DIFFERENT item than the ones we are holding under this ID: the rollID has been
-    -- reused, and what we hold belongs to the previous drop. Start the tally again rather than mixing
-    -- two items' rolls, which is what the council reads its tie-break from.
-    if itemID and itemID ~= "" and LC.rollsFor[rollID] ~= itemID then
-        LC.rolls[rollID] = {}
-        LC.rollsFor[rollID] = itemID
-    end
-    LC.rolls[rollID] = LC.rolls[rollID] or {}
-    LC.rolls[rollID][senderKey] = value
-
-    if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
-        KART.LC.Council.RefreshCouncilRows()
-    end
-end
-
 -- Receives a council member's (non-binding) pick for who should get rollID — a straw-poll tally
 -- only, never an assignment by itself. Like LC_VOTE, this trusts the sender rather than
 -- re-verifying council membership over the wire (the panel that sends it is only ever shown to
@@ -1259,8 +1218,6 @@ end
 -- =====================================================================
 KASC:RegisterMessage("LC_VOTE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) Vote.HandleVote(payload, ctx:Key()) end)
-KASC:RegisterMessage("LC_ROLL", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) Vote.HandleRoll(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CVOTE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) Vote.HandleCouncilVote(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_VOTE_REQ", { payload = true, group = true, enabled = lcEnabled },

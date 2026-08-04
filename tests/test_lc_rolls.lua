@@ -43,9 +43,8 @@ do
 end
 
 -- Never twice ---------------------------------------------------------------------------------------
--- Both roll-start paths call RollForSelf now. On a client that gets Blizzard's own roll AND the
--- owner's announcement, both run -- and a second draw would replace a number the raid has already
--- been shown, on the one screen that decides who gets the item.
+-- The table is drawn once, by the announcer, and HandleStart never draws (see LC.DrawRollTable) -- so
+-- a late duplicate of the announcement must not disturb a table the raid has already been shown.
 do
     local sim, lm, council, raider = F.NewRaid()
     RollsOn(sim)

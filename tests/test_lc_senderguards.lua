@@ -78,9 +78,9 @@ do
         { "a session resume", function() lm.KART.LC.HandleSessionResume(STRANGER) end },
         -- The payload has to be one the handler would otherwise ACCEPT, or it bails on the pattern
         -- and the guard under test is never reached -- an assertion that passes for the wrong
-        -- reason. HandleRoll's shape is "rollID:value:@itemID".
-        { "somebody else's roll", function()
-            lm.KART.LC.Vote.HandleRoll("80:97:@" .. F.GLOVES, STRANGER)
+        -- reason. HandleRolls' shape is "rollID:@itemID:key=value,...".
+        { "somebody else's roll table", function()
+            lm.KART.LC.HandleRolls("80:@" .. F.GLOVES .. ":" .. STRANGER .. "=97", STRANGER)
         end },
     }
 

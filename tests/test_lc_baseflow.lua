@@ -401,9 +401,10 @@ do
         end
     end
 
-    -- Exactly one roll per client per item: rolling twice would let someone re-roll a bad number.
-    T.eq(#RaidSim.Sent(sim, "LC_ROLL:50:"), #sim.clients,
-        "each client broadcast its roll exactly once")
+    -- Exactly one table for the whole raid, drawn once: a second draw would replace a number the
+    -- raid has already been shown, on the one screen that decides who gets the item.
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:50:"), 1,
+        "the whole raid's rolls travel as one message, not one per client")
 end
 
 -- With rolls switched off raid-wide, nobody rolls -- and nobody half-rolls.

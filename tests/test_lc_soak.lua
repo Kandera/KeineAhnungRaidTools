@@ -572,7 +572,7 @@ local function runOne(seed)
                 tostring(c.KART.LC.raidConfig.lootmaster)))
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
-                                 "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLL",
+                                 "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLLS",
                                  "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_ENTRY" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,

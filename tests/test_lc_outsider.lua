@@ -80,15 +80,15 @@ do
     KARTTEST.guidBlackout = {}
 end
 
--- A roll from them -------------------------------------------------------------------------------------
+-- A roll table from them -------------------------------------------------------------------------------
 do
     local sim, _, council, ghost = RaidWithUnresolvable()
     F.Drop(sim, 121, F.GLOVES)
     KARTTEST.AdvanceTime(0)
     local before = Count(council.KART.LC.rolls[121])
 
-    Send(ghost, "LC_ROLL:121:97:@" .. F.GLOVES)
-    T.eq(Count(council.KART.LC.rolls[121]), before, "nor does their roll join the tally")
+    Send(ghost, "LC_ROLLS:121:@" .. F.GLOVES .. ":" .. ghost.guid .. "=97")
+    T.eq(Count(council.KART.LC.rolls[121]), before, "nor does their table replace the tally")
     KARTTEST.guidBlackout = {}
 end
 
@@ -122,7 +122,7 @@ end
 -- Without this every assertion above would pass just as happily against a handler that refuses
 -- everything, which is the failure mode a guard test has to rule out.
 do
-    local sim, _, council = F.NewRaid()
+    local sim, lm, council = F.NewRaid()
     F.Drop(sim, 123, F.GLOVES)
     KARTTEST.AdvanceTime(0)
     local alric = sim.byName.Alric
@@ -133,8 +133,11 @@ do
     T.truthy(v, "a raider the client can resolve has their vote counted")
     T.eq(v and v.idx, 1, "under the answer they clicked")
 
-    Send(alric, "LC_ROLL:123:97:@" .. F.GLOVES)
-    T.eq((council.KART.LC.rolls[123] or {})[alric.guid], 97, "and their roll joins the tally")
+    -- The roll table only ever comes from the loot owner (lm here), unlike a vote -- so this is sent
+    -- from them rather than from Alric, and still checked against the same "a resolvable sender still
+    -- gets through" question the rest of this block asks.
+    Send(lm, "LC_ROLLS:123:@" .. F.GLOVES .. ":" .. lm.guid .. "=97")
+    T.eq((council.KART.LC.rolls[123] or {})[lm.guid], 97, "and their roll table joins the tally")
 end
 
 KARTTEST.guidBlackout = {}

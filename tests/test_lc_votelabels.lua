@@ -190,24 +190,24 @@ do
         "a re-announced identical item keeps its votes")
 end
 
--- B71: a stale "waiting for this roll" stamp must not eat rolls for the roll that DID arrive -------
--- LC_ROLL is accepted for a rollID we do not know yet -- it is broadcast from START_LOOT_ROLL and
+-- B71: a stale "waiting for this roll" stamp must not eat rolls for the table that DID arrive ------
+-- LC_ROLLS is accepted for a rollID we do not know yet -- it is sent right after the announcement and
 -- routinely beats the LC_START that explains it. LC.rollsPendingSince records when that wait began
 -- so PurgeStaleRoll can throw the data away if the roll never materialises.
 --
--- Nothing cleared the stamp when the roll DID materialise. It then sat there for the rest of the
+-- Nothing cleared the stamp when the table DID materialise. It then sat there for the rest of the
 -- session, and the moment the ID was reused the orphan sweep read it as "this data has been waiting
--- twenty minutes" and wiped -- except the table no longer held the orphan, it held the rolls peers
--- had just broadcast for the NEW item. The council scored its tie-break without them, and only on
+-- twenty minutes" and wiped -- except the table no longer held the orphan, it held the rolls the
+-- owner had just sent for the NEW item. The council scored its tie-break without them, and only on
 -- the clients that had missed the LC_START, so the raid disagreed about who rolled what.
 do
     local sim, lm, _, raider = F.NewRaid()
 
-    -- A roll reaches us before we know the roll exists. The wait starts here.
+    -- The table reaches us before we know the roll exists. The wait starts here.
     RaidSim.As(raider, function()
-        raider.KART.LC.Vote.HandleRoll("50:77:@" .. F.GLOVES, lm.guid)
+        raider.KART.LC.HandleRolls("50:@" .. F.GLOVES .. ":" .. lm.guid .. "=77", lm.guid)
     end)
-    T.eq((raider.KART.LC.rolls[50] or {})[lm.guid], 77, "the early roll is kept")
+    T.eq((raider.KART.LC.rolls[50] or {})[lm.guid], 77, "the early table is kept")
 
     -- The roll turns up well inside the grace window, so the sweep never runs and never gets the
     -- chance to clear the stamp on its way past.
@@ -218,14 +218,14 @@ do
     -- bug is precisely about the stamp outliving a roll that is still running.
     KARTTEST.AdvanceTime(18)
 
-    -- Blizzard hands the same ID to a different item. A peer's roll for it arrives first (they run
-    -- their handler before we run ours), and our own START_LOOT_ROLL follows.
+    -- Blizzard hands the same ID to a different item. The owner's table for it arrives first (their
+    -- handler runs before ours), and our own START_LOOT_ROLL follows.
     RaidSim.As(raider, function()
-        raider.KART.LC.Vote.HandleRoll("50:88:@" .. F.WEAPON, lm.guid)
+        raider.KART.LC.HandleRolls("50:@" .. F.WEAPON .. ":" .. lm.guid .. "=88", lm.guid)
     end)
     F.Drop(sim, 50, F.WEAPON, { noRollFor = { Bramor = true, Merrit = true,
                                               Corvin = true, Sinja = true } })
 
     T.eq((raider.KART.LC.rolls[50] or {})[lm.guid], 88,
-        "the peer's roll for the new item survives our own purge")
+        "the owner's table for the new item survives our own purge")
 end

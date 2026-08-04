@@ -522,7 +522,7 @@ local GUARANTEED_TOKENS = {
     LC_START = true, LC_MANUAL_START = true, LC_ROLL_CATCHUP = true,
     LC_END_ROUND = true, LC_ACTIVE = true, LC_SESSION_RESUME = true,
     LC_CONFIG = true, LC_CONFIG_RELAY = true,
-    LC_VOTE = true, LC_CVOTE = true, LC_ROLL = true,
+    LC_VOTE = true, LC_CVOTE = true, LC_ROLLS = true,
     LC_RESULT = true, LC_ONOTE = true,
 }
 
@@ -2313,7 +2313,7 @@ function LC.ClearAllRolls()
     wipe(LC.councilTabs)
     wipe(LC.voteListRolls)
     -- Sweep per-roll state that the two lists above can't reach. Two ways it gets orphaned:
-    -- Vote.HandleRoll deliberately accepts a roll for a not-yet-known rollID (see the comment there),
+    -- LC.HandleRolls deliberately accepts a table for a not-yet-known rollID (see the comment there),
     -- and Trade.HandleResult drops a decided roll from the vote list without calling ClearRollState.
     --
     -- This MUST cover the same tables as Trade.ClearRollState — keep the two in sync. Wiping only
@@ -3075,21 +3075,11 @@ end
 -- for the wrong item. newItemID == "" means "not resolved yet" — never purge on unresolved data,
 -- only on a confirmed different item (see the LC_RESULT-side fix this complements, in
 -- Trade.HandleResult, for the other half of this same rollID-collision class of bug).
--- How long roll data for an untracked rollID stays trusted. Vote.HandleRoll accepts rolls before
+-- How long roll data for an untracked rollID stays trusted. LC.HandleRolls accepts a table before
 -- LC_START arrives (see its comment); that gap is one addon-message round trip, so anything still
 -- unmatched after this is left over from an earlier roll that used the same ID.
 local ROLL_ORPHAN_GRACE = 15
 
--- Opt-in random 1-100 roll (RCLootCouncil-style "Need roll"), purely informational — it gives the
--- council one more tie-breaker next to the votes.
---
--- Must run exactly once per client per roll, and which code path guarantees that differs by roll
--- type: a real drop fires START_LOOT_ROLL on every eligible client, so LC.OnStartLootRoll covers
--- everyone by itself; a manual roll only exists as an addon message, so the sender rolls in
--- LC.StartManualRoll and everyone else in LC.HandleManualStart (KASC drops our own message when it comes back).
--- Note the resulting difference in who takes part: a real roll is limited to players Blizzard deemed
--- eligible, while a manually added item is open to the whole raid — which is the point of handing it
--- back to the council in the first place.
 -- [rollID] = the itemID the rolls currently stored under it were cast for. Blizzard reuses a rollID
 -- for a genuinely different drop within seconds on trash, and every client purges the old state when
 -- it processes its own START_LOOT_ROLL -- but peers broadcast their new rolls at that same instant,
@@ -3098,22 +3088,96 @@ local ROLL_ORPHAN_GRACE = 15
 -- tie-break on a partial set. Found by the soak once it learned to reuse a rollID.
 LC.rollsFor = LC.rollsFor or {}
 
-local function RollForSelf(rollID)
+-- The whole raid's rolls, drawn once by the client that announces the item.
+--
+-- Every client used to draw its own number and broadcast it, which is three problems in one: 25
+-- messages in the same instant for one drop (the biggest burst this addon makes, and it lands in the
+-- window the encounter restriction has just opened), 25 separate things to lose with no way to ask
+-- for one back, and regular ties, because 25 independent draws out of 1-100 collide often.
+--
+-- Drawn WITHOUT replacement, so no two raiders can be handed the same number and the council never
+-- has to break a tie the addon invented. A group cannot hold more than 40 players, so a pool of 100
+-- is never exhausted.
+--
+-- The set of participants is LC.rollEligible[rollID] -- the roster snapshot SnapshotEligible already
+-- takes when announcing. One answer to "who was standing there", used both for who gets a number and
+-- for who may be caught up later (LC.MayCatchUp).
+local ROLL_MAX = 100
+
+-- The wire form, kept in one place because two callers need it: the draw below, and the catch-up
+-- answer that re-sends a table somebody lost (LC.HandleRollRequest).
+function LC.SerializeRollTable(rollID)
+    local rolls = LC.rolls[rollID]
+    if not rolls or next(rolls) == nil then return nil end
+    local parts = {}
+    for key, value in pairs(rolls) do parts[#parts + 1] = key .. "=" .. value end
+    -- Sorted so the message is byte-identical for the same table, which is what makes a retry
+    -- comparable to the original in the harness -- pairs() order is not stable across runs.
+    table.sort(parts)
+    return "LC_ROLLS:" .. rollID .. ":@" .. (LC.rollsFor[rollID] or "")
+        .. ":" .. table.concat(parts, ",")
+end
+
+function LC.DrawRollTable(rollID, itemID)
     if not LC.GetRollsEnabled() then return end
-    local myKey  = (KASC.Identity.ResolvePlayer("player"))
-    -- Once per client per roll, whichever path gets here first (B121). Both roll-start paths call
-    -- this now, and on a client that gets Blizzard's own roll AND the owner's announcement they both
-    -- run -- a second draw would replace a number the raid has already been shown, which is the one
-    -- thing a tie-breaker must never do. PurgeStaleRoll has already emptied this table when the
-    -- rollID belongs to a different item, so a reused id is not caught by this guard.
-    if LC.rolls[rollID] and LC.rolls[rollID][myKey] then return end
-    local myRoll = math.random(1, 100)
-    local link   = LC.rollItems[rollID]
-    local itemID = (type(link) == "string" and link:match("item:(%d+)")) or ""
-    LC.rolls[rollID] = LC.rolls[rollID] or {}
-    LC.rolls[rollID][myKey] = myRoll
-    LC.rollsFor[rollID] = itemID
-    LC.SendLC("LC_ROLL:" .. rollID .. ":" .. myRoll .. ":@" .. itemID)
+    local set = LC.rollEligible[rollID]
+    if not set then return end
+
+    local keys = {}
+    for key in pairs(set) do keys[#keys + 1] = key end
+    -- Sorted before drawing, so the same seed produces the same table in the harness. pairs() over a
+    -- set of GUIDs has no defined order, and the soak's whole premise is that a seed reproduces.
+    table.sort(keys)
+
+    local pool = {}
+    for i = 1, ROLL_MAX do pool[i] = i end
+
+    local rolls = {}
+    for _, key in ipairs(keys) do
+        rolls[key] = table.remove(pool, math.random(#pool))
+    end
+
+    LC.rolls[rollID] = rolls
+    LC.rollsFor[rollID] = itemID or ""
+
+    -- The sender does not process its own message (KASC drops the echo in Dispatch), so the table is
+    -- written locally above rather than on the way back.
+    local msg = LC.SerializeRollTable(rollID)
+    if msg then LC.SendLC(msg) end
+end
+
+-- Receives the whole raid's rolls from the loot owner. REPLACES what we hold rather than writing
+-- single entries, which is the point of the change: one writer instead of 25, so there is no longer
+-- a state where two clients know a different number of rolls and neither of them can tell.
+--
+-- Deliberately NOT gated on LC.rollItems[rollID], for the same reason the old per-client handler was
+-- not: the table is sent right after the announcement, and a client that learns of the roll only
+-- from LC_START can legitimately see the two in either order.
+function LC.HandleRolls(payload, senderKey)
+    if not LC.IsSenderLootOwner(senderKey) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
+    local rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
+    rollID = tonumber(rollID)
+    if not rollID then return end
+
+    -- Same orphan stamp the old handler set: a table for a roll this client never hears about would
+    -- otherwise sit here forever, and PurgeStaleRoll needs to tell "arrived a moment early" from
+    -- "left over from a previous drop under the same id".
+    if not LC.rollItems[rollID] then
+        LC.rollsPendingSince = LC.rollsPendingSince or {}
+        LC.rollsPendingSince[rollID] = LC.rollsPendingSince[rollID] or GetTime()
+    end
+
+    local rolls = {}
+    for key, value in list:gmatch("([^=,]+)=(%d+)") do rolls[key] = tonumber(value) end
+    LC.rolls[rollID] = rolls
+    LC.rollsFor[rollID] = itemID or ""
+
+    if LC.councilPanel and LC.councilPanel:IsShown() and LC.activeRollID == rollID then
+        KART.LC.Council.RefreshCouncilRows()
+    end
 end
 
 local function PurgeStaleRoll(rollID, newItemID)
@@ -3387,11 +3451,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
-    -- LC_START goes out BEFORE the roll broadcast below: a client that never gets its own
+    -- LC_START goes out BEFORE the roll table below: a client that never gets its own
     -- START_LOOT_ROLL (dead, out of range, ineligible, or its session/min-quality state made
-    -- OnStartLootRoll return early) only learns the roll exists from LC_START, and Vote.HandleRoll
-    -- discards data for a roll it doesn't know yet. Sending the roll first would lose the owner's
-    -- own roll on every such client, every time.
+    -- OnStartLootRoll return early) only learns the roll exists from LC_START.
     --
     -- Sent by the LOOT OWNER, not the raid leader (see LC.IsLootOwner). Exactly one client
     -- broadcasts, so no duplicate tabs: while a lootmaster is configured it's them, otherwise the
@@ -3404,6 +3466,9 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- handed this roll after missing its announcement, and who joined too late for it (B118).
         SnapshotEligible(rollID)
         LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. LC.ItemPayload(itemLink, newItemID))
+        -- After the announcement, never before it: a client that never gets its own START_LOOT_ROLL
+        -- learns the roll exists from LC_START, and the two messages travel on different priorities.
+        LC.DrawRollTable(rollID, newItemID)
         LC.Vote.ScheduleVoteCatchup(rollID, secs)
         LC.EnsureTableTicker()
     end
@@ -3411,10 +3476,6 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
     -- "the announcement is still coming" and "it is never coming" except by waiting (B63).
     if not isLootmaster then WaitForAnnouncement(rollID, LC.rollItems[rollID]) end
-
-    -- Every eligible raider's client independently receives this same START_LOOT_ROLL event, so this
-    -- is the one place that reliably rolls once per client for a real drop, council members included.
-    RollForSelf(rollID)
 
     -- The broadcaster does not process their own LC_START, so they open their own windows here —
     -- same treatment HandleStart gives every other client, gated the same way (council gets the
@@ -3672,13 +3733,6 @@ function LC.HandleStart(payload, senderKey)
     LC.rollAnnounced[rollID] = true
     AutoPassAnnounced(rollID)
 
-    -- Our own 1-100 roll, for the clients this handler exists for (B121). LC.OnStartLootRoll was the
-    -- only place that rolled, and it never runs for somebody dead, released, out of range or
-    -- ineligible -- so exactly the people who most need the council to see them as candidates were
-    -- the ones with no number in the column, permanently. RollForSelf refuses to draw twice for the
-    -- same roll, which is what makes it safe to call from both paths.
-    RollForSelf(rollID)
-
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
     end
@@ -3799,9 +3853,9 @@ function LC.StartManualRoll(itemsText)
         end
         LC.SendLC(msg)
 
-        -- Our own roll. Peers do the same in LC.HandleManualStart — see RollForSelf for why the
-        -- two halves are needed here while a real drop gets by with one.
-        RollForSelf(rollID)
+        -- The whole raid's rolls, drawn here for the same reason the announcement is sent here: this
+        -- is the client that knows who is standing in the raid right now.
+        LC.DrawRollTable(rollID, (itemLink:match("item:(%d+)")))
 
         -- KASC drops our own message when it comes back (see Dispatch), so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
@@ -3852,10 +3906,6 @@ function LC.HandleManualStart(payload, senderKey)
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
 
-    -- Our own roll. The sender rolled in LC.StartManualRoll; there is no START_LOOT_ROLL behind a
-    -- manual item, so this handler is the only place the rest of the raid ever rolls for it.
-    RollForSelf(rollID)
-
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)
     end
@@ -3886,6 +3936,8 @@ KASC:RegisterMessage("LC_CONFIG_RELAY", { payload = true, group = true, enabled 
     function(payload, ctx) LC.HandleConfigRelay(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_ROLL_CATCHUP", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleRollCatchup(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_ROLLS", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleRolls(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_TABLE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleTable(payload, ctx:Key(), ctx.sender) end)
 KASC:RegisterMessage("LC_ROLL_REQ", { payload = true, group = true, enabled = lcEnabled },
