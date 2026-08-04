@@ -4516,6 +4516,7 @@ function LC.StartManualRoll(itemsText)
 
     local seconds = KART_Settings.lcVoteSeconds or 20
     local startedAny = false
+    local entries, keys = {}, nil
 
     -- Matches each complete item hyperlink (|Hitem:...|h[Name]|h|r, with either a hex or named
     -- colour escape in front of it — different client versions shift-click different forms)
@@ -4545,22 +4546,25 @@ function LC.StartManualRoll(itemsText)
         -- who was in the raid at the time. Now there is (B118).
         SnapshotEligible(rollID)
 
-        local msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemLink
-        -- Guard the 255-byte SendAddonMessage cap: a very long item link (many bonus IDs) would be
-        -- silently dropped, desyncing peers while the lootmaster's own windows still open below.
-        -- Fall back to the compact item string, which HandleManualStart rebuilds into a full link.
-        if #msg > 255 then
-            local itemStr = KAUtil.GetItemString(itemLink)
-            if itemStr then msg = "LC_MANUAL_START:" .. rollID .. ":" .. seconds .. ":" .. itemStr end
+        -- The participant list is taken once, from the first item: /kart add runs in one moment, so
+        -- every item in it has the same snapshot.
+        if not keys then
+            keys = {}
+            for key in pairs(LC.rollEligible[rollID] or {}) do keys[#keys + 1] = key end
+            table.sort(keys)
         end
-        LC.SendLC(msg)
-
-        -- The whole raid's rolls, drawn here for the same reason the announcement is sent here: this
-        -- is the client that knows who is standing in the raid right now.
-        -- The sender does not process its own LC_MANUAL_START (KASC drops the echo, see Dispatch), so
-        -- this client has to record its own announcement here rather than through LC.HandleManualStart.
+        -- The sender does not process its own LC_DROP (KASC drops the echo, see Dispatch), so this
+        -- client has to record its own announcement here rather than through LC.HandleManualStart.
         LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
-        LC.DrawRollTable(rollID, (itemLink:match("item:(%d+)")))
+        -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
+        LC.DrawRollTable(rollID, (itemLink:match("item:(%d+)")), true)
+        entries[#entries + 1] = {
+            rollID = rollID,
+            -- The full string, not the old 255-byte fallback: this message is split and reassembled
+            -- by the transport, so there is no cliff left to degrade against, and a bare item string
+            -- would lose the bonus ids (B119).
+            itemString = KAUtil.GetFullItemString(itemLink) or itemLink,
+        }
 
         -- KASC drops our own message when it comes back (see Dispatch), so the lootmaster has to open
         -- their own window locally, same as HandleStart does for every other client.
@@ -4571,6 +4575,11 @@ function LC.StartManualRoll(itemsText)
         LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
     end
 
+    if #entries > 0 then
+        LC.SendLC(LC.SerializeDrop("m", seconds, keys, entries))
+        LC.EnsureTableTicker()
+    end
+
     if not startedAny then
         print("|cffff0000KART:|r " .. KART.L.LC_MANUAL_ADD_USAGE)
     end
@@ -4578,8 +4587,9 @@ end
 
 -- Peer side of LC.StartManualRoll — mirrors LC.HandleStart, minus the GetLootRollItemLink call
 -- (there's no real Blizzard roll behind a manually-added item, so the link always arrives intact
--- in the payload itself). Fires once per item — the sender broadcasts one LC_MANUAL_START per
--- link, not a single batched message.
+-- in the payload itself). LC.StartManualRoll no longer sends LC_MANUAL_START itself — the whole
+-- list travels as one LC_DROP (kind "m") — but this handler stays: LC.HandleDrop calls it once per
+-- entry, rebuilding the same per-item payload this used to receive off the wire directly.
 function LC.HandleManualStart(payload, senderKey)
     -- Only the loot owner legitimately sends manual rolls (see LC.StartManualRoll).
     -- IsSenderLootOwner also handles the GUID-vs-pending-text race: senderKey is always a resolved

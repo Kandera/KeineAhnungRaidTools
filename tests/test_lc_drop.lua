@@ -177,3 +177,29 @@ do
     T.truthy(council.KART.LC.rollItems[958] ~= nil, "the item arrives with rolls switched off")
     T.eq(next(council.KART.LC.rolls[958] or {}), nil, "and carries no numbers")
 end
+
+-- /kart add with several links is one message too --------------------------------------------------
+-- The list is already complete when the command runs, so nothing has to be waited for -- but it is
+-- the same message, with the same shared participant list, and the receiver routes it into the
+-- manual handling because a manually added item has no Blizzard roll behind it.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+
+    local links = KARTTEST.items[F.GLOVES].link .. " " .. KARTTEST.items[F.WEAPON].link
+    RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(links) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(#RaidSim.Sent(sim, "LC_MANUAL_START:"), 0, "manual items are not announced one by one either")
+    -- Counted with Announced (RaidSim.Messages), not a bare RaidSim.Sent: two full item strings plus
+    -- the shared key list is already over the 255-byte cap, so this lands as a split message and a
+    -- plain prefix search on the token would find nothing (see the comment on RaidSim.Messages).
+    T.eq(#Announced(sim), 1, "they travel as one message")
+
+    local council = sim.byName.Merrit
+    local tracked = 0
+    for _, link in pairs(council.KART.LC.rollItems) do
+        if link then tracked = tracked + 1 end
+    end
+    T.truthy(tracked >= 2, "and both of them arrive")
+end
