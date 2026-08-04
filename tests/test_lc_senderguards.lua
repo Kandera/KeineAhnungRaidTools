@@ -69,6 +69,9 @@ end
 do
     local sim, lm = F.NewRaid()
     F.Drop(sim, 80, F.GLOVES)
+    -- Past the drop's collection window, so the announcement is on the wire before the picture is
+    -- taken -- what the assertions below are about is what the REFUSED message adds to either.
+    KARTTEST.AdvanceTime(1)
     local before = Snapshot(lm)
 
     local calls = {

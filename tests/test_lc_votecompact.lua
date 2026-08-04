@@ -31,6 +31,7 @@ end
 
 Compact(true)
 F.Drop(sim, 90, F.GLOVES)
+KARTTEST.AdvanceTime(1)
 Refresh()
 
 local f = LC.voteListFrame
@@ -75,6 +76,7 @@ end
 -- The note that travels with the vote ----------------------------------------------------------------
 do
     F.Drop(sim, 91, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     Refresh()
     local row
     for _, r in ipairs(f.compactRows) do
@@ -97,6 +99,7 @@ end
 -- layout carries the same rule; the compact one had no test for it.
 do
     F.Drop(sim, 92, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     RaidSim.As(raider, function() Vote.CastVote(92, 1, nil, true) end)
     Refresh()
     T.eq(LC.autoVotedByMe[92], true, "the answer was given automatically")
@@ -127,6 +130,7 @@ do
     -- What matters is the next batch: the pool is reused, and a row still holding the previous
     -- item's chips would let one click answer a roll that is no longer there.
     F.Drop(sim, 93, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     Refresh()
     T.truthy(f:IsShown(), "a new item opens it again")
     T.eq(ShownRows(f.compactRows), 1, "showing exactly the one item, not the batch before it")

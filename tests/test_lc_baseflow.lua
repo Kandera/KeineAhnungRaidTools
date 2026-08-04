@@ -38,6 +38,8 @@ end
 do
     local sim, lm, council, raider = NewRaid()
     Drop(sim, 41, 249331)
+    -- Past the collection window a drop is held in, so the announcement has actually gone out.
+    KARTTEST.AdvanceTime(1)
 
     for _, c in ipairs(sim.clients) do
         local link = c.KART.LC.rollItems[41]
@@ -113,6 +115,7 @@ end
 do
     local sim, _, _, raider = NewRaid()
     Drop(sim, 44, 249293, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
 
     T.truthy(raider.KART.LC.IsRealItemLink(raider.KART.LC.rollItems[44]),
         "a client with no loot roll of its own still ends up with a real link")
@@ -126,6 +129,7 @@ do
     local sim, _, _, raider = NewRaid()
     KARTTEST.items[249293].cached = false
     Drop(sim, 45, 249293, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
 
     local parked = raider.KART.LC.rollItems[45]
     T.truthy(tostring(parked):find("item:249293", 1, true),
@@ -175,6 +179,8 @@ do
     Drop(sim, 47, 249331)
     Drop(sim, 48, 249293)
     Drop(sim, 49, 249331)     -- the same item as roll 47, a second time
+    -- All three fell inside one collection window, so this is also the moment they arrive.
+    KARTTEST.AdvanceTime(1)
 
     for _, c in ipairs(sim.clients) do
         T.eq(#c.KART.LC.voteListRolls, 3, c.name .. " has a row for each of the three drops")
@@ -220,14 +226,14 @@ do
     -- nothing printed.
     KARTTEST.AdvanceTime(10)
 
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "nothing is decided while the item is unidentifiable")
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "nothing is decided while the item is unidentifiable")
     T.truthy(not (KARTTEST.rolled[59] or {})[lm.unit], "and nothing is force-won on a guess")
 
     -- It arrives, late. The roll must still be picked up rather than abandoned.
     KARTTEST.lootRolls[59].linkPending = nil
     KARTTEST.AdvanceTime(10)
 
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "the roll is picked up once the item is identifiable")
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 1, "the roll is picked up once the item is identifiable")
     T.eq(KARTTEST.rolled[59] and KARTTEST.rolled[59][lm.unit], 1, "and force-won then")
     for _, c in ipairs(sim.clients) do
         T.truthy(c.KART.LC.IsRealItemLink(c.KART.LC.rollItems[59]), c.name .. " gets the item")
@@ -242,6 +248,7 @@ do
     local sim, lm, council, raider = NewRaid()
     KARTTEST.items[249293].cached = false
     Drop(sim, 40, 249293, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
     -- Parked as the item STRING the announcement carried, not as the bare id it used to be reduced to:
     -- the id alone would come back as the base version of the item once it caches (B119). Still not a
     -- real link, which is the state this whole scenario is about.
@@ -256,6 +263,7 @@ do
     -- The same roll ID comes round again, for something else entirely.
     KARTTEST.lootRolls[40] = nil
     Drop(sim, 40, 249331)
+    KARTTEST.AdvanceTime(1)
 
     T.truthy(tostring(raider.KART.LC.rollItems[40]):find("Ezzorak", 1, true),
         "the reused roll shows the NEW item")
@@ -384,6 +392,7 @@ end
 do
     local sim, lm = NewRaid()
     Drop(sim, 50, 249331)
+    KARTTEST.AdvanceTime(1)
 
     local rolls = lm.KART.LC.rolls[50] or {}
     for _, c in ipairs(sim.clients) do
@@ -409,7 +418,7 @@ do
     -- match would find nothing. This only works because the fixture's payload here stays under the
     -- single-part size limit; it will fail loudly, not silently, the day this message's payload grows
     -- past that limit.
-    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:50:"), 1,
+    T.eq(#RaidSim.Sent(sim, "LC_DROP:"), 1,
         "the whole raid's rolls travel as one message, not one per client")
 end
 
@@ -951,6 +960,7 @@ do
     F.AssertAgreed(sim, nil, "about the session and the config before anything drops")
 
     Drop(sim, 81, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     F.AssertAgreed(sim, 81, "about the item that just dropped")
 
     RaidSim.As(raider,  function() raider.KART.LC.Vote.CastVote(81, 1) end)
@@ -972,6 +982,7 @@ do
     -- history: an assignment coming from someone other than the lootmaster is the path where the
     -- sender's own local step and everybody else's handler drift apart unnoticed.
     Drop(sim, 82, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(82, 1) end)
     RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(82, sinja.guid, "Upgrade") end)
     KARTTEST.AdvanceTime(0)
@@ -993,6 +1004,7 @@ do
     local corvin = sim.byName.Corvin
     local ids = { 120, 121, 122, 123 }
     for _, id in ipairs(ids) do F.Drop(sim, id, F.GLOVES) end
+    KARTTEST.AdvanceTime(1)
 
     T.eq(#lm.KART.LC.councilTabs, 4, "the lootmaster has four cards")
     T.eq(#council.KART.LC.councilTabs, 4, "and so does every other council member")

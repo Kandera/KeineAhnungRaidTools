@@ -31,9 +31,12 @@ do
     -- The exact shape of the report: Blizzard raised no roll for this client -- dead, released, out of
     -- range -- so the announcement was its only way to hear about the item, and the announcement was
     -- lost. Other raiders had the card, this one had nothing.
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 80, F.GLOVES, { bop = true, noRollFor = { Merrit = true } })
-    RaidSim.Deliver(sim, "LC_START")
+    -- Past the window the drop is collected in, so the announcement is made -- and lost -- while the
+    -- blackhole is still up.
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
     T.truthy(lm.KART.LC.rollItems[80], "the owner has the item")
     T.eq(council.KART.LC.rollItems[80], nil, "and the council member does not, having missed it")
 
@@ -56,6 +59,8 @@ end
 do
     local sim, lm = F.NewRaid()
     F.Drop(sim, 81, F.GLOVES, { bop = true })
+    -- Announced before they walk in: that is what makes the distribution "already running".
+    KARTTEST.AdvanceTime(1)
 
     local late = RaidSim.Join(sim, LATECOMER)
     KARTTEST.AdvanceTime(0)

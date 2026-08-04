@@ -56,6 +56,8 @@ end
 do
     local sim = NewRaid()
     Drop(sim, 50, F.GLOVES)
+    -- Past the window a drop is collected in, so the announcement has reached them.
+    KARTTEST.AdvanceTime(1)
 
     for _, name in ipairs(AUTOPASSERS) do
         T.eq(PassedBy(sim, 50, name), 0, name .. " passed Blizzard's roll once the council had the item")
@@ -80,7 +82,7 @@ do
     end
 
     RaidSim.As(lm, function() lm.KART.LC.OnStartLootRoll(51) end)
-    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(1)
     for _, name in ipairs(AUTOPASSERS) do
         T.eq(PassedBy(sim, 51, name), 0, "and passes as soon as the announcement arrives -- " .. name)
     end
@@ -90,8 +92,9 @@ end
 do
     local sim, lm = NewRaid()
     Drop(sim, 52, F.GLOVES, { noRollFor = { Bramor = true } })
+    KARTTEST.AdvanceTime(1)
 
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "nobody announces the item, because only the owner ever does")
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "nobody announces the item, because only the owner ever does")
     T.is_nil(lm.KART.LC.rollItems[52], "and the owner is not tracking an item they never saw")
 
     -- The defect: every one of these used to pass, handing the item to whoever is not running KART.
@@ -160,8 +163,9 @@ end
 do
     local sim = NewRaid()
     Drop(sim, 56, F.RARE)
+    KARTTEST.AdvanceTime(1)
 
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "a rare is below the threshold and is never announced")
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "a rare is below the threshold and is never announced")
     for _, name in ipairs(AUTOPASSERS) do
         T.eq(PassedBy(sim, 56, name), 0, name .. " still passes it straight away")
     end
@@ -175,6 +179,7 @@ end
 do
     local sim = NewRaid()
     Drop(sim, 57, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     local corvin = sim.byName.Corvin
     T.truthy(corvin.KART.LC.rollAnnounced[57], "the first item was announced")
 

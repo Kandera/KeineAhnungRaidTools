@@ -28,8 +28,9 @@ do
     local deaf = sim.byName.Corvin -- council, and never asked to roll: the reported case exactly
     RaidSim.ClearLog(sim)
     F.Drop(sim, 90, BRACERS, { bop = true, noRollFor = { Corvin = true } })
+    KARTTEST.AdvanceTime(1)
 
-    local sent = RaidSim.Sent(sim, "LC_START")
+    local sent = RaidSim.Sent(sim, "LC_DROP")
     T.eq(#sent, 1, "the loot owner announces the roll once")
     T.truthy(sent[1].msg:find("11946", 1, true),
         "and the announcement carries the item's bonus ids, not just its id")

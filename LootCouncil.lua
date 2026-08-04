@@ -523,7 +523,11 @@ end
 --
 -- Loot drops at the END of an encounter, which is exactly the window this is about, so the top half
 -- of this list is the loot flow itself.
+-- LC_START and LC_MANUAL_START are no longer SENT (a drop travels as LC_DROP), but LC_ROLL_CATCHUP
+-- still routes through LC.HandleStart, and an entry that triggers nothing is cheaper than one that
+-- turns out to be missing later.
 local GUARANTEED_TOKENS = {
+    LC_DROP = true,
     LC_START = true, LC_MANUAL_START = true, LC_ROLL_CATCHUP = true,
     LC_END_ROUND = true, LC_ACTIVE = true, LC_SESSION_RESUME = true,
     LC_CONFIG = true, LC_CONFIG_RELAY = true,
@@ -543,6 +547,7 @@ local GUARANTEED_TOKENS = {
 --
 -- Everything not listed is NORMAL: votes, rolls, awards, config, session state.
 local TOKEN_PRIO = {
+    LC_DROP = "ALERT",
     LC_START = "ALERT", LC_MANUAL_START = "ALERT", LC_END_ROUND = "ALERT",
     LC_HIST_REQ = "BULK",
 }
@@ -3418,6 +3423,42 @@ function LC.SerializeRollTable(rollID)
         .. ":" .. table.concat(parts, ",")
 end
 
+-- One message for everything that dropped at once.
+--
+-- Shape: LC_DROP:<secs>:<kind>:<key>,<key>,...;<rollID>#<roll>,<roll>,...#<itemString>;<rollID>#...
+--
+-- The head names the participants ONCE; each entry then lists its numbers in that order. That is the
+-- whole saving: six items in a 25-man raid used to repeat the same 25 identity keys six times, which
+-- was three quarters of the traffic.
+--
+-- kind: "r" for a real drop, "m" for manually added items (/kart add). A message is always one or the
+-- other, and the receiver routes each entry into the handling that token had before -- a manual item
+-- has no Blizzard roll behind it, is open to the whole raid, and nobody has to win it.
+--
+-- The separators are not free: an item string contains colons AND commas (see LC.ItemPayload and
+-- B119, which is why the full string travels at all). So ";" separates sections and entries, "#"
+-- separates an entry's fields, "," stays for lists -- and the item string is the LAST field of an
+-- entry, where nothing it contains can split anything else.
+local DROP_ENTRY_SEP, DROP_FIELD_SEP = ";", "#"
+
+function LC.SerializeDrop(kind, secs, keys, entries)
+    local parts = {}
+    for _, e in ipairs(entries) do
+        local nums = {}
+        -- No table at all -- rolls are switched off raid-wide -- leaves the field EMPTY, which is what
+        -- the receiver reads as "this item has no numbers". Filling it with zeros instead would hand
+        -- every raider a roll of 0 for an item the raid deliberately does not roll on.
+        local rolls = LC.rolls[e.rollID]
+        if rolls then
+            for i, key in ipairs(keys) do nums[i] = rolls[key] or 0 end
+        end
+        parts[#parts + 1] = e.rollID .. DROP_FIELD_SEP .. table.concat(nums, ",")
+            .. DROP_FIELD_SEP .. e.itemString
+    end
+    return "LC_DROP:" .. secs .. ":" .. kind .. ":" .. table.concat(keys, ",")
+        .. DROP_ENTRY_SEP .. table.concat(parts, DROP_ENTRY_SEP)
+end
+
 -- The whole raid's rolls, drawn once by the client that announces the item.
 --
 -- Every client used to draw its own number and broadcast it, which is three problems in one: 25
@@ -3432,7 +3473,11 @@ end
 -- The set of participants is LC.rollEligible[rollID] -- the roster snapshot SnapshotEligible already
 -- takes when announcing. One answer to "who was standing there", used both for who gets a number and
 -- for who may be caught up later (LC.MayCatchUp).
-function LC.DrawRollTable(rollID, itemID)
+-- silent: draw and store, but do not send -- the numbers travel inside LC_DROP instead, where the
+-- participant list is written once for the whole batch rather than once per item. Everything else
+-- about the draw is identical, and that is the point: there is one place that decides who gets which
+-- number, whichever message carries the result.
+function LC.DrawRollTable(rollID, itemID, silent)
     if not LC.GetRollsEnabled() then return end
     -- Blizzard re-raises START_LOOT_ROLL for a roll still in progress -- OnStartLootRoll runs again,
     -- PurgeStaleRoll sees the SAME item and deliberately keeps the rolls already cast for it (see its
@@ -3468,6 +3513,7 @@ function LC.DrawRollTable(rollID, itemID)
 
     -- The sender does not process its own message (KASC drops the echo in Dispatch), so the table is
     -- written locally above rather than on the way back.
+    if silent then return end
     local msg = LC.SerializeRollTable(rollID)
     if msg then LC.SendLC(msg) end
 end
@@ -3837,6 +3883,35 @@ end
 
 -- attempt is internal (see the link-retry block below); Core.lua's START_LOOT_ROLL handler passes
 -- only rollID.
+-- What has dropped since the window opened, and when it closes. A boss hands its items over in one
+-- moment, so the first one starts a short window and whatever else arrives inside it goes into the
+-- same message. Half a second is chosen against what it costs: this message carries ALERT because the
+-- raid is waiting for it, but half a second is nothing next to what the encounter restriction holds
+-- back anyway, and the raid is looking at Blizzard's own roll windows in exactly that moment.
+--
+-- A single item waits too. One code path, one format, and the shared participant list applies always.
+local DROP_COLLECT = 0.5
+LC.pendingDrop = nil -- { secs = n, keys = {…}, entries = { { rollID = n, itemString = s }, … } }
+
+local function FlushPendingDrop()
+    local drop = LC.pendingDrop
+    LC.pendingDrop = nil
+    if not drop or #drop.entries == 0 then return end
+    -- Before the send, not after: the heartbeat has to be the older ticker of the two this drop
+    -- starts, exactly as it was when the announcement went out from inside OnStartLootRoll. A
+    -- receiver's own expiry sweep is started by the announcement, so with the same period on both
+    -- and a vote window that is a whole number of heartbeats, the two land on the same second --
+    -- and whichever was created first runs first. Sweeping BEFORE the heartbeat means the owner
+    -- hears "I have nothing under that number" from a client that had it a moment ago and hands it
+    -- straight back, which is a round trip nobody needs.
+    LC.EnsureTableTicker()
+    LC.SendLC(LC.SerializeDrop("r", drop.secs, drop.keys, drop.entries))
+    for _, e in ipairs(drop.entries) do
+        LC.Vote.ScheduleVoteCatchup(e.rollID, drop.secs)
+    end
+end
+LC.FlushPendingDrop = FlushPendingDrop
+
 function LC.OnStartLootRoll(rollID, attempt)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then return end
@@ -3959,9 +4034,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     if LC.rollItems[rollID] == "???" then ResolveRollItemLink(rollID) end
     LC.votes[rollID]     = LC.votes[rollID] or {}
 
-    -- LC_START goes out BEFORE the roll table below: a client that never gets its own
-    -- START_LOOT_ROLL (dead, out of range, ineligible, or its session/min-quality state made
-    -- OnStartLootRoll return early) only learns the roll exists from LC_START.
+    -- The announcement and the roll table travel together in LC_DROP: a client that never gets its
+    -- own START_LOOT_ROLL (dead, out of range, ineligible, or its session/min-quality state made
+    -- OnStartLootRoll return early) only learns the roll exists from that message.
     --
     -- Sent by the LOOT OWNER, not the raid leader (see LC.IsLootOwner). Exactly one client
     -- broadcasts, so no duplicate tabs: while a lootmaster is configured it's them, otherwise the
@@ -3973,15 +4048,29 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- Who is standing here right now, before anything else: this is what decides later who may be
         -- handed this roll after missing its announcement, and who joined too late for it (B118).
         SnapshotEligible(rollID)
-        LC.SendLC("LC_START:" .. rollID .. ":" .. secs .. ":" .. LC.ItemPayload(itemLink, newItemID))
-        -- After the announcement, never before it: a client that never gets its own START_LOOT_ROLL
-        -- learns the roll exists from LC_START, and the two messages travel on different priorities.
-        -- The sender does not process its own LC_START (KASC drops the echo, see Dispatch), so this
-        -- client has to record its own announcement here rather than through LC.HandleStart.
+        -- The sender does not process its own announcement (KASC drops the echo, see Dispatch), so
+        -- this client records its own the moment it decides to make it.
         LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
-        LC.DrawRollTable(rollID, newItemID)
-        LC.Vote.ScheduleVoteCatchup(rollID, secs)
-        LC.EnsureTableTicker()
+        -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
+        LC.DrawRollTable(rollID, newItemID, true)
+
+        if not LC.pendingDrop then
+            local keys = {}
+            for key in pairs(LC.rollEligible[rollID] or {}) do keys[#keys + 1] = key end
+            -- Sorted for the same reason LC.DrawRollTable sorts: the numbers are matched to this
+            -- list by position on the receiving side, so both sides must walk it the same way.
+            table.sort(keys)
+            LC.pendingDrop = { secs = secs, keys = keys, entries = {} }
+            C_Timer.After(DROP_COLLECT, FlushPendingDrop)
+        end
+        local entries = LC.pendingDrop.entries
+        entries[#entries + 1] = {
+            rollID = rollID,
+            -- The full string, not LC.ItemPayload's cap-driven fallback: this message is split and
+            -- reassembled by the transport, so there is no 255-byte cliff to degrade against, and a
+            -- bare itemID would lose the bonus ids B119 is about.
+            itemString = KAUtil.GetFullItemString(itemLink) or LC.ItemPayload(itemLink, newItemID),
+        }
     end
 
     -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
@@ -4449,6 +4538,45 @@ function LC.HandleManualStart(payload, senderKey)
     LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
 end
 
+-- The receiving half, and deliberately thin: it rebuilds the two payloads the existing handlers
+-- already read and calls them. Every guard those grew -- the sender check, PurgeStaleRoll, the reuse
+-- rule, the dismissal note (B132), the announcer record (B130) -- therefore applies unchanged, and
+-- there is no second copy of any of it to drift.
+function LC.HandleDrop(payload, senderKey)
+    local secs, kind, rest = payload:match("^(%d+):([rm]):(.*)$")
+    if not secs then return end
+    local head, entries = rest:match("^([^;]*);(.*)$")
+    if not entries then return end
+
+    local keys = {}
+    for key in head:gmatch("[^,]+") do keys[#keys + 1] = key end
+
+    for entry in entries:gmatch("[^;]+") do
+        -- The item string is the last field precisely so that its own colons and commas cannot reach
+        -- this pattern.
+        local rollID, nums, itemString = entry:match("^(%d+)#([^#]*)#(.*)$")
+        if rollID then
+            local startPayload = rollID .. ":" .. secs .. ":" .. itemString
+            if kind == "m" then
+                LC.HandleManualStart(startPayload, senderKey)
+            else
+                LC.HandleStart(startPayload, senderKey)
+            end
+            -- After the announcement, never before it: LC.HandleRolls accepts a table from the
+            -- ANNOUNCER of that item, and the line above is what records who that is.
+            if nums ~= "" then
+                local pairsOut, i = {}, 0
+                for n in nums:gmatch("[^,]+") do
+                    i = i + 1
+                    if keys[i] then pairsOut[#pairsOut + 1] = keys[i] .. "=" .. n end
+                end
+                LC.HandleRolls(rollID .. ":@" .. LC.PayloadItemID(itemString) .. ":"
+                    .. table.concat(pairsOut, ","), senderKey)
+            end
+        end
+    end
+end
+
 -- =====================================================================
 --  Addon-message registrations
 -- =====================================================================
@@ -4460,6 +4588,8 @@ end
 -- someone outside the group, and the receiver confirms it via popup before anything is applied.
 KASC:RegisterMessage("LC_ACTIVE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleActive(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_DROP", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleDrop(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_START", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleStart(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_MANUAL_START", { payload = true, group = true, enabled = lcEnabled },

@@ -33,6 +33,9 @@ end
 do
     local sim, lm, _, raider = NewRaid()
     Drop(sim, 80, F.GLOVES)
+    -- Past the window a drop is collected in: the item is announced and being distributed BEFORE
+    -- anybody walks in, which is what "already running" means here.
+    KARTTEST.AdvanceTime(1)
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(80, 1) end)
 
     local torvi = RaidSim.Join(sim, NEWCOMER)
@@ -64,6 +67,7 @@ do
 
     -- The next boss is theirs like anyone else's -- which is the whole point of joining cleanly.
     Drop(sim, 81, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     T.truthy(torvi.KART.LC.IsRealItemLink(torvi.KART.LC.rollItems[81]),
         "the joiner sees the NEXT item like everyone else")
     RaidSim.As(torvi, function() torvi.KART.LC.Vote.CastVote(81, 1) end)
@@ -191,6 +195,7 @@ do
         "an item they have not answered the council on is back in front of them")
 
     Drop(sim, 86, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     RaidSim.As(alric, function() alric.KART.LC.Vote.CastVote(86, 1) end)
     T.truthy((lm.KART.LC.votes[86] or {})[alric.guid], "and they vote normally from then on")
     F.AssertAgreed(sim, 86, "including the client that relogged, from the next item on")
@@ -227,6 +232,7 @@ do
     -- The consequence, stated as loot rather than as a flag: the next drop still has to be theirs
     -- to hand out.
     Drop(sim, 88, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     T.eq(KARTTEST.rolled[88] and KARTTEST.rolled[88][lm.unit], 1,
         "so they still force-win the next drop instead of letting it roll away (B30)")
     -- The lootmaster is the client the whole raid reads its config from, so a lootmaster who came
@@ -519,6 +525,7 @@ do
         "-- the two roles are separate, and only the loot one moved")
 
     Drop(sim, 94, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][council.unit], 1,
         "the designee force-wins from then on")
     T.eq(KARTTEST.rolled[94] and KARTTEST.rolled[94][lm.unit], 0,
@@ -1089,16 +1096,17 @@ end
 -- the boss died. Someone who joined afterwards has no such roll and is not pulled in.
 do
     local sim, lm = NewRaid()
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
 
     -- Alric is here and eligible, but reloading at the moment the boss dies: no session, so its own
     -- START_LOOT_ROLL does nothing, and the announcement never arrives either.
     local alric = RaidSim.Reload(sim, "Alric")
     Drop(sim, 90, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     T.eq(alric.KART.LC.rollItems[90], nil, "the deaf client has no idea the item dropped")
     T.truthy(lm.KART.LC.IsRealItemLink(lm.KART.LC.rollItems[90]), "while the raid is voting on it")
 
-    RaidSim.Deliver(sim, "LC_START")
+    RaidSim.Deliver(sim, "LC_DROP")
     RaidSim.EnterWorld(sim, "Alric")
     RosterSettles(sim)
 
@@ -1113,6 +1121,8 @@ end
 do
     local sim, lm = NewRaid()
     Drop(sim, 91, F.GLOVES, { noRollFor = { Torvi = true } })
+    -- Announced before they walk in: that is what makes this "a boss they were not there for".
+    KARTTEST.AdvanceTime(1)
     local torvi = RaidSim.Join(sim, NEWCOMER)
     RosterSettles(sim)
     KARTTEST.AdvanceTime(10)
@@ -1268,6 +1278,7 @@ do
 
     Drop(sim, 70, F.GLOVES)
     Drop(sim, 71, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
 
     -- The disagreement is GONE, and this is where it went. It needed the leader's own client to
     -- believe it owned the loot flow while its peers held a config naming somebody else -- which
@@ -1371,6 +1382,7 @@ do
 
     -- Now the same item, decided after the role has moved.
     Drop(sim, 91, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     T.truthy(RaidSim.As(lm, function() return lm.KART.LC.rollItems[91] end),
         "the lootmaster saw the second drop and force-won it too")
 
@@ -1399,6 +1411,7 @@ end
 do
     local sim, _, council, raider = NewRaid()   -- council = Merrit, not the loot owner yet
     Drop(sim, 92, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.rollNotInOurBags[92],
         "a council member learns of the drop from the lootmaster, so it is not theirs to hand out")
 

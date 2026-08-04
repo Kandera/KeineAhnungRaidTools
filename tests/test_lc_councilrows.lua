@@ -187,6 +187,7 @@ end
 do
     local sim, lm, council = F.NewRaid()
     F.Drop(sim, 96, F.GLOVES, { bop = true })
+    KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.councilPanel and council.KART.LC.councilPanel:IsShown(),
         "the council member's panel is up for the item")
 
@@ -201,5 +202,6 @@ do
 
     -- A genuinely new item does, which is the whole job of the function that was doing the forcing.
     F.Drop(sim, 97, F.WEAPON, { bop = true })
+    KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.councilPanel:IsShown(), "but a new item brings it back")
 end

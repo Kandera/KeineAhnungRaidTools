@@ -69,7 +69,7 @@ end
 do
     local sim, _, council, ghost = RaidWithUnresolvable()
     F.Drop(sim, 120, F.GLOVES)
-    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(1)
     local before = Count(council.KART.LC.votes[120])
 
     Send(ghost, "LC_VOTE:120:1:#3:@" .. F.GLOVES .. ":brauche ich")
@@ -84,7 +84,7 @@ end
 do
     local sim, _, council, ghost = RaidWithUnresolvable()
     F.Drop(sim, 121, F.GLOVES)
-    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(1)
     local before = Count(council.KART.LC.rolls[121])
 
     Send(ghost, "LC_ROLLS:121:@" .. F.GLOVES .. ":" .. ghost.guid .. "=97")

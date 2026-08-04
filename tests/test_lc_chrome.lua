@@ -127,6 +127,9 @@ do
     local sim, owner, council = F.NewRaid()
     local corvin, alric = sim.byName.Corvin, sim.byName.Alric
     for _, id in ipairs({ 130, 131, 132, 133 }) do F.Drop(sim, id, F.GLOVES) end
+    -- Past the window they are collected in, so all four are on the council's panels before any of
+    -- them is dismissed.
+    KARTTEST.AdvanceTime(1)
 
     RaidSim.As(owner, function()
         owner.KART.LC.Council.CloseCouncilTab(130)

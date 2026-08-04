@@ -251,6 +251,7 @@ do
     end
 
     F.Drop(sim, 600, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     RaidSim.As(council, function() council.KART.LC.Council.RefreshCouncilRows() end)
     council.KART.DT.GetGainPercent = realGain
 

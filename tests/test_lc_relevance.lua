@@ -423,6 +423,7 @@ do
     F.Drop(sim, 570, F.WEAPON)
     KARTTEST.AdvanceTime(10)
     F.Drop(sim, 571, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
     T.eq(ShownRows(alric), 2, "B51: both items are on screen")
 
     -- The player closes the window with its "x" (which only hides), and the first roll runs out
@@ -452,12 +453,14 @@ do
         return real(f)
     end
 
+    -- Past the window a drop is collected in, so the item has actually reached this client and the
+    -- rebuild that follows from it has happened.
     F.Drop(sim, 580, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
-    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(1)
     local perDrop = builds
     F.Drop(sim, 581, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
     F.Drop(sim, 582, F.PLATE_CHEST, { canNeed = false, canTransmog = true })
-    KARTTEST.AdvanceTime(0)
+    KARTTEST.AdvanceTime(1)
 
     T.eq(alric.KART.LC.votedByMe[582], alric.KART.LC.GetTransmogButtonIndex(),
         "B54: all three items were answered automatically")

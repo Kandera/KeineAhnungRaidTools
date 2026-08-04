@@ -21,8 +21,10 @@ do
     -- match would find nothing. This only works because the fixture's payload here stays under the
     -- single-part size limit; it will fail loudly, not silently, the day this message's payload grows
     -- past that limit.
-    T.eq(#RaidSim.Sent(sim, "LC_ROLLS:"), 1, "the whole raid's rolls travel as one message")
-    T.eq(RaidSim.Sent(sim, "LC_ROLLS:")[1].from, lm.name, "and the lootmaster is the one who sent it")
+    -- The numbers ride inside the drop's own announcement, so that message IS the roll table on the
+    -- wire; LC_ROLLS is left as the repair form (see the catch-up cases further down).
+    T.eq(#RaidSim.Sent(sim, "LC_DROP:"), 1, "the whole raid's rolls travel as one message")
+    T.eq(RaidSim.Sent(sim, "LC_DROP:")[1].from, lm.name, "and the lootmaster is the one who sent it")
 end
 
 -- Everybody has a number, and no two are the same ------------------------------------------------
@@ -69,21 +71,22 @@ do
     local sim, lm = F.NewRaid()
     local blind = sim.byName.Corvin
 
-    RaidSim.Blackhole(sim, "LC_ROLLS")
     F.Drop(sim, 903, F.GLOVES)
     KARTTEST.AdvanceTime(0.5)
+    -- The numbers ride inside the drop's own announcement, so no token drops them on their own any
+    -- more. The state under test is the same one it always was -- a client holding the item and none
+    -- of its numbers -- so it is set up directly, exactly as the peer-answer cases below do.
+    RaidSim.As(blind, function() blind.KART.LC.rolls[903] = nil end)
     T.eq(blind.KART.LC.rolls[903], nil, "the client that lost the table has no rolls for the item")
 
     -- The heartbeat is what makes it notice. Nothing is re-broadcast: it asks, and the owner answers
     -- that one client.
-    RaidSim.Deliver(sim, "LC_ROLLS")
     RaidSim.ClearLog(sim)
     KARTTEST.AdvanceTime(15)
 
-    -- RaidSim.Blackhole drops the broadcast before it reaches ANY recipient, not just Corvin's, so
-    -- every other raid member is equally blind here -- counting the whole raid's requests would count
-    -- them too. What this checks is the one thing the heartbeat promises per client: asked for, not
-    -- re-asked for, while an answer could already be on its way.
+    -- Counted per client rather than raid-wide: what this checks is the one thing the heartbeat
+    -- promises each of them on its own -- asked for, not re-asked for while an answer could already
+    -- be on its way.
     local blindAsks = 0
     for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
         if e.from == blind.name then blindAsks = blindAsks + 1 end
@@ -124,14 +127,13 @@ do
     -- itself.
     lm.env.KART_Settings.lcVoteSeconds = 60
 
-    RaidSim.Blackhole(sim, "LC_ROLLS")
     F.Drop(sim, 906, F.GLOVES)
     KARTTEST.AdvanceTime(0.5)
+    RaidSim.As(blind, function() blind.KART.LC.rolls[906] = nil end)
     T.eq(blind.KART.LC.rolls[906], nil, "the client that lost the table has no rolls for the item")
 
-    -- Deliveries resume, but the catch-up's own LC_ROLLS is held rather than let through -- so the
-    -- first ask's answer never lands, and the second heartbeat still finds the table missing.
-    RaidSim.Deliver(sim, "LC_ROLLS")
+    -- The catch-up's own LC_ROLLS is HELD rather than let through -- so the first ask's answer never
+    -- lands, and the second heartbeat still finds the table missing.
     RaidSim.Hold(sim, "LC_ROLLS")
     RaidSim.ClearLog(sim)
     KARTTEST.AdvanceTime(21) -- past both the t=10 and t=20 heartbeat ticks
@@ -373,9 +375,12 @@ do
     -- dead, released or out of range -- so the owner's announcement is the only way it could learn of
     -- the drop at all. Blackholing that broadcast costs the rest of the raid nothing: every other
     -- client has its own START_LOOT_ROLL and tracks the weapon from that.
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 950, F.WEAPON, { noRollFor = { Merrit = true } })
-    RaidSim.Deliver(sim, "LC_START")
+    -- Past the window the drop is collected in, so the announcement is made -- and lost -- while the
+    -- blackhole is still up.
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
     T.eq(council.KART.LC.rollItems[950], nil, "and hears nothing about the weapon that reuses its number")
 
     RaidSim.ClearLog(sim)
@@ -440,9 +445,10 @@ do
     -- Same shape as the case above: the number comes back for a weapon and Blizzard raises no roll for
     -- it here, so the owner is this client's only possible source for the drop -- and its announcement
     -- is lost.
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 960, F.WEAPON, { noRollFor = { Merrit = true } })
-    RaidSim.Deliver(sim, "LC_START")
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
     T.eq(council.KART.LC.rollItems[960], nil, "and hears nothing about the weapon that reuses its number")
     T.eq(#RaidSim.Sent(sim, "LC_ROLLS:"), 0, "with no roll table anywhere to learn the reuse from")
 
@@ -475,10 +481,18 @@ do
     end
 
     -- Blizzard raises no roll on this client, and the announcement that reaches it carries no item.
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 980, F.GLOVES, { noRollFor = { Merrit = true } })
-    RaidSim.Deliver(sim, "LC_START")
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
     RaidSim.As(council, function() council.KART.LC.HandleStart("980:20:", lm.guid) end)
+    -- ...and the numbers with it. They travel inside the announcement, so losing that message loses
+    -- both -- and this case is specifically about the client that has everything EXCEPT a readable
+    -- item, which is what makes an ask for anything at all a failure below.
+    local table980 = RaidSim.As(lm, function() return lm.KART.LC.SerializeRollTable(980) end)
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls(table980:match("^LC_ROLLS:(.*)$"), lm.guid)
+    end)
     KARTTEST.AdvanceTime(0)
     T.eq(council.KART.LC.rollItems[980], "???", "the council member holds an item it cannot read")
     T.eq(tabbed(council, 980), true, "tabbed all the same, because the decision is still its own")
@@ -537,9 +551,10 @@ do
 
     -- It announces one of its own, and Blizzard raises no roll for it on the council member -- so the
     -- ask that follows is proof this client read the heartbeat rather than ignored its sender.
-    RaidSim.Blackhole(sim, "LC_START")
+    RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 971, F.PLATE_CHEST, { noRollFor = { Merrit = true } })
-    RaidSim.Deliver(sim, "LC_START")
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
     RaidSim.ClearLog(sim)
     KARTTEST.AdvanceTime(12) -- one heartbeat from the stand-in, naming 971 and nothing else
 

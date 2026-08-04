@@ -78,6 +78,9 @@ local function runOne(seed)
     -- (they still have to decide it) -- measured, and by design. So a roll is compared at the
     -- moment it is acted on, and never again.
     local VOTE_WINDOW = 20
+    -- A boss's items are collected for half a second and announced together (LC.pendingDrop), so the
+    -- vote clock every client runs starts there, not at the loot event itself.
+    local DROP_COLLECT = 0.5
     local function live(id) return KARTTEST.now < (expiresAt[id] or 0) end
     local function openRoll()
         local open = {}
@@ -170,6 +173,11 @@ local function runOne(seed)
             local id = nextRoll
             nextRoll = nextRoll + 1
             Drop(sim, id, pick(ITEMS))
+            -- Exactly the window a drop is collected in, so the clock now reads the moment the
+            -- announcement went out: that is what the vote deadline and "who was party to this roll"
+            -- below are both measured from, and half a second of drift either way would have the walk
+            -- voting on rolls the raid has already pruned.
+            KARTTEST.AdvanceTime(DROP_COLLECT)
             rolls[#rolls + 1] = id
             expiresAt[id] = KARTTEST.now + VOTE_WINDOW
             if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
@@ -285,6 +293,7 @@ local function runOne(seed)
                 if not cur or cur.itemID ~= it then items[#items + 1] = it end
             end
             F.Drop(sim, id, items[rnd(#items)])
+            KARTTEST.AdvanceTime(DROP_COLLECT)
             -- The population is re-recorded exactly as the plain drop does it. Everything already
             -- tracked under this ID belonged to the PREVIOUS item and has been purged, so who is
             -- party to this roll is decided fresh here -- a client still recovering from a reload

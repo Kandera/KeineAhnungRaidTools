@@ -209,6 +209,9 @@ do
     T.truthy(not RaidSim.As(corvin, corvin.KART.LC.IsCouncil), "not council while the config is missing")
 
     F.Drop(sim, 70, F.GLOVES)
+    -- Past the window a drop is collected in, so the announcement has landed and this client is
+    -- running the same vote clock as everybody else.
+    KARTTEST.AdvanceTime(1)
     T.truthy(corvin.KART.LC.rollItems[70], "but the item still reaches them")
     T.eq(#corvin.KART.LC.councilTabs, 0, "with no council tab, because they are not council yet")
 
@@ -238,6 +241,7 @@ do
     wipe(corvin.KART.LC.raidConfig)
     corvin.KART.LC.CouncilNamesTable = {}
     F.Drop(sim, 71, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     corvin.KART.LC.rollDeadlines[71] = GetTime() - 1
     T.truthy(corvin.KART.LC.rollItems[71], "the roll is still tracked, so the guard is what decides")
 
@@ -255,6 +259,7 @@ do
     local sim, lm = F.NewRaid()
     local corvin = sim.byName.Corvin
     F.Drop(sim, 72, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
     corvin.KART.LC.councilPanel:Show()
 
     local repainted = 0
