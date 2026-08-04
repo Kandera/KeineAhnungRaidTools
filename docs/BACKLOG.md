@@ -2796,7 +2796,7 @@ behaviour DURING such a disagreement, not how long it persists in a real raid. T
 to end up holding the same numbers as the lootmaster anyway. The deep soak (2000 seeds, seed 1728
 included) is clean.
 
-## B130 — FIXED 2026-08-04 — the same disagreement B129 fixed on the receive side is still open on the send side
+## B130 — NARROWED 2026-08-04 — every third party now converges, but the client that drew its own table under the disagreement still does not
 
 Found in review of the fix above, not by the soak — see "why the soak did not catch it" below for why
 2000 clean seeds do not rule it out.
@@ -2827,19 +2827,47 @@ two holes" the disagreement opens; this is a third, on the send side, created by
 property, and B129 deliberately did not close it — "this is the smaller of the two holes the diagnosis
 found, and the only one that needed closing."
 
-**The fix.** `LC.HandleRolls` no longer asks "is the sender the loot owner?" — it asks "did the sender
-announce this item to us?", per item rather than per raid. `LC.rollAnnouncedBy[rollID]` records the
-identity key of whoever's `LC_START`/`LC_MANUAL_START` this client accepted for that roll (or its own
-key, for the two paths where a client announces to itself and never processes the echo); a later
-`LC_ROLLS` is only accepted from that same key, or into a void the client holds nothing for yet, the
-same fill-a-gap exception B129 relies on. The two clients in the disagreement window never agree on
-who owns loot, but each still has exactly one client it heard the announcement from, so each converges
-on that announcer's table instead of on two different guesses about the current lootmaster. This is the
-second candidate containment above, generalized to manual rolls. The ownership derivation itself —
-`LC.IsLootOwner` / `LC.IsSenderLootOwner`, and who may hand out loot right now — is untouched;
-`docs/OWNERSHIP.md` still holds as written, so the question both candidates deferred to the maintainer
-never had to be answered to close this: accepting a table by announcer is narrower than a rule about who
-owns loot, and does not require deciding one.
+**What was fixed, and what was not.** `LC.HandleRolls` no longer asks "is the sender the loot owner?" —
+it asks "did the sender announce this item to us?", per item rather than per raid.
+`LC.rollAnnouncedBy[rollID]` records the identity key of whoever's `LC_START`/`LC_MANUAL_START` this
+client accepted for that roll (or its own key, for the two paths where a client announces to itself and
+never processes the echo); a later `LC_ROLLS` is only accepted from that same key, or into a void the
+client holds nothing for yet, the same fill-a-gap exception B129 relies on. This is the second candidate
+containment below, generalized to manual rolls.
+
+**Every THIRD party converges, and that is the whole of the improvement.** A client that heard exactly
+one announcement for the item now keeps that announcer's table, instead of taking whichever of the two
+`LC_ROLLS` matched its own guess about who is lootmaster right now. Before, a client whose guess named
+neither announcer got nothing at all, permanently — which is what B129 was about and what this widens to
+the two-announcer case.
+
+**The disagreeing announcer itself does not converge, and this fix cannot make it.** The victim named in
+"The outcome" above is still the victim. Take the sequence exactly as written: Alric's `IsLootOwner()` is
+true, so he announces, sets `LC.rollAnnouncedBy[rollID]` to his own key, and draws his own table. Bramor's
+`LC_ROLLS` then reaches him: `isAnnouncer` is false (the announcer of record is Alric himself) and
+`isVoid` is false (he drew locally), so it is refused. His `LC.HandleTable` still refuses Bramor's
+heartbeat, and `needRolls` is false anyway because he is holding *a* table. He ends the item holding
+numbers nobody else in the raid holds — and he is the raid leader, looking straight at the council panel
+that scores against them. Nothing about accepting tables by announcer can reach this: the client is its
+own announcer, so the rule it is applying is the correct one, applied to a table it should never have
+drawn.
+
+**What closing the rest depends on.** Stopping that client from DRAWING is the first candidate
+containment below — `LC.DrawRollTable` refusing to draw for a rollID this client did not announce, or the
+raid-leader fallback in `LC.IsLootOwner` not answering `true` for a blanked lootmaster field at all. Both
+are questions about who may originate a roll and who owns loot right now, which is `docs/OWNERSHIP.md`
+and the maintainer's decision — it is still listed open and maintainer-owned below, and it did not stop
+being the blocker just because the receive side got narrower. What is true is that the ownership
+derivation itself — `LC.IsLootOwner` / `LC.IsSenderLootOwner` — is untouched by what shipped, so
+`docs/OWNERSHIP.md` still holds as written.
+
+**One diagnostic added since, and it is the only thing that would surface this in a real raid.** A peer's
+roll table for an item this client already holds is compared against what it holds before being
+discarded. Identical numbers are ordinary traffic and counted nowhere; numbers that DISAGREE bump
+`LC.diag.rollsConflict` and are printed by `/kart status`. That is the first mechanism in the addon that
+can prove two clients scored one item off different numbers — but note it fires on the clients that
+RECEIVE the second table, not on the disagreeing announcer, which by construction refuses and can only
+report a conflict it is itself the cause of.
 
 **Why the soak did not catch it, and does not rule it out.** The B129 test only reaches
 `LC.HandleRolls`'s receive-side guard because a freshly reloaded client has `sessionActive == false` and
@@ -2856,11 +2884,12 @@ convergence checks do not model as a separate step — and the send-side branch 
   about loot ownership — settled in `docs/OWNERSHIP.md`, and the maintainer's decision, not a call to
   make inside a roll-table bugfix. Deliberately left open;
 * accept an incoming roll table only from the sender whose `LC_START` we accepted for that same
-  rollID, rather than re-asking `LC.IsSenderLootOwner` a second time — this is what **The fix** above
-  implements (`LC.rollAnnouncedBy`, generalized to manual rolls too). It turned out narrower than
-  expected: accepting by announcer changes nothing about who may originate a table or who hands out
-  loot, so it did not need the ownership call this section originally worried about for both
-  candidates, and is no longer open.
+  rollID, rather than re-asking `LC.IsSenderLootOwner` a second time — this is what shipped
+  (`LC.rollAnnouncedBy`, generalized to manual rolls too). It turned out narrower than expected in both
+  directions: accepting by announcer changes nothing about who may originate a table or who hands out
+  loot, so it did not need the ownership call this section originally worried about — and by the same
+  token it cannot repair the client that originated the wrong table. This candidate is done; the entry
+  is not.
 
 ## B131 — FIXED 2026-08-04 — a lost roll table cannot always be asked for again after a lootmaster handover
 
@@ -2884,13 +2913,22 @@ who still has it may hand it over regardless of who currently owns the item.
 **The fix.** A second, group-wide request. `LC.HandleTable`'s existing per-roll ask still whispers the
 believed owner first, exactly as before; if `ROLL_REQ_COOLDOWN` (30s) passes with the table still
 missing, the client broadcasts `LC_ROLLS_REQ:<rollID>` to the whole group instead of asking the same
-owner again. Every client still holding a non-empty table for that rollID answers — spread by a hash of
-its own name (`SelfAnswerSlot`, the same construction KASC's handshake uses, and for the same reason: a
-name-hash distributes deterministically where `math.random` would collide and cannot be reproduced in
-the harness) rather than all firing at once, and each drops its own planned answer the moment it sees
-somebody else's `LC_ROLLS` for the same rollID land first. The answer is a normal `LC_ROLLS` broadcast,
-so it runs through the same precedence B130 established: a peer is never the announcer, so its table can
-only ever fill a void, never overwrite what the announcer said.
+owner again. Every client still holding a non-empty table for that rollID answers — spread by its own
+POSITION in the sorted roster (`LC.RollsAnswerSlot`) rather than all firing at once, and each drops its
+own planned answer the moment it sees somebody else's `LC_ROLLS` for the same rollID land first. The
+answer is a normal `LC_ROLLS` broadcast, so it runs through the same precedence B130 established: a peer
+is never the announcer, so its table can only ever fill a void, never overwrite what the announcer said.
+
+A hash of each client's own name was written first — the construction KASC's handshake uses for the same
+problem — and `7123117` replaced it, because it was measured not to hold at raid size: 25 random names,
+20,000 trials, the exact hash that was here, and 26% of full rosters put two clients within a few
+milliseconds of each other, which is well inside the jitter a busy loot round's `ChatThrottleLib` queue
+adds. A hash spreads by luck. Position in a list every client can see identically divides the window
+into N equal gaps by construction. What that costs instead is a stronger requirement — every client must
+independently produce the SAME ordering, where the hash needed no agreement at all — and the code says
+what happens when they briefly do not: the spacing degrades and two clients may answer, which is one
+extra broadcast and nothing else. See the comment above `ROLLS_ANSWER_SPREAD` for the real margin, which
+is 250ms at a 40-man and the same order as the jitter it has to beat.
 
 `LC_ROLLS_REQ` is not on `GUARANTEED_TOKENS`, for the same reason `LC_ROLL_REQ` is not: it is a
 question, and a question that arrives forty seconds late is noise — the asker has already asked again by

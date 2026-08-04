@@ -41,7 +41,7 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --   rollDeadlines -- stored separately, converted to wall clock (GetTime does not survive a logout)
 --   rollLootedAt  -- already persisted, by KART_LCTrades, where the BoP clock belongs
 --
--- Three are IN-FLIGHT MARKERS rather than state, and restoring them would do harm rather than
+-- Five are IN-FLIGHT MARKERS rather than state, and restoring them would do harm rather than
 -- nothing -- a request that is no longer in flight would never be made again:
 --   equipRequestedRolls -- "we already asked this raider for their gear". Nothing is in flight after
 --                          a reload and the answers are gone, so carrying the flag across would
@@ -54,9 +54,9 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --                          stop a ten-second heartbeat turning into a ten-second request (B118).
 --                          GetTime()-based, so it does not survive a logout in any meaningful form,
 --                          and a restored client SHOULD ask again -- that is the whole point of it.
---   rollsAnswerAt       -- a planned LC_ROLLS_REQ answer, GetTime()-based and seconds from now
---                          (B131). Nothing is still pending three seconds after a reload, and
---                          restoring it would either fire on a stale clock or never fire at all.
+--   rollsAnswerAt       -- "an answer of ours to an LC_ROLLS_REQ is scheduled" (B131). The timer it
+--                          belongs to is gone after a reload, so restoring the flag would leave this
+--                          client permanently declining to answer a request it never answers.
 local EXEMPT = {
     rollDeadlines = true, rollLootedAt = true,
     equipRequestedRolls = true, rollsPendingSince = true, pendingItemLoads = true,
