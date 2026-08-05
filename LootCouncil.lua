@@ -37,6 +37,14 @@ LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows
 LC.diag = LC.diag or {
     refusedSender = 0, -- the sender is not who this client believes may send that message
     unknownRoll   = 0, -- a vote/roll/result for an item this client has never heard of
+    -- ...and the same message for an item it DID know and has since let go of. Split out on
+    -- 2026-08-05, because together they were unreadable: one client went from 2 to 181 in seven
+    -- minutes while holding no rolls at all, and every one of those was a raider voting on an item
+    -- this client had already finished with -- twenty senders times however many the boss dropped.
+    -- That is ordinary traffic, and it buried the counter that had found the message loss the night
+    -- before. Kept as a count rather than dropped: a large number here still says something, namely
+    -- that this client is releasing rolls well before the rest of the raid is done with them.
+    staleRoll     = 0,
     -- A peer's roll table for an item we already hold, whose numbers are NOT the ones we hold. Not a
     -- refusal like the two above -- it is a positive finding, and the only one in the addon that
     -- proves two clients scored one item off different numbers (see LC.HandleRolls). An agreeing
@@ -94,6 +102,26 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
 -- A second of slack, because both writers rebuild the deadline from whole seconds and a repeat that
 -- faithfully carries the remaining time still lands a fraction away from where it started. That is
 -- not the thing being looked for.
+-- Which of the two counters a message about an untracked roll belongs in.
+--
+-- LC.rollLootedAt is the discriminator, and it is the right one by construction: every path that
+-- tracks a roll stamps it (LC.OnStartLootRoll and LC.HandleStart both do), and the stamp deliberately
+-- OUTLIVES the roll -- Trade.PruneExpiredLootStamps owns its lifetime, not Trade.ClearRollState --
+-- because the four-hour trade window is measured from it. So a stamp with no roll under it is exactly
+-- "this client knew about this item and has let it go".
+--
+-- A rollID Blizzard has reused could carry a stamp from the previous item and send a genuinely
+-- unknown roll into the stale count instead. Bounded by the four-hour prune, and it is a counter, not
+-- a guard: nothing is refused differently either way.
+LC.Diag = LC.Diag or {}
+function LC.Diag.CountUntracked(rollID)
+    if LC.rollLootedAt and LC.rollLootedAt[rollID] then
+        LC.diag.staleRoll = LC.diag.staleRoll + 1
+    else
+        LC.diag.unknownRoll = LC.diag.unknownRoll + 1
+    end
+end
+
 function LC.SetRollDeadline(rollID, seconds, source)
     local deadline = GetTime() + (seconds or 20)
     local running = LC.rollDeadlines[rollID]
@@ -1500,6 +1528,13 @@ function LC.PrintStatus()
     end
     -- A measurement with no fix behind it yet (see LC.diag.clockRestarted): the report it belongs to
     -- has no reproduction, so the line has to name the writer as well as the count.
+    -- Its own line, because it is not a refusal: these are answers to items this client had and has
+    -- since released, which is ordinary. It is here at all because a large number says this client
+    -- lets rolls go well before the rest of the raid is finished with them -- and because leaving it
+    -- inside the refusal count is what made that count unreadable (see LC.diag.staleRoll).
+    if LC.diag.staleRoll > 0 then
+        print("  " .. string.format(L.LC_STATUS_STALEROLL, LC.diag.staleRoll))
+    end
     if LC.diag.clockRestarted > 0 then
         print("  " .. string.format(L.LC_STATUS_CLOCKRESTART, LC.diag.clockRestarted,
             LC.diag.clockRestartedBy or "?"))

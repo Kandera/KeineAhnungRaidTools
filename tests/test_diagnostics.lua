@@ -147,6 +147,32 @@ do
     T.eq(lc.votes[4242], nil, "and still not stored, which is what it was refused for")
 end
 
+-- ...but an item this client had and has let go of is NOT the same finding ---------------------------
+-- One client went from 2 to 181 of these in seven minutes on 2026-08-05 while holding no rolls at
+-- all, and every one was a raider voting on an item it had already finished with -- twenty senders
+-- times however many the boss dropped, which is ordinary traffic. It buried the counter that had
+-- found the message loss the night before. LC.rollLootedAt tells the two apart: it is stamped by
+-- every path that tracks a roll and deliberately outlives the roll itself.
+do
+    local sim, _, council = F.NewRaid()
+    local lc = council.KART.LC
+    local voter = sim.byName.Merrit
+
+    F.Drop(sim, 96, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(lc.rollItems[96], "the council member had the item")
+
+    -- Its time runs out and the roll is released, exactly as an evening does it.
+    RaidSim.As(council, function() lc.Trade.ClearRollState(96) end)
+    T.eq(lc.rollItems[96], nil, "and has let it go")
+
+    local unknownBefore, staleBefore = lc.diag.unknownRoll, lc.diag.staleRoll
+    RaidSim.As(council, function() lc.Vote.HandleVote("96:2:#6:@:", voter.guid) end)
+    T.eq(lc.diag.staleRoll, staleBefore + 1, "a late vote for it counts as stale, not as unknown")
+    T.eq(lc.diag.unknownRoll, unknownBefore,
+        "so the counter that means 'the message never reached me' stays readable")
+end
+
 -- /kart status ---------------------------------------------------------------------------------------
 -- The line has to be absent on a clean evening: a raider pastes this output into an issue, and a row
 -- of zeroes reads as "something went wrong" to everybody who sees it.

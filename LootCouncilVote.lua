@@ -1325,7 +1325,7 @@ function Vote.HandleVote(payload, senderKey)
     -- would otherwise re-create LC.votes[rollID] as an orphan that no cleanup path ever frees. Every
     -- peer processes LC_START (which sets rollItems) before any vote can be cast, so a legitimate
     -- vote never arrives before this is set.
-    if not LC.rollItems[rollID] then LC.diag.unknownRoll = LC.diag.unknownRoll + 1 return end
+    if not LC.rollItems[rollID] then LC.Diag.CountUntracked(rollID) return end
     -- Which ITEM the vote was cast for travels with it (B46). Blizzard reuses a rollID for a
     -- genuinely different drop within seconds on trash, so a vote delayed by the network landed in
     -- the new item's tally, under a name that had never seen it.
@@ -1372,7 +1372,7 @@ function Vote.HandleCouncilVote(payload, senderKey)
     if not rollID then return end
     -- Ignore council votes for an untracked (already resolved/pruned) roll — see HandleVote:
     -- prevents an orphan LC.councilVotes[rollID] that no cleanup path frees.
-    if not LC.rollItems[rollID] then LC.diag.unknownRoll = LC.diag.unknownRoll + 1 return end
+    if not LC.rollItems[rollID] then LC.Diag.CountUntracked(rollID) return end
     -- Same reused-rollID question as Vote.HandleVote, and answered the same way: a pick that names a
     -- different item than we are holding is kept, not dropped, and filtered when it is read.
 
