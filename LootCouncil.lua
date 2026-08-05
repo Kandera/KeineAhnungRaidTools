@@ -62,6 +62,18 @@ LC.diag = LC.diag or {
     -- it. The received twin of votesCapped above, and kept apart from it because the two are opposite
     -- failures: that one is this raider's answer going missing, this one is somebody else's.
     voteBatchCapped = 0,
+    -- A voting clock that was pushed FORWARD on an item that was already running one. Purely a
+    -- measurement, not a guard: nothing here refuses anything, the deadline is written either way.
+    --
+    -- It exists because #28 could not be reproduced. "Die items verschwinden immer wieder und tauchen
+    -- dann im LC wieder auf. Die Zeit wird immer wieder zurück gesetzt" -- reported by a council
+    -- member, and three separate explanations for it were each refuted by the test harness (a
+    -- re-raised START_LOOT_ROLL announces nothing; the owner's own deadline does not move;
+    -- LC.CatchUpCouncilPanel passes the remaining time through and lands on the same instant). Rather
+    -- than guess a fourth time, count it: if the raider sees it happen and this stays at zero, the
+    -- clock is not what is moving and the report is about something else.
+    clockRestarted = 0,
+    clockRestartedBy = nil, -- which writer did it last, so the count names a place and not just a number
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -70,6 +82,28 @@ LC.rollDeadlines        = {}  -- [rollID] = GetTime() timestamp when voting clos
 LC.rollDurations        = {}  -- [rollID] = original vote-window length in seconds, used only to size
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
+
+-- The one place the two UI entry points write a voting clock, so there is one place that can see a
+-- clock being pushed forward on an item that was already running one. Behaviour is unchanged -- the
+-- deadline is written whatever the answer -- and the only product is LC.diag.clockRestarted; see
+-- there for the report this is trying to settle.
+--
+-- source names the writer rather than the roll: the count is only useful if it says WHERE, and a
+-- rollID means nothing to whoever pastes the status line.
+--
+-- A second of slack, because both writers rebuild the deadline from whole seconds and a repeat that
+-- faithfully carries the remaining time still lands a fraction away from where it started. That is
+-- not the thing being looked for.
+function LC.SetRollDeadline(rollID, seconds, source)
+    local deadline = GetTime() + (seconds or 20)
+    local running = LC.rollDeadlines[rollID]
+    if running and deadline > running + 1 then
+        LC.diag.clockRestarted = LC.diag.clockRestarted + 1
+        LC.diag.clockRestartedBy = source
+    end
+    LC.rollDeadlines[rollID] = deadline
+    LC.rollDurations[rollID] = seconds or 20
+end
 LC.pendingTrades        = {}  -- items assigned to someone else, not yet handed over: {rollID, itemLink, winnerKey}
 LC.CouncilNamesTable    = {}  -- resolved KASC.Identity key -> true. Written by exactly two paths:
                                -- LC.HandleConfig (a received LC_CONFIG) and LC.ApplyOwnConfig (our own
@@ -1356,6 +1390,12 @@ function LC.PrintStatus()
 
     local moduleOn = KART_Settings.lcModuleEnabled ~= false
     print("  " .. L.LC_STATUS_MODULE .. ": " .. (moduleOn and L.LC_STATUS_ON or L.LC_STATUS_OFF))
+    -- The one personal setting a raid can be misled by. "Auto-Pass does not work" was answered four
+    -- times on 2026-08-05 before anybody thought to ask whether it was switched on, and the status
+    -- line -- the whole point of which is to answer that class of question without a round trip --
+    -- did not say. It is not raid-wide and never overridden, so nothing else here implies it.
+    print("  " .. L.LC_STATUS_AUTOPASS .. ": "
+        .. (KART_Settings.lcAutoPass and L.LC_STATUS_ON or L.LC_STATUS_OFF))
     -- The session line says what this client BELIEVES; the qualifier says whether that belief is an
     -- answer or merely a starting value (see LC.sessionStateKnown). The two look identical from the
     -- outside and behave completely differently -- a client that has never been told is still
@@ -1457,6 +1497,12 @@ function LC.PrintStatus()
     -- is worth reading even on an evening where nothing else was refused.
     if LC.diag.rollsConflict > 0 then
         print("  " .. string.format(L.LC_STATUS_ROLLCONFLICT, LC.diag.rollsConflict))
+    end
+    -- A measurement with no fix behind it yet (see LC.diag.clockRestarted): the report it belongs to
+    -- has no reproduction, so the line has to name the writer as well as the count.
+    if LC.diag.clockRestarted > 0 then
+        print("  " .. string.format(L.LC_STATUS_CLOCKRESTART, LC.diag.clockRestarted,
+            LC.diag.clockRestartedBy or "?"))
     end
     -- Own line, same reason as rollsConflict above: a non-zero count here means a batch this client
     -- received named more entries than one message can carry, so some of the raid's loot never

@@ -173,7 +173,7 @@ end
 function Vote.ShowVotePopup(rollID, itemLink, seconds)
     Vote.PruneExpiredRolls() -- clear anything that expired while the window was hidden before adding
     LC.rollItems[rollID]     = LC.rollItems[rollID] or itemLink
-    LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
+    LC.SetRollDeadline(rollID, seconds, "vote window")
 
     local alreadyListed = false
     for _, rid in ipairs(LC.voteListRolls) do

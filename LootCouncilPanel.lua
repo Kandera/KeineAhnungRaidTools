@@ -266,8 +266,7 @@ function Council.ShowCouncilPanel(rollID, seconds)
     if not LC.councilPanel then Council.CreateCouncilPanel() end
     local panel = LC.councilPanel
 
-    LC.rollDeadlines[rollID] = GetTime() + (seconds or 20)
-    LC.rollDurations[rollID] = seconds or 20
+    LC.SetRollDeadline(rollID, seconds, "council panel")
 
     local alreadyTabbed = false
     for _, rid in ipairs(LC.councilTabs) do
