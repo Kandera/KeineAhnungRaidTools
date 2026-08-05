@@ -73,6 +73,35 @@ do
     T.eq(KARTTEST.tradePlayerItems[2], GLOVES, "and the second copy comes from the other bag slot")
 end
 
+-- Two copies owed, one copy actually handed over ------------------------------------------------
+-- The count in LC.tradeWindowItemStrings is not bookkeeping for its own sake: two pending entries
+-- that share an item string are indistinguishable to everything downstream, so a completed trade
+-- carrying ONE copy must confirm exactly one of them. Confirming both is the silent loss B60 is
+-- about -- the raider is handed one item, the lootmaster's list says both are dealt with, and the
+-- second is never traded and never missed by anybody.
+--
+-- The bag half cannot cover this: a copy is still sitting there, so confirmedByBags is false for
+-- both entries and the count is the only thing deciding. A mutation run walked through it (B116).
+do
+    local _, lm, alric = TradeWith(function(a)
+        return {
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 70 },
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 71 },
+        }
+    end, { [0] = { GLOVES } })   -- one physical copy, so only one can go into the window
+    T.eq(KARTTEST.tradePlayerItems[1], GLOVES, "the one copy there is goes into the window")
+    T.eq(KARTTEST.tradePlayerItems[2], nil, "and the second entry finds nothing to place")
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        lm.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+
+    T.eq(#lm.KART.LC.pendingTrades, 1, "one of the two copies is still owed after the trade")
+    T.eq(lm.KART.LC.pendingTrades[1].winnerKey, alric.guid, "and it is still owed to the same winner")
+end
+
 -- Somebody else's items are left alone ----------------------------------------------------------
 do
     local sim, lm = F.NewRaid()

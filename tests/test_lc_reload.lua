@@ -497,6 +497,37 @@ do
         "a completion message that lands before the contents still clears at the close")
 end
 
+-- ...and two copies of one item, of which one arrives ----------------------------------------------
+-- The receiving side counts copies for the same reason the giving side does: two entries for the
+-- same item string are indistinguishable, so a trade carrying one copy may clear exactly one of
+-- them. Clearing both leaves the raider believing they have everything while the lootmaster's list
+-- still says one is owed -- and the two screens disagreeing is how an item stops being anybody's
+-- problem. The mirror of the giving-side case in tests/test_lc_tradefill.lua; a mutation run walked
+-- through both (B116).
+do
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 114, F.GLOVES)
+    F.Drop(sim, 115, F.GLOVES)
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AssignWinner(114, raider.guid, "BIS")
+        lm.KART.LC.Trade.AssignWinner(115, raider.guid, "BIS")
+    end)
+    KARTTEST.AdvanceTime(0)
+    T.eq(#raider.KART.LC.owedToMe, 2, "the winner is owed both copies")
+
+    KARTTEST.tradePartnerUnit = lm.unit
+    KARTTEST.tradeTargetItems = { raider.KART.LC.rollItems[114] }   -- one copy in the window
+    RaidSim.As(raider, function()
+        raider.KART.LC.Trade.OnTradeShow()
+        raider.KART.LC.Trade.OnTradeAcceptUpdate()
+        raider.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+        raider.KART.LC.Trade.OnTradeClosed()
+    end)
+    KARTTEST.tradePartnerUnit, KARTTEST.tradeTargetItems = nil, {}
+
+    T.eq(#raider.KART.LC.owedToMe, 1, "one copy arrived, so one is still owed")
+end
+
 -- ===================================================================================
 -- B81: a reload keeps the items on the table
 -- ===================================================================================
