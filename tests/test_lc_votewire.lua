@@ -103,3 +103,18 @@ T.is_nil(ParseVotesPayload("12:3:@249331:0:"), "a missing fingerprint marker")
 T.is_nil(ParseVotesPayload("12:3:#6:249331:0:"), "a missing item marker")
 T.is_nil(ParseVotesPayload(""), "an empty payload")
 T.is_nil(ParseVotesPayload("abc"), "garbage")
+
+-- SerializeMyVotes bumps LC.diag.votesCapped when VOTES_MAX_ENTRIES is exceeded -- a field that has
+-- to exist on LC.diag before that happens, or the increment is "nil + 1" and the whole serialize
+-- throws instead of truncating the list. Driving the serializer itself is not possible from this
+-- offline harness (LootCouncilVote.lua needs a live WoW/KASC to load at all, same reason the two
+-- functions above are extracted rather than required), so this checks the same fact the runtime
+-- would need to be true: LootCouncil.lua's LC.diag initializer actually declares the field.
+local lcSource = assert(io.open("LootCouncil.lua", "r"))
+local lcText = lcSource:read("*a")
+lcSource:close()
+
+local diagBlock = lcText:match("LC%.diag = LC%.diag or %b{}")
+T.truthy(diagBlock, "LC.diag initializer found in LootCouncil.lua")
+T.truthy(diagBlock and diagBlock:match("votesCapped%s*=%s*0"),
+    "votesCapped is declared on LC.diag, so SerializeMyVotes' cap path has a real counter to bump")

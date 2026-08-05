@@ -52,6 +52,11 @@ LC.diag = LC.diag or {
     -- ours (see PACK_MAX_BLOCK). Without this the refusal is the one silent failure in these two
     -- handlers: the client loses a whole boss's items and neither end has anything to read.
     packedUnreadable = 0,
+    -- Our OWN heartbeat had more votes to carry than one message may name (VOTES_MAX_ENTRIES), so
+    -- some of them were left out of it. Unlike every other counter here this one is about what this
+    -- client SENT, not what it received -- and it is the one case where a raider's own answer can go
+    -- missing without anything else noticing.
+    votesCapped = 0,
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
