@@ -246,17 +246,23 @@ local function Boot(client, saved)
     -- and leaving it out meant RaidSim.Reload modelled a reload WITHOUT the one step that brings
     -- loot-flow state back -- so anything about who still owes whom an item across a relog was being
     -- measured against a client that had deliberately forgotten.
-    RaidSim.active = client
-    if client.KART.LC.Trade and client.KART.LC.Trade.RestorePersistedTrades then
-        pcall(client.KART.LC.Trade.RestorePersistedTrades)
-    end
+    -- Under RaidSim.As, not a bare RaidSim.active: ADDON_LOADED runs as a player who has a unit
+    -- token, and anything these two schedule captures the executing context for its whole life. With
+    -- only the client set and no unit, a timer armed during the restore asked UnitGUID("player")
+    -- forever after and got nil -- a client that could never resolve itself, which is not what
+    -- logging in looks like.
+    RaidSim.As(client, function()
+        if client.KART.LC.Trade and client.KART.LC.Trade.RestorePersistedTrades then
+            pcall(client.KART.LC.Trade.RestorePersistedTrades)
+        end
 
-    -- The items that were still on the table, in the same order Core.lua restores them: trades
-    -- first, then the tracked rolls (B81). Leaving this out modelled a reload that deliberately
-    -- forgets the distribution it was in the middle of.
-    if client.KART.LC.RestoreSessionSnapshot then
-        pcall(client.KART.LC.RestoreSessionSnapshot)
-    end
+        -- The items that were still on the table, in the same order Core.lua restores them: trades
+        -- first, then the tracked rolls (B81). Leaving this out modelled a reload that deliberately
+        -- forgets the distribution it was in the middle of.
+        if client.KART.LC.RestoreSessionSnapshot then
+            pcall(client.KART.LC.RestoreSessionSnapshot)
+        end
+    end)
 
     RaidSim.active = nil
     KARTTEST.frameOwner = nil
@@ -333,6 +339,16 @@ function RaidSim.Reload(sim, name)
     end
     local saved = {}
     for _, key in ipairs(SAVED_VARIABLES) do saved[key] = old.env[key] end
+
+    -- Every timer the old client had scheduled dies with it. Without this the harness kept firing
+    -- the corpse's tickers -- against the corpse's own tables, under the same player name -- so a
+    -- ticker the addon never re-arms after a reload still appeared on the wire, and a test asking
+    -- "does this survive a reload" was answered by the client that did not.
+    for i = #KARTTEST.timers, 1, -1 do
+        if KARTTEST.timers[i].ctx and KARTTEST.timers[i].ctx.client == old then
+            table.remove(KARTTEST.timers, i)
+        end
+    end
 
     local client = NewClient(sim, old.member)
     for i, c in ipairs(sim.clients) do

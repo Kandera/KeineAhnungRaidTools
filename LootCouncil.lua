@@ -3041,6 +3041,13 @@ function LC.RestoreSessionSnapshot()
     -- LC_ACTIVE / LC_SESSION_RESUME). If the answer comes back "no", LC.ClearAllRolls removes exactly
     -- what was just restored, which is the correct outcome and needs no special case.
     if #LC.voteListRolls > 0 then LC.Vote.EnsurePruneTicker() end
+    -- And the vote heartbeat, for the same reason and with the same lifetime. LC.votes came back with
+    -- the rolls, so this client may hold an answer the council is still missing -- and Vote.CastVote
+    -- is the ONLY other place that arms this ticker, so a vote cast before the reload would never be
+    -- repeated again. Armed on the rolls rather than on the votes: at ADDON_LOADED UnitGUID("player")
+    -- is not necessarily there yet, so "do I hold a vote" cannot honestly be asked here. A client
+    -- that turns out to hold none simply sends nothing and the ticker stops with the rolls.
+    LC.Vote.EnsureVoteHeartbeat()
     -- A snapshot carries whatever LC.rollItems held, which for a client that had not cached the item
     -- yet is a bare "item:12345" string. Nothing else would ever look at that roll again.
     if LC.ResolveTrackedItemLinks then LC.ResolveTrackedItemLinks() end

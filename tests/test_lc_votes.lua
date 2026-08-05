@@ -160,3 +160,52 @@ do
         "a block that will not come back is counted, not stored")
     T.is_nil((council.KART.LC.votes[90] or {})[raider.guid], "and nothing is written from it")
 end
+
+-- A reloaded voter keeps repeating -----------------------------------------------------------------
+-- The one case the retired vote-request covered for free: it answered out of restored state and
+-- needed no local timer. A reload leaves the votes and the rolls on disk but every ticker in memory,
+-- and this guild's raiders reload mid-distribution as a matter of course.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 91, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(91, 2) end)
+    KARTTEST.AdvanceTime(6)
+    T.truthy((council.KART.LC.votes[91] or {})[raider.guid], "the council heard the vote once")
+
+    -- The council forgets it -- which is the state the whole repeat exists to repair, and after the
+    -- reload the voter is the only client left that can state it.
+    council.KART.LC.votes[91] = nil
+
+    local reloaded = RaidSim.Reload(sim, "Alric")
+    RaidSim.RosterUpdate(sim)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(10)
+
+    T.truthy(reloaded.KART.LC.votes[91], "the reloaded client still holds its own vote")
+    T.eq(((council.KART.LC.votes[91] or {})[reloaded.guid] or {}).idx, 2,
+        "and repeats it, so the council gets it back after the reload")
+end
+
+-- A tick with nothing to say is not the end of the heartbeat ---------------------------------------
+-- During a loading screen UnitGUID("player") is nil, KASC.Identity.ResolvePlayer answers the literal
+-- unit token, and this client finds no votes under that key. The votes are still live; only the
+-- lookup is momentarily blind. Cancelling on that loses every repeat for the rest of the round.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 92, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(92, 3) end)
+    KARTTEST.AdvanceTime(6)
+
+    -- The blind moment, long enough to swallow a whole tick.
+    KARTTEST.guidBlackout["player"] = true
+    KARTTEST.AdvanceTime(6)
+    KARTTEST.guidBlackout["player"] = nil
+
+    council.KART.LC.votes[92] = nil
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(6)
+    T.eq(((council.KART.LC.votes[92] or {})[raider.guid] or {}).idx, 3,
+        "the heartbeat is still running once the client can see itself again")
+end

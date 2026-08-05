@@ -1191,13 +1191,21 @@ local function ParseVotesPayload(payload)
     return entries
 end
 
--- Sends our own votes if there are any. Returns whether anything went out, which is what tells the
--- ticker below when it has nothing left to do.
+-- Sends our own votes if there are any. Returns whether anything went out.
 function Vote.SendVoteHeartbeat()
     local message = SerializeMyVotes()
     if not message then return false end
     LC.SendLC(message)
     return true
+end
+
+-- Whether this client still tracks anything the heartbeat could ever speak about. This, and NOT
+-- "did the last tick produce a message", is the ticker's lifetime -- see the cancel below.
+local function AnyTrackedRoll()
+    for rollID in pairs(LC.rollItems) do
+        if LC.RollTracked(rollID) then return true end
+    end
+    return false
 end
 
 -- One ticker per CLIENT, not per roll -- that is what makes the cost independent of how many items a
@@ -1209,8 +1217,11 @@ end
 -- within milliseconds of each other in 26% of full rosters, and milliseconds is what ordinary
 -- addon-message jitter eats.
 --
--- Self-cancelling on the first tick that has nothing to say, the way Vote.EnsurePruneTicker stops
--- with its batch: a client whose rolls have all expired holds no timer at all.
+-- Self-cancelling once no tracked roll is left, the way Vote.EnsurePruneTicker stops with its batch:
+-- a client whose rolls have all expired holds no timer at all. Deliberately NOT "the first tick that
+-- had nothing to say" -- during a loading screen UnitGUID("player") is nil, KASC.Identity
+-- .ResolvePlayer answers the literal unit token, and SerializeMyVotes finds nothing under that key
+-- while every vote is still live. That tick is blind, not finished.
 function Vote.EnsureVoteHeartbeat()
     if LC.voteHbTicker or LC.voteHbPending then return end
     LC.voteHbPending = true
@@ -1218,7 +1229,8 @@ function Vote.EnsureVoteHeartbeat()
         LC.voteHbPending = nil
         Vote.SendVoteHeartbeat()
         LC.voteHbTicker = C_Timer.NewTicker(VOTE_HB_PERIOD, function()
-            if not Vote.SendVoteHeartbeat() then
+            Vote.SendVoteHeartbeat()
+            if not AnyTrackedRoll() then
                 if LC.voteHbTicker then LC.voteHbTicker:Cancel() end
                 LC.voteHbTicker = nil
             end
