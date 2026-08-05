@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The lootmaster is quieter about what is on the table**, and a change reaches the raid faster than before.
 - **Less addon chatter during loot**, so announcements get through faster when the raid is busy.
 - **Two versions of the same item are told apart again**, so handing one over no longer ticks the other off what you still owe.
+- **Only one person hands out the loot**, even right after a reload — the raid lead no longer takes over from a lootmaster who is still there.
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**

@@ -1197,11 +1197,15 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- owner for however long nobody joins or leaves, which in a boss pull is the whole fight.
     --
     -- Only to ASK it, never to withdraw an answer already given. LC.CheckStandIn's other half resets
-    -- LC.standInAccepted when the lootmaster is back -- and a relay is the one message that cannot
-    -- establish that, because it names nobody. A stand-in mid-round who takes a relay through the
-    -- gainsCouncil exception would otherwise be stripped of the loot flow they are running, silently
-    -- and without being asked anything. The roster path still resets them, off the designation it can
-    -- actually see.
+    -- LC.standInAccepted when the lootmaster is back -- but a relay's "1" is not proof of that. When
+    -- the relayer holds the raid's actual designation, its "1" is derived from that same designation
+    -- (one raid, one config), so it IS about the person the stand-in replaced -- but "1" is also what
+    -- goes out for a key that has not resolved yet, with no evidence of presence, and a relay-fed
+    -- relayer only forwards what it was told, which can itself be stale. Weak evidence, not none, and
+    -- not enough to withdraw an accepted stand-in on. A stand-in mid-round who takes a relay through
+    -- the gainsCouncil exception would otherwise be stripped of the loot flow they are running,
+    -- silently and without being asked anything. The roster path still resets them, off the
+    -- designation it can actually see.
     if LC.CheckStandIn and not LC.standInAccepted then LC.CheckStandIn() end
 end
 

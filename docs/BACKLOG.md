@@ -2822,100 +2822,51 @@ behaviour DURING such a disagreement, not how long it persists in a real raid. T
 to end up holding the same numbers as the lootmaster anyway. The deep soak (2000 seeds, seed 1728
 included) is clean.
 
-## B130 — NARROWED 2026-08-04 — every third party now converges, but the client that drew its own table under the disagreement still does not
+## B130 — FIXED 2026-08-05 — a relayed config now says whether the raid has a lootmaster, so a reloaded raid leader no longer claims a loot flow that is already running
 
-Found in review of the fix above, not by the soak — see "why the soak did not catch it" below for why
-2000 clean seeds do not rule it out.
+Found in review of the roll-table fix above; closed after two more rounds of review, one of them a
+reverted attempt.
 
-**The mechanism.** `LC.IsLootOwner()` falls back to `UnitIsGroupLeader('player')` whenever
-`LC.GetLootmaster()` answers `""`. A raid leader whose `raidConfig.lootmaster` was blanked by the relay
-— the same "ownership stays derived" shape B129 names, `LC.HandleConfigRelay` — reads an empty key.
-`LootmasterAbsent()` returns false for an empty key (there is no absent NAMED lootmaster to be absent),
-so the stand-in-consent gate that would otherwise ask before taking over is skipped entirely, and the
-raid-leader fallback answers `true` on its own. Once `LC_ACTIVE` has restored `sessionActive` for that
-client — which happens within seconds in a real raid — a drop arriving in this window makes it run the
-FULL owner branch: `SnapshotEligible`, `LC_START`, and `LC.DrawRollTable` plus its broadcast.
+**The mechanism this closed.** `LC.IsLootOwner()` falls back to `UnitIsGroupLeader('player')` whenever
+`LC.GetLootmaster()` answers `""`. A raid leader whose `raidConfig.lootmaster` was blanked by
+`LC.HandleConfigRelay` read an empty key exactly like a raid that never had a lootmaster at all — there
+was nothing on the wire to tell the two apart. `LootmasterAbsent()` returns false for an empty key (there
+is no absent NAMED lootmaster to be absent), the stand-in-consent gate that would otherwise ask before
+taking over was skipped entirely, and the raid-leader fallback answered `true` on its own — while the
+real lootmaster stood next to them, still running the loot flow.
 
-**The outcome.** Two `LC_ROLLS` for one rollID, with different numbers. Every client with the correct
-view of who owns loot converges on the real owner's table — B129 saw to that. The disagreeing client
-itself does not converge: it drew its own table locally, so `isVoid` is false for it; `IsSenderLootOwner`
-answers false for the real owner's message, as far as this client is concerned; it refuses the real
-table for the same reason it refuses the `LC_TABLE` heartbeat that would otherwise make it notice and
-ask (B118's mechanism, same guard); and `needRolls` is false regardless, because it is holding *a*
-table. It ends the item holding numbers nobody else in the raid holds, permanently — and it is the raid
-leader, so most likely the person looking straight at the council panel that scores the tie-break
-against those numbers.
+**What closed it.** `LC_CONFIG_RELAY` now carries a third value in the reserved lootmaster slot: `""`
+(nobody named), `"1"` (named and present), `"0"` (named and gone). The key itself still does not travel
+— only the config owner may name anybody — but a relay can now say whether the raid HAS a designation
+without saying who it is. "Named and present" makes a receiving client defer instead of falling back to
+raid lead; "named and gone" opens the same stand-in dialog a roster update already opens. An
+`ApplyOwnConfig` with an empty own field cannot erase this on its own — only another relay, the config
+owner's own `LC_CONFIG`, or a field naming somebody can — and only a raid-wide broadcast clears it, not
+a targeted sync-request answer, so a leader who reloads mid-round and immediately asks for a sync does
+not get to read that answer as "gone" either.
 
-**Why it lands exactly on this addon.** Before the roll table became one authoritative message this
-window cost nothing — every client drew independently with no sender check at all (see B129's own "why
-it lands exactly on this addon"). B129's write-up named the receive side and `LC.HandleTable` as "the
-two holes" the disagreement opens; this is a third, on the send side, created by the same single-writer
-property, and B129 deliberately did not close it — "this is the smaller of the two holes the diagnosis
-found, and the only one that needed closing."
+**Two residuals, both narrower than what this replaced.**
 
-**What was fixed, and what was not.** `LC.HandleRolls` no longer asks "is the sender the loot owner?" —
-it asks "did the sender announce this item to us?", per item rather than per raid.
-`LC.rollAnnouncedBy[rollID]` records the identity key of whoever's `LC_START`/`LC_MANUAL_START` this
-client accepted for that roll (or its own key, for the two paths where a client announces to itself and
-never processes the echo); a later `LC_ROLLS` is only accepted from that same key, or into a void the
-client holds nothing for yet, the same fill-a-gap exception B129 relies on. This is the second candidate
-containment below, generalized to manual rolls.
+* A relay-fed client forwards what it was told rather than recomputing it, so a stale `"0"` is possible:
+  a client is told once that the lootmaster is gone, the lootmaster returns, nothing re-evaluates that
+  client's own field for it, and it later answers a reloading leader's state request with `"0"` —
+  raising a stand-in prompt nobody needed. Still strictly narrower than what B130 was about: before this
+  fix, that leader simply claimed ownership with no prompt at all. It closes itself at the leader's own
+  next raid-wide broadcast, and even before that a human has to click yes before anything happens.
+* That self-closing has a limit worth naming: it lasts only until the leader's own next raid-wide
+  broadcast. After that the raid agrees on exactly one announcer again — who may be the wrong one, and
+  that is B76's documented tension, untouched by this change. What B130's fix buys is that the raid
+  never runs with TWO announcers, not a permanent correction of who the one announcer is.
 
-**Every THIRD party converges, and that is the whole of the improvement.** A client that heard exactly
-one announcement for the item now keeps that announcer's table, instead of taking whichever of the two
-`LC_ROLLS` matched its own guess about who is lootmaster right now. Before, a client whose guess named
-neither announcer got nothing at all, permanently — which is what B129 was about and what this widens to
-the two-announcer case.
-
-**The disagreeing announcer itself does not converge, and this fix cannot make it.** The victim named in
-"The outcome" above is still the victim. Take the sequence exactly as written: Alric's `IsLootOwner()` is
-true, so he announces, sets `LC.rollAnnouncedBy[rollID]` to his own key, and draws his own table. Bramor's
-`LC_ROLLS` then reaches him: `isAnnouncer` is false (the announcer of record is Alric himself) and
-`isVoid` is false (he drew locally), so it is refused. His `LC.HandleTable` still refuses Bramor's
-heartbeat, and `needRolls` is false anyway because he is holding *a* table. He ends the item holding
-numbers nobody else in the raid holds — and he is the raid leader, looking straight at the council panel
-that scores against them. Nothing about accepting tables by announcer can reach this: the client is its
-own announcer, so the rule it is applying is the correct one, applied to a table it should never have
-drawn.
-
-**What closing the rest depends on.** Stopping that client from DRAWING is the first candidate
-containment below — `LC.DrawRollTable` refusing to draw for a rollID this client did not announce, or the
-raid-leader fallback in `LC.IsLootOwner` not answering `true` for a blanked lootmaster field at all. Both
-are questions about who may originate a roll and who owns loot right now, which is `docs/OWNERSHIP.md`
-and the maintainer's decision — it is still listed open and maintainer-owned below, and it did not stop
-being the blocker just because the receive side got narrower. What is true is that the ownership
-derivation itself — `LC.IsLootOwner` / `LC.IsSenderLootOwner` — is untouched by what shipped, so
-`docs/OWNERSHIP.md` still holds as written.
-
-**One diagnostic added since, and it is the only thing that would surface this in a real raid.** A peer's
-roll table for an item this client already holds is compared against what it holds before being
-discarded. Identical numbers are ordinary traffic and counted nowhere; numbers that DISAGREE bump
-`LC.diag.rollsConflict` and are printed by `/kart status`. That is the first mechanism in the addon that
-can prove two clients scored one item off different numbers — but note it fires on the clients that
-RECEIVE the second table, not on the disagreeing announcer, which by construction refuses and can only
-report a conflict it is itself the cause of.
-
-**Why the soak did not catch it, and does not rule it out.** The B129 test only reaches
-`LC.HandleRolls`'s receive-side guard because a freshly reloaded client has `sessionActive == false` and
-`LC.OnStartLootRoll` returns before ever reaching `LC.DrawRollTable`. Restore `sessionActive` first —
-which `LC_ACTIVE` does within seconds of a reload in a real raid, and which the deep soak's own
-convergence checks do not model as a separate step — and the send-side branch above is live. The clean
-2000-seed run says this exact sequence has not happened in the soak's random walk, not that it cannot.
-
-**Candidate containments**, both named in review at the time this was written:
-
-* have `LC.DrawRollTable` refuse to draw for a rollID this client did not itself announce (i.e. was not
-  the one that just sent the `LC_START` for it) — still not implemented. This one really does change
-  who is allowed to ORIGINATE a roll table under a live ownership disagreement, which is a question
-  about loot ownership — settled in `docs/OWNERSHIP.md`, and the maintainer's decision, not a call to
-  make inside a roll-table bugfix. Deliberately left open;
-* accept an incoming roll table only from the sender whose `LC_START` we accepted for that same
-  rollID, rather than re-asking `LC.IsSenderLootOwner` a second time — this is what shipped
-  (`LC.rollAnnouncedBy`, generalized to manual rolls too). It turned out narrower than expected in both
-  directions: accepting by announcer changes nothing about who may originate a table or who hands out
-  loot, so it did not need the ownership call this section originally worried about — and by the same
-  token it cannot repair the client that originated the wrong table. This candidate is done; the entry
-  is not.
+**How this was arrived at, because it is worth more than the description of the fix.** A first attempt
+(`d6a7bf3`) tried to remember the PROVENANCE of the config instead — mark it "came from a relay" and
+derive the third state from that marker. It was reverted (`74f58a8`) after review reproduced two
+defects: the marker was wiped by `GROUP_ROSTER_UPDATE` within seconds of being set, and narrowing it
+enough to survive that let the original B130 defect back in through the gap the narrowing opened. The
+rule gap this looked like it needed did not exist — **B76** had already decided, on 2026-07-31, that an
+empty field KEEPS what the raid has rather than overwriting it. What was actually missing was not a
+principle but one bit of information the relay was throwing away on the wire: whether the raid has a
+lootmaster at all. Once that bit travels, B76's existing rule is enough.
 
 ## B131 — FIXED 2026-08-04 — a lost roll table cannot always be asked for again after a lootmaster handover
 

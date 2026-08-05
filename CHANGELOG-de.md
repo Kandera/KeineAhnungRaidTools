@@ -26,6 +26,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Lootmaster funkt seltener, was auf dem Tisch liegt**, und eine Änderung erreicht den Raid schneller als vorher.
 - **Weniger Addon-Funk während der Lootverteilung**, damit Ankündigungen bei viel Betrieb schneller durchkommen.
 - **Zwei Varianten desselben Items werden wieder auseinandergehalten**, sodass die Übergabe der einen nicht mehr die andere von deiner Schuldenliste streicht.
+- **Es verteilt nur einer**, auch direkt nach einem Reload — der Raidlead übernimmt nicht mehr von einem Lootmaster, der noch da ist.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
