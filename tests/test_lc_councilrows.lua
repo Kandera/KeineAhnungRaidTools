@@ -185,8 +185,10 @@ end
 -- came back on every port-out, relog and promotion in the raid -- which in this guild is constantly.
 -- Reported as "he votes on everything, closes the window, and it opens again immediately".
 do
-    local sim, lm, council = F.NewRaid()
-    F.Drop(sim, 96, F.GLOVES, { bop = true })
+    -- A raid of its own, not the file-level one: this case closes the panel and reopens it, and the
+    -- assertions above depend on that one staying as they left it.
+    local ownSim, ownLm, council = F.NewRaid()
+    F.Drop(ownSim, 96, F.GLOVES, { bop = true })
     KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.councilPanel and council.KART.LC.councilPanel:IsShown(),
         "the council member's panel is up for the item")
@@ -195,13 +197,13 @@ do
 
     -- The roster moves: somebody ports out, relogs, is promoted. The config goes out again and is
     -- accepted again, exactly as before.
-    RaidSim.As(lm, function() lm.KART.LC.BroadcastRaidConfig() end)
+    RaidSim.As(ownLm, function() ownLm.KART.LC.BroadcastRaidConfig() end)
     KARTTEST.AdvanceTime(0)
     T.truthy(not council.KART.LC.councilPanel:IsShown(),
         "a re-broadcast config does not force the window back open")
 
     -- A genuinely new item does, which is the whole job of the function that was doing the forcing.
-    F.Drop(sim, 97, F.WEAPON, { bop = true })
+    F.Drop(ownSim, 97, F.WEAPON, { bop = true })
     KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.councilPanel:IsShown(), "but a new item brings it back")
 end

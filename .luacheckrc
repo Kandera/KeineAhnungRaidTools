@@ -66,6 +66,8 @@ read_globals = {
     "issecretvalue",
     "GetCursorInfo", "CreateColor", "ReloadUI", "SetCVar",
     "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras", "C_LootHistory",
+    -- Asked for by the council panel's rank column, which needs the guild roster fetched (B124).
+    "C_GuildInfo",
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",
     -- Unit / group API
     "UnitName", "UnitGUID", "UnitExists", "UnitClass", "UnitIsGroupLeader", "UnitIsGroupAssistant",
