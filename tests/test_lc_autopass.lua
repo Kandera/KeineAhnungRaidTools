@@ -1,6 +1,6 @@
--- B63: LC_START for a real drop is sent from exactly one place, inside the loot owner's own
--- START_LOOT_ROLL handler. The owner is subject to the same conditions as everyone else -- out of
--- range, dead, released, ineligible -- and there is no second broadcaster.
+-- B63: a real drop is announced from exactly one place, the LC_DROP the loot owner's own
+-- START_LOOT_ROLL handler collects the item into. The owner is subject to the same conditions as
+-- everyone else -- out of range, dead, released, ineligible -- and there is no second broadcaster.
 --
 -- Auto-Pass did not depend on that announcement, so the whole raid passed on an item nobody had
 -- force-won: it went to whichever raider is NOT running KART, or to nobody, with no vote window
