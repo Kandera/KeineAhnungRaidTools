@@ -6,7 +6,7 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unveröffentlicht]
+## [3.3.1] - 2026-08-05
 ### Behoben
 - **Items zeigen jetzt bei allen das echte Itemlevel und die echten Werte** — auch bei Raidern, die kein eigenes Würfelfenster von Blizzard bekommen haben.
 - **Raider werden nicht mehr den ganzen Abend als „Kein KART erkannt" angezeigt** — die Versionsabfrage repariert sich jetzt selbst.
