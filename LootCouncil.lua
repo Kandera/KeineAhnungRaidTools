@@ -3994,10 +3994,16 @@ end
 local ROLLS_ANSWER_SPREAD = 10
 LC.rollsAnswerAt = LC.rollsAnswerAt or {} -- [rollID] = true while an answer of ours is scheduled
 
--- The pure half: given the sorted identity keys currently in the group and one of them, the slot it
--- gets. Kept apart from SelfAnswerSlot below so a test can prove the spacing at a full raid's size
--- without spinning up a simulated one -- this needs no roster, no client, nothing but the two lists.
-function LC.RollsAnswerSlot(keys, ownKey)
+-- The pure half: given the sorted identity keys currently in the group, one of them, and the window
+-- to spread across, the slot it gets. Kept apart from SelfAnswerSlot below so a test can prove the
+-- spacing at a full raid's size without spinning up a simulated one -- this needs no roster, no
+-- client, nothing but the two lists.
+--
+-- The window is an argument because there are two callers with different ones: the roll table's ten
+-- seconds, and the vote heartbeat's four (which has to stay under its own five-second period, or the
+-- last client's phase slides into the next tick). The reasoning above about POSITION rather than a
+-- hash is what both of them rest on and is stated there once.
+function LC.AnswerSlot(keys, ownKey, spread)
     local n = math.max(#keys, 1)
     -- Last, not first, when we cannot find ourselves in the roster. A client that cannot resolve its
     -- own key is the one least able to agree with anybody else about the ordering, so it is the one
@@ -4007,17 +4013,29 @@ function LC.RollsAnswerSlot(keys, ownKey)
     for i, key in ipairs(keys) do
         if key == ownKey then index = i break end
     end
-    return ((index - 1) / n) * ROLLS_ANSWER_SPREAD
+    return ((index - 1) / n) * spread
 end
 
-local function SelfAnswerSlot()
+function LC.RollsAnswerSlot(keys, ownKey)
+    return LC.AnswerSlot(keys, ownKey, ROLLS_ANSWER_SPREAD)
+end
+
+-- Our own slot against the group as it looks right now. Exposed (rather than file-local, as it was
+-- while the roll table was the only caller) because LootCouncilVote.lua needs the identical roster
+-- gathering for the vote heartbeat, and two copies of it would be two answers to "who is in the
+-- raid" that could disagree.
+function LC.SelfAnswerSlot(spread)
     local keys = {}
     for unit in KAUtil.EachGroupUnit() do
         local key = (KASC.Identity.ResolvePlayer(unit))
         if key then keys[#keys + 1] = key end
     end
     table.sort(keys)
-    return LC.RollsAnswerSlot(keys, (KASC.Identity.ResolvePlayer("player")))
+    return LC.AnswerSlot(keys, (KASC.Identity.ResolvePlayer("player")), spread)
+end
+
+local function SelfAnswerSlot()
+    return LC.SelfAnswerSlot(ROLLS_ANSWER_SPREAD)
 end
 
 function LC.HandleRollsRequest(payload)

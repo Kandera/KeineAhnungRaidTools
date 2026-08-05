@@ -649,4 +649,18 @@ do
     table.sort(otherRaid)
     T.eq(LC.RollsAnswerSlot(otherRaid, otherRaid[7]), LC.RollsAnswerSlot(keys, keys[7]),
         "the slot follows a client's position in the sorted roster, not anything about its name")
+
+    -- The same arithmetic has a second caller now (the vote heartbeat, whose window is shorter than
+    -- the roll table's), so the spread is a parameter rather than a constant baked into one
+    -- function. Both properties that matter have to survive that: the window is respected, and the
+    -- position -- not the key -- is what decides.
+    local narrow = {}
+    for i, key in ipairs(keys) do narrow[i] = LC.AnswerSlot(keys, key, 4) end
+    for _, slot in ipairs(narrow) do
+        T.truthy(slot >= 0 and slot < 4, "a slot never leaves its own window")
+    end
+    T.eq(LC.AnswerSlot(keys, keys[7], 4) * 2.5, LC.AnswerSlot(keys, keys[7], 10),
+        "the same position scales with the window it is given")
+    T.eq(LC.RollsAnswerSlot(keys, keys[7]), LC.AnswerSlot(keys, keys[7], 10),
+        "the roll table's own caller keeps the ten seconds it always had")
 end
