@@ -1459,6 +1459,12 @@ function LC.PrintStatus()
     if LC.diag.packedUnreadable > 0 then
         print("  " .. string.format(L.LC_STATUS_PACKUNREADABLE, LC.diag.packedUnreadable))
     end
+    -- Own line as well, and the only counter here that is about what this client SENT: a non-zero
+    -- count means this raider's own answer was left out of its own repeat, which is the one failure
+    -- on this path that nobody else's screen can show.
+    if LC.diag.votesCapped > 0 then
+        print("  " .. string.format(L.LC_STATUS_VOTESCAPPED, LC.diag.votesCapped))
+    end
 end
 
 -- ==========================================================================

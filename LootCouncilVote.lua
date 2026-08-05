@@ -1272,6 +1272,49 @@ function Vote.HandleVoteRequest(payload, senderKey)
     end)
 end
 
+-- The receiving half of the heartbeat. Every guard Vote.HandleVote applies to a single vote applies
+-- here to each entry, and one guard is deliberately per MESSAGE rather than per entry: the sender
+-- check. A heartbeat is one statement by one client, so a key that is in no group is one refusal,
+-- not one per vote it happened to carry -- LC.diag.refusedSender exists to surface a stranger on the
+-- wire, and counting it per entry would make one message look like a flood.
+--
+-- What is NOT here, and must never be added: a branch that removes anything. A roll this message
+-- does not mention is a roll this message says nothing about. See B118 -- the mirror image of the
+-- table heartbeat ("you hold a card I did not list, drop it") was built and taken out again because
+-- it loses a whole distribution the moment a stand-in's own table is briefly empty.
+function Vote.HandleVotes(payload, senderKey)
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then
+        LC.diag.refusedSender = LC.diag.refusedSender + 1
+        return
+    end
+    local blob = payload:match("^P:(.*)$")
+    if blob then
+        payload = LC.UnpackPayload(blob)
+        if not payload then
+            LC.diag.packedUnreadable = LC.diag.packedUnreadable + 1
+            return
+        end
+    end
+    local entries = ParseVotesPayload(payload)
+    if not entries then return end
+    for _, entry in ipairs(entries) do
+        -- Same rule as Vote.HandleVote: a vote for a roll we no longer track would re-create
+        -- LC.votes[rollID] as an orphan no cleanup path ever frees.
+        if not LC.rollItems[entry.rollID] then
+            LC.diag.unknownRoll = LC.diag.unknownRoll + 1
+        else
+            -- Free text from another client, rendered raw into the council row's note tooltip.
+            -- Doubled here exactly as HandleVote does it -- a hostile client will not have stripped
+            -- anything at its own end.
+            local note = (entry.note:gsub("|", "||"))
+            LC.votes[entry.rollID] = LC.votes[entry.rollID] or {}
+            LC.votes[entry.rollID][senderKey] =
+                { idx = entry.idx, note = note, count = entry.count, item = entry.item }
+            LC.RefreshCouncilIfShown(entry.rollID)
+        end
+    end
+end
+
 function Vote.HandleVote(payload, senderKey)
     -- Reject votes from anyone not actually in our group (CHAT_MSG_ADDON also delivers whispers) —
     -- otherwise a stranger's whisper lands in LC.votes and inflates the voted-count badge.
@@ -1356,6 +1399,8 @@ end
 -- =====================================================================
 KASC:RegisterMessage("LC_VOTE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) Vote.HandleVote(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_VOTES", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) Vote.HandleVotes(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CVOTE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) Vote.HandleCouncilVote(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_VOTE_REQ", { payload = true, group = true, enabled = lcEnabled },

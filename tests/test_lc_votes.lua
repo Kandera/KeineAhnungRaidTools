@@ -94,3 +94,69 @@ do
     KARTTEST.AdvanceTime(20)
     T.eq(CountExact(sim, "LC_VOTES"), 0, "a client with no votes left is silent")
 end
+
+-- The other direction: not the voter is deaf, the council is ---------------------------------------
+-- Both halves of the wire lose messages, and only one of them was ever repairable before: the old
+-- LC_VOTE_REQ came from the loot owner, so a council member who missed a vote had to hope the OWNER
+-- noticed. A repeat does not care which end dropped it.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 87, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.Blackhole(sim, "LC_VOTE:")
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(87, 3) end)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_VOTE:")
+
+    KARTTEST.AdvanceTime(6)
+    T.eq(((council.KART.LC.votes[87] or {})[raider.guid] or {}).idx, 3,
+        "the repeat repairs whichever end lost the first message")
+end
+
+-- A note with the separator in it survives the round trip -------------------------------------------
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 88, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local note = "trade um 5:30; sonst mainspec"
+    RaidSim.As(raider, function()
+        local box = { GetText = function() return note end }
+        raider.KART.LC.Vote.CastVote(88, 1, box)
+    end)
+    KARTTEST.AdvanceTime(6)
+
+    T.eq(((council.KART.LC.votes[88] or {})[raider.guid] or {}).note, note,
+        "a note carrying the entry separator arrives whole")
+end
+
+-- A stranger's heartbeat is not a vote --------------------------------------------------------------
+do
+    local sim, _, council = NewRaid()
+    Drop(sim, 89, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local before = council.KART.LC.diag.refusedSender
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes("89:1:#6:@249331:0:", "Player-9999-DEADBEEF")
+    end)
+    T.is_nil((council.KART.LC.votes[89] or {})["Player-9999-DEADBEEF"],
+        "a key that is in no group does not land in the tally")
+    T.eq(council.KART.LC.diag.refusedSender, before + 1, "and is counted once for the message")
+end
+
+-- An unreadable packed block says nothing, rather than half of something ---------------------------
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 90, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local before = council.KART.LC.diag.packedUnreadable
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes("P:not a deflate block at all", raider.guid)
+    end)
+    T.eq(council.KART.LC.diag.packedUnreadable, before + 1,
+        "a block that will not come back is counted, not stored")
+    T.is_nil((council.KART.LC.votes[90] or {})[raider.guid], "and nothing is written from it")
+end
