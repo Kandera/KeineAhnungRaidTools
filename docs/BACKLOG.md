@@ -78,6 +78,56 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
+## B135 — OPEN — the pipe is full, and nobody has measured what fills it
+
+Raid of 2026-08-05, six `/kart status` outputs collected during a live session. What they said,
+recorded here because the numbers themselves exist nowhere else in the repo:
+
+| Client | Session | Rolls tracked | Unknown item | Own sends rejected | Queued | Dropped while restricted |
+|---|---|---|---|---|---|---|
+| Kandypal (lootmaster) | on (told) | 0 | 285 | **71** | **1578** | 47 |
+| A | on (told) | 14,15,18,19 | 603 | 4 | 104 | 0 |
+| B | on (told) | 14,15,16,17,18,19 | 519 | 3 | 66 | 0 |
+| C | on (told) | 16 | 593 | 1 | 2 | 39 |
+| D | on (told) | 14,15,16,18,19,20 | 516 | 2 | 126 | 0 |
+| E ("it does not work") | on (told) | 14,15,18 | 26 | 0 | 7 | 0 |
+
+Three things follow from that table, and only the first has been acted on.
+
+**Every client knew the session was running.** `on (told)` across the board rules out the
+state-sync gap that every earlier loss of this shape turned out to be (B30, B31). The logic was not
+the problem this time.
+
+**The clients held different SUBSETS of the same boss's rolls.** No filter produces that pattern —
+it is message loss, and the receiving side refused almost nothing (0 sender, 0 unknown token, 0–2
+not in group). The announcements never arrived. The 26–603 "unknown item" counts are the
+consequence, not the cause: votes and results for rolls the client was never told about. E, the one
+who reported it, knew the fewest rolls and therefore counted the least unknown traffic — the
+counter reads backwards from what intuition suggests.
+
+Fixed in 3.3.2: a refused guaranteed send is now retried (see `SEND_RETRY_DELAYS` in KASC-1.0).
+
+**1578 queued sends is the part that is still open.** That is the disease; the retry is a bandage on
+its symptom, and a retry adds traffic to a pipe that is already refusing. What is NOT known is which
+traffic fills it. The obvious suspect — the equipped-item sync — is already deduplicated per roll on
+the asking side and behind a 5-second per-slot cooldown on the answering side, so it is a suspect
+without evidence. The table heartbeat is payload-deduplicated. Votes, results and config are
+one-per-event.
+
+Deliberately not cut before the last test raid of the tier: a guess at the wrong sender removes
+traffic somebody needs and cannot be told apart from the loss it was meant to fix.
+
+**What would settle it:** a per-token send counter in KASC, printed in `/kart status` — the same
+shape as the existing diagnostics, and the same reason they exist. `tests/test_lc_churn.lua` and the
+raidsim harness can already count messages per drop offline, so a first estimate does not need a
+raid at all; what needs a raid is the ratio between a boss's traffic and an evening's.
+
+**Related, also open:** the 71 refusals have no REASON recorded. ChatThrottleLib hands its callback
+`(didSend, sendResult)` and AceComm's shim drops the code on the way through, so KASC sees only the
+boolean (noted on `KASC.diag`). `ChannelThrottle` and `GeneralError` are indistinguishable from
+here, and they want different answers — the first is "slow down", the second is not.
+
+
 ## B81 — FIXED 2026-08-01 — a reload lost the open items, and worst for the one client that must not lose them
 
 Found in the live v3.2.2-beta1 test, 2026-07-31, first as "`/kart add` items are gone after a
