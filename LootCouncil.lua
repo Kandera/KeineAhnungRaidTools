@@ -1785,9 +1785,12 @@ local ROLL_CATCHUP_MAX = 5
 -- raid read "Item Level 44" off a 285 item on 2026-08-03 (B119).
 --
 -- Falls back to the bare itemID when there is no real link to take a string from, and again when the
--- string would push the message past the transport's 255-byte cap: the old, lossy payload is worth
--- far more than a message that is silently dropped for being too long. The cap is checked against the
--- longest prefix any caller puts in front of it, not against the string alone.
+-- string would push the message past the transport's 255-byte cap: the transport (KASC:Send /
+-- AceComm) would still deliver the full string whole, split into extra chunks, rather than dropping
+-- or corrupting it -- but a roll catch-up is a burst of these to whoever missed the original, and the
+-- old, lossy payload staying inside one chunk is worth more than that burst paying for a second one
+-- per item. The cap is checked against the longest prefix any caller puts in front of it, not against
+-- the string alone.
 local WIRE_HEADROOM = 60 -- "LC_ROLL_CATCHUP:" + rollID + seconds + separators, with room to spare
 function LC.ItemPayload(link, itemID)
     local full = KAUtil.GetItemString(link)

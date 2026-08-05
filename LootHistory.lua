@@ -1106,9 +1106,13 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             local msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
                 e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
                 winnerKey, winnerSafe, reasonSafe, e.item or "")
-            -- Full item links can run long (many bonus IDs + localized name); if the message would
-            -- blow the 255-byte SendAddonMessage cap, fall back to the compact, locale-independent
-            -- item string, which the receiver rebuilds into a full link.
+            -- Full item links can run long (many bonus IDs + localized name). The transport
+            -- (KASC:Send / AceComm, see REQ_EQUIP in LootCouncilPanel.lua) splits and reassembles
+            -- anything over 255 bytes rather than dropping or corrupting it, so this is a bandwidth
+            -- choice, not a correctness one: a history catch-up is one message per award from every
+            -- peer that answers, and the compact, locale-independent item string keeps that burst to
+            -- a single addon message instead of paying for an extra chunk. The receiver rebuilds it
+            -- into a full link either way.
             if #msg > 255 then
                 local itemStr = KAUtil.GetItemString(e.item)
                 if itemStr then
@@ -1118,8 +1122,9 @@ function LH.HandleHistoryRequest(payload, senderFullName)
                 end
             end
             -- Still over budget (a non-link item, or a very long nickname + reason): send an empty
-            -- item field rather than let SendAddonMessage truncate the trailing item into garbage.
-            -- The entry still syncs; the item just shows blank on the receiver instead of corrupt.
+            -- item field rather than pay for the extra chunk the full field would cost. The entry
+            -- still syncs either way; this only keeps it inside a single addon message, with the
+            -- item showing blank on the receiver instead of arriving one chunk later.
             if #msg > 255 then
                 msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
                     e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
@@ -1129,10 +1134,10 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- item was never enough on its own: the reason is a vote-button label, the settings box
             -- limits those to 128 LETTERS, and a German label counts two bytes for every umlaut in
             -- it -- so a raid running "Zweitspec für Nebenrolle über Mainspec" style labels produces
-            -- entries that fit LC_RESULT (fewer fields) and not LC_HIST_ENTRY. The comment above
-            -- promised "the entry still syncs" and that promise did not hold: over the cap nothing
-            -- arrives at all, so the award was simply missing from the peer's history with nothing
-            -- said on either side.
+            -- entries that fit LC_RESULT (fewer fields) and not a single-chunk LC_HIST_ENTRY. The
+            -- transport still delivers a message over budget whole, split into extra chunks, rather
+            -- than losing or corrupting it -- so this last cut is purely about keeping a catch-up
+            -- burst to one chunk per award, not about the award arriving at all.
             --
             -- Cut on a character boundary, not a byte one: a half umlaut renders as a broken box in
             -- the reason column, and the receiver stores whatever arrives.
