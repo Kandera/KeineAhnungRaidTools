@@ -43,6 +43,12 @@ it removes the claim, and with it the whole class of disagreement.
 6. A designated lootmaster who is not in the raid falls back to the raid leader, who is asked before
    taking over (unchanged — standing in force-wins items into somebody's bags and is not done to
    them silently).
+7. An empty Lootmaster field hands the loot to the raid leader only when it came from somebody who
+   was allowed to name somebody: the config owner's own settings, or their `LC_CONFIG`. A relay
+   names nobody — it does say **whether** the raid has named somebody and whether that person is
+   here. Says it "named and present", that person hands out the loot and the raid leader does not.
+   Says it "named and gone", that is the same situation as a lootmaster who has left the raid: the
+   raid leader is asked whether to stand in.
 
 ## What this costs
 

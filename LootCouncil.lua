@@ -762,6 +762,11 @@ function LC.IsLootOwner()
     -- mention afterwards. A raid that never named a lootmaster at all is a different case and is not
     -- asked anything: that is the documented setup, and it has always worked this way.
     if LootmasterAbsent() and not LC.standInAccepted then return false end
+    -- The raid has a lootmaster and this client was not told who: that is what a relay's presence
+    -- field says (see LC.RelayRaidConfig). Somebody out there is running the loot flow, and a client
+    -- that does not know who is not the one -- whether that somebody is here ("1") or gone ("0"),
+    -- because in the second case the raid still has to be ASKED before anybody takes over.
+    if LC.raidConfig.relayLootmaster and not LC.standInAccepted then return false end
     return UnitIsGroupLeader("player")
 end
 
@@ -959,6 +964,12 @@ function LC.ApplyOwnConfig()
     if (KART_Settings.lcLootmaster or "") ~= "" or LC.GetLootmaster() == "" then
         LC.raidConfig.lootmaster = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
     end
+    -- Only a field that NAMES somebody clears what a relay said about the raid (see
+    -- LC.HandleConfigRelay). An empty one deliberately does not: this function runs on every
+    -- GROUP_ROSTER_UPDATE, so clearing it here would drop the fact within seconds of learning it --
+    -- one person joining or one promotion -- and hand the loot flow back to a leader the raid is
+    -- not running on. That is precisely how the first attempt at B130 undid itself.
+    if (KART_Settings.lcLootmaster or "") ~= "" then LC.raidConfig.relayLootmaster = nil end
     -- Same rule the receiving side applies (see TryAcceptConfig): an empty council list means "not
     -- configured", not "this raid has no council". It has to hold on BOTH sides or they disagree --
     -- the config owner never processes its own broadcast, so leaving it out here made the new leader
@@ -1020,7 +1031,16 @@ function LC.BroadcastRaidConfig(target)
 
     local prefix = "LC_CONFIG:" .. minQ .. ":" .. buttons .. ":" .. rolls .. ":" .. lootmaster .. ":"
     local payload = BuildCouncilPayload(prefix, council)
-    if payload then LC.SendLC(payload, target) end
+    if payload then
+        LC.SendLC(payload, target)
+        -- What a relay told us about the raid's designation (see LC.HandleConfigRelay) is answered by
+        -- this message: every peer takes the field above as the raid's, and we do not process our own
+        -- broadcast, so clearing it here is the same hand-written step every other send in this module
+        -- needs. Leaving it would make the config owner the one client in the raid that does not
+        -- believe what it just told everybody -- and, since nothing else clears it for a leader whose
+        -- own field is empty, no client at all would own the loot from then on.
+        LC.raidConfig.relayLootmaster = nil
+    end
 end
 
 -- Hands on the config the RAID agreed, to a client that has none (B65).
@@ -1034,9 +1054,10 @@ end
 -- Three things keep this from becoming a second, competing authority:
 --   * It carries LC.raidConfig, never KART_Settings. A stand-in's own (usually empty) council list
 --     can no more overwrite the raid's here than it could through LC.BroadcastRaidConfig.
---   * The lootmaster field goes out EMPTY. This says "here is what the raid settled on", not "and I
+--   * The lootmaster field NAMES nobody. This says "here is what the raid settled on", not "and I
 --     am in charge of it": ownership stays derived, so the real lootmaster reclaims it simply by
---     coming back and broadcasting (their own field names them, ours does not).
+--     coming back and broadcasting (their own field names them, ours does not). It does say whether
+--     the raid has one and whether they are here -- see the presence field below.
 --   * Only whoever is actually running the loot flow relays, and only to someone who asked.
 -- The receiving side adds the fourth: it fills a void and never replaces anything.
 function LC.RelayRaidConfig(target)
@@ -1055,9 +1076,26 @@ function LC.RelayRaidConfig(target)
     -- that is exactly the raid where somebody needs handing it. The receiver's rule is what makes
     -- this safe from anyone: it fills a void and can never replace or clear an existing config, so
     -- the worst a wrong sender achieves is giving settings to a client that had none.
+    -- The field the lootmaster's key used to occupy. The key itself still does NOT travel -- only the
+    -- config owner may name anybody, and that rule is what the empty field was protecting. What the
+    -- relayer CAN say is whether the config it is passing on names somebody at all, and whether that
+    -- somebody is standing here: both are facts about the raid, not a designation.
+    --
+    -- Without this a receiver could not tell "nobody was named" from "I was not told", and a raid
+    -- leader that reads the second as the first hands itself a loot flow somebody else is already
+    -- running (B130).
+    --
+    -- An unresolved key counts as PRESENT: we cannot show that person has gone, and the safe
+    -- direction is the one where this client defers rather than claims.
+    local designated = LC.raidConfig.lootmaster or ""
+    local presence = ""
+    if designated ~= "" then
+        presence = (not KASC.Identity.IsResolvedKey(designated)
+            or KASC.Identity.FindUnitForKey(designated) ~= nil) and "1" or "0"
+    end
     local prefix = "LC_CONFIG_RELAY:" .. (LC.raidConfig.minQuality or 4) .. ":"
         .. (LC.raidConfig.buttonLabels or "") .. ":"
-        .. (LC.raidConfig.rollsEnabled and "1" or "0") .. "::"
+        .. (LC.raidConfig.rollsEnabled and "1" or "0") .. ":" .. presence .. ":"
     local payload = BuildCouncilPayload(prefix, LC.raidConfig.councilMembers or "")
     if payload then LC.SendLC(payload, target) end
 end
@@ -1077,7 +1115,7 @@ function LC.HandleConfigRelay(payload, senderKey)
     local ownField = LC.ResolveConfigName(KART_Settings and KART_Settings.lcLootmaster)
     local selfInvented = LC.raidConfig.fromSelf and not ownField
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local minQ, buttons, rolls, _, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
+    local minQ, buttons, rolls, presence, council = payload:match("^(%d+):([^:]*):([01]):([^:]*):(.*)$")
     if not minQ then return end
 
     -- The same rule TryAcceptConfig and LC.ApplyOwnConfig apply, at the third site that writes this
@@ -1104,6 +1142,22 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- LC.GetLootmaster falls back to raid lead here exactly as it already does on every client that
     -- watched the lootmaster leave.
     LC.raidConfig.lootmaster     = ""
+    -- What the relay says about the raid's designation -- not who it is, only whether there is one
+    -- and whether they are here. "" means nobody was named, which is an answer, not a gap.
+    --
+    -- Set only on a relay we actually TOOK as our config (everything past the guard above), and
+    -- deliberately so: a relay we reject as a config has told us nothing we were willing to believe
+    -- about this raid, and letting the half we discard decide who owns the loot would make a message
+    -- we refused the most consequential one we get. The client that rejected it already holds a
+    -- config of its own, whose lootmaster field is the better answer anyway.
+    --
+    -- It survives everything except a better answer. This describes the RAID, not us, so only a
+    -- source allowed to name somebody may overwrite it: another relay, the config owner's LC_CONFIG
+    -- (see TryAcceptConfig), or our own field naming somebody (see LC.ApplyOwnConfig). Notably NOT
+    -- an ApplyOwnConfig whose own field is empty -- that function runs on every GROUP_ROSTER_UPDATE
+    -- and would wipe this within seconds of a join or a promotion, which is exactly how the first
+    -- attempt at B130 undid itself.
+    LC.raidConfig.relayLootmaster = (presence ~= "" and presence) or nil
     if council ~= "" or (LC.raidConfig.councilMembers or "") == "" then
         LC.raidConfig.councilMembers = council
     end
@@ -1118,6 +1172,10 @@ function LC.HandleConfigRelay(payload, senderKey)
         if key then LC.CouncilNamesTable[key] = true end
     end
     if LC.RefreshRaidWideFields then LC.RefreshRaidWideFields() end
+    -- "Named and gone" is the stand-in question, and it has just become answerable for the first
+    -- time. Waiting for the next GROUP_ROSTER_UPDATE to ask it would leave the raid with no loot
+    -- owner for however long nobody joins or leaves, which in a boss pull is the whole fight.
+    if LC.CheckStandIn then LC.CheckStandIn() end
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting
@@ -1185,6 +1243,10 @@ local function TryAcceptConfig(payload, senderKey)
     -- Empty stays empty and means "the raid leader hands it out themselves" (see LC.GetLootmaster's
     -- fallback), which is a real setting, not a missing one.
     LC.raidConfig.lootmaster    = ConfigKeyFromWire(lootmaster) or ""
+    -- The authoritative answer to the question a relay could only answer sideways (see
+    -- LC.HandleConfigRelay): the config owner is allowed to name somebody, so whatever this says --
+    -- empty included -- replaces what a relay told us about the raid's designation.
+    LC.raidConfig.relayLootmaster = nil
     -- An EMPTY council list means "not configured", not "this raid has no council".
     --
     -- The one content-based exception in this function, and it is here because the soak found what it
@@ -3242,7 +3304,13 @@ local function TearDownForRaidExit()
     LC.CancelPendingConfig()
 end
 
--- The configured lootmaster has left and we are the raid leader, so the role falls to us. Ask before
+-- Either we hold the name and can see they are gone, or a relay told us the raid's lootmaster is not
+-- here without naming them (B130). Both are the same situation for the person being asked.
+local function LootmasterGone()
+    return LootmasterAbsent() or LC.raidConfig.relayLootmaster == "0"
+end
+
+-- The raid's lootmaster is gone and we are the raid leader, so the role falls to us. Ask before
 -- it does (see LC.IsLootOwner for why): standing in means every council-eligible item is force-won
 -- into our own bags from the next drop onwards.
 --
@@ -3250,7 +3318,7 @@ end
 -- who ported out and came back takes their role with them, and a leader who declined is asked again
 -- the next time it genuinely happens.
 function LC.CheckStandIn()
-    if not LootmasterAbsent() then
+    if not LootmasterGone() then
         LC.standInAccepted = false
         LC.standInAsked    = false
         return

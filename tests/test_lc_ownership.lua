@@ -371,3 +371,77 @@ do
         "and the raid leader carries the loot flow instead")
     T.eq(sim.byName.Merrit.KART.LC.raidConfig.lootmaster, "", "on every client, not just theirs")
 end
+
+-- Rule 7: a relay says WHETHER the raid has a lootmaster, without naming them ----------------------
+-- LC.RelayRaidConfig carries the lootmaster field EMPTY on purpose: only the config owner may name
+-- anybody. Read as "nobody was named", that made a reloaded raid leader believe it owned the loot
+-- while the real lootmaster stood next to it -- two announcers, and the wrong one never converges
+-- because it is its own announcer (B130). The field says which of the two it is now.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
+        "a leader told the raid has a lootmaster does not own the loot")
+    T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the real lootmaster still does")
+    T.truthy(not RaidSim.As(leader, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "and is asked nothing, because somebody is there")
+end
+
+-- It survives a roster update ---------------------------------------------------------------------
+-- LC.ApplyOwnConfig runs from GROUP_ROSTER_UPDATE, and the first attempt at this fix was wiped by it
+-- within seconds of being set. What the relay said about the RAID is not ours to forget on a join.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
+        "a roster update does not hand the loot back to the leader")
+    T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the lootmaster still has it")
+end
+
+-- The named lootmaster is gone, so the leader is asked ---------------------------------------------
+do
+    local sim = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.Leave(sim, "Bramor")
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(2)
+
+    T.truthy(RaidSim.As(leader, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "a leader told the lootmaster is gone is asked to stand in")
+end
+
+-- A raid that never named anybody is untouched -----------------------------------------------------
+-- The documented setup. This is the case the third state must not swallow, and the case the first
+-- attempt at this fix broke.
+--
+-- The leader BROADCASTS the empty field rather than only applying it: "never named anybody" is a
+-- fact about the raid, and a raid whose members were told the opposite an hour ago is a different
+-- setup entirely. Without the broadcast the relayer would still be carrying the old designation and
+-- would be telling the truth about it.
+do
+    local sim = F.NewRaid()
+    local leader = sim.byName.Bramor
+    RaidSim.As(leader, function()
+        leader.env.KART_Settings.lcLootmaster = ""
+        wipe(leader.KART.LC.raidConfig)
+        leader.KART.LC.BroadcastRaidConfig()
+    end)
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), true,
+        "a raid that never named a lootmaster still lets its leader hand out the loot")
+    T.truthy(not RaidSim.As(leader, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
+        "and nobody is pestered about standing in")
+end
