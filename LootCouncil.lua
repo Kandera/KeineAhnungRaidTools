@@ -762,11 +762,6 @@ function LC.IsLootOwner()
     -- mention afterwards. A raid that never named a lootmaster at all is a different case and is not
     -- asked anything: that is the documented setup, and it has always worked this way.
     if LootmasterAbsent() and not LC.standInAccepted then return false end
-    -- Empty because a relay could not say who, which is not the same as nobody having been named.
-    -- Somebody out there hands out this raid's loot; this client simply has not been told who, and a
-    -- client that does not know is not the one. LC.CheckStandIn asks, and only if that goes
-    -- unanswered does the usual stand-in question follow (B130).
-    if LC.raidConfig.fromRelay and not LC.standInAccepted then return false end
     return UnitIsGroupLeader("player")
 end
 
@@ -963,11 +958,6 @@ function LC.ApplyOwnConfig()
     -- from then on. Keeping a departed name would leave the raid pointed at an empty chair.
     if (KART_Settings.lcLootmaster or "") ~= "" or LC.GetLootmaster() == "" then
         LC.raidConfig.lootmaster = LC.ResolveConfigName(KART_Settings.lcLootmaster) or ""
-        -- Our own settings, not a relay's silence (see LC.HandleConfigRelay). This is the same
-        -- answer every peer gets from the broadcast that follows, empty field included, so leaving
-        -- the marker on would make the config owner the one client in the raid that does not know
-        -- what its own config says.
-        LC.raidConfig.fromRelay = nil
     end
     -- Same rule the receiving side applies (see TryAcceptConfig): an empty council list means "not
     -- configured", not "this raid has no council". It has to hold on BOTH sides or they disagree --
@@ -1118,17 +1108,6 @@ function LC.HandleConfigRelay(payload, senderKey)
         LC.raidConfig.councilMembers = council
     end
     LC.raidConfig.fromSelf       = nil
-    -- Where this picture came from, which is the one thing the lootmaster field cannot say. A relay
-    -- carries it EMPTY by design -- only the config owner may name somebody -- so "empty" from here
-    -- means "I was not told", not "nobody was named". LC.IsLootOwner needs those apart; without this
-    -- flag they are the same string (B130).
-    --
-    -- Not for a relay that only echoed a config we had applied from our OWN settings and brought
-    -- nothing we lacked (the selfInvented branch above, with the council unchanged). Our own field
-    -- is where that picture came from and it still answers the question -- reading the echo as "I
-    -- was not told" would take the loot flow away from the leader of a raid that simply never named
-    -- anybody, which is the documented setup.
-    if not selfInvented or gainsCouncil then LC.raidConfig.fromRelay = true end
 
     -- Built from what we ENDED UP holding, not from what arrived: those differ whenever the list on
     -- the wire was empty and we kept ours, and rebuilding from the payload there would empty the
@@ -1224,9 +1203,6 @@ local function TryAcceptConfig(payload, senderKey)
         LC.raidConfig.councilMembers = council
     end
     LC.raidConfig.fromSelf      = nil -- received, not self-applied (see LC.ApplyOwnConfig)
-    -- The authoritative answer: whatever this says about the lootmaster is what the raid agreed,
-    -- empty included.
-    LC.raidConfig.fromRelay     = nil
 
     if not keepCouncil then
         LC.CouncilNamesTable = {}

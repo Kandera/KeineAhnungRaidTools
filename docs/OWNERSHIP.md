@@ -13,11 +13,6 @@ fact every client can check about every other client, from its own roster, at an
 owner's client and is a *designation*: the raid leader says who hands out the loot. It normally names
 somebody else. If it names nobody, the raid leader does it themselves.
 
-An empty field is only an answer when it comes from somebody who was allowed to give one. A relay
-(`LC_CONFIG_RELAY`) carries the field empty by design, because only the config owner may name
-anybody — so empty from there means this client has not been told who hands out the loot, and a
-client that does not know is not the one.
-
 ## Why this shape
 
 The old rule asked "does my own Lootmaster field name me?", which made ownership something a client
@@ -48,11 +43,6 @@ it removes the claim, and with it the whole class of disagreement.
 6. A designated lootmaster who is not in the raid falls back to the raid leader, who is asked before
    taking over (unchanged — standing in force-wins items into somebody's bags and is not done to
    them silently).
-7. An empty Lootmaster field hands the loot flow to the raid leader only when it came from somebody
-   who was allowed to name somebody: the config owner's own settings, or their `LC_CONFIG`. Empty
-   because a relay could not say who is a third state — this client does not know who hands out the
-   loot. A raid leader in it asks the raid once, and is only asked to stand in if nobody answers,
-   which is the same question an absent lootmaster raises.
 
 ## What this costs
 

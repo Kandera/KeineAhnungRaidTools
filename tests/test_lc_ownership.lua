@@ -371,38 +371,3 @@ do
         "and the raid leader carries the loot flow instead")
     T.eq(sim.byName.Merrit.KART.LC.raidConfig.lootmaster, "", "on every client, not just theirs")
 end
-
--- A config that came from a relay does not make the raid leader the loot owner ---------------------
--- LC.RelayRaidConfig sends the lootmaster field EMPTY on purpose: only the config owner may name
--- somebody. Read as "nobody was named", that made a raid leader who had reloaded believe it owned the
--- loot while the real lootmaster stood next to it -- two announcers, and the wrong one never
--- converges again because it is its own announcer (B130).
-do
-    local sim, lm = F.NewRaid()
-    RaidSim.Promote(sim, "Alric")
-    local leader = RaidSim.Reload(sim, "Alric") or sim.byName.Alric
-    -- The relay is what a peer answers with; the authoritative config comes only from the owner.
-    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
-    KARTTEST.AdvanceTime(1)
-
-    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
-        "a leader whose picture came from a relay does not own the loot")
-    T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the real lootmaster still does")
-end
-
--- A raid that never named anybody is untouched ------------------------------------------------------
--- The documented setup: no lootmaster configured at all, the raid leader hands out the loot, and
--- nothing asks them anything. This is the case the third state must not swallow.
-do
-    local sim = F.NewRaid()
-    local leader = sim.byName.Bramor
-    RaidSim.As(leader, function()
-        leader.env.KART_Settings.lcLootmaster = ""
-        wipe(leader.KART.LC.raidConfig)
-        leader.KART.LC.ApplyOwnConfig()
-    end)
-    KARTTEST.AdvanceTime(0)
-
-    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), true,
-        "a raid that never named a lootmaster still lets its leader hand out the loot")
-end
