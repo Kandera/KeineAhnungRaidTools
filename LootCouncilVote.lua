@@ -392,6 +392,9 @@ function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
         -- ("5:30 uhr") can't be mistaken for one by the receiver's optional-field parse below.
         LC.SendLC("LC_VOTE:" .. rollID .. ":" .. buttonIdx .. ":#" .. buttonCount
             .. ":@" .. TrackedItemID(rollID) .. ":" .. note)
+        -- The click itself still goes out immediately and unchanged -- no phase delay in front of
+        -- the message the council is waiting for. The heartbeat is only the repeat.
+        Vote.EnsureVoteHeartbeat()
     end
     -- Both branches: refresh the council panel too, so a council member sees their own vote appear
     -- in the panel (rows + tab badge), not just in the vote list.
@@ -1186,6 +1189,41 @@ local function ParseVotesPayload(payload)
     end
     if #entries == 0 then return nil end
     return entries
+end
+
+-- Sends our own votes if there are any. Returns whether anything went out, which is what tells the
+-- ticker below when it has nothing left to do.
+function Vote.SendVoteHeartbeat()
+    local message = SerializeMyVotes()
+    if not message then return false end
+    LC.SendLC(message)
+    return true
+end
+
+-- One ticker per CLIENT, not per roll -- that is what makes the cost independent of how many items a
+-- boss dropped, which is the whole reason the message is bundled.
+--
+-- The phase comes from our position in the sorted roster (LC.SelfAnswerSlot), not from math.random():
+-- twenty clients then divide the window into twenty equal gaps by construction rather than by luck.
+-- Measured for the roll table and written up there: a hash of the player's own name put two clients
+-- within milliseconds of each other in 26% of full rosters, and milliseconds is what ordinary
+-- addon-message jitter eats.
+--
+-- Self-cancelling on the first tick that has nothing to say, the way Vote.EnsurePruneTicker stops
+-- with its batch: a client whose rolls have all expired holds no timer at all.
+function Vote.EnsureVoteHeartbeat()
+    if LC.voteHbTicker or LC.voteHbPending then return end
+    LC.voteHbPending = true
+    C_Timer.After(LC.SelfAnswerSlot(VOTE_HB_SPREAD), function()
+        LC.voteHbPending = nil
+        Vote.SendVoteHeartbeat()
+        LC.voteHbTicker = C_Timer.NewTicker(VOTE_HB_PERIOD, function()
+            if not Vote.SendVoteHeartbeat() then
+                if LC.voteHbTicker then LC.voteHbTicker:Cancel() end
+                LC.voteHbTicker = nil
+            end
+        end)
+    end)
 end
 
 -- B78: one round of "say that again" before the council decides.

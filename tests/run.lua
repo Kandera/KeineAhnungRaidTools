@@ -121,6 +121,7 @@ dofile("tests/test_lc_reload.lua")
 dofile("tests/test_lc_ownership.lua")
 dofile("tests/test_lc_award.lua")
 dofile("tests/test_lc_votelabels.lua")
+dofile("tests/test_lc_votes.lua")
 -- Core.lua is not loadable here (it needs the game), so its event and slash wiring is checked
 -- against the source instead -- see the file for why that is worth doing.
 dofile("tests/test_core_wiring.lua")
