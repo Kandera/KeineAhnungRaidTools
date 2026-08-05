@@ -23,6 +23,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Zwei Raider können nicht mehr dieselbe Wurfzahl bekommen**, und ein Wurf, den niemand gesehen hat, lässt sich nachfordern.
 - **Ein fehlender Wurf wird von dem repariert, der ihn noch hat** — auch wenn der Lootmaster weg ist.
 - **Ein Boss überflutet den Raid nicht mehr mit einer Nachricht pro Item** — was zusammen fällt, wird zusammen angekündigt.
+- **Der Lootmaster funkt seltener, was auf dem Tisch liegt**, und eine Änderung erreicht den Raid schneller als vorher.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**

@@ -99,7 +99,14 @@ do
         local same, field = Same(before, Snapshot(lm))
         T.truthy(same, label .. " from a key that is in no group changes nothing"
             .. (field and (" (" .. field .. " moved)") or ""))
-        T.eq(#RaidSim.Sent(sim, ""), 0, label .. " from that key is not answered either")
+        -- Everything except the owner's own table heartbeat, which is nobody's answer to anything:
+        -- it is polled every two seconds and lands inside this window whatever the stranger did or
+        -- did not send.
+        local answers = 0
+        for _, e in ipairs(RaidSim.Sent(sim, "")) do
+            if not e.msg:match("LC_TABLE") then answers = answers + 1 end
+        end
+        T.eq(answers, 0, label .. " from that key is not answered either")
     end
 end
 

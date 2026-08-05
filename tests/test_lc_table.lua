@@ -40,19 +40,76 @@ do
     T.truthy(lm.KART.LC.rollItems[80], "the owner has the item")
     T.eq(council.KART.LC.rollItems[80], nil, "and the council member does not, having missed it")
 
-    -- Ten seconds later the owner says what is on the table, the council member notices the gap and
-    -- asks, and the owner answers it.
+    -- A poll interval later the owner says what is on the table, the council member notices the gap
+    -- and asks, and the owner answers it.
     RaidSim.ClearLog(sim)
-    KARTTEST.AdvanceTime(11)
+    KARTTEST.AdvanceTime(3)
     T.truthy(#RaidSim.Sent(sim, "LC_TABLE") > 0, "the owner says what is on the table")
     T.truthy(#RaidSim.Sent(sim, "LC_ROLL_REQ") > 0, "the client missing an item asks for it")
     T.truthy(council.KART.LC.rollItems[80], "and gets it")
     T.eq(council.KART.LC.rollItems[80], lm.KART.LC.rollItems[80], "the same item, not a rebuilt guess")
 
     -- Asked once, not once per heartbeat: an answer can be on its way while the next one goes out.
+    -- Far enough for the forced repeat to fall due, so there really is another heartbeat to stay
+    -- quiet about.
     RaidSim.ClearLog(sim)
-    KARTTEST.AdvanceTime(11)
+    KARTTEST.AdvanceTime(35)
+    T.truthy(#RaidSim.Sent(sim, "LC_TABLE") > 0, "the table is said again")
     T.eq(#RaidSim.Sent(sim, "LC_ROLL_REQ"), 0, "and does not keep asking once it has it")
+end
+
+-- A change to the table reaches the raid inside one poll interval ------------------------------------
+-- What the cadence is FOR. The message goes out when what it would say has changed, which is noticed
+-- by a poll rather than by a call at every site that can change it -- three attempts at keeping that
+-- list of sites by hand each missed one, and the missed one is always where the repair path dies.
+do
+    local sim = F.NewRaid()
+    F.Drop(sim, 86, F.GLOVES, { bop = true })
+    KARTTEST.AdvanceTime(3) -- the first item is announced and its table said once
+
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 87, F.WEAPON, { bop = true })
+    KARTTEST.AdvanceTime(3) -- the drop's own collection window, then one poll
+
+    local said = RaidSim.Sent(sim, "LC_TABLE")
+    T.truthy(#said > 0, "a table that changed is said again without waiting for the forced repeat")
+    T.truthy(said[#said].msg:match("87=" .. F.WEAPON), "and the message names the item that changed it")
+end
+
+-- ...and a table that does NOT change is repeated at the forced interval, not at the poll ------------
+do
+    local sim = F.NewRaid()
+    F.Drop(sim, 88, F.GLOVES, { bop = true })
+    KARTTEST.AdvanceTime(3)
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(28)
+    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 0,
+        "an unchanged table is not repeated once per poll for the rest of the distribution")
+    KARTTEST.AdvanceTime(5)
+    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 1,
+        "but it is said again when the forced repeat falls due, for whoever was not listening")
+end
+
+-- ...and the poll stops once the table is empty -------------------------------------------------------
+-- One last message so a client that missed End Round can drop its cards, and then silence: an idle
+-- raid must not be paying for a poll that has nothing left to say. End Round is not the case under
+-- test -- it stops the ticker outright (LC.ClearAllRolls) -- so the table is emptied the way a
+-- distribution really ends it, one roll at a time leaving the owner's own tracking.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 89, F.GLOVES, { bop = true })
+    KARTTEST.AdvanceTime(3)
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.ClearRollState(89) end)
+    KARTTEST.AdvanceTime(3)
+    local said = RaidSim.Sent(sim, "LC_TABLE")
+    T.eq(#said, 1, "the emptied table is said exactly once")
+    T.truthy(said[1].msg:match("LC_TABLE:0:"), "and what it says is that there is nothing on it")
+
+    KARTTEST.AdvanceTime(90)
+    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 1, "after which nothing polls on")
 end
 
 -- A late arrival is not handed a running item ---------------------------------------------------------

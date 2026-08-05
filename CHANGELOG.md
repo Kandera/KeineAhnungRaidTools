@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rolls can no longer come out the same for two raiders**, and a roll nobody saw can be asked for again.
 - **A missing roll is repaired by whoever still has it**, even after the lootmaster has gone.
 - **A boss no longer floods the raid with one message per item** — everything that drops together is announced together.
+- **The lootmaster is quieter about what is on the table**, and a change reaches the raid faster than before.
 
 ### Added
 - **`/kart status` now reports messages this client refused, and its own that never went out.**

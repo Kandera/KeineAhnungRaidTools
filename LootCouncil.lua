@@ -1829,12 +1829,13 @@ end
 -- askable for as long as it is still ON THE TABLE here, not only while its voting timer runs.
 --
 -- It used to be "deadline > now", and at the default lcVoteSeconds of 20 that made the repair path
--- unreachable. The heartbeat ticks every 10s, so the first tick naming a roll lands at t=10 and only
--- stamps LC.rollReqSent; the escalation to LC_ROLLS_REQ needs another ROLL_REQ_COOLDOWN on top of it,
--- i.e. t >= 40 — on a rollID that stopped being listed at t = 20. The lootmaster ports out
--- mid-distribution, a raider's LC_ROLLS chunk is dropped, the whisper at t=10 is refused by the
--- stand-in (LC.MayCatchUp, B118), and by the time the group-wide ask was due there was nothing left
--- to trigger it.
+-- unreachable. The first heartbeat naming a roll only stamps LC.rollReqSent; the escalation to
+-- LC_ROLLS_REQ needs another ROLL_REQ_COOLDOWN on top of it, i.e. t >= 32 even now that the drop is
+-- announced within two seconds of itself — on a rollID that stopped being listed at t = 20, and the
+-- gap was wider still while the heartbeat ticked every ten seconds. The lootmaster ports out
+-- mid-distribution, a raider's LC_ROLLS chunk is dropped, the whisper that first ask makes is refused
+-- by the stand-in (LC.MayCatchUp, B118), and by the time the group-wide ask was due there was nothing
+-- left to trigger it.
 --
 -- The council DECIDES after the timer expires, while the item is still tabbed and waiting to be
 -- assigned. That is exactly when a client that lost the item or its numbers needs repairing, so that
@@ -1948,9 +1949,9 @@ end
 -- member kept three rounds of cards because End Round never reached him.
 --
 -- So the loot owner says what is on the table, over and over, while there is anything on it, and a
--- client missing one of those rolls asks for it. One message every ten seconds, from one client in the
--- raid -- and unlike a retry it also repairs the client that was not even listening when the original
--- went out.
+-- client missing one of those rolls asks for it. One message per change to that table plus one every
+-- half-minute, from one client in the raid -- and unlike a retry it also repairs the client that was
+-- not even listening when the original went out.
 --
 -- IT ONLY EVER ADDS. The obvious other half -- "you are holding a card I did not list, drop it" --
 -- was designed, written, and taken back out before it ever ran, because it can lose a whole
@@ -1959,7 +1960,17 @@ end
 -- have told every council member to drop the items they are voting on, which is C5 and C11 broken by
 -- the very mechanism meant to protect them. Deletion has to come from somebody deciding it, never
 -- from somebody else's silence -- so End Round repeats its own message instead (see LC.EndRound).
-local TABLE_HEARTBEAT_SECONDS = 10
+--
+-- WHEN it goes out is polled, never pushed. The tick builds the message it WOULD send and sends it
+-- only if that differs from the last one, so no call site has to remember to say "the table changed"
+-- -- and there is no fourth mutation site for somebody to forget, which is how the hand-maintained
+-- list failed three times before this. Two seconds is the resolution a change is noticed at; a string
+-- compare that often is nothing next to the messages it saves.
+local TABLE_POLL_SECONDS = 2
+-- An UNCHANGED table is repeated this often anyway, because the message also has to reach a client
+-- that was not listening when the last one went out: a reload, a late invite, a chunk the transport
+-- dropped. Thirty seconds is what ROLL_REQ_COOLDOWN below is sized against.
+local TABLE_RESEND_SECONDS = 30
 -- Enough for any real distribution (a boss drops a handful), and short enough that the message stays
 -- far inside the transport's cap. Nothing is inferred from an item's ABSENCE here, so a truncated
 -- list costs a slower catch-up for whatever it drops -- and LC.OpenRollIDs sorts ASCENDING, so what
@@ -1971,14 +1982,18 @@ local TABLE_HEARTBEAT_SECONDS = 10
 -- (MANUAL_ROLL_ID_BASE + a five-digit remainder), so twelve entries and their commas is 167 bytes,
 -- about 180 with the token and the count in front -- inside one 255-byte addon message with room to
 -- spare, but not the "about 160" first recorded here. AceComm would split a longer one rather than lose
--- it, but a heartbeat that costs three chunks every ten seconds for the rest of the evening is a bad
--- trade for a message whose whole point is to be cheap enough to repeat. That budget is why the item
+-- it, but a heartbeat that costs three chunks every time it repeats, for the rest of the evening, is a
+-- bad trade for a message whose whole point is to be cheap enough to repeat. That budget is why the item
 -- travels as an itemID and never as a link: an itemID is six digits, and the same item's LINK is
 -- fifty-plus bytes and differs per drop by its bonus ids, which is exactly the comparison this
 -- message must not make (see LC.PayloadItemID).
 local TABLE_MAX_IDS = 12
--- A client re-asks for the same missing roll at most this often, so a heartbeat every ten seconds
--- cannot turn into a request every ten seconds while an answer is on its way.
+-- A client re-asks for the same missing roll at most this often. What it now throttles is the
+-- CHANGE-driven half of the heartbeat, which is where the bursts are: a boss dropping four items puts
+-- four different tables on the wire inside a few seconds, and without this a client missing one of
+-- them would ask again on every one. Against the forced repeat it throttles nothing any more --
+-- TABLE_RESEND_SECONDS is the same thirty seconds -- and that is the rate this was always aiming for:
+-- one ask per roll per half-minute, for as long as the answer really is missing.
 local ROLL_REQ_COOLDOWN = 30
 
 -- What this client CHOSE to be finished with -- the one thing the repair path cannot work out for
@@ -2031,6 +2046,9 @@ end
 
 local tableTicker
 local lastTableWasEmpty = true
+-- The message last put on the wire, and when. The tick compares against the STRING it would send, not
+-- against a count or a hash of it, so "changed" means exactly "a receiver would read something else".
+local lastTablePayload, lastTablePayloadAt = nil, 0
 
 -- Everything still on the table here, by LC.RollTracked's rule — which is where the "why not the
 -- deadline" reasoning lives. The name is historical: "open" means still tracked and undecided, not
@@ -2046,14 +2064,12 @@ function LC.OpenRollIDs()
     return ids
 end
 
-function LC.SendTableHeartbeat()
-    if not (IsInGroup() and LC.sessionActive and LC.IsLootOwner()) then return end
+-- The message this client would send right now, and whether the table behind it is empty. Split out
+-- from the send so the tick can build it WITHOUT sending, and compare the real thing rather than a
+-- stand-in for it: anything cheaper to compare -- the id list, a count -- would miss the case B132
+-- added, where the ids are unchanged and an itemID under one of them is not.
+local function TablePayload()
     local ids = LC.OpenRollIDs()
-    -- One empty heartbeat after the table clears, then silence. That message is what lets a client
-    -- which missed End Round drop its cards; sending it forever would be noise on an idle raid.
-    if #ids == 0 and lastTableWasEmpty then return end
-    lastTableWasEmpty = (#ids == 0)
-
     -- "<rollID>=<itemID>", comma-separated, behind the count of what is REALLY on the table (which
     -- can be more than TABLE_MAX_IDS lists). Nothing reads that count -- one thing briefly did, and
     -- LC.HandleTable says at its foot why that reader is gone -- and it stays on the wire because the
@@ -2075,17 +2091,41 @@ function LC.SendTableHeartbeat()
         local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
         shown[i] = rollID .. "=" .. (itemID or 0)
     end
-    LC.SendLC("LC_TABLE:" .. #ids .. ":" .. table.concat(shown, ","))
+    return "LC_TABLE:" .. #ids .. ":" .. table.concat(shown, ","), #ids == 0
+end
+
+function LC.SendTableHeartbeat()
+    if not (IsInGroup() and LC.sessionActive and LC.IsLootOwner()) then return end
+    local payload, isEmpty = TablePayload()
+    -- One empty heartbeat after the table clears, then silence. That message is what lets a client
+    -- which missed End Round drop its cards; sending it forever would be noise on an idle raid.
+    if isEmpty and lastTableWasEmpty then return end
+    lastTableWasEmpty = isEmpty
+    lastTablePayload, lastTablePayloadAt = payload, GetTime()
+    LC.SendLC(payload)
 end
 
 -- Started by the loot owner when it announces a roll, and it stops itself once the table has been
--- reported empty. Cheap either way: the send above returns immediately on any client that is not the
+-- reported empty. Cheap either way: the send below returns immediately on any client that is not the
 -- owner, which is what keeps a role change mid-round from producing two broadcasters.
+--
+-- The tick asks the question the send would answer -- "is what I would say now different from what I
+-- last said?" -- and stays quiet unless it is, or unless the last one is TABLE_RESEND_SECONDS old.
+-- The owner check is repeated here rather than left to the send alone because a client that is not
+-- the owner must not build a payload it will never put on the wire, and must not have a stale
+-- lastTablePayload compared against later.
 function LC.EnsureTableTicker()
     if tableTicker then return end
     lastTableWasEmpty = false
-    tableTicker = C_Timer.NewTicker(TABLE_HEARTBEAT_SECONDS, function()
-        LC.SendTableHeartbeat()
+    lastTablePayload, lastTablePayloadAt = nil, 0
+    tableTicker = C_Timer.NewTicker(TABLE_POLL_SECONDS, function()
+        if IsInGroup() and LC.sessionActive and LC.IsLootOwner() then
+            local payload = TablePayload()
+            if payload ~= lastTablePayload
+                or (GetTime() - lastTablePayloadAt) >= TABLE_RESEND_SECONDS then
+                LC.SendTableHeartbeat()
+            end
+        end
         if lastTableWasEmpty and tableTicker then
             tableTicker:Cancel()
             tableTicker = nil
@@ -2097,6 +2137,7 @@ function LC.StopTableTicker()
     if tableTicker then tableTicker:Cancel() end
     tableTicker = nil
     lastTableWasEmpty = true
+    lastTablePayload, lastTablePayloadAt = nil, 0
 end
 
 -- The receiving half of the heartbeat: ask for what we are missing, and nothing else. Deliberately
@@ -2110,9 +2151,9 @@ function LC.HandleTable(payload, senderKey, sender)
     local _, list = payload:match("^(%d+):?(.*)$")
 
     -- Asked for one at a time, only from the owner, and at most once every ROLL_REQ_COOLDOWN per
-    -- roll -- so a heartbeat every ten seconds cannot become a request every ten seconds while an
-    -- answer is already on its way, and a raid that all missed the same announcement does not answer
-    -- itself into another burst.
+    -- roll -- so the burst of heartbeats a changing table produces cannot become a burst of requests
+    -- while an answer is already on its way, and a raid that all missed the same announcement does not
+    -- answer itself into another burst.
     LC.rollReqSent = LC.rollReqSent or {}
     local now = GetTime()
     for entry in tostring(list):gmatch("[^,]+") do

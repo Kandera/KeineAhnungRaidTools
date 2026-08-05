@@ -117,15 +117,15 @@ end
 -- second heartbeat could ever fire, and nothing there actually exercises ROLL_REQ_COOLDOWN. Here the
 -- catch-up's LC_ROLLS is held in flight -- never delivered, not lost -- so needRolls stays true past
 -- a SECOND heartbeat, and only the cooldown timer stands between that and asking twice.
+--
+-- The second heartbeat now has to be EARNED. The owner repeats an unchanged table only every
+-- TABLE_RESEND_SECONDS, which is the same thirty seconds as the cooldown, so waiting for one proves
+-- nothing about the cooldown at all -- what it throttles is the burst a CHANGING table produces. So
+-- another item drops, the owner says so within a poll interval, and the count below is what stands
+-- between that message and a second ask for 906.
 do
-    local sim, lm = F.NewRaid()
+    local sim = F.NewRaid()
     local blind = sim.byName.Corvin
-
-    -- The default vote window (20s) would close right on top of the second heartbeat (t=20) and
-    -- take the rollID off the table for a reason that has nothing to do with the cooldown -- widen
-    -- it so the only thing keeping the second heartbeat from producing a second ask is the cooldown
-    -- itself.
-    lm.env.KART_Settings.lcVoteSeconds = 60
 
     F.Drop(sim, 906, F.GLOVES)
     KARTTEST.AdvanceTime(0.5)
@@ -136,11 +136,21 @@ do
     -- lands, and the second heartbeat still finds the table missing.
     RaidSim.Hold(sim, "LC_ROLLS")
     RaidSim.ClearLog(sim)
-    KARTTEST.AdvanceTime(21) -- past both the t=10 and t=20 heartbeat ticks
+    KARTTEST.AdvanceTime(3)  -- the first heartbeat, and the ask it produces
+    F.Drop(sim, 907, F.WEAPON)
+    KARTTEST.AdvanceTime(5)  -- the table has changed, so the owner says so again -- well inside 30s
 
+    T.truthy(#RaidSim.Sent(sim, "LC_TABLE") >= 2,
+        "two heartbeats really did go out inside one cooldown")
+
+    -- Both spellings of the ask: the first goes to the owner (LC_ROLL_REQ) and a second one for a
+    -- table still missing would escalate to the raid (LC_ROLLS_REQ), so counting only the first
+    -- token would pass on a cooldown that had been deleted outright.
     local blindAsks = 0
-    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
-        if e.from == blind.name then blindAsks = blindAsks + 1 end
+    for _, token in ipairs({ "LC_ROLL_REQ:906", "LC_ROLLS_REQ:906" }) do
+        for _, e in ipairs(RaidSim.Sent(sim, token)) do
+            if e.from == blind.name then blindAsks = blindAsks + 1 end
+        end
     end
     T.eq(blindAsks, 1,
         "the cooldown keeps it from asking again at the second heartbeat while unanswered")
@@ -253,10 +263,10 @@ end
 
 -- ...at the DEFAULT vote window, which is the only setting that matters -------------------------
 -- The case above widens lcVoteSeconds to 90 to look at recovery minutes in. At the default 20 the
--- repair could not fire at all, and every raid runs the default: the heartbeat ticks every 10s, so
--- the first tick naming the roll lands at t=10 and only stamps rollReqSent; the escalation needs
--- another 30s on top, by which time the roll had dropped out of LC.OpenRollIDs at t=20 and nothing
--- was left to trigger from. An item is now askable for as long as it is still on the table
+-- repair could not fire at all, and every raid runs the default: the first heartbeat naming the roll
+-- only stamps rollReqSent, and the escalation needs another 30s on top -- so even now that the first
+-- one lands within a couple of seconds, the roll had dropped out of LC.OpenRollIDs at t=20 and
+-- nothing was left to trigger from. An item is now askable for as long as it is still on the table
 -- (LC.RollTracked), which is precisely the window in which the council is scoring it.
 do
     local sim = F.NewRaid()

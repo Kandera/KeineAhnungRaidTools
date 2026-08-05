@@ -51,7 +51,7 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --                          back, so the roll is not pending at all.
 --   pendingItemLoads    -- an item load waiting on the client. No callback survives a reload.
 --   rollReqSent         -- "we already asked the owner about this roll", a timestamp read only to
---                          stop a ten-second heartbeat turning into a ten-second request (B118).
+--                          stop a burst of heartbeats turning into a burst of requests (B118).
 --                          GetTime()-based, so it does not survive a logout in any meaningful form,
 --                          and a restored client SHOULD ask again -- that is the whole point of it.
 --   rollsAnswerAt       -- "an answer of ours to an LC_ROLLS_REQ is scheduled" (B131). The timer it
