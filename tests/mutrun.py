@@ -69,8 +69,15 @@ def candidates(path, hit):
             continue
         if '"' in line or "'" in line:      # keep string contents out of it
             continue
+        # ...and trailing comments out of it too. A prose arrow in "-- key ->= true" is not an
+        # operator, but the rules read it as one and report the line as a survivor, which costs a
+        # suite run each and then reads as a finding to somebody going through the list. Safe to cut
+        # here rather than in the substitution: lines carrying a quote are already gone, so the first
+        # "--" on what is left always starts the comment, and the code half comes first -- so a
+        # sub() over the whole line still lands on the operator this looked at.
+        code = line.split("--", 1)[0]
         for pat, rep in RULES:
-            if re.search(pat, line):
+            if re.search(pat, code):
                 out.append((n, pat, rep))
                 break
     return raw, nl, lines, out
