@@ -223,3 +223,27 @@ do
     T.eq(ilvl, 285, "the item that actually dropped, not its base version")
     T.eq(link, lm.KART.LC.rollItems[88], "the same string the owner holds, bonus ids and all")
 end
+
+-- An item already on the table does not get its clock restarted ------------------------------------
+-- Every announcement carries the seconds the OWNER thinks are left, and a receiver used to take them
+-- whatever it already had -- so a second announcement for an item still running restarted the
+-- countdown, and one for an item whose row had already expired and been swept put it back on screen.
+--
+-- A second announcement is ordinary: the catch-up is one, and so is a client that asked for a roll it
+-- had let go of. Driven through LC.HandleStart directly here because that is the receiving side, and
+-- it is reached from three senders.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+    F.Drop(sim, 92, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    local firstDeadline = raider.KART.LC.rollDeadlines[92]
+    T.truthy(firstDeadline, "the raider has the item, with a deadline")
+
+    KARTTEST.AdvanceTime(10)
+    local payload = "92:20:" .. tostring(F.GLOVES)
+    RaidSim.As(raider, function() raider.KART.LC.HandleStart(payload, lm.guid) end)
+    T.eq(raider.KART.LC.rollDeadlines[92], firstDeadline,
+        "a second announcement leaves the clock where it was")
+end
+

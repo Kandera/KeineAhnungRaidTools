@@ -4924,6 +4924,24 @@ function LC.HandleStart(payload, senderKey)
     -- cast. So the deadline is set into the past and the vote row is skipped; a council member gets
     -- the item on the panel with its timer already run out, which is exactly what the clients that
     -- were there are looking at.
+    -- A clock this item is already running keeps running. The seconds in the payload say how long the
+    -- OWNER thinks is left, and every announcement carries them -- including the second and third one
+    -- for an item that is already on the table. Blizzard re-raises START_LOOT_ROLL for a roll still in
+    -- progress (see LC.DrawRollTable, which has carried its own guard against exactly that for
+    -- longer), so the owner announces again and every receiver restarted the countdown.
+    --
+    -- What that looked like from a raid, reported as #28: "die Items verschwinden immer wieder und
+    -- tauchen dann im LC wieder auf, die Zeit wird immer wieder zurückgesetzt". Both halves are this
+    -- line. The timer visibly jumped back, and an item whose row had already expired and been swept
+    -- (Vote.PruneExpiredRolls) was handed a fresh twenty seconds and reappeared -- on a screen where
+    -- the raider had finished with it.
+    --
+    -- Safe to trust a surviving deadline: PurgeStaleRoll ran above, and for a rollID Blizzard reused
+    -- for a DIFFERENT item it has already cleared this table via Trade.ClearRollState. So a deadline
+    -- still standing here belongs to the item being announced.
+    local running = LC.rollDeadlines[rollID]
+    if running then secs = math.max(0, math.floor(running - GetTime())) end
+
     if secs == 0 then
         LC.rollDeadlines[rollID] = GetTime()
         if LC.IsCouncil() then KART.LC.Council.ShowCouncilPanel(rollID, 0) end
@@ -4937,6 +4955,10 @@ function LC.HandleStart(payload, senderKey)
     -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
     -- gets the panel above.
     LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
+    -- Both of those set the deadline from whole seconds, so handing them the remainder of a clock
+    -- that is already running would still shave the fraction off it on every repeat. Put the exact
+    -- value back.
+    if running then LC.rollDeadlines[rollID] = running end
     return true
 end
 
