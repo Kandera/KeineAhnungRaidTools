@@ -1,4 +1,4 @@
-﻿-- One message per boss.
+-- One message per boss.
 --
 -- A boss drops several items at once and KART used to announce each on its own: six items in a
 -- 25-man raid were six LC_START plus six roll tables, and three quarters of that was the same 25
