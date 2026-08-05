@@ -1039,7 +1039,13 @@ function LC.BroadcastRaidConfig(target)
         -- needs. Leaving it would make the config owner the one client in the raid that does not
         -- believe what it just told everybody -- and, since nothing else clears it for a leader whose
         -- own field is empty, no client at all would own the loot from then on.
-        LC.raidConfig.relayLootmaster = nil
+        --
+        -- Only the RAID-WIDE one. A targeted send is the sync-request answer (see
+        -- LC.HandleStateRequest), and it reaches exactly one client: the rest of the raid still holds
+        -- the designation it was told about, so forgetting it here would leave us claiming a loot flow
+        -- somebody else is running, in front of an audience that never heard otherwise -- B130 through
+        -- a different door, and reachable by anybody reloading mid-session.
+        if not target then LC.raidConfig.relayLootmaster = nil end
     end
 end
 
@@ -1087,8 +1093,14 @@ function LC.RelayRaidConfig(target)
     --
     -- An unresolved key counts as PRESENT: we cannot show that person has gone, and the safe
     -- direction is the one where this client defers rather than claims.
+    --
+    -- A client passes on what it KNOWS, and what it was told counts as knowing. Our own designation
+    -- is blank on every client that got its config from a relay in the first place (see
+    -- LC.HandleConfigRelay), so deriving from that alone would make the second hop assert "nobody was
+    -- named" -- the exact untruth B130 is about, stated affirmatively rather than merely implied. A
+    -- client that was told nothing still says nothing.
     local designated = LC.raidConfig.lootmaster or ""
-    local presence = ""
+    local presence = LC.raidConfig.relayLootmaster or ""
     if designated ~= "" then
         presence = (not KASC.Identity.IsResolvedKey(designated)
             or KASC.Identity.FindUnitForKey(designated) ~= nil) and "1" or "0"
@@ -1157,7 +1169,15 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- an ApplyOwnConfig whose own field is empty -- that function runs on every GROUP_ROSTER_UPDATE
     -- and would wipe this within seconds of a join or a promotion, which is exactly how the first
     -- attempt at B130 undid itself.
-    LC.raidConfig.relayLootmaster = (presence ~= "" and presence) or nil
+    --
+    -- Only the two values this protocol defines are stored. The capture is `[^:]*`, so anything at
+    -- all can arrive here -- a garbled field, or whatever a later revision puts in this slot -- and
+    -- every non-empty string is truthy: a 3.3.1 client would defer for ever over it, and never be
+    -- offered the stand-in question either, because only "0" reaches LootmasterGone. Unrecognised
+    -- reads as "told nothing", which is the state the addon behaved correctly in before this field
+    -- existed at all.
+    presence = (presence == "1" or presence == "0") and presence or nil
+    LC.raidConfig.relayLootmaster = presence
     if council ~= "" or (LC.raidConfig.councilMembers or "") == "" then
         LC.raidConfig.councilMembers = council
     end
@@ -1175,7 +1195,14 @@ function LC.HandleConfigRelay(payload, senderKey)
     -- "Named and gone" is the stand-in question, and it has just become answerable for the first
     -- time. Waiting for the next GROUP_ROSTER_UPDATE to ask it would leave the raid with no loot
     -- owner for however long nobody joins or leaves, which in a boss pull is the whole fight.
-    if LC.CheckStandIn then LC.CheckStandIn() end
+    --
+    -- Only to ASK it, never to withdraw an answer already given. LC.CheckStandIn's other half resets
+    -- LC.standInAccepted when the lootmaster is back -- and a relay is the one message that cannot
+    -- establish that, because it names nobody. A stand-in mid-round who takes a relay through the
+    -- gainsCouncil exception would otherwise be stripped of the loot flow they are running, silently
+    -- and without being asked anything. The roster path still resets them, off the designation it can
+    -- actually see.
+    if LC.CheckStandIn and not LC.standInAccepted then LC.CheckStandIn() end
 end
 
 -- The council/lootmaster/button-label edit boxes fire OnTextChanged on every keystroke; broadcasting

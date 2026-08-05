@@ -46,9 +46,9 @@ it removes the claim, and with it the whole class of disagreement.
 7. An empty Lootmaster field hands the loot to the raid leader only when it came from somebody who
    was allowed to name somebody: the config owner's own settings, or their `LC_CONFIG`. A relay
    names nobody — it does say **whether** the raid has named somebody and whether that person is
-   here. Says it "named and present", that person hands out the loot and the raid leader does not.
-   Says it "named and gone", that is the same situation as a lootmaster who has left the raid: the
-   raid leader is asked whether to stand in.
+   here. If it says the raid has named somebody who is present, that person hands out the loot and
+   the raid leader does not. If it says the raid has named somebody who is gone, that is the same
+   situation as a lootmaster who has left the raid, and the raid leader is asked whether to stand in.
 
 ## What this costs
 
@@ -56,6 +56,13 @@ Raid lead moving mid-raid means the new leader's settings become the raid's. Tha
 raid leader is the authority, and the settings follow the authority rather than lagging behind it.
 The Sync Settings button exists for the case that matters in practice — handing your base settings to
 whoever stands in for you on an evening you are out, so they do not configure from scratch.
+
+The deferral in rule 7 lasts only until that leader broadcasts a config of their own. A leader with an
+empty Lootmaster field then puts that emptiness on the wire, the raid adopts it, and the loot falls
+back to the leader — the same trade-off as above, one field over. What rule 7 buys is not a permanent
+correction but the guarantee that the raid never has two people handing out loot at once: before the
+broadcast the leader defers to a designation it cannot see, and after it the whole raid agrees there
+is none.
 
 ## What must stay true
 

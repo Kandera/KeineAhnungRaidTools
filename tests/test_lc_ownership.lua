@@ -394,15 +394,23 @@ end
 -- It survives a roster update ---------------------------------------------------------------------
 -- LC.ApplyOwnConfig runs from GROUP_ROSTER_UPDATE, and the first attempt at this fix was wiped by it
 -- within seconds of being set. What the relay said about the RAID is not ours to forget on a join.
+--
+-- ApplyOwnConfig is called DIRECTLY rather than through RaidSim.RosterUpdate, and that is the whole
+-- value of the case: a roster update also makes the leader re-request state, and a fresh relay lands
+-- a moment later and re-sets the bit. Written that way the test passed with the guard mutated away --
+-- it was measuring the recovery, not the guard. One call, nothing else moving, no second relay.
 do
     local sim, lm = F.NewRaid()
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(1)
-    RaidSim.RosterUpdate(sim)
-    KARTTEST.AdvanceTime(2)
+    T.eq(leader.KART.LC.raidConfig.relayLootmaster, "1", "the leader was told the raid has one")
 
+    RaidSim.As(leader, leader.KART.LC.ApplyOwnConfig)
+
+    T.eq(leader.KART.LC.raidConfig.relayLootmaster, "1",
+        "and re-applying its own empty field does not unsay it")
     T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
         "a roster update does not hand the loot back to the leader")
     T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the lootmaster still has it")
@@ -444,4 +452,50 @@ do
         "a raid that never named a lootmaster still lets its leader hand out the loot")
     T.truthy(not RaidSim.As(leader, KARTTEST.AcceptPopup, "KART_LC_STAND_IN"),
         "and nobody is pestered about standing in")
+end
+
+-- A whisper answers one client, not the raid ------------------------------------------------------
+-- LC.BroadcastRaidConfig with a target is the sync-request answer (see LC.HandleStateRequest), and it
+-- reaches exactly one client. Clearing what a relay said about the raid there took the loot flow back
+-- in front of an audience that had never heard otherwise: two announcers again, triggered by anybody
+-- reloading mid-session (B130).
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.As(leader, function()
+        leader.KART.LC.BroadcastRaidConfig(sim.byName.Sinja.name .. "-" .. sim.byName.Sinja.realm)
+    end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false,
+        "answering one client's sync request does not make the leader the loot owner")
+    T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "so the raid still has exactly one")
+end
+
+-- A relay-fed client passes on what it was told ---------------------------------------------------
+-- LC.HandleConfigRelay blanks the lootmaster field, so a client that got its own config from a relay
+-- has no designation to derive from. Deriving anyway made the second hop state "nobody was named" --
+-- B130's untruth, asserted rather than implied -- and a relay-fed client answers state requests as
+-- readily as anybody else.
+do
+    local sim, lm = F.NewRaid()
+    local hop = RaidSim.Reload(sim, "Sinja")
+    RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(hop.name) end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(hop.KART.LC.raidConfig.lootmaster, "", "the first hop holds no designation of its own")
+    T.eq(hop.KART.LC.raidConfig.relayLootmaster, "1", "only what it was told about the raid")
+
+    RaidSim.Promote(sim, "Alric")
+    local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(hop, function() hop.KART.LC.RelayRaidConfig(leader.name) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(leader.KART.LC.raidConfig.relayLootmaster, "1",
+        "and it hands that on rather than claiming the raid named nobody")
+    T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false, "so the second hop defers too")
+    T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the lootmaster keeps the loot flow")
 end
