@@ -595,7 +595,8 @@ end
 -- match on the token alone therefore finds NOTHING for a message that had to be split. That reads as
 -- "nothing was sent", which is the wrong answer in both directions: silently wrong for an assertion
 -- about absence, and loudly wrong for one about presence. LC_DROP is the first message in this addon
--- that routinely crosses the cap (three items in this fixture is already two chunks), so anything
+-- that crosses the cap at all -- a real boss at raid size, or a couple of long item strings from
+-- /kart add; since it is packed, a small fixture's batch usually fits in one chunk -- so anything
 -- counting it asks here rather than at RaidSim.Sent.
 --
 -- One message is one unsplit send or one FIRST chunk ("\001", AceComm's MSG_MULTI_FIRST); the

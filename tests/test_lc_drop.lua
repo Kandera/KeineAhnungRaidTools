@@ -1,4 +1,4 @@
--- One message per boss.
+﻿-- One message per boss.
 --
 -- A boss drops several items at once and KART used to announce each on its own: six items in a
 -- 25-man raid were six LC_START plus six roll tables, and three quarters of that was the same 25
@@ -8,8 +8,11 @@
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 
--- Counted with RaidSim.Messages, not RaidSim.Sent: a batch of three items in this five-client fixture
--- is already two chunks on the wire, and a prefix match on the token would find neither of them.
+-- Counted with RaidSim.Messages, not RaidSim.Sent: a batch big enough to be split carries AceComm's
+-- control byte in front of the token on every chunk, and a prefix match on the token alone would find
+-- none of them. Three items in this five-client fixture no longer reach that -- packed, they are one
+-- chunk of 154 bytes (measured by the packing tests at the end of this file) -- but a batch at real
+-- raid size still does, and the two long-item /kart add cases below reach it in this fixture.
 local function Announced(sim) return RaidSim.Messages(sim, "LC_DROP:") end
 
 local TORVI = { name = "Torvi", realm = "TarrenMill", guid = "Player-1096-0A1B2C42",
@@ -279,7 +282,7 @@ do
     local council = sim.byName.Merrit
     T.truthy(council.KART.LC.rollItems[958] ~= nil, "the item arrives with rolls switched off")
     T.eq(next(council.KART.LC.rolls[958] or {}), nil, "and carries no numbers")
-    -- ...and no NAME LIST either (design §B/§F). The head exists to order the numbers, so with no
+    -- ...and no NAME LIST either (design Â§B/Â§F). The head exists to order the numbers, so with no
     -- numbers it orders nothing -- and it is the most expensive part of the message: 25 identity keys
     -- is ~525 bytes, on the one ALERT message this whole change exists to shrink. It used to carry the
     -- whole roster because it was built from LC.rollEligible, which SnapshotEligible writes whether or
@@ -530,7 +533,11 @@ do
     local msg = Announced(sim)[1]
     T.truthy(msg ~= nil, "the batch went out")
     T.truthy(msg.msg:sub(1, 8) == "LC_DROP:", "and still opens in plain text, so the guards can read it")
-    T.truthy(#msg.msg <= 255, "packed, not carried whole (" .. #msg.msg .. " bytes)")
+    -- The upper-case kind letter, not the byte count: a batch that went out SPLIT and unpacked would
+    -- also have a first chunk of 255 bytes or fewer, so a length assertion says nothing about whether
+    -- anything was packed. The letter is the sender's own statement that the rest is a block.
+    T.truthy(msg.msg:match("^LC_DROP:%d+:R:") ~= nil,
+        "packed, not carried whole (" .. #msg.msg .. " bytes)")
 
     local council = sim.byName.Merrit
     for _, id in ipairs({ 960, 961, 962 }) do
@@ -585,14 +592,28 @@ do
 end
 
 -- A block that cannot be unpacked is refused, not half-stored ------------------------------------
+-- Asserted against a client that HOLDS something, which is the only way this can fail. Read off a
+-- rollID the corrupt block could never have named, the assertion was nil == nil whatever the handler
+-- did with the block -- it proved no error escaped LibDeflate, and nothing else.
 do
     local sim, lm = F.NewRaid()
     local council = sim.byName.Merrit
-    local before = council.KART.LC.rollItems[963]
+    F.Drop(sim, 963, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local item = council.KART.LC.rollItems[963]
+    local announcer = council.KART.LC.rollAnnouncedBy[963]
+    local rolls = {}
+    for key, value in pairs(council.KART.LC.rolls[963]) do rolls[key] = value end
+    T.truthy(item ~= nil and announcer ~= nil, "the client holds this item before the corrupt block")
+
     RaidSim.As(council, function()
         council.KART.LC.HandleDrop("20:R:not a valid deflate block at all", lm.guid)
     end)
-    T.eq(council.KART.LC.rollItems[963], before, "a corrupt block changes nothing")
+
+    T.eq(council.KART.LC.rollItems[963], item, "a corrupt block leaves the item it holds alone")
+    T.eq(council.KART.LC.rollAnnouncedBy[963], announcer, "and the announcer it recorded")
+    T.deep_eq(council.KART.LC.rolls[963], rolls, "and every number under it")
 end
 
 -- A roll table is packed on the same terms, and refused on the same terms -------------------------
@@ -617,14 +638,44 @@ do
     T.deep_eq(council.KART.LC.rolls[964], lm.KART.LC.rolls[964],
         "and a client that lost it gets the announcer's own table back")
 
-    -- Same rule as the batch: a block that will not come back leaves the client with the gap it had,
-    -- which the heartbeat's repair path can still fill, rather than half a table it would never ask
-    -- about again.
-    council.KART.LC.rolls[964] = nil
+    -- Same rule as the batch, and asserted against a client that holds the table for the same reason:
+    -- a block that will not come back must leave what this client already has exactly as it was,
+    -- rather than replacing it with half a table it would never ask about again.
+    local held = {}
+    for key, value in pairs(council.KART.LC.rolls[964]) do held[key] = value end
     RaidSim.As(council, function()
         council.KART.LC.HandleRolls("P:not a valid deflate block at all", lm.guid)
     end)
-    T.eq(council.KART.LC.rolls[964], nil, "a corrupt table changes nothing either")
+    T.deep_eq(council.KART.LC.rolls[964], held, "a corrupt table changes nothing either")
+end
+
+-- ...and it survives the actual wire, not just the handler ----------------------------------------
+-- The block above calls HandleRolls directly, so the packed table never passes through KASC's
+-- dispatch, AceComm or the transport -- which is exactly where a packed LC_DROP is covered and a
+-- packed LC_ROLLS was not. Driven the way the repair really runs: a client loses its table, asks the
+-- group, and a peer's answer finds its way back through everything in between.
+do
+    local sim = BigRaid()
+    F.Drop(sim, 967, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local asker = sim.byName.Alric
+    local owner = sim.byName.Bramor
+    RaidSim.As(asker, function() asker.KART.LC.rolls[967] = nil end)
+    RaidSim.ClearLog(sim)
+
+    RaidSim.As(asker, function() asker.KART.LC.SendLC("LC_ROLLS_REQ:967") end)
+    KARTTEST.AdvanceTime(5)
+
+    -- The premise: at raid size the answer really did go out packed. A group whose table stopped
+    -- crossing a chunk would leave this passing while testing the plain path twice.
+    local answers = RaidSim.Messages(sim, "LC_ROLLS:")
+    T.eq(#answers, 1, "one answer reaches the group")
+    T.truthy(answers[1].msg:sub(1, 11) == "LC_ROLLS:P:",
+        "and it is packed on the wire (" .. #answers[1].msg .. " bytes)")
+
+    T.deep_eq(asker.KART.LC.rolls[967], owner.KART.LC.rolls[967],
+        "the asker gets the announcer's own numbers back through the real path")
 end
 
 -- A refused block is COUNTED, on both handlers -----------------------------------------------------

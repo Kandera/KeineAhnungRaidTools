@@ -3530,15 +3530,21 @@ local PACK_MAX_BLOCK = 2048
 
 local function Pack(message, plain)
     if #message <= PACK_MAX_MESSAGE then return nil end
-    local packed = LibDeflate:CompressDeflate(plain, PACK_LEVEL)
-    if not packed then return nil end
-    return LibDeflate:EncodeForWoWAddonChannel(packed)
+    -- No nil check on the result: CompressDeflate errors on a bad argument and returns a string for
+    -- every string, so a guard here would be handling a case that cannot occur.
+    return LibDeflate:EncodeForWoWAddonChannel(LibDeflate:CompressDeflate(plain, PACK_LEVEL))
 end
 
--- nil when the block is not something we produced: too large to be ours, truncated, foreign, or
--- damaged. Every caller treats that as "this message says nothing" rather than storing half of it,
--- and counts it -- LC.diag.packedUnreadable -- because the alternative is a client that quietly loses
--- a whole boss's items with nothing to read on either end.
+-- nil when the block will not come back as a string at all: too large to be ours, truncated, foreign,
+-- or damaged badly enough that the deflate stream itself no longer parses. Every caller treats that as
+-- "this message says nothing" rather than storing half of it, and counts it --
+-- LC.diag.packedUnreadable -- because the alternative is a client that quietly loses a whole boss's
+-- items with nothing to read on either end.
+--
+-- What it is NOT is an integrity check, and deliberately so. Raw deflate carries no checksum, so a
+-- block damaged in a way that still parses comes back as altered plaintext and this cannot tell.
+-- That is not a hole this shape opened: a corrupted PLAIN message has the identical exposure, the
+-- guards below catch both the same way, and the addon channel delivers reliably in the first place.
 local function Unpack(blob)
     if #blob > PACK_MAX_BLOCK then return nil end
     local decoded = LibDeflate:DecodeForWoWAddonChannel(blob)
