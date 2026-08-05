@@ -3155,13 +3155,26 @@ table was drawn against the snapshot they are not in, and they store it exactly 
 raid does — with no entry for themselves. So the shape in the raid is a person on the council panel
 with a vote and an empty roll column.
 
-**Why it is not fixed here.** The item is not misassigned — the council still decides, and it can see
-that this raider has no roll number. Fixing it properly means naming the participants in the message
-and having the receiver check itself against that list before opening anything, which is a rule about
-who may hold a card at all; that rule currently lives on the SENDER (`LC.rollEligible`) and moving
-half of it to the receiver is a design decision, not a patch. Before the batch the window was one
-frame, i.e. unreachable, so this is new — but it needs the same reproduction standard as everything
-else here, and nothing reproduces it yet: no test covers it and no raid has reported it.
+**Why it is deliberately not fixed — and this is a decision, not an unfinished job.** The reasoning
+this entry used to carry (the message does not name the participants, so the receiver has nothing to
+check itself against) is stale: since the batching change the head list names every participant, and
+a receiver could compare its own identity key against it in about three lines. So the next reader
+will see an easy fix. It must not be taken, for one reason:
+
+The head names identity keys as the ANNOUNCER resolved them. A raider whose key the announcer
+recorded as a pending text placeholder — which `SnapshotEligible`'s own comment says it deliberately
+keeps, because it happens — would not find its own resolved GUID in that list. A receiver that
+excludes itself on that basis gets no vote row, no popup and no card for an item it is fully entitled
+to, and nothing anywhere says so.
+
+That trades a VISIBLE wrong inclusion — a joiner on the council panel with a vote and an empty roll
+column, which the council can see and ignore — for a SILENT wrong exclusion. This codebase's own
+history is unambiguous about which of those costs more: the whole B118/B129/B131 line of work exists
+because a silent loss costs a raid night and a visible oddity does not. The item is also not
+misassigned in the meantime — the council still decides, and it can see that this raider has no roll
+number.
+
+Stays OPEN because the behaviour is still wrong, not because the fix is unknown.
 
 ## B134 — OPEN 2026-08-04 — a reload inside the collection window loses a whole boss, and the belt only mostly works
 
@@ -3185,7 +3198,15 @@ free and queues otherwise, and a queued message is despooled from an `OnUpdate` 
 again — so a batch that goes out during a quiet moment survives the reload, and one sent while the
 pipe is already congested does not. A crash raises no `PLAYER_LOGOUT` at all.
 
-## B135 — OPEN 2026-08-04 — a batch can flush after a peer's table for the same rollID has already landed
+**And a third way it does nothing, checked 2026-08-05.** `LC_DROP` is a guaranteed token, so while
+the encounter restriction is active `KASC:Send` does not send it at all — it holds it in
+`guaranteedQueue` until `OnRestrictionChanged` releases it. That queue is runtime state like
+`LC.pendingDrop` is, so a reload inside the restriction window takes the belt's own message with it.
+Loot drops at the end of an encounter, which is exactly when that window is closing, so this is not
+an exotic corner. It does not change the verdict — the loss is still loud and `/kart add` is still
+the recovery — but the belt is thinner than the paragraph above alone reads.
+
+## B135 — FIXED 2026-08-05 — a batch can flush after a peer's table for the same rollID has already landed
 
 Found in review of the one-message-per-boss change (`LC_DROP`), not by a raid.
 
@@ -3195,8 +3216,20 @@ that id when the batch flushes — the departing entry could carry the wrong num
 the owner's own path (it draws its own table), and the receiver's length check does not catch it
 since the lengths match.
 
-**Why it is not fixed here.** It is a narrow wrinkle on top of the already-open B130 disagreement
-scenario — a client already known to end up "holding numbers nobody else holds" per B130's own text —
-rather than a new independent failure mode, so deferring the fix is reasonable. What is not reasonable
-is leaving it recorded nowhere but a review report that will get archived, which is the only reason
-this entry exists.
+**What closed it.** The entry no longer reads shared mutable state late: it carries its own copy of
+the numbers, taken when the entry is created, and `LC.SerializeDrop` writes that copy instead of
+`LC.rolls[e.rollID]`. Half a second of other clients' traffic can no longer reach what a departing
+entry says.
+
+The copy is handed out by `LC.DrawnKeys` as a second return value, next to the head it derives from
+the very same read — deliberately, and it is the whole point of putting it there. The head is
+DERIVED from the numbers because computing the two separately broke this invariant three times
+(see the block comment above `LC.DrawnKeys`), so a snapshot taken at a second site would have been
+the fourth. A caller that keeps both keeps a pair that cannot have drifted.
+
+Both entry-building paths take it. `LC.StartManualRoll` serializes in the same breath and could not
+have drifted, but there is one entry shape and one rule about where an entry's numbers come from.
+
+Covered by a test in `tests/test_lc_drop.lua` that replaces `LC.rolls[rollID]` with a foreign table
+of the same length while the entry sits in the batch, and asserts the raid is handed the numbers the
+entry was created with. It fails against the old code.

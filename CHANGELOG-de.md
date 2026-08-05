@@ -25,6 +25,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Boss überflutet den Raid nicht mehr mit einer Nachricht pro Item** — was zusammen fällt, wird zusammen angekündigt.
 - **Der Lootmaster funkt seltener, was auf dem Tisch liegt**, und eine Änderung erreicht den Raid schneller als vorher.
 - **Weniger Addon-Funk während der Lootverteilung**, damit Ankündigungen bei viel Betrieb schneller durchkommen.
+- **Zwei Varianten desselben Items werden wieder auseinandergehalten**, sodass die Übergabe der einen nicht mehr die andere von deiner Schuldenliste streicht.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
