@@ -2685,7 +2685,7 @@ unmatched.
 Fix: retry on `ADDON_LOADED` for the optional dependency as well, and once more a few seconds after
 `PLAYER_ENTERING_WORLD` — both are moments a nickname source can appear without the roster moving.
 
-## B127 — OPEN 2026-08-03 — GetItemString returns a prefix of the item string, and its comment says otherwise
+## B127 — FIXED 2026-08-05 — GetItemString returned a prefix of the item string, and its comment said otherwise
 
 Found while fixing B119, not reported by anybody — which is the concerning part.
 
@@ -2708,16 +2708,42 @@ the function is documented to do.
   dropping the same slot twice at two levels is an ordinary evening.
 * the loot-history export and its duplicate matching, same shape.
 
-`Council.RequestEquipForRoll` uses it as a size guard, where a prefix is harmless and the shortening is
-in fact the point.
+The REQ_EQUIP responder used it as a size guard, where a prefix was harmless and the shortening was in
+fact the point.
 
-**Not fixed here, deliberately.** `KAUtil.GetFullItemString` was added for B119 rather than widening
-this one, because widening it changes what "the same item" means in the trade and history paths at the
-same time — including for entries already persisted in `KART_LCTrades` and `KART_LootHistory`, which
-were written with truncated strings. That is a migration question, not a one-line pattern fix, and it
-wants its own change with its own tests.
+**The migration this entry was blocked on does not exist, and that is worth as much as the fix.** The
+note above said the fix was held back because entries already in `KART_LCTrades` and `KART_LootHistory`
+"were written with truncated strings". They were not. Both stores persist the LINK, never the string:
+`LootCouncilTrade.lua` writes `itemLink = LC.rollItems[rollID]` into every pending/owed entry, and
+`LootHistory.lua` writes `item = itemLink or ""`. The item string is recomputed from that link every
+time a comparison runs, so widening the function moves both sides of every comparison at once and there
+is nothing on disk to migrate. Checked before relying on it. A "blocked on a migration" note is worth
+re-reading against the code before it costs a second release.
 
-Whoever takes it: the comment is the first thing to correct, whatever is decided about the code.
+**The fix.** `KAUtil.GetItemString` matches by delimiter now — `|H(item:[^|]+)|h`, from `item:` to the
+closing `|h` — so it makes no assumption about which separators a client build writes inside the string.
+That is exactly what B119's `KAUtil.GetFullItemString` already did beside it, so the two became ONE
+function under the name the call sites read best: every caller either compares two drops for sameness or
+has to rebuild the same item elsewhere, and both jobs want the whole string. Two names only ever
+documented the bug.
+
+Two things came along with it:
+
+* The history dedup's bare-string fallback (`^item:[%-%d:]+`, for the entries the oversized-link path
+  sends without a link) had the same comma-blind class and would have truncated one side of the
+  comparison while the link side stayed whole. Widened to `^item:.+`.
+* The REQ_EQUIP responder's 255-byte guard is gone. Its premise died with the AceComm transport rework:
+  a message over the cap is split and reassembled, not truncated, so there is nothing to guard against —
+  and the shortening only ever fitted because `GetItemString` was dropping the bonus list by accident.
+  The link goes out whole. The receiver still accepts a shortened reply, because the protocol version did
+  not change and a client on the older responder is in the same raid.
+
+**Covered by tests that failed first**, all built from the fixture's own link shape (the comma is the
+whole point; a skeleton link cannot show this at all): the auto-fill places the variant that was won
+rather than another variant in an earlier bag slot; trading the other variant away leaves the obligation
+standing; `Trade.GetDuplicateOrdinal` does not number two variants as duplicates of each other; a second
+variant arriving over the history sync is a second award, not a duplicate; and the unit-level assertion
+that the comma-separated bonus list survives at all.
 
 ## B128 — FIXED 2026-08-03 — Midnight blocks addon messages during an encounter, and KART never knew
 
