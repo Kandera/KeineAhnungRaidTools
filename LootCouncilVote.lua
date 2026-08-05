@@ -1175,6 +1175,9 @@ local function ParseVotesPayload(payload)
             payload:match("^(%d+):(%d+):#(%d+):@(%d*):(%d+):()", pos)
         if not rollID then return nil end
         noteLen = tonumber(noteLen)
+        -- Stated rather than left to string.sub's clamping: a length longer than what is left cannot
+        -- be a frame, and the check below would only find that out by accident.
+        if noteLen > #payload then return nil end
         local note = payload:sub(afterHead, afterHead + noteLen - 1)
         if #note ~= noteLen then return nil end
         entries[#entries + 1] = { rollID = tonumber(rollID), idx = tonumber(idx),
@@ -1211,11 +1214,16 @@ end
 -- One ticker per CLIENT, not per roll -- that is what makes the cost independent of how many items a
 -- boss dropped, which is the whole reason the message is bundled.
 --
--- The phase comes from our position in the sorted roster (LC.SelfAnswerSlot), not from math.random():
--- twenty clients then divide the window into twenty equal gaps by construction rather than by luck.
+-- The phase comes from our position in the sorted roster (LC.SelfAnswerSlot), not from math.random().
 -- Measured for the roll table and written up there: a hash of the player's own name put two clients
 -- within milliseconds of each other in 26% of full rosters, and milliseconds is what ordinary
 -- addon-message jitter eats.
+--
+-- What the slot buys is bounded, and worth stating exactly: it is applied ONCE, in front of the first
+-- send, relative to each client's own first Vote.CastVote -- there is no raid-wide epoch to be
+-- relative to. Clients that start together therefore divide the window between them by construction,
+-- and that is the case that matters, because the auto-vote burst on LC_DROP starts them together.
+-- Afterwards each ticker free-runs on its own five seconds and the raid drifts back out of step.
 --
 -- Self-cancelling once no tracked roll is left, the way Vote.EnsurePruneTicker stops with its batch:
 -- a client whose rolls have all expired holds no timer at all. Deliberately NOT "the first tick that
