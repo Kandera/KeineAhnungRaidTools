@@ -288,6 +288,7 @@ KART.L_deDE = {
     LC_FORCEWIN_LOST       = "%s ging an %s, nicht an dich -- schau in deine Taschen, bevor du es jemandem zusagst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_STATUS_DROPS        = "Hier verworfene Nachrichten: %d Absender, %d nicht in der Gruppe, %d unbekanntes Item, %d unbekanntes Token -- eigene Sendungen abgelehnt: %d (%d in Warteschlange), wegen Sperre zurückgehalten: %d, dabei verworfen: %d",
+    LC_STATUS_RESENDS      = "Abgelehnte Sendungen erneut verschickt: %d -- davon nach dem letzten Versuch immer noch abgelehnt: %d.",
     LC_STATUS_ROLLCONFLICT = "Würfeltabellen, die dieser Client anders hatte: %d -- jemand im Raid hielt für ein hier gewertetes Item andere Zahlen.",
     LC_STATUS_DROPCAPPED   = "Beim Empfang gekappte Sammelnachrichten: %d -- eine Sammelnachricht nannte mehr Items, als eine Nachricht tragen kann, ein Teil davon fehlt deshalb.",
     LC_STATUS_PACKUNREADABLE = "Komprimierte Nachrichten, die dieser Client nicht lesen konnte: %d -- die Items eines Bosses oder eine Würfeltabelle kamen komprimiert und unlesbar an, nichts davon ist hier angekommen. Meist das LibDeflate eines anderen Addons.",

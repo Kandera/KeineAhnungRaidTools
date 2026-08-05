@@ -48,6 +48,29 @@ KARTTEST.AddItem({ id = 249405, name = "Gloombound Breastplate", quality = 4, il
 F.PET, F.HOUSING = 249403, 249404
 F.PLATE_CHEST = 249405
 
+-- The items the armor-weight rule cannot judge, which is every weapon and every shield. Until
+-- 2026-08-05 those reached the relevance decision as "not determinable" and were therefore always
+-- shown -- a caster who only ever saw weapons never saw Auto-Pass do anything at all.
+--
+-- Four, because two different rules decide them: PROFICIENCY (a paladin cannot hold a staff, a
+-- priest cannot hold a shield, nobody but a hunter shape can hold a bow) and MAIN STAT (a priest
+-- MAY swing a one-handed mace, and a strength one is still not theirs). The last one is the control:
+-- proficiency and stat both say yes, so it must stay visible.
+KARTTEST.AddItem({ id = 249406, name = "Voidglass Spire", quality = 4, ilvl = 285,
+                   classID = 2, subclassID = 10, equipLoc = "INVTYPE_2HWEAPON", bind = 1,
+                   stats = { ITEM_MOD_INTELLECT_SHORT = 300 } })
+KARTTEST.AddItem({ id = 249407, name = "Gloombound Bulwark", quality = 4, ilvl = 285,
+                   classID = 4, subclassID = 6, equipLoc = "INVTYPE_SHIELD", bind = 1,
+                   stats = { ITEM_MOD_INTELLECT_SHORT = 300 } })
+KARTTEST.AddItem({ id = 249408, name = "Gloombound Crusher", quality = 4, ilvl = 285,
+                   classID = 2, subclassID = 4, equipLoc = "INVTYPE_WEAPONMAINHAND", bind = 1,
+                   stats = { ITEM_MOD_STRENGTH_SHORT = 300 } })
+KARTTEST.AddItem({ id = 249409, name = "Voidglass Kris", quality = 4, ilvl = 285,
+                   classID = 2, subclassID = 15, equipLoc = "INVTYPE_WEAPONMAINHAND", bind = 1,
+                   stats = { ITEM_MOD_INTELLECT_SHORT = 300 } })
+
+F.STAFF, F.SHIELD, F.STR_MACE, F.INT_DAGGER = 249406, 249407, 249408, 249409
+
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
 -- of sync, a straw poll disagreeing, or a second council member's assignment reaching the first.

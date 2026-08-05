@@ -138,6 +138,123 @@ local function SnapshotFor(rollID, itemLink)
     return snap
 end
 
+-- =====================================================================
+--  What a class cannot use, for everything the armor-weight rule cannot judge
+-- =====================================================================
+-- The armor rule (Council.GetItemArmorRank / IsArmorEligible) answers cloth-to-plate and nothing
+-- else, so weapons, shields and off-hands reached DecideAutoResponse as "not determinable" and were
+-- treated as relevant. That is the whole of "Auto-Pass does not work for some people": a caster who
+-- only ever sees weapons never saw the feature do anything, while a rogue looking at plate did.
+--
+-- Modelled on RCLootCouncil's Utils/autopass.lua, which has been carrying this in production for
+-- years, in two layers that answer two different questions:
+--
+--   1. PROFICIENCY -- can this class wield this weapon type at all. A static table, because there is
+--      no API that answers it and Blizzard's canNeed conflates it with three other refusals (B36).
+--   2. MAIN STAT -- a rogue may wield a two-handed sword and still have no use for a strength one.
+--      Proficiency cannot see that; the item's own stats can.
+--
+-- Both answer only in the direction that is cheap to be wrong in. Unknown stays unknown, which
+-- DecideAutoResponse reads as relevant -- passing away somebody's upgrade is the expensive mistake.
+local ITEM_CLASS_WEAPON, ITEM_CLASS_ARMOR = 2, 4
+local ARMOR_SUBCLASS_SHIELD = 6 -- Enum.ItemArmorSubclass.Shield
+
+-- [subclassID] = { CLASSFILE = true }: the classes that can NOT use that weapon type. Subclass IDs
+-- are Enum.ItemWeaponSubclass, spelled out rather than read from the enum so this file still
+-- compiles standalone for tests/test_lc_relevance.lua (same reason ARMOR_SUBCLASS_RANK does it).
+local function Set(...)
+    local t = {}
+    for _, v in ipairs({...}) do t[v] = true end
+    return t
+end
+
+local RANGED_AUTOPASS = { "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "SHAMAN", "PRIEST", "MAGE",
+                          "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER" }
+
+local WEAPON_AUTOPASS = {
+    [0]  = Set("DRUID", "PRIEST", "MAGE", "WARLOCK"),                                    -- Axe1H
+    [1]  = Set("DRUID", "ROGUE", "MONK", "PRIEST", "MAGE", "WARLOCK", "DEMONHUNTER", "EVOKER"), -- Axe2H
+    [2]  = Set(unpack(RANGED_AUTOPASS)),                                                 -- Bows
+    [3]  = Set(unpack(RANGED_AUTOPASS)),                                                 -- Guns
+    [4]  = Set("HUNTER", "MAGE", "WARLOCK", "DEMONHUNTER"),                              -- Mace1H
+    [5]  = Set("MONK", "ROGUE", "HUNTER", "PRIEST", "MAGE", "WARLOCK", "DEMONHUNTER"),   -- Mace2H
+    [6]  = Set("ROGUE", "SHAMAN", "PRIEST", "MAGE", "WARLOCK", "DEMONHUNTER", "EVOKER"), -- Polearm
+    [7]  = Set("DRUID", "SHAMAN", "PRIEST"),                                             -- Sword1H
+    [8]  = Set("DRUID", "MONK", "ROGUE", "SHAMAN", "PRIEST", "MAGE", "WARLOCK", "DEMONHUNTER", "EVOKER"), -- Sword2H
+    [9]  = Set("WARRIOR", "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "ROGUE", "PRIEST",
+               "MAGE", "WARLOCK", "HUNTER", "SHAMAN", "EVOKER"),                         -- Warglaive
+    [10] = Set("DEATHKNIGHT", "PALADIN", "ROGUE", "DEMONHUNTER"),                        -- Staff
+    [13] = Set("DEATHKNIGHT", "PALADIN", "PRIEST", "MAGE", "WARLOCK"),                   -- Unarmed (fist)
+    [15] = Set("DEATHKNIGHT", "PALADIN", "MONK", "DEMONHUNTER"),                         -- Dagger
+    [18] = Set(unpack(RANGED_AUTOPASS)),                                                 -- Crossbow
+    [19] = Set("WARRIOR", "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "ROGUE", "HUNTER",
+               "SHAMAN", "DEMONHUNTER", "EVOKER"),                                       -- Wand
+}
+
+-- Shields sit in the ARMOR class but carry no armor weight, so GetItemArmorRank deliberately
+-- returns nil for them and the weight rule never sees one. Three classes can hold one.
+local SHIELD_AUTOPASS = Set("DEATHKNIGHT", "DRUID", "MONK", "ROGUE", "HUNTER", "PRIEST", "MAGE",
+                            "WARLOCK", "DEMONHUNTER", "EVOKER")
+
+-- The main stat(s) a weapon has to carry to be worth anything to a class. Same table RCLootCouncil
+-- keeps, and the reason it exists: proficiency says a rogue may swing a two-handed sword, the stat
+-- says a strength one is not theirs. A class with two entries (a healer/dps hybrid) keeps both.
+local WEAPON_MAIN_STAT = {
+    WARRIOR     = { "ITEM_MOD_STRENGTH_SHORT" },
+    PALADIN     = { "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_INTELLECT_SHORT" },
+    HUNTER      = { "ITEM_MOD_AGILITY_SHORT" },
+    ROGUE       = { "ITEM_MOD_AGILITY_SHORT" },
+    PRIEST      = { "ITEM_MOD_INTELLECT_SHORT" },
+    DEATHKNIGHT = { "ITEM_MOD_STRENGTH_SHORT" },
+    SHAMAN      = { "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_AGILITY_SHORT" },
+    MAGE        = { "ITEM_MOD_INTELLECT_SHORT" },
+    WARLOCK     = { "ITEM_MOD_INTELLECT_SHORT" },
+    MONK        = { "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_AGILITY_SHORT" },
+    DRUID       = { "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_AGILITY_SHORT" },
+    DEMONHUNTER = { "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_INTELLECT_SHORT" },
+    EVOKER      = { "ITEM_MOD_INTELLECT_SHORT" },
+}
+
+-- true only when the weapon demonstrably carries a main stat and none of them is one this class
+-- uses. Everything else -- stats not loaded yet, a weapon with no main stat at all (a caster
+-- off-hand, a stat-stick trinket-shaped thing), an unknown class -- answers false, which leaves the
+-- item relevant.
+local function WeaponMainStatMismatch(itemLink, classFile)
+    local wanted = WEAPON_MAIN_STAT[classFile]
+    if not wanted then return false end
+    if not C_Item.GetItemStats then return false end
+    local stats = C_Item.GetItemStats(itemLink)
+    if not stats then return false end
+    if not (stats.ITEM_MOD_STRENGTH_SHORT or stats.ITEM_MOD_AGILITY_SHORT
+            or stats.ITEM_MOD_INTELLECT_SHORT) then
+        return false
+    end
+    for _, stat in ipairs(wanted) do
+        if stats[stat] then return false end
+    end
+    return true
+end
+
+-- true / false / nil, for the items the armor-weight rule cannot judge. nil means "no opinion",
+-- never "cannot use".
+local function CannotUseByType(itemLink, classFile)
+    if not classFile then return nil end
+    local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = C_Item.GetItemInfo(itemLink)
+    -- Not cached yet. The vote row refreshes again once it is (see ResolveRollItemLink), and
+    -- answering from missing data is how an item gets passed away.
+    if not classID then return nil end
+
+    if classID == ITEM_CLASS_ARMOR then
+        if subclassID ~= ARMOR_SUBCLASS_SHIELD then return nil end -- the weight rule owns the rest
+        return SHIELD_AUTOPASS[classFile] or false
+    end
+    if classID ~= ITEM_CLASS_WEAPON then return nil end -- jewellery, cloaks, anything else
+
+    local blocked = WEAPON_AUTOPASS[subclassID]
+    if blocked and blocked[classFile] then return true end
+    return WeaponMainStatMismatch(itemLink, classFile)
+end
+
 -- Can this player's class not equip the item at all?  true / false / nil when undecidable.
 --
 -- The snapshot above is the accurate answer -- it is Blizzard's own eligibility verdict and covers
@@ -177,10 +294,13 @@ local function IsIrrelevantForMe(rollID, itemLink)
     -- cannot pass away somebody's upgrade -- and it returns nil for weapons and jewellery, which
     -- reaches DecideAutoResponse as "not determinable" and is treated as relevant.
     if not LC.IsRealItemLink(itemLink) then return nil end
-    local rank = KART.LC.Council.GetItemArmorRank(itemLink)
-    if not rank then return nil end -- jewellery, weapons, shields: no armor-weight restriction
     local _, classFile = UnitClass("player")
-    return not KART.LC.Council.IsArmorEligible(classFile, rank)
+    local rank = KART.LC.Council.GetItemArmorRank(itemLink)
+    if rank then return not KART.LC.Council.IsArmorEligible(classFile, rank) end
+    -- No armor weight to judge: jewellery and cloaks (nobody is barred from those, so this answers
+    -- nil for them), but also every weapon and every shield -- which used to end here as "not
+    -- determinable" and is what CannotUseByType exists for.
+    return CannotUseByType(itemLink, classFile)
 end
 
 -- Does the player still need this item's appearance?  true / false / nil when undecidable.
@@ -221,9 +341,20 @@ end
 -- Answers every pending roll that has not been answered yet. Called once per vote-list refresh,
 -- which covers a fresh roll, a cast vote, an expiry sweep and -- the case that needs it -- the
 -- refresh ResolveRollItemLink triggers once a link that started out as "???" has arrived.
+-- The automatic Transmog vote is switched off at the source, on the maintainer's call (2026-08-05):
+-- it did not do what it says in a real raid, and the tier ends before there is another one to test a
+-- repair in. Switched off HERE rather than deleted, because everything it needs is correct and
+-- tested -- NeedsAppearance, DecideAutoResponse's transmog branch, LC.GetTransmogButtonIndex -- and
+-- what was wrong was never established. Reviving it is this constant plus the checkbox in
+-- LootCouncilSettings.lua, both marked with this date.
+--
+-- The checkbox is gone with it, so nobody can turn it on; this line is what also switches it off for
+-- the people who already had it ticked, whose SavedVariables still say true.
+local AUTO_TRANSMOG_ENABLED = false
+
 function LC.Relevance.ApplyToPendingRolls()
     local hide = KART_Settings and KART_Settings.lcHideIrrelevant
-    local mog  = KART_Settings and KART_Settings.lcAutoTransmogVote
+    local mog  = AUTO_TRANSMOG_ENABLED and KART_Settings and KART_Settings.lcAutoTransmogVote
     if not (hide or mog) then return end
 
     local stamp = SettingsStamp(hide, mog)

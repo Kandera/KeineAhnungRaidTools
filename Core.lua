@@ -24,6 +24,10 @@ frame:RegisterEvent("READY_CHECK_FINISHED")
 frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+-- Not a combat event: this is Blizzard closing every UISpecialFrames entry when the player is
+-- stunned, feared or knocked about, which takes this addon's windows with it. See
+-- KART.RegisterEscapeFrame for the whole story.
+frame:RegisterEvent("PLAYER_CONTROL_LOST")
 frame:RegisterEvent("CHALLENGE_MODE_START")
 frame:RegisterEvent("START_LOOT_ROLL")
 -- The outcome of a group-loot roll, which is the only way to notice the lootmaster lost one (B60).
@@ -515,6 +519,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Retry now that every addon has loaded — a LibDurability provider that loads after KART
         -- (e.g. MRT) is nil at BuffChecker parse time. Idempotent (see KART.RegisterLibDurability).
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
+    elseif event == "PLAYER_CONTROL_LOST" then
+        KART.OnControlLost()
     elseif event == "CHALLENGE_MODE_START" then
         if KART.AutoLog then KART.AutoLog.Evaluate() end
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then

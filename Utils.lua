@@ -16,6 +16,51 @@ KART.UI.popupArtworkPath = "Interface\\AddOns\\KeineAhnungRaidTools\\media\\back
 -- right after the locale values are copied into KART.L.
 KART.L = KART.L or {}
 
+-- =====================================================================
+--  Escape-closable windows, and surviving a stun
+-- =====================================================================
+-- Every window in this addon that Escape should close is registered in Blizzard's UISpecialFrames.
+-- That list has a second reader nobody wired for: PLAYER_CONTROL_LOST runs
+-- CloseAllWindows_WithExceptions, which ends in CloseSpecialWindows -- a bare loop over
+-- UISpecialFrames calling Hide() on every entry that is shown (Blizzard_UIParentPanelManager, and
+-- the "exceptions" are UIPanels only, so there is nothing an addon frame can opt out of).
+--
+-- The result, reported from a live raid on 2026-08-05: the first trash pull that stuns or fears
+-- somebody takes their vote window, the council panel, the trade reminder and the loot history with
+-- it, in the middle of a loot round. Nothing is lost -- the frames are only hidden -- but the person
+-- voting has no window to vote in and no reason to suspect one existed.
+--
+-- The repair is deliberately NOT "leave UISpecialFrames": Escape closing these windows is wanted.
+-- Instead, a hide that lands inside the one frame after PLAYER_CONTROL_LOST is treated as Blizzard's
+-- and undone. A hide the player asked for -- Escape, the "x" -- happens outside that window and is
+-- left alone, apart from the vanishingly rare case of pressing Escape in the same instant a stun
+-- lands, which costs one frame of a window staying open.
+local controlLossWindow = false
+local hiddenByControlLoss = {}
+
+function KART.RegisterEscapeFrame(frame)
+    local name = frame and frame.GetName and frame:GetName()
+    if not name then return end
+    table.insert(UISpecialFrames, name)
+    frame:HookScript("OnHide", function(self)
+        if controlLossWindow then hiddenByControlLoss[#hiddenByControlLoss + 1] = self end
+    end)
+end
+
+-- Called from Core.lua's PLAYER_CONTROL_LOST handler. Which of the two handlers runs first, ours or
+-- Blizzard's, is decided by registration order and must not matter -- so this does not snapshot what
+-- is currently shown (that reads empty when Blizzard went first). It opens a window and lets the
+-- hides report themselves.
+function KART.OnControlLost()
+    if controlLossWindow then return end
+    controlLossWindow = true
+    C_Timer.After(0, function()
+        controlLossWindow = false
+        for _, frame in ipairs(hiddenByControlLoss) do frame:Show() end
+        wipe(hiddenByControlLoss)
+    end)
+end
+
 -- Standardeinstellungen
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",

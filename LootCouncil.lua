@@ -1445,6 +1445,13 @@ function LC.PrintStatus()
             LC.diag.unknownRoll, kd.dropUnknownToken, kd.sendRejected, kd.sendQueued,
             kd.sendHeldBack, kd.sendDroppedRestricted))
     end
+    -- Its own line and its own condition, because it answers a different question than the one
+    -- above: not "how many sends were refused" but "how many of them stayed refused". A refused
+    -- send is now put back on the wire (see SEND_RETRY_DELAYS in KASC), so sendRejected alone no
+    -- longer means anything was lost -- only sendGaveUp does.
+    if kd.sendRetried + kd.sendGaveUp > 0 then
+        print("  " .. string.format(L.LC_STATUS_RESENDS, kd.sendRetried, kd.sendGaveUp))
+    end
     -- On its own line and on its own condition: this one is not a "message went nowhere" count at
     -- all. A non-zero here means two clients demonstrably held different numbers for one item, which
     -- is worth reading even on an evening where nothing else was refused.
@@ -2730,7 +2737,7 @@ function LC.ShowSessionPrompt()
     f:SetPoint("CENTER", 0, 120)
     LC.RegisterWindow(f, true)
     KART.UI:ApplyPopupArtwork(f)
-    table.insert(UISpecialFrames, f:GetName())
+    KART.RegisterEscapeFrame(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOP", 0, -14)

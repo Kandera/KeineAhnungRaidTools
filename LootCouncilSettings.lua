@@ -293,12 +293,16 @@ function LC.BuildSettingsPanel(parent)
         tooltip = L.LC_DESC_HIDE_IRRELEVANT,
     })
 
-    KART.LC.CbAutoTransmogVote = KART.UI:CreateSettingsCheckbox(prefsCard, {
-        name = "KART_LCAutoTransmogVote", label = L.LC_SET_AUTO_TRANSMOG,
-        store = SettingsStore, key = "lcAutoTransmogVote", y = -380,
-        onChanged = function() LC.Vote.RefreshAfterRelevanceChange() end,
-        tooltip = L.LC_DESC_AUTO_TRANSMOG,
-    })
+    -- Off the settings page on the maintainer's call (2026-08-05): the automatic Transmog vote did
+    -- not work in a real raid and there is no test raid left this tier to repair it in. Kept
+    -- commented rather than deleted -- see AUTO_TRANSMOG_ENABLED in LootCouncilRelevance.lua, which
+    -- is the other half and the one that also switches it off for anyone who had ticked it.
+    -- KART.LC.CbAutoTransmogVote = KART.UI:CreateSettingsCheckbox(prefsCard, {
+    --     name = "KART_LCAutoTransmogVote", label = L.LC_SET_AUTO_TRANSMOG,
+    --     store = SettingsStore, key = "lcAutoTransmogVote", y = -380,
+    --     onChanged = function() LC.Vote.RefreshAfterRelevanceChange() end,
+    --     tooltip = L.LC_DESC_AUTO_TRANSMOG,
+    -- })
 
     -- Droptimizer gain% column toggle (KART.DT.CbModuleEnabled) is built here too, by
     -- Droptimizer.lua — see the reserved -75 slot there. Kept in its own file since it's a
@@ -639,7 +643,8 @@ function LC.BuildSettingsPanel(parent)
         KART.LC.CbCompactVoteLayout.tooltipText = Lx.LC_DESC_COMPACT_VOTE_LAYOUT
         KART.LC.CbShowNickNames.text:SetText(Lx.LC_SET_SHOW_NICKNAMES)        KART.LC.CbShowNickNames.tooltipText = Lx.LC_DESC_SHOW_NICKNAMES
         KART.LC.CbHideIrrelevant.text:SetText(Lx.LC_SET_HIDE_IRRELEVANT)      KART.LC.CbHideIrrelevant.tooltipText = Lx.LC_DESC_HIDE_IRRELEVANT
-        KART.LC.CbAutoTransmogVote.text:SetText(Lx.LC_SET_AUTO_TRANSMOG)      KART.LC.CbAutoTransmogVote.tooltipText = Lx.LC_DESC_AUTO_TRANSMOG
+        -- Disabled 2026-08-05, see the checkbox above.
+        -- KART.LC.CbAutoTransmogVote.text:SetText(Lx.LC_SET_AUTO_TRANSMOG)   KART.LC.CbAutoTransmogVote.tooltipText = Lx.LC_DESC_AUTO_TRANSMOG
         KART.LC.BtnVotedItemDisplay.tooltipText = Lx.LC_DESC_VOTED_DISPLAY -- label synced by SyncSettingsToUI
         boxTitle:SetText(Lx.LC_RAIDWIDE_TITLE)
         KART.LC.SldVoteTimer.title:SetText(Lx.LC_SET_VOTE_TIMER)              KART.LC.SldVoteTimer.tooltipText = Lx.LC_DESC_VOTE_TIMER

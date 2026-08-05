@@ -77,7 +77,7 @@ mainFrame:Hide()
 KART.UI:AddShowFade(mainFrame)
 
 -- Allows closing the whole KART window with the ESC key
-table.insert(UISpecialFrames, mainFrame:GetName())
+KART.RegisterEscapeFrame(mainFrame)
 KART.MainFrame = mainFrame
 
 -- clickArea covers the opaque artwork region (shadow margin excluded).

@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] - 2026-08-05
+### Fixed
+- **A refused message is sent again instead of being lost** — an item the raid never heard about was usually one send that quietly failed.
+- **Your windows come back after a stun** instead of closing for the rest of the loot round.
+- **Items your class cannot use are passed on again** — weapons, shields and off-hand items were never judged, only armour.
+- **A handed-over item is ticked off the trade list**, including when the same item dropped twice.
+
+### Changed
+- **The automatic Transmog vote is switched off** until it can be repaired.
+
 ## [3.3.1] - 2026-08-05
 ### Fixed
 - **Items now show their real item level and stats for everyone**, including raiders who never got Blizzard's own roll window.

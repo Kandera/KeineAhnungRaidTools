@@ -130,3 +130,11 @@ end
 -- after it, so the ADDON_LOADED path above never fires for them at all. A different call at a
 -- different site: the assertion above is on the throttled variant and passes with this one deleted.
 Wired("KART.LC.RetryPendingResolutions()", "the entering-world pass resolves what is still pending")
+
+-- Surviving a stun (2026-08-05) ---------------------------------------------------------------------
+-- Blizzard hides every UISpecialFrames entry on PLAYER_CONTROL_LOST, and every window in this addon
+-- is one. tests/test_lc_chrome.lua drives the repair itself; without these two lines it never runs in
+-- the game, and the windows keep vanishing on the first trash pull that stuns anybody.
+Wired('frame:RegisterEvent("PLAYER_CONTROL_LOST")', "PLAYER_CONTROL_LOST is registered")
+Wired('elseif event == "PLAYER_CONTROL_LOST" then', "and routed in the event handler")
+Wired("KART.OnControlLost()", "which is what re-opens what Blizzard closed")

@@ -15,7 +15,7 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 4
+local MAJOR, MINOR = "KASC-1.0", 5
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
@@ -66,6 +66,8 @@ KASC.diag = KASC.diag or {
     dropUnknownToken = 0, -- a message in our prefix whose token this client has no handler for
     sendHeldBack = 0,   -- held while addon comms were restricted, and sent afterwards
     sendDroppedRestricted = 0, -- not worth holding, so dropped while restricted (heartbeats, requests)
+    sendRetried = 0,    -- a refused guaranteed message put back on the wire (see SEND_RETRY_DELAYS)
+    sendGaveUp = 0,     -- ...and still refused after the last attempt, so genuinely lost
 }
 
 -- =====================================================================
@@ -126,6 +128,20 @@ function KASC:Diagnostics()
     return KASC.diag
 end
 
+-- How long to wait before putting a refused guaranteed message back on the wire, one entry per
+-- attempt. ChatThrottleLib retries exactly one failure of its own -- SendAddonMessageResult
+-- .AddonMessageThrottle, see IsThrottledSendResult -- and hands every other result straight to the
+-- callback as "not sent", which until now ended the message's life. It is not a rare path: a raid on
+-- 2026-08-05 refused 71 of the lootmaster's sends with 1578 more waiting in the queue, and the
+-- clients that lost an LC_DROP that way spent the evening with items they had never heard of --
+-- no auto-pass, no vote row, and a "was never announced" line hours later.
+--
+-- Only guaranteed messages come back: those are the ones whose loss costs the raid something (see
+-- the opts.guaranteed note below). A question or a heartbeat that fails has already been overtaken
+-- by the next one. Bounded on purpose -- a client that cannot send at all must not spend the
+-- evening trying, and three attempts across six seconds is the whole budget.
+local SEND_RETRY_DELAYS = { 0.5, 1.5, 4 }
+
 -- opts.guaranteed: this message is worth holding until comms come back (see CommsRestricted). Loot
 -- announcements, awards, votes and the session flag are; heartbeats and requests are not.
 -- opts.prio: ChatThrottleLib's priority -- "ALERT", "NORMAL" (the default) or "BULK". The three get
@@ -163,12 +179,40 @@ function KASC:Send(msg, channel, target, opts)
     -- The last argument is AceComm's, not CTL's: a BOOLEAN saying whether the message went out (see
     -- the note on KASC.diag). Only an explicit false counts -- a client that answers nothing at all
     -- reaches here as true, and "no answer" must never read as "everything failed".
+    -- Which attempt this is, carried in the options so a retry can find its own place in
+    -- SEND_RETRY_DELAYS. Absent on every call a consumer makes, which is what makes the first send
+    -- attempt zero.
+    local attempt = (opts and opts.attempt) or 0
+    local guaranteed = opts and opts.guaranteed
+    -- One retry per message, not one per chunk. AceComm splits anything over 255 bytes and gives
+    -- every piece its own callback, so a pipe that refuses one piece usually refuses the rest --
+    -- and re-sending the whole message once per refused chunk would multiply the traffic that
+    -- caused the refusal in the first place.
+    local retried = false
+
     local sentAtOnce = false
     local function OnSent(_, _, _, didSend)
         sentAtOnce = true
-        if didSend == false then
-            KASC.diag.sendRejected = KASC.diag.sendRejected + 1
+        if didSend ~= false then return end
+        KASC.diag.sendRejected = KASC.diag.sendRejected + 1
+        if not guaranteed or retried then return end
+        retried = true
+        local delay = SEND_RETRY_DELAYS[attempt + 1]
+        if not delay then
+            KASC.diag.sendGaveUp = KASC.diag.sendGaveUp + 1
+            return
         end
+        KASC.diag.sendRetried = KASC.diag.sendRetried + 1
+        -- A copy, so the attempt number cannot leak back into the caller's own table -- consumers
+        -- build these per send (see LC.SendLC) but a held message keeps its options across the
+        -- restriction queue, and that table would otherwise carry a stale count into its release.
+        local nextOpts = {}
+        for k, v in pairs(opts) do nextOpts[k] = v end
+        nextOpts.attempt = attempt + 1
+        -- channel stays exactly as the caller gave it, nil included: re-resolving DefaultChannel at
+        -- the next attempt is what keeps a party that became a raid in between from being addressed
+        -- on the channel it no longer has.
+        C_Timer.After(delay, function() KASC:Send(msg, channel, target, nextOpts) end)
     end
 
     AceComm:SendCommMessage(prefix, msg, channel or self:DefaultChannel(), target,

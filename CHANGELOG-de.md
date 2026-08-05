@@ -6,6 +6,16 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] - 2026-08-05
+### Behoben
+- **Eine abgelehnte Nachricht wird erneut verschickt statt verloren zu gehen** — ein Item, von dem der Raid nie erfuhr, war meist ein still fehlgeschlagener Sendeversuch.
+- **Deine Fenster kommen nach einem Stun zurück**, statt für den Rest der Lootrunde zu bleiben.
+- **Items, die deine Klasse nicht tragen kann, werden wieder gepasst** — Waffen, Schilde und Nebenhände wurden nie geprüft, nur Rüstung.
+- **Ein übergebenes Item wird von der Handelsliste abgehakt**, auch wenn dasselbe Item zweimal gedroppt ist.
+
+### Geändert
+- **Die automatische Transmog-Stimme ist abgeschaltet**, bis sie repariert werden kann.
+
 ## [3.3.1] - 2026-08-05
 ### Behoben
 - **Items zeigen jetzt bei allen das echte Itemlevel und die echten Werte** — auch bei Raidern, die kein eigenes Würfelfenster von Blizzard bekommen haben.

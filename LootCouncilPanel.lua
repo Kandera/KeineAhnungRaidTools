@@ -604,7 +604,7 @@ function Council.CreateCouncilPanel()
             KART_Settings.lcCouncilPanelPos = {x = self:GetLeft(), y = self:GetTop()}
         end
     end)
-    table.insert(UISpecialFrames, f:GetName())
+    KART.RegisterEscapeFrame(f)
 
     -- "The player has put this window away." Every route out of the panel ends here -- the Close
     -- button, the window's own x, Escape -- which is why the flag is set on the frame rather than in

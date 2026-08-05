@@ -528,7 +528,7 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
             KART_Settings[posKey] = {x = self:GetLeft(), y = self:GetTop()}
         end
     end)
-    table.insert(UISpecialFrames, f:GetName())
+    KART.RegisterEscapeFrame(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 10, -8)
@@ -707,6 +707,32 @@ LC.tradeWindowItemStrings = LC.tradeWindowItemStrings or {}
 -- clicking its own tick, by a reassignment, or by the four-hour prune. Reported from a live test.
 LC.tradeTargetItemStrings = LC.tradeTargetItemStrings or {}
 
+-- How many copies of each item string were in our bags while the trade window was open, captured on
+-- the same event that reads the slots. Read again after the window closes: what left the bags is what
+-- actually changed hands, and that is a fact about our own inventory rather than a message we have to
+-- have received.
+--
+-- Why it exists (2026-08-05): both existing confirmations can fail at once. `tradeSucceeded` is
+-- Blizzard's LE_GAME_ERR_TRADE_COMPLETE, which we cannot prove reaches us on every client, and the
+-- bag scan next to it asks "is this item still in my bags", which is the wrong question for a
+-- DUPLICATE drop -- trade one of two identical copies and the other one answers yes, so neither
+-- entry is confirmed and the lootmaster is left with "0 of 2 handed over" for a trade that happened.
+-- A count answers what a presence check cannot.
+LC.tradeBagCountsBefore = LC.tradeBagCountsBefore or {}
+
+-- How many copies of itemString are in our own bags right now.
+local function CountItemInBags(itemString)
+    if not itemString then return 0 end
+    local n = 0
+    for bag = 0, 4 do -- backpack (0) + 4 regular bag slots, same range as FindItemInBags
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local bagLink = C_Container.GetContainerItemLink(bag, slot)
+            if bagLink and KAUtil.GetItemString(bagLink) == itemString then n = n + 1 end
+        end
+    end
+    return n
+end
+
 function Trade.OnTradeAcceptUpdate()
     wipe(LC.tradeWindowItemStrings)
     wipe(LC.tradeTargetItemStrings)
@@ -721,6 +747,13 @@ function Trade.OnTradeAcceptUpdate()
         if theirString then
             LC.tradeTargetItemStrings[theirString] = (LC.tradeTargetItemStrings[theirString] or 0) + 1
         end
+    end
+    -- Counted while the trade is still open, so the copies sitting in the trade slots are INCLUDED --
+    -- Blizzard leaves a traded item in its bag slot, locked, until the trade goes through. Two copies
+    -- read as 2 here and as 1 afterwards if one of them changed hands.
+    wipe(LC.tradeBagCountsBefore)
+    for itemString in pairs(LC.tradeWindowItemStrings) do
+        LC.tradeBagCountsBefore[itemString] = CountItemInBags(itemString)
     end
 end
 
@@ -871,6 +904,30 @@ function Trade.ConfirmOwedFromPartner(partnerKey)
     end
 end
 
+-- How long to wait after the trade window closes before recounting the bags. The server applies the
+-- swap a moment after TRADE_CLOSED; a second is well clear of that and still far short of anything a
+-- lootmaster would notice.
+local TRADE_SETTLE_DELAY = 1
+
+-- Confirms as many pending entries per item string as copies actually left our bags. `before` is the
+-- count taken while the window was open (see LC.tradeBagCountsBefore).
+--
+-- Only entries assigned to partnerKey, and only as many as the delta allows: a lootmaster carrying
+-- three copies who hands over one must be left with two still on the list, not zero.
+function Trade.ConfirmByBagDelta(partnerKey, before)
+    for itemString, had in pairs(before) do
+        local gone = had - CountItemInBags(itemString)
+        for i = #LC.pendingTrades, 1, -1 do
+            if gone <= 0 then break end
+            local entry = LC.pendingTrades[i]
+            if entry.winnerKey == partnerKey and KAUtil.GetItemString(entry.itemLink) == itemString then
+                gone = gone - 1
+                Trade.RemovePendingTrade(entry.rollID)
+            end
+        end
+    end
+end
+
 function Trade.OnTradeClosed()
     local partnerKey = LC.currentTradePartnerKey
     -- Kept past the close: the trade-complete message can arrive after the window has gone, and the
@@ -926,6 +983,20 @@ function Trade.OnTradeClosed()
                     entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), KASC.Identity.ResolveDisplayName(partnerKey)))
             end
         end
+    end
+
+    -- Third confirmation, and the only one that survives both of the others failing at once: count
+    -- what actually left the bags. Deferred, because the server has not applied the trade yet at
+    -- TRADE_CLOSED -- that timing is what the immediate bag scan above keeps losing, and the reason a
+    -- handed-over item sometimes stayed on the list and sometimes did not on the same evening.
+    -- Idempotent against everything above: an entry already removed is not found again.
+    local countedBefore = {}
+    for itemString, n in pairs(LC.tradeBagCountsBefore) do countedBefore[itemString] = n end
+    wipe(LC.tradeBagCountsBefore)
+    if partnerKey and next(countedBefore) then
+        C_Timer.After(TRADE_SETTLE_DELAY, function()
+            Trade.ConfirmByBagDelta(partnerKey, countedBefore)
+        end)
     end
 
     -- Mirror check for the recipient side (Task 5's loop) — deliberately left as bag-scan-only.

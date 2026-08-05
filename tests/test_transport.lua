@@ -78,6 +78,67 @@ do
     KARTTEST.AdvanceTime(2)
 end
 
+-- A refused send is put back on the wire ----------------------------------------------------------
+-- 2026-08-05: the lootmaster's own status line read "71 refused, 1578 queued", and the clients that
+-- lost an LC_DROP among those 71 spent the evening with items they had never heard of. CTL retries
+-- exactly one refusal of its own -- AddonMessageThrottle -- and hands every other result to the
+-- callback as "not sent", which used to be the end of the message. ChannelThrottle (8) is the one
+-- the raid actually hit.
+do
+    local sim, lm = F.NewRaid()
+    local heard = 0
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function()
+            c.KASC:RegisterMessage("LC_RESENDPROBE", {}, function() heard = heard + 1 end)
+        end)
+    end
+
+    sim.sendResult = 8 -- Enum.SendAddonMessageResult.ChannelThrottle -- not a throttle CTL retries
+    RaidSim.As(lm, function() lm.KASC:Send("LC_RESENDPROBE", nil, nil, { guaranteed = true }) end)
+    T.eq(heard, 0, "the refused announcement reaches nobody on the first attempt")
+
+    -- The pipe recovers before the first retry falls due. Nobody re-sends by hand.
+    sim.sendResult = nil
+    KARTTEST.AdvanceTime(1)
+    T.eq(heard, #sim.clients - 1, "and the library's own retry delivers it to everybody but the sender")
+end
+
+-- ...but only the messages whose loss costs something ----------------------------------------------
+-- A heartbeat or a state request that fails has been overtaken by the next one before any retry
+-- would land, and re-sending it adds traffic to the pipe that just refused it.
+do
+    local sim, lm = F.NewRaid()
+    local heard = 0
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function()
+            c.KASC:RegisterMessage("LC_CHEAPPROBE", {}, function() heard = heard + 1 end)
+        end)
+    end
+
+    sim.sendResult = 8
+    RaidSim.As(lm, function() lm.KASC:Send("LC_CHEAPPROBE") end)
+    sim.sendResult = nil
+    KARTTEST.AdvanceTime(8)
+    T.eq(heard, 0, "a message that was not worth guaranteeing is not re-sent either")
+end
+
+-- A client that cannot send at all gives up, and says so -------------------------------------------
+-- The retry is bounded on purpose: an evening spent re-sending into a pipe that never opens is worse
+-- than one lost message, and the count is what tells the difference afterwards.
+do
+    local sim, lm = F.NewRaid()
+    local diag = lm.KASC:Diagnostics()
+    local gaveUpBefore, retriedBefore = diag.sendGaveUp, diag.sendRetried
+
+    sim.sendResult = 8
+    RaidSim.As(lm, function() lm.KASC:Send("LC_DEADPROBE", nil, nil, { guaranteed = true }) end)
+    KARTTEST.AdvanceTime(10)
+    sim.sendResult = nil
+
+    T.eq(diag.sendRetried, retriedBefore + 3, "three attempts follow the first refusal")
+    T.eq(diag.sendGaveUp, gaveUpBefore + 1, "and the message is counted as lost exactly once, not per attempt")
+end
+
 -- Priority: an End Round does not queue behind a handshake storm ------------------------------------
 -- 2026-08-03: one version check answered by twenty clients filled the pipe, and the loot flow was
 -- behind it. ChatThrottleLib hands each priority an equal share of the bandwidth, so ALERT traffic

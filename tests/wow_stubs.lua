@@ -429,8 +429,20 @@ function _G.CreateFrame(_, name, parent, _)
     local owner = KARTTEST.frameOwner
 
     local scripts = {}
+    local hooks = {}
     function f:SetScript(scriptType, handler) scripts[scriptType] = handler; return f end
     function f:GetScript(scriptType) return scripts[scriptType] end
+    -- Real, because the loss-of-control repair hangs off it: Blizzard hides every UISpecialFrames
+    -- entry when the player is stunned, and the only place the addon can notice a hide it did not
+    -- ask for is an OnHide hook. A no-op here would report that repair working while every window
+    -- still vanished on the first trash pull. Hooks run AFTER the SetScript handler and in the order
+    -- they were added, exactly as the real client runs them.
+    function f:HookScript(scriptType, handler)
+        hooks[scriptType] = hooks[scriptType] or {}
+        table.insert(hooks[scriptType], handler)
+        return f
+    end
+    function f:GetScriptHooks(scriptType) return hooks[scriptType] end
     function f:RegisterEvent(event)
         for _, reg in ipairs(KARTTEST.eventFrames) do
             if reg.frame == f and reg.event == event then return f end
@@ -549,6 +561,7 @@ function _G.CreateFrame(_, name, parent, _)
     local function fire(f_, script)
         local handler = f_:GetScript(script)
         if handler then handler(f_) end
+        for _, hook in ipairs(f_:GetScriptHooks(script) or {}) do hook(f_) end
     end
     function f:Show()
         local was = shown; shown = true
@@ -815,6 +828,14 @@ _G.C_Item = {
     GetItemIconByID = function(v)
         local it = itemOf(v)
         return it and ("Interface\\Icons\\" .. it.name) or nil
+    end,
+    -- The item's stat block, keyed by the ITEM_MOD_* tokens the live API uses. Answers nil for an
+    -- item the fixture gave no stats, which is the same "not loaded yet" the real one returns before
+    -- the server has sent the item -- and the relevance rule treats it the same way: no opinion.
+    GetItemStats = function(v)
+        local it = itemOf(v)
+        if not it or it.cached == false then return nil end
+        return it.stats
     end,
     -- The EFFECTIVE item level of one specific link, upgrades included -- which is not
     -- GetItemInfo's fourth return, that being the item's base level. Droptimizer needs the

@@ -64,6 +64,13 @@ check("both, mog unknown",    {irrelevant = true,  needsAppearance = nil,   hide
 -- no-op stub.
 local F = dofile("tests/lc_fixture.lua")
 
+-- The automatic Transmog vote is switched off in the addon (2026-08-05, see AUTO_TRANSMOG_ENABLED
+-- in LootCouncilRelevance.lua): it did not do what it says in a real raid, and the tier ended before
+-- there was another one to test a repair in. The blocks that drive it are kept and gated on this
+-- flag rather than deleted, so flipping the feature back on brings its coverage back with it.
+local AUTO_TRANSMOG = false
+
+
 -- B36: "Blizzard says you may not Need this" is not "your class cannot equip this" ------------------
 -- canNeed comes back false for a wrong loot specialization, a level requirement and a unique-equipped
 -- item just as it does for armor your class can never wear -- one boolean for four questions, and
@@ -117,7 +124,7 @@ do
         "B39: no Transmog vote for an appearance this character can never learn")
 end
 
-do
+if AUTO_TRANSMOG then do
     -- ...and one it CAN learn and does not have is still voted for, so the guard is not "never vote".
     local sim = F.NewRaid()
     local alric = sim.byName.Alric
@@ -128,7 +135,7 @@ do
 
     T.eq(alric.KART.LC.votedByMe[511], alric.KART.LC.GetTransmogButtonIndex(),
         "B39: an appearance this character still needs is voted Transmog")
-end
+end end
 
 -- B37, B38, B42: the snapshot has to say WHICH item it describes -----------------------------------
 -- Blizzard's per-roll verdict is captured under a rollID and nothing else, and a rollID is reused for
@@ -146,7 +153,7 @@ end
 --
 -- The medicine is the one this codebase has already applied three times: LC.rollsFor for rolls,
 -- vote.item for votes, RemoveHistoryForRoll's itemLink for history. Stamp it with the item.
-do
+if AUTO_TRANSMOG then do
     local sim = F.NewRaid()
     local alric = sim.byName.Alric            -- MAGE, auto-transmog ON
     -- Item A: an appearance this client still needs. That verdict lands in the snapshot.
@@ -166,7 +173,7 @@ do
 
     T.is_nil(alric.KART.LC.votedByMe[520],
         "B37: the previous item's verdict is not applied to the one that replaced it")
-end
+end end
 
 do
     -- B42: a boss dropping several items must not have each snapshot swept while the next is handled.
@@ -203,7 +210,7 @@ local function IsVisible(client, rollID)
     return false
 end
 
-do
+if AUTO_TRANSMOG then do
     local sim = F.NewRaid()
     local alric = sim.byName.Alric            -- MAGE, auto-transmog ON, hide OFF
     alric.env.KART_Settings.lcVotedItemDisplay = "hide"
@@ -215,7 +222,7 @@ do
     T.truthy(alric.KART.LC.autoVotedByMe[540], "B41: and is marked as automatic, i.e. overridable")
     T.truthy(IsVisible(alric, 540),
         "B41: the row stays on screen, because that is where the correction is clicked")
-end
+end end
 
 do
     -- ...and a vote the player actually clicked still hides, which is what the setting is for.
@@ -247,6 +254,48 @@ do
     sinja.env.KART_Settings.lcHideIrrelevant = false
     T.truthy(IsVisible(sinja, 542),
         "B41: unticking the setting brings the row back for the roll still running")
+end
+
+-- Weapons and shields are judged too, not waved through ---------------------------------------------
+-- Reported 2026-08-05: "auto pass geht bei manchen nicht". It worked for anyone whose mismatch was an
+-- armor weight and never for anyone whose mismatch was a weapon, because the armor rule answers nil
+-- for those and nil means relevant. Two rules cover the rest, after RCLootCouncil's autopass tables:
+-- proficiency, then main stat. canNeed is false throughout on purpose -- a Need roll Blizzard allows
+-- still settles the question on its own, and these drops are exactly the ones it refuses.
+do
+    local sim = F.NewRaid()
+    local corvin = sim.byName.Corvin   -- PALADIN, hide ON
+    local sinja  = sim.byName.Sinja    -- PRIEST, hide ON
+
+    F.Drop(sim, 590, F.STAFF, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(corvin.KART.LC.hiddenIrrelevant[590], "a staff is hidden from a paladin")
+    T.truthy(not IsVisible(corvin, 590), "and its row is gone")
+    T.truthy(not sinja.KART.LC.hiddenIrrelevant[590], "while a priest, who can hold one, still sees it")
+
+    F.Drop(sim, 591, F.SHIELD, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[591], "a shield is hidden from a priest")
+    T.truthy(not corvin.KART.LC.hiddenIrrelevant[591], "and not from a paladin, who can hold one")
+end
+
+do
+    -- The second rule. Proficiency lets a priest swing a one-handed mace, so nothing above this
+    -- would have hidden a strength one -- and the same rule must NOT hide an intellect dagger,
+    -- which is the direction that would pass away somebody's upgrade.
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja     -- PRIEST, hide ON
+
+    F.Drop(sim, 592, F.STR_MACE, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[592],
+        "a strength mace is hidden from a priest, though priests may wield maces")
+
+    F.Drop(sim, 593, F.INT_DAGGER, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(not sinja.KART.LC.hiddenIrrelevant[593],
+        "and an intellect dagger, which is theirs on both counts, stays on screen")
+    T.truthy(IsVisible(sinja, 593), "with its row where the player can vote on it")
 end
 
 -- B49: a roll expires whether or not anybody is looking at it ---------------------------------------
@@ -292,7 +341,7 @@ end
 -- change of the settings that produced that answer could reach it. Ticking the second switch during a
 -- boss therefore did nothing at all -- the switch read as broken, and the Pass already broadcast to
 -- the council stood.
-do
+if AUTO_TRANSMOG then do
     local sim = F.NewRaid()
     local sinja, merrit = sim.byName.Sinja, sim.byName.Merrit   -- PRIEST; and a council member
     sinja.env.KART_Settings.lcAutoTransmogVote = false          -- hide only, to begin with
@@ -315,9 +364,9 @@ do
     T.truthy(IsVisible(sinja, 560), "B50: so the item is back in front of the player")
     T.eq((merrit.KART.LC.votes[560] or {})[sinja.guid].idx, sinja.KART.LC.GetTransmogButtonIndex(),
         "B50: and the council has the corrected vote, not the Pass")
-end
+end end
 
-do
+if AUTO_TRANSMOG then do
     -- The other direction: switching one OFF has to re-answer too, and the answer it falls back to
     -- carries its own hide flag. This is where CastVote's "the player is overriding me" branch used
     -- to fire for LC.Relevance's own re-answer and undo the flag set two lines earlier.
@@ -337,7 +386,7 @@ do
         "B50: without it, hiding answers the same roll with the configured Pass")
     T.truthy(sinja.KART.LC.hiddenIrrelevant[562], "B50: and the row is hidden, as that setting means")
     T.truthy(not IsVisible(sinja, 562), "B50: so it is off screen again")
-end
+end end
 
 do
     -- Re-answering must not re-broadcast an answer that did not change. A settings toggle during a
@@ -443,7 +492,7 @@ end
 -- RefreshVoteListRows -- so every item answered on the player's behalf triggered a full nested
 -- rebuild of a window the outer call had not drawn yet. Bounded and correct, but a visible hitch
 -- exactly when the window first appears, which is when several items are answered at once.
-do
+if AUTO_TRANSMOG then do
     local sim = F.NewRaid()
     local alric = sim.byName.Alric           -- MAGE, auto-transmog ON: plate is answered for them
     local builds = 0
@@ -466,4 +515,4 @@ do
         "B54: all three items were answered automatically")
     T.eq(builds, perDrop * 3, "B54: and each one cost the same as the first — no nested rebuild")
     T.eq(perDrop, 1, "B54: which is one rebuild per item, not two")
-end
+end end

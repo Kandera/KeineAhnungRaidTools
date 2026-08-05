@@ -275,3 +275,63 @@ do
     end)
     T.truthy(sim ~= nil)
 end
+
+-- Neither of the two old confirmations fires, and the item is still ticked off ---------------------
+-- Reported 2026-08-05: "nach auto trade wird nicht abgehakt", and separately "wenn ein item 2 spieler
+-- gewinnt wird 0/2 abgehakt". Both are the same hole. The trade-complete signal is deliberately NOT
+-- sent here -- we cannot prove every client raises it -- and the bag scan that stands in for it runs
+-- inside TRADE_CLOSED, before the server has applied the swap, so it still finds the item and
+-- confirms nothing. What is left is counting: one copy fewer in the bags is one copy handed over.
+do
+    local _, lm = TradeWith(function(a)
+        return { { itemLink = GLOVES, winnerKey = a.guid, rollID = 70 } }
+    end, { [0] = { GLOVES } })
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        -- No OnTradeInfoMessage: this is the client that never reports LE_GAME_ERR_TRADE_COMPLETE.
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+    T.eq(#lm.KART.LC.pendingTrades, 1,
+        "nothing is confirmed while the bags still show the item -- the server has not applied it yet")
+
+    KARTTEST.bags = { [0] = {} } -- the swap lands
+    KARTTEST.AdvanceTime(2)
+    T.eq(#lm.KART.LC.pendingTrades, 0, "and the recount a moment later ticks it off")
+end
+
+do
+    -- The duplicate case, which is where a presence check cannot help at all: two copies owed to the
+    -- same winner, one handed over. Exactly one entry may clear -- confirming both loses an item
+    -- nobody will miss, clearing neither is the "0 of 2" the lootmaster saw.
+    local _, lm, alric = TradeWith(function(a)
+        return {
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 70 },
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 71 },
+        }
+    end, { [0] = { GLOVES, GLOVES } })
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+
+    KARTTEST.bags = { [0] = { GLOVES } } -- one copy left
+    KARTTEST.AdvanceTime(2)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "one of the two copies is confirmed, not both and not neither")
+    T.eq(lm.KART.LC.pendingTrades[1].winnerKey, alric.guid, "and the other is still owed to the winner")
+end
+
+do
+    -- ...and a trade that was cancelled changes nothing, because nothing left the bags.
+    local _, lm = TradeWith(function(a)
+        return { { itemLink = GLOVES, winnerKey = a.guid, rollID = 70 } }
+    end, { [0] = { GLOVES } })
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+    KARTTEST.AdvanceTime(2)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "a cancelled trade leaves the obligation standing")
+end

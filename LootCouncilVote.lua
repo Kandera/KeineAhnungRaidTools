@@ -47,7 +47,7 @@ function Vote.CreateVoteList()
             KART_Settings.lcVotePopupPos = {x = self:GetLeft(), y = self:GetTop()}
         end
     end)
-    table.insert(UISpecialFrames, f:GetName())
+    KART.RegisterEscapeFrame(f)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.title:SetPoint("TOPLEFT", 16, -10)

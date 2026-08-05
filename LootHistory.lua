@@ -235,7 +235,7 @@ function LH.ShowExportDialog()
         f:SetClampedToScreen(true)
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
         f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-        table.insert(UISpecialFrames, f:GetName())
+        KART.RegisterEscapeFrame(f)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         f.title:SetPoint("TOP", 0, -14)
@@ -428,7 +428,7 @@ function LH.CreateWindow()
             KART_Settings.lcHistoryWindowPos = {x = self:GetLeft(), y = self:GetTop()}
         end
     end)
-    table.insert(UISpecialFrames, f:GetName())
+    KART.RegisterEscapeFrame(f)
     f:Hide()
 
     -- Header zone: title on the artwork with an accent line below, matching the main window

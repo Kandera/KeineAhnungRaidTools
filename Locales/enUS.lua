@@ -288,6 +288,7 @@ KART.L_enUS = {
     LC_FORCEWIN_LOST       = "%s went to %s, not to you -- check your bags before you promise it to anybody.",
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_STATUS_DROPS        = "Messages refused here: %d sender, %d not in group, %d unknown item, %d unknown token -- own sends rejected: %d (%d queued), held while restricted: %d, dropped in them: %d",
+    LC_STATUS_RESENDS      = "Refused sends put back on the wire: %d -- of those, still refused after the last attempt: %d.",
     LC_STATUS_ROLLCONFLICT = "Roll tables that disagreed with this client's: %d -- somebody in the raid held different numbers for an item scored here.",
     LC_STATUS_DROPCAPPED   = "Batches capped on arrival: %d -- a drop named more items than one message can carry, so some of it was left out.",
     LC_STATUS_PACKUNREADABLE = "Compressed messages this client could not read: %d -- a boss's items or a roll table arrived packed and unreadable, so none of it reached this screen. Usually another addon's LibDeflate.",

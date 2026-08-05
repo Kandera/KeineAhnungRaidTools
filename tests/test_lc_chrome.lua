@@ -199,3 +199,45 @@ do
         end
     end
 end
+
+-- A stun does not take the vote window with it ------------------------------------------------------
+-- Reported from a live raid on 2026-08-05: "lootcouncil geht komplett zu wenn ein Trashfight beginnt
+-- bzw ein loss of control effekt eingetreten ist". PLAYER_CONTROL_LOST runs Blizzard's
+-- CloseAllWindows_WithExceptions, which loops over UISpecialFrames and hides every entry -- and every
+-- window in this addon is an entry, because Escape is supposed to close them. The hide itself is not
+-- preventable from an addon; undoing it is (see KART.RegisterEscapeFrame).
+do
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 600, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local vote = alric.KART.LC.voteListFrame
+    T.truthy(vote and vote:IsShown(), "the vote window is up for the item that just dropped")
+
+    -- KART.OnControlLost directly, not the event: raidsim does not load Core.lua (it needs the game
+    -- to exist), so the PLAYER_CONTROL_LOST registration and routing are asserted against the source
+    -- in tests/test_core_wiring.lua instead. What runs here is the repair itself.
+    F.RaidSim.As(alric, function()
+        alric.KART.OnControlLost()
+        vote:Hide() -- what CloseSpecialWindows does to every UISpecialFrames entry
+    end)
+    T.truthy(not vote:IsShown(), "Blizzard's close still closes it -- an addon cannot stop that")
+
+    KARTTEST.AdvanceTime(0.1)
+    T.truthy(vote:IsShown(), "and the frame after, it is back where the player was voting")
+end
+
+do
+    -- The other direction, and the reason this is a one-frame window rather than a flag: a window the
+    -- player closed themselves stays closed.
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 601, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local vote = alric.KART.LC.voteListFrame
+    F.RaidSim.As(alric, function() vote:Hide() end)
+    KARTTEST.AdvanceTime(0.1)
+    T.truthy(not vote:IsShown(), "a hide nobody blamed on a stun is left alone")
+end
