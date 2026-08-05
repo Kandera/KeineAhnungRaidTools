@@ -782,40 +782,116 @@ survives for that reason -- not because a test is missing. Worth writing down as
 alongside "real gap" and "equivalent mutant": a survivor can also be marking defensive code that
 nothing can reach, and chasing it is time spent on an assertion that could never fail.
 
-## B117 — OPEN 2026-08-02 — the twentieth run's leftovers, written down instead of left in a temp file
+## B117 — NARROWED 2026-08-05 — the twentieth run's leftovers, re-measured against a file that moved
 
-The sweep over `LootCouncil.lua` and `LootCouncilVote.lua` after B108–B116 and the day's ~145 new
-assertions. **135 mutable executed lines, 71 dead, 64 alive** — 1802 executed lines between the two,
-against B107's narrower reach on 2026-08-01.
+The original entry (2026-08-02) listed 64 surviving line numbers across `LootCouncil.lua` and
+`LootCouncilVote.lua`. **Those numbers are gone from this entry, and deleting them is the finding.**
+49 commits went over `LootCouncil.lua` between then and now — the comms rework, AceComm, one message
+per boss, the heartbeat, LibDeflate, B127/B130/B135 — and the file went from 3678 lines to 5261. Every
+number in that list pointed somewhere else. They were evidence that a measurement had happened, not a
+worklist, and keeping them would have cost the next session an afternoon before it noticed.
 
-Four groups were closed the same day and are not in the list below: the five sender guards, Auto-Pass
-with the setting switched off, the `C_LootHistory` guard, and the roll handler. What is left is
-recorded HERE rather than in a run log, because the log lived in a session-scoped temp directory and
-would have been gone before anybody read it — the same mistake this file already records once, about
-`mutrun.py` itself.
+What does not age is a cluster named after the function it lives in. That is how this entry is
+written now.
 
-**`LootCouncil.lua`, 46 alive:**
-36, 437, 474, 556, 909, 967, 1003, 1148, 1370, 1400, 1401, 1408, 1444, 1536, 1542, 1544, 1572, 1601,
-1607, 1613, 1627, 1668, 1671, 1677, 1711, 1916, 1918, 2195, 2203, 2242, 2279, 2311, 2360, 2643, 2674,
-2707, 2711, 2822, 2989, 3056, 3160, 3258, 3406, 3462, 3613, 3653
+**Re-measured 2026-08-05 against `f47b239`,** with `tests/mutrun.py` (in the repo, `tests/mutrun.py`
+— an earlier note claiming it lives in a temp directory was wrong):
 
-**`LootCouncilVote.lua`, 18 alive:**
-77, 93, 96, 98, 124, 576, 578, 613, 711, 712, 713, 894, 904, 905, 980, 981, 1120, 1177
+| file | executed | mutable | alive |
+|---|---|---|---|
+| `LootCouncil.lua` | 1501 | 130 | 59 |
+| `LootCouncilVote.lua` | 585 | 37 | 16 |
 
-Line numbers age with the file, so treat them as a starting point and re-run rather than as a
-worklist: `KART_COVERAGE=1 luajit tests/run.lua` then `python tests/mutrun.py LootCouncil.lua`.
+Two further "survivors" in the first run were prose: the rules matched an arrow inside a trailing
+comment (`-- resolved KASC.Identity key -> true`), mutated the comment, and reported a green suite.
+Fixed in `tests/mutrun.py` rather than written down as findings — the same discipline as B115, where
+13 of 17 discrepancies turned out to be the harness.
 
-**Where to start, and what to skip.** Two clusters have a bearing on a raid night and neither was
-reached today: the state-request answers (`:1601`, `:1607`, `:1613`, `:1627` — who is allowed to
-answer, and B69/B77 are what happens when the wrong client does) and the retry budgets (`:1444`,
-`:2711`, `:2989`, `:2822`). The rest is overwhelmingly display thresholds and nil guards on widget
-plumbing — the `LootCouncilVote.lua` block from `:576` to `:981` is entirely the vote window's own
-rendering.
+**Cluster 1, the state-request answers — CLOSED.** `LC.HandleStateRequest` has one rule that matters:
+exactly one client may state the raid's config *as* the raid's config, and that is whoever the
+lootmaster field names. Everybody else answers with `LC_CONFIG_RELAY`, which a receiver accepts only
+into an empty config and which therefore cannot overwrite or clear anything. Two mutations walked
+straight through it. Dropping the ownership self-gate in `LC.BroadcastRaidConfig` turns every
+session-active client into a second voice, and it is the roster-change path that makes it bite —
+that one calls the broadcast with no ownership test of its own, deliberately, *because* the
+broadcast self-gates. Losing the branch that picks relay over broadcast costs the backstop instead:
+the raid keeps its config and the next person to ask gets nothing. Both are held now in
+`tests/test_lc_churn.lua`. B130 is why this got more important, not less: a relay now carries a
+statement about the lootmaster, and a state report is a relay.
 
-`:1120` is known and is NOT a gap: `LC.IsSenderLootOwner` on the very next line refuses everything
-the unit lookup would have. Recorded in the bug-run-20 commit; do not re-chase it.
+**Cluster 2, the retry budgets — measured, and the answer is that this tool cannot ask the
+question.** `LC.RetryPendingConfig`'s own cap is held: its `attempts >= PENDING_CONFIG_MAX_ATTEMPTS`
+comparison dies against the suite. The survivors around `START_ROLL_MAX_ATTEMPTS`, `ROLL_CATCHUP_MAX`,
+`ROLL_REQ_COOLDOWN`, `TABLE_RESEND_SECONDS`, `ROLL_ORPHAN_GRACE`, `SESSION_RESTORE_MAX`,
+`PACK_MAX_MESSAGE`, `PACK_MAX_BLOCK` and `WIRE_HEADROOM` are all the same shape: the operator set can
+only turn `<` into `<=`, which moves the edge by one attempt or one second and leaves the bound
+standing. "Runs forever or not at all" is not reachable that way, and nobody in a raid can tell twelve
+retries from thirteen. **Ungemessen**, not a gap — and re-deriving that is what this paragraph is for.
 
-## B116 — OPEN 2026-08-02 — LootCouncilTrade.lua has never been swept, and Core.lua cannot be
+**A fifth kind of survivor: a guard written twice.** The loot owner must not answer "your session is
+still running", and `LC.HandleStateRequest` says so before scheduling the delayed answer and again
+inside it. Break either comparison and the other one holds, so both are reported alive and neither is
+a hole. Same shape in `LC.SendTableHeartbeat`, whose ownership check is repeated by the ticker that is
+its only caller. This joins the four in B115/B116 (real gap; equivalent by construction; defensive
+code nothing reaches; a comparison whose equal case an enclosing guard excluded). The rule for the
+next run: before writing a survivor down, look for the same test one frame up.
+
+**Recorded, not chased.** The `LC_LOOTMASTER_CLASH` warning gate (a message, no state) and the choice
+between answering at once and answering jittered — the second is a message-volume decision and a
+wrong answer costs whispers, not correctness. And roughly eight survivors of the form `#list > 0`
+mutated to `>= 0`, every one of them on a display or `/kart status` path: the empty case is never
+exercised, which is true and cheap and not what an evening is for.
+
+**Skip.** The `LootCouncilVote.lua` block is the vote window drawing itself — 15 of its 16 survivors
+are thresholds and nil guards on widget plumbing. `LootCouncilVote.lua`'s unit lookup in the vote
+handler is known and is NOT a gap: `LC.IsSenderLootOwner` on the next line refuses everything the
+lookup would have let through. Recorded in the bug-run-20 commit; do not re-chase it.
+
+## B116 — CLOSED 2026-08-05 — LootCouncilTrade.lua swept at last, and Core.lua held where it can be
+
+The sweep the entry below asked for, run on 2026-08-05 against `f47b239`: **474 executed lines, 31
+mutable, 14 alive** — the same 31 candidates as on 2026-08-02, three fewer survivors, and this time
+every one of the fourteen is accounted for rather than counted.
+
+**Closed by tests written here:**
+
+* **The award clash message.** `kept = incomingWins and winnerKey or held` mutated to `or` makes
+  `kept` the boolean `true`, and the line then names `true` as the winner the raid kept. A second
+  mutation widened the guard above it, putting a red line about a conflict nobody can act on in front
+  of every raider instead of the two screens that decide and hand the item over. Both lived because
+  `tests/test_lc_award.lua` reached the first 24 characters of `LC_AWARD_CLASH` and stopped — the
+  text in front of the first placeholder. Held now by the fixed text that FOLLOWS the last
+  placeholder (taken from the locale string, so it holds in either language) and by attributing each
+  printed line to the client that printed it.
+* **One copy of a duplicate confirms one entry.** `remaining > 0` in both directions —
+  `Trade.OnTradeClosed` on the giving side and `Trade.ConfirmOwedFromPartner` on the receiving one —
+  mutated to `>= 0` and nothing noticed. The comment above that line already describes exactly what
+  it costs: two pending entries sharing an item string are indistinguishable, so a completed trade
+  carrying ONE copy must confirm one of them; confirming both hands the raider one item while both
+  screens call it dealt with, and the second is never traded and never missed. The bag scan cannot
+  cover it, because a copy is still sitting in the bags. This is B60's silent loss, reached a third
+  way. Held now in `tests/test_lc_tradefill.lua` and `tests/test_lc_reload.lua`.
+
+**Not gaps, and why — so this is not re-derived on the next run:** the `< / <=` on the assignment
+tie-break sits inside `if held and held ~= winnerKey`, so the equal case cannot arise (the fourth
+kind of survivor, named in the entry below). The nil guards on `KART_Settings`, `LC.owedReminderFrame`
+and `KART.LH` are defensive code the harness cannot reach. The trade-timeout boundaries
+(`TRADE_TIMEOUT_SECONDS`, `TRADE_TIMEOUT_WARN_AT`) and the stale-stamp cutoff move by one second on a
+float clock. The `#LC.pendingTrades > 0` pair is the reminder window's own display path. All
+**Ungemessen or Kein Loch**, none worth an evening.
+
+**Core.lua — the standing rule held, and it had drifted.** The file still reports zero executed lines
+and does not appear in the coverage report at all, so `tests/test_core_wiring.lua` remains the only
+thing that can hold it. The comms rework added five call sites there and the wiring test covered
+three. The `GUILD_ROSTER_UPDATE` branch was asserted as registered and routed but never as *doing*
+anything, and a plain source search could not tell an empty branch from a wired one because the same
+call also stands in the `KASC:OnPeer` handler — that assertion is scoped to the branch now.
+`PLAYER_ENTERING_WORLD`'s `RetryPendingResolutions` was not asserted at all; the existing line names
+the throttled variant, a different call at a different site, and the un-throttled one covers the
+client that loaded LAST, for which no other addon ever finishes loading. **The rule stands: anything
+new in `Core.lua` gets a line in that file in the same commit.**
+
+## B116 — the original entry, 2026-08-02 — LootCouncilTrade.lua has never been swept, and Core.lua cannot be
 
 The nineteenth bug run, over the files today's B60 and B66 work touched. Two things came out of it
 that are not about those fixes.
