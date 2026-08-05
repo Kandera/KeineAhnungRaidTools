@@ -3654,6 +3654,12 @@ local function Unpack(blob)
     return LibDeflate:DecompressDeflate(decoded)
 end
 
+-- Exposed for LootCouncilVote.lua's vote heartbeat, which sends a bundled message of the same shape
+-- (a plain head, one marker, the block last) and must not carry a second copy of these ceilings:
+-- PACK_MAX_MESSAGE and PACK_MAX_BLOCK are the numbers, and a copy of them would drift the day one of
+-- them moves. Same functions, a name another file can see.
+LC.PackPayload, LC.UnpackPayload = Pack, Unpack
+
 -- The wire form, kept in one place because two callers need it: the draw below, and the catch-up
 -- answer that re-sends a table somebody lost (LC.HandleRollRequest).
 --

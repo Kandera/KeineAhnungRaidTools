@@ -50,3 +50,56 @@ check("one marker only",        "12:3:#6:brauche ich", nil, nil, nil, nil)
 
 -- Malformed --------------------------------------------------------------------------------------
 check("garbage rejected",     "abc",                 nil, nil, nil, nil)
+
+-- LC_VOTES: several votes in one message ---------------------------------------------------------
+--
+-- The heartbeat carries every vote this client holds, and a note is free text that keeps its colons
+-- AND may contain the separator itself. The note is therefore length-prefixed: read exactly that
+-- many bytes, and what follows is either ";" or the end. Nothing is escaped, so nothing has to be
+-- un-escaped, and the sender's copy stays byte-identical to what the receivers store.
+local votesFn = text:match("\nlocal function ParseVotesPayload%(payload%).-\nend\n")
+T.truthy(votesFn, "ParseVotesPayload was found in LootCouncilVote.lua")
+
+local ParseVotesPayload = assert(loadstring(votesFn .. "\nreturn ParseVotesPayload"))()
+T.eq(type(ParseVotesPayload), "function", "ParseVotesPayload compiles standalone")
+
+do
+    local entries = ParseVotesPayload("12:3:#6:@249331:11:brauche ich")
+    T.truthy(entries, "a single entry parses")
+    T.eq(#entries, 1, "and is one entry")
+    T.eq(entries[1].rollID, 12, "rollID")
+    T.eq(entries[1].idx, 3, "index")
+    T.eq(entries[1].count, 6, "fingerprint")
+    T.eq(entries[1].item, "249331", "itemID")
+    T.eq(entries[1].note, "brauche ich", "note")
+end
+
+do
+    local entries = ParseVotesPayload("12:3:#6:@249331:0:;13:1:#6:@249293:0:;14:2:#6:@:0:")
+    T.truthy(entries, "three entries parse")
+    T.eq(#entries, 3, "all three")
+    T.eq(entries[2].rollID, 13, "the second one's rollID")
+    T.eq(entries[3].item, "", "an unknown item is an empty field, not a missing one")
+end
+
+-- The whole reason for the length prefix ----------------------------------------------------------
+do
+    local note = "trade um 5:30; sonst mainspec"
+    local entries = ParseVotesPayload("12:3:#6:@249331:" .. #note .. ":" .. note
+        .. ";13:1:#6:@249293:0:")
+    T.truthy(entries, "a note containing the separator still parses")
+    T.eq(entries[1].note, note, "and arrives byte for byte")
+    T.eq(#entries, 2, "without swallowing the entry behind it")
+    T.eq(entries[2].rollID, 13, "which is still readable")
+end
+
+-- Framing that does not add up says nothing at all, rather than half of something ------------------
+-- The length prefix IS the framing: an entry whose frame is wrong tells us nothing about where the
+-- next one starts, so reading on would be guessing. LC.HandleDrop treats an unreadable block the
+-- same way, for the same reason -- and the repeat comes round again in five seconds anyway.
+T.is_nil(ParseVotesPayload("12:3:#6:@249331:40:too short"), "a note shorter than it claims")
+T.is_nil(ParseVotesPayload("12:3:#6:@249331:2:ok;garbage"), "a second entry that is not one")
+T.is_nil(ParseVotesPayload("12:3:@249331:0:"), "a missing fingerprint marker")
+T.is_nil(ParseVotesPayload("12:3:#6:249331:0:"), "a missing item marker")
+T.is_nil(ParseVotesPayload(""), "an empty payload")
+T.is_nil(ParseVotesPayload("abc"), "garbage")

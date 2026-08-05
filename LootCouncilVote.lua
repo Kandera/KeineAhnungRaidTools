@@ -1088,6 +1088,106 @@ local function ParseVotePayload(payload)
     return tonumber(rollID), tonumber(idx), tonumber(count), note, itemID
 end
 
+-- =====================================================================
+--  The vote heartbeat  (B118)
+-- =====================================================================
+--
+-- Four raiders pressed a button on 2026-08-03 and the council saw "-" for all four. LC_VOTE goes out
+-- exactly once and nothing acknowledges it; the repair that existed (LC_VOTE_REQ, asked by the loot
+-- owner four seconds before the window closed) was itself a single message, across two hops, with
+-- exactly one asker -- lose any of the three and the repair goes with it.
+--
+-- So the votes repeat themselves instead of being asked for. This is the shape of the table
+-- heartbeat (LC_TABLE): a repeated statement survives every loss, a one-off question only the first.
+--
+-- Two rules this must not break, both learned the expensive way:
+--   * DELETION NEVER COMES FROM SILENCE. The receiver only ever adds. A roll missing from a message
+--     is not touched -- see the mirror image that was built and taken out again in B118, which lost a
+--     whole distribution the moment a stand-in's own table was briefly empty.
+--   * ONE SENDER PER STATEMENT. Twenty clients send, but each one only ever says what IT voted, read
+--     at send time from LC.votes[rollID][myKey]. Nobody relays anybody else's vote, so no client can
+--     spread a wrong tally.
+local VOTE_HB_PERIOD    = 5   -- seconds between repeats
+local VOTE_HB_SPREAD    = 4   -- the phase window; deliberately SHORTER than the period above
+local VOTES_MAX_ENTRIES = 12  -- mirrors TABLE_MAX_IDS in LootCouncil.lua, see the cap below
+
+-- Our own votes for every roll we still track, as one message.
+--
+-- The note is length-prefixed because it is free text that keeps its colons (Vote.CastVote only
+-- strips "|") and may well contain the entry separator itself -- "trade um 5:30; sonst mainspec" is
+-- an ordinary thing for a raider to type. A count of bytes needs no escaping and cannot be
+-- misread.
+--
+-- Sorted by rollID so the same state produces the same bytes, which is what makes a repeat
+-- comparable to its predecessor in the harness (pairs() order is not stable across runs).
+--
+-- nil when there is nothing to say. The caller reads that as "stop the ticker".
+local function SerializeMyVotes()
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
+    if not myKey then return nil end
+
+    local rollIDs = {}
+    for rollID in pairs(LC.rollItems) do
+        if LC.RollTracked(rollID) then rollIDs[#rollIDs + 1] = rollID end
+    end
+    table.sort(rollIDs)
+
+    local parts = {}
+    for _, rollID in ipairs(rollIDs) do
+        local mine = LC.votes[rollID] and LC.votes[rollID][myKey]
+        if type(mine) == "table" and mine.idx then
+            -- Bounded by the same number of entries the table heartbeat can name at once
+            -- (TABLE_MAX_IDS): more rolls than that describe a table the raid could never be brought
+            -- into agreement about anyway, and an unbounded list is an unbounded message. Counted
+            -- rather than silently truncated -- a client that is dropping its own votes on the floor
+            -- is exactly what /kart status exists to surface.
+            if #parts >= VOTES_MAX_ENTRIES then
+                LC.diag.votesCapped = LC.diag.votesCapped + 1
+                break
+            end
+            local note = tostring(mine.note or "")
+            parts[#parts + 1] = rollID .. ":" .. mine.idx .. ":#" .. tostring(mine.count or 0)
+                .. ":@" .. tostring(mine.item or "") .. ":" .. #note .. ":" .. note
+        end
+    end
+    if #parts == 0 then return nil end
+
+    local plain   = table.concat(parts, ";")
+    local message = "LC_VOTES:" .. plain
+    -- The packed block carries arbitrary bytes, so it can only ever be the whole payload behind a
+    -- marker that stays plain -- the same "P:" form LC_ROLLS uses. Pack measures the FINISHED
+    -- message, not the payload, which is the bug this shape exists to not repeat.
+    local blob = LC.PackPayload(message, plain)
+    if blob then return "LC_VOTES:P:" .. blob end
+    return message
+end
+
+-- The receiving half of the format above. Returns nil for a payload whose framing does not add up:
+-- the length prefix IS the framing, so an entry that does not fit says nothing about where the next
+-- one begins, and reading on would be guessing.
+local function ParseVotesPayload(payload)
+    local entries, pos = {}, 1
+    while pos <= #payload do
+        local rollID, idx, count, itemID, noteLen, afterHead =
+            payload:match("^(%d+):(%d+):#(%d+):@(%d*):(%d+):()", pos)
+        if not rollID then return nil end
+        noteLen = tonumber(noteLen)
+        local note = payload:sub(afterHead, afterHead + noteLen - 1)
+        if #note ~= noteLen then return nil end
+        entries[#entries + 1] = { rollID = tonumber(rollID), idx = tonumber(idx),
+                                  count = tonumber(count), item = itemID, note = note }
+        pos = afterHead + noteLen
+        local sep = payload:sub(pos, pos)
+        if sep == ";" then
+            pos = pos + 1
+        elseif sep ~= "" then
+            return nil
+        end
+    end
+    if #entries == 0 then return nil end
+    return entries
+end
+
 -- B78: one round of "say that again" before the council decides.
 --
 -- LC_VOTE is announced exactly once and nothing acknowledges it. That is fine until a client is deaf
