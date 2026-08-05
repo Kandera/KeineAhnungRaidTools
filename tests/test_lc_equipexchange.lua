@@ -4,11 +4,9 @@
 -- their own equipped link for that slot, and the panel shows the comparison. Two decisions in that
 -- responder survived being mutated away, and both are about not flooding or misleading the asker.
 --
--- The third of the addon's 255-byte sites, after the raid config (B107) and the history catch-up
--- (B112) -- and the one that resolves it differently ON PURPOSE. Here the reply is DROPPED when it
--- will not fit, because a missing comparison renders as "no data" while a truncated link renders as
--- a wrong one, cached under that raider's name. The history sync cannot do that: a missing award is
--- missing from the record for good.
+-- This used to be the third of the addon's 255-byte sites, after the raid config (B107) and the
+-- history catch-up (B112), and the one that resolved it by DROPPING the reply. The transport splits
+-- and reassembles now, so the responder carries no cap guard of its own any more (B127).
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
@@ -67,18 +65,14 @@ end
 
 -- A link too long for one message -------------------------------------------------------------------
 -- The reply carries an equipped link, and a heavily-crafted one runs well past the cap on its own --
--- 309 bytes for the piece below. It still goes out in 57, because the fallback replaces the link
--- with KAUtil.GetItemString, which keeps the item id and drops the bonus list the length came from.
+-- 309 bytes for the piece below. It used to go out in 57, shortened by KAUtil.GetItemString, and be
+-- dropped outright if even that would not fit: the transport truncated an over-cap message into
+-- garbage, and a wrong comparison is worse than none.
 --
--- Worth measuring rather than assuming: this responder is the third of the addon's 255-byte sites
--- (after the raid config, B107, and the history catch-up, B112) and the only one that resolves it by
--- DROPPING the message. That is right here and wrong there -- a missing comparison renders as "no
--- data" while a missing award is gone from the record -- and it only stays right as long as the
--- fallback keeps producing something short.
---
--- The drop itself has no test and cannot have one: with any real item link the fallback always fits,
--- so the branch is unreachable. Its mutant survives for that reason and not because anything is
--- missing here.
+-- The transport splits and reassembles now (see KASC:Send / AceComm), so the reply goes out WHOLE,
+-- in several chunks, and arrives as one message -- which is what the link itself is measured against
+-- here. The old shortening only ever worked because GetItemString was dropping the bonus list by
+-- accident (B127), and with that fixed there is nothing short left for it to fall back to anyway.
 do
     local sim, _, council = F.NewRaid()
     -- A real item with a long bonus list, which is what a max-crafted piece looks like.
@@ -95,15 +89,18 @@ do
 
     RaidSim.ClearLog(sim)
     Ask(council, "INVTYPE_LEGS")
-    local replies = RaidSim.Sent(sim, "EQUIP:")
-    T.truthy(#replies > 0, "and it is still answered rather than skipped")
-    for _, e in ipairs(replies) do
-        T.truthy(#e.msg <= 255,
-            "with a message that fits (" .. #e.msg .. " bytes), because the fallback drops the " ..
-            "bonus list the length came from")
-        T.truthy(e.msg:find("item:800001", 1, true),
-            "and still names the item, so the asker can look it up")
-    end
+    -- RaidSim.Messages, not RaidSim.Sent: this one leaves as several chunks, and only the first
+    -- carries the token (see there).
+    T.truthy(#RaidSim.Messages(sim, "EQUIP:") > 0, "and it is still answered rather than skipped")
+    -- What actually matters is what the ASKER ended up holding: the whole link, bonus list and all,
+    -- reassembled -- not a shortened stand-in it would have to rebuild an item from.
+    RaidSim.As(council, function()
+        local cached
+        for _, slots in pairs(council.KART.EquipCache or {}) do
+            cached = cached or slots["INVTYPE_LEGS"]
+        end
+        T.eq(cached, link, "and the asker holds the link whole, every bonus id intact")
+    end)
 end
 
 KARTTEST.inventory[10], KARTTEST.inventory[7] = nil, nil

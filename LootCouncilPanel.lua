@@ -148,18 +148,14 @@ KASC:RegisterMessage("REQ_EQUIP", { payload = true, group = true, enabled = lcEn
     if now - (lastEquipAnswer[payload] or -EQUIP_ANSWER_COOLDOWN) < EQUIP_ANSWER_COOLDOWN then return end
     local link = Council.GetOwnEquippedLink(payload)
     if link then
+        -- A max-crafted/heavily-bonused link runs well past 255 bytes on its own, and this used to
+        -- shorten it (and, failing that, drop the reply) so SendAddonMessage could not truncate the
+        -- trailing link into something the receiver would cache as garbage. The transport splits and
+        -- reassembles anything over the cap now (see KASC:Send / AceComm), so there is no truncation
+        -- left to guard against, and the shortening only worked because KAUtil.GetItemString happened
+        -- to be dropping the bonus list -- an accident, and the bug B127 is about. The link goes out
+        -- whole; a comparison is worth its extra chunk.
         local msg = "EQUIP:" .. payload .. ":" .. link
-        -- A max-crafted/heavily-bonused link can exceed the 255-byte addon-message cap and get
-        -- its trailing link truncated into garbage; fall back to the compact item string (the
-        -- EQUIP receiver rebuilds it into a full link), same guard as the history sync.
-        if #msg > 255 then
-            local itemStr = KAUtil.GetItemString(link)
-            if itemStr then msg = "EQUIP:" .. payload .. ":" .. itemStr end
-        end
-        -- Still over budget (or no item string to fall back to): drop the reply entirely rather
-        -- than let SendAddonMessage truncate the link into something the receiver would cache as
-        -- garbage. Missing data renders as "no comparison"; corrupt data renders as a wrong one.
-        if #msg > 255 then return end
         lastEquipAnswer[payload] = now
         KASC:Send(msg)
     end
@@ -177,9 +173,11 @@ KASC:RegisterMessage("EQUIP", { payload = true, group = true, enabled = lcEnable
     -- boundary, the same rule the GEAR handler follows.
     if link and not (KAUtil.IsRealItemLink(link) or link:match("^item:%d+")) then return end
     if equipLoc and link then
-        -- Sender may have sent a compact item string (oversized-link fallback above); rebuild a
-        -- full link when the item is cached so the tooltip and ilvl comparison work, mirroring
-        -- the history-sync rebuild.
+        -- Sender may have sent a compact item string instead of a link; rebuild a full link when the
+        -- item is cached so the tooltip and ilvl comparison work, mirroring the history-sync rebuild.
+        -- Kept although this addon's own responder no longer shortens anything (B127): the protocol
+        -- version did not change, so a client still running the older responder is in the same raid
+        -- and its shortened reply has to keep working.
         local itemStr = (not KAUtil.IsRealItemLink(link)) and link:match("^item:%d+") and link or nil
         if itemStr then
             link = select(2, C_Item.GetItemInfo(itemStr)) or link

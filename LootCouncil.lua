@@ -1790,7 +1790,7 @@ local ROLL_CATCHUP_MAX = 5
 -- longest prefix any caller puts in front of it, not against the string alone.
 local WIRE_HEADROOM = 60 -- "LC_ROLL_CATCHUP:" + rollID + seconds + separators, with room to spare
 function LC.ItemPayload(link, itemID)
-    local full = KAUtil.GetFullItemString(link)
+    local full = KAUtil.GetItemString(link)
     if full and #full + WIRE_HEADROOM <= 255 then return full end
     return itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
 end
@@ -4351,7 +4351,7 @@ function LC.OnStartLootRoll(rollID, attempt)
             -- The full string, not LC.ItemPayload's cap-driven fallback: this message is split and
             -- reassembled by the transport, so there is no 255-byte cliff to degrade against, and a
             -- bare itemID would lose the bonus ids B119 is about.
-            itemString = KAUtil.GetFullItemString(itemLink) or LC.ItemPayload(itemLink, newItemID),
+            itemString = KAUtil.GetItemString(itemLink) or LC.ItemPayload(itemLink, newItemID),
         }
         -- Replaced, not appended a second time. Blizzard re-raises START_LOOT_ROLL for a roll that is
         -- still running, and LC.DrawRollTable's own guard returns before redrawing -- but nothing here
@@ -4802,7 +4802,7 @@ function LC.StartManualRoll(itemsText)
             -- The full string, not the old 255-byte fallback: this message is split and reassembled
             -- by the transport, so there is no cliff left to degrade against, and a bare item string
             -- would lose the bonus ids (B119).
-            itemString = KAUtil.GetFullItemString(itemLink) or itemLink,
+            itemString = KAUtil.GetItemString(itemLink) or itemLink,
         }
 
         -- KASC drops our own message when it comes back (see Dispatch), so the lootmaster has to open

@@ -1210,9 +1210,13 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- "item:12345:..." string the oversized-link fallback sends — which is also exactly the case
     -- where the local rebuild above can fail (item not in the client's cache yet). Fall back to the
     -- bare form so both sides still reduce to the same locale-independent key.
+    -- The bare pattern takes the whole rest of the field ("^item:.+"), not a character class: a live
+    -- bonus list contains commas, and a class-matched fallback would truncate the bare form at the
+    -- first one while KAUtil.GetItemString keeps the link form whole — the two sides would stop
+    -- reducing to the same key, which is the whole point of this function (B127).
     local function ItemKey(link)
         if type(link) ~= "string" then return nil end
-        return KAUtil.GetItemString(link) or link:match("^item:[%-%d:]+")
+        return KAUtil.GetItemString(link) or link:match("^item:.+")
     end
     local incomingStr = ItemKey(itemLink)
     -- The sender drops the item field entirely when even the compact item string won't fit the

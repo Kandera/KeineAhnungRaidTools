@@ -1,6 +1,6 @@
 -- KAUtil-1.0: string, group, item-link and table helpers shared by every KA addon and by the
 -- other KA libraries. No dependencies, no user-visible strings, no state.
-local MAJOR, MINOR = "KAUtil-1.0", 5
+local MAJOR, MINOR = "KAUtil-1.0", 6
 local KAUtil = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUtil then return end
 
@@ -153,26 +153,25 @@ function KAUtil.IsRealItemLink(link)
     return type(link) == "string" and link:find("|Hitem:") ~= nil
 end
 
--- Full item string (itemID + every bonus ID), not just the bare itemID — two drops can share
--- an itemID while being different variants, and comparing only itemID would treat them as
--- interchangeable (see the auto-trade and history-export call sites).
-function KAUtil.GetItemString(link)
-    return KAUtil.IsRealItemLink(link) and link:match("(item:[%-%d:]+)") or nil
-end
-
 -- The item string EXACTLY as the client wrote it, from "item:" to the closing "|h" — every bonus id,
--- every modifier, whatever separators the client used. GetItemString above stops at the first
--- character outside [-0-9:], which on a live Midnight link is the comma inside the bonus list, so it
--- returns a PREFIX of the string rather than all of it (see B127). That prefix is fine for its own
--- job, comparing two drops for sameness, and useless for this one.
---
--- Used where the string has to be rebuildable into the same item somewhere else: an item that travels
--- to another client as an itemID alone comes back as the BASE version of itself -- item level, stats
--- and all -- which is what a whole raid read off their vote windows on 2026-08-03 (B119).
+-- every modifier, whatever separators the client used. Two drops can share an itemID while being
+-- different variants, so every caller here either compares two drops for sameness or has to rebuild
+-- the same item elsewhere, and both jobs need the whole string.
 --
 -- Matched by delimiter rather than by character class on purpose: no assumption about which
--- separators a client build uses inside the string, only that a link ends its payload at "|h".
-function KAUtil.GetFullItemString(link)
+-- separators a client build uses inside the string, only that a link ends its payload at "|h". The
+-- character class this used to match, [-0-9:], has no comma in it, and a live Midnight link carries
+-- commas inside its bonus list — so it stopped at the first comma and returned a PREFIX carrying one
+-- bonus id out of seven, while claiming in its own comment to return all of them (B127). Two variants
+-- agreeing on their first bonus id compared EQUAL, which is the wrong trade obligation ticked off.
+--
+-- One function, not two: B119 added a second, delimiter-matched GetFullItemString beside the
+-- truncating one rather than widening it, and the two names only ever documented a bug. The
+-- rebuild-it-elsewhere callers and the compare-two-drops callers want the same answer — an item that
+-- travels as an itemID alone comes back as the BASE version of itself, item level, stats and all,
+-- which is what a whole raid read off their vote windows on 2026-08-03 (B119), and a comparison that
+-- drops the bonus list cannot tell that base version from the drop either.
+function KAUtil.GetItemString(link)
     return KAUtil.IsRealItemLink(link) and link:match("|H(item:[^|]+)|h") or nil
 end
 

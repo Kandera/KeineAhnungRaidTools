@@ -23,6 +23,13 @@ T.eq(KAUtil.IsRealItemLink("|cff00ff00Fake Item|r"), false, "IsRealItemLink reje
 T.eq(KAUtil.IsRealItemLink(nil), false, "IsRealItemLink rejects nil")
 T.eq(KAUtil.GetItemString(LINK), "item:12345:7961::::::::80:::::", "GetItemString keeps every bonus id")
 T.is_nil(KAUtil.GetItemString("|cff00ff00Fake Item|r"), "GetItemString returns nil for a non-link")
+-- A live Midnight bonus list is comma-separated, and the pattern this used to match had no comma in
+-- it: it stopped there and returned one bonus id out of seven (B127).
+local COMMA_BONUS = "|cffa335ee|Hitem:249326::::::::80:268::14:8:11946,10390,12043,10255,1540," ..
+                    "10879,11996:::::|h[Gloombind]|h|r"
+T.eq(KAUtil.GetItemString(COMMA_BONUS),
+    "item:249326::::::::80:268::14:8:11946,10390,12043,10255,1540,10879,11996:::::",
+    "GetItemString keeps a comma-separated bonus list whole")
 
 -- EachItemLink -------------------------------------------------------------------------
 local function collectLinks(text)

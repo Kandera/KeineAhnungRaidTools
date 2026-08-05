@@ -276,3 +276,29 @@ do
     T.eq(lm.env.KART_LootHistory[#lm.env.KART_LootHistory].winner, "Sinja",
         "and the new one is the one that stayed")
 end
+
+-- Two variants of one item (B127) ------------------------------------------------------------------
+-- A boss dropping the same slot twice at two levels is an ordinary evening, and the two links differ
+-- only inside the bonus list. The item comparison ran on KAUtil.GetItemString, which stopped at the
+-- first comma of a live bonus list and kept exactly one bonus id -- so two variants agreeing on their
+-- FIRST bonus id read as the same item, and the second award was dropped as a duplicate of the first.
+--
+-- Deliberately without a roll id on the entry already held: that is what a manual entry or one
+-- restored from an older release looks like, and it leaves the item as the only discriminator, which
+-- is the comparison under test.
+do
+    local _, lm, _, raider = F.NewRaid()
+    local now = time()
+    local function Variant(lastBonus)
+        return "|cffa335ee|Hitem:" .. F.GLOVES .. "::::::::80:268::14:8:11946,10390,12043,10255," ..
+               "1540,10879," .. lastBonus .. ":::::|h[Ezzorak's Gloombind]|h|r"
+    end
+    Hold(lm, { { winner = "Alric", winnerKey = "Player-1-A", item = Variant("11996"),
+                 reason = "BIS", time = now, class = "MAGE" } })
+
+    Whisper(lm, raider, { time = now + 1, rollID = 71, winnerKey = "Player-1-A",
+                          winner = "Alric", item = Variant("11997") })
+
+    T.eq(#lm.env.KART_LootHistory, 2,
+        "a second variant of the same item is a second award, not a duplicate of the first")
+end

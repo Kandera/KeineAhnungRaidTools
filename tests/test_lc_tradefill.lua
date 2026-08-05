@@ -170,3 +170,79 @@ do
     T.eq(KARTTEST.tradePlayerItems[2], WEAPON,
         "and the second took the next one, even though the client had not shown the first yet")
 end
+
+-- Two variants of one item, telling them apart (B127) ------------------------------------------------
+-- A boss dropping the same slot twice at two levels is an ordinary evening, and the two links differ
+-- only inside the bonus list -- which is where the defect lived: KAUtil.GetItemString matched
+-- [-0-9:], a class with no comma in it, so it stopped at the first comma of a live Midnight bonus
+-- list and returned a PREFIX carrying exactly one bonus id. Two variants that agree on their FIRST
+-- bonus id compared EQUAL, and everything the trade path does is that comparison.
+--
+-- Built from the fixture's own link shape (see KARTTEST.AddItem) rather than an invented one: the
+-- comma is the whole point, and a skeleton link without one cannot show this at all.
+local BONUS_A = "11946,10390,12043,10255,1540,10879,11996"
+local BONUS_B = "11946,10390,12043,10255,1540,10879,11997" -- same FIRST bonus id, different last one
+local function Variant(bonus)
+    return "|cffa335ee|Hitem:" .. F.GLOVES .. "::::::::80:268::14:8:" .. bonus ..
+           ":::::|h[Ezzorak's Gloombind]|h|r"
+end
+local VARIANT_A, VARIANT_B = Variant(BONUS_A), Variant(BONUS_B)
+
+-- The auto-fill hands over the variant that was actually won.
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.tradePlayerItems = {}
+    KARTTEST.tradeTargetItems = {}
+    KARTTEST.cursorItem = nil
+    -- The other variant sits in an EARLIER bag slot, so a comparison that cannot tell them apart
+    -- finds it first and picks it up.
+    KARTTEST.bags = { [0] = { VARIANT_B, VARIANT_A } }
+    KARTTEST.tradePartnerUnit = alric.unit
+    RaidSim.As(lm, function()
+        lm.KART.LC.pendingTrades = { { itemLink = VARIANT_A, winnerKey = alric.guid, rollID = 72 } }
+        lm.KART.LC.Trade.OnTradeShow()
+    end)
+    T.eq(KARTTEST.tradePlayerItems[1], VARIANT_A,
+        "the variant that was won is placed in the trade window, not the other one")
+end
+
+-- ...and handing the other one over does NOT tick the obligation off.
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    -- The owed variant is still in our bags, so the "no longer in my bags, so it must have gone"
+    -- half of the check cannot answer this on its own -- the trade window has to.
+    KARTTEST.bags = { [0] = { VARIANT_A } }
+    KARTTEST.tradePlayerItems = { VARIANT_B } -- the wrong variant, put there by hand
+    KARTTEST.tradeTargetItems = {}
+    KARTTEST.tradePartnerUnit = alric.unit
+    -- An occupied cursor makes Trade.OnTradeShow's auto-fill bail (it will not swap our item into
+    -- whatever the player is mid-drag of). Kept occupied on purpose: letting the auto-fill also
+    -- place the owed variant would answer the question this asks.
+    KARTTEST.cursorItem = "|cffffffff|Hitem:6948::::::::80:::::|h[Hearthstone]|h|r"
+    RaidSim.As(lm, function()
+        lm.KART.LC.pendingTrades = { { itemLink = VARIANT_A, winnerKey = alric.guid, rollID = 73 } }
+        lm.KART.LC.Trade.OnTradeShow()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        lm.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+    KARTTEST.cursorItem = nil
+    KARTTEST.tradePlayerItems = {}
+    T.eq(#lm.KART.LC.pendingTrades, 1,
+        "trading the other variant away leaves the obligation for the won one standing")
+end
+
+-- The duplicate ordinal counts real duplicates, not variants ------------------------------------------
+-- " (1/2)" on both rows tells the lootmaster the two rolls are the SAME physical item. Two variants
+-- are two different items and must not be labelled as one.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.KART.LC.rollItems = { [74] = VARIANT_A, [75] = VARIANT_B }
+        T.eq(lm.KART.LC.Trade.GetDuplicateOrdinal(74), "",
+            "two variants of one item are not numbered as duplicates of each other")
+    end)
+    T.truthy(sim ~= nil)
+end
