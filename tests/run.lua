@@ -84,6 +84,7 @@ dofile("Libs/AceComm-3.0/AceComm-3.0.lua")
 ChatThrottleLib.HardThrottlingBeginTime = -math.huge
 ChatThrottleLib.avail = ChatThrottleLib.BURST
 
+dofile("Libs/LibDeflate/LibDeflate.lua")
 dofile("Libs/KAUtil-1.0/KAUtil-1.0.lua")
 dofile("Libs/KAGS-1.0/KAGS-1.0.lua")
 dofile("Libs/KASC-1.0/KASC-1.0.lua")

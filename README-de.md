@@ -108,6 +108,7 @@ Unverändert mitgeliefert, jede unter ihrer eigenen Lizenz:
 
 *   **[Ace3](https://www.wowace.com/projects/ace3)** (AceComm-3.0, CallbackHandler-1.0) — © Ace3 Development Team, BSD-artige Lizenz.
 *   **ChatThrottleLib** von Mikk — gemeinfrei (Public Domain).
+*   **[LibDeflate](https://github.com/SafeteeWoW/LibDeflate)** von Haoqian He — zlib-Lizenz.
 
 ## Lizenz
 Dieses Projekt lizenziert unter der MIT-Lizenz - siehe die LICENSE.md Datei für Details.
