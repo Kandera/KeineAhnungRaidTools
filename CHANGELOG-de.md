@@ -24,6 +24,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein fehlender Wurf wird von dem repariert, der ihn noch hat** — auch wenn der Lootmaster weg ist.
 - **Ein Boss überflutet den Raid nicht mehr mit einer Nachricht pro Item** — was zusammen fällt, wird zusammen angekündigt.
 - **Der Lootmaster funkt seltener, was auf dem Tisch liegt**, und eine Änderung erreicht den Raid schneller als vorher.
+- **Weniger Addon-Funk während der Lootverteilung**, damit Ankündigungen bei viel Betrieb schneller durchkommen.
 
 ### Hinzugefügt
 - **`/kart status` meldet jetzt verworfene Nachrichten und eigene, die nie rausgingen.**
