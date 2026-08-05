@@ -4,6 +4,10 @@
 
 _G.strmatch = string.match
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+-- The game has it under both names, and ChatThrottleLib captures `table.wipe` into an upvalue at load
+-- time. Missing it did not throw at load, it threw the first time the library actually recycled a
+-- pipe -- a path only a particular rhythm of sends reaches, so it stayed hidden until one changed.
+_G.table.wipe = _G.wipe
 
 -- Group roster ------------------------------------------------------------------------
 -- Members are { name =, realm =, guid =, nickname = }. Unit tokens are generated to match
