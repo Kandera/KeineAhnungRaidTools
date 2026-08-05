@@ -453,9 +453,9 @@ end
 -- file), three items among the fixture's five clients fit in one chunk with room to spare; six items
 -- among twenty-five do not, and that is the message a boss actually produces. Measured here: 436 bytes
 -- across two chunks, against 156 for the five-client batch this used to send.
-local function BigRaid()
+local function BigRaid(extra)
     local sim = F.NewRaid()
-    for i = 1, 20 do
+    for i = 1, extra or 20 do
         RaidSim.Join(sim, { name = "Extra" .. i, realm = "TarrenMill",
                             guid = string.format("Player-1096-0B%06X", i),
                             class = "MAGE", locale = "enUS" })
@@ -502,6 +502,11 @@ do
     RaidSim.Release(sim, "LC_DROP")
     KARTTEST.AdvanceTime(0)
 
+    -- Pins this block's own premise rather than inheriting it from BigRaid()/BIG_BATCH: what is under
+    -- test is that Release lets EVERY chunk of a split message go, and a batch that quietly stopped
+    -- splitting would leave that passing while testing nothing.
+    T.truthy(#RaidSim.Sent(sim, "\001LC_DROP") > 0, "the message it let go was a split one")
+
     for i = 1, #BIG_BATCH do
         local id = 999 + i
         T.truthy(council.KART.LC.rolls[id] ~= nil,
@@ -525,7 +530,7 @@ do
     local msg = Announced(sim)[1]
     T.truthy(msg ~= nil, "the batch went out")
     T.truthy(msg.msg:sub(1, 8) == "LC_DROP:", "and still opens in plain text, so the guards can read it")
-    T.truthy(#msg.msg < 500, "packed, not carried whole (" .. #msg.msg .. " bytes)")
+    T.truthy(#msg.msg <= 255, "packed, not carried whole (" .. #msg.msg .. " bytes)")
 
     local council = sim.byName.Merrit
     for _, id in ipairs({ 960, 961, 962 }) do
@@ -537,17 +542,46 @@ end
 
 -- A small message stays readable ------------------------------------------------------------------
 -- Packing something that fits in one chunk anyway costs time and buys nothing, and makes the wire
--- log unreadable for whoever is debugging the next raid night.
+-- log unreadable for whoever is debugging the next raid night. Asserted on a short LC_DROP, which is
+-- a message that actually reaches the packing decision -- LC_TABLE never calls it at all, so pointing
+-- this at the heartbeat proved nothing about the threshold.
 do
     local sim = F.NewRaid()
     RaidSim.ClearLog(sim)
-    RaidSim.As(sim.byName.Bramor, function()
-        sim.byName.Bramor.KART.LC.SendLC("LC_TABLE:1:900=249331")
-    end)
-    KARTTEST.AdvanceTime(0.1)
-    local sent = RaidSim.Sent(sim, "LC_TABLE:")
-    T.eq(#sent, 1, "the heartbeat is never packed")
-    T.truthy(sent[1].msg:find("900=249331", 1, true) ~= nil, "and stays readable on the wire")
+    F.Drop(sim, 965, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local sent = RaidSim.Sent(sim, "LC_DROP:")
+    T.eq(#sent, 1, "one item among five raiders is one message")
+    T.truthy(sent[1].msg:match("^LC_DROP:%d+:r:") ~= nil,
+        "the kind letter stays lower case, which is what says the rest is plain")
+    T.truthy(sent[1].msg:find("item:" .. F.GLOVES, 1, true) ~= nil, "and it stays readable on the wire")
+end
+
+-- The decision is made against the MESSAGE, not the payload ---------------------------------------
+-- The head is part of what the transport weighs: AceComm sends one part iff the whole string is 255
+-- bytes or less, and "LC_ROLLS:" is nine of them. Judging the payload alone left a band where a
+-- message went out split AND unpacked -- exactly the outcome packing exists to prevent -- and a
+-- ten-man group's catch-up roll table sat in it. Sized here so the plain message lands just over the
+-- limit while its payload is still under: the band, and nothing else.
+do
+    local sim = BigRaid(5)
+    local lm = sim.byName.Bramor
+    F.Drop(sim, 966, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    -- The plain form this table WOULD have had, built to the serializer's own format because that is
+    -- the length being asserted about. A group whose plain message no longer lands in the band fails
+    -- here with the number, rather than passing while testing something else.
+    local parts = {}
+    for key, value in pairs(lm.KART.LC.rolls[966]) do parts[#parts + 1] = key .. "=" .. value end
+    table.sort(parts)
+    local plain = "LC_ROLLS:966:@" .. F.GLOVES .. ":" .. table.concat(parts, ",")
+    T.truthy(#plain > 255 and #plain <= 264,
+        "this group's plain roll table is inside the band (" .. #plain .. " bytes)")
+
+    local wire = RaidSim.As(lm, function() return lm.KART.LC.SerializeRollTable(966) end)
+    T.truthy(#wire <= 255, "so it is packed and goes out as one chunk (" .. #wire .. " bytes)")
 end
 
 -- A block that cannot be unpacked is refused, not half-stored ------------------------------------

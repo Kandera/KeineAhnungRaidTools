@@ -3475,10 +3475,19 @@ local ROLL_MAX = 100
 
 local LibDeflate = LibStub("LibDeflate")
 
--- Packed only when it would otherwise be split. Below the transport's 254-byte chunk it is one
--- message either way, so packing buys nothing and costs a wire log nobody can read while debugging a
--- raid night. Measured at 25 raiders: six items are 1624 bytes and seven chunks, 531 and three when
--- packed; a roll table for 25 is 636 and three, 148 and one.
+-- Packed only when the MESSAGE would otherwise be split, which is why this is handed the assembled
+-- message and not the payload. AceComm sends one part iff the whole string is 255 bytes or less
+-- (AceComm-3.0's SendCommMessage), and the head is part of that string: "LC_DROP:20:r:" is 13 bytes,
+-- "LC_ROLLS:" is 9. Deciding on the payload alone left a band -- a payload of 243-254 bytes on
+-- LC_DROP, 247-254 on LC_ROLLS -- where the message went out split AND unpacked, which is the one
+-- outcome this exists to prevent: a ten-man group's catch-up roll table cost two chunks where one
+-- would do. The head length could be passed as a number instead, and that is exactly the arithmetic
+-- that was got wrong once: it is a second place to update whenever a head changes. The assembled
+-- string cannot drift from itself.
+--
+-- Below that, packing buys nothing and costs a wire log nobody can read while debugging a raid night.
+-- Measured at 25 raiders: six items are 1478 bytes and six chunks, 437 and two when packed; a roll
+-- table for 25 is 620 and three, 168 and one.
 --
 -- Level 1 deliberately: measured against level 9 it produces the same CHUNK count on every message
 -- this addon sends, 30-50% faster (0.07-0.22ms against 0.1-0.4ms). Chunks are what the transport
@@ -3486,11 +3495,11 @@ local LibDeflate = LibStub("LibDeflate")
 --
 -- EncodeForWoWAddonChannel is not optional: an addon message cannot carry a null byte, and a deflate
 -- block routinely contains them. It costs 0-3 bytes -- it escapes, it does not re-encode.
-local PACK_THRESHOLD = 254
+local PACK_MAX_MESSAGE = 255
 local PACK_LEVEL = { level = 1 }
 
-local function Pack(plain)
-    if #plain <= PACK_THRESHOLD then return nil end
+local function Pack(message, plain)
+    if #message <= PACK_MAX_MESSAGE then return nil end
     local packed = LibDeflate:CompressDeflate(plain, PACK_LEVEL)
     if not packed then return nil end
     return LibDeflate:EncodeForWoWAddonChannel(packed)
@@ -3522,11 +3531,12 @@ function LC.SerializeRollTable(rollID)
     -- comparable to the original in the harness -- pairs() order is not stable across runs.
     table.sort(parts)
     local plain = rollID .. ":@" .. (LC.rollsFor[rollID] or "") .. ":" .. table.concat(parts, ",")
-    local blob = Pack(plain)
+    local message = "LC_ROLLS:" .. plain
+    local blob = Pack(message, plain)
     if blob then
         return "LC_ROLLS:P:" .. blob
     end
-    return "LC_ROLLS:" .. plain
+    return message
 end
 
 -- ==========================================================================
@@ -3614,7 +3624,8 @@ function LC.SerializeDrop(kind, secs, keys, entries)
             .. DROP_FIELD_SEP .. e.itemString
     end
     local plain = table.concat(keys, ",") .. DROP_ENTRY_SEP .. table.concat(parts, DROP_ENTRY_SEP)
-    local blob = Pack(plain)
+    local message = "LC_DROP:" .. secs .. ":" .. kind .. ":" .. plain
+    local blob = Pack(message, plain)
     -- The packed block carries arbitrary bytes -- colons, semicolons, control characters -- so it can
     -- only ever be the LAST field, behind a head that stays plain. The kind letter says which it is:
     -- lower case plain, upper case packed. A client that does not know the upper-case form drops the
@@ -3622,7 +3633,7 @@ function LC.SerializeDrop(kind, secs, keys, entries)
     if blob then
         return "LC_DROP:" .. secs .. ":" .. kind:upper() .. ":" .. blob
     end
-    return "LC_DROP:" .. secs .. ":" .. kind .. ":" .. plain
+    return message
 end
 
 -- The whole raid's rolls, drawn once by the client that announces the item.
