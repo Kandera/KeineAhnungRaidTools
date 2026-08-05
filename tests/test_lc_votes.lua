@@ -161,6 +161,84 @@ do
     T.is_nil((council.KART.LC.votes[90] or {})[raider.guid], "and nothing is written from it")
 end
 
+-- One heartbeat is one redraw ----------------------------------------------------------------------
+-- LC.RefreshCouncilIfShown rebuilds every tab whatever rollID it is handed, so calling it per entry
+-- multiplied the cost by however many items the sender was carrying: twenty senders times twelve
+-- entries every five seconds, each one walking all tabs with item-colour and icon lookups.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 93, F.GLOVES)
+    Drop(sim, 94, F.WEAPON)
+    Drop(sim, 95, F.PLATE_CHEST)
+    KARTTEST.AdvanceTime(1)
+
+    local calls, orig = 0, council.KART.LC.RefreshCouncilIfShown
+    council.KART.LC.RefreshCouncilIfShown = function(...) calls = calls + 1 return orig(...) end
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes(
+            "93:1:#6:@249331:0:;94:2:#6:@249293:0:;95:1:#6:@249405:0:", raider.guid)
+    end)
+    council.KART.LC.RefreshCouncilIfShown = orig
+
+    T.eq(calls, 1, "three votes in one message are one redraw, not three")
+    T.truthy((council.KART.LC.votes[95] or {})[raider.guid], "and every vote in it is still stored")
+end
+
+-- A message that says nothing is not a redraw ------------------------------------------------------
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 96, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local calls, orig = 0, council.KART.LC.RefreshCouncilIfShown
+    council.KART.LC.RefreshCouncilIfShown = function(...) calls = calls + 1 return orig(...) end
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes("777:1:#6:@249331:0:", raider.guid)
+    end)
+    council.KART.LC.RefreshCouncilIfShown = orig
+
+    T.eq(calls, 0, "a heartbeat that wrote nothing redraws nothing")
+end
+
+-- The receiver has a cap of its own ----------------------------------------------------------------
+-- The sender caps at twelve entries, but AceComm reassembles a message of any length and an older or
+-- modified sender is not bound by our cap. Same shape as LC.HandleDrop: stop at the bound, count it.
+do
+    local sim, _, council, raider = NewRaid()
+    for rollID = 100, 113 do Drop(sim, rollID, F.GLOVES) end
+    KARTTEST.AdvanceTime(1)
+
+    local parts = {}
+    for rollID = 100, 113 do parts[#parts + 1] = rollID .. ":1:#6:@249331:0:" end
+    local before = council.KART.LC.diag.voteBatchCapped
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes(table.concat(parts, ";"), raider.guid)
+    end)
+
+    T.truthy((council.KART.LC.votes[111] or {})[raider.guid], "the twelfth entry is read")
+    T.is_nil((council.KART.LC.votes[112] or {})[raider.guid], "the thirteenth is not")
+    T.eq(council.KART.LC.diag.voteBatchCapped, before + 1,
+        "and the cap is counted once for the message, not silently swallowed")
+end
+
+-- A heartbeat about rolls we no longer track is one refusal ----------------------------------------
+-- Clients prune at slightly different instants, so a heartbeat landing in that gap is ordinary. Its
+-- entries are one client's one statement; counting them one by one made a single message read as a
+-- flood on the very instrument this was diagnosed with.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 114, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local before = council.KART.LC.diag.unknownRoll
+    RaidSim.As(council, function()
+        council.KART.LC.Vote.HandleVotes(
+            "801:1:#6:@249331:0:;802:2:#6:@249293:0:;803:1:#6:@249405:0:", raider.guid)
+    end)
+    T.eq(council.KART.LC.diag.unknownRoll, before + 1,
+        "three pruned rolls in one message are one refusal")
+end
+
 -- A reloaded voter keeps repeating -----------------------------------------------------------------
 -- The one case the retired vote-request covered for free: it answered out of restored state and
 -- needed no local timer. A reload leaves the votes and the rolls on disk but every ticker in memory,

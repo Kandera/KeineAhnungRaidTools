@@ -1263,11 +1263,23 @@ function Vote.HandleVotes(payload, senderKey)
     end
     local entries = ParseVotesPayload(payload)
     if not entries then return end
+    local seen, unknown, refreshFor = 0, false, nil
     for _, entry in ipairs(entries) do
+        -- Bounded on arrival as well as on the way out. A current sender never writes past
+        -- VOTES_MAX_ENTRIES, but AceComm reassembles a message of any length and an older or modified
+        -- client is not bound by our cap -- so the receiver states the same bound itself, the way
+        -- LC.HandleDrop does for a batch announcement. Its own counter, because a capped heartbeat
+        -- and a capped announcement are different failures with different consequences.
+        seen = seen + 1
+        if seen > VOTES_MAX_ENTRIES then
+            LC.diag.voteBatchCapped = LC.diag.voteBatchCapped + 1
+            break
+        end
         -- Same rule as Vote.HandleVote: a vote for a roll we no longer track would re-create
-        -- LC.votes[rollID] as an orphan no cleanup path ever frees.
+        -- LC.votes[rollID] as an orphan no cleanup path ever frees. Noted rather than counted here:
+        -- see the count after the loop.
         if not LC.rollItems[entry.rollID] then
-            LC.diag.unknownRoll = LC.diag.unknownRoll + 1
+            unknown = true
         else
             -- Free text from another client, rendered raw into the council row's note tooltip.
             -- Doubled here exactly as HandleVote does it -- a hostile client will not have stripped
@@ -1276,9 +1288,20 @@ function Vote.HandleVotes(payload, senderKey)
             LC.votes[entry.rollID] = LC.votes[entry.rollID] or {}
             LC.votes[entry.rollID][senderKey] =
                 { idx = entry.idx, note = note, count = entry.count, item = entry.item }
-            LC.RefreshCouncilIfShown(entry.rollID)
+            -- Which roll the one redraw below is made for. LC.RefreshCouncilIfShown rebuilds every
+            -- tab whatever it is handed and the rows only for the active roll, so the active roll
+            -- wins if this message touched it and any written roll will do otherwise.
+            if refreshFor == nil or entry.rollID == LC.activeRollID then refreshFor = entry.rollID end
         end
     end
+    -- One statement by one client is one refusal. Clients prune at slightly different instants, so a
+    -- heartbeat naming rolls we have already dropped is ordinary traffic -- counting its entries one
+    -- by one made a single message read as a flood on /kart status, which is the instrument this
+    -- whole path was diagnosed with. Same reasoning as the sender check above.
+    if unknown then LC.diag.unknownRoll = LC.diag.unknownRoll + 1 end
+    -- And one redraw for the message, not one per entry: at raid size that was twenty senders times
+    -- however many items the boss dropped, every five seconds, each call walking all council tabs.
+    if refreshFor then LC.RefreshCouncilIfShown(refreshFor) end
 end
 
 function Vote.HandleVote(payload, senderKey)

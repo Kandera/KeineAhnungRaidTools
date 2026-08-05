@@ -57,6 +57,11 @@ LC.diag = LC.diag or {
     -- client SENT, not what it received -- and it is the one case where a raider's own answer can go
     -- missing without anything else noticing.
     votesCapped = 0,
+    -- A vote heartbeat that ARRIVED naming more votes than one message may carry (VOTES_MAX_ENTRIES),
+    -- past the sender's own cap -- an older or modified sender, since a current one never writes past
+    -- it. The received twin of votesCapped above, and kept apart from it because the two are opposite
+    -- failures: that one is this raider's answer going missing, this one is somebody else's.
+    voteBatchCapped = 0,
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -1464,6 +1469,12 @@ function LC.PrintStatus()
     -- on this path that nobody else's screen can show.
     if LC.diag.votesCapped > 0 then
         print("  " .. string.format(L.LC_STATUS_VOTESCAPPED, LC.diag.votesCapped))
+    end
+    -- The received twin, on its own line for the same reason dropCapped has one: a non-zero here
+    -- means somebody's repeat arrived longer than one message may carry, so part of what they voted
+    -- never reached this screen and no repeat of theirs will ever bring it.
+    if LC.diag.voteBatchCapped > 0 then
+        print("  " .. string.format(L.LC_STATUS_VOTEBATCHCAPPED, LC.diag.voteBatchCapped))
     end
 end
 

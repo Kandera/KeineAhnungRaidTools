@@ -292,6 +292,7 @@ KART.L_enUS = {
     LC_STATUS_DROPCAPPED   = "Batches capped on arrival: %d -- a drop named more items than one message can carry, so some of it was left out.",
     LC_STATUS_PACKUNREADABLE = "Compressed messages this client could not read: %d -- a boss's items or a roll table arrived packed and unreadable, so none of it reached this screen. Usually another addon's LibDeflate.",
     LC_STATUS_VOTESCAPPED  = "Own votes left out of a repeat: %d -- this client held more votes than one message may carry, so some of them were not repeated.",
+    LC_STATUS_VOTEBATCHCAPPED = "Vote repeats capped on arrival: %d -- a client repeated more votes than one message can carry, so some of them were left out.",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",
