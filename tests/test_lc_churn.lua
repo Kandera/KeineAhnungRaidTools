@@ -980,6 +980,56 @@ do
 end
 
 -- ===================================================================================
+-- Who may answer a state request, and with what
+-- ===================================================================================
+-- A state request is answered by most of the raid at once, and the answers are not interchangeable.
+-- Exactly one client may put the raid's config on the wire as the raid's config: the person the
+-- lootmaster field names. Everybody else answers with a relay, which a receiver accepts only into an
+-- EMPTY config and which therefore cannot overwrite or clear anything (B65, and B130 for what a
+-- relay is allowed to say about the lootmaster). The two are separate messages precisely so the
+-- receiver can tell them apart -- and nothing here held the senders to that.
+--
+-- Three mutations lived in this handler: dropping the ownership test on the broadcast, and letting
+-- the loot owner answer "your session is still running" to somebody who had not asked them. Neither
+-- is a crash; both put a second voice on a question that has exactly one answer.
+do
+    local sim, lm = NewRaid()
+    RaidSim.ClearLog(sim)
+
+    local torvi = RaidSim.Join(sim, NEWCOMER)
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(30)   -- past every jittered late answer (3 seconds plus up to 4)
+    T.eq(torvi.KART.LC.sessionActive, true, "the newcomer is in the session, so answers did arrive")
+
+    local strangers = {}
+    for _, e in ipairs(RaidSim.Messages(sim, "LC_CONFIG:")) do
+        if e.from ~= lm.name then strangers[#strangers + 1] = e.from end
+    end
+    T.eq(#strangers, 0,
+        "the raid's config is stated by its owner alone, not by: " .. table.concat(strangers, " "))
+
+    -- The other half, and the reason the first one is safe to be strict about: everybody else does
+    -- answer, with the message that cannot do damage. Without this the assertion above would also
+    -- pass on a raid where nobody answered at all.
+    local relays, fromOwner = RaidSim.Messages(sim, "LC_CONFIG_RELAY:"), 0
+    for _, e in ipairs(relays) do
+        if e.from == lm.name then fromOwner = fromOwner + 1 end
+    end
+    T.truthy(#relays > 0, "the rest of the raid answers as well, with a relay")
+    T.eq(fromOwner, 0, "and the owner does not relay a config it is entitled to state outright")
+
+    -- "Your session is still running" is a claim about the ASKER, sent by somebody who is not them.
+    -- The loot owner saying it to a peer is the sentence turned around: their own session flag is the
+    -- authoritative one, and LC_ACTIVE is how they say so.
+    local ownerResumes = {}
+    for _, e in ipairs(RaidSim.Messages(sim, "LC_SESSION_RESUME")) do
+        if e.from == lm.name then ownerResumes[#ownerResumes + 1] = tostring(e.target) end
+    end
+    T.eq(#ownerResumes, 0,
+        "the loot owner does not tell a peer their session is running: " .. table.concat(ownerResumes, " "))
+end
+
+-- ===================================================================================
 -- Every state request is lost, and then things go back to normal
 -- ===================================================================================
 -- The state request is a bounded backoff on purpose: a raid where nobody can answer must not have
