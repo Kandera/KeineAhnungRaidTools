@@ -800,7 +800,12 @@ written now.
 | file | executed | mutable | alive |
 |---|---|---|---|
 | `LootCouncil.lua` | 1501 | 130 | 59 |
-| `LootCouncilVote.lua` | 585 | 37 | 16 |
+| `LootCouncilVote.lua` | 665 | 40 | 18 |
+
+`LootCouncilVote.lua` was re-measured after B118 landed, because B118 rewrote it — 260 lines of vote
+heartbeat, a wire format carrying several votes at once, and `LC_VOTE_REQ` gone. Re-measuring rather
+than carrying the older figures forward is the whole point of this entry; the alternative is another
+list of numbers that describe a file nobody has any more.
 
 Two further "survivors" in the first run were prose: the rules matched an arrow inside a trailing
 comment (`-- resolved KASC.Identity key -> true`), mutated the comment, and reported a green suite.
@@ -842,10 +847,18 @@ wrong answer costs whispers, not correctness. And roughly eight survivors of the
 mutated to `>= 0`, every one of them on a display or `/kart status` path: the empty case is never
 exercised, which is true and cheap and not what an evening is for.
 
-**Skip.** The `LootCouncilVote.lua` block is the vote window drawing itself — 15 of its 16 survivors
-are thresholds and nil guards on widget plumbing. `LootCouncilVote.lua`'s unit lookup in the vote
-handler is known and is NOT a gap: `LC.IsSenderLootOwner` on the next line refuses everything the
-lookup would have let through. Recorded in the bug-run-20 commit; do not re-chase it.
+**Skip.** Most of `LootCouncilVote.lua` is the vote window drawing itself — thresholds and nil guards
+on widget plumbing. Its unit lookup in the vote handler is known and is NOT a gap: `LC.IsSenderLootOwner`
+on the next line refuses everything the lookup would have let through. Recorded in the bug-run-20
+commit; do not re-chase it.
+
+**B118's new code, measured on arrival, and clean.** Three survivors are in the vote heartbeat and its
+wire format, and all three are non-gaps. `#parts >= VOTES_MAX_ENTRIES` lets one extra vote into a
+message when its edge moves — it never drops one, and the packing measures the finished message
+anyway. `noteLen > #payload` in the parser cannot reach its equal case: the entry's own header stands
+in front of the note, so the length is always strictly smaller. `pos <= #payload` differs only on a
+single stray byte in a payload that is already damaged. Worth stating because a fresh format is
+exactly where a real framing gap would be, and this one does not have one.
 
 ## B116 — CLOSED 2026-08-05 — LootCouncilTrade.lua swept at last, and Core.lua held where it can be
 
