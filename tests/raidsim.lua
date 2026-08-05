@@ -617,7 +617,12 @@ function RaidSim.Drain(sim, maxSeconds)
         KARTTEST.AdvanceTime(step)
         waited = waited + step
     end
-    return waited
+    -- The cap itself is the failure, not a value to hand back quietly: something is still queued after
+    -- maxSeconds of simulated time, which no legitimate settling reaches. Erroring here is what makes
+    -- that loud -- both call sites discard Drain's return, so returning `waited` at the cap would have
+    -- let a despool storm pass as an ordinary wait and jump the walk's clock by it in silence.
+    error(string.format("RaidSim.Drain: still pending after %gs -- a handler is answering itself",
+        maxSeconds), 0)
 end
 
 -- Messages starting with `token` are sent but never delivered, until Deliver puts them back.

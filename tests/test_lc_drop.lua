@@ -314,6 +314,55 @@ do
     T.truthy(tracked >= 2, "and both of them arrive")
 end
 
+-- /kart add with more links than one message can carry refuses the surplus, loudly ------------------
+-- The receiver caps a batch at TABLE_MAX_IDS (12, see the test above). Left unchecked on the sender,
+-- a 13th link would still open its own roll and windows locally on the lootmaster while every peer
+-- silently dropped it at the cap -- the lootmaster would believe an item was announced that never
+-- reached anybody. StartManualRoll must refuse the surplus before any of that happens, and say so.
+do
+    local function Capture(fn)
+        local lines = {}
+        local realPrint = _G.print
+        _G.print = function(...)
+            local parts = {}
+            for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+            lines[#lines + 1] = table.concat(parts, " ")
+        end
+        local ok, err = pcall(fn)
+        _G.print = realPrint
+        if not ok then error(err, 0) end
+        return table.concat(lines, "\n")
+    end
+
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+
+    local link = KARTTEST.items[F.GLOVES].link
+    local links = {}
+    for i = 1, 13 do links[i] = link end
+
+    local output = Capture(function()
+        RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(table.concat(links, " ")) end)
+    end)
+    KARTTEST.AdvanceTime(1)
+
+    local trackedLocally = 0
+    for _, itemLink in pairs(lm.KART.LC.rollItems) do
+        if itemLink then trackedLocally = trackedLocally + 1 end
+    end
+    T.eq(trackedLocally, 12, "the lootmaster itself opens twelve, never the thirteenth")
+
+    local council = sim.byName.Merrit
+    local trackedRemote = 0
+    for _, itemLink in pairs(council.KART.LC.rollItems) do
+        if itemLink then trackedRemote = trackedRemote + 1 end
+    end
+    T.eq(trackedRemote, 12, "and the raid receives the same twelve")
+
+    T.truthy(output:find(string.format(lm.KART.L.LC_MANUAL_ADD_CAPPED, 12, 1), 1, true),
+        "the surplus is refused with a printed message, not silently")
+end
+
 -- What one message may do to a client that receives it ----------------------------------------------
 -- LC_START was one item per message, so one message was one popup. A batch is a list, and both of the
 -- things a list can do that a single item could not are answered here. Driven through LC.HandleDrop
@@ -349,6 +398,7 @@ do
     local tracked = 0
     for i = 1, 20 do if council.KART.LC.rollItems[800 + i] then tracked = tracked + 1 end end
     T.eq(tracked, 12, "a batch of twenty items opens twelve, not twenty")
+    T.eq(council.KART.LC.diag.dropCapped, 1, "hitting the cap bumps a diagnostic instead of staying silent")
 end
 
 -- An entry that names no item leaves nothing behind ------------------------------------------------

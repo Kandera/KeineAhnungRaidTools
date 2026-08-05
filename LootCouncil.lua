@@ -42,6 +42,10 @@ LC.diag = LC.diag or {
     -- proves two clients scored one item off different numbers (see LC.HandleRolls). An agreeing
     -- duplicate is ordinary traffic since B131 and is not counted anywhere.
     rollsConflict = 0,
+    -- A batch LC_DROP that named more entries than TABLE_MAX_IDS could carry, past the sender's own
+    -- StartManualRoll cap -- an older or modified sender, since a current one never writes past the
+    -- cap. See the break in LC.HandleDrop.
+    dropCapped    = 0,
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -1337,6 +1341,12 @@ function LC.PrintStatus()
     -- is worth reading even on an evening where nothing else was refused.
     if LC.diag.rollsConflict > 0 then
         print("  " .. string.format(L.LC_STATUS_ROLLCONFLICT, LC.diag.rollsConflict))
+    end
+    -- Own line, same reason as rollsConflict above: a non-zero count here means a batch this client
+    -- received named more entries than one message can carry, so some of the raid's loot never
+    -- reached this screen -- worth reading regardless of what else is zero.
+    if LC.diag.dropCapped > 0 then
+        print("  " .. string.format(L.LC_STATUS_DROPCAPPED, LC.diag.dropCapped))
     end
 end
 
@@ -4589,8 +4599,20 @@ function LC.StartManualRoll(itemsText)
     -- regardless of how many are pasted in one command or how much whitespace separates them — a
     -- plain word-split would break apart item names that contain spaces (e.g.
     -- "[Sulfuras, Hand von Ragnaros]").
+    local capped = 0
     for itemLink in KAUtil.EachItemLink(itemsText) do
         startedAny = true
+
+        -- One LC_DROP message can only carry TABLE_MAX_IDS entries -- LC.HandleDrop stops reading
+        -- past that cap on every peer (see the comment there). Refusing the surplus HERE, before any
+        -- roll is created or window opened, is what keeps this client's own state from drifting ahead
+        -- of what the raid will actually receive; opening windows for items that never leave this
+        -- computer would be worse than not adding them. Splitting into a second LC_DROP was the other
+        -- option, but it would need a second roster snapshot and a second DrawnKeys head, and /kart
+        -- add is a typed command, not a boss -- nobody pastes 13 links by accident.
+        if #entries >= TABLE_MAX_IDS then
+            capped = capped + 1
+        else
         -- Before anything else: the item is being handed back for a new decision, so whatever was
         -- decided about it last time has to stop being true first.
         RevokePriorAward(itemLink)
@@ -4638,6 +4660,7 @@ function LC.StartManualRoll(itemsText)
         end
         -- Council also gets the vote window (review #29) — see the same pattern in LC.HandleStart.
         LC.Vote.ShowVotePopup(rollID, itemLink, seconds)
+        end
     end
 
     if #entries > 0 then
@@ -4647,6 +4670,8 @@ function LC.StartManualRoll(itemsText)
 
     if not startedAny then
         print("|cffff0000KART:|r " .. KART.L.LC_MANUAL_ADD_USAGE)
+    elseif capped > 0 then
+        print("|cffff0000KART:|r " .. string.format(KART.L.LC_MANUAL_ADD_CAPPED, TABLE_MAX_IDS, capped))
     end
 end
 
@@ -4733,7 +4758,10 @@ function LC.HandleDrop(payload, senderKey)
         -- legitimate comes near it -- and tying the two means a future change to the heartbeat's
         -- budget cannot leave this one behind.
         seen = seen + 1
-        if seen > TABLE_MAX_IDS then break end
+        if seen > TABLE_MAX_IDS then
+            LC.diag.dropCapped = LC.diag.dropCapped + 1
+            break
+        end
         -- The item string is the last field precisely so that its own colons and commas cannot reach
         -- this pattern.
         local rollID, nums, itemString = entry:match("^(%d+)#([^#]*)#(.*)$")
