@@ -443,19 +443,34 @@ do
 end
 
 -- The primitives that drop and hold a message can see a SPLIT one -----------------------------------
--- A three-item batch in this fixture is already two chunks on the wire, and only the FIRST of them
--- carries the token -- the rest lead with AceComm's control byte. RaidSim.Blackhole and RaidSim.Hold
--- matched the raw chunk, so they silently no-opped for exactly the message this file is about: a test
--- asserting "the repair reaches it anyway" would have passed without anything ever being dropped.
--- A silent no-op in a test primitive is worse than a broken one, so it is held to a test of its own.
-do
+-- A boss's batch is several chunks on the wire, and only the FIRST of them carries the token -- the
+-- rest lead with AceComm's control byte. RaidSim.Blackhole and RaidSim.Hold matched the raw chunk, so
+-- they silently no-opped for exactly the message this file is about: a test asserting "the repair
+-- reaches it anyway" would have passed without anything ever being dropped. A silent no-op in a test
+-- primitive is worse than a broken one, so it is held to a test of its own.
+--
+-- It takes a REAL-SIZED raid to reach that shape now. Packed (see the packing tests at the end of this
+-- file), three items among the fixture's five clients fit in one chunk with room to spare; six items
+-- among twenty-five do not, and that is the message a boss actually produces. Measured here: 436 bytes
+-- across two chunks, against 156 for the five-client batch this used to send.
+local function BigRaid()
     local sim = F.NewRaid()
+    for i = 1, 20 do
+        RaidSim.Join(sim, { name = "Extra" .. i, realm = "TarrenMill",
+                            guid = string.format("Player-1096-0B%06X", i),
+                            class = "MAGE", locale = "enUS" })
+    end
+    return sim
+end
+
+local BIG_BATCH = { F.GLOVES, F.WEAPON, F.TOKEN, F.PLATE_CHEST, F.GLOVES, F.WEAPON }
+
+do
+    local sim = BigRaid()
     RaidSim.Blackhole(sim, "LC_DROP")
     RaidSim.ClearLog(sim)
 
-    F.Drop(sim, 980, F.GLOVES)
-    F.Drop(sim, 981, F.WEAPON)
-    F.Drop(sim, 982, F.TOKEN)
+    for i, itemID in ipairs(BIG_BATCH) do F.Drop(sim, 979 + i, itemID) end
     KARTTEST.AdvanceTime(1)
 
     T.eq(#Announced(sim), 1, "the batch was sent")
@@ -465,7 +480,8 @@ do
     -- START_LOOT_ROLL and tracks the item from that, so LC.rollItems says nothing about whether the
     -- announcement arrived -- the numbers and the recorded announcer come from nowhere else.
     local council = sim.byName.Merrit
-    for _, id in ipairs({ 980, 981, 982 }) do
+    for i = 1, #BIG_BATCH do
+        local id = 979 + i
         T.eq(council.KART.LC.rolls[id], nil,
             "a blackholed split message reaches nobody (" .. id .. ")")
         T.eq(council.KART.LC.rollAnnouncedBy[id], nil, "nor does its announcement (" .. id .. ")")
@@ -474,22 +490,105 @@ end
 
 -- ...and the same message, merely SLOW, arrives whole once it is let go.
 do
-    local sim = F.NewRaid()
+    local sim = BigRaid()
     RaidSim.Hold(sim, "LC_DROP")
 
-    F.Drop(sim, 983, F.GLOVES)
-    F.Drop(sim, 984, F.WEAPON)
-    F.Drop(sim, 985, F.TOKEN)
+    for i, itemID in ipairs(BIG_BATCH) do F.Drop(sim, 999 + i, itemID) end
     KARTTEST.AdvanceTime(1)
 
     local council = sim.byName.Merrit
-    T.eq(council.KART.LC.rolls[983], nil, "a held split message has not arrived yet")
+    T.eq(council.KART.LC.rolls[1000], nil, "a held split message has not arrived yet")
 
     RaidSim.Release(sim, "LC_DROP")
     KARTTEST.AdvanceTime(0)
 
-    for _, id in ipairs({ 983, 984, 985 }) do
+    for i = 1, #BIG_BATCH do
+        local id = 999 + i
         T.truthy(council.KART.LC.rolls[id] ~= nil,
             "and every chunk of it is let go together, so it reassembles (" .. id .. ")")
     end
+end
+
+-- Packed, and only when it buys a chunk ----------------------------------------------------------
+-- Measured before this was built: 25 raiders and six items are 1624 bytes, seven chunks of 254, and
+-- three quarters of it is the same identity keys and the same item-string shapes over and over --
+-- which is what a compressor is for. Encoding it for the addon channel costs 0-3 bytes, not the
+-- third one would expect, because it escapes nulls rather than re-encoding everything.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 960, F.GLOVES)
+    F.Drop(sim, 961, F.WEAPON)
+    F.Drop(sim, 962, F.TOKEN)
+    KARTTEST.AdvanceTime(1)
+
+    local msg = Announced(sim)[1]
+    T.truthy(msg ~= nil, "the batch went out")
+    T.truthy(msg.msg:sub(1, 8) == "LC_DROP:", "and still opens in plain text, so the guards can read it")
+    T.truthy(#msg.msg < 500, "packed, not carried whole (" .. #msg.msg .. " bytes)")
+
+    local council = sim.byName.Merrit
+    for _, id in ipairs({ 960, 961, 962 }) do
+        T.truthy(council.KART.LC.rollItems[id] ~= nil, "every item survives the round trip (" .. id .. ")")
+        T.deep_eq(council.KART.LC.rolls[id], lm.KART.LC.rolls[id], "and its rolls do too (" .. id .. ")")
+    end
+    F.AssertAgreed(sim, 961, "about a packed batch")
+end
+
+-- A small message stays readable ------------------------------------------------------------------
+-- Packing something that fits in one chunk anyway costs time and buys nothing, and makes the wire
+-- log unreadable for whoever is debugging the next raid night.
+do
+    local sim = F.NewRaid()
+    RaidSim.ClearLog(sim)
+    RaidSim.As(sim.byName.Bramor, function()
+        sim.byName.Bramor.KART.LC.SendLC("LC_TABLE:1:900=249331")
+    end)
+    KARTTEST.AdvanceTime(0.1)
+    local sent = RaidSim.Sent(sim, "LC_TABLE:")
+    T.eq(#sent, 1, "the heartbeat is never packed")
+    T.truthy(sent[1].msg:find("900=249331", 1, true) ~= nil, "and stays readable on the wire")
+end
+
+-- A block that cannot be unpacked is refused, not half-stored ------------------------------------
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+    local before = council.KART.LC.rollItems[963]
+    RaidSim.As(council, function()
+        council.KART.LC.HandleDrop("20:R:not a valid deflate block at all", lm.guid)
+    end)
+    T.eq(council.KART.LC.rollItems[963], before, "a corrupt block changes nothing")
+end
+
+-- A roll table is packed on the same terms, and refused on the same terms -------------------------
+-- The catch-up answer (LC_ROLLS) carries the same identity keys as the batch and crosses a chunk at
+-- the same raid size: 25 raiders is three chunks in plain text and one packed. Driven at the handler,
+-- because what a repair is worth is what the client that lost the table ends up holding.
+do
+    local sim = BigRaid()
+    local lm = sim.byName.Bramor
+    F.Drop(sim, 964, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local wire = RaidSim.As(lm, function() return lm.KART.LC.SerializeRollTable(964) end)
+    T.truthy(wire:sub(1, 11) == "LC_ROLLS:P:", "a raid-sized table travels packed (" .. #wire .. " bytes)")
+    T.truthy(#wire <= 254, "and fits in one chunk")
+
+    local council = sim.byName.Merrit
+    council.KART.LC.rolls[964] = nil
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls(wire:match("^LC_ROLLS:(.*)$"), lm.guid)
+    end)
+    T.deep_eq(council.KART.LC.rolls[964], lm.KART.LC.rolls[964],
+        "and a client that lost it gets the announcer's own table back")
+
+    -- Same rule as the batch: a block that will not come back leaves the client with the gap it had,
+    -- which the heartbeat's repair path can still fill, rather than half a table it would never ask
+    -- about again.
+    council.KART.LC.rolls[964] = nil
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls("P:not a valid deflate block at all", lm.guid)
+    end)
+    T.eq(council.KART.LC.rolls[964], nil, "a corrupt table changes nothing either")
 end
