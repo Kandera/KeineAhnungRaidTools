@@ -103,6 +103,17 @@ Wired("KART.RequestMissingHellosThrottled()", "the missing handshakes are asked 
 Wired('frame:RegisterEvent("GUILD_ROSTER_UPDATE")', "the guild roster event is registered")
 Wired('elseif event == "GUILD_ROSTER_UPDATE" then', "and routed in the event handler")
 
+do
+    -- ...and the branch does something. Registered-and-routed is only two thirds of the wiring: an
+    -- empty branch passes both assertions above while the ranks never appear. Scoped to the branch
+    -- rather than searched for across the file, because the same call also stands in the KASC:OnPeer
+    -- handler further down -- a plain search finds that one and reports a branch that is gutted as
+    -- wired. Found by the mutation run over the comms rework (B116).
+    local branch = code:match('elseif event == "GUILD_ROSTER_UPDATE" then\n(.-)\nelseif event ==')
+    T.truthy(branch and branch:find("KART.LC.Council.RefreshCouncilRowsThrottled()", 1, true),
+        "and that branch actually refreshes the council rows")
+end
+
 -- Identity resolution after an optional dependency loads (B126) --------------------------------------
 -- NSRT's nickname API does not exist until NSRT has set itself up, and KART's retry pass is driven by
 -- the roster event alone -- so a client that loaded first held plain text where everybody else held
@@ -112,3 +123,10 @@ do
     T.truthy(addonLoaded, "another addon finishing its load is handled at all")
     Wired("KART.LC.RetryPendingResolutionsThrottled()", "and re-runs the pending identity resolutions")
 end
+
+-- The second half of B126, on the other event and without the throttle -------------------------------
+-- PLAYER_ENTERING_WORLD's five-second timer is the other moment an on-demand dependency is finally
+-- there, and it is the one that covers a client which loaded LAST -- no other addon finishes loading
+-- after it, so the ADDON_LOADED path above never fires for them at all. A different call at a
+-- different site: the assertion above is on the throttled variant and passes with this one deleted.
+Wired("KART.LC.RetryPendingResolutions()", "the entering-world pass resolves what is still pending")

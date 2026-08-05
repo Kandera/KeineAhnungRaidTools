@@ -12,18 +12,23 @@
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 
+-- Returns the printed text, and beside it the same lines tagged with the client that printed them --
+-- RaidSim.active is whoever the harness is currently running, which for a line printed out of a
+-- message handler is the receiver. A line's TEXT says nothing about whose screen it was on, and some
+-- of what this file asserts is exactly that (see the clash message below).
 local function Capture(fn)
-    local lines = {}
+    local lines, byClient = {}, {}
     local realPrint = _G.print
     _G.print = function(...)
         local parts = {}
         for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
         lines[#lines + 1] = table.concat(parts, " ")
+        byClient[#byClient + 1] = { who = RaidSim.active and RaidSim.active.name, text = lines[#lines] }
     end
     local ok, err = pcall(fn)
     _G.print = realPrint
     if not ok then error(err, 0) end
-    return table.concat(lines, "\n")
+    return table.concat(lines, "\n"), byClient
 end
 
 -- Two council members, same item, neither having seen the other ------------------------------------
@@ -52,7 +57,7 @@ do
     RaidSim.As(corvin, function()
         corvin.KART.LC.Trade.AssignWinner(60, sinja.guid, "BIS", nil)
     end)
-    local out = Capture(function()
+    local out, printed = Capture(function()
         T.eq(RaidSim.Release(sim, "LC_RESULT"), 2, "both awards were on the wire before either landed")
         KARTTEST.AdvanceTime(0)
     end)
@@ -77,6 +82,40 @@ do
     -- Silence is the other half of the defect: two people decided the same item and neither was told.
     T.truthy(out:find(lm.KART.L.LC_AWARD_CLASH:sub(1, 24), 1, true),
         "and the clash is said out loud rather than resolved behind their backs")
+
+    -- And it names the right person. The line above only reaches the text in front of the first
+    -- placeholder, which is why a mutation run could turn the kept winner into a boolean and leave
+    -- every assertion here green (B116): the message printed, said "true" where a name belongs, and
+    -- nothing looked. It appears on exactly the two screens that can act on a clash -- the council
+    -- decides it, the loot owner physically hands the item over -- so naming nobody is worse than not
+    -- printing at all. Matched against the fixed text that FOLLOWS the last placeholder, taken from
+    -- the locale string itself, so this holds in either language and pins the last slot alone: both
+    -- candidates are named earlier in the same sentence, and searching for the winner's name on its
+    -- own would find it there whichever of the two was kept.
+    local tail = lm.KART.L.LC_AWARD_CLASH:match("%%s([^%%]*)$")
+    T.truthy(tail and tail ~= "", "the clash message ends in fixed text after the kept winner")
+    T.truthy(out:find(lm.KASC.Identity.ResolveDisplayName(first) .. tail, 1, true),
+        "and the winner it says was kept is the one every client agreed on")
+
+    -- And it reaches those two screens and no others. The guard on that print is three conditions
+    -- wide, and loosening any of them puts a red line about a conflict nobody can act on in front of
+    -- every raider in the group -- which is the same mistake as staying silent, from the other side.
+    -- Counted rather than searched for: one extra print says nothing new to a search that has already
+    -- found the first one, which is exactly how this survived a mutation run (B116).
+    local eligible = {}
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function()
+            if c.KART.LC.IsCouncil() or c.KART.LC.IsLootOwner() then eligible[c.name] = true end
+        end)
+    end
+    local strangers = {}
+    for _, line in ipairs(printed) do
+        if line.text:find(lm.KART.L.LC_AWARD_CLASH:sub(1, 24), 1, true) and not eligible[line.who] then
+            strangers[#strangers + 1] = tostring(line.who)
+        end
+    end
+    T.eq(#strangers, 0,
+        "and only on the screens that can act on it, not on: " .. table.concat(strangers, " "))
 
     -- Exactly one pending trade on the loot owner: the losing award must not leave an obligation
     -- behind, or the lootmaster hands the item to the wrong person and ticks it off.
