@@ -4333,9 +4333,6 @@ local function FlushPendingDrop(id)
     -- anyway. Creating the heartbeat first puts it on the safe side of every one of those collisions.
     LC.EnsureTableTicker()
     LC.SendLC(LC.SerializeDrop("r", drop.secs, drop.keys, drop.entries))
-    for _, e in ipairs(drop.entries) do
-        LC.Vote.ScheduleVoteCatchup(e.rollID, drop.secs)
-    end
 end
 LC.FlushPendingDrop = FlushPendingDrop
 
@@ -4517,7 +4514,7 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- Replaced, not appended a second time. Blizzard re-raises START_LOOT_ROLL for a roll that is
         -- still running, and LC.DrawRollTable's own guard returns before redrawing -- but nothing here
         -- would stop the same rollID being serialized twice in one message, which is duplicated bytes
-        -- and LC.Vote.ScheduleVoteCatchup running twice for it.
+        -- and the vote heartbeat starting a second ticker for it.
         --
         -- Only ever the SAME item reaches this: a re-raise carrying a different one is the number being
         -- reused, and PurgeStaleRoll has already closed the batch over it a few lines up rather than

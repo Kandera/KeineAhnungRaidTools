@@ -9,7 +9,7 @@ local RaidSim = F.RaidSim
 local NewRaid, Drop = F.NewRaid, F.Drop
 
 -- RaidSim.Sent matches on the prefix, so "LC_VOTE" also catches every LC_VOTES heartbeat -- the same
--- trap LC_VOTE_REQ had in test_lc_churn.lua. Counting either one needs the exact token.
+-- trap the old vote-request token had in test_lc_churn.lua. Counting either one needs the exact token.
 local function CountExact(sim, token)
     local n = 0
     for _, e in ipairs(RaidSim.Sent(sim, token)) do
@@ -97,7 +97,7 @@ end
 
 -- The other direction: not the voter is deaf, the council is ---------------------------------------
 -- Both halves of the wire lose messages, and only one of them was ever repairable before: the old
--- LC_VOTE_REQ came from the loot owner, so a council member who missed a vote had to hope the OWNER
+-- vote-request came from the loot owner, so a council member who missed a vote had to hope the OWNER
 -- noticed. A repeat does not care which end dropped it.
 do
     local sim, _, council, raider = NewRaid()

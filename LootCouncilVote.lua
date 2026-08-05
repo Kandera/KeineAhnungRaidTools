@@ -1096,9 +1096,9 @@ end
 -- =====================================================================
 --
 -- Four raiders pressed a button on 2026-08-03 and the council saw "-" for all four. LC_VOTE goes out
--- exactly once and nothing acknowledges it; the repair that existed (LC_VOTE_REQ, asked by the loot
--- owner four seconds before the window closed) was itself a single message, across two hops, with
--- exactly one asker -- lose any of the three and the repair goes with it.
+-- exactly once and nothing acknowledges it; the repair that existed then (a single request, asked by
+-- the loot owner four seconds before the window closed) was itself a single message, across two hops,
+-- with exactly one asker -- lose any of the three and the repair goes with it.
 --
 -- So the votes repeat themselves instead of being asked for. This is the shape of the table
 -- heartbeat (LC_TABLE): a repeated statement survives every loss, a one-off question only the first.
@@ -1223,52 +1223,6 @@ function Vote.EnsureVoteHeartbeat()
                 LC.voteHbTicker = nil
             end
         end)
-    end)
-end
-
--- B78: one round of "say that again" before the council decides.
---
--- LC_VOTE is announced exactly once and nothing acknowledges it. That is fine until a client is deaf
--- for a moment -- the blip, where one client's group APIs answer "no group" and KASC correctly
--- rejects every group-gated message. Whatever was said in those seconds is then gone for that one
--- client, silently, and the council panel is the one screen where a missing vote changes who gets
--- the item. Rolls have LC_ROLL_CATCHUP and history has its own catch-up; votes had neither.
---
--- Asked by the LOOT OWNER and nobody else, once per roll -- the same "exactly one broadcaster" rule
--- the LC_DROP announcement follows, so N council members cannot turn this into N rounds. Everyone who voted answers,
--- which is at most the votes that already exist and never more, and the answer goes to the whole
--- raid rather than to the asker: every client's tally converges, not just the one that noticed.
-local VOTE_CATCHUP_LEAD   = 4    -- seconds before the window closes; long enough for the answers
-local VOTE_CATCHUP_SPREAD = 2    -- answers jittered across this, so twenty clients do not all fire at once
-
-function Vote.ScheduleVoteCatchup(rollID, secs)
-    if LC.IsTestRoll(rollID) then return end
-    C_Timer.After(math.max(1, (secs or 20) - VOTE_CATCHUP_LEAD), function()
-        -- Still on the table, and still ours to ask about: the role can move mid-round (the
-        -- lootmaster ports out and the leader stands in), and asking after that would be a second
-        -- broadcaster.
-        if not LC.rollItems[rollID] or not LC.IsLootOwner() then return end
-        LC.SendLC("LC_VOTE_REQ:" .. rollID)
-    end)
-end
-
--- The answering half. Re-sends OUR OWN vote and nothing else -- each client is the only authority on
--- what it voted, so this needs no trust rules of its own and cannot spread a wrong tally.
-function Vote.HandleVoteRequest(payload, senderKey)
-    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    if not LC.IsSenderLootOwner(senderKey) then return end
-    local rollID = tonumber(payload:match("^(%d+)$"))
-    if not rollID or not LC.rollItems[rollID] then return end
-    local myKey = (KASC.Identity.ResolvePlayer("player"))
-    local mine  = LC.votes[rollID] and LC.votes[rollID][myKey]
-    if type(mine) ~= "table" or not mine.idx then return end
-    C_Timer.After(math.random() * VOTE_CATCHUP_SPREAD, function()
-        -- Re-read rather than closing over the values: the raider may have corrected an automatic
-        -- vote in the meantime, and the correction is what the council should end up with.
-        local now = LC.votes[rollID] and LC.votes[rollID][myKey]
-        if type(now) ~= "table" or not now.idx or not LC.rollItems[rollID] then return end
-        LC.SendLC("LC_VOTE:" .. rollID .. ":" .. now.idx .. ":#" .. tostring(now.count or 0)
-            .. ":@" .. tostring(now.item or "") .. ":" .. tostring(now.note or ""))
     end)
 end
 
@@ -1403,5 +1357,3 @@ KASC:RegisterMessage("LC_VOTES", { payload = true, group = true, enabled = lcEna
     function(payload, ctx) Vote.HandleVotes(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_CVOTE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) Vote.HandleCouncilVote(payload, ctx:Key()) end)
-KASC:RegisterMessage("LC_VOTE_REQ", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) Vote.HandleVoteRequest(payload, ctx:Key()) end)

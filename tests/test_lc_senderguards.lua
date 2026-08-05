@@ -109,28 +109,3 @@ do
         T.eq(answers, 0, label .. " from that key is not answered either")
     end
 end
-
--- The one that needs the loot owner, not a stranger ------------------------------------------------
--- Vote.HandleVoteRequest checks the unit lookup and THEN LC.IsSenderLootOwner, so a stranger is
--- refused by the second line whatever the first one does. The case that separates them is the loot
--- owner who is no longer in the raid -- which is not exotic here: raiders port out mid-distribution
--- and reconnect constantly, and their key stays the raid's answer to "who owns the loot" until a
--- config says otherwise. A request from that key must not make the whole council re-broadcast.
-do
-    local sim, lm, council = F.NewRaid()
-    F.Drop(sim, 80, F.GLOVES)
-    RaidSim.As(council, function() council.KART.LC.Vote.CastVote(80, 1, nil) end)
-    KARTTEST.AdvanceTime(1)
-
-    local lmKey = lm.guid
-    T.truthy(RaidSim.As(council, function() return council.KART.LC.IsSenderLootOwner(lmKey) end),
-        "the lootmaster's key is the loot owner while they are here")
-
-    RaidSim.Leave(sim, "Bramor")
-    RaidSim.ClearLog(sim)
-    RaidSim.As(council, function() council.KART.LC.Vote.HandleVoteRequest("80", lmKey) end)
-    KARTTEST.AdvanceTime(5)
-
-    T.eq(#RaidSim.Sent(sim, "LC_VOTE"), 0,
-        "a request from a loot owner who has left the raid is not answered")
-end
