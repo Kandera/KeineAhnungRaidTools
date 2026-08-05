@@ -46,6 +46,12 @@ LC.diag = LC.diag or {
     -- StartManualRoll cap -- an older or modified sender, since a current one never writes past the
     -- cap. See the break in LC.HandleDrop.
     dropCapped    = 0,
+    -- A packed block (LC_DROP, LC_ROLLS) this client could not read back: damaged in transit, written
+    -- by a LibDeflate that is not the one we compressed with -- LibStub hands out the highest minor
+    -- loaded by ANY addon, so a raider does not necessarily run our copy -- or simply too large to be
+    -- ours (see PACK_MAX_BLOCK). Without this the refusal is the one silent failure in these two
+    -- handlers: the client loses a whole boss's items and neither end has anything to read.
+    packedUnreadable = 0,
 }
 
 LC.councilTabs          = {}  -- ordered list of rollIDs currently shown as tabs in the council panel
@@ -1347,6 +1353,13 @@ function LC.PrintStatus()
     -- reached this screen -- worth reading regardless of what else is zero.
     if LC.diag.dropCapped > 0 then
         print("  " .. string.format(L.LC_STATUS_DROPCAPPED, LC.diag.dropCapped))
+    end
+    -- Own line, same reason again: a non-zero here means a packed announcement or roll table arrived
+    -- and this client could not read it back, so a whole boss's items never reached this screen. The
+    -- one thing it points at that nothing else does is a LibDeflate mismatch -- LibStub hands out the
+    -- highest minor any addon loaded, so this raider may not be running our copy at all.
+    if LC.diag.packedUnreadable > 0 then
+        print("  " .. string.format(L.LC_STATUS_PACKUNREADABLE, LC.diag.packedUnreadable))
     end
 end
 
@@ -3498,6 +3511,23 @@ local LibDeflate = LibStub("LibDeflate")
 local PACK_MAX_MESSAGE = 255
 local PACK_LEVEL = { level = 1 }
 
+-- The largest block we will even hand to the decompressor, and the only bound there is on what one
+-- arrives as. AceComm reassembles a multipart message of any length, so before this a group member
+-- could send a small block that expands to megabytes on every client in the raid -- memory and frame
+-- time -- where plain text cost the raid exactly what it weighed. Not an open door (a guild-mandatory
+-- addon, and ChatThrottleLib caps the sender's own throughput), but the cheap half of the fix is one
+-- comparison, so it is defence in depth rather than a hole left open.
+--
+-- Sized against the largest block WE can produce, measured with LibDeflate at PACK_LEVEL:
+--   25 raiders, six items, real item strings ...........  234 bytes  (the ordinary raid night)
+--   40 raiders (the group cap), TABLE_MAX_IDS = 12 items,
+--   every item string at LC.ItemPayload's own 195-byte
+--   ceiling -- the most this protocol can ever say ...... 1081 bytes
+-- 2048 is that worst case with room to spare. What it buys: deflate cannot expand by more than about
+-- 1032:1, so a 2048-byte block decompresses to at most ~2.1 MB rather than to whatever the sender
+-- felt like (measured with LibDeflate's own encoder, the realistic ceiling is ~400:1, ~800 KB).
+local PACK_MAX_BLOCK = 2048
+
 local function Pack(message, plain)
     if #message <= PACK_MAX_MESSAGE then return nil end
     local packed = LibDeflate:CompressDeflate(plain, PACK_LEVEL)
@@ -3505,9 +3535,12 @@ local function Pack(message, plain)
     return LibDeflate:EncodeForWoWAddonChannel(packed)
 end
 
--- nil when the block is not something we produced: truncated, foreign, or damaged. Every caller
--- treats that as "this message says nothing" rather than storing half of it.
+-- nil when the block is not something we produced: too large to be ours, truncated, foreign, or
+-- damaged. Every caller treats that as "this message says nothing" rather than storing half of it,
+-- and counts it -- LC.diag.packedUnreadable -- because the alternative is a client that quietly loses
+-- a whole boss's items with nothing to read on either end.
 local function Unpack(blob)
+    if #blob > PACK_MAX_BLOCK then return nil end
     local decoded = LibDeflate:DecodeForWoWAddonChannel(blob)
     if not decoded then return nil end
     return LibDeflate:DecompressDeflate(decoded)
@@ -3736,7 +3769,10 @@ function LC.HandleRolls(payload, senderKey)
     local blob = payload:match("^P:(.*)$")
     if blob then
         payload = Unpack(blob)
-        if not payload then return end
+        if not payload then
+            LC.diag.packedUnreadable = LC.diag.packedUnreadable + 1
+            return
+        end
     end
     local rollID, itemID, list = payload:match("^(%d+):@(%d*):(.*)$")
     rollID = tonumber(rollID)
@@ -4854,7 +4890,10 @@ function LC.HandleDrop(payload, senderKey)
     -- half a batch is half a boss, announced to a raid that has no way to notice the rest is missing.
     if kind == "R" or kind == "M" then
         rest = Unpack(rest)
-        if not rest then return end
+        if not rest then
+            LC.diag.packedUnreadable = LC.diag.packedUnreadable + 1
+            return
+        end
         kind = kind:lower()
     end
     local head, entries = rest:match("^([^;]*);(.*)$")

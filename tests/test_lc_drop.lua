@@ -626,3 +626,65 @@ do
     end)
     T.eq(council.KART.LC.rolls[964], nil, "a corrupt table changes nothing either")
 end
+
+-- A refused block is COUNTED, on both handlers -----------------------------------------------------
+-- The one refusal in these two handlers that used to be silent, and the worst one to be silent about:
+-- every other refusal here is on /kart status (refusedSender, unknownRoll, rollsConflict, dropCapped),
+-- while this one costs the client a whole boss's items and left nothing to read on either end. The
+-- failure it exists for is a LibDeflate mismatch -- LibStub hands out the highest minor ANY addon
+-- loaded, so a raider is not guaranteed to be running the copy KART ships.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+    local before = council.KART.LC.diag.packedUnreadable
+
+    RaidSim.As(council, function()
+        council.KART.LC.HandleDrop("20:R:not a valid deflate block at all", lm.guid)
+    end)
+    T.eq(council.KART.LC.diag.packedUnreadable, before + 1, "a batch that will not unpack is counted")
+
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls("P:not a valid deflate block at all", lm.guid)
+    end)
+    T.eq(council.KART.LC.diag.packedUnreadable, before + 2, "and so is a roll table that will not")
+end
+
+-- A block too large to be ours is refused before it is expanded ------------------------------------
+-- AceComm reassembles a multipart message of any length, so without a cap a group member could send
+-- one small block that expands to megabytes on every client in the raid, where plain text cost the
+-- raid exactly what it weighed. Driven with a block that decompresses PERFECTLY -- the same payload
+-- goes in plain and is accepted below -- so what is under test is the size refusal itself and not
+-- another way of failing to read the thing.
+do
+    local sim, lm = F.NewRaid()
+    local head, nums = HeadAndNums(sim)
+    local LibDeflate = LibStub("LibDeflate")
+
+    -- Padding the compressor cannot get rid of, so the BLOCK crosses the cap rather than the payload.
+    -- It rides in the item string, which is the last field of an entry and may hold anything.
+    math.randomseed(20260805)
+    local alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-"
+    local pad = {}
+    for i = 1, 6000 do
+        local n = math.random(#alphabet)
+        pad[i] = alphabet:sub(n, n)
+    end
+    local payload = head .. ";968#" .. nums .. "#item:" .. F.GLOVES .. ":" .. table.concat(pad)
+    local blob = LibDeflate:EncodeForWoWAddonChannel(
+        LibDeflate:CompressDeflate(payload, { level = 1 }))
+    T.truthy(#blob > 2048, "the block is over the cap (" .. #blob .. " bytes)")
+
+    local capped = sim.byName.Merrit
+    local before = capped.KART.LC.diag.packedUnreadable
+    ReceiveDrop(lm, capped, "20:R:" .. blob)
+    T.eq(capped.KART.LC.rollItems[968], nil, "an oversized block announces nothing")
+    T.eq(capped.KART.LC.diag.packedUnreadable, before + 1,
+        "and is counted on the same line as one that cannot be read at all")
+
+    -- The premise, without which the assertions above would pass on a payload that was simply bad:
+    -- unpacked, this very payload IS a batch, and the same client takes it.
+    local plainClient = sim.byName.Alric
+    ReceiveDrop(lm, plainClient, "20:r:" .. payload)
+    T.truthy(plainClient.KART.LC.rollItems[968] ~= nil,
+        "the same payload sent plain is a batch this client accepts")
+end

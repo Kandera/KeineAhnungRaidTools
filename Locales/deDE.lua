@@ -290,6 +290,7 @@ KART.L_deDE = {
     LC_STATUS_DROPS        = "Hier verworfene Nachrichten: %d Absender, %d nicht in der Gruppe, %d unbekanntes Item, %d unbekanntes Token -- eigene Sendungen abgelehnt: %d (%d in Warteschlange), wegen Sperre zurückgehalten: %d, dabei verworfen: %d",
     LC_STATUS_ROLLCONFLICT = "Würfeltabellen, die dieser Client anders hatte: %d -- jemand im Raid hielt für ein hier gewertetes Item andere Zahlen.",
     LC_STATUS_DROPCAPPED   = "Beim Empfang gekappte Sammelnachrichten: %d -- eine Sammelnachricht nannte mehr Items, als eine Nachricht tragen kann, ein Teil davon fehlt deshalb.",
+    LC_STATUS_PACKUNREADABLE = "Komprimierte Nachrichten, die dieser Client nicht lesen konnte: %d -- die Items eines Bosses oder eine Würfeltabelle kamen komprimiert und unlesbar an, nichts davon ist hier angekommen. Meist das LibDeflate eines anderen Addons.",
     LC_OUTDATED_PEERS      = "Diese Raider haben ein KART älter als %s und können nicht am Loot Council teilnehmen -- sie müssen aktualisieren: %s",
     LC_VOTE_TITLE          = "Loot Council — Abstimmung",
     LC_VOTED_ROW           = "|cff66ff66Gewählt:|r %s",

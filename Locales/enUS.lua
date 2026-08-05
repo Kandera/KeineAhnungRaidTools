@@ -290,6 +290,7 @@ KART.L_enUS = {
     LC_STATUS_DROPS        = "Messages refused here: %d sender, %d not in group, %d unknown item, %d unknown token -- own sends rejected: %d (%d queued), held while restricted: %d, dropped in them: %d",
     LC_STATUS_ROLLCONFLICT = "Roll tables that disagreed with this client's: %d -- somebody in the raid held different numbers for an item scored here.",
     LC_STATUS_DROPCAPPED   = "Batches capped on arrival: %d -- a drop named more items than one message can carry, so some of it was left out.",
+    LC_STATUS_PACKUNREADABLE = "Compressed messages this client could not read: %d -- a boss's items or a roll table arrived packed and unreadable, so none of it reached this screen. Usually another addon's LibDeflate.",
     LC_OUTDATED_PEERS      = "these raiders run a KART older than %s and cannot take part in the loot council -- they need to update: %s",
     LC_VOTE_TITLE          = "Loot Council — Vote",
     LC_VOTED_ROW           = "|cff66ff66Voted:|r %s",

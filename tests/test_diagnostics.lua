@@ -171,6 +171,16 @@ do
 
     local again = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
     T.eq(Lines(again), Lines(clean), "a client that lost nothing prints no such line at all")
+
+    -- The packed-block refusal is on the same list and on the same terms. It has its own line rather
+    -- than a slot in the refusal line above because it is the one refusal that costs a whole boss at
+    -- once, and because it names a cause none of the others do -- another addon's LibDeflate.
+    lm.KART.LC.diag.packedUnreadable = 3
+    local unreadable = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
+    lm.KART.LC.diag.packedUnreadable = 0
+
+    T.eq(Lines(unreadable), Lines(clean) + 1, "a client that could not unpack something says so")
+    T.truthy(unreadable:find("3", 1, true), "with the count, like every other counter here")
 end
 
 -- Addon restrictions ---------------------------------------------------------------------------------
