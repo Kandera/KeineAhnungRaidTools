@@ -267,6 +267,35 @@ do
     AssertNumbersIntact(sim, lm, 992, "a raider left between two raises")
 end
 
+-- ...and a peer's table landing under the same id before the window closes (B135) --------------------
+-- The entry is written when the item drops and serialized up to half a second later, and
+-- LC.rolls[rollID] is shared mutable state in between: in the B130 ownership-disagreement corner a
+-- peer's table for the arriving item can already be stored under that id by the time the batch
+-- flushes. Read at SEND time, the entry would ship numbers this client never drew -- at the same
+-- length, so the receiver's own check waves them through and the raid scores the council's tie-break
+-- on them. So the entry carries its own copy, taken from the same read as the head.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+
+    F.Drop(sim, 993, F.GLOVES)
+
+    local drawn = {}
+    for key, roll in pairs(lm.KART.LC.rolls[993]) do drawn[key] = roll end
+
+    -- The same people, different numbers -- exactly the shape a length check cannot tell apart.
+    local foreign = {}
+    for key, roll in pairs(drawn) do foreign[key] = 101 - roll end
+    lm.KART.LC.rolls[993] = foreign
+
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(#Announced(sim), 1, "the batch still goes out")
+    local council = sim.byName.Merrit
+    T.deep_eq(council.KART.LC.rolls[993], drawn,
+        "and carries the numbers the entry was created with, not the ones that replaced them")
+end
+
 -- Rolls switched off raid-wide ----------------------------------------------------------------------
 do
     local sim, lm = F.NewRaid()

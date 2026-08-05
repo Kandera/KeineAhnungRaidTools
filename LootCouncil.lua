@@ -3606,14 +3606,28 @@ end
 --
 -- With rolls switched off raid-wide there is no table, so this answers with an EMPTY list -- which is
 -- exactly what the format asks for (design §B and §F: no numbers, and no name list either).
+--
+-- Second return: a COPY of the numbers the head was derived from, for the caller to keep (B135). A
+-- batch entry is written now and serialized up to half a second later, and LC.rolls[rollID] is shared
+-- mutable state that a peer's table for the same id can replace in between (the B130 disagreement
+-- corner) -- so an entry that read it at send time could ship numbers this client never drew, at a
+-- length the receiver's check cannot tell apart. Handed out from HERE, next to the head, so the two
+-- still come from one read of one set: a caller that keeps both keeps a pair that cannot have drifted.
 function LC.DrawnKeys(rollID)
-    local keys = {}
-    for key in pairs(LC.rolls[rollID] or {}) do keys[#keys + 1] = key end
+    local src = LC.rolls[rollID]
+    local keys, rolls = {}, nil
+    if src then
+        rolls = {}
+        for key, roll in pairs(src) do
+            keys[#keys + 1] = key
+            rolls[key] = roll
+        end
+    end
     -- Sorted for the same reason LC.DrawRollTable sorts its own walk: the receiver matches numbers to
     -- this list BY POSITION, so both sides have to walk it the same way -- and pairs() over a set of
     -- GUIDs has no defined order, in the game or in the harness.
     table.sort(keys)
-    return keys
+    return keys, rolls
 end
 
 -- One message for everything that dropped at once.
@@ -3641,7 +3655,11 @@ function LC.SerializeDrop(kind, secs, keys, entries)
         -- No table at all -- rolls are switched off raid-wide -- leaves the field EMPTY, which is what
         -- the receiver reads as "this item has no numbers". Filling it with zeros instead would hand
         -- every raider a roll of 0 for an item the raid deliberately does not roll on.
-        local rolls = LC.rolls[e.rollID]
+        --
+        -- The entry's OWN copy, taken when the entry was created (B135), not LC.rolls[e.rollID] as it
+        -- stands now: this runs up to half a second after the entry was written, and by then that
+        -- table can be a peer's rather than this client's.
+        local rolls = e.rolls
         if rolls then
             -- The last gate on the invariant above, and the reason there is no `or 0` here any more.
             -- The caller derives the head from LC.DrawnKeys and splits the batch the moment an entry
@@ -4145,7 +4163,8 @@ end
 --
 -- A single item waits too. One code path, one format, and the shared participant list applies always.
 local DROP_COLLECT = 0.5
-LC.pendingDrop = nil -- { id = n, secs = n, keys = {…}, entries = { { rollID = n, itemString = s }, … } }
+-- { id = n, secs = n, keys = {…}, entries = { { rollID = n, rolls = {…}, itemString = s }, … } }
+LC.pendingDrop = nil
 local pendingDropSeq = 0
 
 -- Whether this roll's own head is the one the batch already names. Both sides come from
@@ -4329,7 +4348,11 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- LC.DrawnKeys) and not from LC.rollEligible[rollID]. A re-raised START_LOOT_ROLL re-snapshots
         -- the roster a line above while LC.DrawRollTable keeps the table it has already shown the
         -- raid, so the snapshot is the one thing here that is allowed to be out of date.
-        local keys = LC.DrawnKeys(rollID)
+        --
+        -- The numbers come back with it and travel in the entry (B135): the message is serialized
+        -- when the window closes, and LC.rolls[rollID] is not guaranteed to still be this client's
+        -- table by then.
+        local keys, rolls = LC.DrawnKeys(rollID)
 
         -- This item's own head against the one the batch already names. They can differ inside one
         -- boss's half second, and the message cannot carry both -- so the batch is closed here and
@@ -4348,6 +4371,7 @@ function LC.OnStartLootRoll(rollID, attempt)
 
         local entry = {
             rollID = rollID,
+            rolls = rolls,
             -- The full string, not LC.ItemPayload's cap-driven fallback: this message is split and
             -- reassembled by the transport, so there is no 255-byte cliff to degrade against, and a
             -- bare itemID would lose the bonus ids B119 is about.
@@ -4796,9 +4820,14 @@ function LC.StartManualRoll(itemsText)
         -- synchronous loop, so nothing can walk in between two items and every one of them draws
         -- against the same roster. Rolls switched off raid-wide therefore leaves the head empty too,
         -- which is what design §B asks for -- it used to carry the whole roster for nothing.
-        keys = keys or LC.DrawnKeys(rollID)
+        -- The numbers ride in the entry, from the same read as the head (B135) -- this path serializes
+        -- in the same breath, so nothing can move underneath it, but there is one entry shape and one
+        -- rule about where an entry's numbers come from.
+        local itemKeys, rolls = LC.DrawnKeys(rollID)
+        keys = keys or itemKeys
         entries[#entries + 1] = {
             rollID = rollID,
+            rolls = rolls,
             -- The full string, not the old 255-byte fallback: this message is split and reassembled
             -- by the transport, so there is no cliff left to degrade against, and a bare item string
             -- would lose the bonus ids (B119).
