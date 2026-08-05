@@ -193,3 +193,33 @@ do
     T.truthy(council.KART.LC.rollItems[85], "which is why the new item is still there")
     T.truthy(lm.KART.LC.rollItems[85], "on the owner's side too")
 end
+
+-- What the repair actually hands over -------------------------------------------------------------
+-- 3.3.1 answered #20, #22 and #23 with "the whole item goes over the wire now, not just its number",
+-- and only LC_DROP was changed. LC.ItemPayload -- which the catch-up and the roll-request reply both
+-- use -- kept falling back to the bare id for any string that would push the message past 255 bytes,
+-- which is every Midnight drop carrying a full upgrade track. So the client that needed the repair
+-- most got the BASE version of the item: item level 44 instead of 285, wrong stats in the tooltip,
+-- an empty upgrade column, and no tooltip at all where the vote row asks for a real link. Reported
+-- again as #35 after the 3.3.1 release, which is what says the first fix only covered one path.
+--
+-- The 255-byte cap it was avoiding stopped existing when the transport moved onto AceComm: a long
+-- message is split and reassembled whole. An extra chunk per caught-up item is the entire cost, and
+-- it buys the item actually being the item.
+do
+    local sim, lm, council = F.NewRaid()
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 88, F.LONG_ITEM, { bop = true, noRollFor = { [council.name] = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    T.eq(council.KART.LC.rollItems[88], nil, "the council member missed the announcement")
+
+    -- The heartbeat, the request, and the answer.
+    KARTTEST.AdvanceTime(3)
+    local link = council.KART.LC.rollItems[88]
+    T.truthy(council.KART.LC.IsRealItemLink(link), "and is handed a real item link by the catch-up")
+
+    local _, _, _, ilvl = C_Item.GetItemInfo(link)
+    T.eq(ilvl, 285, "the item that actually dropped, not its base version")
+    T.eq(link, lm.KART.LC.rollItems[88], "the same string the owner holds, bonus ids and all")
+end

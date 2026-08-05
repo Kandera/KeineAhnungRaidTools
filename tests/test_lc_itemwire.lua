@@ -66,16 +66,19 @@ do
     T.truthy(tostring(heard):find(tostring(BRACERS), 1, true), "on the right item")
 end
 
--- The transport's 255-byte cap ----------------------------------------------------------------------
--- A message too long is dropped silently by the transport, which would cost the whole item. The lossy
--- payload is worth more than no payload.
+-- Length is no longer a reason to send less ---------------------------------------------------------
+-- This used to cut any string over the transport's old 255-byte cap down to the bare id, so a
+-- catch-up would hand over the BASE version of the item -- item level 44 instead of 285, wrong
+-- tooltip, empty upgrade column (#20, #22, #23, and #35 after they were declared fixed). The cap
+-- stopped applying when the transport moved onto AceComm, which splits and reassembles a long message
+-- whole; every Midnight drop with a full upgrade track is over it, so the exception was the rule.
 do
     local _, lm = F.NewRaid()
     local Payload = lm.KART.LC.ItemPayload
 
     local long = "|cffa335ee|Hitem:" .. BRACERS .. ":" .. string.rep("9", 240) .. "|h[X]|h|r"
-    T.eq(Payload(long, tostring(BRACERS)), tostring(BRACERS),
-        "an item string that would overrun the message falls back to the bare id")
+    T.truthy(#Payload(long, tostring(BRACERS)) > 240,
+        "a string too long for one message goes out whole, for the transport to split")
 
     local normal = KARTTEST.items[BRACERS].link
     T.truthy(Payload(normal, tostring(BRACERS)):find("11946", 1, true),

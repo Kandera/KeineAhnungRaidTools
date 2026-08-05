@@ -1906,18 +1906,21 @@ local ROLL_CATCHUP_MAX = 5
 -- SAME item rather than the base version of it -- an itemID alone carries no bonus ids, so the whole
 -- raid read "Item Level 44" off a 285 item on 2026-08-03 (B119).
 --
--- Falls back to the bare itemID when there is no real link to take a string from, and again when the
--- string would push the message past the transport's 255-byte cap: the transport (KASC:Send /
--- AceComm) would still deliver the full string whole, split into extra chunks, rather than dropping
--- or corrupting it -- but a roll catch-up is a burst of these to whoever missed the original, and the
--- old, lossy payload staying inside one chunk is worth more than that burst paying for a second one
--- per item. The cap is checked against the longest prefix any caller puts in front of it, not against
--- the string alone.
-local WIRE_HEADROOM = 60 -- "LC_ROLL_CATCHUP:" + rollID + seconds + separators, with room to spare
+-- Falls back to the bare itemID only when there is no real link to take a string from at all.
+--
+-- It used to fall back a second time, for any string long enough to push the message past 255 bytes,
+-- to keep a catch-up burst inside one chunk each. That trade was wrong, and #35 is what said so: 3.3.1
+-- fixed the base-item bug on LC_DROP and left this path alone, so the clients being REPAIRED -- the
+-- ones that missed the original announcement and are the whole reason the message exists -- kept
+-- receiving the base version. Item level 44 instead of 285, wrong tooltip stats, empty upgrade
+-- column. And the length it was avoiding stopped being a limit when the transport moved onto AceComm:
+-- anything over the cap is split and reassembled whole (see KASC:Send). Every Midnight drop carrying
+-- a full upgrade track is over it, so this was not the exception it reads as -- it was the norm.
+--
+-- The cost is one extra chunk per caught-up item, bounded by ROLL_CATCHUP_MAX.
 function LC.ItemPayload(link, itemID)
-    local full = KAUtil.GetItemString(link)
-    if full and #full + WIRE_HEADROOM <= 255 then return full end
-    return itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
+    return KAUtil.GetItemString(link)
+        or itemID or (type(link) == "string" and link:match("item:(%d+)")) or ""
 end
 
 -- The other direction, for the handlers that read one of those payloads back. The bare id is what
@@ -3152,6 +3155,8 @@ function LC.SetSessionActive(active)
         LC.HideSessionPrompt()
         -- Before the first item, while there is still time to tell them to update (B62).
         LC.WarnOutdatedRaiders()
+        -- Anything Blizzard already put a roll window up for, before we knew we were in a session.
+        LC.ReplaySeenWhileUnaware()
     end
     -- CONFIG BEFORE LC_ACTIVE, and this order matters. A peer validates LC_ACTIVE with
     -- LC.IsSenderLootOwner, which needs to already know who the lootmaster is; a client that has
@@ -4267,6 +4272,27 @@ local START_ROLL_RETRY_MAX    = 2
 LC.rollAnnounced = LC.rollAnnounced or {} -- [rollID] = true once the LOOT OWNER's LC_START landed here
 LC.rollSeenHere  = LC.rollSeenHere  or {} -- [rollID] = true once WE have processed our own START_LOOT_ROLL
 
+-- Rolls Blizzard raised on this client while it did not yet know a session was running, so that
+-- LC.OnStartLootRoll can be run for them once it does. See LC.ReplaySeenWhileUnaware.
+--
+-- Why this is needed at all: LC.OnStartLootRoll returns on its second line while LC.sessionActive is
+-- false, and that early return is the ONLY writer of LC.rollSeenHere -- which AutoPassAnnounced
+-- requires. LC.HandleStart has no such gate, so the announcement still builds a vote row. The result,
+-- reported from a live raid on 2026-08-05: a raider whose client restarted mid-session had four vote
+-- rows, a status line reading "Session: on (told)", and four unanswered Blizzard roll windows, with
+-- nothing anywhere saying why. Every reload, every disconnect and every relog inside a session lands
+-- in this window; the state request that closes it takes seconds (see STATE_REQ_BACKOFF), and a boss
+-- dying inside those seconds used to cost the whole round's auto-passing.
+--
+-- An in-flight marker, not state: deliberately not persisted across a reload (the roll windows are
+-- gone with the client anyway) and not in ClearRollState.
+LC.rollsSeenWhileUnaware = LC.rollsSeenWhileUnaware or {}
+
+-- How many of them to hold at once. A client sitting in a raid with no session running still sees
+-- every BoP roll of the evening, and none of them is worth remembering past the boss it belongs to.
+-- Well above what a boss can drop, far below anything that matters as a table.
+local SEEN_WHILE_UNAWARE_MAX = 40
+
 -- [rollID] = the identity key of whoever announced this item to us. NOT the same question as "who
 -- hands out the loot": that one is about the raid right now, this one is about a moment in the past,
 -- and the numbers belong to that moment. Keeping them apart is what stops a client that disagrees
@@ -4277,6 +4303,43 @@ LC.rollAnnouncedBy = LC.rollAnnouncedBy or {}
 -- link retry above rather than picked: they can legitimately spend that whole budget before sending
 -- anything, and a message that fires on a raid which was merely slow is worse than no message.
 local ANNOUNCE_WAIT = START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5
+
+-- Runs the roll handler for everything that arrived while this client did not know there was a
+-- session (see LC.rollsSeenWhileUnaware). Called the moment the state stops being a guess -- from
+-- LC.SetSessionActive, which is us deciding, and from LC.HandleActive, which is being told.
+--
+-- Idempotent by construction: the list is taken and emptied before anything runs, and
+-- LC.OnStartLootRoll is safe to run twice for one roll anyway (Blizzard re-raises START_LOOT_ROLL for
+-- a roll still in progress, which is the same call).
+-- Only rolls the council has demonstrably taken up, which is the same condition Auto-Pass itself
+-- answers to (B63) -- and, less obviously, the thing that keeps this repair from breaking the
+-- catch-up. LC.HandleRollCatchup refuses a roll this client already has an item for, and
+-- LC.OnStartLootRoll writes LC.rollItems: replaying a roll whose announcement had NOT arrived left
+-- the client holding the item with no vote row and no way to be sent one, which is worse than the
+-- missing pass. With the announcement already in, LC.HandleStart has written those tables anyway and
+-- the replay adds nothing but the flag it exists for.
+--
+-- A roll still waiting for its announcement therefore stays in the list, and LC.HandleStart picks it
+-- up from there when the announcement lands.
+local function ReplayOne(rollID)
+    if not LC.rollAnnounced[rollID] then return false end
+    LC.rollsSeenWhileUnaware[rollID] = nil
+    -- Only rolls that are still live. A nil texture means Blizzard's window is gone -- expired, or
+    -- answered by hand in the meantime -- and there is nothing left to pass or force-win.
+    if GetLootRollItemInfo(rollID) then LC.OnStartLootRoll(rollID) end
+    return true
+end
+
+function LC.ReplaySeenWhileUnaware(rollID)
+    if not LC.sessionActive then return end
+    if rollID then ReplayOne(rollID) return end
+    -- Sorted, so a client replaying three rolls handles them in the order they dropped rather than
+    -- in table order, which differs between clients.
+    local ids = {}
+    for id in pairs(LC.rollsSeenWhileUnaware) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do ReplayOne(id) end
+end
 
 -- Passes Blizzard's roll for a council item, but only once the owner has announced it. Called from
 -- both roll-start paths: whichever of the two runs SECOND is the one that finds both halves true, so
@@ -4363,7 +4426,21 @@ LC.FlushPendingDrop = FlushPendingDrop
 
 function LC.OnStartLootRoll(rollID, attempt)
     if KART_Settings.lcModuleEnabled == false then return end
-    if not LC.sessionActive then return end
+    if not LC.sessionActive then
+        -- Remember it instead of forgetting it. Everything below -- the force-win, the announcement,
+        -- Auto-Pass, and above all LC.rollSeenHere -- is unreachable until the session is known, and
+        -- the roll window Blizzard put on screen outlives that wait by minutes. See
+        -- LC.rollsSeenWhileUnaware for what this cost in a live raid.
+        --
+        -- Counted rather than measured with # : the table is keyed by rollID, so it is not a
+        -- sequence, and dropping the oldest is not possible without an order nobody has. Once it is
+        -- full the newest is dropped instead, which is the safe direction -- a client that has been
+        -- collecting forty of these is not in a session at all.
+        local n = 0
+        for _ in pairs(LC.rollsSeenWhileUnaware) do n = n + 1 end
+        if n < SEEN_WHILE_UNAWARE_MAX then LC.rollsSeenWhileUnaware[rollID] = true end
+        return
+    end
 
     -- Quality/bind data first — the lootmaster branch below depends on it. bindOnPickUp comes
     -- from GetLootRollItemInfo (reliable even for uncached items); classID via GetItemInfoInstant,
@@ -4698,6 +4775,9 @@ function LC.HandleActive(value, senderKey)
     -- A session started elsewhere makes our own "start one?" question obsolete; leaving the dialog
     -- up invites someone to answer a question that no longer applies.
     if LC.sessionActive then LC.HideSessionPrompt() end
+    -- The moment this client stops guessing. Anything Blizzard raised a roll window for while it was
+    -- still asking is picked up here -- the reload/relog/disconnect case, which is most of them.
+    if LC.sessionActive then LC.ReplaySeenWhileUnaware() end
     -- A peer receiving the owner's session-end must also drop its tracked rolls and close its
     -- windows, exactly like the owner's own SetSessionActive(false) — otherwise stale tabs, votes
     -- and a leftover /kart showall override survive into the next session.
@@ -4825,6 +4905,11 @@ function LC.HandleStart(payload, senderKey)
     -- released, out of range -- has nothing to pass and AutoPassAnnounced returns without acting.
     LC.rollAnnounced[rollID] = true
     LC.rollAnnouncedBy[rollID] = senderKey
+    -- The other half of the reload repair: this client saw Blizzard raise the roll while it still had
+    -- no idea a session was running, so its own handler returned early and never set LC.rollSeenHere
+    -- -- which AutoPassAnnounced below requires. Now that the announcement is here, that handler can
+    -- run for real. Does nothing in the ordinary case, where the list is empty.
+    if LC.rollsSeenWhileUnaware[rollID] then LC.ReplaySeenWhileUnaware(rollID) end
     AutoPassAnnounced(rollID)
 
     -- secs == 0 is a catch-up for an item whose voting time has already run out — reachable since a

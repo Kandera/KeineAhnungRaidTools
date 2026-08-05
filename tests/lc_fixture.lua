@@ -71,6 +71,23 @@ KARTTEST.AddItem({ id = 249409, name = "Voidglass Kris", quality = 4, ilvl = 285
 
 F.STAFF, F.SHIELD, F.STR_MACE, F.INT_DAGGER = 249406, 249407, 249408, 249409
 
+-- An item whose STRING is long enough to matter on the wire. Everything above sits comfortably
+-- inside one addon message, so no test could see what happens to the one that does not -- and a
+-- Midnight drop carrying a full upgrade track, a crest and a tertiary runs well past it.
+--
+-- baseIlvl is what makes the difference observable: asked by bare id, the stub answers the BASE
+-- version, exactly as the live client does. That is the whole of "ilvl 44 statt 285" (#20, #22,
+-- #23) -- a client holding the id alone is holding a different item.
+KARTTEST.AddItem({ id = 249410, name = "Voidbound Regalia of the Eternal Vigil", quality = 4,
+                   ilvl = 285, baseIlvl = 44, classID = 4, subclassID = 1,
+                   equipLoc = "INVTYPE_CHEST", bind = 1,
+                   link = "|cffa335ee|Hitem:249410::::::::80:268::14:28:11946,10390,12043,10255," ..
+                          "1540,10879,11996,10396,10394,1527,10877,10255,12345,10871,11304,10333," ..
+                          "10842,10256,10395,12044,11300,10389,10391,10392,10393,10397,10398,10399" ..
+                          ":28:9:::::|h[Voidbound Regalia of the Eternal Vigil]|h|r" })
+
+F.LONG_ITEM = 249410
+
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
 -- of sync, a straw poll disagreeing, or a second council member's assignment reaching the first.

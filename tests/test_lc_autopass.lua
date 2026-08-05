@@ -207,3 +207,34 @@ do
         sim.byName[name].env.KART_Settings.lcAutoPass = true
     end
 end
+
+-- A client that learns about the session AFTER the item dropped ------------------------------------
+-- Reported 2026-08-05, and caused by the advice that fixed something else: everybody restarted their
+-- client mid-raid to pick up a new build. A fresh client starts with sessionActive false and asks the
+-- raid what is going on (LC.RequestSessionState), and until the answer lands LC.OnStartLootRoll
+-- returns on its second line -- so LC.rollSeenHere is never set for anything that drops in that
+-- window. LC.HandleStart has no such gate, so the vote row appears anyway, and AutoPassAnnounced
+-- refuses forever afterwards because the flag it needs is only ever written by the handler that was
+-- skipped. The raider is left clicking Blizzard's window while their status line says "Session: on".
+do
+    local sim, lm = NewRaid()
+    local corvin = sim.byName.Corvin
+    RaidSim.As(corvin, function()
+        corvin.KART.LC.sessionActive = false
+        corvin.KART.LC.sessionStateKnown = false
+    end)
+
+    Drop(sim, 60, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(corvin.KART.LC.rollItems[60],
+        "the announcement still reaches it, so the item is tracked and a vote row exists")
+    T.is_nil(PassedBy(sim, 60, "Corvin"),
+        "but nothing is passed while the client does not know a session is running")
+
+    -- The raid answers. From here on the client is in every way a normal participant.
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_ACTIVE:1") end)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(corvin.KART.LC.sessionActive, "the state request is answered")
+    T.eq(PassedBy(sim, 60, "Corvin"), 0,
+        "and the roll it already saw is passed after all, rather than left open for the evening")
+end
