@@ -1547,12 +1547,13 @@ do
     T.is_nil((council.KART.LC.votes[98] or {})[sinja.guid],
         "and the client that blinked out does not")
 
-    -- The window runs down. Before it closes, the loot owner asks once for the votes on this item
-    -- and everyone who voted says theirs again.
+    -- The window runs down. Sinja's client goes on repeating what it voted on its own clock, for as
+    -- long as it still tracks the roll, so the council member who blinked out gets it on one of the
+    -- repeats without anybody having to notice the gap.
     KARTTEST.AdvanceTime(25)
 
     T.truthy((council.KART.LC.votes[98] or {})[sinja.guid],
-        "the catch-up brings it back before the council decides")
+        "a repeat brings it back before the council decides")
     T.eq((council.KART.LC.votes[98] or {})[sinja.guid].idx, 2, "with the answer they actually gave")
 end
 
@@ -1580,6 +1581,9 @@ do
         RaidSim.As(alric, function() alric.KART.LC.SendLC("LC_VOTES:100:1:#6:@249331:0:") end)
     end
     KARTTEST.AdvanceTime(5)
-    T.truthy(heartbeatsFrom("Sinja") <= 2,
-        "a raider spraying messages cannot make anybody else repeat faster")
+    -- Bounded from BELOW as well: a rate of zero also satisfies "no faster than two", and a heartbeat
+    -- that has quietly died would sail through the assertion this test exists to make.
+    local rate = heartbeatsFrom("Sinja")
+    T.truthy(rate >= 1 and rate <= 2,
+        "a raider spraying messages cannot make anybody else repeat faster, and does not stop them")
 end

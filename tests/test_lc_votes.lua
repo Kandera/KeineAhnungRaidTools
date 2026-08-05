@@ -80,6 +80,18 @@ do
     T.truthy((council.KART.LC.votes[84] or {})[raider.guid],
         "a roll the message does not mention keeps the vote it already had")
     T.truthy((council.KART.LC.votes[85] or {})[raider.guid], "and the one it does mention arrives")
+
+    -- A note is rendered raw into the council row's tooltip, and a sender that did not strip its own
+    -- pipes is exactly what a hostile client looks like -- so the receiver doubles them, the way
+    -- Vote.HandleVote does for the single message. Reachable only from a hand-written LC_VOTES,
+    -- because Vote.CastVote strips the pipes at the sending end.
+    local escape = "|cffff0000mine"
+    RaidSim.As(raider, function()
+        raider.KART.LC.SendLC("LC_VOTES:85:2:#6:@249293:" .. #escape .. ":" .. escape)
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(((council.KART.LC.votes[85] or {})[raider.guid] or {}).note, "||cffff0000mine",
+        "a pipe in a note arrives doubled, so it cannot colour anybody's tooltip")
 end
 
 -- The ticker stops when there is nothing left to say -----------------------------------------------
@@ -119,6 +131,10 @@ do
     local sim, _, council, raider = NewRaid()
     Drop(sim, 88, F.GLOVES)
     KARTTEST.AdvanceTime(1)
+
+    -- The immediate click message has to be gone, or it satisfies the assertion on its own and this
+    -- test never exercises the length-prefix encoder it is here for -- the only test that does.
+    RaidSim.Blackhole(sim, "LC_VOTE:")
 
     local note = "trade um 5:30; sonst mainspec"
     RaidSim.As(raider, function()
