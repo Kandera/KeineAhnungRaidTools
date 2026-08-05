@@ -2340,9 +2340,9 @@ Where a cause was traced to the line, it says so. Where it is still a hypothesis
 names the measurement that would settle it — the evening ended before the send probe could be run, and
 guessing past that point is how B70 cost three attempts.
 
-## B118 — NARROWED 2026-08-03 — a lost addon message costs the item, and nothing in a running session notices
+## B118 — FIXED 2026-08-03 — a lost addon message costs the item, and nothing in a running session notices
 
-**Two of the three halves are fixed; the third is written down at the bottom of this entry.**
+**All three halves are fixed, the vote last, at the bottom of this entry.**
 
 *The item.* The loot owner now broadcasts what is on the table every ten seconds while anything is on
 it (`LC_TABLE`), a client missing one of those rolls asks for it (`LC_ROLL_REQ`, at most once per roll
@@ -2376,13 +2376,14 @@ Held by `tests/test_lc_table.lua`, and by `tests/test_lc_persistedtables.lua` fo
 table — an owner who reloads mid-round without `rollEligible` would refuse every catch-up for the
 items still on their own table.
 
-**Still open, and it is the fourth measurement in the table below: the votes.** Four raiders pressed a
-button and the council never saw it. `LC_VOTE` is still sent exactly once; the vote catch-up
-(`LC_VOTE_REQ`, four seconds before the window closes) is the only thing that re-asks, it comes from
-the owner alone, and losing that request loses the repair with it. The shape of the answer is probably
-the same one as here — the tally is known to every council member, so "who has not answered" is
-answerable locally — but it is a different message and a different design, and it wants its own entry
-rather than being bolted onto this one.
+*The vote, and it is the fourth measurement in the table below.* Four raiders pressed a button and the
+council never saw it — settled the same way as the item and End Round above: repeat it until it is
+seen, rather than ask for it once and hope the ask arrives. Every client now repeats its own votes on a
+heartbeat (`LC_VOTES`), bundled across every roll it is still tracking rather than one message per vote,
+phased from the client's own position in the roster so the whole raid does not answer in the same
+instant. `LC_VOTE_REQ` is gone with it — there is nothing left to ask for, because the vote itself keeps
+arriving. A receiver only ever adds a vote it does not already have, never removes one, for the same
+reason deletion stays out of the item heartbeat above.
 
 ### The original diagnosis, kept for the measurements
 
