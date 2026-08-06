@@ -163,6 +163,66 @@ shape as the existing diagnostics, and the same reason they exist. `tests/test_l
 raidsim harness can already count messages per drop offline, so a first estimate does not need a
 raid at all; what needs a raid is the ratio between a boss's traffic and an evening's.
 
+**Measured offline, 2026-08-06.** 30 clients (the split-run ceiling), council of three, one boss of
+six items, 90 simulated seconds, messages counted per token off the raidsim wire log:
+
+| token | msgs | bytes | sender |
+|---|---|---|---|
+| LC_ROLL_REQ | 162 | 2,430 | 27 plain raiders, 6 each |
+| LC_ROLL_CATCHUP | 134 | 16,148 | the lootmaster, all of them |
+| LC_ROLLS | 133 | 23,033 | the lootmaster, all of them |
+| LC_DROP | 1 (+2 chunks) | 561 | the lootmaster |
+| LC_TABLE | 2 | 152 | the lootmaster |
+| REQ_EQUIP | 3 | 66 | council |
+
+The announcement itself is innocent: at +2 s every client holds the item and all 30 numbers from the
+one LC_DROP. The storm is structural, and it repeats per boss:
+
+1. At the vote deadline (+20 s) every plain raider frees the roll — `Vote.PruneExpiredRolls`, the
+   deliberate B49 sweep.
+2. The owner still has every item on the table, so its next heartbeat (+30 s) names all six.
+3. **Every pruned raider asks for every roll in the same instant** — 162 whispers hit the
+   lootmaster on one heartbeat, because the prune and the heartbeat are synchronized for the whole
+   raid.
+4. The owner answers each ask individually: LC_ROLL_CATCHUP plus LC_ROLLS, whispered, per asker per
+   roll — 27 × 6 × 2 = 324 queued sends, despooled at ChatThrottleLib's ~2/s for the next TWO AND A
+   HALF MINUTES. The next trash pack or boss lands on a queue that has not drained, and an evening
+   of bosses compounds into exactly the lootmaster's 1,578.
+
+The equipped-item sync — the suspect named when this entry was written — is exonerated at this
+size: three messages, the per-roll dedup and 5 s cooldown do their job. The catch-up burst has no
+such dedup: LC.HandleRollsRequest spreads answers to the BROADCAST ask (LC_ROLLS_REQ) across the
+raid, but the whispered LC_ROLL_REQ path answers every asker separately.
+
+**The cut is a decision, not a patch,** because every option touches a rule that was set on
+purpose:
+
+* *Answer the burst once, as a group broadcast per roll* — cheapest wire-wise, but the eligibility
+  rule (LC.MayCatchUp, per asker, owner-side) has no receiver-side half: a client that joined after
+  the drop would adopt a roll it is not entitled to.
+* *Bundle one answer per asker* (all six rolls in one whisper) — keeps eligibility intact, cuts
+  ~6×; needs a new wire token, so it rides the 3.4.0 everybody-updates window or not at all.
+* *Stop the re-ask: a raider that watched the window close does not re-fetch* — kills the whole
+  burst and the visible half of #28 (rows reappearing) with it. Tried on 2026-08-06
+  (`LC.rollExpiredHere`, third attempt in the #28 handover) and reverted against the decision
+  encoded in `tests/test_lc_rolltable.lua`: a missing item stays catchable after voting closed.
+  But note what that test actually does: it reaches "not tracked" by letting a raider that HELD
+  the roll expire it, as a stand-in for a client that never heard the announcement. The two are
+  conflated by the test's construction, not by reality — an asker-side expiry note distinguishes
+  them exactly (the truly-deaf client never expired anything and still asks). Reopening this
+  option means rewriting that test to model the lost announcement the way `:401` already does
+  (blackhole the broadcast), and answering who needs a closed roll re-tracked at all when the
+  winner's trade state is rebuilt by the result message.
+* *Prune later — free plain-raider state at End Round instead of at the deadline* — no asks, no
+  refetch, trivial memory cost; but tying "still on the table" to the heartbeat's list re-opens the
+  absence-as-evidence trap this file already buried once (a stand-in's list is short and says
+  nothing about the rolls it does not name).
+
+What the options need before one is picked: the answer to why a plain raider re-fetches a closed
+roll at all, and the maintainer's read on which rule may move. The measurement stands either way,
+and the harness that produced it is three edits away from a regression test pinning whatever budget
+the cut buys.
+
 **Related, also open:** the 71 refusals have no REASON recorded. ChatThrottleLib hands its callback
 `(didSend, sendResult)` and AceComm's shim drops the code on the way through, so KASC sees only the
 boolean (noted on `KASC.diag`). `ChannelThrottle` and `GeneralError` are indistinguishable from
