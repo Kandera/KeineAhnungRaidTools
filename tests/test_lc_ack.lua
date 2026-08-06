@@ -316,3 +316,30 @@ do
     T.eq(StateOn(lm, 983, victim), "acked",
         "and the council is told so, instead of being told they said nothing")
 end
+
+-- ...and an ack that arrives after the round ended asks for nothing ---------------------------------
+-- The other half of the same hole. LC.ClearAllRolls wipes LC.rollReqSent along with everything else,
+-- and End Round sends itself three times (0/2/5 s), so each repeat re-opened the cooldown for the
+-- acks still despooling behind it. Measured over an offline evening with one boss's announcement
+-- lost: 841 asks against 267 on the tree before these packages, six per client per roll inside seven
+-- seconds, where the gate on its own allows one.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 984, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.Hold(sim, "LC_ACK")
+    KARTTEST.AdvanceTime(3)
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    KARTTEST.AdvanceTime(6)   -- past both END_ROUND_REPEATS
+
+    RaidSim.ClearLog(sim)
+    T.truthy(RaidSim.Release(sim, "LC_ACK") > 0, "the acks land after the round is over")
+    KARTTEST.AdvanceTime(2)
+
+    local asks = 0
+    for _, e in ipairs(RaidSim.Messages(sim, "LC_ROLL_REQ")) do
+        if e.msg:match("^LC_ROLL_REQ:") then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "and nobody asks about a roll the round has already ended")
+end

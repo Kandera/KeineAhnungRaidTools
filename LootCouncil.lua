@@ -2387,6 +2387,16 @@ end
 -- (PurgeStaleRoll), by a heartbeat naming a different item under it, and by the round ending.
 LC.rollExpiredHere = LC.rollExpiredHere or {}
 
+--- The rolls this client cleared because the ROUND ended, as opposed to because their own window ran
+--- out (LC.rollExpiredHere) or because they threw them away (LC.rollDismissed). Same shape, same
+--- lifetime, same readers -- the three ask paths -- and it exists because End Round is the one of the
+--- three that wipes every other note on its way past (see LC.ClearAllRolls).
+---
+--- Deliberately NOT wiped there: it is what that function leaves behind, and a message still in
+--- flight when the round ended is the case it is for. Cleared per rollID when a roll starts under
+--- that number, and wholesale when the raid is left.
+LC.rollRoundEnded = LC.rollRoundEnded or {}
+
 local tableTicker
 local lastTableWasEmpty = true
 -- The message last put on the wire, and when. The tick compares against the STRING it would send, not
@@ -2617,7 +2627,11 @@ function LC.HandleTable(payload, senderKey, sender)
         -- A note that survives the purge above is one the heartbeat has just confirmed: the item
         -- under that number is still the item this client closed. So the gate reads on truthiness
         -- alone, and it is no longer the blind reader it used to be (B132).
+        -- The round ending is a third reason not to ask (B145), alongside the dismissal and the
+        -- expiry note. It reaches this path the same way it reaches the other two asks: a heartbeat
+        -- from before End Round can still be in flight when it lands.
         if (needItem or needRolls) and not LC.rollDismissed[rollID]
+            and not (LC.rollRoundEnded and LC.rollRoundEnded[rollID])
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             local askedBefore = LC.rollReqSent[rollID] ~= nil
             LC.rollReqSent[rollID] = now
@@ -3050,6 +3064,19 @@ function LC.ClearAllRolls()
     -- there until its vote window runs out. The timer itself is left to fire and find nothing (see
     -- FlushPendingDrop), which is cheaper than carrying a handle around for it.
     LC.pendingDrop = nil
+    -- Noted BEFORE the clearing, because afterwards there is nothing left to note. This is what an
+    -- ask path needs to tell "I was never told about this roll" from "the round it belonged to is
+    -- over": a vote heartbeat or an ack still despooling when End Round overtook it names rolls that
+    -- are gone, and without this every gate is open by then -- the clearing below wipes rollItems,
+    -- rollDismissed, rollExpiredHere and rollReqSent alike (B145).
+    LC.rollRoundEnded = LC.rollRoundEnded or {}
+    for id in pairs(LC.rollItems) do LC.rollRoundEnded[id] = true end
+    -- ...and the numbers we have been ASKING about, which is not the same set and is the important
+    -- half. The client this protects is the one that never got the announcement: it holds no
+    -- rollItems at all, so the loop above would note nothing for it and it would go on asking about
+    -- rolls the raid has finished with -- exactly the client that asks most. LC.rollReqSent is wiped
+    -- further down this function, so it has to be read here.
+    for id in pairs(LC.rollReqSent or {}) do LC.rollRoundEnded[id] = true end
     for i = #LC.councilTabs, 1, -1 do
         LC.Trade.ClearRollState(LC.councilTabs[i])
     end
@@ -3717,6 +3744,10 @@ local function TearDownForRaidExit()
     -- vote window keep last raid's tabs, votes and winner highlights, and those low rollIDs are
     -- exactly the ones Blizzard hands out first in the next raid — an immediate collision.
     if wasActive then LC.ClearAllRolls() end
+    -- ClearAllRolls fills this rather than emptying it (see there), and the numbers it holds are this
+    -- raid's -- the next one starts at exactly the same low rollIDs, which is the collision the block
+    -- above is about. Wiped here, where "a different raid" is the fact being acted on.
+    if LC.rollRoundEnded then wipe(LC.rollRoundEnded) end
     -- Any B12 retry (see LC.RetryPendingConfig) was for this raid's config; it's meaningless in
     -- whatever we join next, regardless of whether a session was active.
     LC.CancelPendingConfig()
@@ -4477,6 +4508,8 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- The expiry note goes with it, for the same reason: a roll STARTING under this ID means the
     -- one that expired here is over, and the note must not silence the repair for the new one (B135).
     LC.rollExpiredHere[rollID] = nil
+    -- And the round-ended note, which is the same rule for the same reason (B145).
+    if LC.rollRoundEnded then LC.rollRoundEnded[rollID] = nil end
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
     -- numbers would render as the NEW item's rolls on the council panel.
@@ -4716,10 +4749,35 @@ LC.passLog = LC.passLog or {} -- oldest first: { rollID = , item = , gate = }
 -- first path's provisional answer. A roll that PASSED keeps that verdict -- the second call finds
 -- Blizzard's window blank (that is what passing does) and would otherwise overwrite the good outcome
 -- with "the window was already gone".
+-- Whether a log entry is about the roll we are recording NOW, or about the previous occupant of that
+-- number. Blizzard reuses roll IDs within seconds and the guards below never expire, so without this
+-- a "passed" verdict outlives its item: the next roll under the number finds the guard, returns, and
+-- /kart status names the FIRST item and says it passed while the raider is looking at an unanswered
+-- window for a different one. A probe that lies is worse than no probe -- it is read precisely when
+-- something has already gone wrong.
+--
+-- An entry with no item recorded is still ours: that is what the first call for a roll this client
+-- has never been told about looks like, and it is part of the answer rather than a mismatch. An entry
+-- that DOES name an item, against a roll we now hold nothing for, is not -- the item it names is the
+-- one thing we could still be wrong about.
+local function PassLogEntryIsCurrent(entry, rollID)
+    local was = type(entry.item) == "string" and entry.item:match("item:(%d+)") or nil
+    if not was then return true end
+    local link = LC.rollItems[rollID]
+    local now = type(link) == "string" and link:match("item:(%d+)") or nil
+    return was == now
+end
+
 local function RecordPassGate(rollID, gate)
     local entry
     for i = 1, #LC.passLog do
         if LC.passLog[i].rollID == rollID then entry = LC.passLog[i] break end
+    end
+    -- The number has been handed to a different item since. The slot stays -- one entry per rollID is
+    -- the whole shape of this ring -- but its verdict belonged to the previous roll and must neither
+    -- guard this one nor be printed against it.
+    if entry and not PassLogEntryIsCurrent(entry, rollID) then
+        entry.gate, entry.item = nil, nil
     end
     if entry then
         if entry.gate == "passed" then return end
@@ -4881,6 +4939,11 @@ local function AskForUnannounced(rollID)
     -- in its own bags would be an answer nobody can give.
     if LC.IsLootOwner() then return end
     if LC.rollDismissed[rollID] or LC.rollExpiredHere[rollID] then return end
+    -- ...and a round that has ended is not a gap either (B145). Without it, the three LC_END_ROUND
+    -- repeats each wipe LC.rollReqSent and hand the acks still despooling behind them a fresh
+    -- cooldown: measured at six asks per client per roll inside seven seconds, where the gate on its
+    -- own allows one.
+    if LC.rollRoundEnded and LC.rollRoundEnded[rollID] then return end
     local now = GetTime()
     LC.rollReqSent = LC.rollReqSent or {}
     if (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) < ROLL_REQ_COOLDOWN then return end

@@ -1481,6 +1481,11 @@ local ROLL_REQ_COOLDOWN = 30
 local function AskOwnerForUnknownRoll(rollID)
     if LC.IsLootOwner() then return end
     if LC.rollDismissed[rollID] or LC.rollExpiredHere[rollID] then return end
+    -- ...nor a round that is over (B145). The heartbeat is NORMAL priority and repeats every five
+    -- seconds; LC_END_ROUND is ALERT and guaranteed, so a bundle sent moments before the round ended
+    -- lands after it -- at which point LC.ClearAllRolls has wiped every other gate here, and each
+    -- straggler whispered the owner about a roll nobody has any more.
+    if LC.rollRoundEnded and LC.rollRoundEnded[rollID] then return end
     LC.rollReqSent = LC.rollReqSent or {}
     local now = GetTime()
     if (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) < ROLL_REQ_COOLDOWN then return end

@@ -518,3 +518,37 @@ do
     T.truthy(not out:find(lm.KART.L.LC_STATUS_PASSLOG, 1, true),
         "no item has been decided about, so there is no Auto-Pass block")
 end
+
+-- The gate probe must not answer for the previous occupant of a rollID -------------------------------
+-- Blizzard reuses roll numbers within seconds -- that is what PurgeStaleRoll exists for (B132). The
+-- probe keyed its entry on the rollID alone and kept a "passed" verdict for ever, so a later item
+-- arriving under the same number found the guard and returned: /kart status then names the FIRST
+-- item and says it passed, while the raider is looking at an unanswered window for a different one.
+-- The probe lying is worse than no probe, because it is read exactly when something has gone wrong.
+do
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    local function GateFor(id)
+        return RaidSim.As(raider, function()
+            for _, e in ipairs(raider.KART.LC.passLog) do
+                if e.rollID == id then return e.gate end
+            end
+        end)
+    end
+
+    F.Drop(sim, 70, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    T.eq(GateFor(70), "passed", "the gloves were passed, and the probe says so")
+
+    -- The same number, a different item, and this client is never told about it -- which is the case
+    -- the probe is for: the raider is staring at a roll window nothing has explained.
+    KARTTEST.rolled[70] = nil
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 70, F.WEAPON)
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Deliver(sim, "LC_DROP")
+
+    T.truthy(GateFor(70) ~= "passed",
+        "and the unrelated item reusing that number does not inherit the verdict")
+end

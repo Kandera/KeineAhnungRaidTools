@@ -478,3 +478,36 @@ do
     T.truthy(b, "LootCouncilVote.lua states the ask cooldown")
     T.eq(b, a, "and the vote path asks at the same rate the heartbeat does")
 end
+
+-- A round that ended is not a gap to repair ---------------------------------------------------------
+-- The vote heartbeat repeats a bundle every five seconds and is NORMAL priority, while LC_END_ROUND
+-- is ALERT and guaranteed -- so on a busy pipe a bundle sent moments before the round ended lands
+-- after it. By then LC.ClearAllRolls has wiped rollItems, rollExpiredHere, rollDismissed AND
+-- rollReqSent, so every gate E1's ask has is open and every entry in that bundle looks like a roll
+-- this client was never told about. Each straggler then whispers the owner about a roll nobody has
+-- any more, all of them refused by LC.HandleRollRequest -- one ask per sender per item, which at
+-- raid size is the whole raid asking at once.
+--
+-- The same wipe is what let F's ack-driven ask fire again after every End Round repeat (there are
+-- three, 0/2/5 s apart), measured at three times the asks of the tree before these packages.
+do
+    local sim, lm, _, raider = NewRaid()
+    Drop(sim, 140, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(140, 1) end)
+
+    -- Held, not blackholed: this message is not lost, it is SLOW -- which is the whole case.
+    RaidSim.Hold(sim, "LC_VOTES")
+    KARTTEST.AdvanceTime(8)
+
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    KARTTEST.AdvanceTime(1)
+    T.is_nil(raider.KART.LC.rollItems[140], "the round is over and the roll is gone from the raid")
+
+    RaidSim.ClearLog(sim)
+    T.truthy(RaidSim.Release(sim, "LC_VOTES") > 0, "and a heartbeat from before it now lands")
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(CountExact(sim, "LC_ROLL_REQ"), 0,
+        "nobody asks the owner to hand back a roll the whole raid has just finished with")
+end

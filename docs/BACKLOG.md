@@ -3733,3 +3733,45 @@ knows the item was tradeable at 20:00.
 Tests: `tests/test_lc_tradefill.lua` — "so handing over the awarded one does not stop the clock on
 it", "and its deadline is being watched again", "and it is reported as a window that ran out, not as
 one that never existed".
+
+
+## B145 — FIXED 2026-08-06 — End Round wiped the ask gates and every straggler asked again
+
+Found by measuring the integrated tree of the six RC-compare packages against the tree before them,
+with the same script on both — the combined cost of F's ack and E1's vote-triggered ask, which the
+final-verification handover named as the one genuinely unmeasured thing in the release.
+
+**Clean evening: the sum is exactly F's acks.** 1,926 messages before, 2,100 after, +174 LC_ACK and
+no other token moved. E1 sends nothing when nothing is lost, by design.
+
+**One boss whose announcement was lost: the asks tripled.** 267 → 841, and per (client, rollID) 1–2
+→ 3–6, six of them inside seven seconds. Bisected: E1 (`5a37ac1`) is neutral at 268; F (`5174158`)
+is where it goes to 841.
+
+The gate is not broken. Re-run with End Round removed, the integrated tree sends **exactly one ask
+per client per roll**. The amplifier is End Round: `END_ROUND_REPEATS = { 2, 5 }` sends
+`LC_END_ROUND` three times, each runs `LC.ClearAllRolls` on every peer, and that wipes
+`LC.rollReqSent` along with `rollItems`, `rollDismissed` and `rollExpiredHere` — so every gate the
+ask paths have is open again, three times per boss, with F's acks still despooling behind them. The
+wipe is old and was correct while nothing else asked; F's trigger is what made it expensive.
+
+The same wipe hits E1's ask from the other side. `LC_VOTES` is NORMAL priority and repeats every five
+seconds; `LC_END_ROUND` is ALERT and guaranteed, so a bundle sent moments before the round ended lands
+after it and every entry in it looks like a roll this client was never told about. One whisper per
+sender per item, all refused by `LC.HandleRollRequest` — no catch-up, nothing resurrected, pure
+traffic.
+
+**Fixed 2026-08-06.** `LC.rollRoundEnded` — the same shape, lifetime and readers as
+`LC.rollExpiredHere` and `LC.rollDismissed`, and it exists because End Round is the one of the three
+that wipes every other note on its way past. Filled by `LC.ClearAllRolls` before it clears anything,
+from two sources: the rolls we track, and the rolls we have been ASKING about. The second is the
+important one — the client this protects is the one that never got the announcement, holds no
+`rollItems` at all, and would otherwise have nothing noted and go on asking. Cleared per rollID when a
+roll starts under that number (beside the other two notes) and wiped when the raid is left.
+
+After the fix, same measurement: **268 asks, 1–2 per pair — the pre-package numbers** — while
+`LC_VOTE` stays at the full 1,080, so every deaf client still recovers and still votes on everything.
+The repair is intact; only the repetition is gone.
+
+Tests: `tests/test_lc_votes.lua`, "nobody asks the owner to hand back a roll the whole raid has just
+finished with"; `tests/test_lc_ack.lua`, "and nobody asks about a roll the round has already ended".
