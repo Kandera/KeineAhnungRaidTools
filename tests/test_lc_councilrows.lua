@@ -207,3 +207,95 @@ do
     KARTTEST.AdvanceTime(1)
     T.truthy(council.KART.LC.councilPanel:IsShown(), "but a new item brings it back")
 end
+
+-- The equipped column on a tier token -----------------------------------------------------------
+-- A token carries no equipLoc of its own, so the slot it is worn in cannot be read off the item --
+-- and the whole equipped-gear comparison used to give up on exactly the drops the council argues
+-- hardest about (Manifest C12). The slot comes out of a table of token ids instead.
+do
+    local ownSim, ownLm = F.NewRaid()
+    KARTTEST.AddItem({ id = 800002, name = "Voidwoven Mantle", quality = 4, ilvl = 280,
+                       classID = 4, subclassID = 1, equipLoc = "INVTYPE_SHOULDER", bind = 1 })
+    -- The inventory stub is keyed by slot number and shared by every simulated client, so this puts
+    -- the same shoulders on the whole raid -- see test_lc_equipexchange.
+    KARTTEST.inventory[3] = KARTTEST.items[800002].link
+
+    RaidSim.ClearLog(ownSim)
+    -- 249364 is a Voidcured Unraveled Nullcore: a shoulder token.
+    F.Drop(ownSim, 90, F.TOKEN)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.truthy(#RaidSim.Sent(ownSim, "REQ_EQUIP:INVTYPE_SHOULDER") > 0,
+        "a shoulder token asks the raid for their shoulders")
+
+    RaidSim.Drain(ownSim, 5)
+    local alric = ownSim.byName.Alric
+    RaidSim.As(ownLm, function()
+        local link = ownLm.KART.LC.Council.GetEquippedForUnit(alric.unit,
+            ownLm.KART.LC.rollItems[90])
+        T.eq(link, KARTTEST.items[800002].link, "and the column shows what they wear there")
+    end)
+    KARTTEST.inventory[3] = nil
+end
+
+-- A token nothing knows the slot of ---------------------------------------------------------------
+-- The table is an allow-list, exactly like the collectible rule it sits next to: an id that is not in
+-- it leaves the column empty, which is what it did before. A guessed slot would put somebody else's
+-- gear on the row that hands the item out.
+do
+    local ownSim, ownLm = F.NewRaid()
+    KARTTEST.AddItem({ id = 800003, name = "Nullcore of a Later Tier", quality = 4, ilvl = 285,
+                       classID = 15, subclassID = 0, bind = 1 })
+    RaidSim.ClearLog(ownSim)
+    F.Drop(ownSim, 91, 800003)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.eq(#RaidSim.Sent(ownSim, "REQ_EQUIP:"), 0,
+        "a token this client has no slot for asks nobody")
+end
+
+-- "x of y council members have voted" ---------------------------------------------------------------
+-- The per-candidate tally says who is ahead; it does not say whether everyone has spoken. A council
+-- member whose votes never arrive looks exactly like one who is still thinking (Manifest C14), and
+-- the lootmaster hands the item out either way.
+do
+    local ownSim, ownLm = F.NewRaid()
+    F.Drop(ownSim, 88, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    local ownPanel = ownLm.KART.LC.councilPanel
+    local council = { ownSim.byName.Bramor, ownSim.byName.Merrit, ownSim.byName.Corvin }
+    local alric = ownSim.byName.Alric
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(alric.unit))
+    end)
+    local L = ownLm.KART.L
+
+    local function ProgressText()
+        RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+        return ownPanel.voteProgressText:GetText()
+    end
+
+    T.eq(ProgressText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 0, 3),
+        "a council of three with nobody voted yet says so")
+
+    RaidSim.As(council[1], function() council[1].KART.LC.Vote.ToggleCouncilVote(88, alricKey) end)
+    RaidSim.As(council[2], function() council[2].KART.LC.Vote.ToggleCouncilVote(88, alricKey) end)
+    RaidSim.Drain(ownSim, 5)
+    T.eq(ProgressText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 2, 3),
+        "two of the three having picked reads as two of three")
+    local r, g, b = ownPanel.voteProgressText:GetTextColor()
+    T.truthy(not (r < g and b < g), "and is not yet wearing the everybody-has-voted colour")
+
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(88, alricKey) end)
+    RaidSim.Drain(ownSim, 5)
+    T.eq(ProgressText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 3, 3),
+        "and the last one completes it")
+    local r2, g2, b2 = ownPanel.voteProgressText:GetTextColor()
+    T.truthy(r2 < g2 and b2 < g2, "which is what the colour says too")
+
+    -- A retracted pick is a council member who has not decided again, not one who has.
+    RaidSim.As(council[3], function() council[3].KART.LC.Vote.ToggleCouncilVote(88, alricKey) end)
+    RaidSim.Drain(ownSim, 5)
+    T.eq(ProgressText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 2, 3),
+        "and taking a pick back counts back down")
+end

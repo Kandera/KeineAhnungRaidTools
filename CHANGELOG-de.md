@@ -17,6 +17,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Item, von dem du nie erfahren hast, erreicht dich, solange das Würfelfenster noch offen ist.**
 - **Das Council sieht, wer noch nicht geantwortet hat** — und wer das Item gar nicht bekommen hat.
 - **`/kart status` sagt, warum die letzten Items für dich gepasst wurden oder nicht.**
+- **Das Council-Panel vergleicht auch bei Tier-Token die angelegte Ausrüstung.**
+- **Das Council-Panel zeigt, wie viele Council-Mitglieder abgestimmt haben.**
 
 ### Behoben
 - **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.

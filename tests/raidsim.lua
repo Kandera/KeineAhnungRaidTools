@@ -25,6 +25,7 @@ local CLIENT_FILES = {
     "Utils.lua",
     "LootHistory.lua",
     "LootCouncil.lua",
+    "LootCouncilTokenData.lua",
     "LootCouncilOfficerNotes.lua",
     "LootCouncilRelevance.lua",
     "LootCouncilVote.lua",

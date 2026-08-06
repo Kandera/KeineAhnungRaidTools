@@ -76,6 +76,15 @@ local function scanSlots(unit, slots, weaponsOnly)
     return bestLink, bestIlvl
 end
 
+-- The slot an item is compared against: its own equipLoc, or -- for a tier token, which has none --
+-- the one the token table knows it is worn in (see LootCouncilTokenData.lua). Nil for anything
+-- neither answers, which is the "no comparison at all" case both callers below already handle.
+local function ResolveEquipLoc(itemLink, itemEquipLoc)
+    if itemEquipLoc and itemEquipLoc ~= "" then return itemEquipLoc end
+    local itemID = C_Item.GetItemInfoInstant(itemLink)
+    return itemID and LC.GetTokenEquipLoc(itemID) or nil
+end
+
 -- Returns (equippedLink, equippedIlvl) for the slot matching rollItemLink on unit.
 -- For two-slot items (rings, trinkets) returns the lower-ilvl piece (most likely to be replaced).
 function Council.GetEquippedForUnit(unit, rollItemLink)
@@ -86,7 +95,8 @@ function Council.GetEquippedForUnit(unit, rollItemLink)
     -- comparison never found a matching slot for ANY item, test or real.
     local itemName, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
     if not itemName then return nil, nil end
-    local slots = EQUIP_LOC_TO_SLOT[itemEquipLoc]
+    itemEquipLoc = ResolveEquipLoc(rollItemLink, itemEquipLoc)
+    local slots = itemEquipLoc and EQUIP_LOC_TO_SLOT[itemEquipLoc]
     if not slots then return nil, nil end
 
     local bestLink, bestIlvl = scanSlots(unit, slots, itemEquipLoc == "INVTYPE_WEAPON")
@@ -123,7 +133,8 @@ LC.equipRequestedRolls = LC.equipRequestedRolls or {}
 function Council.RequestEquipForRoll(rollID, rollItemLink)
     if not IsInGroup() or LC.equipRequestedRolls[rollID] then return end
     local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(rollItemLink)
-    if not itemEquipLoc or itemEquipLoc == "" or not EQUIP_LOC_TO_SLOT[itemEquipLoc] then return end
+    itemEquipLoc = ResolveEquipLoc(rollItemLink, itemEquipLoc)
+    if not itemEquipLoc or not EQUIP_LOC_TO_SLOT[itemEquipLoc] then return end
     LC.equipRequestedRolls[rollID] = true
     KASC:Send("REQ_EQUIP:" .. itemEquipLoc)
 end
@@ -692,6 +703,13 @@ function Council.CreateCouncilPanel()
     f.ilvlText:SetPoint("TOPLEFT", f.itemText, "BOTTOMLEFT", 0, -2)
     f.ilvlText:SetTextColor(0.6, 0.6, 0.55)
 
+    -- How much of the council has weighed in on this item at all (see RefreshCouncilRows). Not in
+    -- f.collapsible on purpose: "we are still waiting on somebody" is exactly what a council member
+    -- with the panel minimized needs to keep seeing.
+    f.voteProgressText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.voteProgressText:SetPoint("TOPRIGHT", -12, -54)
+    f.voteProgressText:SetJustifyH("RIGHT")
+
     -- Slim fill bar showing the vote window's remaining time as a fraction (see LC.rollDurations),
     -- updated alongside f.timerText by the same ticker below.
     f.timeBar = CreateFrame("StatusBar", nil, f)
@@ -1078,6 +1096,31 @@ function Council.RefreshCouncilRows()
     if panel.ilvlText then
         -- intentional: "Item Level" prefix kept un-localized by design (review 2026-07-24)
         panel.ilvlText:SetText(rollItemIlvl and ("Item Level " .. rollItemIlvl) or "")
+    end
+
+    -- How many council members have picked somebody at all. The per-candidate tally further down
+    -- says who is ahead; nothing said whether anyone was still missing -- and a council member whose
+    -- votes are not arriving looks exactly like one who is still thinking (C14), while the item gets
+    -- handed out either way. Counted against the council list, so a straw-poll pick left over from
+    -- somebody who is no longer on it cannot push the count past the total.
+    if panel.voteProgressText then
+        local council = LC.CouncilNamesTable or {}
+        local councilSize, votedCount = 0, 0
+        for _ in pairs(council) do councilSize = councilSize + 1 end
+        for voter in pairs((rollID and LC.councilVotes[rollID]) or {}) do
+            if council[voter] then votedCount = votedCount + 1 end
+        end
+        if rollID and councilSize > 0 then
+            panel.voteProgressText:SetText(string.format(KART.L.LC_COUNCIL_VOTES_PROGRESS,
+                votedCount, councilSize))
+            if votedCount >= councilSize then
+                panel.voteProgressText:SetTextColor(0.4, 0.9, 0.4)
+            else
+                panel.voteProgressText:SetTextColor(0.9, 0.75, 0.3)
+            end
+        else
+            panel.voteProgressText:SetText("")
+        end
     end
 
     -- The guild rank column below reads GetGuildInfo(unit), which answers nothing until this client

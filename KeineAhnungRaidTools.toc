@@ -30,6 +30,7 @@ RaidleadBar.lua
 Profiles.lua
 BuffChecker.lua
 LootCouncil.lua
+LootCouncilTokenData.lua
 LootCouncilOfficerNotes.lua
 LootCouncilRelevance.lua
 LootCouncilVote.lua
