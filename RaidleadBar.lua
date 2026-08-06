@@ -63,9 +63,23 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
     if macrotext then
         b:SetAttribute("type", "macro")
         b:SetAttribute("macrotext", macrotext)
-        -- Secure buttons execute on EVERY registered click transition — registering both Up
-        -- and Down ran the macro twice per click. Down-only matches retail's default behavior.
-        b:RegisterForClicks("AnyDown")
+        -- BOTH transitions, and exactly one of them ever acts. Blizzard gates a secure click in
+        -- SecureTemplates.lua: `clickAction = (down and useOnKeyDown) or (not down and not
+        -- useOnKeyDown)`, and for a button an addon created, `useOnKeyDown` comes down to the
+        -- ActionButtonUseKeyDown CVar. With that CVar at 0 the only registered transition is the one
+        -- the gate refuses, so the button hovers, holds correct attributes, and does nothing.
+        --
+        -- Measured on the 12.1 PTR, 2026-08-06: the whole bar dead -- 8 raid markers, 8 world
+        -- markers, Clear World Markers, Ready Check -- with the CVar never touched by the player.
+        -- Not a 12.1 break: this has been latent for as long as the down-only line existed, and every
+        -- player who ever changed that option had a dead bar. Nobody reported it, which says how few
+        -- of them there are.
+        --
+        -- The comment this replaces claimed "Down-only matches retail's default behavior", and that
+        -- sentence is what made the bug look deliberate. Registering both does NOT bring back the
+        -- double fire it was written against: the gate passes exactly one transition whatever the
+        -- CVar says. Keybinds follow along -- SetOverrideBindingClick reaches the same gate.
+        b:RegisterForClicks("AnyUp", "AnyDown")
     else
         -- Plain (non-secure) buttons fire on Down only, matching the secure macro buttons above and
         -- the key-down transition a keybind delivers via SetOverrideBindingClick — so a bound key

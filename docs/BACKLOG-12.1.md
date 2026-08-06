@@ -42,7 +42,7 @@ before and is the single most useful line here.
 
 | | measured | consequence |
 |---|---|---|
-| `ActionButtonUseKeyDown` | `"1"` | P1's precondition already holds by default |
+| `ActionButtonUseKeyDown` | `"1"` via `C_CVar.GetCVar` -- **and the bar was still dead** | P1 is real and NOT explained by the CVar reading; fixed by not depending on it |
 | `GetWeaponEnchantInfo` | **present**, returns `true / 7180552` | P2's premise is wrong for this build |
 | own aura `name` / `spellId` | usable, not secret | P3 narrowed to OTHER units |
 | `UnitIsGroupLeader("player")` | ordinary boolean | as expected; the group half is untouched |
@@ -51,7 +51,7 @@ before and is the single most useful line here.
 about reading ANOTHER unit. The player's own identity is never secret, so a solo probe answers the
 easy half of both and neither of the hard ones. Both need a group on 12.1.
 
-## P1 — SOLVED BY DEFAULT 2026-08-06 — the Raidlead bar's secure buttons do nothing unless `ActionButtonUseKeyDown` is 1
+## P1 — FIXED 2026-08-06 — the Raidlead bar's secure buttons do nothing unless `ActionButtonUseKeyDown` is 1
 
 Reported from the 12.1 PTR, 2026-08-03: "kein Icon mehr auf den Kopf per Raidleadbar". Measured down
 to the line rather than guessed, and it is **not** a 12.1 API break — 12.1 only exposed it.

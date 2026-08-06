@@ -112,3 +112,28 @@ do
     T.truthy(KARTTEST.overrideBindings[KART.RaidleadBar] ~= nil,
         "and they are applied once combat is over")
 end
+
+-- Both click transitions are registered, so the CVar cannot decide whether the bar works ------------
+-- P1 (docs/BACKLOG-12.1.md), reported from the 12.1 PTR as "kein Icon mehr auf den Kopf per
+-- Raidleadbar", with the whole bar inert: 8 raid markers, 8 world markers, Clear World Markers and
+-- Ready Check.
+--
+-- Blizzard gates a secure click on `(down and useOnKeyDown) or (not down and not useOnKeyDown)`, and
+-- for an addon's own button useOnKeyDown comes down to ActionButtonUseKeyDown. Register one
+-- transition and half the player base gets the one the gate refuses -- the button hovers, holds
+-- correct attributes, and does nothing. Register both and exactly one acts whatever the CVar says,
+-- which is also why this cannot bring back the double fire the old line was written against.
+--
+-- Not a 12.1 break: latent for as long as the down-only line existed. 12.1 only shipped a client
+-- where the CVar was not 1.
+--
+-- Checked against the source, like tests/test_core_wiring.lua checks Core.lua's routing. The harness
+-- has no secure-button gate to drive, so a behavioural test here could only assert its own stub.
+do
+    local src = assert(io.open("RaidleadBar.lua", "r")):read("*a")
+    local macroBranch = src:match('SetAttribute%("type", "macro"%).-RegisterForClicks%(([^%)]+)%)')
+    T.truthy(macroBranch, "the secure macro branch still registers its clicks in one place")
+    T.truthy(macroBranch and macroBranch:find("AnyUp", 1, true)
+             and macroBranch:find("AnyDown", 1, true),
+        "and registers BOTH transitions, so the CVar cannot decide whether the bar works")
+end
