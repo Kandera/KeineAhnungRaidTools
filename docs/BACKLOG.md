@@ -78,6 +78,30 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
+## B136 — OPEN — the suite fails intermittently, and it did before anyone noticed
+
+`tests/test_lc_rolltable.lua:321` and `:401` ("with the numbers that go with it") fail on roughly
+1 run in 4 to 1 in 20. Reproduced on a pristine tree before any change was made to it, so it is not
+caused by whatever is being worked on when it appears.
+
+Two causes, and only the first is fixable by seeding:
+
+* LuaJIT 2.1 seeds `math.random` per process unless the suite pins it.
+* **`pairs()` does not iterate in a stable order across processes in this build.** Probed directly:
+  both string and table keys reorder run to run. No seed reaches this.
+
+Related to B70, which is the same family of problem seen from the addon's side.
+
+**Why it is worth fixing rather than living with, and why now:** a suite that sometimes goes red for
+nothing is a suite whose red is negotiable. On 2026-08-06 that already cost real accuracy -- an
+attempt at #28 was assessed against a run where one of the two failing assertions was this flake, and
+the attempt was read as more broken than it was. Before a raid that decides whether the module stays,
+"that one is just flaky" is exactly the sentence that lets a genuine regression through.
+
+The fix is to make the assertion independent of iteration order rather than to seed around it: the
+comparison is over a roll table, and a test that compares tables should compare them as sets.
+
+
 ## B135 — OPEN — the pipe is full, and nobody has measured what fills it
 
 Raid of 2026-08-05, six `/kart status` outputs collected during a live session. What they said,
