@@ -686,3 +686,34 @@ do
         "the copy that CAN still be traded is the one that answers for the obligation")
     T.eq(out, "", "so nothing is said about handing it over being impossible")
 end
+
+-- A warning nobody heard has not been given ---------------------------------------------------------
+-- B3 holds the chat line back until the pull is over; the "said once" latch was set when the line was
+-- QUEUED, not when it was said. LC.pendingTrades is the saved table itself (Trade.RestorePersistedTrades
+-- points the live list at store.pending), so the latch persists immediately -- and a reload or a
+-- disconnect inside that pull leaves the entry marked as warned about with nobody ever having been
+-- warned. The 20-minutes-left warning is the one thing standing between the lootmaster and losing the
+-- item to the timer, and it never comes again.
+--
+-- The undecided warning beside it already gets this right, by keeping its latch memory-only on
+-- purpose: "after a reload the deadline is still real, and hearing about it once more is the right
+-- side to be wrong on". Same rule, arrived at from the other end.
+do
+    local _, lm = OwingSince(TRADE_WINDOW - 600) -- ten minutes of trade window left
+    KARTTEST.inCombat = true
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(out, "", "nothing is said while the raid is in combat")
+    T.is_nil(lm.KART.LC.pendingTrades[1].timeoutWarned,
+        "and the entry does not yet count as warned about, because nobody has been warned")
+
+    -- The ticker comes round again inside the same pull. That must not queue a second copy.
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(lm, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    local seen = select(2, after:gsub("Gloombind", ""))
+    T.eq(seen, 1, "the warning arrives once the pull is over, once: " .. after)
+    T.eq(lm.KART.LC.pendingTrades[1].timeoutWarned, true, "and only now does it count as said")
+end

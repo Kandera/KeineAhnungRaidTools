@@ -3833,13 +3833,31 @@ and the vote window stopped redrawing until `/reload`. Now `pcall`'d, with the e
 one-off error is a defect and belongs in the player's error frame, but it must not take a feature with
 it for the rest of the session.
 
-**Not fixed, deliberately.** `deferredNotices` is memory-only, so a reload or disconnect DURING a pull
-loses the queued explanation for a row that has already been removed. Two settled decisions collide
-there — B3 (no chat mid-pull) and B47 (a row past its window is a lie whether or not anybody is in
-combat, and is dropped on schedule) — and holding the removal back until combat ends was tried and
-reverted against the test that encodes the second. The residue is one lost sentence in the case where
-the player disconnects mid-pull, and closing it needs the notice queue persisted. Not worth new
-SavedVariables machinery days before the raid that decides the module.
+**Partly fixed 2026-08-06, and the rest recorded.** `deferredNotices` is memory-only, so a reload or
+disconnect DURING a pull loses whatever it is holding. The four notices that go through it do NOT all
+fail the same way, which the first pass over this ran together:
+
+| notice | latch | persisted | after a reload mid-pull |
+|---|---|---|---|
+| trade window closing (20 min left) | `entry.timeoutWarned` | yes — `LC.pendingTrades` IS `store.pending` | was lost for good |
+| item still undecided | `LC.rollUndecidedWarned` | no, on purpose | warns again, correct already |
+| window ran out | entry removed | yes | row and reason both gone |
+| never keepable | entry removed | yes | row and reason both gone |
+
+The first row is now fixed and needed no decision reversed, because the warning removes nothing: the
+latch moves from the moment the line is DECIDED to the moment it is SAID (`TradeNotice`'s `onSaid`),
+with a dedupe key so a pull outlasting the five-minute ticker does not queue it twice. That is the
+same rule the undecided warning already follows from the other end — its latch is deliberately
+memory-only, "hearing about it once more is the right side to be wrong on".
+
+Rows three and four are NOT fixed. They are bound to the removal, and B3 (no chat mid-pull) and B47 (a
+row past its window is a lie whether or not anybody is in combat, and is dropped on schedule) collide
+there: holding the removal back until combat ends was tried and reverted against the test that
+encodes B47. Closing it properly means persisting the notice queue — a new `KART_LCTrades` field, a
+size bound, a staleness rule (does a line from two days ago still get printed?), output after the
+locale is up, and the persisted-tables guard test. Deferred to the window before the first raid day of
+the season (2026-08-19), not because it is small but because it is a saved-variable change and those
+want their own gate.
 
 
 ## B148 — FIXED 2026-08-06 — Auto-Pass read the previous item's announcement on a reused rollID

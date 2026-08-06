@@ -242,16 +242,38 @@ combatFrame:SetScript("OnEvent", function(_, event)
         if lcEnabled() and LC.IsLootOwner() then Trade.StartTradeTimeoutTicker() end
         return
     end
-    for _, line in ipairs(deferredNotices) do print(line) end
+    for _, notice in ipairs(deferredNotices) do
+        print(notice.text)
+        -- Whatever "this has now been said" means for the caller, done HERE and not when the line was
+        -- queued. See TradeNotice.
+        if notice.onSaid then notice.onSaid() end
+    end
     wipe(deferredNotices)
 end)
 
 -- Says text now, or once the pull is over.
-local function TradeNotice(text)
+--
+-- onSaid (optional) runs at the moment the line actually reaches the player, which is not the moment
+-- the caller decided to say it. A "said once" latch set at the decision instead of at the delivery is
+-- a promise the addon cannot keep: LC.pendingTrades IS the saved table (see
+-- Trade.RestorePersistedTrades), so a latch on an entry is persisted immediately, and a reload or a
+-- disconnect inside the same pull leaves it marked as warned about with nobody ever having been
+-- warned. The 20-minutes-left warning does not come again after that. LC.rollUndecidedWarned beside it
+-- avoids the same trap from the other end, by staying memory-only on purpose.
+--
+-- key (optional) dedupes: the ticker comes round every five minutes and a pull outlasts that, so the
+-- same warning would otherwise queue several times before anybody read one.
+local function TradeNotice(text, onSaid, key)
     if InCombatLockdown() then
-        deferredNotices[#deferredNotices + 1] = text
+        if key then
+            for _, notice in ipairs(deferredNotices) do
+                if notice.key == key then return end
+            end
+        end
+        deferredNotices[#deferredNotices + 1] = { text = text, onSaid = onSaid, key = key }
     else
         print(text)
+        if onSaid then onSaid() end
     end
 end
 
@@ -347,10 +369,14 @@ function Trade.CheckTradeTimeouts()
                 TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
                     entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)))
             elseif not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
-                entry.timeoutWarned = true
                 local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
+                -- Latched when the line is SAID, not when it is decided (see TradeNotice): this entry
+                -- is part of the saved file, so marking it warned about while the line is still
+                -- waiting out a pull survives a reload that the line does not.
                 TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
-                    entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
+                    entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft),
+                    function() entry.timeoutWarned = true end,
+                    "trade-timeout:" .. tostring(entry.rollID))
             end
         end
     end
