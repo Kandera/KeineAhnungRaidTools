@@ -377,3 +377,38 @@ do
     T.eq(ShownRows(alric.KART.LC.owedReminderFrame), 1,
         "/kart owed lists only what has not arrived yet")
 end
+
+-- An award that lands after the voting window closed reaches a winner who tracks nothing ------------
+-- The common case since B135: a plain raider frees a roll at its vote deadline and no longer
+-- re-fetches it, so by the time the council finishes deliberating -- which is normally after the
+-- window -- the winner's client holds neither item nor deadline. The result has to rebuild what a
+-- winner needs (Trade.HandleResult's late-joiner rebuild), and the trade clock has to run from the
+-- DROP via the rollLootedAt stamp that outlives the roll (Trade.PruneExpiredLootStamps owns it),
+-- never from the award.
+do
+    local sim, _, council = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 74, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    local lootedAt = alric.KART.LC.rollLootedAt[74]
+    T.truthy(lootedAt ~= nil, "the winner-to-be stamped the loot time at the drop")
+
+    KARTTEST.AdvanceTime(23) -- past the default 20s window: the plain raider has freed the roll
+    T.eq(alric.KART.LC.rollItems[74], nil, "by award time their client tracks nothing under the id")
+
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(74, alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(tostring(alric.KART.LC.rollItems[74]):match("item:" .. F.GLOVES),
+        "the result rebuilds the item on the winner's client")
+    local owed
+    for _, e in ipairs(alric.KART.LC.owedToMe or {}) do
+        if e.rollID == 74 then owed = e end
+    end
+    T.truthy(owed ~= nil, "and the winner knows the lootmaster owes them the item")
+    T.eq(owed and owed.lootedAt, lootedAt,
+        "with a trade clock that runs from the drop, not from the award")
+    T.eq(F.HasVoteRow(alric, 74), false, "and no vote row reopens for a decided item")
+end
