@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An item you never heard about finds you while the roll window is still open.**
 - **The council sees who has not answered yet**, and who has not even received the item.
 - **`/kart status` says why each of the last items was or was not passed for you.**
+- **The raid's vote buttons, council and roll setting survive a reload** instead of waiting for the raid to say them again.
 - **The council panel compares equipped gear on tier tokens too.**
 - **The council panel says how many council members have voted.**
 

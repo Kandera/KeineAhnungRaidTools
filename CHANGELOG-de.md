@@ -18,6 +18,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Item, von dem du nie erfahren hast, erreicht dich, solange das Würfelfenster noch offen ist.**
 - **Das Council sieht, wer noch nicht geantwortet hat** — und wer das Item gar nicht bekommen hat.
 - **`/kart status` sagt, warum die letzten Items für dich gepasst wurden oder nicht.**
+- **Vote-Buttons, Council und Würfel-Einstellung des Raids überleben ein Neuladen**, statt darauf zu warten, dass der Raid sie erneut schickt.
 - **Das Council-Panel vergleicht auch bei Tier-Token die angelegte Ausrüstung.**
 - **Das Council-Panel zeigt, wie viele Council-Mitglieder abgestimmt haben.**
 
