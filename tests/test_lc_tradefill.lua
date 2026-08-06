@@ -335,3 +335,71 @@ do
     KARTTEST.AdvanceTime(2)
     T.eq(#lm.KART.LC.pendingTrades, 1, "a cancelled trade leaves the obligation standing")
 end
+
+-- The BoP trade clock: what it says, and when ------------------------------------------------------
+
+local TRADE_WINDOW = 4 * 60 * 60
+
+-- Returns everything printed while fn ran.
+local function Capture(fn)
+    local lines = {}
+    local realPrint = _G.print
+    _G.print = function(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        lines[#lines + 1] = table.concat(parts, " ")
+    end
+    local ok, err = pcall(fn)
+    _G.print = realPrint
+    if not ok then error(err, 0) end
+    return table.concat(lines, "\n")
+end
+
+-- A lootmaster owing one item, with the clock wound forward to `elapsed` seconds since it dropped.
+local function OwingSince(elapsed)
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.bags = { [0] = { GLOVES } }
+    RaidSim.As(lm, function()
+        lm.KART.LC.pendingTrades = {
+            { itemLink = GLOVES, winnerKey = alric.guid, rollID = 90, lootedAt = time() - elapsed },
+        }
+    end)
+    return sim, lm
+end
+
+-- Mid-pull, the chat line waits (B3) --------------------------------------------------------------
+-- The 5-minute ticker lands whenever it lands, and a raid spends most of its evening in a pull. A
+-- trade warning printed there is read after the fight if at all, and it arrives on top of whatever
+-- the player is actually doing.
+do
+    local _, lm = OwingSince(TRADE_WINDOW - 600) -- ten minutes of trade window left
+    KARTTEST.inCombat = true
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(out, "", "nothing is said while the raid is in combat")
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(lm, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find("Gloombind", 1, true),
+        "and the warning arrives once the pull is over: " .. after)
+end
+
+-- ...while the obligation itself still dies on schedule -------------------------------------------
+-- Only the PRINT waits. An entry past the window is a lie whether or not anybody is in combat, and
+-- leaving it in the list until the fight ends is exactly the "row that looks live but is dead" B47
+-- removed.
+do
+    local _, lm = OwingSince(TRADE_WINDOW + 60)
+    KARTTEST.inCombat = true
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(#lm.KART.LC.pendingTrades, 0, "the dead obligation is dropped mid-pull like any other")
+    T.eq(out, "", "but the line about it waits")
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(lm, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find("Gloombind", 1, true), "and is said afterwards: " .. after)
+end

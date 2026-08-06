@@ -215,6 +215,27 @@ local TRADE_TIMEOUT_SECONDS = 4 * 60 * 60
 local TRADE_TIMEOUT_WARN_AT = TRADE_TIMEOUT_SECONDS - 20 * 60 -- warn with 20 minutes left
 local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
 
+-- The chat lines the trade clock produces, held back while the raid is in a pull. Everything else
+-- keeps running in combat -- Blizzard's window does not pause, so neither does the expiry below --
+-- but a line printed mid-pull is read after the fight if at all, and it lands on top of whatever the
+-- player is actually doing. Held rather than dropped: the item is still owed either way.
+local deferredNotices = {}
+local combatFrame = CreateFrame("Frame")
+combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+combatFrame:SetScript("OnEvent", function()
+    for _, line in ipairs(deferredNotices) do print(line) end
+    wipe(deferredNotices)
+end)
+
+-- Says text now, or once the pull is over.
+local function TradeNotice(text)
+    if InCombatLockdown() then
+        deferredNotices[#deferredNotices + 1] = text
+    else
+        print(text)
+    end
+end
+
 -- Warns once (per entry, via entry.timeoutWarned) as a pending trade's item approaches the end of
 -- its Bind-on-Pickup trade-eligibility window (see TRADE_TIMEOUT_SECONDS). Never removes the entry itself — that still
 -- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
@@ -244,12 +265,12 @@ function Trade.CheckTradeTimeouts()
             dropped = true
             -- Said once, at the moment it dies. A row vanishing from the reminder list on its own is
             -- exactly the kind of silence this addon has been paying for elsewhere.
-            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
+            TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
                 entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)))
         elseif not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
             entry.timeoutWarned = true
             local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
-            print(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
+            TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
                 entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
         end
     end
