@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Recipes and patterns now go through the loot council** instead of Blizzard's roll window.
 
 ### Fixed
+- **Auto-Pass works again for everyone**, even when the item's announcement never arrived.
 - **Auto-Pass keeps working after a reload or a disconnect** in a running session.
 - **An item you were caught up on is the real item**, with its true item level and a working tooltip.
 - **Tier tokens your class cannot use are passed on** like any other item you cannot wear.
 - **Housing decor stays out of the loot council**, like mounts, pets and toys.
+- **The raidlead bar's buttons work again** — markers, Clear World Markers and Ready Check.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

@@ -11,10 +11,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Rezepte und Muster laufen jetzt über das Loot Council** statt über Blizzards Würfelfenster.
 
 ### Behoben
+- **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.
 - **Auto-Pass funktioniert weiter nach einem Neuladen oder einer Verbindungstrennung** in einer laufenden Session.
 - **Ein nachgeliefertes Item ist das echte Item** — richtiges Itemlevel, funktionierender Tooltip.
 - **Tier-Tokens, die deine Klasse nicht nutzen kann, werden gepasst** wie alles andere, was du nicht tragen kannst.
 - **Housing-Dekoration bleibt aus dem Loot Council heraus**, wie Reittiere, Haustiere und Spielzeug.
+- **Die Knöpfe der Raidlead-Leiste funktionieren wieder** — Marker, Marker löschen und Bereitschaftscheck.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben
