@@ -2135,7 +2135,22 @@ end
 function LC.HandleRollCatchup(payload, senderKey)
     local rollID = tonumber(payload:match("^(%d+):"))
     if not rollID then return end
-    if LC.rollItems[rollID] then return end        -- already have it; nothing to catch up
+    -- "Already TOLD about it", not "already have it", and the difference is the whole value of this
+    -- message. LC.rollItems is also written by LC.OnStartLootRoll, so every raider who was present
+    -- and eligible -- which is most of them -- looked as though they had been caught up already,
+    -- whether or not the announcement ever arrived. The repair reached only the clients that had no
+    -- roll of their own: dead, out of range, or reloading.
+    --
+    -- What that cost is the thing the module is judged on. AutoPassAnnounced requires
+    -- LC.rollAnnounced, only LC.HandleStart sets it, and this line is what kept the catch-up from
+    -- reaching it -- so a raider whose announcement was lost kept Blizzard's roll window for the rest
+    -- of the round with no way back, and the heartbeat that exists to repair exactly that was refused
+    -- at the door. "Das funktioniert schon wieder nicht, können wir nicht einfach das Modul wieder
+    -- abschaffen", 2026-08-05.
+    --
+    -- Still a refusal, and still the one that matters: once the announcement HAS landed, a repeat is
+    -- noise, and re-running LC.HandleStart for it would re-open a vote row the round has moved past.
+    if LC.rollAnnounced[rollID] then return end    -- already told about it; nothing to catch up
     -- Nor one we put away ourselves (LC.rollDismissed) -- while it is still the item we put away. We
     -- stopped asking the moment the tab was closed, but an answer to the LAST ask can still be in
     -- flight, and taking it would reopen the panel for an item this client is finished with -- the

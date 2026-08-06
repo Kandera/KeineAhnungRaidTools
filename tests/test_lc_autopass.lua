@@ -238,3 +238,54 @@ do
     T.eq(PassedBy(sim, 60, "Corvin"), 0,
         "and the roll it already saw is passed after all, rather than left open for the evening")
 end
+
+-- The announcement is lost outright, and Auto-Pass still happens -------------------------------------
+-- This is the chain the module is judged on. A raider who has to click Blizzard's window is a raider
+-- who asks why the addon is installed -- "das funktioniert schon wieder nicht, können wir nicht
+-- einfach das Modul wieder abschaffen", reported on 2026-08-05 -- and every separate repair built
+-- since then exists to keep that from happening. Nothing had ever asserted that they compose.
+--
+-- Four links, and each one has its own test elsewhere; this one is about the whole rope:
+--   the announcement is lost      -> the lootmaster's heartbeat says what is on the table
+--   the client notices the gap    -> LC_ROLL_REQ
+--   the owner answers             -> LC_ROLL_CATCHUP -> LC.HandleStart
+--   HandleStart marks it announced-> AutoPassAnnounced finally has both halves
+do
+    local sim = NewRaid()
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 70, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    for _, name in ipairs(AUTOPASSERS) do
+        T.is_nil(PassedBy(sim, 70, name), name .. " cannot pass yet -- nobody has told them anything")
+    end
+    T.eq(PassedBy(sim, 70, "Bramor"), 1, "while the lootmaster force-won it regardless of the message")
+
+    -- Nothing is re-sent by hand. The heartbeat falls due, the clients ask, the owner answers.
+    KARTTEST.AdvanceTime(4)
+    for _, name in ipairs(AUTOPASSERS) do
+        T.eq(PassedBy(sim, 70, name), 0,
+            name .. " passes once the repair reaches them, without the announcement ever arriving")
+    end
+end
+
+-- ...and the same when the client also missed the session itself ------------------------------------
+-- The shape of a raider who restarted mid-evening: no session state, no announcement, and Blizzard's
+-- roll window already up. Both repairs have to land, in either order.
+do
+    local sim, lm = NewRaid()
+    local corvin = sim.byName.Corvin
+    RaidSim.As(corvin, function()
+        corvin.KART.LC.sessionActive = false
+        corvin.KART.LC.sessionStateKnown = false
+    end)
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 71, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.is_nil(PassedBy(sim, 71, "Corvin"), "nothing has reached this client at all yet")
+
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_ACTIVE:1") end)
+    KARTTEST.AdvanceTime(5)
+    T.eq(PassedBy(sim, 71, "Corvin"), 0,
+        "and once both the session and the item have found their way there, it passes")
+end
