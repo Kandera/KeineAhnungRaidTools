@@ -65,6 +65,21 @@ function T.deep_eq(actual, expected, label)
     if not same(actual, expected) then
         failures = failures + 1
         print("FAIL  " .. label .. " (tables differ)")
+        -- Dump both tables in a stable order, so an intermittent failure leaves evidence behind
+        -- (B136: "tables differ" alone said nothing about nil-vs-content-vs-key-form, and the
+        -- failure could not be reproduced on demand to find out). Costs nothing on a green run.
+        local function dump(t)
+            if type(t) ~= "table" then return tostring(t) end
+            local parts = {}
+            for k, v in pairs(t) do
+                parts[#parts + 1] = tostring(k) .. "=" .. tostring(v)
+                    .. "(" .. type(k) .. "/" .. type(v) .. ")"
+            end
+            table.sort(parts)
+            return "{" .. table.concat(parts, ",") .. "}"
+        end
+        print("        expected: " .. dump(expected))
+        print("        actual:   " .. dump(actual))
     end
 end
 

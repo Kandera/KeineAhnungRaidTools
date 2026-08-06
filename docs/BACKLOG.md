@@ -78,28 +78,45 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
-## B136 — OPEN — the suite fails intermittently, and it did before anyone noticed
+## B136 — NARROWED — the suite failed intermittently; 2,521 runs later it will not do it again
 
-`tests/test_lc_rolltable.lua:321` and `:401` ("with the numbers that go with it") fail on roughly
-1 run in 4 to 1 in 20. Reproduced on a pristine tree before any change was made to it, so it is not
-caused by whatever is being worked on when it appears.
+What was observed on 2026-08-06 (morning): `tests/test_lc_rolltable.lua:321` and `:401` ("with the
+numbers that go with it") failing on roughly 1 run in 4 to 1 in 20, on a tree with no local changes.
+The cost was real -- an attempt at #28 was assessed against a run where one of its two failures was
+this flake, and the attempt was read as more broken than it was.
 
-Two causes, and only the first is fixable by seeding:
+**Measured that afternoon, same machine, and none of it reproduced:**
 
-* LuaJIT 2.1 seeds `math.random` per process unless the suite pins it.
-* **`pairs()` does not iterate in a stable order across processes in this build.** Probed directly:
-  both string and table keys reorder run to run. No seed reaches this.
+| where | runs | red |
+|---|---|---|
+| `18dae43` (HEAD), full suite | 381 (incl. one coverage run, JIT off) | 0 |
+| `18dae43`, `test_lc_rolltable.lua` alone in a minimal harness | 2,000 | 0 |
+| `8130eee` (compile-once suite) | 100 | 0 |
+| `9b03776` (before the c312a19 catch-up fix) | 40 | 0 |
 
-Related to B70, which is the same family of problem seen from the addon's side.
+At the claimed 1-in-20 floor, 381 green runs in a row has probability ~3e-9. Whatever produced the
+morning's reds is not producible on this tree, and was already not producible at `9b03776` -- so
+"one of the day's fixes killed it" is not confirmed either. No root cause; the failure cannot be
+made to happen, and a fix without one would be a guess.
 
-**Why it is worth fixing rather than living with, and why now:** a suite that sometimes goes red for
-nothing is a suite whose red is negotiable. On 2026-08-06 that already cost real accuracy -- an
-attempt at #28 was assessed against a run where one of the two failing assertions was this flake, and
-the attempt was read as more broken than it was. Before a raid that decides whether the module stays,
-"that one is just flaky" is exactly the sentence that lets a genuine regression through.
+**What the hunt refuted, so nobody re-walks it:**
 
-The fix is to make the assertion independent of iteration order rather than to seed around it: the
-comparison is over a roll table, and a test that compares tables should compare them as sets.
+* "LuaJIT seeds `math.random` per process" -- false on this machine. Probed: the first
+  `math.random` value is IDENTICAL across processes. The only per-process variance is `pairs()`
+  order (string-hash randomization is active; probed, it does reorder run to run).
+* "Compare the roll table as a set instead of by iteration order" -- rests on a false premise.
+  `T.deep_eq` compares by key, both directions; it is already order-independent. A red there means
+  the tables genuinely differ (or one side is nil), not that iteration order leaked in.
+* The harness clock is fully virtual (fixed epoch, `wow_stubs.lua`), so machine load cannot reach
+  a test's timing.
+
+**What is in place for the next occurrence:** `T.deep_eq` now prints both tables, sorted, with key
+and value types, on every failure (tests/run.lua). "tables differ" could not distinguish
+nil-vs-content-vs-key-form, which is exactly the question a root cause needs answered. The next red
+leaves its evidence behind whether or not anyone is hunting it.
+
+The stakes note stands: a red that is negotiable is how a real regression gets waved through. If it
+fires again, the dump decides the mechanism -- do not re-derive the refuted theories above.
 
 
 ## B135 — OPEN — the pipe is full, and nobody has measured what fills it
