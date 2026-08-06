@@ -122,7 +122,11 @@ KASC.CommsRestricted = CommsRestricted
 -- pcall'd for the same reason the event registration below is: an older client has no such API, and
 -- the cost of being wrong must be that this seed is inert, never that the library fails to load.
 --
--- No flush here: this only ever CLOSES the gate, and at both call sites nothing has been queued yet.
+-- No flush here, and it only ever CLOSES the gate. Note what that does NOT say: PLAYER_ENTERING_WORLD
+-- fires on every zone and instance transition, not only at load, so "nothing has been queued yet" --
+-- which is what stood here -- is not true in general. What is true is that the queue can only hold
+-- something while the gate is shut, and this function never opens it, so there is never anything to
+-- flush AT this call. The release still arrives as ADDON_RESTRICTION_STATE_CHANGED and still flushes.
 local function SeedRestrictions()
     local ask = C_RestrictedActions and C_RestrictedActions.GetAddOnRestrictionState
     if not ask then return end

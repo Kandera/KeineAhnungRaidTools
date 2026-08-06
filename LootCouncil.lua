@@ -5170,6 +5170,11 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- The lootmaster physically wins everything Council decides on, so he can hand it over
         -- through Blizzard's BoP trade window afterwards.
         ForceWinRoll(rollID)
+        -- Recorded here too, or the one client that never writes a verdict is the loot owner's --
+        -- and that is the client the Manifest asks the raid for a /kart status from. An empty
+        -- Auto-Pass block reads as "nothing was decided here", which is a different claim from "we
+        -- took it, so there was nothing to pass". Same verdict AutoPassAnnounced uses for the owner.
+        LC.RecordPassGate(rollID, "owner")
         -- We rolled Need on it ourselves, so from here on this roll counts as ours to hand out even
         -- if a previous round left a stale mark under the same rollID (Blizzard reuses them).
         LC.rollNotInOurBags[rollID] = nil
@@ -5183,6 +5188,13 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- to wait for and the lootmaster passes on them too.
         RollOnLoot(rollID, 0)
     elseif KART_Settings.lcAutoPass and councilEngages then
+        -- Purged BEFORE the announcement is consulted. The purge below runs a few lines later, and
+        -- "later" was too late: on a rollID Blizzard has reused, LC.rollAnnounced still held the
+        -- PREVIOUS item's flag, so this passed the new one on the strength of an announcement that
+        -- was about something else -- B63's guarantee defeated through the back door, on a client
+        -- that was never told about the item it just gave away. Idempotent, so the call below is
+        -- unaffected; it stays because the other branches reach it too.
+        PurgeStaleRoll(rollID, LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or "")
         -- An item the council WILL take up -- but only once it demonstrably has (B63). If the owner's
         -- announcement came in first this passes right here; if it has not arrived yet, HandleStart
         -- does it when it does; if it never arrives, we deliberately never pass.

@@ -381,6 +381,13 @@ do
     local sim, lm = F.NewRaid()
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
+    -- Cleared explicitly, because since D2 a reload no longer produces a client holding no config --
+    -- it restores one from disk, and LC.HandleConfigRelay refuses a relay outright while anything is
+    -- held (its `next(LC.raidConfig) ~= nil` guard). Without this the assertions below are satisfied
+    -- by the restored config and the relay under test never runs at all: delete RelayRaidConfig's
+    -- presence field and the case still passes. The state being modelled is a client that has been
+    -- told nothing yet, which is what a reload used to leave behind.
+    RaidSim.As(leader, function() wipe(leader.KART.LC.raidConfig) end)
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(1)
 
@@ -470,6 +477,13 @@ do
     local sim, lm = F.NewRaid()
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
+    -- Cleared explicitly, because since D2 a reload no longer produces a client holding no config --
+    -- it restores one from disk, and LC.HandleConfigRelay refuses a relay outright while anything is
+    -- held (its `next(LC.raidConfig) ~= nil` guard). Without this the assertions below are satisfied
+    -- by the restored config and the relay under test never runs at all: delete RelayRaidConfig's
+    -- presence field and the case still passes. The state being modelled is a client that has been
+    -- told nothing yet, which is what a reload used to leave behind.
+    RaidSim.As(leader, function() wipe(leader.KART.LC.raidConfig) end)
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(1)
 

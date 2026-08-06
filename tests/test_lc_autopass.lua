@@ -289,3 +289,29 @@ do
     T.eq(PassedBy(sim, 71, "Corvin"), 0,
         "and once both the session and the item have found their way there, it passes")
 end
+
+-- A reused rollID does not inherit the previous item's announcement ---------------------------------
+-- B63's guarantee is that nothing is passed until the council demonstrably has the item. Blizzard
+-- reuses roll numbers within seconds, and LC.OnStartLootRoll consults LC.rollAnnounced BEFORE
+-- PurgeStaleRoll clears the previous roll's state from under that number -- so the SECOND item, which
+-- nobody announced and which may not be council's business at all, was passed on the strength of the
+-- first one's announcement. The exact failure B63 was written for, reached through the back door.
+do
+    local sim = NewRaid()
+    local raider = sim.byName.Alric
+
+    Drop(sim, 96, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    T.truthy((KARTTEST.rolled[96] or {})[raider.unit] ~= nil,
+        "the announced item is passed, as it should be")
+
+    -- The same number, a different item, and this client is never told about it.
+    KARTTEST.rolled[96] = nil
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 96, F.WEAPON)
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Deliver(sim, "LC_DROP")
+
+    T.is_nil((KARTTEST.rolled[96] or {})[raider.unit],
+        "the unannounced item reusing that number is not passed on the strength of the first one")
+end

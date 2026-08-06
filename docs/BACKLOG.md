@@ -3840,3 +3840,37 @@ combat, and is dropped on schedule) — and holding the removal back until comba
 reverted against the test that encodes the second. The residue is one lost sentence in the case where
 the player disconnects mid-pull, and closing it needs the notice queue persisted. Not worth new
 SavedVariables machinery days before the raid that decides the module.
+
+
+## B148 — FIXED 2026-08-06 — Auto-Pass read the previous item's announcement on a reused rollID
+
+Found while tracing D1's gate probe (B146) in the integrated review; pre-existing rather than new to
+these packages — the same ordering is at `3804d62`.
+
+B63's guarantee is that nothing is passed until the council demonstrably has the item, and it is the
+guarantee the module lives or dies by. `LC.OnStartLootRoll` consults `AutoPassAnnounced` — which reads
+`LC.rollAnnounced[rollID]` — a few lines BEFORE it calls `PurgeStaleRoll`, which is what clears the
+previous roll's state from under a reused number. So the second item, announced by nobody and possibly
+not council's business at all, was passed on the strength of the first one's announcement, on a client
+that had never been told about the item it just gave away. `LC.HandleStart` purges first and does not
+have this.
+
+Reproduced: an announced item under rollID 96 passes correctly; the announcement for the item that
+reuses 96 is blackholed; the raider passes it anyway.
+
+**Fixed 2026-08-06.** The purge runs first in that branch. It is idempotent, so the later call — which
+the other branches reach — is unaffected.
+
+Also here, and smaller: the loot owner's own client recorded no Auto-Pass verdict at all, because it
+force-wins in a different branch and never reaches `AutoPassAnnounced`. Its `/kart status` printed an
+empty Auto-Pass block, which reads as "nothing was decided here" — a different claim from "we took it,
+so there was nothing to pass", on the client the Manifest asks the raid to screenshot. It records the
+same `owner` verdict now.
+
+**Not fixed, deliberately.** The `unaware` verdict is recorded above every council-eligibility test, so
+a mount or a green seen while no session is known takes one of the ten ring slots. Moving it below the
+eligibility work means restructuring the session gate's early return, which is not a thing to do to the
+Auto-Pass path days before the raid. Noise in a diagnostic, and it is labelled as such.
+
+Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number is not passed on the
+strength of the first one".
