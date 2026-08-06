@@ -267,7 +267,7 @@ do
     AssertNumbersIntact(sim, lm, 992, "a raider left between two raises")
 end
 
--- ...and a peer's table landing under the same id before the window closes (B135) --------------------
+-- ...and a peer's table landing under the same id before the window closes (B137) --------------------
 -- The entry is written when the item drops and serialized up to half a second later, and
 -- LC.rolls[rollID] is shared mutable state in between: in the B130 ownership-disagreement corner a
 -- peer's table for the arriving item can already be stored under that id by the time the batch

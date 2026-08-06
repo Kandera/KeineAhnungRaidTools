@@ -950,7 +950,7 @@ nothing can reach, and chasing it is time spent on an assertion that could never
 The original entry (2026-08-02) listed 64 surviving line numbers across `LootCouncil.lua` and
 `LootCouncilVote.lua`. **Those numbers are gone from this entry, and deleting them is the finding.**
 49 commits went over `LootCouncil.lua` between then and now — the comms rework, AceComm, one message
-per boss, the heartbeat, LibDeflate, B127/B130/B135 — and the file went from 3678 lines to 5261. Every
+per boss, the heartbeat, LibDeflate, B127/B130/B137 — and the file went from 3678 lines to 5261. Every
 number in that list pointed somewhere else. They were evidence that a measurement had happened, not a
 worklist, and keeping them would have cost the next session an afternoon before it noticed.
 
@@ -3410,7 +3410,10 @@ Loot drops at the end of an encounter, which is exactly when that window is clos
 an exotic corner. It does not change the verdict — the loss is still loud and `/kart add` is still
 the recovery — but the belt is thinner than the paragraph above alone reads.
 
-## B135 — FIXED 2026-08-05 — a batch can flush after a peer's table for the same rollID has already landed
+## B137 — FIXED 2026-08-05 — a batch can flush after a peer's table for the same rollID has already landed
+
+(Recorded as a second "B135" until 2026-08-06 — the number was already taken by the send-volume
+entry above. Renumbered so the two stop sharing citations; code comments moved with it.)
 
 Found in review of the one-message-per-boss change (`LC_DROP`), not by a raid.
 

@@ -3925,7 +3925,7 @@ end
 -- With rolls switched off raid-wide there is no table, so this answers with an EMPTY list -- which is
 -- exactly what the format asks for (design §B and §F: no numbers, and no name list either).
 --
--- Second return: a COPY of the numbers the head was derived from, for the caller to keep (B135). A
+-- Second return: a COPY of the numbers the head was derived from, for the caller to keep (B137). A
 -- batch entry is written now and serialized up to half a second later, and LC.rolls[rollID] is shared
 -- mutable state that a peer's table for the same id can replace in between (the B130 disagreement
 -- corner) -- so an entry that read it at send time could ship numbers this client never drew, at a
@@ -3974,7 +3974,7 @@ function LC.SerializeDrop(kind, secs, keys, entries)
         -- the receiver reads as "this item has no numbers". Filling it with zeros instead would hand
         -- every raider a roll of 0 for an item the raid deliberately does not roll on.
         --
-        -- The entry's OWN copy, taken when the entry was created (B135), not LC.rolls[e.rollID] as it
+        -- The entry's OWN copy, taken when the entry was created (B137), not LC.rolls[e.rollID] as it
         -- stands now: this runs up to half a second after the entry was written, and by then that
         -- table can be a peer's rather than this client's.
         local rolls = e.rolls
@@ -4774,7 +4774,7 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- the roster a line above while LC.DrawRollTable keeps the table it has already shown the
         -- raid, so the snapshot is the one thing here that is allowed to be out of date.
         --
-        -- The numbers come back with it and travel in the entry (B135): the message is serialized
+        -- The numbers come back with it and travel in the entry (B137): the message is serialized
         -- when the window closes, and LC.rolls[rollID] is not guaranteed to still be this client's
         -- table by then.
         local keys, rolls = LC.DrawnKeys(rollID)
@@ -5275,7 +5275,7 @@ function LC.StartManualRoll(itemsText)
         -- synchronous loop, so nothing can walk in between two items and every one of them draws
         -- against the same roster. Rolls switched off raid-wide therefore leaves the head empty too,
         -- which is what design §B asks for -- it used to carry the whole roster for nothing.
-        -- The numbers ride in the entry, from the same read as the head (B135) -- this path serializes
+        -- The numbers ride in the entry, from the same read as the head (B137) -- this path serializes
         -- in the same breath, so nothing can move underneath it, but there is one entry shape and one
         -- rule about where an entry's numbers come from.
         local itemKeys, rolls = LC.DrawnKeys(rollID)
