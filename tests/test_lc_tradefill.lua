@@ -457,3 +457,53 @@ do
     local out = Capture(function() RaidSim.As(alric, alric.KART.LC.Trade.CheckTradeTimeouts) end)
     T.eq(out, "", "a plain raider hears nothing about an item they are not holding")
 end
+
+-- Who on this list is reachable right now (B2) ------------------------------------------------------
+-- The lootmaster works the reminder list by walking up to people, and range was discoverable only by
+-- clicking a row and being told no. The colour answers the question the list is actually asked.
+-- Plain white for a row nothing has coloured yet, so an uncoloured row reads as a wrong colour
+-- rather than crashing the assertion.
+local function NameColor(btn)
+    local r, g, b = btn.text:GetTextColor()
+    return r or 1, g or 1, b or 1
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.inRange = {}
+    RaidSim.As(lm, function()
+        lm.KART.LC.pendingTrades = {
+            { itemLink = GLOVES, winnerKey = alric.guid, rollID = 94, lootedAt = time() },
+        }
+        lm.KART.LC.Trade.RefreshTradeReminder()
+    end)
+    local nameBtn = lm.KART.LC.tradeReminderFrame.rows[1].nameBtn
+    local r, g = NameColor(nameBtn)
+    T.truthy(r > g, "a winner standing too far away reads red")
+
+    KARTTEST.inRange[alric.unit] = true
+    KARTTEST.AdvanceTime(1)
+    r, g = NameColor(nameBtn)
+    T.truthy(g > r, "and turns green when they walk into range, without anybody clicking anything")
+
+    -- CheckInteractDistance is combat-restricted (it answers nil since 9.1), so a red row in a pull
+    -- would mean "we cannot tell" while looking exactly like "they are not here".
+    KARTTEST.inCombat = true
+    KARTTEST.AdvanceTime(1)
+    local br, bg, bb = NameColor(nameBtn)
+    T.truthy(br > 0.9 and bg > 0.9 and bb < 0.5,
+        "in combat the client refuses to answer, and the row says so rather than lying red")
+    KARTTEST.inCombat = false
+    KARTTEST.AdvanceTime(1)
+
+    nameBtn:GetScript("OnEnter")(nameBtn)
+    nameBtn:GetScript("OnLeave")(nameBtn)
+    r, g = NameColor(nameBtn)
+    T.truthy(g > r, "and the mouse leaving the row gives the range colour back, not plain white")
+
+    RaidSim.As(lm, function() lm.KART.LC.tradeReminderFrame:Hide() end)
+    KARTTEST.AdvanceTime(1)
+    T.eq(lm.KART.LC.tradeRangeTicker, nil,
+        "a closed window stops asking the client where everybody is standing")
+end

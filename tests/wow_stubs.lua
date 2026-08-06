@@ -1012,7 +1012,11 @@ function _G.GetItemQualityColor() return 1, 1, 1, "|cffffffff" end
 function _G.CanInspect() return false end
 function _G.NotifyInspect() end
 function _G.ClearInspectPlayer() end
-function _G.CheckInteractDistance() return false end
+-- Who is standing close enough to trade with, as a set of unit tokens a test fills in. A hard false
+-- meant every trade-reminder row read as out of range for ever, so the colour that tells the
+-- lootmaster who is reachable right now could not be asserted at all.
+KARTTEST.inRange = {}
+function _G.CheckInteractDistance(unit, _) return KARTTEST.inRange[unit] == true end
 -- Combat lockdown is a switch a test flips, not a constant. Half this addon has a branch for it
 -- -- the raidlead bar refuses to change frames, keybinds defer themselves -- and a hard false
 -- meant none of those branches had ever run.

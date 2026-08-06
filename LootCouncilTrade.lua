@@ -627,6 +627,58 @@ local function CreateReminderFrame(frameName, titleText, posKey, defaultX)
     return f
 end
 
+-- How the reminder rows say whether the person on them is reachable right now. Green/red is the
+-- question the list is really asked -- the lootmaster works it by walking up to people -- and until
+-- now the answer only came from clicking a row and being told no (LC_TRADE_OUT_OF_RANGE).
+--
+-- Yellow is not a shade of "no": CheckInteractDistance is combat-restricted and answers nil in a
+-- pull, so a red row there would mean "we cannot tell" while looking exactly like "they are not
+-- here". RCLootCouncil colours its own trade rows the same three ways.
+local RANGE_IN      = {0.2, 1, 0.2}
+local RANGE_OUT     = {1, 0.3, 0.3}
+local RANGE_UNKNOWN = {1, 1, 0.2}
+local RANGE_TICK    = 1
+
+-- Colours one row's name button from where its target is standing. The colour is kept on the button
+-- because the hover handlers have to give it back on OnLeave -- plain white there would overwrite
+-- the answer the moment the mouse touched the row it belongs to.
+local function UpdateRowRange(nameBtn)
+    local key = nameBtn.targetKey
+    local unit = key and KASC.Identity.FindUnitForKey(key)
+    local color
+    if InCombatLockdown() then
+        color = RANGE_UNKNOWN
+    elseif unit and CheckInteractDistance(unit, 2) then
+        color = RANGE_IN
+    else
+        color = RANGE_OUT
+    end
+    nameBtn.rangeColor = color
+    if not nameBtn:IsMouseOver() then nameBtn.text:SetTextColor(color[1], color[2], color[3]) end
+end
+
+-- Re-reads the range for every visible row once a second, and stops itself as soon as neither window
+-- is on screen: this asks the client about every name on the list, and a closed window is not asking
+-- anybody anything. Started from the row rebuild below.
+local function StartRangeTicker()
+    if LC.tradeRangeTicker then return end
+    LC.tradeRangeTicker = C_Timer.NewTicker(RANGE_TICK, function()
+        local shown = 0
+        for _, f in pairs({ trade = LC.tradeReminderFrame, owed = LC.owedReminderFrame }) do
+            if f:IsShown() then
+                shown = shown + 1
+                for _, row in ipairs(f.rows) do
+                    if row:IsShown() and row.nameBtn.targetKey then UpdateRowRange(row.nameBtn) end
+                end
+            end
+        end
+        if shown == 0 and LC.tradeRangeTicker then
+            LC.tradeRangeTicker:Cancel()
+            LC.tradeRangeTicker = nil
+        end
+    end)
+end
+
 -- Rebuilds f's rows from entries (LC.pendingTrades or LC.owedToMe). getTargetKey(entry) resolves
 -- which player this row's trade partner is; removeByRollID(rollID) is called when a row's
 -- done-button is clicked (Trade.RemovePendingTrade or Trade.RemoveOwedItem, per window).
@@ -660,7 +712,10 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
             row.nameBtn.text:SetPoint("RIGHT")
             row.nameBtn.text:SetJustifyH("LEFT")
             row.nameBtn:SetScript("OnEnter", function(self) self.text:SetTextColor(KART.UI:AccentColor()) end)
-            row.nameBtn:SetScript("OnLeave", function(self) self.text:SetTextColor(1, 1, 1) end)
+            row.nameBtn:SetScript("OnLeave", function(self)
+                local c = self.rangeColor
+                if c then self.text:SetTextColor(c[1], c[2], c[3]) else self.text:SetTextColor(1, 1, 1) end
+            end)
 
             row.doneBtn = CreateFrame("Button", nil, row) -- child of row so it hides with it
             row.doneBtn:SetSize(16, 16)
@@ -681,6 +736,8 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
         row.text:SetText(entry.itemLink or "???")
         local targetKey = getTargetKey(entry)
         row.nameBtn.text:SetText(KASC.Identity.ResolveDisplayName(targetKey))
+        row.nameBtn.targetKey = targetKey
+        UpdateRowRange(row.nameBtn)
         local capturedRollID = entry.rollID
         row.doneBtn:SetScript("OnClick", function() removeByRollID(capturedRollID) end)
         row.nameBtn:SetScript("OnClick", function()
@@ -708,6 +765,7 @@ local function RefreshReminderRows(f, entries, getTargetKey, removeByRollID)
 
     f:SetHeight(8 + 26 + #entries * 26 + 8)
     f:Show()
+    StartRangeTicker()
 end
 
 -- Rebuilds the reminder list from LC.pendingTrades; hides the frame entirely once it's empty.
