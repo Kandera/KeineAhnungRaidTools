@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tier tokens your class cannot use are passed on** like any other item you cannot wear.
 - **Housing decor stays out of the loot council**, like mounts, pets and toys.
 - **The raidlead bar's buttons work again** — markers, Clear World Markers and Ready Check.
+- **Far less addon traffic after each boss** — the lootmaster's send queue stays clear.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

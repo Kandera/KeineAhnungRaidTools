@@ -294,25 +294,30 @@ do
 end
 
 -- A missing ITEM is catchable after voting closed too, and arrives without a vote row -------------
--- The accepted other half of the same decision. A raider who is not on the council stops tracking a
--- roll a second after its deadline (Vote.PruneExpiredRolls), so this is what a lost LC_START looks
--- like from the outside once the timer is gone. The catch-up must not answer it with a one-second
--- vote window -- the row would flash up and the prune sweep would tear the whole repair back down a
--- tick later, numbers included.
+-- The accepted other half of the same decision, on the client it was decided FOR: one that never
+-- heard the announcement at all -- dead, released or out of range at the drop (no roll of its own),
+-- and the broadcast lost on top. Until B135 this test reached "not tracked" by letting an INFORMED
+-- raider expire the roll, as a stand-in for the deaf one; the two really are indistinguishable to
+-- the OWNER, but not to the asker, and the expired client asking again is exactly the burst B135
+-- measured. So the deaf client is now built the way :B132's test below builds one, and the expired
+-- client has its own test after this one, asserting the opposite.
+-- The catch-up must not answer with a one-second vote window either -- the row would flash up and
+-- the prune sweep would tear the whole repair back down a tick later, numbers included.
 do
     local sim, lm = F.NewRaid()
     local raider = sim.byName.Alric
 
-    -- Held back only long enough to see the roll actually gone. Without this the repair lands on the
-    -- same heartbeat tick that the expiry sweep runs on, and the test could not tell a client that
-    -- lost the item from one that never did.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    -- The repair itself is held back too, or there is no "after voting closed" to test: the
+    -- heartbeat names the missing item within seconds and the deaf client would be caught up while
+    -- the window still runs -- which is the ordinary repair other tests already cover.
     RaidSim.Blackhole(sim, "LC_ROLL_CATCHUP")
-    F.Drop(sim, 931, F.GLOVES)
-    local lootedAt = raider.KART.LC.rollLootedAt[931]
-    KARTTEST.AdvanceTime(25) -- past the default 20s window: the plain raider has dropped the roll
-    T.eq(raider.KART.LC.rollItems[931], nil, "a plain raider stops tracking a roll once voting closes")
-    T.eq(F.HasVoteRow(raider, 931), false, "and has no row for it")
+    F.Drop(sim, 931, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1) -- the announcement goes out -- and is lost -- inside the blackhole
+    RaidSim.Deliver(sim, "LC_DROP")
+    T.eq(raider.KART.LC.rollItems[931], nil, "the deaf raider knows nothing of the drop")
 
+    KARTTEST.AdvanceTime(25) -- past the default 20s window: voting closes without it ever knowing
     RaidSim.Deliver(sim, "LC_ROLL_CATCHUP")
     RaidSim.ClearLog(sim)
     KARTTEST.AdvanceTime(35) -- past ROLL_REQ_COOLDOWN, then the next heartbeat, ask and answer
@@ -322,10 +327,48 @@ do
     T.eq(F.HasVoteRow(raider, 931), false, "and without a vote on something that closed")
     T.truthy(raider.KART.LC.rollDeadlines[931] <= GetTime(),
         "its deadline stays in the past rather than being reopened")
-    -- A repair minutes after the drop must not restart the four-hour BoP trade window; the stamp the
-    -- client took when the item really dropped outlives the roll for exactly this reason.
-    T.eq(raider.KART.LC.rollLootedAt[931], lootedAt,
-        "and its trade clock still runs from the drop, not from the repair")
+    -- The deaf client never saw the loot event, so its BoP trade clock can only date from the
+    -- repair. That errs towards a reminder that outlives the real window, which is the accepted
+    -- direction for a client that may yet be handed the item (LC.HandleRollCatchup's comment).
+    T.truthy(raider.KART.LC.rollLootedAt[931] ~= nil,
+        "and the repair leaves it a trade clock to run on")
+end
+
+-- ...but a raider that WATCHED the window close does not ask for the item back (B135) --------------
+-- The other half of the split above, and the cut that empties the lootmaster's queue: an informed
+-- raider whose roll expired (Vote.PruneExpiredRolls) knows exactly what it freed. Re-asking bought
+-- nothing -- the answer is a closed item with no vote row -- and it cost 27 raiders x 6 items x 2
+-- whispered answers from the owner in one synchronized burst per boss, which is the 1,578-message
+-- queue of 2026-08-05 (see docs/BACKLOG.md, B135). The roll the raider might still be missing
+-- NUMBERS for is untouched: needRolls has its own ask, and C13 keeps it.
+do
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    F.Drop(sim, 933, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    T.truthy(raider.KART.LC.rollItems[933] ~= nil, "the raider was told about the drop")
+    local lootedAt = raider.KART.LC.rollLootedAt[933]
+    T.truthy(lootedAt ~= nil, "and stamped its trade clock at the loot event")
+
+    KARTTEST.AdvanceTime(23) -- past the default 20s window: the plain raider frees the roll
+    T.eq(raider.KART.LC.rollItems[933], nil, "a plain raider stops tracking a roll once voting closes")
+
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(40) -- a forced heartbeat repeat and a full ROLL_REQ_COOLDOWN
+
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_REQ"), 0, "nobody asks for an item everybody watched close")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0, "so the owner's queue stays empty")
+    T.eq(raider.KART.LC.rollItems[933], nil, "and the freed roll stays freed")
+    T.eq(raider.KART.LC.rollLootedAt[933], lootedAt,
+        "while the trade clock still runs from the drop, in case the council awards it here")
+
+    -- Blizzard reuses the number for a different item: the note about the expired roll must not
+    -- make this client deaf to a drop nobody here ever decided about (the B132 rule, again).
+    F.Drop(sim, 933, F.WEAPON)
+    KARTTEST.AdvanceTime(2)
+    T.truthy(tostring(raider.KART.LC.rollItems[933]):match("item:" .. F.WEAPON),
+        "a reused rollID reaches it like any fresh drop")
 end
 
 -- ...but what a client PUT AWAY is not what a client lost -------------------------------------------

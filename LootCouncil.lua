@@ -2296,6 +2296,27 @@ function LC.ForgetDismissalIfReused(rollID, itemID)
     end
 end
 
+-- What this client watched EXPIRE -- the second thing the repair path cannot work out for itself,
+-- and the cheaper sibling of LC.rollDismissed above. A plain raider frees a roll the moment its
+-- voting window closes (Vote.PruneExpiredRolls), the owner keeps the item on the table until it is
+-- decided, and the heartbeat therefore keeps naming it -- so every raider in the raid asked for
+-- every closed item back on the same heartbeat, and the owner answered each of them separately, two
+-- whispers per asker per roll. Measured at 30 clients and one six-item boss: 162 asks in one burst,
+-- 324 queued answers, two and a half minutes of despooling -- the lootmaster's 1,578-message queue
+-- of 2026-08-05 (B135). The answer bought the asker nothing it needed: a closed item arrives
+-- tracked, rowless and invisible, which is also the half of #28 a raider can see.
+--
+-- Gates ONLY the needItem ask. needRolls stays free (C13: the council scores after the timer, so a
+-- client still HOLDING the item must be able to ask for the numbers it is missing), and so does the
+-- genuinely deaf client this repair exists for: one that never heard the announcement has no stamp
+-- here and asks exactly as before. "I watched it close" is knowledge the asker has and the owner
+-- does not -- the earlier attempt to give the OWNER this distinction died on that asymmetry.
+--
+-- Same shape and lifecycle as the dismissal note: [rollID] = itemID (or `true` for "???"), runtime
+-- only, outlives Trade.ClearRollState on purpose, cleared by a roll START under the ID
+-- (PurgeStaleRoll), by a heartbeat naming a different item under it, and by the round ending.
+LC.rollExpiredHere = LC.rollExpiredHere or {}
+
 local tableTicker
 local lastTableWasEmpty = true
 -- The message last put on the wire, and when. The tick compares against the STRING it would send, not
@@ -2489,12 +2510,30 @@ function LC.HandleTable(payload, senderKey, sender)
             end
         end
 
+        -- A note about an item that expired HERE gates the item ask below -- but only while the
+        -- heartbeat still names the item it was stamped for. A different item under the number is
+        -- Blizzard's reuse (B132): the expired roll is over, the note comes off, and the ask goes
+        -- out on this same heartbeat. Compared only when both sides are comparable, exactly like
+        -- the dismissal note above -- an unresolved stamp (`true`) or an unnamed item (itemID "0")
+        -- keeps the gate closed, erring towards silence about a roll this client already watched
+        -- end.
+        local expiredHere = rollID and LC.rollExpiredHere[rollID]
+        if type(expiredHere) == "string" and itemID and itemID ~= "0" and expiredHere ~= itemID then
+            LC.rollExpiredHere[rollID] = nil
+            expiredHere = nil
+        end
+
         -- Two reasons to ask, and the second is new: the item itself is missing, or the item is here
         -- but its roll table never arrived. The table travels as one message for the whole raid, so
         -- losing it costs everybody's numbers at once -- which is exactly why it has to be askable.
         -- Read AFTER the purge above, so a reuse this client just learned about is asked for on the
         -- same heartbeat rather than the next one.
-        local needItem  = rollID and not LC.rollItems[rollID]
+        --
+        -- needItem alone respects the expiry note: an item this client tracked to the end of its
+        -- window and freed is not a gap, and re-fetching it was the B135 burst. needRolls cannot
+        -- see the note by construction -- it requires the item to be tracked, and a tracked item
+        -- was never pruned.
+        local needItem  = rollID and not LC.rollItems[rollID] and not expiredHere
         local needRolls = rollID and LC.rollItems[rollID] and LC.GetRollsEnabled()
                           and not LC.rolls[rollID]
         -- ...and one reason not to ask at all: a roll this client threw away itself
@@ -2987,8 +3026,9 @@ function LC.ClearAllRolls()
     if LC.rollsAnswerAt then wipe(LC.rollsAnswerAt) end
     -- Same block, same convention. The round is over for the whole raid, so there is nothing left for
     -- this client to be refusing to ask about -- and a flag kept past that would silence the repair
-    -- for whatever rollID Blizzard hands out next (LC.rollDismissed).
+    -- for whatever rollID Blizzard hands out next (LC.rollDismissed, LC.rollExpiredHere).
     if LC.rollDismissed then wipe(LC.rollDismissed) end
+    if LC.rollExpiredHere then wipe(LC.rollExpiredHere) end
     -- Nothing left on the table, so nothing left to say about it (B118). The ticker also stops itself
     -- after one empty heartbeat; this is the direct route for the case that skips that -- a session
     -- ending, or the round being cleared from under it.
@@ -4239,6 +4279,9 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- when it names a DIFFERENT item -- LC.HandleRollCatchup still refuses a repeat of the item that
     -- was dismissed, and a different one IS the reuse this clear exists for (B132).
     LC.rollDismissed[rollID] = nil
+    -- The expiry note goes with it, for the same reason: a roll STARTING under this ID means the
+    -- one that expired here is over, and the note must not silence the repair for the new one (B135).
+    LC.rollExpiredHere[rollID] = nil
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
     -- numbers would render as the NEW item's rolls on the council panel.

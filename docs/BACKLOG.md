@@ -119,7 +119,7 @@ The stakes note stands: a red that is negotiable is how a real regression gets w
 fires again, the dump decides the mechanism -- do not re-derive the refuted theories above.
 
 
-## B135 — OPEN — the pipe is full, and nobody has measured what fills it
+## B135 — NARROWED — the pipe was filled by the catch-up burst, and that sender is cut
 
 Raid of 2026-08-05, six `/kart status` outputs collected during a live session. What they said,
 recorded here because the numbers themselves exist nowhere else in the repo:
@@ -218,10 +218,21 @@ purpose:
   absence-as-evidence trap this file already buried once (a stand-in's list is short and says
   nothing about the rolls it does not name).
 
-What the options need before one is picked: the answer to why a plain raider re-fetches a closed
-roll at all, and the maintainer's read on which rule may move. The measurement stands either way,
-and the harness that produced it is three edits away from a regression test pinning whatever budget
-the cut buys.
+**Cut taken, 2026-08-06: the third option.** `LC.rollExpiredHere` — stamped in
+`Vote.PruneExpiredRolls` with the itemID, read by the `needItem` ask alone, cleared on any roll
+start under the ID, on a heartbeat naming a different item, and at round end. `needRolls` stays
+free (C13), and the genuinely deaf client has no stamp and repairs exactly as before — the test
+that encoded the re-fetch decision now builds that client the honest way (announcement blackholed,
+no roll of its own) instead of reaching "not tracked" through an informed client's expiry. The
+2026-08-06 morning attempt failed on that construction, not on the design.
+
+Same fixture, same boss, after the cut: **9 messages, 855 bytes** (LC_DROP, two heartbeats, three
+REQ_EQUIP) against 437 and 42,390 before. The ask storm and both whisper streams are zero.
+
+**Still open here, and it needs the raid:** the ratio between a boss's traffic and an evening's
+(votes, results, config, history sync carry the rest), and the per-token send counter in
+`/kart status` that would let a live evening say which token is loudest. The 71 refusals still
+have no REASON recorded (AceComm's shim drops the result code; see below).
 
 **Related, also open:** the 71 refusals have no REASON recorded. ChatThrottleLib hands its callback
 `(didSend, sendResult)` and AceComm's shim drops the code on the way through, so KASC sees only the

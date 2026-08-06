@@ -128,7 +128,19 @@ function Vote.PruneExpiredRolls()
             for _, cid in ipairs(LC.councilTabs) do
                 if cid == rid then inCouncil = true break end
             end
-            if not inCouncil then LC.Trade.ClearRollState(rid) end
+            if not inCouncil then
+                -- WHAT expired, read before ClearRollState takes the link with it -- the same
+                -- gesture as Council.CloseCouncilTab, for the same reason: the note has to outlive
+                -- the roll it names, and the rollID alone cannot tell this roll from the unrelated
+                -- item Blizzard hands that number seconds later (B132). Set AFTER the clear, which
+                -- is what lets it survive it. It stops only this client's own re-ask for an item it
+                -- watched close (B135); a client that never heard of the roll has no stamp and
+                -- stays repairable.
+                local link = LC.rollItems[rid]
+                local expiredItem = (type(link) == "string" and link:match("item:(%d+)")) or true
+                LC.Trade.ClearRollState(rid)
+                LC.rollExpiredHere[rid] = expiredItem
+            end
         end
     end
     return changed
