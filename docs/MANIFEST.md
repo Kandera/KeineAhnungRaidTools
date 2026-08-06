@@ -112,15 +112,21 @@ same moment.
 
 ## C6 — Collectibles, BoEs and anything below the threshold stay out
 
-A mount, a pet, a housing item, a Bind-on-Equip and an item below the minimum quality all drop. KART
-touches none of them: no force-win, no forced pass, Blizzard's own roll window behaves normally and
-the raid rolls on them the way it would without the addon.
+A mount, a pet, a toy, a piece of housing decor, a Bind-on-Equip and an item below the minimum
+quality all drop. KART touches none of them: no force-win, no forced pass, Blizzard's own roll window
+behaves normally and the raid rolls on them the way it would without the addon.
 
-Its counterpart is C12: the same class, one subclass apart, and it must NOT be excluded.
+Housing decor is checked by ITEM CLASS, not by subclass: Midnight moved it out of Miscellaneous into
+a class of its own, and mounts, pets and toys are the ones caught by their journal APIs whatever
+class they sit in. A rule that only knows Miscellaneous lets furniture through.
 
-*Protects:* housing decor being force-won, which has happened; a BoE the lootmaster can never hand
-over through the trade window at all; and a session where Auto-Pass quietly hands every collectible
-to whichever raider is NOT running KART.
+Two counterparts, and both must NOT be excluded: C12 (a set token, the same class as a mount and one
+subclass apart) and C15 (a recipe, which is Bind-on-Equip and goes in anyway).
+
+*Protects:* housing decor being force-won, which has happened twice -- once as a subclass nobody
+enumerated, once as a whole item class nobody had heard of; a BoE the lootmaster can never hand over
+through the trade window at all; and a session where Auto-Pass quietly hands every collectible to
+whichever raider is NOT running KART.
 
 ## C7 — The award reaches the whole raid, once, and everyone agrees
 
@@ -177,6 +183,19 @@ voted on, awarded, handed over.
 the same item class and are told apart only by subclass. Getting that wrong once already meant tokens
 were skipped entirely and rolled on the normal way by nobody. Worth its own attempt precisely because
 C6 and C12 are two sides of one check: C6 must exclude, C12 must not.
+
+## C15 — A recipe reaches the lootmaster
+
+A recipe or pattern drops -- Bind-on-Equip, and Rare while the raid's threshold is Epic. It is
+treated exactly like a normal piece of gear: force-won by the lootmaster, announced, voted on,
+awarded, handed over.
+
+The other side of C6, and the reason both are worth their own attempt: C6 must keep every other BoE
+out, and this one must let a recipe in, on a rule that reads the item class rather than the binding.
+
+*Protects:* the requirement itself (#34) -- in this guild a recipe always ends up with the
+lootmaster, and until 2026-08-06 nothing made that happen. Its own failure mode is the opposite of
+C6's: an exception written one word too wide takes every BoE in the instance with it.
 
 ## C13 — The rolls are complete before anyone decides
 
