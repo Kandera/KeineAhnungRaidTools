@@ -113,6 +113,77 @@ function KART.UnitAssists(unit)
     return readStanding(UnitIsGroupAssistant, unit, unitAssists)
 end
 
+-- =====================================================================
+--  /kart ptr -- what the client underneath actually does
+-- =====================================================================
+-- A maintenance tool in the same spirit as /kart ench: it prints facts about the CLIENT, so a new
+-- game version is answered with measurements instead of with reading patch notes and guessing.
+--
+-- It exists because the alternative was four hand-typed /run probes per question, each of which has
+-- to fit in 255 characters, on a PTR where the tester is solo and every round trip costs an evening.
+-- Everything it asks is in docs/BACKLOG-12.1.md; the answers decide P1, P2 and P3, and narrow P4.
+--
+-- Every single read is pcall'd, including the ones that "cannot fail". That is the entire point: on a
+-- client that returns secret values, the failure mode being measured IS an error, and a probe that
+-- dies while asking answers nothing.
+--
+-- Deliberately not localized and not in /kart help: it is for whoever is porting the addon to a new
+-- client, and it will be read next to the backlog file, in English.
+local function probe(label, fn, ...)
+    local ok, a, b = pcall(fn, ...)
+    if not ok then return label .. " = ERROR (" .. tostring(a) .. ")" end
+    if b ~= nil then return label .. " = " .. type(a) .. " " .. tostring(a) .. " / " .. tostring(b) end
+    return label .. " = " .. type(a) .. " " .. tostring(a)
+end
+
+-- Whether a value can be USED, which is a different question from whether it can be read. A secret
+-- reads back fine and raises on comparison, so this is the check that actually finds one.
+local function comparable(value)
+    local ok = pcall(function() return value == value end)
+    return ok and "usable" or "SECRET (raises when compared)"
+end
+
+function KART.PrintClientProbe()
+    print("|cff00ff00KART " .. (KART.Version or "?") .. "|r client probe -- see docs/BACKLOG-12.1.md")
+    print("  interface = " .. tostring(select(4, GetBuildInfo())) .. "  build = " .. tostring((GetBuildInfo())))
+
+    -- P1: the raidlead bar's secure buttons do nothing unless this is 1.
+    print("  " .. probe("P1 ActionButtonUseKeyDown", C_CVar.GetCVar, "ActionButtonUseKeyDown"))
+
+    -- P2: the whole oil column reads this one API.
+    print("  P2 GetWeaponEnchantInfo = " .. type(GetWeaponEnchantInfo))
+    if type(GetWeaponEnchantInfo) == "function" then
+        print("  " .. probe("P2 -> mainhand", GetWeaponEnchantInfo))
+    end
+
+    -- P3: the buff checker walks auras by index and reads their fields.
+    local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", 1, "HELPFUL")
+    if not ok then
+        print("  P3 GetAuraDataByIndex = ERROR (" .. tostring(aura) .. ")")
+    elseif aura == nil then
+        print("  P3 GetAuraDataByIndex = nil -- put any buff on yourself and run this again")
+    else
+        print("  P3 aura.name = " .. comparable(aura.name) .. "  aura.spellId = " .. comparable(aura.spellId))
+    end
+
+    -- P4: the authority reads. Self is never secret; the group members are the open question, and a
+    -- solo tester will only ever see the first line -- which is itself worth recording.
+    print("  " .. probe("P4 UnitIsGroupLeader(player)", UnitIsGroupLeader, "player"))
+    local checked = 0
+    for unit in KAUtil.EachGroupUnit() do
+        if not UnitIsUnit(unit, "player") and checked < 3 then
+            checked = checked + 1
+            local okL, leads = pcall(UnitIsGroupLeader, unit)
+            local okC, class = pcall(UnitClass, unit)
+            print("  P4 " .. unit .. " leader = " .. (okL and comparable(leads) or "ERROR")
+                .. "  class = " .. (okC and comparable(class) or "ERROR"))
+        end
+    end
+    if checked == 0 then
+        print("  P4 no other group member to ask -- this is the half a solo login cannot answer")
+    end
+end
+
 -- Standardeinstellungen
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",

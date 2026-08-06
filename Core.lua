@@ -860,6 +860,10 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         if cmd == "ench raid" then KART.StartEnchantScan() else KART.PrintEnchantDump() end
     elseif cmd == "status" then
         if KART.LC and KART.LC.PrintStatus then KART.LC.PrintStatus() end
+    elseif cmd == "ptr" then
+        -- Maintenance tool, like /kart ench above and deliberately absent from /kart help: it prints
+        -- what the CLIENT does, for whoever is porting the addon to a new game version.
+        KART.PrintClientProbe()
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)

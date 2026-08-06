@@ -1122,6 +1122,12 @@ function _G.IsInGuild() return false end
 -- ClassLocked in LootCouncilRelevance.lua). Driven per fixture item by def.classesAllowed, a list of
 -- class display names; an item without one produces a tooltip that says nothing about classes, which
 -- is what almost every item does.
+-- What /kart ptr reads about the client itself. Present so that probe can be exercised at all: it is
+-- the one command whose whole job is to work on the FIRST try on a client nobody has tested against.
+function _G.GetBuildInfo() return "12.1.0", "60000", "Aug 06 2026", 120100 end
+_G.C_CVar = { GetCVar = function(name) return KARTTEST.cvars and KARTTEST.cvars[name] or nil end }
+KARTTEST.cvars = { ActionButtonUseKeyDown = "1" }
+
 _G.ITEM_CLASSES_ALLOWED = "Classes: %s"
 _G.C_TooltipInfo = {
     GetHyperlink = function(link)

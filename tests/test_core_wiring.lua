@@ -138,3 +138,35 @@ Wired("KART.LC.RetryPendingResolutions()", "the entering-world pass resolves wha
 Wired('frame:RegisterEvent("PLAYER_CONTROL_LOST")', "PLAYER_CONTROL_LOST is registered")
 Wired('elseif event == "PLAYER_CONTROL_LOST" then', "and routed in the event handler")
 Wired("KART.OnControlLost()", "which is what re-opens what Blizzard closed")
+
+-- /kart ptr runs, on a client that answers and on one that refuses -----------------------------------
+-- Its whole job is to work on the FIRST try on a game version nobody has tested against, typed by
+-- somebody logged in alone on a PTR. A probe that raises while asking answers nothing -- so the case
+-- it is built for, an API that errors, is the case it must survive.
+do
+    local F2 = dofile("tests/lc_fixture.lua")
+    local sim = F2.NewRaid()
+    local lm = sim.byName.Bramor
+
+    local lines = 0
+    local realPrint = _G.print
+    _G.print = function() lines = lines + 1 end
+    local ok = F2.RaidSim.As(lm, function() return pcall(lm.KART.PrintClientProbe) end)
+    _G.print = realPrint
+    T.truthy(ok, "the probe runs on a client that answers everything")
+    T.truthy(lines > 4, "and prints a line per question rather than one summary")
+
+    local realLeader, realAura = _G.UnitIsGroupLeader, _G.C_UnitAuras.GetAuraDataByIndex
+    local realWpn = _G.GetWeaponEnchantInfo
+    _G.UnitIsGroupLeader = function() error("secret") end
+    _G.C_UnitAuras.GetAuraDataByIndex = function() error("secret") end
+    _G.GetWeaponEnchantInfo = nil
+    realPrint = _G.print
+    _G.print = function() end
+    local ok2 = F2.RaidSim.As(lm, function() return pcall(lm.KART.PrintClientProbe) end)
+    _G.print = realPrint
+    _G.UnitIsGroupLeader, _G.C_UnitAuras.GetAuraDataByIndex = realLeader, realAura
+    _G.GetWeaponEnchantInfo = realWpn
+
+    T.truthy(ok2, "and survives a client that refuses every question it asks -- which is the point")
+end
