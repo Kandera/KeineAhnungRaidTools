@@ -61,6 +61,58 @@ function KART.OnControlLost()
     end)
 end
 
+-- =====================================================================
+--  Reading another unit's group standing, on a client that may refuse to say
+-- =====================================================================
+-- 12.1 makes a number of unit APIs return SECRET values when the unit's identity is secret, and
+-- UnitIsGroupLeader and UnitIsGroupAssistant are on that list (docs/BACKLOG-12.1.md, P4). A secret
+-- used in an `if` raises an error -- so on a client where that happens, the handler doing the asking
+-- dies rather than answering wrong.
+--
+-- Which handlers: LC.IsSenderLootOwner authorises every incoming Loot Council message, LC.GetLootOwnerKey
+-- decides who holds the loot when no lootmaster is configured, and TryAcceptConfig decides whether the
+-- raid's settings are taken. An error in those is not a cosmetic loss; it is the loot flow stopping
+-- mid-distribution with a Lua error where a decision should have been.
+--
+-- Whether a group member's identity is ever secret to their OWN group is not known and cannot be
+-- measured solo, which is why this is written before the answer rather than after: the cost of being
+-- wrong the other way is one pcall per call.
+--
+-- "Cannot tell" deliberately does NOT mean "no". Answering false would take the lootmaster's
+-- authority away at the exact moment combat starts, which is the same outage with a quieter cause.
+-- The last answer this client actually got is used instead -- leadership does not change during a
+-- pull, and the cache is dropped whenever the roster does (KART.ForgetUnitStanding, called from
+-- Core.lua's GROUP_ROSTER_UPDATE), so a stale token can never answer for a new occupant.
+local unitLeads, unitAssists = {}, {}
+
+function KART.ForgetUnitStanding()
+    wipe(unitLeads)
+    wipe(unitAssists)
+end
+
+-- pcall, and then a type check rather than a comparison: `value == true` is itself the operation a
+-- secret refuses, so the answer has to be shown to be an ordinary boolean before it is used at all.
+local function readStanding(fn, unit, cache)
+    local ok, value = pcall(fn, unit)
+    if ok and type(value) == "boolean" then
+        cache[unit] = value
+        return value
+    end
+    local last = cache[unit]
+    if last ~= nil then return last end
+    return false
+end
+
+function KART.UnitLeads(unit)
+    if not unit then return false end
+    return readStanding(UnitIsGroupLeader, unit, unitLeads)
+end
+
+function KART.UnitAssists(unit)
+    if not unit then return false end
+    return readStanding(UnitIsGroupAssistant, unit, unitAssists)
+end
+
 -- Standardeinstellungen
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",

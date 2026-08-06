@@ -863,7 +863,7 @@ function LC.GetLootOwnerKey()
     local lootmaster = LC.GetLootmaster()
     if lootmaster ~= "" then return lootmaster end
     for unit in KAUtil.EachGroupUnit() do
-        if UnitIsGroupLeader(unit) then return (KASC.Identity.ResolvePlayer(unit)) end
+        if KART.UnitLeads(unit) then return (KASC.Identity.ResolvePlayer(unit)) end
     end
     return ""
 end
@@ -886,7 +886,7 @@ function LC.IsSenderLootOwner(senderKey)
     -- need to: a leader who has not accepted sends nothing, because their own IsLootOwner gates every
     -- send. Being permissive here costs nothing and refusing would break the stand-in outright — do
     -- not "fix" this asymmetry.
-    return UnitIsGroupLeader(unit)
+    return KART.UnitLeads(unit)
 end
 
 -- Random 1-100 rolls are an opt-in raid-wide feature (analogous to RCLootCouncil's Need roll),
@@ -1349,7 +1349,7 @@ local function TryAcceptConfig(payload, senderKey)
     -- existed for: a "lootmaster-mismatch" rejection (the sender no longer names itself -- naming
     -- somebody else is the whole point now), a "not-leader" rejection for an unnamed field, and the
     -- "weaker-claim" rule that decided between two configs on their content.
-    if not UnitIsGroupLeader(unit) then return false, "not-leader" end
+    if not KART.UnitLeads(unit) then return false, "not-leader" end
 
     LC.raidConfig.minQuality    = tonumber(minQ) or 4
     LC.raidConfig.buttonLabels  = buttons
@@ -1483,7 +1483,7 @@ function LC.PrintStatus()
     -- comparing that one word across a raid is what tells the two apart in seconds.
     local leader = "-"
     for unit in KAUtil.EachGroupUnit() do
-        if UnitIsGroupLeader(unit) then leader = UnitName(unit) or "?" break end
+        if KART.UnitLeads(unit) then leader = UnitName(unit) or "?" break end
     end
     print("  " .. L.LC_STATUS_LEADER .. ": " .. leader
         .. (LC.IsConfigOwner() and (" (" .. L.LC_STATUS_IS_ME .. ")") or ""))

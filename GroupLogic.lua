@@ -131,7 +131,7 @@ function KART.HandleAutoPromote()
                 matches = nick ~= nil and KART.PromoteNamesTable[nick]
             end
             if matches then
-                if not UnitIsGroupAssistant(unit) and not UnitIsGroupLeader(unit) then
+                if not KART.UnitAssists(unit) and not KART.UnitLeads(unit) then
                     -- Promote the specific character (full Name-Realm), not the realm-free short
                     -- name — two same-named cross-realm raiders would otherwise be ambiguous. The
                     -- NSRT nickname is only used for MATCHING above; the promote targets the real

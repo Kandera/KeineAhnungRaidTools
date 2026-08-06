@@ -346,6 +346,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC then KART.LC.Trade.OnTradeInfoMessage(arg1) end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
+        -- Before anything reads a unit token: the tokens have just been renumbered, so what this
+        -- client last knew about raid7 is about somebody else now (see KART.UnitLeads).
+        KART.ForgetUnitStanding()
         if KART.LC then KART.LC.CheckRaidJoin() end
         if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
         if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end

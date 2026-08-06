@@ -21,6 +21,14 @@ do
     setfenv(KART.HandleAutoPromote, env)
 end
 
+-- GroupLogic.lua is loaded on its own here, so the two readers Utils.lua owns are not in this KART
+-- table. They exist because 12.1 can make UnitIsGroupLeader/Assistant return secret values for
+-- another unit, which raise when used (docs/BACKLOG-12.1.md, P4); the real ones pcall and fall back
+-- to the last answer they got. Nothing about auto-promote depends on that, so plain pass-throughs
+-- are the honest stand-in -- the guard itself is asserted in tests/test_lc_senderguards.lua.
+KART.UnitLeads   = function(unit) return UnitIsGroupLeader(unit) end
+KART.UnitAssists = function(unit) return UnitIsGroupAssistant(unit) end
+
 -- In a raid every member is raid1..raidN and "player" is nobody until KARTTEST.activeUnit says
 -- who we are -- so `me` is appended last and pointed at. Getting that wrong does not fail loudly: it
 -- makes this client a non-member, HandleAutoPromote's first line returns, and every case below

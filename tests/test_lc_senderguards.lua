@@ -109,3 +109,59 @@ do
         T.eq(answers, 0, label .. " from that key is not answered either")
     end
 end
+
+-- A client that refuses to say who leads the group ---------------------------------------------------
+-- 12.1 (P4): several unit APIs return SECRET values when the unit's identity is secret, and
+-- UnitIsGroupLeader is one of them. A secret used in an `if` raises -- so the handler asking the
+-- question dies rather than answering it wrong, and the callers here decide who owns the loot and
+-- whether a peer's message is authorised. Whether a group member is ever secret to their own group is
+-- not known and cannot be measured solo, which is why the guard is written before the answer.
+--
+-- The API is made to throw outright, which is stricter than a secret value -- a secret only raises
+-- when it is USED -- so anything surviving this survives the real thing.
+--
+-- KART.UnitLeads is exercised directly rather than through LC.IsSenderLootOwner: that function only
+-- reaches the leader fallback when NO lootmaster is configured, and the fixture always configures
+-- one, so a test driven through it would have gone green without touching this at all.
+do
+    local F2 = dofile("tests/lc_fixture.lua")
+    local sim = F2.NewRaid()
+    local raider = sim.byName.Alric
+    local leaderUnit = sim.byName.Bramor.unit
+
+    F2.RaidSim.As(raider, function()
+        raider.KART.ForgetUnitStanding()
+        T.truthy(raider.KART.UnitLeads(leaderUnit), "the leader reads as the leader while the client answers")
+    end)
+
+    local real = _G.UnitIsGroupLeader
+    _G.UnitIsGroupLeader = function() error("secret value used in a conditional") end
+    local stillLeads = F2.RaidSim.As(raider, function() return raider.KART.UnitLeads(leaderUnit) end)
+    local neverRead  = F2.RaidSim.As(raider, function()
+        raider.KART.ForgetUnitStanding()
+        return raider.KART.UnitLeads(leaderUnit)
+    end)
+    _G.UnitIsGroupLeader = real
+
+    T.truthy(stillLeads,
+        "and keeps reading as the leader once the client stops answering -- authority does not lapse mid-pull")
+    T.truthy(not neverRead,
+        "while a client that never got an answer refuses rather than inventing one")
+end
+
+-- ...and the authority sites actually go through it ---------------------------------------------------
+-- Checked against the source, the same way tests/test_core_wiring.lua checks Core.lua's routing: the
+-- guard is worth nothing if one of the four callers still reads the raw API, and nothing else in the
+-- suite would notice, because the raw call only misbehaves on a client this harness cannot produce.
+do
+    for _, name in ipairs({ "LootCouncil.lua", "GroupLogic.lua" }) do
+        local src = assert(io.open(name, "r")):read("*a")
+        for line in src:gmatch('[^' .. string.char(10) .. ']+') do
+            local isComment = line:match("^%s*%-%-")
+            if not isComment and line:find("UnitIsGroup", 1, true) and not line:find('"player"', 1, true) then
+                T.truthy(false, name .. " reads a group standing directly: " .. line:gsub("^%s+", ""))
+            end
+        end
+    end
+    T.truthy(true, "no authority check reads UnitIsGroupLeader/Assistant on another unit directly")
+end
