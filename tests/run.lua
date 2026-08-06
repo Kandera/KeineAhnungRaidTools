@@ -68,11 +68,16 @@ function T.deep_eq(actual, expected, label)
         -- Dump both tables in a stable order, so an intermittent failure leaves evidence behind
         -- (B136: "tables differ" alone said nothing about nil-vs-content-vs-key-form, and the
         -- failure could not be reproduced on demand to find out). Costs nothing on a green run.
-        local function dump(t)
+        -- One level of recursion: B136's suspects were flat roll tables, but a mismatch inside a
+        -- nested value dumped as "table: 0x..." names the slot and withholds the evidence. Depth 1,
+        -- not unbounded -- the dump exists to be read in a failure line, not to serialize a fixture.
+        local function dump(t, depth)
             if type(t) ~= "table" then return tostring(t) end
+            depth = depth or 0
             local parts = {}
             for k, v in pairs(t) do
-                parts[#parts + 1] = tostring(k) .. "=" .. tostring(v)
+                local vs = (type(v) == "table" and depth < 1) and dump(v, depth + 1) or tostring(v)
+                parts[#parts + 1] = tostring(k) .. "=" .. vs
                     .. "(" .. type(k) .. "/" .. type(v) .. ")"
             end
             table.sort(parts)
