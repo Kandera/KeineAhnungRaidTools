@@ -6,6 +6,16 @@ Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokument
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Geändert
+- **Rezepte und Muster laufen jetzt über das Loot Council** statt über Blizzards Würfelfenster.
+
+### Behoben
+- **Auto-Pass funktioniert weiter nach einem Neuladen oder einer Verbindungstrennung** in einer laufenden Session.
+- **Ein nachgeliefertes Item ist das echte Item** — richtiges Itemlevel, funktionierender Tooltip.
+- **Tier-Tokens, die deine Klasse nicht nutzen kann, werden gepasst** wie alles andere, was du nicht tragen kannst.
+- **Housing-Dekoration bleibt aus dem Loot Council heraus**, wie Reittiere, Haustiere und Spielzeug.
+
 ## [3.3.2] - 2026-08-05
 ### Behoben
 - **Eine abgelehnte Nachricht wird erneut verschickt statt verloren zu gehen** — ein Item, von dem der Raid nie erfuhr, war meist ein still fehlgeschlagener Sendeversuch.

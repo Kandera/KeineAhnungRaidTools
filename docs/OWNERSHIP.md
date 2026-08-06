@@ -49,6 +49,17 @@ it removes the claim, and with it the whole class of disagreement.
    here. If it says the raid has named somebody who is present, that person hands out the loot and
    the raid leader does not. If it says the raid has named somebody who is gone, that is the same
    situation as a lootmaster who has left the raid, and the raid leader is asked whether to stand in.
+8. **Which items the lootmaster is given at all.** Bind-on-Pickup gear that is not a collectible,
+   plus one named exception: a **recipe** (item class 9 -- recipes, patterns, plans, formulae),
+   whatever it is bound as and whatever the raid's minimum quality is set to. Everything else
+   Bind-on-Equip, and every collectible -- mounts, pets, toys, housing decor -- stays outside Loot
+   Council entirely and is left to Blizzard's own roll window.
+
+   The recipe exception was asked for on 2026-08-06 (#34): in this guild a recipe always ends up
+   with the lootmaster, and nothing made that happen. It costs the guarantee the rest of the rule
+   was written for -- a raider not running KART can win Blizzard's roll on a recipe, leaving the
+   council to decide something nobody can hand over. Accepted because KART is mandatory here, which
+   is an assumption about people rather than a guarantee from the code.
 
 ## What this costs
 

@@ -97,6 +97,22 @@ KARTTEST.AddItem({ id = 249411, name = "Voidbound Vestment of the Vigil", qualit
 
 F.TIER_TOKEN = 249411
 
+-- The one named exception to "Bind-on-Equip never reaches Council" (2026-08-06, #34): a recipe goes
+-- to the lootmaster whatever it is bound as and whatever the raid's minimum quality says. Rare on
+-- purpose -- most recipes are, the threshold is Epic, and a fixture that made it Epic would test the
+-- exception without testing the half of it that matters.
+--
+-- Next to it, a Bind-on-Equip that is NOT a recipe: the control that says the rule still holds for
+-- everything else. F.BOE is a cloak, and stays out.
+KARTTEST.AddItem({ id = 249412, name = "Pattern: Voidbound Vestment", quality = 3, ilvl = 1,
+                   classID = 9, subclassID = 11, bind = 2 })
+-- Housing decor as Midnight ships it: its own item class, not a compartment of Miscellaneous any
+-- more, and Bind-on-Pickup -- which is what made it reach Council while the rule only knew class 15.
+KARTTEST.AddItem({ id = 249413, name = "Gloombound Chandelier", quality = 4, ilvl = 1,
+                   classID = 20, subclassID = 0, bind = 1 })
+
+F.RECIPE, F.HOUSING_DECOR = 249412, 249413
+
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
 -- of sync, a straw poll disagreeing, or a second council member's assignment reaching the first.

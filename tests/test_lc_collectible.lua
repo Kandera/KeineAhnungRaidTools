@@ -114,3 +114,40 @@ end
 -- The one case where "unknown" is already treated as "keep out": no itemID at all.
 T.eq(LC.IsCollectibleItem(nil, MISC, 0), true,
     "an item we cannot identify at all is kept out of Council rather than force-won")
+
+-- Housing left Miscellaneous ------------------------------------------------------------------------
+-- Midnight gave housing decor its own item class (Enum.ItemClass.Housing, 20). The rule only knew 15,
+-- and mounts/pets/toys are the ones caught independently of the class by their journal APIs -- housing
+-- has no such API here. So a Bind-on-Pickup piece of furniture was reaching Loot Council: force-won by
+-- the lootmaster, auto-passed by the raid, voted on. Against the standing rule, and silently, because
+-- nothing in the addon had changed.
+local HOUSING = 20
+T.eq(LC.IsCollectibleItem(800, HOUSING, 0), true, "housing decor stays out of Council")
+T.eq(LC.IsCollectibleItem(nil, HOUSING, nil), true, "and does so before its subclass is even known")
+T.eq(LC.IsCollectibleItem(801, 4, 4), false, "while ordinary plate is still Council's business")
+
+-- A recipe is Council's business, whatever it is bound as ---------------------------------------------
+-- The exception of 2026-08-06 (#34). Everything else Bind-on-Equip stays out, which is what the
+-- second line here holds: the rule gained one named hole, not a general loosening.
+--
+-- These two assert the TIERS rather than IsCollectibleItem, so they drive LC.OnStartLootRoll through
+-- the raid fixture -- there is no smaller seam, and a copy of the two-line decision would pass
+-- forever after the real one changed.
+do
+    local F2 = dofile("tests/lc_fixture.lua")
+    local sim, lm = F2.NewRaid()
+    local raider = sim.byName.Alric
+
+    -- Rare, while the raid's threshold is Epic: without the quality half of the carve-out this
+    -- reaches nobody, which is the state the report was about.
+    F2.Drop(sim, 610, F2.RECIPE, { bop = false })
+    KARTTEST.AdvanceTime(1)
+    T.truthy(lm.KART.LC.rollItems[610], "a Rare Bind-on-Equip recipe reaches Council anyway")
+    T.eq((KARTTEST.rolled[610] or {})[lm.unit], 1, "the lootmaster force-wins it, so he can hand it over")
+    T.eq((KARTTEST.rolled[610] or {})[raider.unit], 0, "and everyone else passes")
+
+    F2.Drop(sim, 611, F2.BOE, { bop = false })
+    KARTTEST.AdvanceTime(1)
+    T.eq(lm.KART.LC.rollItems[611], nil,
+        "while a Bind-on-Equip that is not a recipe is still none of Council's business")
+end

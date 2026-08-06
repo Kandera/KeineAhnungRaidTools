@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+- **Recipes and patterns now go through the loot council** instead of Blizzard's roll window.
+
+### Fixed
+- **Auto-Pass keeps working after a reload or a disconnect** in a running session.
+- **An item you were caught up on is the real item**, with its true item level and a working tooltip.
+- **Tier tokens your class cannot use are passed on** like any other item you cannot wear.
+- **Housing decor stays out of the loot council**, like mounts, pets and toys.
+
 ## [3.3.2] - 2026-08-05
 ### Fixed
 - **A refused message is sent again instead of being lost** — an item the raid never heard about was usually one send that quietly failed.

@@ -500,12 +500,27 @@ end
 -- holds all 1144 toys on a fresh login without Collections ever being opened, it answers for toys
 -- the player has NOT collected (425 of the 1144 were learned), and it answers regardless of the
 -- box's own display filter, which on that client was showing 41 entries.
+-- Enum.ItemClass.Recipe. Spelled out rather than read from the enum for the same reason every other
+-- class id in this file is: the offline harness has no Enum table, and a number with a name next to
+-- it cannot be broken by a client that renames the field.
+local ITEM_CLASS_RECIPE = 9
+
 function LC.IsCollectibleItem(itemID, classID, subclassID)
     if itemID then
         if C_ToyBox and C_ToyBox.GetToyInfo and C_ToyBox.GetToyInfo(itemID) then return true end
         if C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID) then return true end
         if C_PetJournal and C_PetJournal.GetPetInfoByItemID and C_PetJournal.GetPetInfoByItemID(itemID) then return true end
     end
+    -- 20 is Enum.ItemClass.Housing, new in Midnight, and written as a bare number for the same reason
+    -- 15 below is: tests/test_lc_collectible.lua compiles this function out of the source on its own,
+    -- where a file-local constant would be nil -- and `classID == nil` then matches every unresolved
+    -- item, which is the opposite of what this line is for.
+    --
+    -- Housing decor used to be a compartment of Miscellaneous and now has a class of its own, so the
+    -- 15 test stopped covering it. Mounts, pets and toys are caught by their journal APIs whatever
+    -- class they sit in; housing has no such API here, so it was reaching Loot Council against the
+    -- standing rule -- silently, because nothing in this file had changed.
+    if classID == 20 then return true end
     if classID ~= 15 then return false end
     if subclassID ~= 0 then return true end
     if not itemID then return true end
@@ -4582,8 +4597,25 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- councilEngages narrows that further by the raid's rarity threshold. Auto-Pass deliberately
     -- ignores THAT one — a raider's "don't make me click loot windows" preference is their own call,
     -- not the raid leader's (reviewed; do not re-tie Auto-Pass to min quality).
-    local councilEligible = bindOnPickUp and not isCollectible
-    local councilEngages  = councilEligible and not (quality and quality < LC.GetRaidMinQuality())
+    --
+    -- ONE NAMED EXCEPTION, and it is an exception to both halves of the rule above (maintainer,
+    -- 2026-08-06, out of #34): a RECIPE goes to Council whatever it is bound as, and whatever the
+    -- raid's minimum quality says. In this guild a recipe always ends up with the lootmaster, and
+    -- until now nothing made that happen -- the Bind-on-Equip rule kept every one of them out, so
+    -- the vote window had nothing to show and the reporter had nothing to click.
+    --
+    -- The quality half of the carve-out is not tidiness: most recipes are Rare, the raid's threshold
+    -- is Epic, and without it the exception would do nothing for exactly the items it was asked for.
+    --
+    -- It costs the guarantee the rule was written for, and the cost is stated rather than hidden: a
+    -- raider not running KART can still win Blizzard's roll on a recipe, and then the lootmaster does
+    -- not hold it and the council decides something nobody can hand over. Accepted because KART is
+    -- mandatory here -- an assumption about people, not a guarantee from the code. If that ever stops
+    -- holding, this is the first line to re-examine.
+    local isRecipe        = classID == ITEM_CLASS_RECIPE
+    local councilEligible = (bindOnPickUp or isRecipe) and not isCollectible
+    local councilEngages  = councilEligible
+                            and (isRecipe or not (quality and quality < LC.GetRaidMinQuality()))
 
     -- Set before the branch below, because the Auto-Pass arm consults it (see AutoPassAnnounced), and
     -- only for rolls the council actually tracks -- those are the ones LC.Trade.ClearRollState and
