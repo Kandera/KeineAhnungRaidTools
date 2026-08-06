@@ -3151,6 +3151,31 @@ local PERSISTED_ROLL_TABLES = {
     "rollEligible",
 }
 
+-- ==========================================================================
+--  D2: the raid's config across a reload
+-- ==========================================================================
+--
+-- The rolls come back (B81); LC.raidConfig and LC.CouncilNamesTable do not, and until a message
+-- replaces them this client runs its OWN vote buttons, its own minimum quality, its own roll setting
+-- and an empty council. The wire does put them back -- LC_STATE_REQ's backoff chain, the config
+-- owner's rebroadcast, the relay -- but not before the first item, and not at all when the answer is
+-- lost. What it costs is B25's shape (buttons that do not match the raid's are votes nobody can read)
+-- and the roll setting, which decides whether this raider rolls at all.
+--
+-- Config is settings; the session is a live claim. Only the first of those is ours to restore -- see
+-- the end of LC.RestoreSessionSnapshot for why a session must never resurrect itself from disk.
+--
+-- Its own age bound, tighter than the rolls'. A stale config is not merely useless, it is wrong in a
+-- direction that costs items: it names a lootmaster who was never in this raid, and every announcement
+-- from the real one is then rejected by LC.IsSenderLootOwner -- the cross-raid half of B29, which the
+-- raid-exit teardown's wipe exists for and which a restore can reintroduce. A reload is seconds and a
+-- disconnect is minutes; nothing legitimate needs the hour the rolls get. Same figure RC keeps its own
+-- cached config for (core.lua, RestoreCachedData).
+local CONFIG_RESTORE_MAX = 15 * 60
+
+-- No same-character check, unlike RC's. KART_LCSession is SavedVariablesPerCharacter (see the .toc),
+-- so the game already hands each character its own file; RC's cache is account-wide and has to ask.
+
 -- Called from PLAYER_LOGOUT, which the client raises for /reload, a logout and a quit alike -- so
 -- one write site covers every ordinary way a session is interrupted. A crash or a pulled cable is
 -- not covered, and cannot be: nothing runs then.
@@ -3160,6 +3185,26 @@ function LC.SaveSessionSnapshot()
     -- Wiped first, unconditionally: a snapshot must never outlive the moment it describes, and every
     -- early return below means "there is nothing to come back to".
     wipe(store)
+
+    -- The config, before the rolls and independent of them: the reload with nothing on the table is
+    -- the ordinary one -- between two bosses -- and it is exactly the case the roll block below writes
+    -- nothing for. A raid we have left has no config to save (the raid-exit teardown wipes it), so
+    -- that case answers itself here.
+    if next(LC.raidConfig) ~= nil then
+        store.savedAt = time()
+        -- Copied field by field rather than by reference: SavedVariables serializes at logout, and
+        -- LC.raidConfig is a table the addon keeps writing to. Flat scalars throughout (see
+        -- TryAcceptConfig and LC.ApplyOwnConfig, the only two writers), which is what a saved file can
+        -- carry.
+        store.config = {}
+        for key, value in pairs(LC.raidConfig) do store.config[key] = value end
+        -- The RESOLVED council keys, not the semicolon list they were parsed from: a name resolves
+        -- through KASC.Identity against a roster this client does not have at ADDON_LOADED, so
+        -- re-parsing at restore time would come back empty for exactly the members whose identity is
+        -- the point. The list itself travels in store.config.councilMembers anyway.
+        store.council = {}
+        for key in pairs(LC.CouncilNamesTable or {}) do store.council[#store.council + 1] = key end
+    end
 
     -- Deliberately NOT gated on LC.sessionActive. Ending a session already clears every tracked roll
     -- (LC.SetSessionActive and LC.HandleActive both call LC.ClearAllRolls), so the empty check below
@@ -3222,6 +3267,23 @@ function LC.RestoreSessionSnapshot()
     local store = KART_LCSession
     if type(store) ~= "table" or type(store.savedAt) ~= "number" then return end
     if (time() - store.savedAt) >= SESSION_RESTORE_MAX then wipe(store) return end
+
+    -- The config first, and on its own bound (see CONFIG_RESTORE_MAX): it is what decides how
+    -- everything below is READ -- which buttons a vote means, who counts as council, whether this raid
+    -- rolls -- so restoring the rolls into an empty config would put the items back under this
+    -- client's own settings for as long as the wire takes.
+    --
+    -- Applied as "the raid's config from a snapshot", which is what it was: fromSelf travels with it,
+    -- so a config this client invented for itself before the reload is still recognisable as one
+    -- afterwards and StateStillNeeded keeps asking for a real one.
+    if type(store.config) == "table" and (time() - store.savedAt) < CONFIG_RESTORE_MAX then
+        for key, value in pairs(store.config) do LC.raidConfig[key] = value end
+        LC.CouncilNamesTable = {}
+        for _, key in ipairs(type(store.council) == "table" and store.council or {}) do
+            LC.CouncilNamesTable[key] = true
+        end
+    end
+
     if type(store.tables) ~= "table" then wipe(store) return end
 
     local now = GetTime()

@@ -407,6 +407,65 @@ do
     T.truthy(out:find(merrit.KART.L.LC_PASSGATE_OFF, 1, true), "the probe names the setting, per item")
 end
 
+-- The raid's config across a reload (D2) -------------------------------------------------------------
+-- The rolls on the table survive a reload (B81); the config the raid runs on does not. So a reloaded
+-- raider comes back on their OWN vote buttons, their OWN roll setting and an empty council list, and
+-- stays there until a message reaches them -- seconds at best (LC_STATE_REQ's backoff), the rest of the
+-- evening when the answer is lost. Both halves of that were paid for already: B25 is what mismatched
+-- buttons cost, and the roll setting decides whether this raider rolls at all.
+--
+-- Between bosses is the case with nothing on the table at all, which is exactly when the roll snapshot
+-- writes nothing -- so the config has to be saved on its own terms, not as a passenger of the rolls.
+do
+    local sim = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    T.eq(RaidSim.As(council, council.KART.LC.GetRollsEnabled), true, "the raid rolls, by the raid's config")
+    T.truthy(RaidSim.As(council, council.KART.LC.IsCouncil), "and this raider is on its council")
+    T.eq(council.env.KART_Settings.lcRollsEnabled, false, "while their own setting says otherwise")
+
+    local back = RaidSim.Reload(sim, "Merrit")
+    T.eq(RaidSim.As(back, back.KART.LC.GetRollsEnabled), true,
+        "after a reload the raid's roll setting is in force before any message has arrived")
+    T.truthy(RaidSim.As(back, back.KART.LC.IsCouncil), "and so is the council list")
+    T.eq(back.KART.LC.raidConfig.fromSelf, nil,
+        "and it is still the RAID's config, not one this client invented for itself")
+
+    -- The line the whole snapshot is not allowed to cross. Whether a session is running is a live
+    -- claim the raid answers; a config is settings. Restoring the first from disk is what the comment
+    -- in LC.RestoreSessionSnapshot refuses, and this pins that the config work did not weaken it.
+    T.eq(back.KART.LC.sessionActive, false, "the session itself is still the raid's answer, not the file's")
+end
+
+-- ...and a config old enough to belong to another raid is not brought back --------------------------
+-- The bound is tighter than the roll snapshot's hour on purpose. A stale config is not merely useless,
+-- it is actively wrong: it names a lootmaster who was never in this raid, and LC.IsSenderLootOwner then
+-- rejects the real one's announcements (the cross-raid half of B29, which TearDownForRaidExit exists
+-- for). A reload takes seconds and a disconnect minutes; nothing legitimate needs an hour.
+do
+    local sim = F.NewRaid()
+    local council = sim.byName.Merrit
+    RaidSim.As(council, function() council.KART.LC.SaveSessionSnapshot() end)
+    local saved = council.env.KART_LCSession
+    T.truthy(saved.config, "the snapshot carries the config even with nothing on the table")
+
+    -- Half an hour old: still inside the hour the ROLLS are kept for, and well past the config's own
+    -- bound. Aged that way on purpose -- it is what tells the two bounds apart, and a day-old file
+    -- would be refused by the outer one before the config was ever looked at.
+    local stale = { savedAt = saved.savedAt - (30 * 60), config = saved.config, council = saved.council }
+
+    local back = RaidSim.Reload(sim, "Merrit")
+    RaidSim.As(back, function()
+        wipe(back.KART.LC.raidConfig)
+        back.KART.LC.CouncilNamesTable = {}
+        back.env.KART_LCSession = stale
+        back.KART.LC.RestoreSessionSnapshot()
+    end)
+    T.is_nil(next(back.KART.LC.raidConfig), "yesterday's config is not brought back")
+    T.eq(RaidSim.As(back, back.KART.LC.GetRollsEnabled), false,
+        "so this client is back on the wire's answer, exactly as it was before")
+end
+
 -- ...and a client that has passed nothing at all prints nothing ---------------------------------------
 -- Same rule as every counter above: a raider pastes this output into an issue, and an empty block
 -- reads as something having gone wrong.

@@ -403,6 +403,11 @@ do
     local sim, lm = F.NewRaid()
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
+    -- The client a relay is FOR: one that came back holding nothing. A reload inside the config
+    -- snapshot's window restores the raid's own config (D2), and a client that holds one rejects the
+    -- relay on purpose -- its lootmaster field is the better answer (see LC.HandleConfigRelay). What
+    -- is under test here is the other client: a crash, or a snapshot past its bound.
+    RaidSim.As(leader, function() wipe(leader.KART.LC.raidConfig) end)
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(1)
     T.eq(leader.KART.LC.raidConfig.relayLootmaster, "1", "the leader was told the raid has one")
@@ -421,6 +426,8 @@ do
     local sim = F.NewRaid()
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
+    -- Came back with nothing, as above: the relay is what tells THIS client the raid has a lootmaster.
+    RaidSim.As(leader, function() wipe(leader.KART.LC.raidConfig) end)
     RaidSim.Leave(sim, "Bramor")
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(2)
@@ -484,6 +491,9 @@ end
 do
     local sim, lm = F.NewRaid()
     local hop = RaidSim.Reload(sim, "Sinja")
+    -- Came back with nothing, as in the relay cases above: a client still holding the raid's config
+    -- would reject the relay and have a designation of its own to pass on.
+    RaidSim.As(hop, function() wipe(hop.KART.LC.raidConfig) end)
     RaidSim.As(sim.byName.Merrit, function() sim.byName.Merrit.KART.LC.RelayRaidConfig(hop.name) end)
     KARTTEST.AdvanceTime(1)
     T.eq(hop.KART.LC.raidConfig.lootmaster, "", "the first hop holds no designation of its own")
@@ -491,6 +501,7 @@ do
 
     RaidSim.Promote(sim, "Alric")
     local leader = RaidSim.Reload(sim, "Alric")
+    RaidSim.As(leader, function() wipe(leader.KART.LC.raidConfig) end)
     RaidSim.As(hop, function() hop.KART.LC.RelayRaidConfig(leader.name) end)
     KARTTEST.AdvanceTime(1)
 
