@@ -3555,3 +3555,47 @@ Tests: `tests/test_diagnostics.lua`, "a client that reloaded mid-encounter does 
 announcement to a refusing transport" (the reload path, via `RaidSim.Reload`) and "entering the world
 under an active restriction closes the gate" (the `PLAYER_ENTERING_WORLD` path). Both also assert the
 held message still goes out when the restriction lifts.
+
+
+## B141 — FIXED 2026-08-06 — the restored config asked the lootmaster to end the raid's session
+
+Found in the integrated review of the six RC-compare packages (`3804d62..402e9d8`), not in a raid —
+but the raid it would have happened in is the 3.4.0 one.
+
+D2 restores the raid config from `KART_LCSession` on load. `LC.IsLootOwner()` reads that config, so a
+DESIGNATED lootmaster — somebody who hands out the loot without leading the raid, which is this
+guild's ordinary split — now passes the loot-owner gate immediately after a reload. Three seconds
+later `LC.CheckRaidJoin` asks them whether to start a session, over the one that is still running.
+
+Before D2 the same client held no config at all, read as not-the-loot-owner, and was never asked.
+That is what the comment at the prompt already says it is guarding ("becoming loot owner mid-raid ...
+used to pop this question over a live session, and answering no ended it for the whole raid"); D2
+re-opened the door for a new population, and put it on the person who reloads most.
+
+What "No" then does is the whole cost: `LC.SetSessionActive(false)` broadcasts `LC_ACTIVE:0`, and
+peers accept it because the sender genuinely is the config's lootmaster. Reproduced against the
+integrated tree — split raid, session running, reload mid-encounter, one click: all five simulated
+clients ended with `sessionActive = false`. The message is guaranteed, so an encounter does not even
+save it; it is held and flushes the moment the boss dies. On `3804d62` the same run restores no
+config and shows no prompt.
+
+Why it needs a mid-encounter reload to appear at all: the reply to `LC_STATE_REQ` is what would have
+told the returning client the session is running, and `LC_STATE_REQ` is not in `GUARANTEED_TOKENS`,
+so an active restriction drops it (B140 correctly closes that gate). Any lost reply does the same —
+the restriction is one way, not the only one.
+
+**Fixed 2026-08-06.** A snapshot that carried a config sets `LC.sessionSnapshotPending`, and
+`LC.ShowSessionPrompt` refuses while that is set and `LC.sessionStateKnown` is still false — "a
+session was running a moment ago and nobody has told me otherwise yet" is not a state to ask the
+question in. Deferred rather than dropped: a timer on `RESTORE_CONFIRM_SECONDS` clears the flag and
+asks after all, so a lootmaster who reloads into a raid that really has no session is still offered
+one. Armed where the config is restored rather than with the roll snapshot, because the ordinary
+between-two-bosses reload takes an early return before that timer is ever reached.
+
+The two-boolean distinction at the top of `LootCouncil.lua` is what this turns on, again: "no
+session" and "I have not found out yet" look identical in `LC.sessionActive`, and the prompt was
+reading the second as the first.
+
+Tests: `tests/test_diagnostics.lua`, "and it is NOT asked whether to start a session the raid never
+said had ended", plus the other half — "once the raid has had its chance to answer and did not, the
+question comes".

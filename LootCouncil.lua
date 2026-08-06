@@ -20,6 +20,12 @@ LC.sessionStateKnown    = false
 --- a session somebody else is running means the raid already agreed something and ours must not
 --- replace it. Reset by every reload, like the rest of the runtime state.
 LC.sessionStartedByUs   = false
+--- Whether a snapshot restored on this load carried a raid config -- i.e. a session was running when
+--- the file was written, seconds ago. It is not evidence that the session is running NOW (that stays
+--- the raid's answer, see LC.RestoreSessionSnapshot), but it IS evidence that asking "start a
+--- session?" would be asking over the top of one. Cleared once the wire answers, or once the raid has
+--- had its chance to answer and did not.
+LC.sessionSnapshotPending = false
 LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
@@ -2915,10 +2921,24 @@ function LC.HideSessionPrompt()
     if LC.sessionPromptFrame then LC.sessionPromptFrame:Hide() end
 end
 
+-- Whether we are still waiting to be told what the raid is doing, having come back from a reload
+-- holding a config that says a session was running. Both halves matter: the snapshot on its own is
+-- stale the moment the wire answers, and LC.sessionStateKnown on its own cannot tell "nobody has
+-- started a session" from "nobody has told me yet" -- which is the distinction at the top of this
+-- file, and the one the prompt gets wrong.
+local function AwaitingRestoredSessionState()
+    return LC.sessionSnapshotPending and not LC.sessionStateKnown
+end
+
 function LC.ShowSessionPrompt()
     -- Asking whether to start a session that is already running is never right, and the caller's
     -- own check happens up to three seconds before this runs.
     if LC.sessionActive or not LC.IsLootOwner() then return end
+    -- ...and neither is asking one whose answer is still in the post, which for a DESIGNATED
+    -- lootmaster is the difference between a question and ending the raid's distribution: their "No"
+    -- is the one every peer accepts. Deferred rather than dropped -- see the RESTORE_CONFIRM_SECONDS
+    -- timer in LC.RestoreSessionSnapshot, which asks it once the raid has had its chance.
+    if AwaitingRestoredSessionState() then return end
     LC.sessionPromptAnswered = false
     if LC.sessionPromptFrame then
         LC.sessionPromptFrame:Show()
@@ -3282,6 +3302,30 @@ function LC.RestoreSessionSnapshot()
         for _, key in ipairs(type(store.council) == "table" and store.council or {}) do
             LC.CouncilNamesTable[key] = true
         end
+        -- A config in the file means a session was running when it was written. That does not set the
+        -- session flag -- the raid answers that -- but it does mean the "start a session?" prompt has
+        -- something to wait for. Without this the restored config makes LC.IsLootOwner() true on a
+        -- designated lootmaster, who is then asked whether to start the session they are already
+        -- running, and whose "No" the whole raid accepts (LC.SetSessionActive broadcasts LC_ACTIVE:0).
+        LC.sessionSnapshotPending = true
+        -- Armed HERE and not with the roll snapshot below, because the reload with nothing on the
+        -- table takes an early return long before that timer: LC.SaveSessionSnapshot writes no
+        -- store.tables when no roll is on screen, and the restore bails on it. That is the ordinary
+        -- between-two-bosses reload, and leaving the flag set there would suppress the question for
+        -- the rest of the evening.
+        C_Timer.After(RESTORE_CONFIRM_SECONDS, function()
+            LC.sessionSnapshotPending = false
+            -- Nobody answered in a minute, so as far as this client can tell there is no session --
+            -- which is exactly when the loot owner is supposed to be offered one. The prompt on the
+            -- way in was suppressed; this is where it lands instead.
+            --
+            -- IsInRaid() rather than the InAnyRaid() helper the other call sites use: that one is a
+            -- local declared further down this file and is not in scope here. Same predicate today
+            -- (see its comment on why it is not widened to IsInGroup).
+            if LC.sessionActive or not IsInRaid() or not LC.IsLootOwner() then return end
+            LC.promptedThisSession = true
+            LC.ShowSessionPrompt()
+        end)
     end
 
     if type(store.tables) ~= "table" then wipe(store) return end

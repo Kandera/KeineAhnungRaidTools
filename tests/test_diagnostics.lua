@@ -466,6 +466,49 @@ do
         "so this client is back on the wire's answer, exactly as it was before")
 end
 
+-- ...and the restored config must not put the session question back on screen ----------------------
+-- The prompt asks "start a session?", and answering No runs LC.SetSessionActive(false), which
+-- broadcasts LC_ACTIVE:0 and ends the distribution for the whole raid. It is gated on
+-- LC.IsLootOwner(), and before D2 a reloaded client held no config, so a DESIGNATED lootmaster --
+-- someone who hands out the loot without leading the raid -- read as not-the-loot-owner and was
+-- never asked. Restoring the config from disk made that gate true again on the one client whose
+-- "No" the whole raid accepts, over a session that is still running.
+--
+-- The condition that tells the two apart is not "do we own the loot" but "have we been told". A
+-- snapshot that carried a config is evidence a session was running when it was written, so the
+-- question waits for the wire to answer rather than being asked over the top of it.
+do
+    local sim = F.NewSplitRaid()       -- Corvin leads, Bramor hands out the loot
+    KARTTEST.AdvanceTime(3)
+
+    -- Losing the reply is the whole case. Mid-encounter that is Blizzard shutting comms (B140), but
+    -- a dropped answer does it just as well, and the client cannot tell the two apart.
+    RaidSim.Blackhole(sim, "LC_STATE_REQ")
+    local back = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+    KARTTEST.AdvanceTime(5)            -- past the three seconds the prompt is armed on
+
+    T.truthy(next(back.KART.LC.raidConfig) ~= nil, "the config is back from disk")
+    T.truthy(RaidSim.As(back, back.KART.LC.IsLootOwner), "so this client knows it hands out the loot")
+    T.eq(back.KART.LC.sessionActive, false, "and its own session flag is still unanswered")
+
+    local shown = RaidSim.As(back, function()
+        local f = back.KART.LC.sessionPromptFrame
+        return (f ~= nil and f:IsShown()) or false
+    end)
+    T.eq(shown, false, "and it is NOT asked whether to start a session the raid never said had ended")
+
+    -- The question is deferred, not thrown away: if nobody ever answers, the snapshot stops being
+    -- evidence and the loot owner is asked after all. Otherwise a lootmaster who reloads into a raid
+    -- that really has no session spends the evening never being offered one.
+    KARTTEST.AdvanceTime(75)           -- past RESTORE_CONFIRM_SECONDS (60)
+    local askedLater = RaidSim.As(back, function()
+        local f = back.KART.LC.sessionPromptFrame
+        return (f ~= nil and f:IsShown()) or false
+    end)
+    T.eq(askedLater, true, "once the raid has had its chance to answer and did not, the question comes")
+end
+
 -- ...and a client that has passed nothing at all prints nothing ---------------------------------------
 -- Same rule as every counter above: a raider pastes this output into an issue, and an empty block
 -- reads as something having gone wrong.
