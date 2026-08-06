@@ -423,7 +423,14 @@ end
 function KARTTEST.RestoreContext(ctx)
     local prev = { client = RaidSim.active, unit = KARTTEST.activeUnit }
     RaidSim.active     = ctx and ctx.client or nil
-    KARTTEST.activeUnit = ctx and ctx.unit or nil
+    -- The client's unit token as it is NOW, not the one it carried when this was captured. Raid
+    -- units are positional ("raid3", see Reindex), so one person leaving re-numbers
+    -- everybody below them -- and delayed work scheduled before that then ran as whoever INHERITED
+    -- the token: the stubs resolved "player" to a different raider than the one whose timer it was,
+    -- so that client's own vote heartbeat serialized its neighbour's key and the raid ended up
+    -- holding a vote nobody cast. In the game a client's own "player" is its own whatever the
+    -- roster does, and that is what this restores.
+    KARTTEST.activeUnit = (ctx and ctx.client and ctx.client.unit) or (ctx and ctx.unit) or nil
     return prev
 end
 

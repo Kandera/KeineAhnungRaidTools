@@ -16,6 +16,118 @@ local function TrackedItemID(rollID)
     return (type(link) == "string" and link:match("item:(%d+)")) or ""
 end
 
+-- =====================================================================
+--  Duplicate copies: two rollIDs, one decision
+-- =====================================================================
+-- A boss dropping the same item twice hands out two rollIDs, and until now that meant two cards for
+-- one decision: the raider clicked twice, and whoever forgot the second click became the council's
+-- "answered (1/2), missed (2/2)" row to chase. One card now stands for every copy and the answer is
+-- cast for all of them.
+--
+-- Only the RAIDER's side merges. The council keeps a tab per copy, because the two copies go to
+-- different people -- an award is per rollID and nothing about it is duplicated. Nothing in this
+-- section is reachable from the council panel.
+--
+-- Same item means the same item STRING, bonus IDs included -- the definition
+-- Trade.GetDuplicateOrdinal already uses for the "(1/2)" marking, so the card that merges is exactly
+-- the card that was marked as a copy. Two drops that differ in their bonus IDs are two items to a
+-- raider deciding, and they stay two cards.
+--
+-- ...and only while the copy can still be ANSWERED. A closed roll is not part of anybody's card:
+-- a council member keeps its rolls in LC.voteListRolls for as long as the tab is open, long after
+-- the window shut (Vote.PruneExpiredRolls skips what is tabbed), and folding one of those into a
+-- live card would either hide the live copy behind a dead one or -- found by the soak walk, seed 25
+-- -- cast a vote on a roll the rest of the raid has already let go, which nobody can accept and
+-- which leaves that client alone with a vote for it.
+local function CopyKey(rollID)
+    local deadline = LC.rollDeadlines[rollID]
+    if not deadline or deadline <= GetTime() then return nil end
+    return KAUtil.GetItemString(LC.rollItems[rollID])
+end
+
+-- Every roll on THIS raider's list that is the same item as rollID, ascending -- so the first entry
+-- is the copy the ordinal calls (1/N) and every client picks the same one to draw. Returns nil when
+-- there is nothing to merge, which is the normal case and is what lets the callers below stay on
+-- their existing single-roll path.
+local function DuplicateGroup(rollID)
+    local key = CopyKey(rollID)
+    if not key then return nil end
+    local group
+    for _, rid in ipairs(LC.voteListRolls) do
+        if rid ~= rollID and CopyKey(rid) == key then
+            group = group or { rollID }
+            group[#group + 1] = rid
+        end
+    end
+    if group then table.sort(group) end
+    return group
+end
+
+-- A copy that arrives AFTER the raider has already answered takes the answer that was given for the
+-- card it belongs to. The two drops of one item do not have to be simultaneous, and a card that
+-- opens seconds later to ask again for a decision already made is the double click this whole
+-- section exists to end. Silent when there is nothing to inherit, which is every ordinary drop.
+--
+-- Held back while the raid cannot have heard of the roll yet. The loot owner tracks a roll from its
+-- own START_LOOT_ROLL and announces it a moment later, once the batch it belongs to is flushed
+-- (LC.pendingDrop) -- so in between it is the only client that knows the number exists, and a vote
+-- sent for it is refused by every receiver as untracked. Found by the soak walk at seed 25, on a
+-- reused rollID: the announcer inherited its copy's answer, the message went out ahead of the
+-- announcement, and that client stood alone with a vote nobody could accept until the next
+-- heartbeat repeated it. Vote.ApplyInheritedAnswers on the prune tick is what comes back for it.
+local function Announced(rollID)
+    for _, entry in ipairs(LC.pendingDrop and LC.pendingDrop.entries or {}) do
+        if entry.rollID == rollID then return false end
+    end
+    return true
+end
+
+local function InheritCopyAnswer(rollID)
+    if LC.votedByMe[rollID] or not Announced(rollID) then return end
+    for _, other in ipairs(DuplicateGroup(rollID) or {}) do
+        if other ~= rollID and LC.votedByMe[other] then
+            -- Vote.CastVote reads the note off a widget, since every other caller has one; here it
+            -- is a string that was already stripped and stored, so it travels in the smallest thing
+            -- that answers GetText.
+            local note = LC.votedNoteByMe[other] or ""
+            Vote.CastVote(rollID, LC.votedByMe[other],
+                note ~= "" and { GetText = function() return note end } or nil,
+                LC.autoVotedByMe[other] and true or nil)
+            return
+        end
+    end
+end
+
+-- The retry for the case above: a roll whose card opened before its own announcement had gone out
+-- inherits on the next prune tick instead. One second, and only for as long as this client has a
+-- card open at all -- the ticker's own lifetime (Vote.EnsurePruneTicker).
+function Vote.ApplyInheritedAnswers()
+    for i = #LC.voteListRolls, 1, -1 do
+        InheritCopyAnswer(LC.voteListRolls[i])
+    end
+end
+
+-- The deadline a merged card counts down: the EARLIEST of its copies'. The card is drawn for the
+-- lowest rollID and the copies started apart, so that one can be the later of the two -- showing its
+-- timer would tell the raider they have time they do not have for the other copy.
+function Vote.CardDeadline(rollID)
+    local deadline = LC.rollDeadlines[rollID]
+    for _, rid in ipairs(DuplicateGroup(rollID) or {}) do
+        local other = LC.rollDeadlines[rid]
+        if other and (not deadline or other < deadline) then deadline = other end
+    end
+    return deadline
+end
+
+-- What a merged card says where a single one shows Trade.GetDuplicateOrdinal's "(1/2)": that marking
+-- names ONE copy, and this card is all of them. A bare count needs no locale string of its own --
+-- "2x" reads the same in both the languages this addon ships.
+function Vote.CardItemSuffix(rollID)
+    local group = DuplicateGroup(rollID)
+    if not group then return LC.Trade.GetDuplicateOrdinal(rollID) end
+    return string.format(" (%dx)", #group)
+end
+
 
 -- =====================================================================
 --  Vote List  (shown to non-council raiders off the LC_DROP announcement)
@@ -94,7 +206,7 @@ function Vote.CreateVoteList()
             for i, rid in ipairs(Vote.GetVisibleRolls()) do
                 local row = pool and pool[i]
                 if row and row:IsShown() then
-                    local deadline  = LC.rollDeadlines[rid]
+                    local deadline  = Vote.CardDeadline(rid)
                     local remaining = deadline and math.max(0, math.ceil(deadline - now)) or 0
                     local votedCount, total = LC.CountVotes(rid)
                     row.timerText:SetText(remaining .. "s  " .. string.format(KART.L.LC_VOTES_PROGRESS, votedCount, total))
@@ -161,6 +273,8 @@ function Vote.EnsurePruneTicker()
     if LC.pruneTicker then return end
     LC.pruneTicker = C_Timer.NewTicker(1, function()
         local changed = Vote.PruneExpiredRolls()
+        -- ...and the other thing a listed roll may still be owed: the answer its copy already got.
+        Vote.ApplyInheritedAnswers()
         if #LC.voteListRolls == 0 then
             -- The same reset RefreshVoteListRows performs when the batch empties. It cannot be left
             -- to that function here: the window may be hidden, or never have been built at all.
@@ -196,6 +310,7 @@ function Vote.ShowVotePopup(rollID, itemLink, seconds)
     end
 
     Vote.EnsurePruneTicker()
+    InheritCopyAnswer(rollID)
     Vote.RefreshVoteListRows()
 end
 
@@ -235,7 +350,11 @@ local NO_HIDDEN = {}
 -- an auto-PASS also carries a vote, so unticking lcHideIrrelevant could not bring its row back
 -- either. An automatic answer hides through LC.hiddenIrrelevant, which the live setting governs,
 -- and never through this clause.
-function Vote.GetVisibleRolls()
+--
+-- Named FilteredRolls rather than GetVisibleRolls since the duplicate merge below sits on top of it:
+-- what this answers is "which rolls survive the personal filters", and what a row is drawn for is
+-- what Vote.GetVisibleRolls answers.
+function Vote.FilteredRolls()
     local hideVoted = (KART_Settings and KART_Settings.lcVotedItemDisplay) == "hide"
     if LC.showAllOverride then return LC.voteListRolls end
     local hidden = (KART_Settings and KART_Settings.lcHideIrrelevant and LC.hiddenIrrelevant) or NO_HIDDEN
@@ -254,6 +373,48 @@ function Vote.GetVisibleRolls()
         end
     end
     return visible
+end
+
+-- One card per ITEM, out of a list that is one entry per roll. The copy that survives is the lowest
+-- rollID present, which is the one Trade.GetDuplicateOrdinal calls (1/N), so every client draws the
+-- same one. Applied to the ALREADY-FILTERED list rather than to LC.voteListRolls: if one copy is
+-- hidden and another is not, the card has to be the one that is still on screen.
+--
+-- /kart showall does not lift this, unlike the two filters below it. Showing both copies would put
+-- two answer paths on screen for one answer that is cast for both anyway -- the merge is not
+-- something the player is being kept from seeing.
+--
+-- Returns the list it was handed whenever nothing merges, which is the ordinary case, and scans for
+-- that answer without allocating: LC.voteListRolls is a boss's drops, so the pair loop is a few
+-- dozen comparisons and it runs on every refresh and every countdown tick.
+local function CollapseCopies(list)
+    local anyCopies = false
+    for i = 2, #list do
+        local key = CopyKey(list[i])
+        if key then
+            for j = 1, i - 1 do
+                if CopyKey(list[j]) == key then anyCopies = true break end
+            end
+        end
+        if anyCopies then break end
+    end
+    if not anyCopies then return list end
+
+    local lowest = {}
+    for _, rollID in ipairs(list) do
+        local key = CopyKey(rollID)
+        if key and (not lowest[key] or rollID < lowest[key]) then lowest[key] = rollID end
+    end
+    local merged = {}
+    for _, rollID in ipairs(list) do
+        local key = CopyKey(rollID)
+        if not key or lowest[key] == rollID then merged[#merged + 1] = rollID end
+    end
+    return merged
+end
+
+function Vote.GetVisibleRolls()
+    return CollapseCopies(Vote.FilteredRolls())
 end
 
 -- Thin dispatcher: resizes nothing itself, just picks which style actually builds the rows.
@@ -356,6 +517,11 @@ end
 -- two things below, and both used to be handled by the caller afterwards — which was wrong as soon
 -- as LC.Relevance could answer a roll a second time (B50), because the "this is an override" branch
 -- fired for its own re-answer and undid the hide flag it had just set.
+-- Re-entrancy flag for the copy fan-out at the end of Vote.CastVote: the copies are answered by
+-- calling this function again, and each of those calls would otherwise fan out back to the roll it
+-- came from. Also what tells the inner calls to leave the redraw to the outer one.
+local castingCopies = false
+
 function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
     -- A vote the player clicked is final. One that LC.Relevance cast on their behalf is not: the
     -- relevance check can be wrong, and the player's own correction has to win over it. HandleVote
@@ -418,7 +584,30 @@ function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
     -- visible hitch exactly when the window first appears, which is when several items are answered
     -- at once. ApplyToPendingRolls has no other caller, so there is no path where an automatic vote
     -- is cast outside a refresh.
-    if not isAuto then Vote.RefreshVoteListRows() end
+    -- ...and the same answer for every other copy of this item, because the card that was clicked
+    -- stands for all of them (see DuplicateGroup). One message per rollID, not one per card: the
+    -- council scores each copy separately and needs a vote under each number.
+    --
+    -- Skipped for a copy that already holds this exact answer, which is the rule LC.Relevance
+    -- applies to its own re-answers and for the same reason. It is what keeps the automatic pass
+    -- from sending twice per copy: Relevance walks LC.voteListRolls and reaches copy two after this
+    -- fan-out has already answered it, finds the answer unchanged, and casts nothing.
+    if not castingCopies then
+        castingCopies = true
+        for _, other in ipairs(DuplicateGroup(rollID) or {}) do
+            if other ~= rollID
+                and (LC.votedByMe[other] ~= buttonIdx
+                     or (LC.votedNoteByMe[other] or "") ~= note
+                     or (LC.autoVotedByMe[other] and true or false) ~= (isAuto and true or false)) then
+                Vote.CastVote(other, buttonIdx, noteBox, isAuto)
+            end
+        end
+        castingCopies = false
+    end
+
+    -- One redraw for the click, not one per copy -- the same reason the inner calls above are the
+    -- ones that skip it rather than the outer one.
+    if not isAuto and not castingCopies then Vote.RefreshVoteListRows() end
 end
 
 -- "Spacious" style: one card per item, full window width each, large touch targets. The default
@@ -615,7 +804,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         end
 
         local rollLink = LC.rollItems[rollID]
-        row.itemText:SetText((rollLink or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
+        row.itemText:SetText((rollLink or "???") .. Vote.CardItemSuffix(rollID))
 
         -- Real icon when we have one; otherwise the same tinted placeholder used by the council
         -- panel's tabs (see RefreshCouncilTabs), so both windows degrade the same way.
@@ -624,7 +813,7 @@ function Vote.RefreshVoteListRows_Spacious(f)
         row.itemIconBorder:SetVertexColor(ir, ig, ib)
         row.accentStrip:SetColorTexture(ir, ig, ib)
 
-        local deadline  = LC.rollDeadlines[rollID]
+        local deadline  = Vote.CardDeadline(rollID)
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
         do
             local votedCount, total = LC.CountVotes(rollID)
@@ -897,7 +1086,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         end
 
         local rollLink = LC.rollItems[rollID]
-        row.itemText:SetText((rollLink or "???") .. LC.Trade.GetDuplicateOrdinal(rollID))
+        row.itemText:SetText((rollLink or "???") .. Vote.CardItemSuffix(rollID))
         row.itemText:SetWidth(CONTENT_W - ICON_SIZE - MARGIN * 2 - 8 - 60)
 
         local ir, ig, ib = LC.ParseItemColor(rollLink)
@@ -905,7 +1094,7 @@ function Vote.RefreshVoteListRows_Compact(f)
         row.itemIconBorder:SetVertexColor(ir, ig, ib)
         row.itemText:SetTextColor(ir, ig, ib)
 
-        local deadline  = LC.rollDeadlines[rollID]
+        local deadline  = Vote.CardDeadline(rollID)
         local remaining = deadline and math.max(0, math.ceil(deadline - GetTime())) or 0
         do
             local votedCount, total = LC.CountVotes(rollID)

@@ -10,6 +10,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Geändert
 - **Rezepte und Muster laufen jetzt über das Loot Council** statt über Blizzards Würfelfenster.
 - **Ein verpasstes Item erreicht dich jetzt in Sekunden** statt in einer halben Minute.
+- **Zwei Kopien eines Items teilen sich jetzt ein Abstimmungsfenster**, und deine Antwort zählt für beide.
 - **KART warnt vor Items, die das Council noch nicht entschieden hat**, bevor deren Handelszeit abläuft.
 - **Die Handelserinnerung zeigt grün, wer gerade nah genug zum Traden ist.**
 - **Handelsfristen kommen vom Item selbst**, und ein Item, das nie übergeben werden kann, sagt es.

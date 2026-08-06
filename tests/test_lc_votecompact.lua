@@ -98,7 +98,9 @@ end
 -- in that case -- they are the only way to take back an answer nobody chose to give. The spacious
 -- layout carries the same rule; the compact one had no test for it.
 do
-    F.Drop(sim, 92, F.GLOVES)
+    -- Not the gloves of roll 90: two drops of one item share a single merged card since the
+    -- duplicate-copy change, and this block needs a row of its own to look at.
+    F.Drop(sim, 92, F.STAFF)
     KARTTEST.AdvanceTime(1)
     RaidSim.As(raider, function() Vote.CastVote(92, 1, nil, true) end)
     Refresh()

@@ -491,7 +491,9 @@ do
     local alric = sim.byName.Alric           -- plain raider; a weapon, so relevance stays out of it
     F.Drop(sim, 570, F.WEAPON)
     KARTTEST.AdvanceTime(10)
-    F.Drop(sim, 571, F.WEAPON)
+    -- A DIFFERENT weapon: two drops of one item are one merged card since the duplicate-copy
+    -- change, and what this test needs on screen is two rows.
+    F.Drop(sim, 571, F.STAFF)
     KARTTEST.AdvanceTime(1)
     T.eq(ShownRows(alric), 2, "B51: both items are on screen")
 

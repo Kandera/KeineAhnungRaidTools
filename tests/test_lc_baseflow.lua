@@ -187,11 +187,12 @@ do
     end
     T.eq(#council.KART.LC.councilTabs, 3, "and the council has a tab for each")
 
-    -- Votes have to land on the roll they were cast on, not on the other copy of the same item.
+    -- Two copies of one item are ONE decision for the raider: the vote card merges them, and the
+    -- answer is recorded and sent under BOTH rollIDs -- the council scores each copy on its own tab
+    -- and needs a vote under each number. Merging is per ITEM, so the other drop is untouched.
     RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(47, 1) end)
-    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(49, 3) end)
-    T.eq((lm.KART.LC.votes[47] or {})[raider.guid].idx, 1, "the first copy carries its own vote")
-    T.eq((lm.KART.LC.votes[49] or {})[raider.guid].idx, 3, "and the second copy carries its own")
+    T.eq((lm.KART.LC.votes[47] or {})[raider.guid].idx, 1, "the copy that was answered carries the vote")
+    T.eq((lm.KART.LC.votes[49] or {})[raider.guid].idx, 1, "and so does the copy it stands for")
     T.truthy(not (lm.KART.LC.votes[48] or {})[raider.guid], "and the other item has none")
 
     -- Deciding one leaves the others alone.

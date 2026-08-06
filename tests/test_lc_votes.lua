@@ -392,6 +392,77 @@ do
     T.eq(council.KART.LC.rollItems[122], nil, "so the tab it closed stays closed")
 end
 
+-- Two copies of one item are one card, and one answer ----------------------------------------------
+-- A boss dropping the same item twice gives it two rollIDs and, until now, two cards: the raider
+-- clicked twice for one decision, and the class the council then chased was "answered (1/2), missed
+-- (2/2)". The council side stays per copy -- the two are awarded to different people -- so only the
+-- RAIDER's card merges.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 130, F.GLOVES)
+    Drop(sim, 131, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local visible
+    RaidSim.As(raider, function() visible = raider.KART.LC.Vote.GetVisibleRolls() end)
+    T.eq(#visible, 1, "two copies of one item are one card")
+    T.eq(visible[1], 130, "and it is the first copy, the one the ordinal calls (1/2)")
+    T.eq(F.HasVoteRow(raider, 131), true, "the second copy is still tracked, just not drawn twice")
+    T.eq(#council.KART.LC.councilTabs, 2, "while the council still scores each copy on its own tab")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(130, 2) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(((council.KART.LC.votes[130] or {})[raider.guid] or {}).idx, 2, "one click answers the copy shown")
+    T.eq(((council.KART.LC.votes[131] or {})[raider.guid] or {}).idx, 2, "and the copy it stands for")
+
+    local mine = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_VOTE:")) do
+        if e.from == raider.name and e.msg:match("^LC_VOTE:") then mine = mine + 1 end
+    end
+    T.eq(mine, 2, "as one message per copy -- the council needs both -- and not one per copy per copy")
+end
+
+-- ...and a copy that arrives after the answer inherits it -------------------------------------------
+-- The two drops do not have to be simultaneous. A raider who has already answered must not be asked
+-- again by a card that opens seconds later for the same item.
+do
+    local sim, _, council, raider = NewRaid()
+    Drop(sim, 132, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(132, 1) end)
+    KARTTEST.AdvanceTime(1)
+
+    Drop(sim, 133, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(((council.KART.LC.votes[133] or {})[raider.guid] or {}).idx, 1,
+        "a copy that arrives after the answer is answered the same way")
+    T.eq(raider.KART.LC.votedByMe[133], 1, "and the raider is not asked a second time")
+end
+
+-- ...and the merged card runs on the earlier of the two windows -------------------------------------
+-- The copies start apart, so their deadlines are apart. The card is drawn for the lower rollID -- the
+-- ordinal's (1/2) -- and that one can be the LATER of the two; showing its timer would tell the
+-- raider they have time they do not have for the other copy.
+do
+    local sim, _, _, raider = NewRaid()
+    Drop(sim, 141, F.GLOVES)
+    KARTTEST.AdvanceTime(3)
+    Drop(sim, 140, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local shown, own, earlier
+    RaidSim.As(raider, function()
+        shown   = raider.KART.LC.Vote.CardDeadline(140)
+        own     = raider.KART.LC.rollDeadlines[140]
+        earlier = raider.KART.LC.rollDeadlines[141]
+    end)
+    T.eq(shown, earlier, "the merged card counts down the earlier window")
+    T.truthy(shown < own, "which is not the window of the copy it is drawn for")
+end
+
 -- The two files have to mean the same thirty seconds -------------------------------------------------
 -- The ask cooldown is a local in LootCouncil.lua and the vote path may not reach into it, so it is
 -- stated twice. Two cooldowns that drift apart are two ask rates for one ask, which is exactly the
