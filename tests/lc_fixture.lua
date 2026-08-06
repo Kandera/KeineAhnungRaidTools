@@ -88,6 +88,15 @@ KARTTEST.AddItem({ id = 249410, name = "Voidbound Regalia of the Eternal Vigil",
 
 F.LONG_ITEM = 249410
 
+-- A tier token, restricted to three classes. Neither of the two rules above can say anything about
+-- one: a token is Miscellaneous, so it has no armor weight and no weapon subclass -- and a raid on
+-- new content is full of them. Only the item's own tooltip knows.
+KARTTEST.AddItem({ id = 249411, name = "Voidbound Vestment of the Vigil", quality = 4, ilvl = 285,
+                   classID = 15, subclassID = 0, bind = 1,
+                   classesAllowed = { "DEATHKNIGHT", "PALADIN", "WARRIOR" } })
+
+F.TIER_TOKEN = 249411
+
 -- A council of three plus two plain raiders. More than one council member is the point: the whole
 -- feature is several people deciding together, and a "council" of one cannot show a tally going out
 -- of sync, a straw poll disagreeing, or a second council member's assignment reaching the first.

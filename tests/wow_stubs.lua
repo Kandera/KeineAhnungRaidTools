@@ -1117,6 +1117,25 @@ function _G.SendChatMessage(msg, channel)
 end
 function KARTTEST.ClearChat() KARTTEST.chat = {} end
 function _G.IsInGuild() return false end
+-- The tooltip, as data. C_TooltipInfo.GetHyperlink is how an addon reads a line no item API exposes
+-- -- the class restriction on a tier token, which is the only thing that can judge one (see
+-- ClassLocked in LootCouncilRelevance.lua). Driven per fixture item by def.classesAllowed, a list of
+-- class display names; an item without one produces a tooltip that says nothing about classes, which
+-- is what almost every item does.
+_G.ITEM_CLASSES_ALLOWED = "Classes: %s"
+_G.C_TooltipInfo = {
+    GetHyperlink = function(link)
+        local it = itemOf(link)
+        if not it or it.cached == false then return nil end
+        local lines = { { leftText = it.name } }
+        if it.classesAllowed then
+            lines[#lines + 1] = { leftText = string.format(_G.ITEM_CLASSES_ALLOWED,
+                                                           table.concat(it.classesAllowed, ", ")) }
+        end
+        return { lines = lines }
+    end,
+}
+
 _G.UISpecialFrames = {}
 -- Popups are recorded rather than shown, so a test can accept one deliberately. Several confirms
 -- are load-bearing -- reassigning a winner routes THROUGH one -- and a stub that silently swallowed

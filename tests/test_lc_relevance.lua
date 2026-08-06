@@ -298,6 +298,26 @@ do
     T.truthy(IsVisible(sinja, 593), "with its row where the player can vote on it")
 end
 
+-- A tier token names the classes that may use it, and that settles it --------------------------------
+-- The armor-weight rule and the weapon tables both answer nothing for a token: it is Miscellaneous,
+-- with no weight and no weapon subclass. No item API exposes the restriction either -- it is a
+-- tooltip line, which is where RCLootCouncil has been reading it for years. New content is a tier
+-- full of these, so this is the case that matters most in a fortnight and least today.
+do
+    local sim = F.NewRaid()
+    local corvin = sim.byName.Corvin   -- PALADIN, hide ON: named on the token
+    local sinja  = sim.byName.Sinja    -- PRIEST, hide ON: not named
+
+    F.Drop(sim, 594, F.TIER_TOKEN, { canNeed = false, canTransmog = false })
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(sinja.KART.LC.hiddenIrrelevant[594],
+        "a token that does not name your class is hidden, though nothing about the item type says so")
+    T.truthy(not corvin.KART.LC.hiddenIrrelevant[594],
+        "and a class the token DOES name still sees it")
+    T.truthy(IsVisible(corvin, 594), "with its row, so they can vote on it")
+end
+
 -- B49: a roll expires whether or not anybody is looking at it ---------------------------------------
 -- The vote window's ticker was the only thing calling Vote.PruneExpiredRolls during a batch, and it
 -- lives and dies with the window. Hide every row -- which is precisely what lcHideIrrelevant does to

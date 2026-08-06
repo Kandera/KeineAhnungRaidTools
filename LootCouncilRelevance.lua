@@ -235,6 +235,38 @@ local function WeaponMainStatMismatch(itemLink, classFile)
     return true
 end
 
+-- Does the item name the classes allowed to use it, and is ours missing from that list?
+-- true / false / nil, where nil is "the item says nothing about classes".
+--
+-- This is the only rule that can judge a TIER TOKEN, and tier tokens are the whole reason it exists:
+-- a token is Miscellaneous with no armor weight and no weapon subclass, so both rules above answer
+-- nothing about it, and a raid on new content is a raid full of them. The restriction is not exposed
+-- by any item API -- it lives in the tooltip, exactly as it does for RCLootCouncil, which has been
+-- reading it there for years.
+--
+-- C_TooltipInfo.GetHyperlink rather than a hidden scanning frame: it returns the lines as data, so
+-- there is no frame to own, no anchor to get wrong and nothing on screen to flicker.
+--
+-- Whitespace is stripped from both sides of the comparison and the list is wrapped in delimiters
+-- before matching, so "Death Knight, Paladin" answers correctly for a Paladin without depending on
+-- which delimiter the client's locale uses, and no class can match another as a prefix.
+local function ClassLocked(itemLink, classDisplayName)
+    if not (classDisplayName and ITEM_CLASSES_ALLOWED) then return nil end
+    if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return nil end
+    local data = C_TooltipInfo.GetHyperlink(itemLink)
+    if not (data and data.lines) then return nil end
+    local pattern = ITEM_CLASSES_ALLOWED:gsub("%%s", "(.+)")
+    for _, line in ipairs(data.lines) do
+        local listed = line.leftText and line.leftText:match(pattern)
+        if listed then
+            local haystack = "," .. listed:gsub("%s", "") .. ","
+            local mine = "," .. classDisplayName:gsub("%s", "") .. ","
+            return haystack:find(mine, 1, true) == nil
+        end
+    end
+    return nil
+end
+
 -- true / false / nil, for the items the armor-weight rule cannot judge. nil means "no opinion",
 -- never "cannot use".
 local function CannotUseByType(itemLink, classFile)
@@ -294,7 +326,11 @@ local function IsIrrelevantForMe(rollID, itemLink)
     -- cannot pass away somebody's upgrade -- and it returns nil for weapons and jewellery, which
     -- reaches DecideAutoResponse as "not determinable" and is treated as relevant.
     if not LC.IsRealItemLink(itemLink) then return nil end
-    local _, classFile = UnitClass("player")
+    local classDisplay, classFile = UnitClass("player")
+    -- Asked first, because it is the only one of the three that is a STATEMENT BY THE ITEM rather
+    -- than a rule of ours, and the only one that can answer for a tier token at all.
+    local locked = ClassLocked(itemLink, classDisplay)
+    if locked ~= nil then return locked end
     local rank = KART.LC.Council.GetItemArmorRank(itemLink)
     if rank then return not KART.LC.Council.IsArmorEligible(classFile, rank) end
     -- No armor weight to judge: jewellery and cloaks (nobody is barred from those, so this answers
