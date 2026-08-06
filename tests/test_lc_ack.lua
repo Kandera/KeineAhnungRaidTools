@@ -1,0 +1,275 @@
+-- Paket F: the announcement receipt-ack, and the answer states the council reads off it.
+--
+-- The hole this is about: a client whose LC_DROP was swallowed while Blizzard DID give it a roll
+-- window sits blind. Auto-Pass needs LC.rollAnnounced, only the announcement (or a catch-up) sets it,
+-- and the only thing that happens on its own is WaitForAnnouncement PRINTING at ANNOUNCE_WAIT --
+-- longer than Blizzard's window, so the item is already lost by then. 2026-08-03 cost a raider an
+-- item exactly this way (B118).
+
+local F = dofile("tests/lc_fixture.lua")
+local RaidSim = F.RaidSim
+
+local function PassedBy(sim, rollID, name)
+    return (KARTTEST.rolled[rollID] or {})[sim.byName[name].unit]
+end
+
+-- One client deaf to the announcement, and to nothing else.
+--
+-- RaidSim.Blackhole is raid-wide by token, and this needs the OPPOSITE: the rest of the raid has to
+-- receive the drop, because their acks are the evidence under test. So the message is stopped at this
+-- client's own LC handler instead -- the same place a swallowed message stops, one layer below the
+-- transport. Everything KASC does with the message (the group check, the sender key, the self-echo
+-- drop) still runs, and every OTHER token still reaches this client, which is the whole point.
+local function Deafen(client)
+    local real = client.KART.LC.HandleDrop
+    client.KART.LC.HandleDrop = function() end
+    return function() client.KART.LC.HandleDrop = real end
+end
+
+-- The headline: deaf, holding Blizzard's window, repaired while that window is still open ----------
+-- Rolls are OFF here, which is the DEFAULT (Utils.lua) and the case with no repair path at all: the
+-- table heartbeat's needItem is false (this client has the item from its own roll event) and its
+-- needRolls is false too (a raid that does not roll has no table to miss). Nothing else in the addon
+-- ever names this roll to this client again.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Alric
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    RaidSim.ClearLog(sim)
+    local restore = Deafen(deaf)
+    F.Drop(sim, 940, F.GLOVES)
+    T.truthy(deaf.KART.LC.rollItems[940] ~= nil, "Blizzard raised its roll window")
+    T.eq(deaf.KART.LC.rollAnnounced[940], nil, "and nothing has told it what the item is for")
+    -- One second: the collection window closes, the announcement goes out to everybody else, their
+    -- acks are slotted from it, and the repair has to be finished inside that -- Blizzard's window is
+    -- what this is racing, not ANNOUNCE_WAIT's forty-five seconds.
+    KARTTEST.AdvanceTime(1)
+    restore()
+
+    -- It never received the announcement, so the ONLY route to the item is the one it asked for after
+    -- overhearing somebody else being told.
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == deaf.name then asks = asks + 1 end
+    end
+    T.eq(asks, 1, "it overhears an ack for a roll it has never heard of and asks -- once")
+    T.truthy(deaf.KART.LC.rollAnnounced[940], "the owner answers, and the item is properly announced")
+    T.eq(PassedBy(sim, 940, "Alric"), 0, "so Auto-Pass finally has both halves, and it passes")
+end
+
+-- ...and without the acks it does not, which is what today's raid looks like ------------------------
+-- The control for the test above: same client, same silence, the acks lost as well. Nothing else in
+-- the addon names this roll to this client, so it holds Blizzard's window until ANNOUNCE_WAIT --
+-- which is the state that cost a raider an item on 2026-08-03.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Alric
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    RaidSim.Blackhole(sim, "LC_ACK")
+    local restore = Deafen(deaf)
+    F.Drop(sim, 941, F.GLOVES)
+    KARTTEST.AdvanceTime(5)
+    restore()
+
+    T.eq(deaf.KART.LC.rollAnnounced[941], nil, "with the acks lost too, nothing reaches it")
+    T.is_nil(PassedBy(sim, 941, "Alric"), "and it is still holding a roll window it cannot answer")
+    RaidSim.Deliver(sim, "LC_ACK")
+end
+
+-- What a boss costs: one ack per client, for the whole batch ---------------------------------------
+-- The number is the point. B120 bundled a boss's items into ONE announcement to quiet the post-boss
+-- minute, and an ack per item would have handed most of that back. Against the B135 baseline (1,680
+-- messages an evening) one ack per client per boss is about 174 over six bosses -- ten percent more
+-- messages, two percent more bytes.
+do
+    local sim, lm = F.NewRaid()
+
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 950, F.GLOVES)
+    F.Drop(sim, 951, F.WEAPON)
+    F.Drop(sim, 952, F.PLATE_CHEST)
+    KARTTEST.AdvanceTime(3) -- the collection window, then every slot of the ack spread
+
+    local acks = RaidSim.Messages(sim, "LC_ACK")
+    T.eq(#RaidSim.Messages(sim, "LC_DROP:"), 1, "the boss travels as one announcement")
+    T.eq(#acks, #sim.clients - 1, "and is answered by one ack per client that received it")
+    local fromOwner, ids = 0, nil
+    for _, e in ipairs(acks) do
+        if e.from == lm.name then fromOwner = fromOwner + 1 end
+        ids = ids or e.msg:match("^LC_ACK:(.*)$")
+    end
+    T.eq(fromOwner, 0, "the owner acks nothing -- it is the one client that was never told")
+    T.eq(ids, "950,951,952", "and one ack names the whole batch rather than one item")
+end
+
+-- The client with no roll of its own is repaired too ------------------------------------------------
+-- Dead, released, out of range: no Blizzard window, so nothing local to notice the silence by, and the
+-- clients least able to help themselves. The ask is deliberately NOT gated on holding a roll -- who is
+-- entitled is decided on the owner (LC.MayCatchUp) from the roster snapshot, not here.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Alric
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    local restore = Deafen(deaf)
+    F.Drop(sim, 953, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    restore()
+
+    T.truthy(deaf.KART.LC.rollAnnounced[953],
+        "a client with no roll window of its own is caught up off the overheard ack as well")
+    T.truthy(deaf.KART.LC.rollItems[953] ~= nil, "and has the item to vote on")
+end
+
+-- ...but somebody who joined afterwards is still refused (B118) --------------------------------------
+-- The ask is broadcast, and a late arrival hears the same acks. The rule that keeps them out of the
+-- distribution lives on the owner and is unchanged: this only proves the new ask does not route around
+-- it.
+do
+    local sim = F.NewRaid()
+    F.Drop(sim, 954, F.GLOVES)
+    -- After the announcement has left, or they simply receive it like everybody else and the ask is
+    -- never the thing under test.
+    KARTTEST.AdvanceTime(1)
+    local late = RaidSim.Join(sim, { name = "Torvath", realm = "TarrenMill",
+                                     guid = "Player-1096-0A1B2C97", class = "SHAMAN", locale = "enUS" })
+    KARTTEST.AdvanceTime(3)
+
+    T.eq(late.KART.LC.rollItems[954], nil, "a raider who was not there is not handed the item by an ack")
+end
+
+-- The suppression gates hold: an ack does not reopen what this client closed ------------------------
+-- B135/B138: a roll dismissed here, or watched expire here, is not a gap. The whole burst B135
+-- measured was clients re-asking for items they had themselves finished with, so a new ask path that
+-- ignored those notes would put it straight back.
+do
+    local sim, lm = F.NewRaid()
+    local council, raider = sim.byName.Merrit, sim.byName.Alric
+
+    F.Drop(sim, 955, F.GLOVES)
+    KARTTEST.AdvanceTime(25) -- the window closes: the plain raider frees the roll and notes why
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(955) end)
+    T.truthy(raider.KART.LC.rollExpiredHere[955] ~= nil, "the raider watched the gloves close")
+    T.truthy(council.KART.LC.rollDismissed[955] ~= nil, "and the council member put the tab away")
+
+    -- A peer repaired late acks the roll all over again -- the one message that reaches both of these
+    -- clients while they hold their notes.
+    RaidSim.ClearLog(sim)
+    RaidSim.As(sim.byName.Sinja, function() sim.byName.Sinja.KART.LC.SendLC("LC_ACK:955") end)
+    KARTTEST.AdvanceTime(2)
+
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == raider.name or e.from == council.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "neither of them asks for an item they are finished with")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0, "so the owner's queue stays empty (B135)")
+    T.eq(lm.KART.LC.rollItems[955] ~= nil, true, "while the owner still holds it, waiting to award it")
+end
+
+-- ==================================================================================================
+--  F2: what the council sees about each raider's answer
+-- ==================================================================================================
+--
+-- The panel drew cast votes and nothing else, so a raider mid-relog and a raider ignoring the window
+-- were the same empty dash on the screen the item is handed out from (Manifest C14).
+
+local function StateOn(client, rollID, forClient)
+    return RaidSim.As(client, function()
+        local key = (client.KASC.Identity.ResolvePlayer(forClient.unit))
+        return client.KART.LC.Council.AnswerState(rollID, key)
+    end)
+end
+
+-- Acked, silent, answered ---------------------------------------------------------------------------
+do
+    local sim, lm = F.NewRaid()
+    -- A raider who is not running the module at all: in the raid, on the panel, and saying nothing.
+    -- Deafening this client to the announcement would NOT do -- the overhear repair catches it up and
+    -- it acks from there, which is the feature working, not a silent raider.
+    local quiet = sim.byName.Alric
+    local voter = sim.byName.Sinja
+    quiet.env.KART_Settings.lcModuleEnabled = false
+
+    F.Drop(sim, 980, F.GLOVES)
+    KARTTEST.AdvanceTime(3) -- the announcement, and every slot of the ack spread
+
+    T.eq(StateOn(lm, 980, sim.byName.Corvin), "acked",
+        "a raider whose ack arrived is shown as holding the item, not as unanswered")
+    T.eq(StateOn(lm, 980, lm), "acked", "and so is the owner, who is holding it by definition")
+    T.is_nil(StateOn(lm, 980, quiet),
+        "while a raider who has said nothing yet is still just an empty cell -- the ack could be late")
+
+    -- Only after the wait does silence mean anything. Nothing arrives to trigger the redraw, which is
+    -- why the panel arms its own timer for this moment.
+    KARTTEST.AdvanceTime(10)
+    T.eq(StateOn(lm, 980, quiet), "silent", "past the wait, the silence is stated rather than implied")
+
+    -- An answer supersedes both, and it is the row that proves it: AnswerState is only consulted for a
+    -- raider who has not voted.
+    RaidSim.As(voter, function() voter.KART.LC.Vote.CastVote(980, 1, nil, false) end)
+    KARTTEST.AdvanceTime(6)
+    local row
+    RaidSim.As(lm, function()
+        lm.KART.LC.Council.RefreshCouncilRows()
+        local key = (lm.KASC.Identity.ResolvePlayer(voter.unit))
+        for _, r in ipairs(lm.KART.LC.councilPanel.rows or {}) do
+            if r:IsShown() and r.memberKey == key then row = r end
+        end
+    end)
+    T.truthy(row, "the voter has a row on the panel")
+    T.truthy(not tostring(row.voteText:GetText()):find(lm.KART.L.LC_ANSWER_ACKED, 1, true),
+        "and it shows their answer, not what they acked")
+end
+
+-- Somebody who was not in the raid for it stays an empty cell ---------------------------------------
+-- The other half of C14: a cell that says "no reply" about a raider who was never asked is the same
+-- false statement in the other direction.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 981, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    local late = RaidSim.Join(sim, { name = "Torvin", realm = "TarrenMill",
+                                     guid = "Player-1096-0A1B2C96", class = "HUNTER", locale = "enUS" })
+    KARTTEST.AdvanceTime(15) -- well past the wait that turns silence into "no reply"
+
+    T.is_nil(StateOn(lm, 981, late), "a raider who joined afterwards is not in this decision at all")
+end
+
+-- A reused rollID does not inherit the previous item's answers --------------------------------------
+-- Blizzard hands the same number to an unrelated item within seconds. An ack kept across that would
+-- show somebody as holding an item they have never been told about.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 982, F.GLOVES)
+    KARTTEST.AdvanceTime(3)
+    T.eq(StateOn(lm, 982, sim.byName.Corvin), "acked", "the gloves were acked")
+
+    RaidSim.Blackhole(sim, "LC_ACK")
+    F.Drop(sim, 982, F.WEAPON)
+    KARTTEST.AdvanceTime(3)
+    RaidSim.Deliver(sim, "LC_ACK")
+
+    T.is_nil(StateOn(lm, 982, sim.byName.Corvin),
+        "and the weapon that reuses the number starts from nothing")
+end

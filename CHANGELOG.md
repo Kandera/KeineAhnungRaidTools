@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The trade reminder shows in green who is close enough to trade with** right now.
 - **Trade deadlines come from the item itself**, and an item that can never be handed over says so.
 - **Trade warnings wait until the pull is over** instead of landing mid-fight.
+- **An item you never heard about finds you while the roll window is still open.**
+- **The council sees who has not answered yet**, and who has not even received the item.
 
 ### Fixed
 - **Auto-Pass works again for everyone**, even when the item's announcement never arrived.

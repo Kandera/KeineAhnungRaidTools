@@ -71,7 +71,9 @@ do
     F.Drop(sim, 80, F.GLOVES)
     -- Past the drop's collection window, so the announcement is on the wire before the picture is
     -- taken -- what the assertions below are about is what the REFUSED message adds to either.
-    KARTTEST.AdvanceTime(1)
+    -- Past the receipt-acks the announcement produces, too: they are slotted across ACK_SPREAD, so a
+    -- one-second wait left the tail of them to land inside the measurement below and read as an answer.
+    KARTTEST.AdvanceTime(3)
     local before = Snapshot(lm)
 
     local calls = {

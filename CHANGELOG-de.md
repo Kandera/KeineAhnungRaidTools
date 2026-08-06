@@ -14,6 +14,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Handelserinnerung zeigt grün, wer gerade nah genug zum Traden ist.**
 - **Handelsfristen kommen vom Item selbst**, und ein Item, das nie übergeben werden kann, sagt es.
 - **Handelswarnungen warten, bis der Pull vorbei ist**, statt mitten im Kampf zu kommen.
+- **Ein Item, von dem du nie erfahren hast, erreicht dich, solange das Würfelfenster noch offen ist.**
+- **Das Council sieht, wer noch nicht geantwortet hat** — und wer das Item gar nicht bekommen hat.
 
 ### Behoben
 - **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.

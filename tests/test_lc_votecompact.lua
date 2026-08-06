@@ -121,7 +121,14 @@ do
     local before = ShownRows(f.compactRows)
     T.truthy(before > 1, "several items are on screen")
 
-    RaidSim.As(raider, function() LC.ClearAllRolls() end)
+    -- The WHOLE raid, not this client alone. A raider that has forgotten a roll the rest of the raid
+    -- is still holding gets it handed back -- that is the repair path working (the table heartbeat's,
+    -- and since the receipt-ack also LC_ACK's), and it landed inside this block and drew a second row.
+    -- What is under test here is the row pool, so the round ends everywhere and leaves nothing to
+    -- repair.
+    for _, c in ipairs(sim.clients) do
+        RaidSim.As(c, function() c.KART.LC.ClearAllRolls() end)
+    end
     Refresh()
     -- The WINDOW is what closes; the rows keep their own shown flag and go invisible with their
     -- parent, which is why this asks about the window and not about them.

@@ -990,6 +990,35 @@ function Council.RefreshCouncilRowsThrottled()
     end)
 end
 
+-- What this raider has said about this roll, for the cell that would otherwise be an empty dash.
+--
+-- The panel used to render CAST VOTES and nothing else, so a raider mid-relog and a raider ignoring
+-- the window looked identical on the one screen the item is handed out from. Manifest C14 states the
+-- rule for rolls -- an empty cell must mean "not in this decision", never "their answer did not make
+-- it" -- and an answer is the same promise.
+--
+-- Four states, three of which are derived from messages the council already receives:
+--   * they voted            -- rendered above this, unchanged, and it supersedes everything here
+--   * "acked"               -- their receipt-ack arrived (LC.rollAcked): they have the item and are
+--                              deciding, which is a different thing from not answering
+--   * "silent"              -- answerable, and neither of the above by LC.rollAckDeadline
+--   * nil                   -- not in this decision at all: joined afterwards, or this client has no
+--                              record of the announcement to judge against. An empty cell, as before.
+--
+-- Ourselves and the announcer are "acked" without a message: we are both demonstrably holding the
+-- item, and neither of us ever sends an ack about it (KASC drops the self-echo).
+function Council.AnswerState(rollID, key)
+    if not (rollID and key) or LC.IsTestRoll(rollID) then return nil end
+    local answerable = LC.rollAnswerable and LC.rollAnswerable[rollID]
+    if not (answerable and answerable[key]) then return nil end
+    if (LC.rollAcked and LC.rollAcked[rollID] or {})[key] then return "acked" end
+    if LC.rollAnnouncedBy[rollID] == key then return "acked" end
+    if (KASC.Identity.ResolvePlayer("player")) == key then return "acked" end
+    local deadline = LC.rollAckDeadline and LC.rollAckDeadline[rollID]
+    if deadline and GetTime() >= deadline then return "silent" end
+    return nil
+end
+
 function Council.RefreshCouncilRows()
     local panel = LC.councilPanel
     if not panel then return end
@@ -1102,6 +1131,9 @@ function Council.RefreshCouncilRows()
             table.insert(members, {
                 short = short, realm = unitRealm, unit = unit, key = key,
                 voteIdx = voteIdx, voteNote = voteNote, voteDef = voteDef, voteMismatch = voteMismatch,
+                -- Only asked while there is no answer to show: a cast vote is the answer, and it
+                -- supersedes everything the ack can say about the same raider.
+                answerState = (not voteIdx) and Council.AnswerState(rollID, key) or nil,
                 equippedLink = equippedLink, equippedIlvl = equippedIlvl,
                 kartStatus = kartStatus,
                 rollValue = rollID and LC.rolls[rollID] and LC.rolls[rollID][key],
@@ -1458,6 +1490,14 @@ function Council.RefreshCouncilRows()
             -- "hasn't voted", which would be a second false statement in place of the first.
             row.voteText:SetText("|cffffaa00" .. KART.L.LC_VOTE_UNKNOWN .. "|r")
             row.voteIcon:Hide()
+        elseif m.answerState == "acked" then
+            -- They have the item and have not decided yet. Deliberately dimmer than a vote and dimmer
+            -- than the silence below: it is the state that needs nothing done about it.
+            row.voteText:SetText("|cff7788aa" .. KART.L.LC_ANSWER_ACKED .. "|r")
+            row.voteIcon:Hide()
+        elseif m.answerState == "silent" then
+            row.voteText:SetText("|cffcc7777" .. KART.L.LC_ANSWER_SILENT .. "|r")
+            row.voteIcon:Hide()
         else
             row.voteText:SetText("|cff666666-|r")
             row.voteIcon:Hide()
@@ -1552,12 +1592,24 @@ function Council.RefreshCouncilRows()
         end)
         row.warnHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+        -- One hitbox, three things it can be explaining: a vote whose label cannot be matched, a
+        -- raider who has the item and has not decided, and one who has said nothing at all. Each of
+        -- them is a word on the row that means nothing without the sentence behind it.
         local capturedVoteMismatch = m.voteMismatch
-        row.voteHitbox:EnableMouse(capturedVoteMismatch and true or false)
+        local capturedAnswerState  = m.answerState
+        local voteTip
+        if capturedVoteMismatch then
+            voteTip = KART.L.LC_VOTE_UNKNOWN_TIP
+        elseif capturedAnswerState == "acked" then
+            voteTip = KART.L.LC_ANSWER_ACKED_TIP
+        elseif capturedAnswerState == "silent" then
+            voteTip = KART.L.LC_ANSWER_SILENT_TIP
+        end
+        row.voteHitbox:EnableMouse(voteTip and true or false)
         row.voteHitbox:SetScript("OnEnter", function(self)
-            if not capturedVoteMismatch then return end
+            if not voteTip then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(KART.L.LC_VOTE_UNKNOWN_TIP, 1, 0.67, 0, 1, true)
+            GameTooltip:SetText(voteTip, 1, 0.67, 0, 1, true)
             GameTooltip:Show()
         end)
         row.voteHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)

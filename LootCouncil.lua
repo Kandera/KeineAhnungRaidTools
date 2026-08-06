@@ -3039,6 +3039,12 @@ function LC.ClearAllRolls()
     if LC.pendingItemLoads then wipe(LC.pendingItemLoads) end
     if LC.rollEligible then wipe(LC.rollEligible) end
     if LC.rollReqSent then wipe(LC.rollReqSent) end
+    -- Who acknowledged what, and who could have. Same reasoning as LC.relevanceSnapshot above: the
+    -- per-roll clear deliberately leaves these alone (see LC.ClearAckState), but a session ending ends
+    -- every decision they could still describe.
+    if LC.rollAcked then wipe(LC.rollAcked) end
+    if LC.rollAnswerable then wipe(LC.rollAnswerable) end
+    if LC.rollAckDeadline then wipe(LC.rollAckDeadline) end
     -- Same block, same convention as everything above it -- and it was missing. A planned LC_ROLLS_REQ
     -- answer surviving an End Round makes this client refuse a genuine request for a rollID Blizzard
     -- has since reused, because LC.HandleRollsRequest reads a leftover stamp as "we are already about
@@ -4398,6 +4404,9 @@ local function PurgeStaleRoll(rollID, newItemID)
     -- Rolls already cast FOR THE ITEM NOW ARRIVING survive the purge. Everything else about this
     -- rollID belongs to the previous item and goes.
     local keepRolls = (LC.rollsFor[rollID] == newItemID) and LC.rolls[rollID] or nil
+    -- The answers belonged to the previous item under this number. Kept, they would be drawn against
+    -- the new one -- somebody shown as having confirmed an item they have never been told about.
+    LC.ClearAckState(rollID)
     LC.Trade.ClearRollState(rollID)
     if keepRolls then
         LC.rolls[rollID] = keepRolls
@@ -4554,6 +4563,169 @@ local function WaitForAnnouncement(rollID, link)
         if not GetLootRollItemInfo(rollID) then return end
         print("|cffff0000KART:|r " .. string.format(KART.L.LC_ROLL_UNANNOUNCED, link or "?"))
     end)
+end
+
+-- ==========================================================================
+--  B118: the announcement, said back
+-- ==========================================================================
+--
+-- The print above is all that happened to a client whose announcement was swallowed while Blizzard
+-- HAD given it a roll window -- and it happens at ANNOUNCE_WAIT, which is longer than Blizzard's
+-- window. By then the item is decided. On 2026-08-03 that cost a raider an item outright.
+--
+-- The other repairs do not reach this client. LC.HandleTable's needItem is false (its own roll event
+-- wrote LC.rollItems), and needRolls is false whenever the raid does not roll -- which is the DEFAULT
+-- (lcRollsEnabled, Utils.lua). So in a raid with rolls off there is nothing that will ever name this
+-- roll to this client again. With rolls on the heartbeat does repair it, within a few seconds; this
+-- makes the repair arrive at the same speed either way, and without waiting for a poll.
+--
+-- The evidence is the raid itself: every client that RECEIVES an announcement says so out loud, and a
+-- client that overhears somebody being told about a roll it has never heard of knows it was skipped
+-- -- while Blizzard's window is still open, which is the whole point. Same shape RCLootCouncil2 uses
+-- (its lootAck, core.lua:1231-1249 / 3159-3176).
+--
+-- Traffic (B135): one ack per client per announcement BATCH, not per item -- about 29 messages per
+-- boss, ~174 over an evening of six, against the 1,680-message baseline. Ten percent more messages
+-- and about two percent more bytes, spread over ACK_SPREAD instead of landing in one instant.
+-- Deliberately NOT guaranteed and never retried (see GUARANTEED_TOKENS): a lost ack costs nothing,
+-- because the next client's ack carries the same evidence, and every deaf client only needs one.
+local ACK_SPREAD = 2
+
+-- Who has confirmed they were told about a roll: [rollID][identity key] = true. Read by the council
+-- panel, which is the whole reason the sender is recorded rather than just the fact (see F2 below).
+LC.rollAcked = LC.rollAcked or {}
+-- Who could have answered at all: [rollID][identity key] = true, taken when the roll arrived here.
+-- Without it an "unanswered" cell would also be drawn for somebody who joined after the drop, which
+-- is the false statement the whole feature exists to stop (Manifest C14).
+LC.rollAnswerable = LC.rollAnswerable or {}
+-- When silence starts to mean something. Local per client, deliberately: RC broadcasts a timer
+-- message from the master looter, and every client can run the same clock from its own copy of the
+-- announcement instead -- one less message for the same answer.
+LC.rollAckDeadline = LC.rollAckDeadline or {}
+
+-- Long enough that a slot at the far end of ACK_SPREAD plus the transport is not read as silence,
+-- short enough to still be inside a twenty-second vote window. Derived rather than picked, so a
+-- change to the spread carries this with it.
+local ACK_WAIT = ACK_SPREAD * 4
+
+local pendingAck
+
+local function FlushAck()
+    local ids = pendingAck
+    pendingAck = nil
+    if not ids or #ids == 0 then return end
+    -- Sorted for the same reason every other list on this wire is: two clients acking the same batch
+    -- produce the same string, which is what makes a difference between them worth looking at.
+    table.sort(ids)
+    LC.SendLC("LC_ACK:" .. table.concat(ids, ","))
+end
+
+-- One ack for everything this client was just told about. Called from LC.HandleStart, which is where
+-- BOTH paths arrive -- the batch announcement and a per-item catch-up -- so a client repaired late
+-- still tells the council it got there, and the panel stops calling it silent.
+local function QueueAck(rollID)
+    if not IsInGroup() then return end
+    if pendingAck then
+        for _, id in ipairs(pendingAck) do if id == rollID then return end end
+        if #pendingAck < TABLE_MAX_IDS then pendingAck[#pendingAck + 1] = rollID end
+        return
+    end
+    pendingAck = { rollID }
+    -- The same slotting the vote heartbeat and the roll-table answer use (LC.SelfAnswerSlot): a
+    -- position in the sorted roster rather than math.random, so the raid divides the window between
+    -- itself instead of colliding inside it. The client in slot one acks immediately, which is what
+    -- keeps the evidence early.
+    C_Timer.After(LC.SelfAnswerSlot(ACK_SPREAD), FlushAck)
+end
+
+-- What a client does when it overhears somebody else being told about a roll it has never heard of.
+--
+-- Through the existing LC.rollReqSent / ROLL_REQ_COOLDOWN gate, and through the same refusals the
+-- table heartbeat answers to (B135/B138/B139): a roll this client dismissed itself, or watched expire
+-- here, is not a gap and must not produce an ask. Paket E's vote-side trigger funnels into this same
+-- gate, so the two cannot double-ask.
+--
+-- Broadcast, not whispered: this client never received the announcement, so it does not know who made
+-- it (LC.rollAnnouncedBy is empty here by construction). LC.HandleRollRequest answers only on the loot
+-- owner, so the group form reaches exactly one answerer -- and reaches a STAND-IN who took the role
+-- over, which a whisper to a remembered announcer would not.
+--
+-- Deliberately NOT gated on holding a Blizzard roll for the item. That gate would exclude precisely
+-- the clients B118 is about -- dead, released, out of range, mid-reload -- who have no roll of their
+-- own and are the ones least able to notice anything is missing. Entitlement is not this client's
+-- question anyway: LC.MayCatchUp decides it on the owner, from the roster snapshot taken when the item
+-- dropped, so a raider who was not there is refused there. The cost of asking anyway is one whisper
+-- that goes unanswered, once per roll.
+local function AskForUnannounced(rollID)
+    if LC.rollAnnounced[rollID] then return end
+    -- The owner announces; it cannot be missing its own announcement, and asking the raid for an item
+    -- in its own bags would be an answer nobody can give.
+    if LC.IsLootOwner() then return end
+    if LC.rollDismissed[rollID] or LC.rollExpiredHere[rollID] then return end
+    local now = GetTime()
+    LC.rollReqSent = LC.rollReqSent or {}
+    if (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) < ROLL_REQ_COOLDOWN then return end
+    LC.rollReqSent[rollID] = now
+    LC.SendLC("LC_ROLL_REQ:" .. rollID)
+end
+
+function LC.HandleAck(payload, senderKey)
+    if not senderKey or senderKey == "" then return end
+    local seen = 0
+    for idText in payload:gmatch("[^,]+") do
+        local rollID = tonumber(idText)
+        -- Bounded on arrival, like every other list on this wire: a current sender never writes past
+        -- one batch's worth, and AceComm reassembles a message of any length.
+        seen = seen + 1
+        if seen > TABLE_MAX_IDS then break end
+        if rollID then
+            LC.rollAcked[rollID] = LC.rollAcked[rollID] or {}
+            LC.rollAcked[rollID][senderKey] = true
+            AskForUnannounced(rollID)
+        end
+    end
+    if LC.councilPanel and LC.councilPanel:IsShown() then
+        KART.LC.Council.RefreshCouncilRowsThrottled()
+    end
+end
+
+-- Taken when a roll arrives here, on every client that could ever have to show it: who was in the
+-- raid at that moment, and from when their silence is worth saying out loud.
+--
+-- The owner already has the authoritative answer (LC.rollEligible, the snapshot LC.MayCatchUp rules
+-- on). Everyone else takes their own, and it is deliberately NOT written into LC.rollEligible: that
+-- table is what a client vouches for other people with, and a stand-in vouching from a snapshot it
+-- made up is exactly the B118/B131 failure. This one only ever decides what a cell on this screen
+-- says.
+local function NoteAnnouncement(rollID)
+    local set = LC.rollEligible[rollID]
+    if not set then
+        set = {}
+        for unit in KAUtil.EachGroupUnit() do
+            local key = (KASC.Identity.ResolvePlayer(unit))
+            if key and key ~= "" then set[key] = true end
+        end
+    end
+    LC.rollAnswerable[rollID] = set
+    LC.rollAckDeadline[rollID] = GetTime() + ACK_WAIT
+    -- Nothing else would redraw at the moment silence becomes silence: an unanswered raider sends no
+    -- message, so without this the cell only changes the next time somebody else does something.
+    C_Timer.After(ACK_WAIT, function()
+        if LC.councilPanel and LC.councilPanel:IsShown() then
+            KART.LC.Council.RefreshCouncilRows()
+        end
+    end)
+end
+
+-- Everything this file keeps about a roll's answers. Cleared where the roll's OTHER state is cleared
+-- for a reused rollID (LC.PurgeStaleRoll) rather than in Trade.ClearRollState, for the same reason
+-- LC.relevanceSnapshot is not cleared there: the council keeps looking at an item after the raid has
+-- stopped tracking it, and a cell that says "nobody answered" because the record was swept is the
+-- false statement this exists to prevent.
+function LC.ClearAckState(rollID)
+    LC.rollAcked[rollID]       = nil
+    LC.rollAnswerable[rollID]  = nil
+    LC.rollAckDeadline[rollID] = nil
 end
 
 -- attempt is internal (see the link-retry block below); Core.lua's START_LOOT_ROLL handler passes
@@ -4770,8 +4942,11 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- handed this roll after missing its announcement, and who joined too late for it (B118).
         SnapshotEligible(rollID)
         -- The sender does not process its own announcement (KASC drops the echo, see Dispatch), so
-        -- this client records its own the moment it decides to make it.
+        -- this client records its own the moment it decides to make it. Same for the answer states the
+        -- panel reads: LC.HandleStart is where every other client takes them, and the owner never runs
+        -- it for its own roll -- yet the owner is usually the one looking at the council panel.
         LC.rollAnnouncedBy[rollID] = (KASC.Identity.ResolvePlayer("player"))
+        if not LC.rollAnswerable[rollID] then NoteAnnouncement(rollID) end
         -- Silent: the numbers ride inside LC_DROP, next to the participant list they are ordered by.
         LC.DrawRollTable(rollID, newItemID, true)
 
@@ -5098,6 +5273,12 @@ function LC.HandleStart(payload, senderKey)
     -- (B63). Auto-Pass used to run only in OnStartLootRoll, unconditionally; it now runs from
     -- whichever of the two paths completes the pair. A client with no roll of its own -- dead,
     -- released, out of range -- has nothing to pass and AutoPassAnnounced returns without acting.
+    -- Once per announcement, never per repeat: the owner re-announces a roll Blizzard re-raises
+    -- START_LOOT_ROLL for, and a second ack for the same item would be pure chatter.
+    if not LC.rollAnnounced[rollID] then
+        QueueAck(rollID)
+        NoteAnnouncement(rollID)
+    end
     LC.rollAnnounced[rollID] = true
     LC.rollAnnouncedBy[rollID] = senderKey
     -- The other half of the reload repair: this client saw Blizzard raise the roll while it still had
@@ -5490,6 +5671,11 @@ KASC:RegisterMessage("LC_ROLLS", { payload = true, group = true, enabled = lcEna
     function(payload, ctx) LC.HandleRolls(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_TABLE", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleTable(payload, ctx:Key(), ctx.sender) end)
+-- No entry in GUARANTEED_TOKENS or TOKEN_PRIO on purpose, and both absences are the design: an ack is
+-- a STATEMENT the raid makes over and over, so losing one costs nothing (the next client's carries the
+-- same evidence), and it is not one of the two moments the raid stands still for.
+KASC:RegisterMessage("LC_ACK", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LC.HandleAck(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_ROLL_REQ", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LC.HandleRollRequest(payload, ctx:Key(), ctx.sender) end)
 KASC:RegisterMessage("LC_ROLLS_REQ", { payload = true, group = true, enabled = lcEnabled },
