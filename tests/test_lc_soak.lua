@@ -183,6 +183,15 @@ local function runOne(seed)
         -- Weighted towards one item, because that is still what most drops look like.
         { "drop", function()
             local batch = {}
+            -- When the walk may still ACT on a roll is bounded by the EARLIEST deadline any client
+            -- holds, not by one recomputed here: the clients stamp their own clocks from their own
+            -- START_LOOT_ROLL, the owner from the announcement, and the two differ by the
+            -- collection window. Measuring expiresAt from the announcement took the LATEST end, so
+            -- the walk voted inside that skew -- seed 1253 landed on the exact tick of a plain
+            -- raider's deadline: the harness said live, the client had correctly freed it, and the
+            -- comparison called the design a bug. The real deadlines are read off the clients after
+            -- the drop lands, below; this stamp is only the fallback for a roll nobody tracked.
+            local eventAt = KARTTEST.now
             for _ = 1, ({ 1, 1, 1, 2, 2, 3 })[rnd(6)] do
                 local id = nextRoll
                 nextRoll = nextRoll + 1
@@ -211,7 +220,12 @@ local function runOne(seed)
             RaidSim.Drain(sim)
             for _, id in ipairs(batch) do
                 rolls[#rolls + 1] = id
-                expiresAt[id] = KARTTEST.now + VOTE_WINDOW
+                local earliest
+                for _, c in ipairs(sim.clients) do
+                    local dl = c.KART.LC.rollDeadlines[id]
+                    if dl and (not earliest or dl < earliest) then earliest = dl end
+                end
+                expiresAt[id] = earliest or (eventAt + VOTE_WINDOW)
                 if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
                 present[id] = {}
                 for _, c in ipairs(sim.clients) do
@@ -325,6 +339,9 @@ local function runOne(seed)
             for _, it in ipairs({ F.GLOVES, F.WEAPON, F.TOKEN }) do
                 if not cur or cur.itemID ~= it then items[#items + 1] = it end
             end
+            -- Same earliest-clock rule as the plain drop above: the walk must not act on a roll
+            -- past the tick the first client's own deadline prunes it.
+            local eventAt = KARTTEST.now
             F.Drop(sim, id, items[rnd(#items)])
             KARTTEST.AdvanceTime(DROP_COLLECT)
             -- Landed, not merely sent -- same reason as the plain drop above.
@@ -334,7 +351,12 @@ local function runOne(seed)
             -- party to this roll is decided fresh here -- a client still recovering from a reload
             -- gets no START_LOOT_ROLL and is not part of it, and comparing it against the others
             -- would report the recovery as a disagreement.
-            expiresAt[id] = KARTTEST.now + VOTE_WINDOW
+            local earliest
+            for _, c in ipairs(sim.clients) do
+                local dl = c.KART.LC.rollDeadlines[id]
+                if dl and (not earliest or dl < earliest) then earliest = dl end
+            end
+            expiresAt[id] = earliest or (eventAt + VOTE_WINDOW)
             if next(blackholed) ~= nil or KARTTEST.now < outageUntil then unreliable[id] = true end
             present[id] = {}
             for _, c in ipairs(sim.clients) do
@@ -483,7 +505,7 @@ local function runOne(seed)
     -- problem with B69 -- the value a client ends up holding is one no message on the wire appears
     -- to have carried, so the interesting question is which step put it there.
     local watching = os.getenv("KART_SOAK_DEBUG") == tostring(seed)
-    local lastRolls = {}
+    local lastRolls, lastItems = {}, {}
     local function TraceRolls(when)
         if not watching then return end
         for _, c in ipairs(sim.clients) do
@@ -520,6 +542,24 @@ local function runOne(seed)
                     table.sort(parts)
                     print(string.format("  ROLLS %-8s %d for=%-8s %s | after %s", c.name, id,
                         tostring(c.KART.LC.rollsFor[id]), table.concat(parts, ","), when))
+                end
+            end
+        end
+        -- The tracked ITEM the same way, transitions only: "which step lost this roll" begins with
+        -- the item, because the vote row, the asks and the council tab all key off it -- and a
+        -- client can lose the item while keeping the numbers (seed 1253 is exactly that shape).
+        if os.getenv("KART_SOAK_TRACEITEMS") then
+            for _, c in ipairs(sim.clients) do
+                for _, id in ipairs(rolls) do
+                    local key = c.name .. ":" .. id
+                    local v = tostring(c.KART.LC.rollItems[id] ~= nil)
+                        .. "/dl=" .. tostring(c.KART.LC.rollDeadlines[id])
+                    if lastItems[key] ~= v then
+                        print(string.format("  ITEM  t=%-6s %-8s %d %-10s -> %-24s | after %s",
+                            tostring(KARTTEST.now), c.name, id,
+                            tostring(lastItems[key]), v, when))
+                        lastItems[key] = v
+                    end
                 end
             end
         end
@@ -617,10 +657,27 @@ local function runOne(seed)
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
                                  "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLLS",
-                                 "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_ENTRY" }) do
+                                 "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_ENTRY",
+                                 -- The tokens the table heartbeat rework added; a wire dump without
+                                 -- them shows a repair with no visible cause (found at seed 1253).
+                                 "LC_DROP", "LC_TABLE", "LC_ROLL_REQ", "LC_ROLLS_REQ", "LC_END" }) do
             for _, e in ipairs(RaidSim.Sent(sim, token)) do
                 print(string.format("  wire %-10s %-8s -> %-22s %s", token, e.from,
                     tostring(e.target or e.channel), e.msg:sub(1, 60)))
+            end
+        end
+        -- The same log once more, in SEND ORDER across all tokens: the per-token lists above answer
+        -- "did X happen", this answers "before or after Y" -- which is where the seed-1253 class of
+        -- question lives. Continuation chunks are skipped, control bytes stripped, binary blobs
+        -- flattened.
+        print("  -- full wire, in send order --")
+        for _, e in ipairs(sim.log) do
+            local msg = e.msg
+            local ctrl = msg:sub(1, 1)
+            if ctrl ~= "\002" and ctrl ~= "\003" then
+                if ctrl == "\001" then msg = msg:sub(2) end
+                print(string.format("  %-8s -> %-20s %s", e.from,
+                    tostring(e.target or e.channel), (msg:sub(1, 70):gsub("[%z\1-\31\127-\255]", "?"))))
             end
         end
         for _, l in ipairs(bad) do print("  BAD " .. l:sub(1, 160)) end
