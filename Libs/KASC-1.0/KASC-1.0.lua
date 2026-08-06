@@ -15,7 +15,7 @@
 -- functions -- SerializeHello, ParseHello, Dispatch -- which only transform their explicit
 -- arguments, need no self, and are also handed out as bare function values (see Dispatch's
 -- "exposed for the offline harness" assignment below).
-local MAJOR, MINOR = "KASC-1.0", 5
+local MAJOR, MINOR = "KASC-1.0", 6
 local KASC = LibStub:NewLibrary(MAJOR, MINOR)
 if not KASC then return end
 
@@ -68,6 +68,12 @@ KASC.diag = KASC.diag or {
     sendDroppedRestricted = 0, -- not worth holding, so dropped while restricted (heartbeats, requests)
     sendRetried = 0,    -- a refused guaranteed message put back on the wire (see SEND_RETRY_DELAYS)
     sendGaveUp = 0,     -- ...and still refused after the last attempt, so genuinely lost
+    -- [token] = messages handed to the transport under that token, retries included -- they are wire
+    -- traffic like any other. The counters above say whether the pipe struggled; this says WHICH
+    -- conversation filled it, which is the question B135 could only answer offline. A table among
+    -- numbers, so any consumer summing "the counters" must skip it (KART's /kart status names its
+    -- fields instead of iterating, so nothing does that today).
+    sentByToken = {},
 }
 
 -- =====================================================================
@@ -184,6 +190,11 @@ function KASC:Send(msg, channel, target, opts)
     -- attempt zero.
     local attempt = (opts and opts.attempt) or 0
     local guaranteed = opts and opts.guaranteed
+
+    -- Counted where the message actually reaches the transport: a send refused by the restriction
+    -- gate above never went anywhere, and a retry that lands here is a second real message.
+    local token = msg:match("^([^:]+)") or msg
+    KASC.diag.sentByToken[token] = (KASC.diag.sentByToken[token] or 0) + 1
     -- One retry per message, not one per chunk. AceComm splits anything over 255 bytes and gives
     -- every piece its own callback, so a pipe that refuses one piece usually refuses the rest --
     -- and re-sending the whole message once per refused chunk would multiply the traffic that

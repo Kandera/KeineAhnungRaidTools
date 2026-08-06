@@ -229,10 +229,11 @@ no roll of its own) instead of reaching "not tracked" through an informed client
 Same fixture, same boss, after the cut: **9 messages, 855 bytes** (LC_DROP, two heartbeats, three
 REQ_EQUIP) against 437 and 42,390 before. The ask storm and both whisper streams are zero.
 
-**Still open here, and it needs the raid:** the ratio between a boss's traffic and an evening's
-(votes, results, config, history sync carry the rest), and the per-token send counter in
-`/kart status` that would let a live evening say which token is loudest. The 71 refusals still
-have no REASON recorded (AceComm's shim drops the result code; see below).
+**The per-token send counter is in** (same day): `KASC.diag.sentByToken`, counted where a message
+reaches the transport, printed by `/kart status` as the five loudest tokens. What still needs the
+raid: the ratio between a boss's traffic and an evening's (votes, results, config, history sync
+carry the rest) — six status outputs like 2026-08-05's, now with that line, answer it. The 71
+refusals still have no REASON recorded (AceComm's shim drops the result code; see below).
 
 **Related, also open:** the 71 refusals have no REASON recorded. ChatThrottleLib hands its callback
 `(didSend, sendResult)` and AceComm's shim drops the code on the way through, so KASC sees only the

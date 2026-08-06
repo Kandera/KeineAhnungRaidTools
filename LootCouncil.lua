@@ -1535,6 +1535,24 @@ function LC.PrintStatus()
     if kd.sendRetried + kd.sendGaveUp > 0 then
         print("  " .. string.format(L.LC_STATUS_RESENDS, kd.sendRetried, kd.sendGaveUp))
     end
+    -- WHICH conversation this client's own sends belong to, loudest first. The counters above say
+    -- whether the pipe struggled; comparing this line across clients says who filled it and with
+    -- what -- the question B135 could only answer offline, asked of a real evening. Top five,
+    -- because the tail is heartbeats and one-offs; sorted, so two outputs compare side by side.
+    local tokens = {}
+    for token in pairs(kd.sentByToken or {}) do tokens[#tokens + 1] = token end
+    if #tokens > 0 then
+        table.sort(tokens, function(a, b)
+            local na, nb = kd.sentByToken[a], kd.sentByToken[b]
+            if na ~= nb then return na > nb end
+            return a < b
+        end)
+        local parts = {}
+        for i = 1, math.min(5, #tokens) do
+            parts[i] = tokens[i] .. " " .. kd.sentByToken[tokens[i]]
+        end
+        print("  " .. L.LC_STATUS_SENDTOKENS .. ": " .. table.concat(parts, ", "))
+    end
     -- On its own line and on its own condition: this one is not a "message went nowhere" count at
     -- all. A non-zero here means two clients demonstrably held different numbers for one item, which
     -- is worth reading even on an evening where nothing else was refused.

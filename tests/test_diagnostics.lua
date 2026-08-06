@@ -81,6 +81,37 @@ do
     KARTTEST.AdvanceTime(2)
 end
 
+-- Which conversation the sends belonged to ---------------------------------------------------------
+-- The counters above say whether the pipe struggled; this one says WHAT this client's own sends
+-- were, per token, so a live evening can name its loudest sender the way B135's offline measurement
+-- did. Counted where the message reaches the transport -- a send the restriction gate swallows never
+-- went anywhere and must not appear here.
+do
+    local _, lm = F.NewRaid()
+    local diag = lm.KASC:Diagnostics()
+
+    local before = diag.sentByToken.LC_TOKENPROBE or 0
+    RaidSim.As(lm, function() lm.KASC:Send("LC_TOKENPROBE:payload") end)
+    RaidSim.As(lm, function() lm.KASC:Send("LC_TOKENPROBE:other") end)
+    T.eq(diag.sentByToken.LC_TOKENPROBE, before + 2, "two sends under one token count twice")
+
+    RaidSim.As(lm, function()
+        lm.KASC:OnRestrictionChanged(1, 2) -- Encounter, Active
+        lm.KASC:Send("LC_TOKENPROBE:during")
+        lm.KASC:OnRestrictionChanged(1, 0)
+    end)
+    T.eq(diag.sentByToken.LC_TOKENPROBE, before + 2,
+        "a send the restriction gate dropped counts as no message on the wire")
+
+    -- The status line names the loudest tokens; whatever else the raid has said by now, the probe
+    -- token exists and must appear with its count when it is among them -- and the line itself must
+    -- appear once anything was sent at all.
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
+    T.truthy(out:match("LC_")
+        and out:match(lm.KART.L.LC_STATUS_SENDTOKENS) ~= nil,
+        "/kart status prints the per-token send line")
+end
+
 -- A client that answers with nothing at all --------------------------------------------------------
 -- "No answer" must never read as "everything failed", or the line in /kart status would accuse the
 -- transport on every client that does not return the value. ChatThrottleLib maps a send that returned

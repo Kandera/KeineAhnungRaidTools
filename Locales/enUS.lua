@@ -289,6 +289,7 @@ KART.L_enUS = {
     LC_STATUS_OUTDATED     = "Raiders below KART %s: %d",
     LC_STATUS_DROPS        = "Messages refused here: %d sender, %d not in group, %d unknown item, %d unknown token -- own sends rejected: %d (%d queued), held while restricted: %d, dropped in them: %d",
     LC_STATUS_RESENDS      = "Refused sends put back on the wire: %d -- of those, still refused after the last attempt: %d.",
+    LC_STATUS_SENDTOKENS   = "Own sends by token",
     LC_STATUS_STALEROLL    = "Answers about items this client had already finished with: %d -- ordinary unless it is large.",
     LC_STATUS_CLOCKRESTART = "Voting clocks pushed forward on an item already running one: %d (last by: %s).",
     LC_STATUS_ROLLCONFLICT = "Roll tables that disagreed with this client's: %d -- somebody in the raid held different numbers for an item scored here.",

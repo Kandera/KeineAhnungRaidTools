@@ -289,6 +289,7 @@ KART.L_deDE = {
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_STATUS_DROPS        = "Hier verworfene Nachrichten: %d Absender, %d nicht in der Gruppe, %d unbekanntes Item, %d unbekanntes Token -- eigene Sendungen abgelehnt: %d (%d in Warteschlange), wegen Sperre zurückgehalten: %d, dabei verworfen: %d",
     LC_STATUS_RESENDS      = "Abgelehnte Sendungen erneut verschickt: %d -- davon nach dem letzten Versuch immer noch abgelehnt: %d.",
+    LC_STATUS_SENDTOKENS   = "Eigene Sendungen pro Token",
     LC_STATUS_STALEROLL    = "Antworten zu Items, die dieser Client schon abgeschlossen hatte: %d -- normal, solange es wenige sind.",
     LC_STATUS_CLOCKRESTART = "Laufende Abstimmungsuhren nach vorne gesetzt: %d (zuletzt von: %s).",
     LC_STATUS_ROLLCONFLICT = "Würfeltabellen, die dieser Client anders hatte: %d -- jemand im Raid hielt für ein hier gewertetes Item andere Zahlen.",
