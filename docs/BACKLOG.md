@@ -3460,3 +3460,44 @@ have drifted, but there is one entry shape and one rule about where an entry's n
 Covered by a test in `tests/test_lc_drop.lua` that replaces `LC.rolls[rollID]` with a foreign table
 of the same length while the entry sits in the batch, and asserts the raid is handed the numbers the
 entry was created with. It fails against the old code.
+
+## B138 — FIXED 2026-08-06 — the award itself re-opened the B135 burst, through the other ask
+
+Found by the review-and-bug-hunt session over `18dae43..211b586`, one commit after `baa734c` closed
+the `needItem` half; never seen in a raid, because no raid has run with awards landing after the
+window yet — which 3.4.0 makes the common case.
+
+`Trade.HandleResult`'s late-joiner link rebuild wrote the rebuilt link into `LC.rollItems[rollID]`
+on EVERY client that lacked one — since B135 that is every pruned plain raider, ~27 of 30. A roll
+put halfway back (item present, numbers pruned) reads as `needRolls` against the owner's heartbeat,
+which still names a decided item (`DoAssignWinner` closes nothing — reassignment is a feature). So
+within one `TABLE_RESEND_SECONDS` of each award the pruned clients whispered `LC_ROLL_REQ` at the
+owner and the owner answered each with two whispers: ~81 messages per award, ~486 for a six-item
+boss, landing on the lootmaster's queue mid-distribution. The exact flood shape `baa734c` measured
+and cut, re-opened through the ask it left free. Self-healing per award (the rolls arrive and
+`needRolls` goes quiet), so a burst per award rather than a standing stream — the B135 entry's
+baseline table would have shown it as a fat delta on the raid's send counters.
+
+Secondary effect of the same line: re-tracking re-opened the untracked-vote gate
+(`LootCouncilVote.lua`), so guaranteed-delivery straggler votes recreated `LC.votes` orphans on
+pruned clients instead of being refused. Freed only by the round-end wipe; harmless, but state
+nobody asked for.
+
+**What closed it.** The rebuilt link stays a local — the winner popup, the history entry, the owed
+reminder and the clash print all read the local now — and is written back into `LC.rollItems` only
+when `LC.rollDeadlines[rollID]` still exists, i.e. on clients that genuinely still track the roll
+(the council's parked "???" upgrade, B40, which those clients need and where `needRolls` stays
+false because they hold the numbers). A pruned client takes the history entry and nothing else.
+
+Held by the non-winner half of `tests/test_lc_award.lua`: a pruned plain raider takes a result,
+logs exactly one history entry (idempotent under redelivery), re-opens nothing — and after a forced
+heartbeat repeat plus a full `ROLL_REQ_COOLDOWN`, the raid sends zero `LC_ROLL_REQ`/`LC_ROLLS_REQ`.
+That last assertion is the one that fails against the old code, with 2 asks from the sim's 2 plain
+raiders — the 5-client miniature of the 27-client burst. The winner half now also pins "rebuilt for
+the reminder, NOT put back into tracking".
+
+One reading note for the raid: `/kart status`'s staleRoll line counts late VOTES reaching a pruned
+client (`LC.Diag.CountUntracked` is called from the vote handlers only, never from `HandleResult`),
+not awards. The 2026-08-06 handover expected that line to climb with awards-after-expiry; it will
+not, and post-award votes stop counting once the roll was decided. Reading it as "awards that
+arrived stale" misreads it in the too-low direction.

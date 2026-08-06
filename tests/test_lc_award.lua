@@ -401,14 +401,78 @@ do
     end)
     KARTTEST.AdvanceTime(1)
 
-    T.truthy(tostring(alric.KART.LC.rollItems[74]):match("item:" .. F.GLOVES),
-        "the result rebuilds the item on the winner's client")
     local owed
     for _, e in ipairs(alric.KART.LC.owedToMe or {}) do
         if e.rollID == 74 then owed = e end
     end
-    T.truthy(owed ~= nil, "and the winner knows the lootmaster owes them the item")
+    T.truthy(owed ~= nil, "the winner knows the lootmaster owes them the item")
+    T.truthy(owed and tostring(owed.itemLink):match("item:" .. F.GLOVES),
+        "named by the link the result rebuilt from its payload")
+    -- Rebuilt for the reminder, NOT put back into tracking: a re-tracked item with no numbers would
+    -- read as needRolls against the owner's heartbeat, on the winner like on every other pruned
+    -- client (B138, and the non-winner test below).
+    T.eq(alric.KART.LC.rollItems[74], nil, "while the freed roll stays freed")
     T.eq(owed and owed.lootedAt, lootedAt,
         "with a trade clock that runs from the drop, not from the award")
     T.eq(F.HasVoteRow(alric, 74), false, "and no vote row reopens for a decided item")
+end
+
+-- ...and the same award on the ~27 clients that did NOT win ------------------------------------------
+-- The other side of the case above, and since B135 the COMMON shape of every award: the result
+-- reaches a plain raider whose client freed the roll at its vote deadline and tracks nothing. All a
+-- non-winner keeps from it is the history entry every client logs. In particular the result must not
+-- put the roll back into LC.rollItems: the owner's heartbeat keeps naming a decided item
+-- (DoAssignWinner closes nothing -- reassignment is a feature), so a re-tracked item with no numbers
+-- reads as needRolls on every pruned client at once, and the next heartbeat turns one award into a
+-- raid-wide LC_ROLL_REQ burst on the lootmaster's queue -- the B135 flood, reopened through the other
+-- ask one commit after the first one was shut.
+do
+    local sim, _, council = F.NewRaid()
+    local alric = sim.byName.Alric
+    local sinja = sim.byName.Sinja
+
+    F.Drop(sim, 75, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    KARTTEST.AdvanceTime(23) -- past the default 20s window: the plain raiders freed the roll
+    T.eq(sinja.KART.LC.rollItems[75], nil, "a non-winner tracks nothing by award time")
+
+    RaidSim.As(council, function()
+        council.KART.LC.Trade.AssignWinner(75, alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(1)
+    local resultMsg = RaidSim.Sent(sim, "LC_RESULT")[1]
+    T.truthy(resultMsg ~= nil, "the award went out on the wire")
+
+    -- What a non-winner takes from it: the shared record, nothing else.
+    local count, entry = 0, nil
+    for _, e in ipairs(sinja.env.KART_LootHistory or {}) do
+        if e.rollID == 75 then count = count + 1 entry = e end
+    end
+    T.eq(count, 1, "the non-winner logs the award, once")
+    T.truthy(entry and tostring(entry.item):match("item:" .. F.GLOVES),
+        "for the item named in the payload, though this client tracks nothing")
+    T.eq(entry and entry.winnerKey, alric.guid, "and the winner everybody agreed on")
+
+    T.eq(F.HasVoteRow(sinja, 75), false, "no vote row reopens")
+    T.eq(#(sinja.KART.LC.owedToMe or {}), 0, "nobody owes a non-winner anything")
+    T.eq(#(sinja.KART.LC.pendingTrades or {}), 0, "and it owes nobody anything")
+
+    -- The quiet part, and what makes this the load-bearing test: the owner's heartbeat still names
+    -- the decided item, and 27 clients that just processed its result must not answer with traffic.
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(40) -- a forced heartbeat repeat and a full ROLL_REQ_COOLDOWN
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_REQ"), 0,
+        "no client asks about an item the council already decided")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLLS_REQ"), 0, "not for its numbers either")
+
+    -- A redelivered result -- retries and the bundled repeat are the only repair results have -- must
+    -- not double the record.
+    RaidSim.As(sinja, function()
+        sinja.KART.LC.Trade.HandleResult(resultMsg.msg:sub(#"LC_RESULT:" + 1), council.guid)
+    end)
+    count = 0
+    for _, e in ipairs(sinja.env.KART_LootHistory or {}) do
+        if e.rollID == 75 then count = count + 1 end
+    end
+    T.eq(count, 1, "a redelivered result changes nothing")
 end

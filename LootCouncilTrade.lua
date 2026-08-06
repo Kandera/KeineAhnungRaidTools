@@ -1095,16 +1095,27 @@ function Trade.HandleResult(payload, senderKey)
         if localItemID and localItemID ~= itemID then return end
     end
 
-    -- A council peer who joined late never tracked this roll, so LC.rollItems[rollID] is nil and the
-    -- winner notification / history / trade reminder would all show "???". Rebuild a link from the
+    -- A client with no usable link for this roll -- a late-joining council peer who never tracked it,
+    -- or since B135 simply EVERY plain raider, whose client freed the roll at its vote deadline --
+    -- would show "???" in the winner notification / history / trade reminder. Rebuild a link from the
     -- itemID carried in the payload (full link if the item is cached, bare item string otherwise).
     -- Rebuild when we have no link OR only a non-real placeholder ("???" from a late-joiner who saw
     -- LC_START but never resolved the link) — a truthy "???" would otherwise skip this and land in
     -- the winner popup / history.
+    --
+    -- The rebuilt link stays LOCAL unless the roll is still tracked here. Writing it into
+    -- LC.rollItems on a pruned client put the roll halfway back: item present, numbers gone -- and
+    -- the owner's heartbeat still names a decided item (DoAssignWinner closes nothing, reassignment
+    -- is a feature), so every pruned client read that as needRolls on its next heartbeat and the
+    -- award itself re-opened the B135 burst through the other ask (B138). On a client that still
+    -- tracks the roll -- the council, the owner -- the write stays: it is the in-place upgrade of a
+    -- parked "???" (B40), and those clients hold the numbers, so needRolls stays false.
     local itemLink = LC.rollItems[rollID]
     if (not itemLink or not LC.IsRealItemLink(itemLink)) and itemID ~= "" then
         itemLink = select(2, C_Item.GetItemInfo(itemID)) or ("item:" .. itemID)
-        LC.rollItems[rollID] = itemLink
+        if LC.rollDeadlines[rollID] ~= nil then
+            LC.rollItems[rollID] = itemLink
+        end
     end
 
     -- A result came in for this roll — remove it from our vote list, if it's still there.
@@ -1144,7 +1155,7 @@ function Trade.HandleResult(payload, senderKey)
         if not deliberate and not heldDeliberate and (LC.IsCouncil() or LC.IsLootOwner()) then
             local kept = incomingWins and winnerKey or held
             print("|cffff0000KART:|r " .. string.format(KART.L.LC_AWARD_CLASH,
-                LC.rollItems[rollID] or "?",
+                itemLink or "?",
                 KASC.Identity.ResolveDisplayName(held),
                 KASC.Identity.ResolveDisplayName(winnerKey),
                 KASC.Identity.ResolveDisplayName(kept)))
@@ -1160,7 +1171,7 @@ function Trade.HandleResult(payload, senderKey)
         -- Every client logs the same award locally, so every client has to drop it locally too —
         -- the revoker does this itself (it does not process its own message, see the panel's No-Winner
         -- button and LC.StartManualRoll's re-decision path).
-        KART.LH.RemoveHistoryForRoll(rollID, LC.rollItems[rollID])
+        KART.LH.RemoveHistoryForRoll(rollID, itemLink)
         -- "No winner" mirrors the assigner's own local CloseCouncilTab (see the panel button): the
         -- assigner already closed and cleared its tab, and this broadcast is the peers' only signal
         -- (KASC drops our own message when it comes back). Without this, peers keep a ghost council tab
@@ -1180,7 +1191,7 @@ function Trade.HandleResult(payload, senderKey)
     local myKey = (KASC.Identity.ResolvePlayer("player"))
 
     if winnerKey == myKey then
-        Trade.ShowWinnerNotification(LC.rollItems[rollID])
+        Trade.ShowWinnerNotification(itemLink)
         -- If I'm the loot owner myself, I already have the item — nothing to trade myself for.
         -- GetLootOwnerKey resolves the raid leader when no lootmaster is configured (they hold the
         -- items in that case, see LC.IsLootOwner); "" only when neither can be resolved at all, and
@@ -1197,7 +1208,7 @@ function Trade.HandleResult(payload, senderKey)
             -- Trade.PruneExpiredLootStamps), so this is the real loot time, not the award time; the
             -- time() fallback only covers a roll this client never saw start at all.
             table.insert(LC.owedToMe, {
-                rollID = rollID, itemLink = LC.rollItems[rollID], lootmasterKey = lootmasterKey,
+                rollID = rollID, itemLink = itemLink, lootmasterKey = lootmasterKey,
                 lootedAt = (LC.rollLootedAt and LC.rollLootedAt[rollID]) or time(),
             })
             Trade.RefreshOwedReminder()
