@@ -33,7 +33,25 @@ diff -u a.lua b.lua
 
 # Tier 0 — breaks a core function the moment 12.1 goes live
 
-## P1 — the Raidlead bar's secure buttons do nothing unless `ActionButtonUseKeyDown` is 1
+## Measured on 12.1.0 (interface 120100), 2026-08-06 — solo PTR, `/kart ptr`
+
+The first pass with the whole addon actually loaded on the new client, rather than read out of diffs.
+
+**KART loads on 12.1 with no Lua error, and `/kart status` runs clean.** That was simply unknown
+before and is the single most useful line here.
+
+| | measured | consequence |
+|---|---|---|
+| `ActionButtonUseKeyDown` | `"1"` | P1's precondition already holds by default |
+| `GetWeaponEnchantInfo` | **present**, returns `true / 7180552` | P2's premise is wrong for this build |
+| own aura `name` / `spellId` | usable, not secret | P3 narrowed to OTHER units |
+| `UnitIsGroupLeader("player")` | ordinary boolean | as expected; the group half is untouched |
+
+**What a solo login cannot answer, and therefore what is still open:** every question in P3 and P4 is
+about reading ANOTHER unit. The player's own identity is never secret, so a solo probe answers the
+easy half of both and neither of the hard ones. Both need a group on 12.1.
+
+## P1 — SOLVED BY DEFAULT 2026-08-06 — the Raidlead bar's secure buttons do nothing unless `ActionButtonUseKeyDown` is 1
 
 Reported from the 12.1 PTR, 2026-08-03: "kein Icon mehr auf den Kopf per Raidleadbar". Measured down
 to the line rather than guessed, and it is **not** a 12.1 API break — 12.1 only exposed it.
@@ -103,7 +121,19 @@ one keybind per row. That is `MANIFEST.md`'s standard applied to the bar, not a 
 
 # Tier 1 — errors on a removed API
 
-## P2 — `GetWeaponEnchantInfo` is removed in 12.1
+## P2 — DEPRECATED, NOT REMOVED — `GetWeaponEnchantInfo` is dropped from the API list in 12.1
+
+**Measured 2026-08-06 on 12.1.0: the function is still there and still answers** (`true / 7180552`
+for a main hand carrying an oil). The evidence below is a diff of Blizzard's `Resources/GlobalAPI.lua`,
+which is the documented list rather than the client -- being struck from the list is the step before
+removal, not the removal. The oil column therefore works on 12.1 as shipped.
+
+That drops this out of "must be done before the next raid" and into ordinary migration work: the
+replacement exists, the old call will stop answering at some point, and doing it early costs nothing.
+The signature question below is still the blocker for actually writing it.
+
+### Original entry
+
 
 `Resources/GlobalAPI.lua` drops it in the 12.0.7→12.1.0 diff. The replacement added in the same diff
 is `C_PaperDollInfo.GetTemporaryEnchantmentInfo`. Blizzard migrated their own callers the same way
