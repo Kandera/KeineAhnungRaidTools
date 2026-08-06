@@ -104,6 +104,34 @@ local function CommsRestricted()
 end
 KASC.CommsRestricted = CommsRestricted
 
+-- The event above is the only thing that ever announced the gate, and a client that reloads or relogs
+-- DURING an encounter was not there to hear it -- which is this guild's ordinary operating state,
+-- people do it mid-pull (B140). It came back believing comms were open, so its guaranteed messages
+-- skipped the hold queue, reached a transport that refused them, burned all three retries in six
+-- seconds and ended in sendGaveUp: genuinely lost, the B118 shape the hold machinery exists to
+-- prevent. So ask the client outright instead of waiting to be told.
+--
+-- Asked at BOTH load moments on purpose. Init runs on ADDON_LOADED, behind the loading screen, and
+-- whether the client can already answer for the encounter it is reloading INTO is not something an
+-- addon gets to decide; PLAYER_ENTERING_WORLD is the moment the world is there and the answer is
+-- certainly true. Asking twice costs two API calls and covers a state that changed between them.
+--
+-- GetAddOnRestrictionState rather than IsAddOnRestrictionActive (both are in the 12.0.1 annotations):
+-- it answers the same Enum.AddOnRestrictionState the event carries, so "Activating counts as active"
+-- stays one rule in one place, and it is the one that keeps answering during the event's own dispatch.
+-- pcall'd for the same reason the event registration below is: an older client has no such API, and
+-- the cost of being wrong must be that this seed is inert, never that the library fails to load.
+--
+-- No flush here: this only ever CLOSES the gate, and at both call sites nothing has been queued yet.
+local function SeedRestrictions()
+    local ask = C_RestrictedActions and C_RestrictedActions.GetAddOnRestrictionState
+    if not ask then return end
+    for _, t in ipairs({ RESTRICT_ENCOUNTER, RESTRICT_CHALLENGE_MODE }) do
+        local ok, state = pcall(ask, t)
+        if ok and ((state == 2) or (state == 1)) then activeRestrictions[t] = true end
+    end
+end
+
 -- Messages that must survive the restriction rather than be lost by it. Capped, deduplicated, and
 -- flushed in order once comms come back. Everything else is dropped while restricted: a heartbeat or
 -- a state request that arrives forty seconds late is noise, not repair.
@@ -516,10 +544,13 @@ local frame = CreateFrame("Frame")
 -- not be on yet, and the cost of being wrong must be "this one guard is inert", never "the library
 -- fails to load and takes the addon with it".
 pcall(frame.RegisterEvent, frame, "ADDON_RESTRICTION_STATE_CHANGED")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function(_, event, a, b)
     -- ADDON_RESTRICTION_STATE_CHANGED: type, state.
     if event == "ADDON_RESTRICTION_STATE_CHANGED" then
         KASC:OnRestrictionChanged(a, b)
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        SeedRestrictions()
     end
 end)
 
@@ -531,6 +562,7 @@ function KASC:Init(p)
     -- its own channel instead, so fail loudly rather than let that happen quietly.
     assert(prefix == nil or prefix == p, "KASC: Init already called with a different prefix")
     prefix = p
+    SeedRestrictions()
     -- AceComm registers the prefix itself, owns the event frame, and hands over a message that is
     -- already reassembled. Dispatch is unchanged behind it: the self-echo drop, the group check and
     -- the counters all sit where they sat.

@@ -64,6 +64,9 @@ read_globals = {
     -- Secret values (Midnight): data the client refuses to let an addon read. Absent on older
     -- clients, which is why KAUtil.IsSecret tests for it rather than calling it outright.
     "issecretvalue",
+    -- Addon restrictions (Midnight): what an addon may do during an encounter or a M+ run. Read at
+    -- load to seed KASC's gate, and absent on older clients for the same reason as issecretvalue.
+    "C_RestrictedActions",
     "GetCursorInfo", "CreateColor", "ReloadUI", "SetCVar",
     "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras", "C_LootHistory",
     -- Asked for by the council panel's rank column, which needs the guild roster fetched (B124).

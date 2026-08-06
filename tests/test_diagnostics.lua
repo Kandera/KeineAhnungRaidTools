@@ -282,3 +282,59 @@ do
     T.truthy(diag.sendHeldBack >= 1, "what was held is counted")
     T.truthy(diag.sendDroppedRestricted >= 1, "and so is what was dropped")
 end
+
+-- ...and a client that RELOADED while the encounter was already running (B140) -----------------------
+-- ADDON_RESTRICTION_STATE_CHANGED is the only thing that ever told KASC about the gate, and it was
+-- raised while this client was gone. People in this guild reload mid-pull, so a client that comes back
+-- believing comms are open is the normal case, not a corner: its guaranteed sends skip the hold queue,
+-- get refused, burn all three retries in six seconds and are then genuinely lost -- the B118 shape the
+-- whole hold/retry machinery exists to prevent.
+do
+    local sim, lm = F.NewRaid()
+    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
+
+    -- Set WITHOUT firing the event, which is the whole point: the state changed while this client did
+    -- not exist, so nothing will ever tell it after the fact.
+    KARTTEST.restrictions[ENCOUNTER] = ACTIVE
+    lm = RaidSim.Reload(sim, lm.name)
+    RaidSim.ClearLog(sim)
+
+    local diag = lm.KASC:Diagnostics()
+    local held = diag.sendHeldBack
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:901:20:item:249331") end)
+    RaidSim.Drain(sim)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 0,
+        "a client that reloaded mid-encounter does not hand its announcement to a refusing transport")
+    T.eq(diag.sendHeldBack, held + 1, "it holds it, like any other client under the restriction")
+
+    -- The seed has to compose with the existing machinery, not replace it: the release still arrives
+    -- as an event, and what was held still goes out on it.
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
+    RaidSim.Drain(sim)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "and sends it once the encounter releases the comms")
+end
+
+-- The same question asked at the other moment a login can answer it (B140) --------------------------
+-- ADDON_LOADED runs behind the loading screen, before the world is there, and whether the client can
+-- already answer for the encounter it is reloading INTO is not something this addon gets to decide.
+-- PLAYER_ENTERING_WORLD is the moment the world exists and the answer is certainly true, so the same
+-- question is asked again there -- which is also what catches a state that changed between the two.
+do
+    local sim, lm = F.NewRaid()
+    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
+
+    -- Drained first: this client has been talking since the fixture built it, and a message still
+    -- despooling in its transport would count as one this test sent.
+    RaidSim.Drain(sim)
+    KARTTEST.restrictions[ENCOUNTER] = ACTIVE
+    RaidSim.As(lm, function() KARTTEST.FireEvent("PLAYER_ENTERING_WORLD") end)
+    RaidSim.ClearLog(sim)
+
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:902:20:item:249331") end)
+    RaidSim.Drain(sim)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "entering the world under an active restriction closes the gate")
+
+    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
+    RaidSim.Drain(sim)
+    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "and what waited behind it goes out on the release")
+end

@@ -3525,3 +3525,33 @@ real fix needs the wire to say which INSTANCE of a roll the heartbeat means — 
 generation counter next to the itemID in `LC_TABLE`, which is a protocol change, not a note rule.
 Re-evaluate after the next raid: if `/kart status` ever shows a raider tracking nothing for an item
 the raid is voting on twice, this is the entry.
+
+## B140 — FIXED 2026-08-06 — a client that reloaded mid-encounter thought comms were open
+
+Found comparing KASC against RCLootCouncil2's `Services.CommsRestrictions`. KASC learned the Midnight
+addon-message gate (B128) from `ADDON_RESTRICTION_STATE_CHANGED` alone, and `activeRestrictions`
+started empty at load. A client that reloads or relogs DURING an encounter — this guild's ordinary
+operating state, people do it mid-pull — was not there when the restriction activated and came back
+believing it could send.
+
+What that cost: its guaranteed messages skipped the hold queue, reached the transport, were refused,
+burned all three attempts of `SEND_RETRY_DELAYS` in about six seconds and ended in `sendGaveUp` —
+genuinely lost, which is the B118 failure shape the whole hold-and-retry machinery exists to prevent.
+The lootmaster is the client this hurts most: loot drops at the END of an encounter, so an `LC_DROP`
+or `LC_START` sent from a freshly reloaded client is exactly the message in that window.
+
+**Fixed 2026-08-06.** `KASC:Init` and a new `PLAYER_ENTERING_WORLD` branch on the library's own frame
+both call `SeedRestrictions`, which asks `C_RestrictedActions.GetAddOnRestrictionState` for the
+encounter and challenge-mode types and closes the gate itself instead of waiting to be told. Asked at
+both moments because `ADDON_LOADED` runs behind the loading screen, where the client may not yet be
+able to answer for the encounter it is reloading into. The existing hold/flush machinery does the
+rest: the release still arrives as an event and still flushes what waited.
+
+The reference addon has the SAME blind spot — RC feeds its state from the event only and calls
+`IsAddOnRestrictionActive` merely in a debug dump (`Classes/Services/CommsRestrictions.lua:20-32`,
+`:42`) — so this goes beyond it rather than copying it.
+
+Tests: `tests/test_diagnostics.lua`, "a client that reloaded mid-encounter does not hand its
+announcement to a refusing transport" (the reload path, via `RaidSim.Reload`) and "entering the world
+under an active restriction closes the gate" (the `PLAYER_ENTERING_WORLD` path). Both also assert the
+held message still goes out when the restriction lifts.

@@ -13,6 +13,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.
 - **Auto-Pass funktioniert weiter nach einem Neuladen oder einer Verbindungstrennung** in einer laufenden Session.
+- **Loot-Ansagen überleben ein Neuladen im Kampf**, statt verloren zu gehen.
 - **Ein nachgeliefertes Item ist das echte Item** — richtiges Itemlevel, funktionierender Tooltip.
 - **Tier-Tokens, die deine Klasse nicht nutzen kann, werden gepasst** wie alles andere, was du nicht tragen kannst.
 - **Housing-Dekoration bleibt aus dem Loot Council heraus**, wie Reittiere, Haustiere und Spielzeug.

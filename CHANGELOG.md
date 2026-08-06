@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Auto-Pass works again for everyone**, even when the item's announcement never arrived.
 - **Auto-Pass keeps working after a reload or a disconnect** in a running session.
+- **Loot announcements survive a reload during a fight** instead of being lost.
 - **An item you were caught up on is the real item**, with its true item level and a working tooltip.
 - **Tier tokens your class cannot use are passed on** like any other item you cannot wear.
 - **Housing decor stays out of the loot council**, like mounts, pets and toys.
