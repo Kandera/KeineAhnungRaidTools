@@ -166,8 +166,13 @@ function KART.PrintClientProbe()
         print("  P3 aura.name = " .. comparable(aura.name) .. "  aura.spellId = " .. comparable(aura.spellId))
     end
 
-    -- P4: the authority reads. Self is never secret; the group members are the open question, and a
-    -- solo tester will only ever see the first line -- which is itself worth recording.
+    -- P3 and P4 both come down to reading ANOTHER unit, and the player's own identity is never
+    -- secret -- so the two lines above answer the easy half of P3 and the loop below is where both
+    -- are actually decided. A solo login reaches neither, which the probe says rather than leaving
+    -- the reader to notice the silence.
+    --
+    -- The other person needs nothing: no addon, no version, no settings. This client is the one
+    -- asking, they are only the unit being asked about.
     print("  " .. probe("P4 UnitIsGroupLeader(player)", UnitIsGroupLeader, "player"))
     local checked = 0
     for unit in KAUtil.EachGroupUnit() do
@@ -177,10 +182,24 @@ function KART.PrintClientProbe()
             local okC, class = pcall(UnitClass, unit)
             print("  P4 " .. unit .. " leader = " .. (okL and comparable(leads) or "ERROR")
                 .. "  class = " .. (okC and comparable(class) or "ERROR"))
+
+            -- P3's real question. The buff checker walks every group member's auras and compares
+            -- their fields, so THIS is the read that decides whether that module works on 12.1 --
+            -- and it is the one a solo login cannot make.
+            local okA, other = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HELPFUL")
+            if not okA then
+                print("  P3 " .. unit .. " aura = ERROR (" .. tostring(other) .. ")")
+            elseif other == nil then
+                print("  P3 " .. unit .. " aura = nil -- ask them to eat something and run this again")
+            else
+                print("  P3 " .. unit .. " aura.name = " .. comparable(other.name)
+                    .. "  aura.spellId = " .. comparable(other.spellId))
+            end
         end
     end
     if checked == 0 then
-        print("  P4 no other group member to ask -- this is the half a solo login cannot answer")
+        print("  P3/P4 no other group member to ask -- both open questions are about ANOTHER unit,")
+        print("        so a solo login cannot answer either. Two people on 12.1 is enough.")
     end
 end
 
