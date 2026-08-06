@@ -1133,7 +1133,54 @@ _G.C_CVar = { GetCVar = function(name) return KARTTEST.cvars and KARTTEST.cvars[
 KARTTEST.cvars = { ActionButtonUseKeyDown = "1" }
 
 _G.ITEM_CLASSES_ALLOWED = "Classes: %s"
+
+-- What Blizzard says about a Bind-on-Pickup item's remaining trade window, which it says in the
+-- TOOLTIP and as localized text -- there is no API that answers it as a number. KART reads it to
+-- check its own four-hour stamp against the item itself (see Trade.GetBagTradeTimeRemaining).
+--
+-- Per bag item, keyed by link: a number of seconds still tradeable, or "bound" for an item that is
+-- soulbound with no trade line left at all -- an item that can never be handed over, which is a
+-- different thing from one whose four hours are nearly up. An item nobody put in here says nothing
+-- about binding, which is what an ordinary unbound item's tooltip does.
+KARTTEST.bagTradeTime = {}
+_G.ITEM_SOULBOUND = "Soulbound"
+_G.BIND_TRADE_TIME_REMAINING = "You may trade this item with players that were also eligible to loot this item for the next %s."
+_G.INT_SPELL_DURATION_HOURS = "%d |4hour:hours;"
+_G.INT_SPELL_DURATION_MIN = "%d |4min:min;"
+_G.INT_SPELL_DURATION_SEC = "%d |4sec:sec;"
+
+-- Built from the same globals the addon parses back, so the harness cannot agree with it by using
+-- different words than the client would.
+local function PluralUnit(fmt, n)
+    local singular, plural = fmt:match("|4([^:]+):([^;]+);")
+    return n .. " " .. (n == 1 and singular or plural)
+end
+local function DurationText(seconds)
+    local parts = {}
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    if hours > 0 then parts[#parts + 1] = PluralUnit(_G.INT_SPELL_DURATION_HOURS, hours) end
+    if minutes > 0 then parts[#parts + 1] = PluralUnit(_G.INT_SPELL_DURATION_MIN, minutes) end
+    if #parts == 0 then parts[1] = PluralUnit(_G.INT_SPELL_DURATION_SEC, math.floor(seconds)) end
+    return table.concat(parts, " ")
+end
+
 _G.C_TooltipInfo = {
+    GetBagItem = function(bag, slot)
+        local link = (KARTTEST.bags[bag] or {})[slot]
+        if not link then return nil end
+        local it = itemOf(link)
+        local lines = { { leftText = it and it.name or link } }
+        local state = KARTTEST.bagTradeTime[link]
+        if state == "bound" then
+            lines[#lines + 1] = { leftText = _G.ITEM_SOULBOUND }
+        elseif type(state) == "number" then
+            lines[#lines + 1] = { leftText = _G.ITEM_SOULBOUND }
+            lines[#lines + 1] = { leftText = string.format(_G.BIND_TRADE_TIME_REMAINING,
+                                                           DurationText(state)) }
+        end
+        return { lines = lines }
+    end,
     GetHyperlink = function(link)
         local it = itemOf(link)
         if not it or it.cached == false then return nil end

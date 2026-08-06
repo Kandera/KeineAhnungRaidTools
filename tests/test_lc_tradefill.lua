@@ -507,3 +507,62 @@ do
     T.eq(lm.KART.LC.tradeRangeTicker, nil,
         "a closed window stops asking the client where everybody is standing")
 end
+
+-- The item's own clock, not ours (B4) ---------------------------------------------------------------
+-- Everything above measures from a stamp KART writes itself. Blizzard writes the truth into the
+-- item's tooltip, as localized TEXT -- there is no API that answers it as a number -- and reading it
+-- is the difference between a deadline we believe and the one the client will actually enforce.
+do
+    local _, lm = F.NewRaid()
+    local Parse = lm.KART.LC.Trade.ParseTradeTimeText
+    T.eq(Parse("1 hour 59 min"), 3600 + 59 * 60, "an hour and a bit reads back as seconds")
+    T.eq(Parse("14 min"), 14 * 60, "so does a bare minute count")
+    T.eq(Parse("nothing about time"), nil, "and text with no duration in it is no opinion at all")
+
+    -- The whole point of parsing against the client's own duration globals rather than against
+    -- English: this guild raids in two languages and the German client says something else entirely.
+    local hours, minutes = _G.INT_SPELL_DURATION_HOURS, _G.INT_SPELL_DURATION_MIN
+    _G.INT_SPELL_DURATION_HOURS = "%d |4Stunde:Stunden;"
+    _G.INT_SPELL_DURATION_MIN   = "%d |4Min.:Min.;"
+    T.eq(Parse("1 Stunde 59 Min."), 3600 + 59 * 60, "a German client's tooltip reads the same")
+    _G.INT_SPELL_DURATION_HOURS, _G.INT_SPELL_DURATION_MIN = hours, minutes
+end
+
+do
+    -- The stamp says three hours left, the item says ten minutes. The item wins: a stamp taken at
+    -- award time on a client that never saw the roll start, or one carried across a reload, can be
+    -- minutes or hours out, and the raid finds out when the trade is refused.
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = 10 * 60 }
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.truthy(out:find("Gloombind", 1, true),
+        "the warning follows the item's own clock, not our stamp: " .. out)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "and the obligation itself still stands")
+    KARTTEST.bagTradeTime = {}
+end
+
+do
+    -- An item that is bound with no trade line at all can never be handed over. A four-hour promise
+    -- for it is worse than no promise: the lootmaster works the list, the winner waits for a trade
+    -- that cannot happen, and nothing ever says so.
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = "bound" }
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(#lm.KART.LC.pendingTrades, 0, "an item that can never be traded comes off the list")
+    T.truthy(out:find("Gloombind", 1, true), "and is said out loud rather than vanishing: " .. out)
+    KARTTEST.bagTradeTime = {}
+end
+
+do
+    -- No copy in our bags -- the stand-in loot owner case (B60), where the item is in somebody
+    -- else's inventory. The tooltip cannot be read at all there, and "cannot read" must never be
+    -- treated as "no time left".
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = {} }
+    KARTTEST.bagTradeTime = {}
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(#lm.KART.LC.pendingTrades, 1, "an item we cannot see is left exactly as it was")
+    T.eq(out, "", "and nothing is said about it")
+end

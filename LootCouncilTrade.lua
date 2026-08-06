@@ -219,6 +219,10 @@ end
 local TRADE_TIMEOUT_SECONDS = 4 * 60 * 60
 local TRADE_TIMEOUT_WARN_AT = TRADE_TIMEOUT_SECONDS - 20 * 60 -- warn with 20 minutes left
 local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
+-- How far our own stamp may sit from what the item's tooltip says before the stamp is corrected to
+-- it (see Trade.TradeTimeRemainingFor). Blizzard counts that line in whole minutes, so anything
+-- tighter would rewrite the stamp every pass for a rounding difference.
+local TRADE_TIME_TOLERANCE = 60
 
 -- The chat lines the trade clock produces, held back while the raid is in a pull. Everything else
 -- keeps running in combat -- Blizzard's window does not pause, so neither does the expiry below --
@@ -303,24 +307,45 @@ function Trade.CheckTradeTimeouts()
     -- come due in the same pass after a long fight.
     for i = #LC.pendingTrades, 1, -1 do
         local entry = LC.pendingTrades[i]
-        local elapsed = now - (entry.lootedAt or now)
-        -- B47: past the trade window the item cannot be handed over at all, and the entry stopped
-        -- being a reminder and became a lie -- indistinguishable in the list from the ones that are
-        -- still live, so the lootmaster works through it and cannot tell which rows are still worth
-        -- chasing. Pruning happened only in Trade.RestorePersistedTrades, which runs at ADDON_LOADED:
-        -- a raid that never reloads never prunes.
-        if elapsed >= TRADE_TIMEOUT_SECONDS then
+        -- What the ITEM says, where we are holding it (see Trade.TradeTimeRemainingFor). Correcting
+        -- the stamp rather than acting on the reading directly keeps every branch below on one
+        -- clock: the warning, the expiry and the persisted entry all stay in agreement.
+        local remaining = Trade.TradeTimeRemainingFor(entry.itemLink)
+        if remaining == 0 then
+            -- Bound to us with no trade window at all -- this can never be handed over, so the row
+            -- is not a deadline running out but a promise that was never keepable.
             table.remove(LC.pendingTrades, i)
             dropped = true
-            -- Said once, at the moment it dies. A row vanishing from the reminder list on its own is
-            -- exactly the kind of silence this addon has been paying for elsewhere.
-            TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
+            TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_UNTRADEABLE,
                 entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)))
-        elseif not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
-            entry.timeoutWarned = true
-            local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
-            TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
-                entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
+        else
+            if remaining then
+                local implied = TRADE_TIMEOUT_SECONDS - (now - (entry.lootedAt or now))
+                -- The tooltip counts in whole minutes, so only a real disagreement moves the stamp
+                -- -- otherwise every pass would rewrite it by a few seconds for nothing.
+                if math.abs(implied - remaining) > TRADE_TIME_TOLERANCE then
+                    entry.lootedAt = now - (TRADE_TIMEOUT_SECONDS - remaining)
+                end
+            end
+            local elapsed = now - (entry.lootedAt or now)
+            -- B47: past the trade window the item cannot be handed over at all, and the entry stopped
+            -- being a reminder and became a lie -- indistinguishable in the list from the ones that are
+            -- still live, so the lootmaster works through it and cannot tell which rows are still worth
+            -- chasing. Pruning happened only in Trade.RestorePersistedTrades, which runs at ADDON_LOADED:
+            -- a raid that never reloads never prunes.
+            if elapsed >= TRADE_TIMEOUT_SECONDS then
+                table.remove(LC.pendingTrades, i)
+                dropped = true
+                -- Said once, at the moment it dies. A row vanishing from the reminder list on its own is
+                -- exactly the kind of silence this addon has been paying for elsewhere.
+                TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_EXPIRED,
+                    entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)))
+            elseif not entry.timeoutWarned and elapsed >= TRADE_TIMEOUT_WARN_AT then
+                entry.timeoutWarned = true
+                local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
+                TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_TIMEOUT_WARNING,
+                    entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey), minutesLeft))
+            end
         end
     end
     if dropped then Trade.RefreshTradeReminderIfShown() end
@@ -918,6 +943,93 @@ local function FindItemInBags(itemLink, skip)
         end
     end
     return nil
+end
+
+-- =====================================================================
+--  The item's own trade clock
+-- =====================================================================
+-- Everything above measures from LC.rollLootedAt, a stamp KART writes itself. Blizzard writes the
+-- truth into the item's TOOLTIP and nowhere else -- there is no API that answers it as a number --
+-- and the two come apart in ordinary play: a client that never saw the roll start falls back to the
+-- award time, a reload restores a stamp taken by somebody else's clock, and /kart add can only guess
+-- at when a thing was looted. The stamp stays the fallback; where the item can be read, the item
+-- wins. RCLootCouncil has parsed the same tooltip line for years.
+
+-- Seconds per unit word, from the client's own duration strings ("%d |4hour:hours;") rather than
+-- from English. This guild raids in two languages and the German client says something else
+-- entirely; the words are whatever the running client uses, so they are read fresh each time.
+local function DurationUnits()
+    local map = {}
+    local function add(fmt, seconds)
+        if type(fmt) ~= "string" then return end
+        local singular, plural = fmt:match("|4([^:]+):([^;]+);")
+        if singular then
+            map[singular:lower()] = seconds
+            map[plural:lower()] = seconds
+        else
+            -- A locale with no plural form at all: everything but the number IS the word.
+            local word = fmt:gsub("%%d", ""):gsub("%s", "")
+            if word ~= "" then map[word:lower()] = seconds end
+        end
+    end
+    add(INT_SPELL_DURATION_HOURS, 3600)
+    add(INT_SPELL_DURATION_MIN, 60)
+    add(INT_SPELL_DURATION_SEC, 1)
+    return map
+end
+
+-- "1 hour 59 min" -> 7140, "1 Stunde 59 Min." likewise on a German client. nil when nothing in the
+-- text is a duration this client knows -- no opinion, never "no time left": a parse that failed must
+-- not be able to shorten anybody's deadline.
+function Trade.ParseTradeTimeText(text)
+    if type(text) ~= "string" then return nil end
+    local units = DurationUnits()
+    local total, matched = 0, false
+    for count, word in text:gmatch("(%d+)%s*([^%d%s]+)") do
+        local seconds = units[word:lower()]
+        if seconds then
+            total = total + tonumber(count) * seconds
+            matched = true
+        end
+    end
+    if not matched then return nil end
+    return total
+end
+
+-- What the item in (bag, slot) says about its own trade window: seconds remaining, 0 for an item
+-- that is bound to us with no trade line left at all, or nil for "says nothing" -- an ordinary
+-- unbound item, or a client that answered no tooltip.
+--
+-- The 0 is the valuable half. An item that can never be handed over is not a deadline running out,
+-- it is a promise that was never keepable, and a reminder for it has the lootmaster working a row
+-- and the winner waiting for a trade that cannot happen.
+function Trade.GetBagTradeTimeRemaining(bag, slot)
+    if not (C_TooltipInfo and C_TooltipInfo.GetBagItem and BIND_TRADE_TIME_REMAINING) then return nil end
+    local data = C_TooltipInfo.GetBagItem(bag, slot)
+    if not (data and data.lines) then return nil end
+    -- Escaped before the %s becomes a capture: the sentence is localized text and a stray "(" or "."
+    -- in it would either error out of this ticker or match something it should not.
+    local pattern = BIND_TRADE_TIME_REMAINING
+        :gsub("([%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
+        :gsub("%%s", "(.+)")
+    local bound = false
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText or ""
+        if ITEM_SOULBOUND and text == ITEM_SOULBOUND then bound = true end
+        local timeText = text:match(pattern)
+        if timeText then return Trade.ParseTradeTimeText(timeText) end
+    end
+    return bound and 0 or nil
+end
+
+-- The same question asked about a pending entry, which only the client physically holding the item
+-- can answer -- a stand-in loot owner (B60) has the obligation and not the item, and there "cannot
+-- read it" has to stay nil rather than becoming "no time left".
+function Trade.TradeTimeRemainingFor(itemLink)
+    if not LC.IsRealItemLink(itemLink) then return nil end
+    local bag, slot = FindItemInBags(itemLink)
+    if not bag then return nil end
+    return Trade.GetBagTradeTimeRemaining(bag, slot)
 end
 
 -- "" normally, or " (i/N)" when N >= 2 currently-active rolls (LC.rollItems is only ever
