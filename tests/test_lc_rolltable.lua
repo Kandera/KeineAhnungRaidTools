@@ -371,6 +371,51 @@ do
         "a reused rollID reaches it like any fresh drop")
 end
 
+-- ...and the heartbeat alone releases the expiry note, like the dismissal note above (B132 shape) ----
+-- The reuse case above learns of the new item from its own START_LOOT_ROLL / the announcement. This
+-- client gets neither: no roll of its own, the announcement lost, rolls off for the raid -- the
+-- heartbeat is the only message that will ever name the new item to it. The suppression test holds
+-- one half of B135 (an expired roll is not re-asked about); this holds the other half, on the branch
+-- in LC.HandleTable that compares the note against the item the heartbeat names: without it, this
+-- client's own note about the OLD item keeps the gate closed against the NEW one for the rest of the
+-- round, and a raider never learns an item existed.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 970, F.GLOVES)
+    KARTTEST.AdvanceTime(25) -- past the default 20s window: the plain raider frees the roll
+    T.eq(raider.KART.LC.rollItems[970], nil, "the raider watched the gloves close and freed them")
+    T.truthy(raider.KART.LC.rollExpiredHere[970] ~= nil, "and holds the note that says so")
+
+    -- The number comes back for a weapon; Blizzard raises no roll for it here and the announcement
+    -- is lost, so the heartbeat is this client's only possible source for the drop.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 970, F.WEAPON, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    T.eq(raider.KART.LC.rollItems[970], nil, "and hears nothing about the weapon that reuses its number")
+
+    -- A few seconds, not a full window: the owner's heartbeat changed with the reuse and goes out on
+    -- the next tick, the freed note has no ask on cooldown, and the catch-up lands while the weapon's
+    -- window still runs. Waiting the window out instead would show the ORDINARY end of that repair --
+    -- a plain raider's re-tracked roll expires and is freed with a fresh note, this time about the
+    -- weapon -- and the assertion would read that as the clear never having fired.
+    KARTTEST.AdvanceTime(6)
+
+    T.truthy(raider.KART.LC.rollExpiredHere[970] ~= tostring(F.GLOVES),
+        "the heartbeat naming a DIFFERENT item under that number drops the note about the old one")
+    T.truthy(tostring(raider.KART.LC.rollItems[970]):match("item:" .. F.WEAPON),
+        "and the drop nobody here watched close reaches it, off the heartbeat alone")
+end
+
 -- ...but what a client PUT AWAY is not what a client lost -------------------------------------------
 -- The other side of the same widening. A council member awards the item and closes its tab, which is
 -- the ordinary end-of-item gesture and now happens well after voting closed -- leaving that client
