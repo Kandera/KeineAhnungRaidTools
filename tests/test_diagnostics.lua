@@ -103,6 +103,17 @@ do
     T.eq(diag.sentByToken.LC_TOKENPROBE, before + 2,
         "a send the restriction gate dropped counts as no message on the wire")
 
+    -- The upgrade case every KASC minor has to survive: an OLDER minor initialized KASC.diag first,
+    -- so `KASC.diag or {...}` kept a table with no sentByToken in it. One embedder today, but the
+    -- library is shipped to be embedded (and a KALC split would make two copies real) -- a counter
+    -- that only exists when THIS minor won the LibStub race would error on every send otherwise.
+    RaidSim.As(lm, function()
+        lm.KASC.diag.sentByToken = nil
+        lm.KASC:Send("LC_TOKENPROBE:after-upgrade")
+    end)
+    T.eq(lm.KASC:Diagnostics().sentByToken.LC_TOKENPROBE, 1,
+        "a diag table inherited from an older minor grows the counter instead of erroring the send")
+
     -- The status line names the loudest tokens; whatever else the raid has said by now, the probe
     -- token exists and must appear with its count when it is among them -- and the line itself must
     -- appear once anything was sent at all.

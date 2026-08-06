@@ -193,7 +193,11 @@ function KASC:Send(msg, channel, target, opts)
 
     -- Counted where the message actually reaches the transport: a send refused by the restriction
     -- gate above never went anywhere, and a retry that lands here is a second real message.
+    -- The `or {}` is the upgrade seam, not defensiveness: when an OLDER minor initialized KASC.diag
+    -- first, `KASC.diag or {...}` above kept a table with no sentByToken in it, and this line is the
+    -- first to touch the field after the LibStub handover.
     local token = msg:match("^([^:]+)") or msg
+    KASC.diag.sentByToken = KASC.diag.sentByToken or {}
     KASC.diag.sentByToken[token] = (KASC.diag.sentByToken[token] or 0) + 1
     -- One retry per message, not one per chunk. AceComm splits anything over 255 bytes and gives
     -- every piece its own callback, so a pipe that refuses one piece usually refuses the rest --
