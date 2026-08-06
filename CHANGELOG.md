@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - **Recipes and patterns now go through the loot council** instead of Blizzard's roll window.
+- **An item you missed now reaches you within seconds** instead of half a minute.
 
 ### Fixed
 - **Auto-Pass works again for everyone**, even when the item's announcement never arrived.

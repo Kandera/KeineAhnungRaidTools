@@ -9,6 +9,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unreleased]
 ### Geändert
 - **Rezepte und Muster laufen jetzt über das Loot Council** statt über Blizzards Würfelfenster.
+- **Ein verpasstes Item erreicht dich jetzt in Sekunden** statt in einer halben Minute.
 
 ### Behoben
 - **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.

@@ -303,3 +303,107 @@ do
     T.eq(((council.KART.LC.votes[92] or {})[raider.guid] or {}).idx, 3,
         "the heartbeat is still running once the client can see itself again")
 end
+
+-- How many LC_ROLL_REQ one client sent. The escalation (LC_ROLLS_REQ) is a different token and a
+-- different decision, so it is deliberately not folded in here -- RaidSim.Sent matches on the
+-- prefix and "LC_ROLL_REQ" does not match "LC_ROLLS_REQ".
+local function AsksFrom(sim, client)
+    local n = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == client.name then n = n + 1 end
+    end
+    return n
+end
+
+-- A vote naming a roll we do not have is a reason to ask for it ------------------------------------
+-- The wire already says "you are missing something" every five seconds; before this only the owner's
+-- table heartbeat was heard saying it, and that repeats at most every thirty (TABLE_RESEND_SECONDS).
+-- A client whose LC_DROP was lost -- the loss B135 measured, where six clients held six different
+-- subsets of one boss's rolls -- therefore sat blind for up to half a minute with the evidence
+-- arriving six times over.
+--
+-- The heartbeat is blackholed for the whole test, so it cannot be the thing that repairs this: the
+-- only message that ever names roll 120 to this client is another raider's vote.
+do
+    local sim, _, council, raider = NewRaid()
+
+    RaidSim.Blackhole(sim, "LC_TABLE")
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 120, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    T.eq(raider.KART.LC.rollItems[120], nil, "the deaf raider knows nothing of the drop")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(council, function()
+        council.KART.LC.SendLC("LC_VOTES:120:1:#6:@" .. F.GLOVES .. ":0:")
+    end)
+    KARTTEST.AdvanceTime(2)
+
+    T.truthy(AsksFrom(sim, raider) >= 1, "a vote about a roll it does not track makes it ask the owner")
+    T.truthy(raider.KART.LC.rollItems[120] ~= nil,
+        "and the item is handed over well inside the heartbeat's thirty seconds")
+    T.truthy(raider.KART.LC.rollDeadlines[120] ~= nil, "with a window to answer in")
+end
+
+-- ...but a client that WATCHED the roll expire still does not ask (B135) ----------------------------
+-- Votes about a pruned roll arrive late by design -- clients prune at slightly different instants and
+-- a council member keeps its tab long after the window closed -- so the untracked-vote drop is
+-- ORDINARY traffic on an expired client. Asking on it would rebuild the 1,578-message queue through a
+-- new door, five seconds at a time instead of thirty.
+do
+    local sim, _, council, raider = NewRaid()
+
+    Drop(sim, 121, F.GLOVES)
+    KARTTEST.AdvanceTime(23) -- past the default 20s window: the plain raider frees the roll
+    T.eq(raider.KART.LC.rollItems[121], nil, "the raider watched the window close and freed the roll")
+    T.truthy(raider.KART.LC.rollExpiredHere[121] ~= nil, "and holds the note that says so")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(council, function()
+        council.KART.LC.SendLC("LC_VOTES:121:1:#6:@" .. F.GLOVES .. ":0:")
+    end)
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(AsksFrom(sim, raider), 0, "a late vote is not a reason to fetch back what it watched close")
+    T.eq(raider.KART.LC.rollItems[121], nil, "and the freed roll stays freed")
+end
+
+-- ...and neither does a client that threw the roll away itself (B123/B131) --------------------------
+-- The other gate the heartbeat's ask already respects. A council member closes its tab after awarding
+-- -- the ordinary end-of-item gesture -- while the rest of the raid is still voting and still saying
+-- so every five seconds. Asking on that put the tab back on screen every thirty seconds; asking on
+-- the votes would put it back every five.
+do
+    local sim = NewRaid()
+    local council, peer = sim.byName.Merrit, sim.byName.Corvin
+
+    Drop(sim, 122, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(122) end)
+    T.eq(council.KART.LC.rollItems[122], nil, "closing the tab takes the item off that client")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(peer, function()
+        peer.KART.LC.SendLC("LC_VOTES:122:1:#6:@" .. F.GLOVES .. ":0:")
+    end)
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(AsksFrom(sim, council), 0, "it never asks for an item it threw away itself")
+    T.eq(council.KART.LC.rollItems[122], nil, "so the tab it closed stays closed")
+end
+
+-- The two files have to mean the same thirty seconds -------------------------------------------------
+-- The ask cooldown is a local in LootCouncil.lua and the vote path may not reach into it, so it is
+-- stated twice. Two cooldowns that drift apart are two ask rates for one ask, which is exactly the
+-- doubling the shared LC.rollReqSent table exists to prevent -- so the duplication is pinned here
+-- rather than left to whoever next tunes one of them. Read out of the SOURCE, like
+-- tests/test_lc_persistedtables.lua does for the two roll-state lists.
+do
+    local council = assert(io.open("LootCouncil.lua", "r")):read("*a")
+    local vote    = assert(io.open("LootCouncilVote.lua", "r")):read("*a")
+    local a = council:match("\nlocal ROLL_REQ_COOLDOWN = (%d+)")
+    local b = vote:match("\nlocal ROLL_REQ_COOLDOWN = (%d+)")
+    T.truthy(a, "LootCouncil.lua states the ask cooldown")
+    T.truthy(b, "LootCouncilVote.lua states the ask cooldown")
+    T.eq(b, a, "and the vote path asks at the same rate the heartbeat does")
+end

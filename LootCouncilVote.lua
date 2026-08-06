@@ -1258,6 +1258,56 @@ function Vote.EnsureVoteHeartbeat()
     end)
 end
 
+-- LootCouncil.lua's ROLL_REQ_COOLDOWN, stated a second time because it is a local there and this
+-- file may not reach into it. tests/test_lc_votes.lua reads both out of the source and refuses a
+-- drift: two cooldowns for one ask is two ask rates, which is the doubling the shared
+-- LC.rollReqSent table below exists to prevent.
+local ROLL_REQ_COOLDOWN = 30
+
+-- A vote naming a roll this client does not track is the raid saying "you are missing something" --
+-- and it says it every five seconds, from every voter, while the owner's table heartbeat says it at
+-- most every thirty (TABLE_RESEND_SECONDS). Same repair, sooner: a client whose announcement was
+-- lost is caught up on the traffic that was already arriving instead of waiting out the forced
+-- resend.
+--
+-- Every gate is LC.HandleTable's, reused rather than re-decided, because this is the ask that
+-- filled the lootmaster's queue on 2026-08-05 (B135) and a second path with its own rules would
+-- double it:
+--
+--   * LC.rollExpiredHere -- this client watched the window close and freed the roll itself. Late
+--     votes about a pruned roll are ORDINARY traffic (clients prune at different instants, a
+--     council member keeps its tab long after), so asking on them re-opens the burst B135 cut,
+--     five seconds at a time instead of thirty. Read on truthiness alone: the note-versus-item
+--     comparison stays where it is, on the heartbeat, so there is one place that clears it.
+--   * LC.rollDismissed -- this client threw the roll away on purpose (B123/B131). Nothing may put
+--     it back on screen off somebody else's traffic.
+--   * LC.rollReqSent -- the SAME table and the same thirty seconds, so the two paths cannot ask
+--     twice for one roll. A stamp set here also makes the heartbeat's escalation read "the owner
+--     has had its turn", which is exactly what happened.
+--
+-- Only the whispered ask to the owner, never the group-wide LC_ROLLS_REQ: what a vote proves is
+-- missing is the ITEM, and the escalation is the heartbeat's decision to make (it is the half that
+-- can tell a missing table from a missing item). The owner still enforces eligibility per asker in
+-- LC.HandleRollRequest, so a late joiner adopts nothing it was not standing there for.
+local function AskOwnerForUnknownRoll(rollID)
+    if LC.IsLootOwner() then return end
+    if LC.rollDismissed[rollID] or LC.rollExpiredHere[rollID] then return end
+    LC.rollReqSent = LC.rollReqSent or {}
+    local now = GetTime()
+    if (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) < ROLL_REQ_COOLDOWN then return end
+    local ownerKey = LC.GetLootOwnerKey()
+    local unit = ownerKey ~= "" and KASC.Identity.FindUnitForKey(ownerKey)
+    if not unit then return end
+    -- The whisper wants a name, and the heartbeat's ask gets one for free from the message it is
+    -- answering. Here there is only a key, so it is resolved the way the game addresses anybody:
+    -- bare on our own realm, qualified for a genuine cross-realm one.
+    local name, realm = UnitName(unit)
+    if not name then return end
+    LC.rollReqSent[rollID] = now
+    LC.SendLC("LC_ROLL_REQ:" .. rollID,
+        (realm and realm ~= "") and (name .. "-" .. realm) or name)
+end
+
 -- The receiving half of the heartbeat. Every guard Vote.HandleVote applies to a single vote applies
 -- here to each entry, and one guard is deliberately per MESSAGE rather than per entry: the sender
 -- check. A heartbeat is one statement by one client, so a key that is in no group is one refusal,
@@ -1300,6 +1350,10 @@ function Vote.HandleVotes(payload, senderKey)
         -- see the count after the loop.
         if not LC.rollItems[entry.rollID] then
             unknown = true
+            -- ...and, gates permitting, a reason to go and get it -- see AskOwnerForUnknownRoll.
+            -- Per ENTRY, unlike the diag count above: the refusal is one statement by one client,
+            -- but a missing roll is a missing roll and the cooldown is per rollID anyway.
+            AskOwnerForUnknownRoll(entry.rollID)
         else
             -- Free text from another client, rendered raw into the council row's note tooltip.
             -- Doubled here exactly as HandleVote does it -- a hostile client will not have stripped
