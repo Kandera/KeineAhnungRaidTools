@@ -235,6 +235,26 @@ raid: the ratio between a boss's traffic and an evening's (votes, results, confi
 carry the rest) — six status outputs like 2026-08-05's, now with that line, answer it. The 71
 refusals still have no REASON recorded (AceComm's shim drops the result code; see below).
 
+**The offline evening, as the baseline the raid's counters compare against** (same day, after the
+cut: 30 clients, six bosses of six items, every client voting on everything, council awarding after
+each window, End Round each boss):
+
+| token | msgs | bytes |
+|---|---|---|
+| LC_VOTES | 504 | 91,728 |
+| LC_VOTE | 1,080 | 36,720 |
+| LC_RESULT | 36 | 1,697 |
+| everything else | 60 | ~4,400 |
+
+1,680 messages / 134 KB for the whole evening, spread over thirty senders — about 56 sends and 3 KB
+per client. The catch-up storm that used to put 324 sends on ONE client per boss is gone from the
+profile entirely. What leads now is the vote traffic, and both halves of it are load-bearing by the
+rules fixed after the 2026-08-03 raid test: one broadcast per cast vote, and the bundled repeat that
+is the only repair votes have (nothing acknowledges a vote; B66). Seventeen heartbeats per client
+per evening is not a number worth a wire change days before a raid that decides the module — so no
+further cut is planned from this measurement. If the live counters disagree with this table, THAT
+is the finding: the delta names whatever the harness does not model.
+
 **Related, also open:** the 71 refusals have no REASON recorded. ChatThrottleLib hands its callback
 `(didSend, sendResult)` and AceComm's shim drops the code on the way through, so KASC sees only the
 boolean (noted on `KASC.diag`). `ChannelThrottle` and `GeneralError` are indistinguishable from
