@@ -42,7 +42,7 @@ before and is the single most useful line here.
 
 | | measured | consequence |
 |---|---|---|
-| `ActionButtonUseKeyDown` | `"1"` via `C_CVar.GetCVar` -- **and the bar was still dead** | P1 is real and NOT explained by the CVar reading; fixed by not depending on it |
+| `ActionButtonUseKeyDown` | `"1"` via `C_CVar.GetCVar` -- **and the bar was still dead** | P1 was real and is not explained by the CVar reading. Fixed by not depending on it, verified in-game 2026-08-06, entry deleted per this file's rule (`git log --grep=P1`) |
 | `GetWeaponEnchantInfo` | **present**, returns `true / 7180552` | P2's premise is wrong for this build |
 | own aura `name` / `spellId` | usable, not secret | P3 narrowed to OTHER units |
 | `UnitIsGroupLeader("player")` | ordinary boolean | as expected; the group half is untouched |
@@ -50,76 +50,6 @@ before and is the single most useful line here.
 **What a solo login cannot answer, and therefore what is still open:** every question in P3 and P4 is
 about reading ANOTHER unit. The player's own identity is never secret, so a solo probe answers the
 easy half of both and neither of the hard ones. Both need a group on 12.1.
-
-## P1 — FIXED 2026-08-06 — the Raidlead bar's secure buttons do nothing unless `ActionButtonUseKeyDown` is 1
-
-Reported from the 12.1 PTR, 2026-08-03: "kein Icon mehr auf den Kopf per Raidleadbar". Measured down
-to the line rather than guessed, and it is **not** a 12.1 API break — 12.1 only exposed it.
-
-### What was measured
-
-| probe | result |
-|---|---|
-| `/tm 1` in chat, right-click → target marker | works |
-| hover the star button | backdrop turns accent blue — the mouse reaches the button |
-| Buff-Checker toggle (plain `OnClick` button on the same bar) | works |
-| `c[1]:GetAttribute("type")` / `("macrotext")` | `macro` / `/target [@target,noexists] player\n/tm 1` — intact |
-| `GetCVarBool("ActionButtonUseKeyDown")` | Live `true`, PTR `false` |
-| `c[1]:SetAttribute("useOnKeyDown", true)`, then click | icon appears |
-
-### The cause
-
-`CreateBarButton` registers every button with `RegisterForClicks("AnyDown")` (`RaidleadBar.lua:68`),
-so a secure button only ever receives the down transition. Blizzard's gate, unchanged between 12.0.7
-and 12.1.0 (`Blizzard_FrameXML/SecureTemplates.lua:811-817`):
-
-```lua
-local isSecureMousePress = not isKeyPress and isSecureAction;
-local useOnKeyDown = not isSecureMousePress and (SecureActionButton_ShouldUseOnKeyDown(self) or pressAndHoldAction);
-local clickAction = (down and useOnKeyDown) or (not down and not useOnKeyDown);
-```
-
-An addon-created button is clicked through the template's own `OnClick`, which passes neither
-`isKeyPress` nor `isSecureAction`, so `isSecureMousePress` is false and the decision falls to
-`SecureActionButton_ShouldUseOnKeyDown` — the `useOnKeyDown` attribute if set, otherwise the CVar.
-With the CVar at 0, `clickAction` is false for every down transition, the up transition is never
-registered, and the button is inert while still hovering and holding correct attributes.
-
-The 12.1 PTR reports the CVar as 0 and refuses `/console ActionButtonUseKeyDown 1`; the 12.1.0
-resource dump lists its default as `"1"` (`Resources/CVars.lua`), so the PTR value comes from
-somewhere else — Config-WTF or the settings registry. Worth one look on 12.1 live, but irrelevant to
-the fix: KART must not depend on the value at all.
-
-This has been latent on Live for as long as the `"AnyDown"` line has existed. Every player with the
-CVar at 0 has a dead bar, which is 8 raid markers, 8 world markers, Clear World Markers and Ready
-Check. Nobody reported it, which says something about how many players changed that option.
-
-### The shape of the fix
-
-In the `macrotext` branch of `CreateBarButton`, register both transitions and let Blizzard's gate
-pick one:
-
-```lua
-b:RegisterForClicks("AnyUp", "AnyDown")
-```
-
-Exactly one of the two passes `clickAction` for any CVar value, so this does not reintroduce a double
-fire. The plain-`OnClick` branch keeps `"AnyDown"` — that branch has no gate in front of it, and the
-double fire the current comment describes was only ever that branch's. Override bindings from
-`SetOverrideBindingClick` reach the same gate and follow along.
-
-The comment at `RaidleadBar.lua:66-73` goes with the change: "Down-only matches retail's default
-behavior" is false, and it is the sentence that made the bug look intentional.
-
-### How it gets verified
-
-Not by the suite — the harness has no click gate. On 12.1, with `ActionButtonUseKeyDown` forced to 0
-**and** to 1: every marker button, both world-marker rows, Clear World Markers and Ready Check, plus
-one keybind per row. That is `MANIFEST.md`'s standard applied to the bar, not a unit test.
-
----
-
-# Tier 1 — errors on a removed API
 
 ## P2 — DEPRECATED, NOT REMOVED — `GetWeaponEnchantInfo` is dropped from the API list in 12.1
 
