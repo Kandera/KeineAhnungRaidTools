@@ -30,6 +30,7 @@ LC.promptedThisSession  = false
 LC.votes                = {}  -- [rollID][Identity key] = {idx, note}  (key is a GUID, see KASC.Identity)
 LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt-in, see lcRollsEnabled)
 LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
+LC.councilVoteItem      = {}  -- [rollID][council member Identity key] = itemID that pick was about (see LC.CouncilVoteIsForItem)
 LC.rollItems            = {}  -- [rollID] = itemLink
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 -- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
@@ -389,6 +390,27 @@ end
 -- blank a whole raid's votes over a link that had not arrived yet.
 function LC.VoteIsForItem(vote, rollID)
     local stamped = type(vote) == "table" and vote.item or nil
+    if stamped == nil or stamped == "" then return true end
+    local link = LC.rollItems[rollID]
+    local mine = (type(link) == "string" and link:match("item:(%d+)")) or ""
+    if mine == "" then return true end
+    return stamped == mine
+end
+
+--- The same question for a COUNCIL straw-poll pick, which stamps its item in a table of its own
+--- (LC.councilVoteItem, written by Vote.HandleCouncilVote) rather than inside the stored value.
+---
+--- Vote.HandleCouncilVote's own comment says a pick naming a different item is "kept, not dropped,
+--- and filtered when it is read" -- and nothing read it, so both consumers of LC.councilVotes counted
+--- a pick made about the previous occupant of a reused rollID. Narrow in practice, because
+--- PurgeStaleRoll clears the tally on a proven reuse, but it needs an LC_CVOTE in flight across that
+--- purge and nothing else would have caught it.
+---
+--- Same shape and same forgiveness as LC.VoteIsForItem: an unstamped pick (an older client, or one
+--- made before the item was known here) is not stale, or a mixed-version raid would show a council
+--- that never voted.
+function LC.CouncilVoteIsForItem(rollID, voterKey)
+    local stamped = ((LC.councilVoteItem or {})[rollID] or {})[voterKey]
     if stamped == nil or stamped == "" then return true end
     local link = LC.rollItems[rollID]
     local mine = (type(link) == "string" and link:match("item:(%d+)")) or ""
@@ -3056,6 +3078,7 @@ function LC.ClearAllRolls()
     wipe(LC.rolls)
     wipe(LC.rollsFor)
     wipe(LC.councilVotes)
+    if LC.councilVoteItem then wipe(LC.councilVoteItem) end
     wipe(LC.rollItems)
     wipe(LC.rollDeadlines)
     wipe(LC.rollDurations)
@@ -3165,7 +3188,11 @@ local RESTORE_CONFIRM_SECONDS = 60
 -- a new table has to be decided about rather than forgotten. The values are numbers, strings,
 -- booleans and one flat table of those (LC.votes), all of which SavedVariables round-trips.
 local PERSISTED_ROLL_TABLES = {
-    "votes", "rolls", "rollsFor", "councilVotes", "rollItems", "rollDurations",
+    -- councilVoteItem travels with councilVotes for the same reason votedFpByMe travels with votes:
+    -- it is the stamp that says which item a pick was about, and a tally that comes back without its
+    -- stamps is read as "not stale" for every entry -- which is the forgiving answer, but it is a
+    -- guess where the file could simply have carried the fact.
+    "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
     "rollNotInOurBags", "rollAnnounced", "rollAnnouncedBy", "rollSeenHere", "relevanceHandled",
     "hiddenIrrelevant", "autoVotedByMe", "councilTabsNew",

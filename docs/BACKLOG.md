@@ -3657,3 +3657,39 @@ but the reason behind it never was, and the panel should not claim one.
 
 Tests: `tests/test_lc_ack.lua`, "and the council is told so, instead of being told they said nothing"
 — a refused ack, past both `ACK_WAIT` and `SEND_RETRY_DELAYS`, still reads as "acked".
+
+
+## B143 — FIXED 2026-08-06 — "x of y council members have voted" counted the wrong council
+
+Found in the integrated review of the six RC-compare packages. C2's line was added to answer the one
+question the per-candidate tally cannot: is anybody still missing (Manifest C14)?
+
+It counted against `LC.CouncilNamesTable`, which is the AUTHORIZATION list and is roster-independent
+on purpose — a key stays in it long after that person left, because it decides whose `LC_CVOTE` is
+accepted (`tests/test_lc_senderguards.lua`: "their key is still in CouncilNamesTable long after that
+person left"). As a denominator that is wrong in the ordinary case: a council of four with one member
+not raiding tonight can never reach "everyone has spoken", so the line sits on `3 von 4` in the
+waiting colour for every item all night, and the signal it exists to give becomes a permanent yes.
+RC counts council-**in-group** for exactly this reason (`votingFrame.lua`, `Council:Get()`); that half
+was not adopted.
+
+Two more, in the same feature and found with it:
+
+* **The two numbers on the same screen disagreed.** The new line filtered voters by council
+  membership; the per-candidate straw-poll button beside it did not. A pick from somebody the config
+  owner has since dropped from the council list showed as `0 von 2` on the line and `1` on the button.
+* **`LC.councilVoteItem` was written and never read.** `Vote.HandleCouncilVote` says a pick naming a
+  different item than we hold is "kept, not dropped, and filtered when it is read" — and nothing read
+  it, so a pick made about the previous occupant of a reused rollID counted. Narrow (`PurgeStaleRoll`
+  clears the tally on a proven reuse, so it needs an `LC_CVOTE` in flight across the purge) and
+  pre-existing rather than C's, but C2 added a second consumer of the unfiltered table.
+
+**Fixed 2026-08-06.** Both consumers now apply the same three conditions: on the council list, present
+in the group (`KASC.Identity.FindUnitForKey`, the check `Vote.HandleCouncilVote` already makes on the
+receiving side), and about the item we are holding (`LC.CouncilVoteIsForItem`, the mirror of
+`LC.VoteIsForItem` the comment promised). `LC.councilVoteItem` is declared with the other roll tables,
+cleared in `Trade.ClearRollState` and `LC.ClearAllRolls`, and persisted beside `councilVotes` — the
+per-roll-table guard test caught the first two of those on its own, which is what it is for.
+
+Tests: `tests/test_lc_councilrows.lua`, "everyone in the raid having picked reads as complete, not as
+three of four".

@@ -546,6 +546,9 @@ function Trade.ClearRollState(rollID)
     LC.rolls[rollID]           = nil
     LC.rollsFor[rollID]        = nil
     LC.councilVotes[rollID]    = nil
+    -- Beside the tally it stamps, or a reused rollID inherits the previous item's stamps and
+    -- LC.CouncilVoteIsForItem starts filtering the NEW picks against the OLD item.
+    if LC.councilVoteItem then LC.councilVoteItem[rollID] = nil end
     LC.rollItems[rollID]       = nil
     LC.rollDeadlines[rollID]   = nil
     LC.rollDurations[rollID]   = nil

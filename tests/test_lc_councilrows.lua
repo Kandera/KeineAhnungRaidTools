@@ -299,3 +299,46 @@ do
     T.eq(ProgressText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 2, 3),
         "and taking a pick back counts back down")
 end
+
+-- ...counted against the council that is actually HERE ----------------------------------------------
+-- LC.CouncilNamesTable is the AUTHORIZATION list and is deliberately roster-independent: a key stays
+-- in it long after that person left, because it decides whose LC_CVOTE is accepted, not who is
+-- online. As a denominator it is the wrong list. A council of four with one member not raiding
+-- tonight -- somebody on holiday, somebody who logged in on an alt -- can never reach "everyone has
+-- spoken", so the line sits on "3 of 4" in the waiting colour for every item, all night, and the one
+-- thing it was added to say (Manifest C14: is anybody still missing?) becomes a permanent yes.
+do
+    local ownSim, ownLm = F.NewRaid()
+    RaidSim.As(ownLm, function()
+        ownLm.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin;Nichthier"
+        ownLm.KART.LC.ApplyOwnConfig()
+        ownLm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(1)
+    F.Drop(ownSim, 89, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local ownPanel = ownLm.KART.LC.councilPanel
+    local council = { ownSim.byName.Bramor, ownSim.byName.Merrit, ownSim.byName.Corvin }
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(ownSim.byName.Alric.unit))
+    end)
+    local L = ownLm.KART.L
+
+    T.truthy(RaidSim.As(ownLm, function()
+        local n = 0
+        for _ in pairs(ownLm.KART.LC.CouncilNamesTable or {}) do n = n + 1 end
+        return n
+    end) == 4, "the council list really does name four")
+
+    for _, c in ipairs(council) do
+        RaidSim.As(c, function() c.KART.LC.Vote.ToggleCouncilVote(89, alricKey) end)
+    end
+    RaidSim.Drain(ownSim, 5)
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+
+    T.eq(ownPanel.voteProgressText:GetText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 3, 3),
+        "everyone in the raid having picked reads as complete, not as three of four")
+    local r, g, b = ownPanel.voteProgressText:GetTextColor()
+    T.truthy(r < g and b < g, "and wears the everybody-has-voted colour")
+end

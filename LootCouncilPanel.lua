@@ -1104,11 +1104,25 @@ function Council.RefreshCouncilRows()
     -- handed out either way. Counted against the council list, so a straw-poll pick left over from
     -- somebody who is no longer on it cannot push the count past the total.
     if panel.voteProgressText then
+        -- The council that is HERE, not the council that is configured. LC.CouncilNamesTable is the
+        -- authorization list and is roster-independent on purpose -- a key stays in it long after that
+        -- person left, because it decides whose LC_CVOTE is accepted (see test_lc_senderguards). As a
+        -- denominator that is wrong in the ordinary case: one listed member not raiding tonight and
+        -- the line can never reach "everyone has spoken", so it sits in the waiting colour all night
+        -- and stops saying the one thing it exists to say.
+        --
+        -- Same presence check the receiving side already applies to a straw-poll vote
+        -- (Vote.HandleCouncilVote), so the two halves of this number agree by construction.
         local council = LC.CouncilNamesTable or {}
         local councilSize, votedCount = 0, 0
-        for _ in pairs(council) do councilSize = councilSize + 1 end
+        for key in pairs(council) do
+            if KASC.Identity.FindUnitForKey(key) then councilSize = councilSize + 1 end
+        end
         for voter in pairs((rollID and LC.councilVotes[rollID]) or {}) do
-            if council[voter] then votedCount = votedCount + 1 end
+            if council[voter] and KASC.Identity.FindUnitForKey(voter)
+               and LC.CouncilVoteIsForItem(rollID, voter) then
+                votedCount = votedCount + 1
+            end
         end
         if rollID and councilSize > 0 then
             panel.voteProgressText:SetText(string.format(KART.L.LC_COUNCIL_VOTES_PROGRESS,
@@ -1575,9 +1589,19 @@ function Council.RefreshCouncilRows()
         local pollVotes    = (capturedRoll and LC.councilVotes[capturedRoll]) or {}
         local myPick       = pollVotes[myKey]
         local votedByMe    = (myPick == capturedKey)
+        -- Filtered exactly like the "x of y have voted" line above it, and for the reason those two
+        -- numbers sit on the same screen: a pick from somebody no longer on the council list, or no
+        -- longer in the raid, or made about the previous occupant of a reused rollID, would be
+        -- counted here and not there -- and a lootmaster reading "0 of 2 have voted" beside a
+        -- candidate wearing a 1 has no way to tell which of them is lying.
+        local pollCouncil  = LC.CouncilNamesTable or {}
         local pollCount    = 0
-        for _, pick in pairs(pollVotes) do
-            if pick == capturedKey then pollCount = pollCount + 1 end
+        for voter, pick in pairs(pollVotes) do
+            if pick == capturedKey and pollCouncil[voter]
+               and KASC.Identity.FindUnitForKey(voter)
+               and LC.CouncilVoteIsForItem(capturedRoll, voter) then
+                pollCount = pollCount + 1
+            end
         end
         -- Plain ASCII only (no ★/☆) — WoW's default game fonts don't have glyphs for most
         -- symbol/dingbat Unicode ranges and silently render them as an empty box ("tofu").
