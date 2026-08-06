@@ -150,8 +150,26 @@ Four live call sites, all reading main-hand/off-hand temporary enchants:
 Plus the harness stub at `tests/wow_stubs.lua:638`, which has to move with them or the suite will
 keep proving the old signature.
 
-**Ungemessen, and the reason this is not just a rename:** the return signature of
-`C_PaperDollInfo.GetTemporaryEnchantmentInfo` has not been checked. The old call returns eight flat
+**MEASURED 2026-08-06 on 12.1.0**, two characters, same shape both times:
+
+```
+C_PaperDollInfo.GetTemporaryEnchantmentInfo(16)
+  -> { enchantID = 8052, hasExpirationTime = true, remainingTimeMs = 6527852, chargesRemaining = 0 }
+```
+
+One table per SLOT (16 main hand, 17 off hand) where the old call returned eight flat values for both
+hands at once. The mapping is mechanical: table present -> `hasMainHandEnchant`, `enchantID` ->
+`mainHandEnchantID`, `remainingTimeMs` -> `mainHandExpiration`, `chargesRemaining` ->
+`mainHandCharges`. 8052 is Thalassian Phoenix Oil, which matches the id already verified in
+BuffChecker's bestSpells.
+
+**Deliberately not migrated yet.** The old call still answers on 12.1 (see the heading), so this is
+housekeeping with no deadline -- and two of the four sites are in shipped libraries, which means
+version bumps. Touching KAGS and KASC for something that is not broken, in the fortnight before a
+raid that decides whether the module survives, is the wrong trade. Do it after that raid.
+
+**The original open question, now answered:** the return signature of
+`C_PaperDollInfo.GetTemporaryEnchantmentInfo` had not been checked. The old call returns eight flat
 values (`hasMH, mhExpiration, mhCharges, mhEnchantID, hasOH, …`); the `C_PaperDollInfo` namespace
 returns structured tables elsewhere. Dump it on the PTR before writing any of the four call sites:
 
@@ -162,7 +180,17 @@ returns structured tables elsewhere. Dump it on the PTR before writing any of th
 Two of the four sites are in shipped libraries (`KAGS-1.0`, `KASC-1.0`), so the fix carries a library
 version bump.
 
-## P3 — `C_UnitAuras.GetAuraDataByIndex` errors while auras are secret
+## P3 — SOLVED 2026-08-06 — `C_UnitAuras.GetAuraDataByIndex` errors while auras are secret
+
+**Measured on 12.1.0 with two people in a group, `/kart ptr`: another group member's
+`aura.name` and `aura.spellId` are both usable.** Not secret, no error on comparison. The buff
+checker reads exactly this for every group member, so the module works on 12.1 as shipped.
+
+Note for anyone chasing #27 (buff food showing as missing): this is NOT that. The two looked alike
+and they are unrelated -- #27 needs its own diagnosis.
+
+### Original entry
+
 
 12.1: *"C_UnitAura and C_TooltipInfo APIs that provide access to aura data via index, slot, or
 instance ID will Lua error when called by addons while auras are secret."* APIs that go through spell
@@ -213,7 +241,21 @@ bearing: a spell-ID query per configured buff stays legal in 12.1 and skips the 
 per player. That is a rewrite of the loop, not a wrapper, and it wants its own measurement of what
 the spell-ID APIs return for a raid member rather than the player.
 
-## P4 — Ungemessen — unit APIs KART reads for authority return secrets when unit identity is secret
+## P4 — SOLVED 2026-08-06 — unit APIs KART reads for authority return secrets when unit identity is secret
+
+**Measured on 12.1.0 with two people in a group, `/kart ptr`: `UnitIsGroupLeader(raid2)` and
+`UnitClass(raid2)` are both usable.** A group member's identity is not secret to their own group,
+which was the open question and the one that decided whether this was nothing or Tier 0. It is
+nothing.
+
+The guard written before the answer (`KART.UnitLeads` / `KART.UnitAssists` in `Utils.lua`) stays, and
+it is worth being clear that it is **not load-bearing**: nothing today needs it. It costs one pcall
+per call and covers the contexts nobody has measured -- Blizzard's wording is "when the unit's
+identity is secret", and a group member is only one kind of unit. Do not read its presence as
+evidence that the raw API is unsafe here; it is not.
+
+### Original entry
+
 
 12.1: *"A number of Unit APIs are being changed to return secret values when the unit's identity is
 secret."* The list includes `UnitClass`, `UnitIsGroupLeader`, `UnitIsGroupAssistant`, `UnitInRaid`,
