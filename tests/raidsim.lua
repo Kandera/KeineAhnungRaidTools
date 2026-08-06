@@ -67,10 +67,31 @@ local function slurp(path)
     return text
 end
 
+-- Compiled once per path, then re-run for every client that boots.
+--
+-- Reading and re-parsing the same ~800 KB of source on every one of the suite's ~3400 boots was
+-- three quarters of its wall clock -- 30 s of 41 s, measured -- and it bought nothing a client can
+-- observe. A Lua chunk keeps no state between calls: its locals are fresh each time, and every
+-- closure it creates takes the environment in force at the moment of creation, which is the setfenv
+-- in loadInto below and therefore still per client. The "@path" chunk name is baked in at compile
+-- time, so line numbers, error messages and luacov's per-source counts are exactly as before.
+--
+-- Safe to hand the same chunk out repeatedly because loading is strictly sequential: loadInto is
+-- called only from Boot's two loops, and no addon file boots another client while it is executing.
+local compiled = {}
+local function chunkFor(path)
+    local chunk = compiled[path]
+    if not chunk then
+        chunk = assert(loadstring(slurp(path), "@" .. path))
+        compiled[path] = chunk
+    end
+    return chunk
+end
+
 -- Loads one file as WoW would: a chunk called with the addon name and the addon's shared table,
 -- running in this client's environment so its globals (KART_Settings and friends) stay its own.
 local function loadInto(client, path)
-    local chunk = assert(loadstring(slurp(path), "@" .. path))
+    local chunk = chunkFor(path)
     setfenv(chunk, client.env)
     local ok, err = pcall(chunk, "KeineAhnungRaidTools", client.KART)
     if not ok then
@@ -588,7 +609,11 @@ function RaidSim.Install(sim)
     KARTTEST.PumpComms = function(delta)
         for _, c in ipairs(sim.clients) do
             if c.CTL and c.CTL.Frame then
-                RaidSim.As(c, function() c.CTL.OnUpdate(c.CTL.Frame, delta) end)
+                -- Handed to As as function-plus-arguments rather than wrapped in a closure: As
+                -- pcalls it either way, so this is the same call under the same active client, minus
+                -- one closure allocated per client per 0.1 s slice. The suite pumps ~660k slices, so
+                -- the wrapper was millions of short-lived closures for nothing.
+                RaidSim.As(c, c.CTL.OnUpdate, c.CTL.Frame, delta)
             end
         end
         KARTTEST.FlushEcho()
