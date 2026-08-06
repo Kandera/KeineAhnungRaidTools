@@ -3270,7 +3270,11 @@ end
 -- Nothing here can repair that -- the broken half is running code we cannot change. What it can do
 -- is stop it being a mystery: name the raiders concerned, on the one screen that can act on it,
 -- before the first boss rather than during it.
-LC.PROTOCOL_VERSION = "3.3.1" -- release whose loot-council wire protocol this client requires of peers
+-- 3.4.0 is a behaviour floor, not a parse break (the maintainer's call, 2026-08-06): the B135/B138
+-- traffic cuts live on the ASKER's side, so one 3.3.x client still re-asks after every expiry and
+-- every award, and a handful of them reopens the burst this release closes. The guild updates for
+-- the patch; this constant is what names whoever has not, before the first boss.
+LC.PROTOCOL_VERSION = "3.4.0" -- release whose loot-council wire protocol this client requires of peers
 LC.outdatedWarned = LC.outdatedWarned or {} -- short name -> true, so a raid is named once, not per hello
 
 -- Group members whose KART is older than the protocol above, sorted. Skipped on purpose:

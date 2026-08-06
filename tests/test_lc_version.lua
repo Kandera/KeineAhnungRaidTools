@@ -34,16 +34,21 @@ do
     -- Raised again for 3.3.1, and this time it is not a judgement call: LC_START's item field changed
     -- shape (B119), and a 3.3.0 client's pattern does not match the new payload at all -- it drops the
     -- announcement entirely and its owner never learns the item exists.
-    T.eq(LC.PROTOCOL_VERSION, "3.3.1", "the protocol floor is the current release")
+    --
+    -- Raised for 3.4.0 as the maintainer's call (2026-08-06): no parse break this time, but the
+    -- B135/B138 traffic cuts are asker-side behaviour -- a 3.3.x client still re-asks after every
+    -- expiry and every award, so a handful of laggards reopens the burst the release exists to
+    -- close. The whole guild updates for the patch; this line is what names whoever has not.
+    T.eq(LC.PROTOCOL_VERSION, "3.4.0", "the protocol floor is the current release")
 
     T.deep_eq(RaidSim.As(lm, LC.OutdatedRaiders), {},
         "a raid nobody has reported a version for names nobody -- silence is not evidence")
 
     lm.KART.PlayerVersions = {
-        Merrit = "3.2.2",   -- the case: on the previous release
-        Corvin = "3.3.1",   -- current
-        Alric  = "3.4.0",   -- ahead of us
-        Bramor = "3.2.2",   -- ourselves, and we never process our own broadcast anyway
+        Merrit = "3.3.2",   -- the case: on the previous release
+        Corvin = "3.4.0",   -- current
+        Alric  = "3.5.0",   -- ahead of us
+        Bramor = "3.3.2",   -- ourselves, and we never process our own broadcast anyway
     }
     T.deep_eq(RaidSim.As(lm, LC.OutdatedRaiders), { "Merrit" },
         "only the raider actually below the protocol is named")
@@ -83,7 +88,7 @@ do
 
     local out = Capture(function() RaidSim.As(lm, lm.KART.LC.WarnOutdatedRaiders) end)
     T.truthy(out:find("Merrit", 1, true), "the loot owner is told which raider is behind")
-    T.truthy(out:find("3.3.1", 1, true), "and what they need to be on")
+    T.truthy(out:find("3.4.0", 1, true), "and what they need to be on")
 
     -- Latched: the hook is a peer's version arriving, and a raid forming answers one request with one
     -- reply per raider, repeatedly. Unlatched, the owner would read the same line all evening.
