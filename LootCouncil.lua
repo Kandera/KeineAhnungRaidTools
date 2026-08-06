@@ -1597,6 +1597,26 @@ function LC.PrintStatus()
     if LC.diag.voteBatchCapped > 0 then
         print("  " .. string.format(L.LC_STATUS_VOTEBATCHCAPPED, LC.diag.voteBatchCapped))
     end
+
+    -- Why each of the last few rolls was or was not passed for this raider (see LC.passLog). Unlike
+    -- every counter above this block is NOT a fault report -- a working evening fills it with
+    -- "passed", which is exactly what makes it readable: a raider who had to click a window by hand
+    -- pastes this and the line for that item names the condition that held, with the others around it
+    -- saying what normal looks like on the same client.
+    --
+    -- Last, because it is the only block here that grows past one line, and oldest first so it reads
+    -- in the order the evening happened.
+    if #LC.passLog > 0 then
+        print("  " .. string.format(L.LC_STATUS_PASSLOG, #LC.passLog))
+        for _, entry in ipairs(LC.passLog) do
+            -- The link is looked up again here rather than only at decision time: the two roll-start
+            -- paths write LC.rollItems AFTER the pass decision, and an item whose data had not
+            -- propagated yet resolves later still (see LC.ResolveRollItemLink). A verdict with no item
+            -- name against it is the one line a raider cannot act on.
+            print("    " .. entry.rollID .. " " .. (entry.item or LC.rollItems[entry.rollID] or "?")
+                .. " -- " .. (L["LC_PASSGATE_" .. entry.gate:upper()] or entry.gate))
+        end
+    end
 end
 
 -- ==========================================================================
@@ -4528,24 +4548,73 @@ function LC.ReplaySeenWhileUnaware(rollID)
     for _, id in ipairs(ids) do ReplayOne(id) end
 end
 
+-- ==========================================================================
+--  D1: which gate held the pass, per roll
+-- ==========================================================================
+--
+-- A raider clicking Blizzard's roll window by hand is the failure the module is judged on, and until
+-- now every one of the conditions below refused in silence: five in AutoPassAnnounced plus the
+-- session gate in LC.OnStartLootRoll, none of them recorded, none of them printed. Answering "why did
+-- it not pass" meant reading three clients' logs after the item was already gone.
+--
+-- Recorded at DECISION time, not re-derived when the status line is printed: answering a roll makes
+-- Blizzard's API go blank for it, so by print time every entry would read "the window was gone" --
+-- including the ones that passed correctly, which is the opposite of what this exists to say.
+--
+-- Runtime only, deliberately: the roll windows are gone with the client anyway, and a verdict that
+-- survives a reload would explain last night's item to somebody looking at tonight's.
+local PASS_LOG_MAX = 10
+LC.passLog = LC.passLog or {} -- oldest first: { rollID = , item = , gate = }
+
+-- Keyed by rollID rather than appended per call, because both roll-start paths run this for the same
+-- item: whichever runs second is the one that decides, and an append would fill the ring with the
+-- first path's provisional answer. A roll that PASSED keeps that verdict -- the second call finds
+-- Blizzard's window blank (that is what passing does) and would otherwise overwrite the good outcome
+-- with "the window was already gone".
+local function RecordPassGate(rollID, gate)
+    local entry
+    for i = 1, #LC.passLog do
+        if LC.passLog[i].rollID == rollID then entry = LC.passLog[i] break end
+    end
+    if entry then
+        if entry.gate == "passed" then return end
+        -- A client that did not know there was a session never ran its own roll handler, so every
+        -- verdict AutoPassAnnounced can reach afterwards is downstream of that one -- "no roll of our
+        -- own for it" is true and names the wrong cause. Only actually passing it (the replay in
+        -- LC.ReplaySeenWhileUnaware, once the state arrives) displaces it.
+        if entry.gate == "unaware" and gate ~= "passed" then return end
+    end
+    if not entry then
+        entry = { rollID = rollID }
+        LC.passLog[#LC.passLog + 1] = entry
+        if #LC.passLog > PASS_LOG_MAX then table.remove(LC.passLog, 1) end
+    end
+    -- Whatever this client knows the item as. A roll it never saw has no link here at all, which is
+    -- itself part of the answer.
+    entry.item = LC.rollItems[rollID] or entry.item
+    entry.gate = gate
+end
+LC.RecordPassGate = RecordPassGate -- read by LC.OnStartLootRoll's session gate, one layer up
+
 -- Passes Blizzard's roll for a council item, but only once the owner has announced it. Called from
 -- both roll-start paths: whichever of the two runs SECOND is the one that finds both halves true, so
 -- the order the event and the message arrive in does not matter.
 local function AutoPassAnnounced(rollID)
-    if not KART_Settings.lcAutoPass then return end
-    if not LC.rollAnnounced[rollID] then return end
+    if not KART_Settings.lcAutoPass then RecordPassGate(rollID, "off") return end
+    if not LC.rollAnnounced[rollID] then RecordPassGate(rollID, "unannounced") return end
     -- The owner force-wins instead of passing, and never processes their own LC_START anyway.
-    if LC.IsLootOwner() then return end
+    if LC.IsLootOwner() then RecordPassGate(rollID, "owner") return end
     -- Not before this client has run its OWN roll handler. Answering a roll makes Blizzard's API go
     -- blank for it, so passing from a message that beat the local event -- which the harness produces
     -- and the game may -- left OnStartLootRoll with no quality, no bind flag and no link, so it bailed
     -- at the council-eligibility test and skipped the 1-100 roll entirely. Whichever path runs second
     -- passes; this is what makes "second" mean second.
-    if not LC.rollSeenHere[rollID] then return end
+    if not LC.rollSeenHere[rollID] then RecordPassGate(rollID, "unseen") return end
     -- No roll of our own to answer: this client was never eligible, or has already answered it.
     -- GetLootRollItemInfo goes blank in both cases, which is what keeps this from passing twice.
-    if not GetLootRollItemInfo(rollID) then return end
+    if not GetLootRollItemInfo(rollID) then RecordPassGate(rollID, "gone") return end
     RollOnLoot(rollID, 0)
+    RecordPassGate(rollID, "passed")
 end
 
 -- Armed by a non-owner when a council item drops; says so if the announcement never arrives.
@@ -4789,6 +4858,11 @@ function LC.OnStartLootRoll(rollID, attempt)
         local n = 0
         for _ in pairs(LC.rollsSeenWhileUnaware) do n = n + 1 end
         if n < SEEN_WHILE_UNAWARE_MAX then LC.rollsSeenWhileUnaware[rollID] = true end
+        -- The one Auto-Pass verdict that is decided outside AutoPassAnnounced, and the one a live
+        -- raid actually reported: four roll windows nobody answered, a status line reading "session:
+        -- on (told)", and nothing saying the rolls had arrived before that was known. If the replay
+        -- above reaches this roll later it passes and overwrites this verdict, which is the point.
+        LC.RecordPassGate(rollID, "unaware")
         return
     end
 

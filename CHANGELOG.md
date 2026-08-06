@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Trade warnings wait until the pull is over** instead of landing mid-fight.
 - **An item you never heard about finds you while the roll window is still open.**
 - **The council sees who has not answered yet**, and who has not even received the item.
+- **`/kart status` says why each of the last items was or was not passed for you.**
 
 ### Fixed
 - **Auto-Pass works again for everyone**, even when the item's announcement never arrived.

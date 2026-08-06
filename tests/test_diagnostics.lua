@@ -338,3 +338,81 @@ do
     RaidSim.Drain(sim)
     T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "and what waited behind it goes out on the release")
 end
+
+-- Why an item was NOT auto-passed (D1) ---------------------------------------------------------------
+-- The bar the module is judged on is a raider never having to click Blizzard's roll window. When that
+-- fails, five separate conditions could have held it -- the setting, the announcement, being the loot
+-- owner, this client's own roll event, and the window still being live -- plus the session gate one
+-- layer up, and NONE of them left a trace. The diagnosis was archaeology across three logs; it has to
+-- be one screenshot.
+--
+-- Verdicts are recorded per rollID at the moment the decision was taken, not re-derived at print time:
+-- by then GetLootRollItemInfo has gone blank for every roll that was answered, so every line would
+-- read "the window was already gone".
+do
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric -- Auto-Pass on, and not the loot owner
+
+    -- The announcement never comes: the owner never had the roll, so nobody broadcasts it (B63).
+    F.Drop(sim, 70, F.GLOVES, { noRollFor = { Bramor = true } })
+    KARTTEST.AdvanceTime(1)
+    T.is_nil((KARTTEST.rolled[70] or {})[raider.unit], "the item was not passed for this raider")
+
+    local L = raider.KART.L
+    local out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
+    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true), "/kart status names the item it did not pass")
+    T.truthy(out:find(L.LC_PASSGATE_UNANNOUNCED, 1, true), "and says the announcement is what was missing")
+
+    -- The same client, one item later, with everything in place: the line has to be able to say the
+    -- ordinary answer too, or a raider reading it cannot tell a working evening from a broken one.
+    F.Drop(sim, 71, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+    T.eq((KARTTEST.rolled[71] or {})[raider.unit], 0, "the next item was passed")
+
+    out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
+    T.truthy(out:find(L.LC_PASSGATE_PASSED, 1, true), "and the probe says so")
+    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true),
+        "while the item before it is still on the list -- the probe is a ring, not a last-item report")
+end
+
+-- ...including the gate one layer up, in the roll handler itself ------------------------------------
+-- A client that does not yet know a session is running returns before any of the five conditions is
+-- even reached (LC.rollsSeenWhileUnaware). That is the shape reported from a live raid on 2026-08-05 --
+-- four unanswered roll windows and nothing anywhere saying why -- so it needs a verdict of its own.
+do
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric
+    RaidSim.As(raider, function() raider.KART.LC.sessionActive = false end)
+
+    F.Drop(sim, 72, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
+    T.truthy(out:find(raider.KART.L.LC_PASSGATE_UNAWARE, 1, true),
+        "a client that did not know there was a session says that, not something about the item")
+end
+
+-- A raider who switched Auto-Pass off is not a fault -------------------------------------------------
+-- It is the single most common answer to "Auto-Pass does not work" and it was asked four times on one
+-- evening. The status line already prints the setting; the probe has to name it per item as well, or a
+-- raid comparing two screenshots reads a silent probe as a broken one.
+do
+    local sim = F.NewRaid()
+    local merrit = sim.byName.Merrit -- the fixture's one raider who clicks the window themselves
+
+    F.Drop(sim, 73, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local out = Capture(function() RaidSim.As(merrit, merrit.KART.LC.PrintStatus) end)
+    T.truthy(out:find(merrit.KART.L.LC_PASSGATE_OFF, 1, true), "the probe names the setting, per item")
+end
+
+-- ...and a client that has passed nothing at all prints nothing ---------------------------------------
+-- Same rule as every counter above: a raider pastes this output into an issue, and an empty block
+-- reads as something having gone wrong.
+do
+    local _, lm = F.NewRaid()
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
+    T.truthy(not out:find(lm.KART.L.LC_STATUS_PASSLOG, 1, true),
+        "no item has been decided about, so there is no Auto-Pass block")
+end
