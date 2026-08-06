@@ -3406,6 +3406,14 @@ function LC.RestoreSessionSnapshot()
     -- A snapshot carries whatever LC.rollItems held, which for a client that had not cached the item
     -- yet is a bare "item:12345" string. Nothing else would ever look at that roll again.
     if LC.ResolveTrackedItemLinks then LC.ResolveTrackedItemLinks() end
+    -- The four-hour clock on items the council has not decided (B1). It rides Trade's ticker, and the
+    -- restore that normally starts that ticker is Trade.RestorePersistedTrades -- which Core.lua runs
+    -- BEFORE this one, when LC.rollItems is still empty and an undecided item therefore looks like
+    -- nothing to watch. The reload with nothing awarded yet is exactly the state B1 exists for: boss
+    -- dead, council still talking, no obligation to restore.
+    if LC.Trade and LC.Trade.AnythingOnTheTradeClock and LC.Trade.AnythingOnTheTradeClock() then
+        LC.Trade.StartTradeTimeoutTicker()
+    end
 
     -- If no answer comes at all, the items are last night's. That is the ordinary shape of logging
     -- back in shortly after a raid -- inside the age bound, but with nobody left to ask -- and

@@ -566,3 +566,66 @@ do
     T.eq(#lm.KART.LC.pendingTrades, 1, "an item we cannot see is left exactly as it was")
     T.eq(out, "", "and nothing is said about it")
 end
+
+-- An item past its window is not an item that never had one ----------------------------------------
+-- B4 reads the trade clock off the item, and an item whose four hours ran out is soulbound with no
+-- trade line -- exactly what "bound to us, never keepable" looks like. The untradeable branch was
+-- tested first, so the ordinary expiry (B47) told the lootmaster the promise was never keepable: a
+-- false statement that hides both the real cause and the behaviour that would fix it. The two are
+-- told apart by our own stamp, which is the one thing that knows the item WAS tradeable at 20:00.
+do
+    local _, lm = OwingSince(TRADE_WINDOW + 60) -- awarded four hours and a minute ago
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = "bound" }
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.bagTradeTime = {}
+
+    T.eq(#lm.KART.LC.pendingTrades, 0, "the row still comes off the list")
+    T.truthy(out:find("Handelsfenster", 1, true) ~= nil,
+        "and it is reported as a window that ran out, not as one that never existed: " .. out)
+    T.truthy(out:find("nie übergeben", 1, true) == nil,
+        "so the lootmaster is not told the item could never have been handed over")
+end
+
+-- The clock keeps running for what is still undecided -----------------------------------------------
+-- B1's warning rides the same ticker as the trade obligations, and the ticker was cancelled the
+-- moment the last PENDING TRADE cleared. Trade the one item you awarded and the warning for the one
+-- the council never decided stops with it -- on the last boss of the night there is no further
+-- START_LOOT_ROLL to restart it, so the item dies exactly as silently as before B1.
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 91, F.GLOVES)   -- awarded below
+    F.Drop(sim, 92, F.WEAPON)   -- never decided
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AssignWinner(91, alric.guid, "BIS", nil)
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(lm.KART.LC.tradeTimeoutTicker ~= nil, "the ticker is running for the awarded item")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.RemovePendingTrade(91) end)
+    T.truthy(lm.KART.LC.rollItems[92] ~= nil and lm.KART.LC.assignedWinners[92] == nil,
+        "the second item is still on the table and still undecided")
+    T.truthy(lm.KART.LC.tradeTimeoutTicker ~= nil,
+        "so handing over the awarded one does not stop the clock on it")
+end
+
+-- ...and it is running again after a reload with nothing but undecided items ------------------------
+-- The state B1 exists for: the boss is dead, the council is talking, nobody has awarded anything --
+-- and the lootmaster reloads. There is no pending trade to restore, so the restore path started no
+-- ticker at all and the four-hour clock ran out unwatched.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 93, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(lm.KART.LC.rollLootedAt[93] ~= nil, "the drop is stamped before the reload")
+
+    local back = RaidSim.Reload(sim, "Bramor")
+    KARTTEST.AdvanceTime(1)
+    T.eq(#back.KART.LC.pendingTrades, 0, "nothing was awarded, so there is no obligation to restore")
+    T.truthy(back.KART.LC.rollItems[93] ~= nil, "the undecided item itself came back")
+    T.truthy(back.KART.LC.tradeTimeoutTicker ~= nil,
+        "and its deadline is being watched again")
+end

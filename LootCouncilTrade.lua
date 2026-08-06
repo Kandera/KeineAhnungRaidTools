@@ -311,7 +311,13 @@ function Trade.CheckTradeTimeouts()
         -- the stamp rather than acting on the reading directly keeps every branch below on one
         -- clock: the warning, the expiry and the persisted entry all stay in agreement.
         local remaining = Trade.TradeTimeRemainingFor(entry.itemLink)
-        if remaining == 0 then
+        -- An item whose four hours ran out IS soulbound with no trade line, which is exactly what
+        -- "never keepable" reads as -- so the two are indistinguishable from the item alone, and
+        -- testing the item first made the ordinary expiry (B47) report itself as the other one. Our
+        -- own stamp is the thing that knows this item WAS tradeable at 20:00, so it decides which of
+        -- the two messages is true.
+        local stampElapsed = now - (entry.lootedAt or now)
+        if remaining == 0 and stampElapsed < TRADE_TIMEOUT_SECONDS then
             -- Bound to us with no trade window at all -- this can never be handed over, so the row
             -- is not a deadline running out but a promise that was never keepable.
             table.remove(LC.pendingTrades, i)
@@ -371,6 +377,24 @@ function Trade.StartTradeTimeoutTicker()
     LC.tradeTimeoutTicker = C_Timer.NewTicker(TRADE_TIMEOUT_CHECK_EVERY, Trade.CheckTradeTimeouts)
 end
 
+-- Whether anything is still on this ticker's clock. Three lists ride it, and every place that decides
+-- to start or stop it has to ask about all three -- Trade.CheckTradeTimeouts already did, and
+-- Trade.RemovePendingTrade asked about one, which is how B1's undecided warning came to be switched
+-- off by an unrelated trade completing. Named and shared so the two cannot drift apart again.
+--
+-- Side-effect free, deliberately: WarnUndecided answers the same question but PRINTS on the way, so
+-- it cannot be used to decide whether to keep a timer.
+function Trade.AnythingOnTheTradeClock()
+    if #LC.pendingTrades > 0 then return true end
+    if #(LC.owedToMe or {}) > 0 then return true end
+    -- The undecided items are the loot owner's business only, exactly as in WarnUndecided.
+    if not LC.IsLootOwner() then return false end
+    for rollID in pairs(LC.rollLootedAt or {}) do
+        if LC.rollItems[rollID] and not LC.assignedWinners[rollID] then return true end
+    end
+    return false
+end
+
 -- Removes the pending-trade entry for rollID, if any (reassignment, manual dismiss, or after the
 -- item was successfully placed into an open trade window).
 function Trade.RemovePendingTrade(rollID)
@@ -380,10 +404,13 @@ function Trade.RemovePendingTrade(rollID)
         end
     end
     Trade.RefreshTradeReminderIfShown()
-    -- Cancel the BoP-timeout ticker (see Trade.StartTradeTimeoutTicker) immediately once the last
-    -- pending trade clears, instead of waiting up to TRADE_TIMEOUT_CHECK_EVERY (5 minutes) for the
-    -- next periodic Trade.CheckTradeTimeouts to notice the list is empty.
-    if #LC.pendingTrades == 0 and LC.tradeTimeoutTicker then
+    -- Cancel the BoP-timeout ticker (see Trade.StartTradeTimeoutTicker) immediately once there is
+    -- nothing left on its clock, instead of waiting up to TRADE_TIMEOUT_CHECK_EVERY (5 minutes) for
+    -- the next periodic Trade.CheckTradeTimeouts to notice. All three lists, not just this one: B1
+    -- put the undecided-item warning on the same ticker, so cancelling on an empty pendingTrades
+    -- meant handing over your last awarded item switched off the clock for the item nobody had
+    -- decided -- and on the last boss of the night nothing starts it again.
+    if not Trade.AnythingOnTheTradeClock() and LC.tradeTimeoutTicker then
         LC.tradeTimeoutTicker:Cancel()
         LC.tradeTimeoutTicker = nil
     end
@@ -481,11 +508,15 @@ function Trade.RestorePersistedTrades()
 
     if #LC.pendingTrades > 0 then
         Trade.RefreshTradeReminder()
-        Trade.StartTradeTimeoutTicker()
     end
     if #LC.owedToMe > 0 then
         Trade.RefreshOwedReminder()
     end
+    -- Started for the owed side too, not only for what we owe: those entries die on the same clock
+    -- and Trade.CheckTradeTimeouts is what prunes them (B47). The undecided items cannot be asked
+    -- about here -- LC.rollItems is restored by LC.RestoreSessionSnapshot, which Core.lua runs AFTER
+    -- this -- so that half is armed there.
+    if Trade.AnythingOnTheTradeClock() then Trade.StartTradeTimeoutTicker() end
 end
 
 -- Drops both halves of the "this roll has a winner" bookkeeping: the lootmaster's pending trade and

@@ -3693,3 +3693,43 @@ per-roll-table guard test caught the first two of those on its own, which is wha
 
 Tests: `tests/test_lc_councilrows.lua`, "everyone in the raid having picked reads as complete, not as
 three of four".
+
+
+## B144 — FIXED 2026-08-06 — the trade clock stopped early, started late, and misnamed the ending
+
+Three findings from the integrated review of the six RC-compare packages, all in the same machinery:
+one `C_Timer` ticker (`LC.tradeTimeoutTicker`) that three different lists ride.
+
+**It stopped as soon as the last pending trade cleared.** `Trade.RemovePendingTrade` cancelled on
+`#LC.pendingTrades == 0` alone, which was right when trades were the only thing on that clock. B1 put
+the undecided-item warning on it as well and did not widen the cancel. So: the lootmaster hands over
+the one item they awarded, and the warning for the item the council never decided stops with it. On
+the last boss of the night no further `START_LOOT_ROLL` restarts it, and the item dies exactly as
+silently as before B1 — its own headline scenario.
+
+**It never started for a reload with nothing awarded.** `Trade.RestorePersistedTrades` started the
+ticker only when `#LC.pendingTrades > 0`. The reload B1 exists for has none: boss dead at 20:00,
+council still discussing, lootmaster `/reload`s at 20:10. `KART_LCTrades` restores `rollLootedAt` and
+`KART_LCSession` restores `rollItems`, so the deadline is real and known — and nothing was watching
+it. Note the ordering that hides this: Core.lua runs `RestorePersistedTrades` BEFORE
+`RestoreSessionSnapshot`, so at the trade restore `LC.rollItems` is still empty and an undecided item
+cannot be seen at all.
+
+**And it called the ordinary expiry something else.** B4 reads the trade clock off the item, and an
+item whose four hours ran out *is* soulbound with no trade line — indistinguishable, from the item
+alone, from one that was never tradeable. The `remaining == 0` branch was tested before the elapsed
+branch, so every ordinary B47 expiry on an item still in the owner's bags printed
+`LC_TRADE_UNTRADEABLE`: *"ist an dich gebunden und kann Alric nie übergeben werden"* — a false
+statement about an item that was tradeable for four hours, and one that hides both the real cause and
+the behaviour that would fix it. B47's own line was effectively unreachable.
+
+**Fixed 2026-08-06.** `Trade.AnythingOnTheTradeClock()` asks about all three lists in one place, side
+-effect free (`WarnUndecided` answers the same question but prints on the way, so it cannot be used to
+decide whether to keep a timer), and both the cancel and the restore go through it. The undecided half
+of the restore is armed in `LC.RestoreSessionSnapshot` instead, which is the first moment
+`LC.rollItems` exists. And the expiry branch is decided by OUR OWN stamp, which is the one thing that
+knows the item was tradeable at 20:00.
+
+Tests: `tests/test_lc_tradefill.lua` — "so handing over the awarded one does not stop the clock on
+it", "and its deadline is being watched again", "and it is reported as a window that ran out, not as
+one that never existed".

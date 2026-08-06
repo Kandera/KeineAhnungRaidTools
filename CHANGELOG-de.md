@@ -25,6 +25,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Behoben
 - **Ein Neuladen fragt den Lootmaster nicht mehr, ob er eine laufende Session starten will**, und beendet sie nicht mehr für den Raid.
 - **Das Council-Fenster nennt niemanden mehr stumm**, dessen Empfangsbestätigung nur verloren ging.
+- **Die Warnung zu unentschiedenen Items läuft weiter**, auch nach dem letzten Trade und nach einem Neuladen.
+- **Ein Item, dessen Handelsfenster abgelaufen ist, sagt genau das** — statt zu behaupten, es sei nie übergebbar gewesen.
 - **Auto-Pass funktioniert wieder für alle**, auch wenn die Ansage zu einem Item nie angekommen ist.
 - **Auto-Pass funktioniert weiter nach einem Neuladen oder einer Verbindungstrennung** in einer laufenden Session.
 - **Loot-Ansagen überleben ein Neuladen im Kampf**, statt verloren zu gehen.
