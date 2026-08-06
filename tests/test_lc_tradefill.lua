@@ -403,3 +403,57 @@ do
     end)
     T.truthy(after:find("Gloombind", 1, true), "and is said afterwards: " .. after)
 end
+
+-- The item nobody has decided yet (B1) --------------------------------------------------------------
+-- Every warning above needs an AWARD to exist first: pendingTrades and owedToMe are both built when a
+-- winner is named. An item the council never got round to -- the lootmaster ported out, the pull
+-- started, the tab sat there -- has a live four-hour clock and nothing watching it, so it dies in
+-- silence and the raid finds out never.
+
+-- Winds the drop's loot stamp back on this client, as if the boss had died `elapsed` seconds ago.
+local function StampedSince(client, rollID, elapsed)
+    RaidSim.As(client, function() client.KART.LC.rollLootedAt[rollID] = time() - elapsed end)
+end
+
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 91, F.GLOVES)
+    T.truthy(lm.KART.LC.tradeTimeoutTicker ~= nil,
+        "holding an undecided item is enough to run the clock, with nothing yet owed to anybody")
+
+    StampedSince(lm, 91, TRADE_WINDOW - 600) -- ten minutes of trade window left
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.truthy(out:find("Gloombind", 1, true),
+        "the holder is warned about an item the council never decided: " .. out)
+
+    local again = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(again, "", "and told once, not every five minutes")
+end
+
+do
+    -- A DECIDED item is somebody's pending trade and is warned about as one -- naming it twice would
+    -- put two lines about the same item on the same screen.
+    local sim, lm, council = F.NewRaid()
+    F.Drop(sim, 92, F.GLOVES)
+    local alric = sim.byName.Alric
+    RaidSim.As(council, function() council.KART.LC.Trade.AssignWinner(92, alric.guid, "BIS", nil) end)
+    KARTTEST.AdvanceTime(0)
+
+    StampedSince(lm, 92, TRADE_WINDOW - 600)
+    RaidSim.As(lm, function() lm.KART.LC.pendingTrades[1].lootedAt = time() - (TRADE_WINDOW - 600) end)
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    local mentions = select(2, out:gsub("Gloombind", ""))
+    T.eq(mentions, 1, "one line about a decided item, not two: " .. out)
+end
+
+do
+    -- ...and the warning belongs to whoever is holding the item. Every client in the raid stamps the
+    -- same clock (the winner's own reminder is measured from it), so a raider who cannot hand
+    -- anything over would otherwise be nagged about every drop of the evening.
+    local sim = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 93, F.GLOVES)
+    StampedSince(alric, 93, TRADE_WINDOW - 600)
+    local out = Capture(function() RaidSim.As(alric, alric.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(out, "", "a plain raider hears nothing about an item they are not holding")
+end

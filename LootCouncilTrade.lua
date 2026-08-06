@@ -8,6 +8,11 @@ KART.LC.Trade = KART.LC.Trade or {}
 local Trade = KART.LC.Trade
 local LC = KART.LC
 
+-- Which undecided rolls we have already said something about (see WarnUndecided). Memory-only on
+-- purpose: after a reload the deadline is still real, and hearing about it once more is the right
+-- side to be wrong on.
+LC.rollUndecidedWarned = LC.rollUndecidedWarned or {}
+
 -- =====================================================================
 --  Result announcement & winner notification
 -- =====================================================================
@@ -222,7 +227,17 @@ local TRADE_TIMEOUT_CHECK_EVERY = 5 * 60
 local deferredNotices = {}
 local combatFrame = CreateFrame("Frame")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-combatFrame:SetScript("OnEvent", function()
+-- The clock has to run for an item that was never awarded (see WarnUndecided), and every other path
+-- that starts it -- an award, a restored session -- needs an award to have happened first. A drop is
+-- the earliest moment the holder knows there is something to watch. Note that /kart add has no
+-- Blizzard roll behind it and so raises no event here: a manually added item gets the undecided
+-- warning only while the ticker is already running for something else.
+combatFrame:RegisterEvent("START_LOOT_ROLL")
+combatFrame:SetScript("OnEvent", function(_, event)
+    if event == "START_LOOT_ROLL" then
+        if lcEnabled() and LC.IsLootOwner() then Trade.StartTradeTimeoutTicker() end
+        return
+    end
     for _, line in ipairs(deferredNotices) do print(line) end
     wipe(deferredNotices)
 end)
@@ -240,15 +255,49 @@ end
 -- its Bind-on-Pickup trade-eligibility window (see TRADE_TIMEOUT_SECONDS). Never removes the entry itself — that still
 -- only happens via Trade.OnTradeClosed/manual done/reassignment, same as every other pending-trade
 -- removal path; this is purely a heads-up so the lootmaster doesn't lose the item to the timer.
+-- The items on the table that nobody has decided yet, on the client physically holding them. Returns
+-- how many are still live, so the ticker below knows there is something to watch.
+--
+-- Everything else on this clock needs an AWARD to exist first: pendingTrades and owedToMe are both
+-- built when a winner is named. An item the council never got round to -- the lootmaster ported out,
+-- the pull started, the tab sat there -- has the same live four-hour window and nothing watching it,
+-- so it dies in silence and the raid finds out never. RCLootCouncil warns for its unawarded parked
+-- items for the same reason.
+--
+-- Only for rolls this client still TRACKS (LC.rollItems): the stamp deliberately outlives the roll
+-- (see Trade.PruneExpiredLootStamps), so a dismissed item or one revoked with "No Winner" still has
+-- one, and warning about those would be nagging about decisions the council already made.
+local function WarnUndecided(now)
+    if not LC.IsLootOwner() then return 0 end
+    -- Bounds the walk below: past the window the stamp cannot matter to anything, and dropping it
+    -- here is also what lets the ticker stop for a raid that ended with an item undecided.
+    Trade.PruneExpiredLootStamps()
+    local live = 0
+    for rollID, stamp in pairs(LC.rollLootedAt or {}) do
+        if LC.rollItems[rollID] and not LC.assignedWinners[rollID] then
+            live = live + 1
+            local elapsed = now - stamp
+            if elapsed >= TRADE_TIMEOUT_WARN_AT and not LC.rollUndecidedWarned[rollID] then
+                LC.rollUndecidedWarned[rollID] = true
+                local minutesLeft = math.max(0, math.floor((TRADE_TIMEOUT_SECONDS - elapsed) / 60))
+                TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_UNDECIDED_WARNING,
+                    LC.rollItems[rollID], minutesLeft))
+            end
+        end
+    end
+    return live
+end
+
 function Trade.CheckTradeTimeouts()
+    local now = time() -- matches the wall-clock lootedAt stamps (see Trade.AddPendingTrade)
+    local undecided = WarnUndecided(now)
     -- The winner's own obligations die on the same clock and are pruned below, so returning here
     -- when WE owe nothing left every "you are owed this" row alive for ever on the one client that
     -- has no pending trade of its own -- which is every winner who is not the lootmaster (B47).
-    if #LC.pendingTrades == 0 and #(LC.owedToMe or {}) == 0 then
+    if #LC.pendingTrades == 0 and #(LC.owedToMe or {}) == 0 and undecided == 0 then
         if LC.tradeTimeoutTicker then LC.tradeTimeoutTicker:Cancel() LC.tradeTimeoutTicker = nil end
         return
     end
-    local now = time() -- matches the wall-clock lootedAt stamps (see Trade.AddPendingTrade)
     local dropped = false
     -- Backwards: entries are removed in place, and Blizzard's window is wall clock, so several can
     -- come due in the same pass after a long fight.
@@ -481,6 +530,7 @@ function Trade.ClearRollState(rollID)
     LC.votedFpByMe[rollID]     = nil
     LC.votedNoteByMe[rollID]   = nil
     LC.rollNotInOurBags[rollID]  = nil
+    LC.rollUndecidedWarned[rollID] = nil
     LC.rollAnnounced[rollID]     = nil
     LC.rollAnnouncedBy[rollID]   = nil
     LC.rollSeenHere[rollID]      = nil

@@ -57,10 +57,15 @@ T.truthy(count > 10, "and it clears the per-roll tables this test is about (" ..
 --   rollsAnswerAt       -- "an answer of ours to an LC_ROLLS_REQ is scheduled" (B131). The timer it
 --                          belongs to is gone after a reload, so restoring the flag would leave this
 --                          client permanently declining to answer a request it never answers.
+--   rollUndecidedWarned -- "we have already said this undecided item is running out of trade time"
+--                          (see WarnUndecided). A reload does not make the deadline less real, and
+--                          the item is still on the table: saying it once more is the right side to
+--                          be wrong on, while a restored flag would silence the one warning that
+--                          exists for an item nobody has decided.
 local EXEMPT = {
     rollDeadlines = true, rollLootedAt = true,
     equipRequestedRolls = true, rollsPendingSince = true, pendingItemLoads = true,
-    rollReqSent = true, rollsAnswerAt = true,
+    rollReqSent = true, rollsAnswerAt = true, rollUndecidedWarned = true,
 }
 
 for name in pairs(cleared) do
