@@ -629,3 +629,60 @@ do
     T.truthy(back.KART.LC.tradeTimeoutTicker ~= nil,
         "and its deadline is being watched again")
 end
+
+-- A localized sentence with a positional argument must not blow up the ticker -----------------------
+-- BIND_TRADE_TIME_REMAINING is Blizzard's own string and several locales write it with a positional
+-- insertion ("%1$s") rather than a bare "%s". The escape class covered every magic character except
+-- the one that matters here -- "%" itself -- so the pattern came out holding "%1", which Lua reads as
+-- a BACK-REFERENCE and refuses: "invalid capture index", thrown out of the five-minute ticker on the
+-- first tooltip line it reads. Not a degraded reading, an error, and it takes the whole pass with it
+-- -- expiry pruning included. This guild ships enUS and deDE only, but nothing about the parser knows
+-- that, and RC strips the same insertion for the same reason.
+do
+    local realBind = _G.BIND_TRADE_TIME_REMAINING
+    _G.BIND_TRADE_TIME_REMAINING = "Handelbar für: %1$s"
+
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = 30 * 60 }
+    local ok = pcall(function()
+        Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    end)
+    KARTTEST.bagTradeTime = {}
+    _G.BIND_TRADE_TIME_REMAINING = realBind
+
+    T.eq(ok, true, "a locale that numbers its insertion does not error the trade-timeout pass")
+    T.eq(#lm.KART.LC.pendingTrades, 1, "and the obligation is still standing afterwards")
+end
+
+-- Warbound counts as bound ---------------------------------------------------------------------------
+-- The untradeable reading keys off the tooltip's bound line, and only ITEM_SOULBOUND was matched.
+-- Midnight hands out plenty that is account- or warbound instead, and for those the reading came back
+-- nil -- "says nothing" -- so B4's valuable half never fired for them.
+do
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = "warbound" }
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.bagTradeTime = {}
+
+    T.eq(#lm.KART.LC.pendingTrades, 0, "an item bound to the account can never be handed over either")
+    T.truthy(out:find("Gloombind", 1, true) ~= nil, "and it is said out loud: " .. out)
+end
+
+-- Two copies, and the live one decides -----------------------------------------------------------
+-- FindItemInBags answers with whichever slot it reaches first. A second, fully bound copy of the same
+-- item from an earlier lockout sitting in a lower bag slot therefore answered for the live one -- and
+-- since B4 the consequence is destructive rather than merely wrong: the obligation is DELETED and
+-- announced as never keepable, which no later pass undoes.
+do
+    local _, lm = OwingSince(60)
+    KARTTEST.bags = { [0] = { GLOVES, GLOVES } }
+    KARTTEST.bagTradeTime = { [GLOVES] = { "bound", 30 * 60 } }
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.bagTradeTime = {}
+
+    T.eq(#lm.KART.LC.pendingTrades, 1,
+        "the copy that CAN still be traded is the one that answers for the obligation")
+    T.eq(out, "", "so nothing is said about handing it over being impossible")
+end

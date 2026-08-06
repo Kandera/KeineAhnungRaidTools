@@ -594,15 +594,26 @@ function Vote.CastVote(rollID, buttonIdx, noteBox, isAuto)
     -- fan-out has already answered it, finds the answer unchanged, and casts nothing.
     if not castingCopies then
         castingCopies = true
-        for _, other in ipairs(DuplicateGroup(rollID) or {}) do
-            if other ~= rollID
-                and (LC.votedByMe[other] ~= buttonIdx
-                     or (LC.votedNoteByMe[other] or "") ~= note
-                     or (LC.autoVotedByMe[other] and true or false) ~= (isAuto and true or false)) then
-                Vote.CastVote(other, buttonIdx, noteBox, isAuto)
+        -- pcall'd so the flag is always given back. It is set and cleared straight-line, and an error
+        -- anywhere between the two -- a nil field on a note widget, a label lookup that fails --
+        -- escapes with it still true. From that moment no click fans out to the second copy again
+        -- (silently reintroducing "answered 1/2, missed 2/2", the thing E2 exists to remove) and the
+        -- redraw below is skipped for the rest of the session. A one-off error is a bug; a one-off
+        -- error that disables a feature until /reload is a different order of problem.
+        local ok, err = pcall(function()
+            for _, other in ipairs(DuplicateGroup(rollID) or {}) do
+                if other ~= rollID
+                    and (LC.votedByMe[other] ~= buttonIdx
+                         or (LC.votedNoteByMe[other] or "") ~= note
+                         or (LC.autoVotedByMe[other] and true or false) ~= (isAuto and true or false)) then
+                    Vote.CastVote(other, buttonIdx, noteBox, isAuto)
+                end
             end
-        end
+        end)
         castingCopies = false
+        -- Re-raised rather than swallowed: the error itself is still a defect and still belongs in
+        -- the player's error frame. What must not survive it is the flag.
+        if not ok then error(err, 0) end
     end
 
     -- One redraw for the click, not one per copy -- the same reason the inner calls above are the

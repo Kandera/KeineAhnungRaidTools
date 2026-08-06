@@ -3775,3 +3775,68 @@ The repair is intact; only the repetition is gone.
 
 Tests: `tests/test_lc_votes.lua`, "nobody asks the owner to hand back a roll the whole raid has just
 finished with"; `tests/test_lc_ack.lua`, "and nobody asks about a roll the round has already ended".
+
+
+## B146 — FIXED 2026-08-06 — the gate probe answered for the previous occupant of a rollID
+
+Landed in `387e848` alongside B145, whose commit message does not mention it — recorded here because
+the commit is where the code is and this is where the reason is.
+
+D1's Auto-Pass probe keys its entry on the rollID, deliberately: both roll-start paths run for the
+same item and whichever runs second is the one that decides. But Blizzard reuses roll numbers within
+seconds — that is what `LC.PurgeStaleRoll` exists for (B132) — and the "a passed verdict is never
+overwritten" guard never expires. So a later item arriving under a used number found the guard,
+returned, and `/kart status` printed the FIRST item's name and "passed for you" while the raider was
+staring at an unanswered window for a different one. The probe lying is worse than no probe: it is
+read precisely when something has already gone wrong, and it is the instrument the Manifest asks the
+raid for.
+
+**Fixed.** `PassLogEntryIsCurrent` compares the itemID the entry names against the one we hold under
+that rollID now. Not current means the slot is reset -- one entry per rollID is the shape of this ring
+and two entries for one number would be its own confusion -- so the new roll gets a fresh answer and
+the old verdict neither guards it nor is printed against it. An entry with no item recorded is still
+ours: that is what the first call for a roll this client was never told about looks like, and it is
+part of the answer.
+
+Tests: `tests/test_diagnostics.lua`, "and the unrelated item reusing that number does not inherit the
+verdict".
+
+
+## B147 — FIXED 2026-08-06 — three smaller holes in the trade clock, and one in the vote fan-out
+
+All from the integrated review of the six RC-compare packages.
+
+**A positional insertion in a locale string errored the whole pass.** `BIND_TRADE_TIME_REMAINING` is
+Blizzard's own text and several locales write it as `%1$s` rather than `%s`. The escape class covered
+every pattern magic character except `%` itself, so the pattern came out holding `%1` — which Lua
+reads as a back-reference and refuses outright: *invalid capture index*, thrown out of the five-minute
+ticker on the first tooltip line, taking the whole pass with it including the expiry pruning. Not a
+degraded reading, an error. The insertion is now lifted out first (positional form included), then
+everything is escaped, then the capture goes back in. This guild ships enUS and deDE only; nothing
+about the parser knew that, and RC strips the same insertion for the same reason.
+
+**Only soulbound counted as bound.** Midnight hands out account- and warbound gear alongside it, and
+for those the reading came back nil — "says nothing" — so B4's untradeable half never fired.
+`ITEM_ACCOUNTBOUND`, `ITEM_BNETACCOUNTBOUND` and `ITEM_ACCOUNTBOUND_UNTIL_EQUIP` count too now.
+
+**A second copy answered for the first.** `FindItemInBags` returns whichever slot it reaches first, so
+a fully bound copy from an earlier lockout in a lower slot answered for the live one — and since B4
+that reading is destructive rather than merely wrong: a 0 deletes the obligation and announces it as
+never keepable, which no later pass undoes. Every copy is asked now and the LONGEST answer wins,
+because the readings are not equally trustworthy: a copy that still names a window proves the item
+CAN be handed over, a bound copy only proves that particular one cannot. nil stays nil (B60).
+
+**And the duplicate-copy fan-out could disable itself.** `castingCopies` was set and cleared
+straight-line, so an error between the two escaped with it still true — after which no click fanned
+out to the second copy again (silently reintroducing "answered 1/2, missed 2/2", the thing E2 removed)
+and the vote window stopped redrawing until `/reload`. Now `pcall`'d, with the error re-raised: a
+one-off error is a defect and belongs in the player's error frame, but it must not take a feature with
+it for the rest of the session.
+
+**Not fixed, deliberately.** `deferredNotices` is memory-only, so a reload or disconnect DURING a pull
+loses the queued explanation for a row that has already been removed. Two settled decisions collide
+there — B3 (no chat mid-pull) and B47 (a row past its window is a lie whether or not anybody is in
+combat, and is dropped on schedule) — and holding the removal back until combat ends was tried and
+reverted against the test that encodes the second. The residue is one lost sentence in the case where
+the player disconnects mid-pull, and closing it needs the notice queue persisted. Not worth new
+SavedVariables machinery days before the raid that decides the module.

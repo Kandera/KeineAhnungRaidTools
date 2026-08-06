@@ -1041,15 +1041,32 @@ function Trade.GetBagTradeTimeRemaining(bag, slot)
     if not (C_TooltipInfo and C_TooltipInfo.GetBagItem and BIND_TRADE_TIME_REMAINING) then return nil end
     local data = C_TooltipInfo.GetBagItem(bag, slot)
     if not (data and data.lines) then return nil end
-    -- Escaped before the %s becomes a capture: the sentence is localized text and a stray "(" or "."
-    -- in it would either error out of this ticker or match something it should not.
+    -- Escaped before the insertion becomes a capture: the sentence is localized text and a stray "("
+    -- or "." in it would either error out of this ticker or match something it should not.
+    --
+    -- The insertion is lifted out FIRST, because several locales write it positionally ("%1$s") and
+    -- because "%" has to be escaped like every other magic character -- it was the one the class
+    -- missed. Escaping it after the swap would turn "%s" into "%%s" and lose the capture; escaping it
+    -- before, without lifting the insertion out, left "%1" in the pattern, which Lua reads as a BACK
+    -- REFERENCE and refuses outright ("invalid capture index"). That error came out of the five-minute
+    -- ticker and took the whole pass with it, expiry pruning included. \1 as the placeholder because
+    -- it is not a pattern magic character and cannot occur in a client string.
     local pattern = BIND_TRADE_TIME_REMAINING
-        :gsub("([%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
-        :gsub("%%s", "(.+)")
+        :gsub("%%%d+%$s", "\1")
+        :gsub("%%s", "\1")
+        :gsub("([%^%$%(%)%.%[%]%*%+%-%?%%])", "%%%1")
+        :gsub("\1", "(.+)")
     local bound = false
     for _, line in ipairs(data.lines) do
         local text = line.leftText or ""
-        if ITEM_SOULBOUND and text == ITEM_SOULBOUND then bound = true end
+        -- Every form of "bound to you" that removes the trade window, not just the soulbound one:
+        -- Midnight hands out account- and warbound gear alongside it, and for those the reading used
+        -- to come back nil -- "says nothing" -- so the untradeable half never fired for them.
+        if text ~= "" and (text == ITEM_SOULBOUND or text == ITEM_ACCOUNTBOUND
+                           or text == ITEM_BNETACCOUNTBOUND
+                           or text == ITEM_ACCOUNTBOUND_UNTIL_EQUIP) then
+            bound = true
+        end
         local timeText = text:match(pattern)
         if timeText then return Trade.ParseTradeTimeText(timeText) end
     end
@@ -1059,11 +1076,27 @@ end
 -- The same question asked about a pending entry, which only the client physically holding the item
 -- can answer -- a stand-in loot owner (B60) has the obligation and not the item, and there "cannot
 -- read it" has to stay nil rather than becoming "no time left".
+-- Every copy is asked, and the LONGEST answer wins. FindItemInBags returns whichever slot it reaches
+-- first, and a second copy of the same item from an earlier lockout -- fully bound, no trade line --
+-- would then answer for the live one. Since B4 that reading is destructive rather than merely wrong:
+-- a 0 deletes the obligation and announces it as never keepable, and no later pass undoes that.
+--
+-- Longest rather than first because the readings are not equally trustworthy: a copy that still names
+-- a window is proof this item CAN be handed over, while a bound copy only proves that particular one
+-- cannot. nil stays nil -- "cannot read it" must never become "no time left" (B60, the stand-in loot
+-- owner who has the obligation and not the item).
 function Trade.TradeTimeRemainingFor(itemLink)
     if not LC.IsRealItemLink(itemLink) then return nil end
-    local bag, slot = FindItemInBags(itemLink)
-    if not bag then return nil end
-    return Trade.GetBagTradeTimeRemaining(bag, slot)
+    local best, skip = nil, nil
+    while true do
+        local bag, slot = FindItemInBags(itemLink, skip)
+        if not bag then break end
+        local remaining = Trade.GetBagTradeTimeRemaining(bag, slot)
+        if remaining and (best == nil or remaining > best) then best = remaining end
+        skip = skip or {}
+        skip[bag .. ":" .. slot] = true
+    end
+    return best
 end
 
 -- "" normally, or " (i/N)" when N >= 2 currently-active rolls (LC.rollItems is only ever

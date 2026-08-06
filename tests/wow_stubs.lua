@@ -1138,12 +1138,20 @@ _G.ITEM_CLASSES_ALLOWED = "Classes: %s"
 -- TOOLTIP and as localized text -- there is no API that answers it as a number. KART reads it to
 -- check its own four-hour stamp against the item itself (see Trade.GetBagTradeTimeRemaining).
 --
--- Per bag item, keyed by link: a number of seconds still tradeable, or "bound" for an item that is
+-- Per bag item, keyed by link: a number of seconds still tradeable, "bound" for an item that is
 -- soulbound with no trade line left at all -- an item that can never be handed over, which is a
--- different thing from one whose four hours are nearly up. An item nobody put in here says nothing
--- about binding, which is what an ordinary unbound item's tooltip does.
+-- different thing from one whose four hours are nearly up -- or "warbound" for the account-bound
+-- forms, which say the same thing in a different word. An item nobody put in here says nothing about
+-- binding, which is what an ordinary unbound item's tooltip does.
+--
+-- A LIST value gives the copies their own states, in bag order: two copies of one item, one of them
+-- an old fully-bound one from a previous lockout, is the case where "whichever slot we reach first"
+-- and "the one the obligation is about" stop being the same slot.
 KARTTEST.bagTradeTime = {}
 _G.ITEM_SOULBOUND = "Soulbound"
+_G.ITEM_ACCOUNTBOUND = "Account Bound"
+_G.ITEM_BNETACCOUNTBOUND = "Battle.net Account Bound"
+_G.ITEM_ACCOUNTBOUND_UNTIL_EQUIP = "Warbound until equipped"
 _G.BIND_TRADE_TIME_REMAINING = "You may trade this item with players that were also eligible to loot this item for the next %s."
 _G.INT_SPELL_DURATION_HOURS = "%d |4hour:hours;"
 _G.INT_SPELL_DURATION_MIN = "%d |4min:min;"
@@ -1165,6 +1173,28 @@ local function DurationText(seconds)
     return table.concat(parts, " ")
 end
 
+-- Several locales write BIND_TRADE_TIME_REMAINING with a POSITIONAL insertion ("%1$s"), which is a
+-- real client string and which string.format cannot take. Normalized here so the harness can model
+-- such a locale at all -- the addon reads the raw global, which is the point of the exercise.
+local function TradeLine(text)
+    return string.format((_G.BIND_TRADE_TIME_REMAINING:gsub("%%%d+%$s", "%%s")), text)
+end
+
+-- Which copy of an item this slot is. Two copies of one link occupy two slots, and a list value in
+-- KARTTEST.bagTradeTime gives them a state each, in bag order.
+local function CopyIndex(bag, slot, link)
+    local n = 0
+    for b = 0, 4 do
+        for s = 1, #(KARTTEST.bags[b] or {}) do
+            if (KARTTEST.bags[b] or {})[s] == link then
+                n = n + 1
+                if b == bag and s == slot then return n end
+            end
+        end
+    end
+    return n
+end
+
 _G.C_TooltipInfo = {
     GetBagItem = function(bag, slot)
         local link = (KARTTEST.bags[bag] or {})[slot]
@@ -1172,12 +1202,14 @@ _G.C_TooltipInfo = {
         local it = itemOf(link)
         local lines = { { leftText = it and it.name or link } }
         local state = KARTTEST.bagTradeTime[link]
+        if type(state) == "table" then state = state[CopyIndex(bag, slot, link)] end
         if state == "bound" then
             lines[#lines + 1] = { leftText = _G.ITEM_SOULBOUND }
+        elseif state == "warbound" then
+            lines[#lines + 1] = { leftText = _G.ITEM_ACCOUNTBOUND_UNTIL_EQUIP }
         elseif type(state) == "number" then
             lines[#lines + 1] = { leftText = _G.ITEM_SOULBOUND }
-            lines[#lines + 1] = { leftText = string.format(_G.BIND_TRADE_TIME_REMAINING,
-                                                           DurationText(state)) }
+            lines[#lines + 1] = { leftText = TradeLine(DurationText(state)) }
         end
         return { lines = lines }
     end,
