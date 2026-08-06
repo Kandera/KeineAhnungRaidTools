@@ -3599,3 +3599,61 @@ reading the second as the first.
 Tests: `tests/test_diagnostics.lua`, "and it is NOT asked whether to start a session the raid never
 said had ended", plus the other half — "once the raid has had its chance to answer and did not, the
 question comes".
+
+
+## B142 — FIXED 2026-08-06 — one lost receipt made a raider "no reply" for a whole boss
+
+Found in the integrated review of the six RC-compare packages, and measured before it was changed.
+
+F's announcement ack does two jobs. **F1**, the self-heal: a client that overhears an ack for a roll
+it has never heard of asks the owner, while Blizzard's window is still open. **F2**, the council
+panel's per-candidate answer column: "has it" once that raider's ack arrives, "no reply" once the
+local wait (`ACK_WAIT`, 8 s) expires with nothing heard.
+
+The ack was deliberately not guaranteed and never retried, on the reasoning that *"a lost ack costs
+nothing, because the next client's ack carries the same evidence."* That is true of F1 and false of
+F2: each client's ack is the ONLY evidence about that client. `QueueAck` fires once, on the
+`rollAnnounced` false→true edge, and no heartbeat, catch-up or restriction release re-queues it — so
+a single lost ack was final for that item.
+
+Two ways it was lost, both recorded in B135's live table of 2026-08-05: a refused send (1–4 own sends
+refused per plain raider per evening, and the acks go out in the burst right after a boss dies), and
+the encounter restriction (`LC_ACK` was not in `GUARANTEED_TOKENS`, so it was DROPPED rather than
+held — two clients recorded 39 and 47 drops that night).
+
+**What it cost, measured offline** (30 clients, six bosses of six items, 174 acks, panel read before
+anybody votes). One ack covers a whole boss BATCH, so one loss is six wrong cells:
+
+| refusal rate | acks lost | false "no reply" cells | raiders wrong for a whole boss |
+|---|---|---|---|
+| 1 in 40 | 4 | 24 | 4 |
+| 1 in 20 | 8 | 48 | 8 |
+
+With five raiders whose comms gate was still shut when the announcement landed: 30 false cells. With
+no loss at all: 1,044 cells, 0 wrong. And the tooltip stated a cause — "offline, on a loading screen,
+or not running KART" — about somebody holding the item and deciding, which is the C14 false statement
+the states exist to prevent, on the screen the item is handed out from.
+
+**Fixed 2026-08-06, two halves.**
+
+*Reliable.* `LC_ACK` joins `GUARANTEED_TOKENS`. Three options were patched and measured against each
+other before choosing:
+
+| | clean evening | refused 1 in 20 | gate shut 5 s | gate shut 12 s |
+|---|---|---|---|---|
+| before | 2,100 msgs / 181.4 KB | 48 false cells | 30 | 30 |
+| guaranteed | **2,100 / 181.4 KB** | **0** | **0** | **0** |
+| one repeat at `ACK_WAIT` | 2,274 / 186.6 KB | 0 | 0 | **30** |
+
+Guaranteed costs nothing in the ordinary case — it changes only what happens to a send that was
+refused or restricted — and it is bound to the release EVENT rather than to a fixed timer, which is
+why the 12-second column separates it from a repeat. The queue objection does not apply: KASC's
+`guaranteedQueue` is a file-local, so it is per client, and a client holds at most ONE ack at a time
+(measured: `heldBack = 1` through a whole encounter, against a cap of 40).
+
+*Honest.* `LC_ANSWER_SILENT_TIP` no longer names a cause. "Nothing has been heard from this raider
+since the item was announced. This says what did not arrive, not why" — the state is now reliable,
+but the reason behind it never was, and the panel should not claim one.
+
+Tests: `tests/test_lc_ack.lua`, "and the council is told so, instead of being told they said nothing"
+— a refused ack, past both `ACK_WAIT` and `SEND_RETRY_DELAYS`, still reads as "acked".

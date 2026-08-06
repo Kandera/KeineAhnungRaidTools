@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A reload no longer asks the lootmaster to start a session that is already running**, and no longer ends it for the raid.
+- **The council panel no longer calls a raider silent** when only their receipt went missing.
 - **Auto-Pass works again for everyone**, even when the item's announcement never arrived.
 - **Auto-Pass keeps working after a reload or a disconnect** in a running session.
 - **Loot announcements survive a reload during a fight** instead of being lost.

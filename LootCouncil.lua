@@ -638,6 +638,10 @@ local GUARANTEED_TOKENS = {
     LC_DROP = true,
     LC_START = true, LC_MANUAL_START = true, LC_ROLL_CATCHUP = true,
     LC_END_ROUND = true, LC_ACTIVE = true, LC_SESSION_RESUME = true,
+    -- Added 2026-08-06, having been deliberately left out: see the note above QueueAck. One ack per
+    -- client per boss batch, so a client holds at most ONE at a time and the per-client queue (40)
+    -- is never a consideration -- measured at heldBack = 1 through a whole encounter.
+    LC_ACK = true,
     LC_CONFIG = true, LC_CONFIG_RELAY = true,
     LC_VOTE = true, LC_CVOTE = true, LC_ROLLS = true,
     LC_RESULT = true, LC_ONOTE = true,
@@ -4762,8 +4766,13 @@ end
 -- Traffic (B135): one ack per client per announcement BATCH, not per item -- about 29 messages per
 -- boss, ~174 over an evening of six, against the 1,680-message baseline. Ten percent more messages
 -- and about two percent more bytes, spread over ACK_SPREAD instead of landing in one instant.
--- Deliberately NOT guaranteed and never retried (see GUARANTEED_TOKENS): a lost ack costs nothing,
--- because the next client's ack carries the same evidence, and every deaf client only needs one.
+--
+-- GUARANTEED, since B142. It was not, on the reasoning that "a lost ack costs nothing, because the
+-- next client's ack carries the same evidence" -- which is true of F1 below (any ack tells a deaf
+-- client it was skipped) and false of F2 (each client's ack is the only evidence about THAT client,
+-- and nothing re-sends it). Guaranteed costs nothing in the ordinary case, because it changes only
+-- what happens to a refused or restricted send: measured over a full offline evening, the message
+-- count is identical with and without it.
 local ACK_SPREAD = 2
 
 -- Who has confirmed they were told about a roll: [rollID][identity key] = true. Read by the council

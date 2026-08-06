@@ -273,3 +273,46 @@ do
     T.is_nil(StateOn(lm, 982, sim.byName.Corvin),
         "and the weapon that reuses the number starts from nothing")
 end
+
+-- A refused ack must not turn into a raider who "said nothing" -------------------------------------
+-- The ack was built deliberately non-guaranteed, on the reasoning that a lost one costs nothing
+-- "because the next client's ack carries the same evidence". That is true of F1, the self-heal: any
+-- ack tells a deaf client it was skipped. It is false of F2, the answer states -- each client's ack
+-- is the ONLY evidence about that client, and nothing ever re-sends it. QueueAck fires once, on the
+-- rollAnnounced false->true edge, and no heartbeat, catch-up or restriction release re-queues it.
+--
+-- Measured before changing it (offline evening, 30 clients, 174 acks): at the refusal rate B135's
+-- live table recorded -- 1 to 4 own sends refused per raider per evening -- 4 refused acks put 24
+-- false cells on the council panel, because one ack covers a whole boss BATCH. The panel then says,
+-- in the tooltip, that the raider is offline or not running KART, about somebody who is holding the
+-- item and deciding. That is the C14 false statement the states exist to prevent, on the screen the
+-- item is handed out from.
+do
+    local sim, lm = F.NewRaid()
+
+    -- The client refusing to send, which is what the rate limiter actually does (B120): the message
+    -- never leaves, and the only signal is the return value.
+    local victim
+    sim.sendResult = function(msg)
+        local body = msg:sub(1, 1) == "\001" and msg:sub(2) or msg
+        if body:sub(1, 7) == "LC_ACK:" and not victim then
+            victim = RaidSim.active
+            return 8 -- ChannelThrottle
+        end
+        return 0
+    end
+
+    F.Drop(sim, 983, F.GLOVES)
+    KARTTEST.AdvanceTime(3)
+    sim.sendResult = nil
+    T.truthy(victim ~= nil, "one client's ack really was refused")
+
+    -- Long past ACK_WAIT (8 s), so silence has had every chance to be believed, and past
+    -- SEND_RETRY_DELAYS, so a retry has had every chance to land.
+    KARTTEST.AdvanceTime(20)
+
+    T.truthy(RaidSim.As(victim, function() return victim.KART.LC.rollItems[983] ~= nil end),
+        "the raider whose ack was refused is holding the item")
+    T.eq(StateOn(lm, 983, victim), "acked",
+        "and the council is told so, instead of being told they said nothing")
+end
