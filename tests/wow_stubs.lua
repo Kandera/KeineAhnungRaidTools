@@ -698,6 +698,20 @@ _G.C_RestrictedActions = {
     GetAddOnRestrictionState = function(t) return KARTTEST.restrictions[t] or 0 end,
 }
 
+-- NOTE for the simulated raid: KARTTEST.FireEvent only reaches frames owned by the CURRENTLY ACTIVE
+-- client (see its `reg.owner == owner` test), so calling this bare closes the gate on ONE client and
+-- leaves every other one reading the world normally. Every member of a raid is in the same encounter,
+-- so a multi-client test has to raise the event as each of them:
+--
+--     for _, c in ipairs(sim.clients) do
+--         RaidSim.As(c, function()
+--             KARTTEST.FireEvent("ADDON_RESTRICTION_STATE_CHANGED", t, state)
+--         end)
+--     end
+--
+-- Written down because it cost the 2026-08-06 integration review two wrong conclusions before it was
+-- caught -- a guaranteed queue that looked stuck, and an LC_ACTIVE:0 that looked lost -- both of them
+-- the harness, not the addon. The single-client tests below are unaffected and use this as it stands.
 function KARTTEST.SetRestriction(restrictionType, state)
     KARTTEST.restrictions[restrictionType] = state
     KARTTEST.FireEvent("ADDON_RESTRICTION_STATE_CHANGED", restrictionType, state)
