@@ -2534,7 +2534,9 @@ function LC.HandleTable(payload, senderKey, sender)
         -- out on this same heartbeat. Compared only when both sides are comparable, exactly like
         -- the dismissal note above -- an unresolved stamp (`true`) or an unnamed item (itemID "0")
         -- keeps the gate closed, erring towards silence about a roll this client already watched
-        -- end.
+        -- end. A reuse carrying a second copy of the SAME item compares equal and is invisible
+        -- here -- accepted, B139: telling that apart needs the wire to name the roll's instance,
+        -- not a better note rule.
         local expiredHere = rollID and LC.rollExpiredHere[rollID]
         if type(expiredHere) == "string" and itemID and itemID ~= "0" and expiredHere ~= itemID then
             LC.rollExpiredHere[rollID] = nil

@@ -3501,3 +3501,27 @@ client (`LC.Diag.CountUntracked` is called from the vote handlers only, never fr
 not awards. The 2026-08-06 handover expected that line to climb with awards-after-expiry; it will
 not, and post-award votes stop counting once the roll was decided. Reading it as "awards that
 arrived stale" misreads it in the too-low direction.
+
+## B139 — OPEN, by choice 2026-08-06 — a reused rollID carrying the SAME item cannot be told from a repeat
+
+Found by the same review session, in the corner of `baa734c` its comments do not discuss: the
+`LC.rollExpiredHere` note stores WHICH item expired precisely so Blizzard's rollID reuse can be told
+from the heartbeat repeating itself — and that comparison is structurally blind when the reuse
+carries a second copy of the SAME item. `LC.HandleTable`'s clear fires on `expiredHere ~= itemID`;
+two drops of one item under one number compare equal.
+
+The client it costs needs three coincidences at once: Blizzard reuses the rollID (real, B132), for a
+second copy of the same item (real — the duplicate "(1/2)" marking exists because it happens), on a
+client that got no `START_LOOT_ROLL` of its own (dead, released, out of range — the self-clear in
+`LC.OnStartLootRoll` never runs) AND lost the `LC_DROP` announcement. That client's note survives
+every clear rule, `needItem` stays gated, and it is deaf to the second drop until the round-end wipe
+— the one case where "a genuinely deaf client repairs as before" is false. Everyone else in the raid
+is unaffected, the council still decides the item, and the deaf client's history syncs back later.
+
+Left open deliberately, five days before 3.4.0: every client-side rule was already considered and
+rejected in the `baa734c` design (the note exists because asker-side knowledge is the only reliable
+signal, and "same item under the number" is exactly the case where that knowledge says nothing). A
+real fix needs the wire to say which INSTANCE of a roll the heartbeat means — a start-stamp or
+generation counter next to the itemID in `LC_TABLE`, which is a protocol change, not a note rule.
+Re-evaluate after the next raid: if `/kart status` ever shows a raider tracking nothing for an item
+the raid is voting on twice, this is the entry.

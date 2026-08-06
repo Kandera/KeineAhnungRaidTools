@@ -66,6 +66,21 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
 
 ## Verified, no change needed
 
+- **An expiry note stamped `true` can never be cleared by the heartbeat** (LootCouncil.lua,
+  `LC.HandleTable`'s expiry-note purge). Raised 2026-08-06. A client whose "???"-tracked roll
+  expired holds `LC.rollExpiredHere[rollID] = true`, and the different-item clear requires a string
+  on both sides — so if it then also misses a reuse's own announcement, it stays silent about the
+  new item until round end. Requires the owner to have been unable to name the item all the way to
+  expiry (otherwise the B40 in-place repair resolves the link first) plus a lost announcement on
+  top. The comment above the purge chooses "erring towards silence" explicitly, mirroring the
+  settled dismissal-note shape. Bounded by the round-end wipe. Kept.
+
+- **`itemID ~= "0"` in the expiry-note purge is dead** (LootCouncil.lua, same block). The receiver
+  normalizes a heartbeat's `"0"`/`""` itemID to nil before the purge runs, so the condition can
+  never see the string "0". Harmless defensive redundancy that reads as a live branch; noted here
+  instead of removed — deleting it invites re-adding it on the next read of the sender's "=0"
+  convention.
+
 - **`LC_CONFIG` colon-in-button-label desync** (LootCouncil.lua BroadcastRaidConfig / HandleConfig).
   Already mitigated: the button-labels, council-members, and lootmaster edit boxes all strip
   colons at input via `StripColons` (LootCouncilSettings.lua). No colon can enter these synced
