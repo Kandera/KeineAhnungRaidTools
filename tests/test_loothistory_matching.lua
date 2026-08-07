@@ -144,21 +144,37 @@ do
 end
 
 do
-    -- The line the player drew when they cleared the history. An award stamped with that very
-    -- second is on the wrong side of it: clearing means "everything up to now is gone", and a reply
-    -- burst already in flight is exactly what this guard exists for.
+    -- The line a clear draws is the EPOCH, and it is the only thing allowed to draw it.
+    --
+    -- It used to be a timestamp comparison as well: an entry whose t was at or below our own
+    -- KART_LootHistoryClearedAt was dropped. But t is the SENDER's time() and clearedAt is OURS, and
+    -- comparing two clients' clocks against a wipe line is exactly what the epoch exists to abolish
+    -- (design §2). The lootmaster wipes at 20:00 by their clock; a council member five minutes slow
+    -- awards at 20:03 real and stamps 19:58; the lootmaster reconnects, asks for a catch-up, a peer
+    -- answers with that entry at the current epoch -- and it was dropped. The lootmaster stayed
+    -- permanently short an award the whole raid holds, its checksum never matched, and it pulled a
+    -- full reconcile every night that re-sent and re-dropped the same row.
     local _, lm, _, raider = F.NewRaid()
     local cleared = time()
     Hold(lm, {})
-    RaidSim.As(lm, function() lm.env.KART_LootHistoryClearedAt = cleared end)
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistoryClearedAt = cleared
+        lm.env.KART_LootHistoryEpoch     = 2
+    end)
 
-    Whisper(lm, raider, { time = cleared, rollID = 70, winnerKey = "Player-1-A",
-                          winner = "Alric", item = GLOVES })
-    T.eq(#lm.env.KART_LootHistory, 0, "an award stamped at the moment of the clear stays cleared")
+    -- Decided before the wipe, and it says so: epoch 1 against our 2. Discarded by merge rule 2,
+    -- whatever its timestamp claims -- this is the reply burst already in flight.
+    Whisper(lm, raider, { time = cleared + 60, rollID = 70, winnerKey = "Player-1-A",
+                          winner = "Alric", item = GLOVES, epoch = 1, id = "pre-wipe" })
+    T.eq(#lm.env.KART_LootHistory, 0,
+        "an award decided before the wipe stays cleared, even dated after it")
 
-    Whisper(lm, raider, { time = cleared + 1, rollID = 71, winnerKey = "Player-1-A",
-                          winner = "Alric", item = GLOVES })
-    T.eq(#lm.env.KART_LootHistory, 1, "while the next second is a new award and arrives")
+    -- Decided after the wipe by a client whose clock runs slow. At our own epoch, so it belongs to
+    -- us however its timestamp reads.
+    Whisper(lm, raider, { time = cleared - 300, rollID = 71, winnerKey = "Player-1-A",
+                          winner = "Alric", item = GLOVES, epoch = 2, id = "post-wipe" })
+    T.eq(#lm.env.KART_LootHistory, 1,
+        "and an award at our epoch is not eaten by five minutes of clock difference")
     RaidSim.As(lm, function() lm.env.KART_LootHistoryClearedAt = nil end)
 end
 

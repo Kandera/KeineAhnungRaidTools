@@ -438,7 +438,11 @@ function LH.ClearHistory()
     end
     KART_LootHistoryEpoch = (KART_LootHistoryEpoch or 1) + 1
     wipe(KART_LootHistory)
-    KART_LootHistoryClearedAt = time()   -- display only now; the epoch is the watermark
+    -- Kept as a plain "cleared on ..." stamp and nothing else (design §6). Nothing reads it any more:
+    -- it was the sync watermark, and as a watermark it was our own clock being compared against other
+    -- clients' -- see LH.HandleHistoryEntry and LH.RequestHistorySync for what that cost. The epoch
+    -- is the watermark now.
+    KART_LootHistoryClearedAt = time()
     LC.SendLC("LC_HIST_EPOCH:" .. KART_LootHistoryEpoch)
     LH.Refresh()
 end
@@ -1238,9 +1242,13 @@ function LH.RequestHistorySync()
     end
     LH.syncWanted = nil
 
-    -- Never earlier than the current epoch's start: the since-timestamp means "I have everything up
-    -- to here", and a wipe is exactly such a line.
-    local latest = KART_LootHistoryClearedAt or 0
+    -- Purely "the newest thing I hold", and nothing else. This used to be floored at
+    -- KART_LootHistoryClearedAt, which is our OWN clock stamped at our own wipe -- so an award made
+    -- after that wipe by a client whose clock runs a few minutes slow fell below the floor and was
+    -- never asked for. Same cross-client clock comparison as the one LH.HandleHistoryEntry no longer
+    -- makes, and the epoch already draws the line the floor was standing in for: peers only ever
+    -- answer with entries at their own current epoch.
+    local latest = 0
     for _, e in ipairs(KART_LootHistory or {}) do
         if e.time and e.time > latest then latest = e.time end
     end
@@ -1610,10 +1618,16 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- becomes the "since" watermark LH.RequestHistorySync sends, permanently asking every peer for
     -- entries newer than that date and silently killing catch-up sync for good.
     if t > time() + 300 then return end
-    -- Older than the line the player drew when they last cleared. The request side already asks from
-    -- there, but a clear can land between the request and the answer, with the deleted entries
-    -- already on their way.
-    if t <= (KART_LootHistoryClearedAt or 0) then return end
+    -- No comparison against KART_LootHistoryClearedAt here, and deliberately not. `t` is the SENDER's
+    -- time() and clearedAt is OURS, so that line compared two clients' clocks against a wipe -- which
+    -- is precisely what the epoch exists to abolish (design §2: "comparing timestamps across clients
+    -- against a wipe line would silently keep or eat entries whenever two clocks are a few minutes
+    -- apart"). The lootmaster wipes at 20:00 by their clock, a council member five minutes slow
+    -- awards at 20:03 real and stamps 19:58, and the entry the whole raid holds was dropped on the
+    -- one client that asked for it -- for ever, since a full reconcile re-sent and re-dropped the
+    -- same row every night. LH.AdmitEpoch above is the line, and it is drawn in a number that does
+    -- not drift: an award decided before the wipe carries the pre-wipe epoch and is discarded by
+    -- merge rule 2 whatever its timestamp says.
     -- Free text from another client, rendered raw into the history window and the export. Double the
     -- pipes so |c colour codes and |H hyperlinks can't be injected into a SavedVariable that is then
     -- displayed forever. (RC_REASON does the same on its own receive side.)
