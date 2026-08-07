@@ -795,3 +795,42 @@ do
     T.eq(raider.KART.LC.rollInstance[980], "2",
         "and a bare entry leaves the receiver's memory alone rather than erasing it")
 end
+
+-- ...and a note about a roll that ended here records that instance ----------------------------------
+-- The note is what gates this client's re-ask (B135). It has always held WHICH item ended, so the
+-- number alone could not silence it for an unrelated drop (B132); it now holds which instance of that
+-- item, which is the half B139 needs.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+    local council = sim.byName.Merrit
+
+    -- Rolls off raid-wide keeps the assertions about the notes free of roll-table traffic.
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 981, F.GLOVES)
+    KARTTEST.AdvanceTime(25)   -- past the 20s window: the plain raider frees the roll and stamps it
+    T.eq(raider.KART.LC.rollExpiredHere[981], tostring(F.GLOVES) .. "@1",
+        "the expiry note names the item AND the instance of it that ended here")
+
+    F.Drop(sim, 982, F.GLOVES)
+    KARTTEST.AdvanceTime(25)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(982) end)
+    T.eq(council.KART.LC.rollDismissed[982], tostring(F.GLOVES) .. "@1",
+        "and so does the note a council member leaves when it closes a tab")
+
+    local item, gen = lm.KART.LC.RollNoteParts(tostring(F.GLOVES) .. "@3")
+    T.eq(item, tostring(F.GLOVES), "a note splits back into its item...")
+    T.eq(gen, "3", "...and its generation")
+    local plainItem, plainGen = lm.KART.LC.RollNoteParts(tostring(F.GLOVES))
+    T.eq(plainItem, tostring(F.GLOVES), "a note with no generation still yields its item")
+    T.eq(plainGen, nil, "and says nothing about the instance")
+    local unknownItem, unknownGen = lm.KART.LC.RollNoteParts(true)
+    T.eq(unknownItem, nil, "an unresolved note yields no item...")
+    T.eq(unknownGen, nil, "...and no generation")
+end

@@ -352,6 +352,8 @@ function Council.CloseCouncilTab(rollID)
     -- back to refusing on the id alone, exactly as they did before.
     local link = LC.rollItems[rollID]
     local dismissedItem = (type(link) == "string" and link:match("item:(%d+)")) or true
+    -- And which instance of it, read before the clear for the same reason as the link (B139).
+    dismissedItem = LC.StampRollNote(rollID, dismissedItem)
     LC.Trade.ClearRollState(rollID)
     -- Every caller of this function is somebody deciding they are done with the item, so this is where
     -- the decision is recorded (see LC.rollDismissed for why it has to be, and for the list of removals

@@ -2387,6 +2387,29 @@ end
 -- (PurgeStaleRoll), by a heartbeat naming a different item under it, and by the round ending.
 LC.rollExpiredHere = LC.rollExpiredHere or {}
 
+--- A note about a roll that ended here, as one string: the itemID, and the instance of it this note
+--- was stamped for (B139) -- "249331@2". One string rather than a second table so every existing
+--- reader's `type(note) == "string"` guard keeps working unchanged, and so the unresolved case
+--- (`true`, from a roll this client never managed to name) stays exactly what it was.
+---
+--- Call this BEFORE Trade.ClearRollState, which takes the generation with the rest of the roll. Both
+--- callers already read the item link before that clear for the same reason.
+function LC.StampRollNote(rollID, itemID)
+    if type(itemID) ~= "string" then return itemID end
+    local gen = LC.rollInstance and LC.rollInstance[rollID]
+    return gen and (itemID .. "@" .. gen) or itemID
+end
+
+--- ...and back apart. Answers nil for anything that is not a note about a named item, and nil for the
+--- generation of a note stamped without one -- an owner that sent none, or a roll that ended before
+--- any heartbeat named it. Every caller treats that nil as "says nothing", never as a difference.
+function LC.RollNoteParts(note)
+    if type(note) ~= "string" then return nil, nil end
+    local item, gen = note:match("^(%d+)@(%d+)$")
+    if item then return item, gen end
+    return note, nil
+end
+
 --- The rolls this client cleared because the ROUND ended, as opposed to because their own window ran
 --- out (LC.rollExpiredHere) or because they threw them away (LC.rollDismissed). Same shape, same
 --- lifetime, same readers -- the three ask paths -- and it exists because End Round is the one of the

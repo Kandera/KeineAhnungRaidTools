@@ -250,6 +250,9 @@ function Vote.PruneExpiredRolls()
                 -- stays repairable.
                 local link = LC.rollItems[rid]
                 local expiredItem = (type(link) == "string" and link:match("item:(%d+)")) or true
+                -- WHICH instance of that item, read here for the same reason the link is: the clear
+                -- below takes it with the roll, and the note has to outlive both (B139).
+                expiredItem = LC.StampRollNote(rid, expiredItem)
                 LC.Trade.ClearRollState(rid)
                 LC.rollExpiredHere[rid] = expiredItem
             end
