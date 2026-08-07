@@ -888,3 +888,79 @@ do
     end)
     T.truthy(after:find("Gloombind", 1, true), "only once combat ends does it arrive: " .. after)
 end
+
+-- Combat resumes DURING the five-second delay -- not already true through the whole wait (the block
+-- above), but false at restore (so the delayed-print branch gets armed) and true again before the
+-- timer fires. That transition is exactly what the timer's own second InCombatLockdown() check
+-- (Important 3) exists to catch: printing here would be the mid-fight line this whole mechanism
+-- exists to prevent, one call-site removed from the block above.
+do
+    local sim, lm = OwingSince(TRADE_WINDOW + 60)
+    KARTTEST.inCombat = true
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+
+    KARTTEST.inCombat = false -- the reload lands between pulls: the delayed-print branch is armed
+    local back
+    Capture(function() back = RaidSim.Reload(sim, "Bramor") end)
+
+    KARTTEST.inCombat = true -- ...and the next pull starts before the five seconds are up
+    local out = Capture(function() KARTTEST.AdvanceTime(6) end)
+    T.eq(out, "", "nothing prints once combat has resumed, even past the usual delay")
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(back, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find(GLOVES, 1, true) ~= nil,
+        "the line survived into the in-memory queue and arrives once this pull ends too: " .. after)
+end
+
+-- A notice persisted DURING the five-second delay must not be swept into the batch the timer is
+-- about to print, must not be lost, and -- the property that actually tells the snapshot-plus-
+-- front-removal design (Important 2) apart from the reverted "swap the table, print from the copy"
+-- one -- the restored line it is waiting behind must still be sitting in KART_LCTrades itself while
+-- the timer is pending, not already moved into a local variable nothing but the timer closure can
+-- reach. A crash right then is exactly what Important 2 was written to survive, and swapping the
+-- table out at restore time, before the five seconds even start, is what would lose it.
+do
+    local sim, lm = OwingSince(TRADE_WINDOW + 60)
+    KARTTEST.inCombat = true
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+
+    KARTTEST.inCombat = false -- the reload lands between pulls: the delayed-print branch is armed
+    local back
+    Capture(function() back = RaidSim.Reload(sim, "Bramor") end)
+
+    -- A second, short pull starts and ends inside the five-second window. Its own expiry queues (and
+    -- persists) a second notice, appended after the restored one -- PersistNotice always appends.
+    local alric = sim.byName.Alric
+    KARTTEST.inCombat = true
+    RaidSim.As(back, function()
+        back.KART.LC.pendingTrades = {
+            { itemLink = WEAPON, winnerKey = alric.guid, rollID = 99,
+              lootedAt = time() - (TRADE_WINDOW + 60) },
+        }
+    end)
+    Capture(function() RaidSim.As(back, back.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.inCombat = false -- and that second pull is over well before the delay elapses
+
+    -- Both lines are still in KART_LCTrades while the timer is pending -- the restored one has not
+    -- been swapped out into a variable a crash here could take with it, and the fresh one has not
+    -- been lost or merged into it either. A table-swap design would already show 1 here, not 2: the
+    -- restored line left the store the moment RestorePersistedTrades ran, five seconds before this.
+    T.eq(#(back.env.KART_LCTrades.notices or {}), 2,
+        "the restored line and the freshly queued one are both still in the store while the timer waits")
+
+    local out = Capture(function() KARTTEST.AdvanceTime(6) end)
+    T.truthy(out:find(GLOVES, 1, true) ~= nil, "the restored line prints once the delay elapses: " .. out)
+    T.truthy(out:find(WEAPON, 1, true) == nil,
+        "but the one queued mid-window is not swept into that same batch: " .. out)
+    T.eq(#(back.env.KART_LCTrades.notices or {}), 1, "and afterwards only the still-unsaid one remains")
+
+    -- Not lost, not merely delayed by accident: it still reaches the player through the ordinary
+    -- path once this second pull, too, is over.
+    local after = Capture(function()
+        RaidSim.As(back, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find(WEAPON, 1, true) ~= nil, "and it still arrives once combat ends: " .. after)
+end
