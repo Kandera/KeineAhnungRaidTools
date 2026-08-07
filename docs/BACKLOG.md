@@ -4039,10 +4039,18 @@ empty Auto-Pass block, which reads as "nothing was decided here" — a different
 so there was nothing to pass", on the client the Manifest asks the raid to screenshot. It records the
 same `owner` verdict now.
 
-**Not fixed, deliberately.** The `unaware` verdict is recorded above every council-eligibility test, so
-a mount or a green seen while no session is known takes one of the ten ring slots. Moving it below the
-eligibility work means restructuring the session gate's early return, which is not a thing to do to the
-Auto-Pass path days before the raid. Noise in a diagnostic, and it is labelled as such.
+**Fixed 2026-08-07, the deferred half.** The `unaware` verdict used to be recorded above every
+council-eligibility test, so a Bind-on-Equip drop or a collectible seen while no session is known took
+one of the ten ring slots — and since neither is ever announced, that slot could never resolve into
+anything else; it sat there naming an item nobody was ever going to decide, on the screen the Manifest
+asks the raid to photograph. `CouncilCouldTakeRoll` (`LootCouncil.lua`, immediately above
+`LC.OnStartLootRoll`) now answers the same question `councilEligible` answers further down, early
+enough to guard the session gate's call: a verdict is recorded only once it is positively established
+Council could take the roll up. When the item cannot be identified yet — its link has not propagated —
+nothing is recorded, deliberately: "cannot tell yet" must not be read as "yes". The roll itself is
+still remembered either way (`LC.rollsSeenWhileUnaware`); only the verdict is withheld. It mirrors
+`councilEligible`, not `councilEngages` — the raid's rarity threshold is not something a client outside
+a session has been told, so a council-eligible item below it still gets `unaware` here, correctly.
 
 Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number is not passed on the
-strength of the first one".
+strength of the first one" (B148's first half); "B148, the deferred half" (this one).

@@ -5157,6 +5157,34 @@ local function FlushPendingDrop(id)
 end
 LC.FlushPendingDrop = FlushPendingDrop
 
+-- Whether Council could ever take this roll up, decided from the same three facts councilEligible
+-- below is built from -- but usable from inside the session gate, where none of the state
+-- councilEligible normally sits next to (LC.rollSeenHere, LC.rollItems, the retry loop) exists yet.
+--
+-- Three-valued, and the caller has to treat everything but true as "record nothing":
+--   true  -- Bind-on-Pickup gear, or a recipe, and not a collectible. Council-eligible.
+--   false -- positively established as NOT council's business (Bind-on-Equip, a collectible, ...).
+--   nil   -- cannot tell YET. The link has not propagated to this client (see the retry loop a few
+--            lines below, which the session gate does not get the luxury of running -- it returns
+--            immediately, it does not wait). "Cannot tell" must not be read as "yes": guessing
+--            eligible here would put a Bind-on-Equip drop or a collectible into the pass-log ring on
+--            the strength of nothing, which is the defect this function exists not to repeat.
+--
+-- Deliberately mirrors councilEligible, NOT councilEngages. councilEngages additionally needs
+-- LC.GetRaidMinQuality(), and that is the RAID's answer -- a client sitting outside a session has not
+-- been told the raid's threshold and has no business guessing it. So a council-eligible item below
+-- that threshold still gets "unaware" here, correctly: the eventual replay (LC.ReplaySeenWhileUnaware)
+-- resolves it properly once the session, and the threshold with it, is known.
+local function CouncilCouldTakeRoll(rollID)
+    local _, _, _, _, bindOnPickUp = GetLootRollItemInfo(rollID)
+    local link = GetLootRollItemLink(rollID)
+    if not LC.IsRealItemLink(link) then return nil end
+    local itemID, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(link)
+    if not classID then return nil end
+    return (bindOnPickUp or classID == ITEM_CLASS_RECIPE)
+           and not LC.IsCollectibleItem(itemID, classID, subclassID)
+end
+
 function LC.OnStartLootRoll(rollID, attempt)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then
@@ -5176,7 +5204,17 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- raid actually reported: four roll windows nobody answered, a status line reading "session:
         -- on (told)", and nothing saying the rolls had arrived before that was known. If the replay
         -- above reaches this roll later it passes and overwrites this verdict, which is the point.
-        LC.RecordPassGate(rollID, "unaware")
+        --
+        -- Guarded rather than unconditional (B148's deferred half, fixed 2026-08-07): this used to
+        -- record "unaware" for every roll seen here, above any of the eligibility tests further down
+        -- -- so a Bind-on-Equip drop or a collectible took one of the ten pass-log ring slots, and
+        -- since neither is ever announced (see AutoPassAnnounced / ReplayOne), that slot could never
+        -- resolve into anything else: it sat there naming an item nobody was ever going to decide,
+        -- until ten further council rolls pushed it out -- on the screen the Manifest asks the raid to
+        -- photograph. CouncilCouldTakeRoll answers the same question councilEligible answers below,
+        -- just early enough to ask it here, and a nil answer (cannot tell yet) withholds the verdict
+        -- exactly like a false one does.
+        if CouncilCouldTakeRoll(rollID) then LC.RecordPassGate(rollID, "unaware") end
         return
     end
 

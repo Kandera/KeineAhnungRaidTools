@@ -315,3 +315,51 @@ do
     T.is_nil((KARTTEST.rolled[96] or {})[raider.unit],
         "the unannounced item reusing that number is not passed on the strength of the first one")
 end
+
+-- B148, the deferred half -- fixed 2026-08-07 -----------------------------------------------------
+-- Until now the session gate above recorded "unaware" for EVERY roll it saw, above any of the
+-- eligibility tests further down -- so a mount or a Bind-on-Equip drop took one of the ten pass-log
+-- ring slots. Neither is ever announced (see AutoPassAnnounced / ReplayOne), so that slot could never
+-- resolve into anything else: it sat there naming an item nobody was ever going to decide, on the
+-- screen the Manifest asks the raid to photograph, until ten further council rolls pushed it out.
+--
+-- The fix: record a verdict only once it is positively established the council could take the roll
+-- up (CouncilCouldTakeRoll, mirroring councilEligible). "Cannot tell yet" -- the item's link has not
+-- propagated -- must not count as "yes", so it records nothing rather than guessing. The roll itself
+-- is still remembered either way (LC.rollsSeenWhileUnaware); only the verdict is withheld.
+do
+    local function GateFor(client, id)
+        return RaidSim.As(client, function()
+            for _, e in ipairs(client.KART.LC.passLog) do
+                if e.rollID == id then return e.gate end
+            end
+        end)
+    end
+
+    local sim = NewRaid()
+    local corvin = sim.byName.Corvin
+    RaidSim.As(corvin, function()
+        corvin.KART.LC.sessionActive = false
+        corvin.KART.LC.sessionStateKnown = false
+    end)
+
+    -- A council item still gets its verdict -- the case B148 built the pass-log entry for in the
+    -- first place, and it must not regress.
+    Drop(sim, 80, F.GLOVES)
+    T.eq(GateFor(corvin, 80), "unaware", "a Bind-on-Pickup drop still records the unaware verdict")
+    T.truthy(corvin.KART.LC.rollsSeenWhileUnaware[80], "and the roll itself is remembered")
+
+    -- A Bind-on-Equip drop -- the realistic non-council item; a mount barely reaches Blizzard's roll
+    -- window at all in current WoW -- gets no verdict: Council was never going to touch it.
+    Drop(sim, 81, F.BOE, { bop = false })
+    T.is_nil(GateFor(corvin, 81), "a Bind-on-Equip drop records no verdict at all")
+    T.truthy(corvin.KART.LC.rollsSeenWhileUnaware[81], "but the roll is still remembered")
+
+    -- An item whose link has not propagated yet: eligibility cannot be decided at all, so nothing is
+    -- recorded rather than guessed. The session gate has no retry loop of its own (deliberately --
+    -- unlike the one further down for a known session), so this stays undecided rather than answered
+    -- either way.
+    Drop(sim, 82, F.GLOVES, { linkPending = true })
+    T.is_nil(GateFor(corvin, 82), "an unidentifiable item records no verdict")
+    T.truthy(corvin.KART.LC.rollsSeenWhileUnaware[82], "and is still remembered for the replay")
+end
