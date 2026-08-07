@@ -752,3 +752,46 @@ do
     T.eq(LC.RollsAnswerSlot(keys, keys[7]), LC.AnswerSlot(keys, keys[7], 10),
         "the roll table's own caller keeps the ten seconds it always had")
 end
+
+-- B139: the heartbeat says WHICH instance of a roll it means ----------------------------------------
+-- Blizzard reuses roll numbers within seconds, and the itemID under the number cannot tell a repeat
+-- of the heartbeat from a second copy of the SAME item. The owner counts the rolls it starts under
+-- each number and puts that count on the wire; everything downstream compares it.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    local function lastTable()
+        local sent = RaidSim.Messages(sim, "LC_TABLE")
+        return sent[#sent] and sent[#sent].msg or ""
+    end
+
+    F.Drop(sim, 980, F.GLOVES)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(35)   -- at least one heartbeat, and past TABLE_RESEND_SECONDS
+    T.truthy(lastTable():match("980=" .. F.GLOVES .. "@1"),
+        "the first roll under a number is generation 1")
+
+    -- The number comes back for a SECOND COPY OF THE SAME ITEM, which is the case the itemID cannot
+    -- see. The owner is on its own roll here, so its counter moves.
+    F.Drop(sim, 980, F.GLOVES)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(35)
+    T.truthy(lastTable():match("980=" .. F.GLOVES .. "@2"),
+        "and the second copy under that number is generation 2")
+    T.eq(raider.KART.LC.rollInstance[980], "2",
+        "a receiver remembers the generation it last heard, as a string like every other wire field")
+
+    -- An owner holding no counter for a roll already on the table -- a stand-in who took the role
+    -- over mid-round, or one who reloaded -- sends the entry bare. That is the RIGHT degradation:
+    -- counting on every client instead would give the raid several counters that only agree if every
+    -- client saw every roll start, and a wrong generation purges live state where an absent one
+    -- purges nothing.
+    RaidSim.As(lm, function() wipe(lm.KART.LC.rollGeneration) end)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(35)
+    T.truthy(lastTable():match("980=" .. F.GLOVES .. "$"),
+        "an owner with no counter for the roll sends the entry bare")
+    T.eq(raider.KART.LC.rollInstance[980], "2",
+        "and a bare entry leaves the receiver's memory alone rather than erasing it")
+end

@@ -2397,6 +2397,24 @@ LC.rollExpiredHere = LC.rollExpiredHere or {}
 --- that number, and wholesale when the raid is left.
 LC.rollRoundEnded = LC.rollRoundEnded or {}
 
+--- Which INSTANCE of a roll a number currently means (B139). Blizzard reuses roll numbers within
+--- seconds, and when the reuse carries a second copy of the SAME item, the itemID comparison
+--- everything else rests on compares equal -- so a client that watched copy 1 close and lost copy 2's
+--- announcement stays deaf to it for the rest of the round. Only the wire can tell those apart.
+---
+--- Owner-side. Bumped by the client that was loot owner when the roll STARTED, and by nobody else:
+--- counters kept on every client would only agree if every client saw every roll start, which is
+--- exactly what is not guaranteed, and a WRONG generation purges live state where an absent one
+--- purges nothing. Never cleared per rollID -- the whole point is that it keeps rising for a number
+--- Blizzard hands out again -- and wiped with everything else at End Round.
+LC.rollGeneration = LC.rollGeneration or {}
+--- Receiver-side: the generation last heard for a number, as the string it arrived as. Read for ONE
+--- purpose, stamping a note at expiry or dismissal time (LC.StampRollNote). It is never what the
+--- heartbeat is compared against -- that is the note's own stamp against the field on the wire; a
+--- comparison against this table would be the wire against itself from the second heartbeat onward
+--- and could not fire at all.
+LC.rollInstance = LC.rollInstance or {}
+
 local tableTicker
 local lastTableWasEmpty = true
 -- The message last put on the wire, and when. The tick compares against the STRING it would send, not
@@ -2442,7 +2460,11 @@ local function TablePayload()
         local rollID = ids[i]
         local link = LC.rollItems[rollID]
         local itemID = type(link) == "string" and link:match("item:(%d+)") or nil
-        shown[i] = rollID .. "=" .. (itemID or 0)
+        -- "@<gen>" says WHICH roll under this number is meant (B139). Left off entirely when this
+        -- client holds no counter for the roll -- a stand-in owner who took over mid-round, an owner
+        -- who reloaded -- and a receiver reads its absence as "unknown", never as a mismatch.
+        local gen = LC.rollGeneration[rollID]
+        shown[i] = rollID .. "=" .. (itemID or 0) .. (gen and ("@" .. gen) or "")
     end
     return "LC_TABLE:" .. #ids .. ":" .. table.concat(shown, ","), #ids == 0
 end
@@ -2510,7 +2532,7 @@ function LC.HandleTable(payload, senderKey, sender)
     LC.rollReqSent = LC.rollReqSent or {}
     local now = GetTime()
     for entry in tostring(list):gmatch("[^,]+") do
-        local id, item = entry:match("^(%d+)=?(%d*)$")
+        local id, item, gen = entry:match("^(%d+)=?(%d*)@?(%d*)$")
         local rollID = tonumber(id)
         -- "the owner cannot name this one either", in both spellings it can arrive in: "=0" from a
         -- 3.3.1 owner holding "???", and a bare id from a 3.3.0 owner, whose heartbeat carried no
@@ -2519,6 +2541,9 @@ function LC.HandleTable(payload, senderKey, sender)
         -- what makes a mixed-version raid degrade to exactly the old behaviour rather than to a
         -- wrong one.
         local itemID = (item ~= "" and item ~= "0") and item or nil
+        -- Which instance of the roll the owner means (B139). Absent from a sender that holds no
+        -- counter for it, and absence is not a mismatch -- the same rule the itemID above follows.
+        local genID = (gen ~= "" and gen) or nil
 
         -- What the owner says is under that number, against what this client has under it -- held, or
         -- merely remembered as dismissed. A DIFFERENT item is proof Blizzard handed the number on and
@@ -2644,6 +2669,11 @@ function LC.HandleTable(payload, senderKey, sender)
                 LC.SendLC("LC_ROLL_REQ:" .. rollID, sender)
             end
         end
+
+        -- Remembered for the notes this client may stamp later (LC.StampRollNote). Unconditional:
+        -- a number this client tracks nothing under today may be repaired into a tracked roll by
+        -- the very ask above, and the answer carries no generation of its own.
+        if rollID and genID then LC.rollInstance[rollID] = genID end
     end
     -- No sweep over the unlisted ids, deliberately. One stood here and read "the owner no longer
     -- names this number" as "the roll it was about is over, so the note may go" -- which needed
@@ -3149,6 +3179,8 @@ function LC.ClearAllRolls()
     -- for whatever rollID Blizzard hands out next (LC.rollDismissed, LC.rollExpiredHere).
     if LC.rollDismissed then wipe(LC.rollDismissed) end
     if LC.rollExpiredHere then wipe(LC.rollExpiredHere) end
+    if LC.rollGeneration then wipe(LC.rollGeneration) end
+    if LC.rollInstance then wipe(LC.rollInstance) end
     -- Nothing left on the table, so nothing left to say about it (B118). The ticker also stops itself
     -- after one empty heartbeat; this is the direct route for the case that skips that -- a session
     -- ending, or the round being cleared from under it.
@@ -3219,7 +3251,8 @@ local PERSISTED_ROLL_TABLES = {
     -- it is the stamp that says which item a pick was about, and a tally that comes back without its
     -- stamps is read as "not stale" for every entry -- which is the forgiving answer, but it is a
     -- guess where the file could simply have carried the fact.
-    "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollDurations",
+    "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollInstance",
+    "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
     "rollNotInOurBags", "rollAnnounced", "rollAnnouncedBy", "rollSeenHere", "relevanceHandled",
     "hiddenIrrelevant", "autoVotedByMe", "councilTabsNew",
@@ -4510,6 +4543,12 @@ local function PurgeStaleRoll(rollID, newItemID)
     LC.rollExpiredHere[rollID] = nil
     -- And the round-ended note, which is the same rule for the same reason (B145).
     if LC.rollRoundEnded then LC.rollRoundEnded[rollID] = nil end
+    -- And the generation, for the same reason and one of its own: a roll STARTING under this number
+    -- makes the remembered generation the PREVIOUS roll's, and a note stamped from it afterwards
+    -- would name an instance that is already over -- which the next heartbeat would then read as a
+    -- mismatch and purge a note that was right. Cleared, so such a note carries no generation at all
+    -- and falls back to the itemID rule.
+    if LC.rollInstance then LC.rollInstance[rollID] = nil end
     -- Orphaned roll data first, and before the newItemID guard below: this case has no tracked item
     -- to compare against, which is exactly why the itemID check can't see it. Left in place, those
     -- numbers would render as the NEW item's rolls on the council panel.
@@ -5207,6 +5246,13 @@ function LC.OnStartLootRoll(rollID, attempt)
 
     local newItemID = LC.IsRealItemLink(itemLink) and (itemLink:match("item:(%d+)") or "") or ""
     PurgeStaleRoll(rollID, newItemID)
+
+    -- A roll is starting under this number, so this is the NEXT instance of it (B139). Owner-side
+    -- only -- see LC.rollGeneration for why every other client deliberately counts nothing -- and
+    -- after the purge above, which is what defines "a roll is starting" for every other reader.
+    if LC.IsLootOwner() then
+        LC.rollGeneration[rollID] = (LC.rollGeneration[rollID] or 0) + 1
+    end
 
     -- Blizzard's Bind-on-Pickup trade window opens the moment the item is looted, not whenever
     -- Council later decides a winner — LC.CheckTradeTimeouts and Trade.RestorePersistedTrades both

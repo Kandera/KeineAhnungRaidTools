@@ -639,6 +639,10 @@ function Trade.ClearRollState(rollID)
     -- "we have already asked the owner about this one", a timestamp and nothing else.
     if LC.rollReqSent then LC.rollReqSent[rollID] = nil end
     if LC.rollsAnswerAt then LC.rollsAnswerAt[rollID] = nil end
+    -- The generation this number last meant (B139), cleared with the roll it described. Note that
+    -- Vote.PruneExpiredRolls and Council.CloseCouncilTab read it BEFORE calling this, exactly as they
+    -- read the item link, because the note they stamp has to outlive the roll.
+    if LC.rollInstance then LC.rollInstance[rollID] = nil end
     -- LC.relevanceSnapshot is deliberately NOT cleared here, unlike the three above. On a reused
     -- rollID this runs from PurgeStaleRoll AFTER the relevance frame has already snapshotted the new
     -- item — that frame registers for START_LOOT_ROLL before Core.lua's dispatcher and therefore
