@@ -1187,28 +1187,51 @@ local function EntryRecord(e)
         e.id or "", e.epoch or 1, e.item or "")
 end
 
-function LH.GateOpen()
-    -- Undecided rolls only. LC.rollDeadlines[rollID] being present does not by itself mean a
-    -- distribution is in flight -- a council member's DECIDED roll deliberately stays there so its
-    -- tab can be reassigned (see Trade.DoAssignWinner: "the tab deliberately stays open"), and
-    -- Vote.PruneExpiredRolls explicitly skips clearing anything still tabbed. A plain raider's client
-    -- frees the roll at its own vote deadline, but a council member's does not -- so checking mere
-    -- presence would close this gate on the first item of the night for every council member (and
-    -- therefore the lootmaster) and never reopen it, taxing every history answer and every own
-    -- request from those clients the full GATE_MAX_PARK for the rest of the raid, every raid.
-    --
-    -- LC.assignedWinners[rollID] is set the instant a decision is made -- Trade.DoAssignWinner sets
-    -- it locally before Trade.AnnounceResult sends anything, and Trade.HandleResult sets it on every
-    -- receiving peer just as early -- so a roll stops blocking here at the same moment it stops being
-    -- "on the table," not merely once its tab eventually closes. Both LC.rollDeadlines and
-    -- LC.assignedWinners are wiped together (Trade.ClearRollState, and the bulk wipe in
-    -- LootCouncil.lua), so there is no window where one is stale relative to the other.
+-- Whether any roll here is still undecided and therefore blocks the gate.
+--
+-- Undecided rolls only. LC.rollDeadlines[rollID] being present does not by itself mean a
+-- distribution is in flight -- a council member's DECIDED roll deliberately stays there so its
+-- tab can be reassigned (see Trade.DoAssignWinner: "the tab deliberately stays open"), and
+-- Vote.PruneExpiredRolls explicitly skips clearing anything still tabbed. A plain raider's client
+-- frees the roll at its own vote deadline, but a council member's does not -- so checking mere
+-- presence would close this gate on the first item of the night for every council member (and
+-- therefore the lootmaster) and never reopen it, taxing every history answer and every own
+-- request from those clients the full GATE_MAX_PARK for the rest of the raid, every raid.
+--
+-- LC.assignedWinners[rollID] is set the instant a decision is made -- Trade.DoAssignWinner sets
+-- it locally before Trade.AnnounceResult sends anything, and Trade.HandleResult sets it on every
+-- receiving peer just as early -- so a roll stops blocking here at the same moment it stops being
+-- "on the table," not merely once its tab eventually closes. Both LC.rollDeadlines and
+-- LC.assignedWinners are wiped together (Trade.ClearRollState, and the bulk wipe in
+-- LootCouncil.lua), so there is no window where one is stale relative to the other.
+--
+-- Shared by LH.GateOpen (mutating: extends the grace period as a side effect) and LH.GateStatus (a
+-- pure read for diagnostics), so the two can never disagree on what counts as blocking.
+local function AnyRollBlocking()
     for rollID in pairs(LC.rollDeadlines or {}) do
-        if (LC.assignedWinners or {})[rollID] == nil then
-            LH.gateClosedUntil = GetTime() + GATE_GRACE
-            return false
-        end
+        if (LC.assignedWinners or {})[rollID] == nil then return true end
     end
+    return false
+end
+
+function LH.GateOpen()
+    if AnyRollBlocking() then
+        LH.gateClosedUntil = GetTime() + GATE_GRACE
+        return false
+    end
+    return GetTime() >= (LH.gateClosedUntil or 0)
+end
+
+-- The same gate LH.GateOpen reports, without its side effect. Diagnostics-only, for LH.PrintStatus.
+--
+-- LH.GateOpen re-stamps LH.gateClosedUntil to "now + GATE_GRACE" every time it sees a blocking roll --
+-- correct for the request/answer paths, which call it to decide whether to act right now, but wrong
+-- for a status line that is merely reporting the gate: the manifest's failure procedure is "run
+-- /kart status when something looks stuck", which is exactly when this gets called several times in a
+-- row, and a read-only diagnostic must not be the reason the gate stays held a little longer each time
+-- somebody checks it.
+function LH.GateStatus()
+    if AnyRollBlocking() then return false end
     return GetTime() >= (LH.gateClosedUntil or 0)
 end
 
@@ -1256,17 +1279,34 @@ end
 -- What /kart status prints about the loot history. Facts only, one per line: the manifest's failure
 -- procedure is "everybody run /kart status and paste it", so this is read across five clients at once
 -- and has to be comparable at a glance rather than pretty on one.
+-- One labelled line per fact, the same convention LC.PrintStatus states in its own comment: "One line
+-- each, so a raider can paste the output and the question is settled." Five people paste this into the
+-- same chat window at once, and a single packed sentence shifts every field's column between clients
+-- the moment one digit differs in width.
+--
+-- Entries and checksum are deliberately the SAME scope (the current epoch only): KART_LootHistory can
+-- still hold rows from a prior epoch that nothing has pruned yet, and printed side by side with no
+-- qualifier, a client that simply kept more old-epoch rows than another would read as a sync problem
+-- that is not actually one.
 function LH.PrintStatus()
+    local epoch = KART_LootHistoryEpoch or 1
+    local entries = 0
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if (e.epoch or 1) == epoch then entries = entries + 1 end
+    end
     local parked = 0
     for _ in pairs(LH.parked or {}) do parked = parked + 1 end
-    print(string.format(KART.L.LH_STATUS_LINE,
-        KART_LootHistoryEpoch or 1,
-        #(KART_LootHistory or {}),
-        LH.HistoryChecksum(),
-        parked,
-        LH.GateOpen() and KART.L.LH_STATUS_OPEN or KART.L.LH_STATUS_HELD))
+
+    print("  " .. KART.L.LH_STATUS_EPOCH .. ": " .. epoch)
+    print("  " .. KART.L.LH_STATUS_ENTRIES .. ": " .. entries)
+    print("  " .. KART.L.LH_STATUS_CHECKSUM .. ": " .. LH.HistoryChecksum())
+    print("  " .. KART.L.LH_STATUS_PARKED .. ": " .. parked)
+    -- LH.GateStatus, not LH.GateOpen: this is a read for display, not a decision to act on, and
+    -- LH.GateOpen's grace-period stamp is a side effect that belongs to the request/answer paths only.
+    print("  " .. KART.L.LH_STATUS_GATE .. ": "
+        .. (LH.GateStatus() and KART.L.LH_STATUS_OPEN or KART.L.LH_STATUS_HELD))
     if LH.IsStale() then
-        print(string.format(KART.L.LH_STATUS_STALE, LH.heardEpoch or 0, KART_LootHistoryEpoch or 1))
+        print(string.format(KART.L.LH_STATUS_STALE, LH.heardEpoch or 0, epoch))
     end
 end
 

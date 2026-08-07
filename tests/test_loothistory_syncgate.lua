@@ -208,3 +208,31 @@ do
     T.truthy(joined:find("1", 1, true), "the status names the one parked request")
     T.truthy(joined:lower():find("hist"), "and says what it is about")
 end
+
+-- LH.PrintStatus must not perturb the gate it merely reports on ------------------------------------
+-- LH.GateOpen is not a pure read: whenever it finds an undecided roll it stamps
+-- LH.gateClosedUntil = GetTime() + GATE_GRACE as a side effect. Calling it three times in a row while
+-- a roll is still undecided -- exactly what running /kart status repeatedly while something looks
+-- stuck does -- must not push that stamp out to the time of the LAST status call. If it did, resolving
+-- the roll the instant after would still find the gate held for another GATE_GRACE seconds, delaying
+-- release of parked sync requests and a stuck client's own catch-up for no reason but having checked.
+do
+    local _, lm = F.NewRaid()
+    RaidSim.As(lm, function() lm.KART.LC.rollDeadlines[87] = GetTime() + 999 end)
+
+    RaidSim.As(lm, function()
+        local realPrint = lm.env.print
+        lm.env.print = function() end
+        for _ = 1, 3 do
+            lm.KART.LH.PrintStatus()
+            KARTTEST.AdvanceTime(2)
+        end
+        lm.env.print = realPrint
+    end)
+
+    -- Resolve the roll right in the same instant as the last PrintStatus call above.
+    RaidSim.As(lm, function() lm.KART.LC.assignedWinners[87] = true end)
+
+    T.truthy(RaidSim.As(lm, function() return lm.KART.LH.GateOpen() end),
+        "the gate reopens immediately once the roll resolves -- PrintStatus did not hold it shut")
+end
