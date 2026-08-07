@@ -3526,11 +3526,11 @@ generation counter next to the itemID in `LC_TABLE`, which is a protocol change,
 Re-evaluate after the next raid: if `/kart status` ever shows a raider tracking nothing for an item
 the raid is voting on twice, this is the entry.
 
-**Fixed.** The heartbeat now names the roll's instance: the loot owner counts the rolls it starts
-under each number (`LC.rollGeneration`, owner-side only) and sends it as `LC_TABLE`'s third field,
-`rollID=itemID@gen`. Receivers remember the last generation heard (`LC.rollInstance`) and stamp it
-into `LC.rollExpiredHere` / `LC.rollDismissed`, which now read `"249331@2"`. `LC.HandleTable` purges a
-note when the generation differs, alongside the itemID rule it already had.
+**Fixed 2026-08-07.** The heartbeat now names the roll's instance: the loot owner counts the rolls it
+starts under each number (`LC.rollGeneration`, owner-side only) and sends it as `LC_TABLE`'s third
+field, `rollID=itemID@gen`. Receivers remember the last generation heard (`LC.rollInstance`) and stamp
+it into `LC.rollExpiredHere` / `LC.rollDismissed`, which now read `"249331@2"`. `LC.HandleTable` purges
+a note when the generation differs, alongside the itemID rule it already had.
 
 Scope was kept to the ask gates deliberately. Votes, council votes and the pass log still compare
 itemIDs, because E2 makes one vote card answer for every copy of an item on purpose and instance-aware
@@ -3541,7 +3541,20 @@ not touched. A counter rather than a timestamp: measured over an evening both co
 chunks, but `time() % 100000` is not fixed width and leaves the worst-case heartbeat four bytes short
 of splitting, where the counter leaves fifty-two.
 
-Design and measurements: `docs/superpowers/specs/2026-08-06-b139-roll-instance-design.md` (local).
+The review that closed this out found a second lesson worth keeping, more transferable than the fix
+itself: changing a stored value's shape is not a local change, however carefully the readers' guards
+were counted. The design counted every `type(x) == "string"` guard standing between the note and its
+new `"itemID@gen"` shape, and that counting was not enough — the same note is also compared for
+EQUALITY against a bare itemID in places the design never looked, because a guard search finds
+readers that check the TYPE, not readers that check the VALUE. `LC.HandleRollCatchup`'s dismissal
+refusal and `LC.ForgetDismissalIfReused` both do exactly that, both broke silently the moment the note
+grew a suffix, and the suite stayed green through it — nothing exercised a stamped note through either
+path. A shape change owes a sweep of every read of the value, not just its type guards, and the
+sweep's finding per site — including the sites judged fine — belongs in the record, because "we looked
+and it was fine" is the claim a reader six months from now has no other way to check.
+
+Design and measurements: `docs/superpowers/specs/2026-08-06-b139-roll-instance-design.md` (local,
+gitignored — the two paragraphs above are what would otherwise be lost with it).
 
 ## B140 — FIXED 2026-08-06 — a client that reloaded mid-encounter thought comms were open
 

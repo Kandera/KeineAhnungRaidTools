@@ -2344,12 +2344,17 @@ local ROLL_REQ_COOLDOWN = 30
 -- entire job -- so it is in neither of the two lists tests/test_lc_persistedtables.lua keeps in step,
 -- and belongs in neither.
 --
--- [rollID] = the itemID that was dismissed, or `true` when this client never resolved what it was
--- holding ("???"). WHAT was put away, not merely that something was: a raider dismisses an ITEM and
--- the rollID is only how it was addressed, and Blizzard hands that number to an unrelated item within
+-- [rollID] = a note about the item that was dismissed, built and read only through
+-- LC.StampRollNote/LC.RollNoteParts -- never compared or sliced by hand. As a string it is
+-- "itemID@generation" (B139), or a bare itemID when this client held no generation for the roll at
+-- the moment it was stamped; it is `true` when this client never resolved what it was holding
+-- ("???"). WHAT was put away, not merely that something was: a raider dismisses an ITEM and the
+-- rollID is only how it was addressed, and Blizzard hands that number to an unrelated item within
 -- seconds on trash (B132). Remembering the number alone left this client refusing the NEXT item under
 -- it as well -- deaf to a drop nobody here ever decided about. Everything that reads this compares on
--- truthiness for the gate and on the item for the question "is this still the roll I closed".
+-- truthiness for the gate, on the item for the question "is this still the roll I closed", and, where
+-- both sides know a generation, on that too -- the second copy of the same item under a reused number
+-- is the one reuse the item comparison alone cannot see.
 LC.rollDismissed = LC.rollDismissed or {}
 
 -- The dismissal is about an item, so any message that names a DIFFERENT item under a dismissed
@@ -2384,9 +2389,13 @@ end
 -- here and asks exactly as before. "I watched it close" is knowledge the asker has and the owner
 -- does not -- the earlier attempt to give the OWNER this distinction died on that asymmetry.
 --
--- Same shape and lifecycle as the dismissal note: [rollID] = itemID (or `true` for "???"), runtime
--- only, outlives Trade.ClearRollState on purpose, cleared by a roll START under the ID
--- (PurgeStaleRoll), by a heartbeat naming a different item under it, and by the round ending.
+-- Same shape and lifecycle as the dismissal note above -- built and read only through
+-- LC.StampRollNote/LC.RollNoteParts: "itemID@generation" (B139), a bare itemID when no generation was
+-- known at the moment it was stamped, or `true` for "???". Runtime only, outlives
+-- Trade.ClearRollState on purpose, and cleared by any of four things: a roll START under the ID
+-- (PurgeStaleRoll), a heartbeat naming a different item under it, a heartbeat naming a different
+-- INSTANCE of the same item under it (B139 -- the reuse the item comparison alone cannot see), and
+-- the round ending.
 LC.rollExpiredHere = LC.rollExpiredHere or {}
 
 --- A note about a roll that ended here, as one string: the itemID, and the instance of it this note
@@ -2662,6 +2671,14 @@ function LC.HandleTable(payload, senderKey, sender)
         -- item named either: TablePayload sends "(itemID or 0)" for an owner holding "???" for the
         -- roll, so a differing generation alone releases the note even when the wire names no item at
         -- all -- a generation mismatch is stronger evidence of a reuse than an item name ever was.
+        --
+        -- Its sibling above (the dismissal note's check) does not get this: it lives inside
+        -- `if rollID and itemID then`, so a heartbeat naming no item at all cannot release a
+        -- dismissal on a generation mismatch alone -- only this expiry note can. Left narrower on
+        -- purpose rather than widened to match: a sender only holds a generation for a roll whose
+        -- START it counted (LC.rollGeneration), and counting the start means it named the item at
+        -- that moment too, so an owner that holds a generation but names no item NOW is close to
+        -- unreachable in practice.
         local expiredHere = rollID and LC.rollExpiredHere[rollID]
         local expiredItem, expiredGen = LC.RollNoteParts(expiredHere)
         if expiredItem and itemID and itemID ~= "0" and expiredItem ~= itemID then
