@@ -178,3 +178,44 @@ do
     T.eq(raider.env.KART_LootHistory[1].id, idBefore, "the award id survives a reload")
     T.eq(raider.env.KART_LootHistoryEpoch, epochBefore, "the epoch survives a reload")
 end
+
+-- Convergence. The three merge rules are meant to be commutative and idempotent: who talks to whom,
+-- and in what order, must not change where the raid ends up. That is a property, not a case, so it is
+-- checked by running the same awards and wipes through randomised orderings and losses and asserting
+-- that every client lands on the same epoch and the same set of ids.
+--
+-- Deterministic seed: a soak that cannot be re-run on the failing input is a soak that reports
+-- something nobody can fix. Compare by RATE across runs, never by seed number.
+do
+    for seed = 1, 40 do
+        math.randomseed(seed)
+        local sim, lm, council, raider = F.NewRaid()
+
+        for i = 1, 12 do
+            local winner = ({ council, raider, lm })[math.random(1, 3)]
+            if math.random() < 0.25 then RaidSim.Hold(sim, "LC_RESULT") end
+            Award(sim, lm, 200 + i, F.GLOVES, winner, "BIS")
+            if math.random() < 0.25 then RaidSim.Release(sim, "LC_RESULT") end
+            if i == 6 then RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end) end
+            if math.random() < 0.2 then RaidSim.Reload(sim, raider.name) end
+        end
+
+        RaidSim.Release(sim, "LC_RESULT")
+        RaidSim.Drain(sim, 300)
+
+        local function idSet(c)
+            local s = {}
+            for _, e in ipairs(c.env.KART_LootHistory or {}) do s[e.id] = true end
+            return s
+        end
+
+        T.eq(raider.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
+            "seed " .. seed .. ": the raider ends on the lootmaster's epoch")
+        T.eq(council.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
+            "seed " .. seed .. ": the council member does too")
+        T.deep_eq(idSet(raider), idSet(lm),
+            "seed " .. seed .. ": the raider holds exactly the lootmaster's award ids")
+        T.deep_eq(idSet(council), idSet(lm),
+            "seed " .. seed .. ": and so does the council member")
+    end
+end
