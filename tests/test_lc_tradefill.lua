@@ -630,6 +630,35 @@ do
         "and its deadline is being watched again")
 end
 
+-- ...and from the pending trade itself, not only from an undecided item (B144, B149 mutation gap) ----
+-- The block above restarts the ticker through LC.RestoreSessionSnapshot's own check, and that one
+-- only ever runs when there is still something on LC.councilTabs/LC.voteListRolls for
+-- LC.SaveSessionSnapshot to have written a store.tables for in the first place -- with nothing on the
+-- panel at all it returns before ever writing one, and LC.RestoreSessionSnapshot bails out on the
+-- other side before reaching its own AnythingOnTheTradeClock() check. That is exactly the ordinary
+-- shape of a BoP obligation: the item is awarded, the tab is closed (End Round, or the lootmaster
+-- dismissing it), and only the trade reminder is left. Without Trade.RestorePersistedTrades starting
+-- the clock on its OWN pending-trade table, a reload in that shape restores the reminder row with no
+-- clock behind it at all: no 20-minutes-left warning, no expiry, until something unrelated happens to
+-- start one.
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    F.Drop(sim, 94, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(94, alric.guid, "BIS", nil) end)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(lm, function() lm.KART.LC.Council.CloseCouncilTab(94) end)
+    T.truthy(#lm.KART.LC.pendingTrades > 0, "the setup: a pending trade obligation exists before the reload")
+    T.eq(#lm.KART.LC.councilTabs, 0, "and nothing at all is left on the council panel")
+
+    local back = RaidSim.Reload(sim, "Bramor")
+    T.truthy(#back.KART.LC.pendingTrades > 0, "the pending trade itself came back")
+    T.truthy(back.KART.LC.tradeTimeoutTicker ~= nil,
+        "Gap 6 (B144): and its clock is running again, from the pending trade alone -- nothing was " ..
+        "left on the table for LC.RestoreSessionSnapshot's own check to see")
+end
+
 -- A localized sentence with a positional argument must not blow up the ticker -----------------------
 -- BIND_TRADE_TIME_REMAINING is Blizzard's own string and several locales write it with a positional
 -- insertion ("%1$s") rather than a bare "%s". The escape class covered every magic character except

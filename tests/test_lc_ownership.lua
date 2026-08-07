@@ -524,3 +524,40 @@ do
     T.eq(RaidSim.As(leader, leader.KART.LC.IsLootOwner), false, "so the second hop defers too")
     T.eq(RaidSim.As(lm, lm.KART.LC.IsLootOwner), true, "and the lootmaster keeps the loot flow")
 end
+
+-- A restored snapshot must not hold the session prompt back once the raid HAS answered ------------
+-- B141 (mutation-run gap, B149): LC.ShowSessionPrompt refuses to ask while
+-- `LC.sessionSnapshotPending and not LC.sessionStateKnown` -- a snapshot restored from a reload, and
+-- no word from the raid yet on whether that session is still running. Dropping the second half of
+-- that guard (leaving only `LC.sessionSnapshotPending`) holds the prompt back for the whole
+-- RESTORE_CONFIRM_SECONDS (60s), even once the raid HAS answered -- which is most of what B141 was
+-- about: a reloaded lootmaster left unable to be asked to start the next session for the better part
+-- of a minute after being told everything there was to know.
+do
+    local sim = F.NewSplitRaid() -- Bramor hands out the loot, Corvin leads -- the ordinary split
+    local back = RaidSim.Reload(sim, "Bramor")
+    RaidSim.EnterWorld(sim, "Bramor")
+
+    T.truthy(back.KART.LC.sessionSnapshotPending,
+        "the setup: a config was restored from disk, so the snapshot flag is set")
+
+    -- LC_STATE_REQ goes out on join, and the requester is the loot owner itself -- council and the
+    -- raid leader answer that one at once (LC.HandleStateRequest), not on the ordinary raider jitter,
+    -- so the harness's synchronous group delivery already carries the reply back by the time
+    -- RaidSim.EnterWorld returns -- seconds, not the RESTORE_CONFIRM_SECONDS minute the timer
+    -- fallback would otherwise need.
+    T.eq(back.KART.LC.sessionStateKnown, true, "the raid has already told this client the session state")
+    T.eq(back.KART.LC.sessionActive, true, "confirming the same session that was running before")
+    T.truthy(back.KART.LC.sessionSnapshotPending,
+        "the snapshot flag itself is untouched by that answer -- only its own 60s timer clears it, " ..
+        "and nowhere near that much time has passed")
+
+    -- The owner, now that it genuinely knows the session is running, ends it -- the ordinary way any
+    -- distribution ends, well under a minute after the reload.
+    RaidSim.As(back, function() back.KART.LC.SetSessionActive(false) end)
+
+    RaidSim.As(back, back.KART.LC.ShowSessionPrompt)
+    T.truthy(back.KART.LC.sessionPromptFrame and back.KART.LC.sessionPromptFrame:IsShown(),
+        "Gap 5 (B141): once the session state has genuinely arrived, the prompt is free to appear " ..
+        "right away -- not held back for the rest of the snapshot's minute")
+end

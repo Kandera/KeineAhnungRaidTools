@@ -375,6 +375,26 @@ do
         "while the item before it is still on the list -- the probe is a ring, not a last-item report")
 end
 
+-- ...and the loot owner's OWN verdict, not an empty block (B148, B149 mutation gap) -------------------
+-- The owner force-wins a council item rather than passing it -- a completely different branch from
+-- AutoPassAnnounced, which LC.OnStartLootRoll's isLootmaster arm takes over before the AutoPassAnnounced
+-- arm is ever reached for this client. Without its own LC.RecordPassGate(rollID, "owner") call, the one
+-- client the Manifest asks the raid to screenshot prints an EMPTY Auto-Pass block for an item it just
+-- force-won -- "nothing was decided here", a different claim entirely from "we took it, so there was
+-- nothing to pass".
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 97, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq((KARTTEST.rolled[97] or {})[lm.unit], 1, "the setup: the loot owner force-won it, not passed it")
+
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
+    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true),
+        "Gap 7 (B148): /kart status names the item on the owner's own client")
+    T.truthy(out:find(lm.KART.L.LC_PASSGATE_OWNER, 1, true),
+        "and says it was won rather than passed, instead of printing an empty Auto-Pass block")
+end
+
 -- ...including the gate one layer up, in the roll handler itself ------------------------------------
 -- A client that does not yet know a session is running returns before any of the five conditions is
 -- even reached (LC.rollsSeenWhileUnaware). That is the shape reported from a live raid on 2026-08-05 --

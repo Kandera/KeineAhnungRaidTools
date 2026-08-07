@@ -1234,3 +1234,128 @@ do
     end
     T.eq(asks, 0, "so no needless ask goes out for the item this client already put away")
 end
+
+-- B145 gaps 1-4 (B149 mutation run): "a round that ended is not a gap to repair" --------------------
+-- B145's rule: once a round ends, a client must stop asking the owner about the rolls it was in the
+-- middle of repairing -- a heartbeat from before End Round can still be in flight and land afterwards.
+-- LC.rollRoundEnded is the note that says so, and LC.ClearAllRolls writes it from TWO different
+-- tables: LC.rollItems (a client that held something) and LC.rollReqSent (a client that only ever
+-- ASKED). The second is the half the whole entry turns on -- a DEAF client, one that never received
+-- the announcement at all, holds no LC.rollItems, so the first loop notes nothing for it. It is
+-- exactly the client B145 exists for, and it is built the same way in all four gaps below: excluded
+-- from Blizzard's own roll (F.Drop's noRollFor) and from the network announcement (LC_DROP
+-- blackholed), unlike the "???" construction used elsewhere in this file (a hand-fed LC_START with no
+-- item, which still tracks SOMETHING). This client tracks nothing at all -- only that it asked.
+
+-- Builds that client: F.Drop's noRollFor keeps Blizzard from ever raising the roll on it, and
+-- blackholing LC_DROP loses the announcement too, so LC.rollItems[rollID] never gets set. A table
+-- heartbeat reaches it regardless (LC_TABLE is never blackholed) and it asks for what it cannot see;
+-- LC_ROLL_CATCHUP is blackholed too, so the reply is lost and LC.rollReqSent stays the only trace of
+-- the roll this client ever holds -- exactly what Gap 1 needs to be testing the right half of.
+local function DeafAsksOnce(sim, deaf, rollID, itemID)
+    RaidSim.Blackhole(sim, "LC_DROP")
+    RaidSim.Blackhole(sim, "LC_ROLL_CATCHUP")
+    F.Drop(sim, rollID, itemID, { noRollFor = { [deaf.name] = true } })
+    KARTTEST.AdvanceTime(1)
+    T.eq(deaf.KART.LC.rollItems[rollID], nil, "the deaf client never heard the announcement at all")
+    KARTTEST.AdvanceTime(3) -- past TABLE_POLL_SECONDS: the first heartbeat reaches it
+    T.truthy(deaf.KART.LC.rollReqSent[rollID] ~= nil, "and has asked about the roll it never heard of")
+    T.eq(deaf.KART.LC.rollItems[rollID], nil, "asking is not hearing -- it still holds nothing")
+end
+
+-- Gap 1: LC.ClearAllRolls's rollReqSent loop, and Gap 2: the round-ended gate in LC.HandleTable ------
+-- Run together on purpose (per the task): reaching Gap 2 needs a note that only Gap 1's mechanism can
+-- produce, so one scenario that drives both beats two that half-drive each.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Sinja
+    DeafAsksOnce(sim, deaf, 1000, F.GLOVES)
+
+    -- A second heartbeat is on its way, still naming 1000 -- held rather than delivered, so it can
+    -- land AFTER the round ends instead of before it. That is exactly the shape B145 exists for: a
+    -- heartbeat sent before End Round, still in flight when it lands.
+    RaidSim.Hold(sim, "LC_TABLE")
+    KARTTEST.AdvanceTime(30) -- past TABLE_RESEND_SECONDS, so the owner says it again
+
+    -- The round ends while the deaf client's ask is the only thing it holds under 1000.
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    T.truthy(deaf.KART.LC.rollRoundEnded and deaf.KART.LC.rollRoundEnded[1000],
+        "Gap 1 (B145): LC.ClearAllRolls's rollReqSent loop notes the round ended for a client the " ..
+        "rollItems loop never sees at all -- the deaf client the whole entry turns on")
+
+    -- The stale heartbeat lands now, still naming a roll whose round is over.
+    RaidSim.ClearLog(sim)
+    local released = RaidSim.Release(sim, "LC_TABLE")
+    T.truthy(released > 0, "the heartbeat held since before End Round lands only now")
+    local asked = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == deaf.name then asked = asked + 1 end
+    end
+    T.eq(asked, 0,
+        "Gap 2 (B145): the round-ended gate in LC.HandleTable stops a heartbeat in flight from " ..
+        "resurrecting an ask for a round that is already over")
+end
+
+-- Gap 3: PurgeStaleRoll clears the round-ended note when the roll genuinely restarts ------------------
+-- Without this, a fresh roll under a number whose round ended is refused for the rest of the session
+-- -- the note outlives the thing it was about.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Sinja
+    DeafAsksOnce(sim, deaf, 1010, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    T.truthy(deaf.KART.LC.rollRoundEnded and deaf.KART.LC.rollRoundEnded[1010],
+        "the setup: the round-ended note is in place for 1010, same construction as Gaps 1 and 2")
+
+    -- Blizzard hands the SAME number to a genuinely NEW roll, and this time deaf sees it -- included
+    -- in Blizzard's own roll again, so its own local OnStartLootRoll runs PurgeStaleRoll(1010, ...)
+    -- itself, independent of the network (LC_DROP is still blackholed from the setup above).
+    F.Drop(sim, 1010, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(deaf.KART.LC.rollRoundEnded[1010], nil,
+        "Gap 3 (B145): PurgeStaleRoll clears the stale round-ended note when the roll genuinely restarts")
+    T.truthy(tostring(deaf.KART.LC.rollItems[1010]):match("item:" .. F.WEAPON),
+        "and the fresh roll is tracked normally -- not refused for the rest of the session")
+end
+
+-- Gap 4: TearDownForRaidExit wipes the round-ended notes on the way out -------------------------------
+-- Narrow, and the task said to report it rather than force it if it could not be reached: it needs a
+-- client that leaves the raid, rejoins, and is THEN deaf to a reused number -- because any roll start
+-- it DOES see runs PurgeStaleRoll, which clears the note per rollID (Gap 3), and would prove the wrong
+-- mechanism. Reached here via KARTTEST.solo, the same "ported out" tool tests/test_lc_churn.lua uses
+-- to drive a real LC.CheckRaidJoin exit-and-teardown, confirmed over RAID_EXIT_CONFIRM_DELAY rather
+-- than assumed.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Sinja
+    DeafAsksOnce(sim, deaf, 1020, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    T.truthy(deaf.KART.LC.rollRoundEnded and deaf.KART.LC.rollRoundEnded[1020],
+        "the setup: the round-ended note is in place for 1020, same construction as Gaps 1 and 2")
+
+    -- deaf ports out of the raid entirely, and the exit has to actually be CONFIRMED
+    -- (RAID_EXIT_CONFIRM_DELAY) for TearDownForRaidExit to run at all -- what tells this apart from
+    -- the roster blip LC.CheckRaidJoin is written to tolerate and must not tear down on.
+    KARTTEST.solo[deaf.unit] = true
+    RaidSim.As(deaf, function() deaf.KART.LC.CheckRaidJoin() end)
+    KARTTEST.AdvanceTime(5)
+    KARTTEST.solo[deaf.unit] = nil
+    RaidSim.As(deaf, function() deaf.KART.LC.CheckRaidJoin() end) -- back in, a new raid as far as LC knows
+
+    -- The "new" raid hands out the SAME number, and deaf is deaf to it again -- excluded from
+    -- Blizzard's own roll AND from the announcement (LC_DROP is still blackholed), so nothing on this
+    -- client ever runs PurgeStaleRoll for 1020. Only the heartbeat reaches it, exactly as in the setup.
+    F.Drop(sim, 1020, F.WEAPON, { noRollFor = { [deaf.name] = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(3)
+
+    local asked = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == deaf.name then asked = asked + 1 end
+    end
+    T.truthy(asked > 0,
+        "Gap 4 (B145): TearDownForRaidExit wiped the stale round-ended note on the way out, so the " ..
+        "new raid's roll under the same number is askable again")
+end
