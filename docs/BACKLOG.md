@@ -57,6 +57,19 @@ B51 and B54. All ten are fixed and both switches are available again as of 2026-
 is gone. Until that pass the feature had never executed in a test at all -- `RegisterEvent` was a
 no-op in the harness, so its own frame never received START_LOOT_ROLL.
 
+**2026-08-07:** Loot history epoch sync. Touches C3, C7, C8, C14. The suite covers the merge rules,
+the gate and its 60-second cap, the batching ceiling and convergence across 40 randomised orderings.
+Still owed: ten in-game attempts with two clients -- specifically C3 with a raider who missed the
+wipe, and C14 with a roll that never closes. The module is on trial until the next real raid.
+
+The one-time purge that ships with this empties EVERY user's loot history on first load of this
+version, not just the maintainer's -- the single most user-visible consequence of the work, and worth
+someone remembering before the "why is my history empty" reports come in.
+
+Two deferred minors, worth carrying rather than fixing now: `LH.GateOpen` is an O(n) scan over
+tracked rolls, called once a second while a request is parked; and the `LC_HIST_EPOCH` handler touches
+epoch state directly instead of going through the shared `LH.AdmitEpoch`.
+
 ## Reading this file
 
 **Every heading carries its own status**, so "what is still open?" is one look at the headings and

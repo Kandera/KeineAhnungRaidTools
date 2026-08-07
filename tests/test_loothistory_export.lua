@@ -193,3 +193,17 @@ do
         "and picking it shows both of their histories, which is the documented trade")
     LH.filters.player, LH.filters.playerIds = nil, nil
 end
+
+-- The new fields stay out of the export. BuildRCLootCouncilJSON mirrors the field set and order
+-- RCLootCouncil itself produces, because the output is pasted into tools built to read that -- an
+-- extra key is a change to somebody else's format, and the export cut that will use `id` (sub-project
+-- 2) tracks it on our side, not on the wire to wowutils.
+do
+    me.env.KART_LootHistoryEpoch = 3
+    History({ { time = 1786090821, item = "item:1234", winner = "Alric", winnerKey = "Player-1-A",
+                reason = "BIS", class = "MAGE", id = "1786090821-3f9a1c", epoch = 3 } })
+    local json = Export()
+
+    T.eq(json:find("epoch", 1, true), nil, "the epoch does not leak into the export")
+    T.truthy(json:find('"player":"Alric"', 1, true), "and the export still says what it always said")
+end

@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The raid's vote buttons, council and roll setting survive a reload** instead of waiting for the raid to say them again.
 - **The council panel compares equipped gear on tier tokens too.**
 - **The council panel says how many council members have voted.**
+- **Clearing the loot history now clears it for the whole raid.** Raiders who were away are cleared too, the next time they join.
+- **The loot history catch-up is faster and arrives complete.** Long reasons and item links are no longer shortened on the way.
+- **Loot history syncing waits while an item is being distributed.**
 
 ### Fixed
 - **A reload no longer asks the lootmaster to start a session that is already running**, and no longer ends it for the raid.
