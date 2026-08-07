@@ -386,7 +386,7 @@ do
         "and it is counted -- the alternative is a client that quietly loses a whole catch-up")
 end
 
--- The full reconcile runs once a night, not once a relog ----------------------------------------------
+-- The full reconcile runs once per cooldown, not once per relog ---------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
     -- The peer is missing an entry BEHIND its watermark, so every request diverges on checksum and
@@ -421,10 +421,60 @@ do
     RaidSim.Drain(sim, 30)
 
     T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0,
-        "the second divergence in the same night is not answered with another full pull")
+        "the second divergence inside the cooldown is not answered with another full pull")
 end
 
--- A granted full reconcile that sends nothing does not burn the once-per-night allowance ------------
+-- and is granted again once the cooldown has passed ---------------------------------------------------
+-- The other half of the throttle, and the reason it is an hour rather than an evening (maintainer's
+-- ruling, 2026-08-07). Nothing acknowledges a batch -- LH.fullReconciled is stamped on SEND -- so a
+-- full answer that never arrived spends the asker's allowance anyway. At six hours that client had no
+-- history for the rest of the raid; at one hour the very next divergence past the window pulls it.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = time() - 300, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 1, id = "cool-one", epoch = 1 },
+            { time = time() - 60,  item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "cool-two", epoch = 1 },
+        }
+    end)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "cool-two", epoch = 1 },
+        }
+    end)
+
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+    T.eq(#raider.env.KART_LootHistory, 2, "the first reconcile fills the hole")
+
+    -- Everything the first full answer delivered is gone again -- the client it reached was lost, or
+    -- the answer never landed. The hole is BEHIND the watermark either way, so only a full pull can
+    -- see it: raider's remaining entry is the NEWEST one, so its since-timestamp asks for nothing.
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "cool-two", epoch = 1 },
+        }
+    end)
+    -- Past HISTORY_FULL_COOLDOWN. At the old six hours this same wait was still inside the window and
+    -- the client stayed one entry short until the next raid night.
+    KARTTEST.AdvanceTime(61 * 60)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") > 0,
+        "a divergence past the cooldown is answered with a full pull again")
+    T.eq(#raider.env.KART_LootHistory, 2,
+        "so the entry behind the watermark is recovered the same evening, not the next one")
+end
+
+-- A granted full reconcile that sends nothing does not burn its allowance --------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
     -- The peer's own history is empty at the moment it grants a full reconcile -- e.g. it just

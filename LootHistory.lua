@@ -1276,9 +1276,16 @@ end
 -- matters, which is whether this block will come back as a string over there.
 local HISTORY_BATCH_ENTRIES = 50
 
--- One full reconcile per asker per raid night. Six hours covers an evening and has reset by the next
--- one; a calendar day would not, since a raid that runs past midnight is one night.
-local HISTORY_FULL_COOLDOWN = 6 * 60 * 60
+-- The minimum gap between two full reconciles for the same asker.
+--
+-- An hour, and deliberately not an evening (maintainer's ruling, 2026-08-07). What this cooldown is
+-- for is absorbing a relog storm -- people port out mid-distribution and come back, and every one of
+-- those joins asks again -- and those joins are MINUTES apart, so an hour serves that purpose exactly
+-- as well as six do. What six hours also did was make a full reconcile whose answer was genuinely
+-- lost (nothing acknowledges a batch; the stamp is written on send) unrecoverable until the next
+-- raid night. An hour lets that client recover the same evening instead, at no cost to the storm it
+-- was written for.
+local HISTORY_FULL_COOLDOWN = 60 * 60
 
 -- One record, in the field order the receiver parses. The item is last because item links are full of
 -- colons; winner and reason are free text, so their colons are stripped and the fixed fields stay
@@ -1485,16 +1492,16 @@ function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
     -- and the wire stays empty.
     local full = (theirEpoch < myEpoch) or (theirSum ~= LH.HistoryChecksum())
 
-    -- Throttled to once a night per asker. In this raid people port out mid-distribution and relog
-    -- all evening, and every one of those joins asks again -- while a hole appears at most once. Ask
-    -- a second time in the same night and you get the incremental answer; the hole is already filled
-    -- by then, and if it is not, tomorrow's first join pulls it.
+    -- Throttled to once per HISTORY_FULL_COOLDOWN per asker. In this raid people port out
+    -- mid-distribution and relog all evening, and every one of those joins asks again -- while a hole
+    -- appears at most once. Ask again inside the window and you get the incremental answer; the hole
+    -- is already filled by then, and if it is not, the request after the cooldown pulls it.
     LH.fullReconciled = LH.fullReconciled or {}
     local lastFull = LH.fullReconciled[senderFullName]
     -- Whether THIS request earns the stamp, decided now; written below only once the answer is known
     -- to be non-empty (matching LH.historySyncAnswered) -- a peer whose own history is empty, or has
     -- nothing surviving the epoch/cutoff filter, sends nothing back, and stamping it anyway would
-    -- burn the asker's once-per-night allowance on a no-op: if this peer backfills real entries
+    -- burn the asker's one full answer per cooldown on a no-op: if this peer backfills real entries
     -- later in the same window, the asker's next request would be throttled into the incremental
     -- branch and those entries would not reach it until the cooldown expired.
     local grantFull = false
