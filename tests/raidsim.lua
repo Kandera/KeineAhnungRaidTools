@@ -108,9 +108,15 @@ RaidSim.active = nil
 -- The SavedVariables a /reload keeps. Everything else about a client -- every table in KART.LC, the
 -- session flag, the tracked rolls -- is runtime state and starts empty again, which is exactly the
 -- asymmetry that makes a reloading lootmaster dangerous.
+-- KART_LootHistoryEpoch has been a real declared SavedVariable in KeineAhnungRaidTools.toc since
+-- commit 492d646, and belongs on this list for the same reason every other entry does: a real
+-- /reload does NOT drop a declared SavedVariable, it only drops runtime state. Omitting it here
+-- made a reloading client's epoch silently go to nil instead of surviving the reload -- the harness
+-- diverging from the game it is simulating, in a way that let a test pass for a reason the game
+-- would never supply. Whoever adds the next SavedVariable to the .toc must add it here too.
 local SAVED_VARIABLES = {
-    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LCTrades",
-    "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache", "KART_LCSession",
+    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LootHistoryEpoch",
+    "KART_LCTrades", "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache", "KART_LCSession",
 }
 
 -- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
@@ -149,6 +155,10 @@ local function Boot(client, saved)
     client.env.KART_Settings       = saved.KART_Settings or {}
     client.env.KART_LootHistory    = saved.KART_LootHistory or {}
     client.env.KART_LootHistoryClearedAt = saved.KART_LootHistoryClearedAt
+    -- Scalar, may legitimately be nil (a client that has never loaded LH.PurgeIfNoEpoch), same
+    -- treatment as KART_LootHistoryClearedAt above -- see the SAVED_VARIABLES comment for why this
+    -- has to travel across RaidSim.Reload at all.
+    client.env.KART_LootHistoryEpoch = saved.KART_LootHistoryEpoch
     client.env.KART_LCTrades       = saved.KART_LCTrades or { pending = {}, owed = {} }
     client.env.KART_LCSession      = saved.KART_LCSession or {}
     client.env.KART_LCOfficerNotes = saved.KART_LCOfficerNotes or {}

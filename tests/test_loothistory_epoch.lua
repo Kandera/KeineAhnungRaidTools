@@ -168,14 +168,103 @@ do
     T.eq(#lm.env.KART_LootHistory, 0, "and ends up with an empty table, not a crash")
 end
 
+-- The award now carries the epoch it was decided in (Task 6a), not the receiver's guess at
+-- delivery time. Three cases, on the wire, per the maintainer's ruling.
+
+-- The delayed award that outlived a wipe is discarded (case 2) ----------------------------------
+-- Held before it can send, so it is still in flight when the loot owner wipes the raid. Every
+-- receiver -- not just the assigner, who wiped its own copy directly -- must end up without it.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.Hold(sim, "LC_RESULT")
+    Award(sim, lm, 300, F.GLOVES, raider, "BIS")
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
+    RaidSim.Release(sim, "LC_RESULT")
+    RaidSim.Drain(sim, 10)
+
+    local function hasRoll300(c)
+        for _, e in ipairs(c.env.KART_LootHistory or {}) do
+            if e.rollID == 300 then return true end
+        end
+        return false
+    end
+    for _, c in ipairs(sim.clients) do
+        T.eq(hasRoll300(c), false, c.name .. " does not store the pre-wipe award")
+    end
+end
+
+-- An award decided at a higher epoch, from the loot owner, is adopted along with its epoch
+-- (case 3, authorized) ---------------------------------------------------------------------------
+-- raider never hears the wipe broadcast itself (held back); the award from the loot owner is what
+-- reaches it first, and that alone must be enough to bring it up to date.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.Hold(sim, "LC_HIST_EPOCH")
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
+    T.eq(raider.env.KART_LootHistoryEpoch, nil, "raider has not heard the wipe broadcast yet")
+
+    Award(sim, lm, 301, F.GLOVES, raider, "BIS")
+
+    T.eq(raider.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
+        "raider adopts the assigner's epoch along with the award")
+    local stored
+    for _, e in ipairs(raider.env.KART_LootHistory) do
+        if e.rollID == 301 then stored = e end
+    end
+    T.truthy(stored, "raider stores the award")
+    T.eq(stored and stored.epoch, lm.env.KART_LootHistoryEpoch, "stamped at the epoch it was decided in")
+
+    RaidSim.Release(sim, "LC_HIST_EPOCH")
+    RaidSim.Drain(sim, 10)
+end
+
+-- The same award from a council member who is not the loot owner is discarded, and the client
+-- reads as stale afterwards (case 3, unauthorized) -----------------------------------------------
+-- Only the loot owner's own broadcast may raise an epoch (Task 2, Task 4). raider is put a full
+-- epoch behind the rest of the raid (as if it had missed the wipe broadcast, e.g. a disconnect)
+-- while council legitimately holds the new one, then council -- not the loot owner -- awards.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+
+    Award(sim, council, 302, F.GLOVES, lm, "BIS")
+
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "raider does not adopt an epoch from a non-owner")
+    local hasRoll302 = false
+    for _, e in ipairs(raider.env.KART_LootHistory) do
+        if e.rollID == 302 then hasRoll302 = true end
+    end
+    T.eq(hasRoll302, false, "raider does not store the award either")
+    RaidSim.As(raider, function() T.truthy(raider.KART.LH.IsStale(), "raider now reads as stale") end)
+end
+
 -- A reload changes nothing (C8) --------------------------------------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
+    -- Bumped past 1 before the award, so the reload assertion below cannot be satisfied by
+    -- LH.PurgeIfNoEpoch's nil->1 fallback -- which is exactly how this block used to pass before
+    -- KART_LootHistoryEpoch was added to raidsim.lua's SAVED_VARIABLES list (see the comment there):
+    -- the reload silently dropped the epoch to nil, the purge reset it to 1, and epochBefore/after
+    -- both being 1 looked like the epoch had survived.
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
     Award(sim, lm, 61, F.GLOVES, raider, "BIS")
     local idBefore    = raider.env.KART_LootHistory[1].id
     local epochBefore = raider.env.KART_LootHistoryEpoch
-    RaidSim.Reload(sim, raider.name)
-    T.eq(raider.env.KART_LootHistory[1].id, idBefore, "the award id survives a reload")
+    T.truthy(epochBefore and epochBefore > 1, "the epoch is bumped past 1 before the reload")
+    -- RaidSim.Reload REPLACES the client and returns the new one; the pre-reload `raider` object
+    -- is left untouched (a corpse -- see its own comment), so without capturing the return value
+    -- here every assertion below would be reading the SAME table it read before the reload ever
+    -- ran, unable to fail no matter what RaidSim.Reload actually does. This is what let C8 "pass"
+    -- before KART_LootHistoryEpoch was even added to SAVED_VARIABLES.
+    raider = RaidSim.Reload(sim, raider.name)
+    T.eq(raider.env.KART_LootHistory[1] and raider.env.KART_LootHistory[1].id, idBefore,
+        "the award id survives a reload")
     T.eq(raider.env.KART_LootHistoryEpoch, epochBefore, "the epoch survives a reload")
 end
 
@@ -197,7 +286,14 @@ do
             Award(sim, lm, 200 + i, F.GLOVES, winner, "BIS")
             if math.random() < 0.25 then RaidSim.Release(sim, "LC_RESULT") end
             if i == 6 then RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end) end
-            if math.random() < 0.2 then RaidSim.Reload(sim, raider.name) end
+            -- RaidSim.Reload REPLACES the client in the sim and returns the new one; the old
+            -- `raider` reference becomes a corpse (see its own comment). Without capturing the
+            -- return value here, every later iteration -- and the convergence assertions below --
+            -- kept driving/reading the dead pre-reload client, which never receives another
+            -- broadcast again. That made a real defect (the wire-guessed epoch, Task 6a Finding 2)
+            -- indistinguishable from this harness bug: both left the post-reload raider looking
+            -- behind the raid.
+            if math.random() < 0.2 then raider = RaidSim.Reload(sim, raider.name) end
         end
 
         RaidSim.Release(sim, "LC_RESULT")

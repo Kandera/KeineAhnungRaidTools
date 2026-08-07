@@ -989,7 +989,12 @@ function LH.NewAwardID()
     return string.format("%d-%03x%03x", time(), math.random(0, 0xFFF), awardIDCounter)
 end
 
-function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey, awardID)
+-- decisionEpoch (optional) is the epoch KART_LootHistoryEpoch held at the moment this award was
+-- decided -- carried on the wire next to awardID since Task 6a, and threaded straight through by
+-- both LC_RESULT call sites (Trade.DoAssignWinner and Trade.HandleResult) rather than re-derived
+-- here. Absent for a locally logged award that never went over the wire (a test roll, or a manual
+-- call with no awardID either): falls back to the current epoch, same as before Task 6a.
+function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey, awardID, decisionEpoch)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
 
@@ -1059,7 +1064,7 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         difficultyID = difficultyID,
         rollID       = rollID,
         id           = awardID or LH.NewAwardID(),
-        epoch        = KART_LootHistoryEpoch or 1,
+        epoch        = decisionEpoch or KART_LootHistoryEpoch or 1,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
