@@ -78,6 +78,65 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
+## B149 — OPEN — B141–B148 shipped with about half their decisions untested
+
+Twenty-second bug run, 2026-08-07, and the first one aimed at a set of fixes rather than at a file.
+B141–B148 were the integration review's own fixes (`402e9d8..e91a26e`), every one written red-first
+with a test that reproduced its defect. That is not the same as every DECISION in them being covered,
+and 3.4.0 goes out on 2026-08-11.
+
+`tests/mutrun.py` could not run this. Its rule set flips `<`, `>`, `<=`, `>=` and `and`/`or`, and it
+skips every line carrying a quote — these fixes are almost entirely `~=`/`==` comparisons, `nil`
+guards and function calls. Twenty-seven mutations were named by hand instead, one per decision, each
+phrased as a plausible wrong version: invert each match, drop each half of each guard, delete each
+lifetime clear, remove each `FindUnitForKey` presence check.
+
+**Thirteen caught, fourteen survived.** For comparison, the same method over B139 the same day caught
+nineteen of twenty-six with four real gaps. The survivors:
+
+**Real gaps — the mutation changes behaviour a raider would see, and nothing fails:**
+
+* **`LC.VoteIsForItem` / `LC.CouncilVoteIsForItem`, both halves of "unknown means cannot-tell"**
+  (`LootCouncil.lua:393`, `:396`, `:414`, `:417`). Dropping `stamped == ""` or the `mine == ""` guard
+  leaves the suite green. Both are live within one version, not old-client tolerance: a client voting
+  on a card it still holds as "???" stamps no item, and a client whose own link has not arrived reads
+  `mine == ""`. Without the second guard `stamped == mine` compares a real itemID against `""`, is
+  false, and the card hides every vote on it — the exact "blank a whole raid's votes over a link that
+  had not arrived yet" the function's comment says it exists to prevent.
+* **`LC.ClearAllRolls`'s second round-ended loop** (`:3171`), `for id in pairs(LC.rollReqSent or {})`.
+  This is the half B145 turns on: a DEAF client holds no `rollItems`, so the first loop notes nothing
+  for it and only this one records that the round ended. It is untested, which means the case B145 was
+  written for is the case that is not covered.
+* **The round-ended gate in `LC.HandleTable`** (`:2721`). Its two siblings — `AskForUnannounced` and
+  `AskOwnerForUnknownRoll` — are both caught; the heartbeat's own gate is not. Linked to the one
+  above: reaching it needs a note that only the `rollReqSent` loop can produce.
+* **`PurgeStaleRoll` clearing the round-ended note** (`:4607`). Without it a fresh roll under a number
+  whose round ended is refused for the rest of the session.
+* **`AwaitingRestoredSessionState`'s `not LC.sessionStateKnown` half** (`:3062`). Dropping it holds the
+  session prompt back for the full `RESTORE_CONFIRM_SECONDS` even after the state has arrived — a
+  minute of a reloaded lootmaster not being asked, which is most of what B141 was about.
+* **`Trade.RestorePersistedTrades` starting the ticker** (`LootCouncilTrade.lua:545`). Restored trade
+  rows would sit there with no clock: no 20-minutes-left warning, no expiry, until something else
+  starts the ticker.
+* **The `FindUnitForKey` presence check on the ANSWER count and on the straw poll**
+  (`LootCouncilPanel.lua:1124`, `:1603`). The sibling check on the council SIZE (`:1121`) is caught,
+  so "x of y" is covered on one number and not on the other.
+* **The loot owner's own Auto-Pass verdict** (`LootCouncil.lua:5278`). B148's smaller half — the one
+  client that never wrote a verdict was the owner's, and its `/kart status` printed an empty
+  Auto-Pass block on the client the Manifest asks the raid to screenshot.
+* **`TearDownForRaidExit` wiping the round-ended notes** (`:3845`). Narrow: a client that leaves and
+  rejoins, is deaf to a reused number, and is refused its repair. Real, but it needs all three.
+
+**Survives on purpose — do not re-flag:**
+
+* **`LC.ClearAllRolls` wiping `LC.councilVoteItem`** (`:3200`). `councilVotes` is wiped in the same
+  function, so there is no tally left for a stale stamp to filter; the wipe is hygiene.
+
+Fixing this is test work, not code work — no defect was found in the fixes themselves, and the two
+mutation runs together say the code does what it claims. What they also say is that "written red-first"
+covers the defect that prompted the change and not the decisions taken around it, which is worth
+knowing before the next set of fixes is called done.
+
 ## B136 — NARROWED — the suite failed intermittently; 2,521 runs later it will not do it again
 
 What was observed on 2026-08-06 (morning): `tests/test_lc_rolltable.lua:321` and `:401` ("with the
