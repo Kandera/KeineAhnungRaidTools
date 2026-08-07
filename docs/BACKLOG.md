@@ -78,7 +78,7 @@ exactly how B64 and B70 kept coming back up after they had stopped being real.
 
 # Tier 0 — reopened and unresolved
 
-## B149 — OPEN — B141–B148 shipped with about half their decisions untested
+## B149 — FIXED 2026-08-07 — B141–B148 shipped with about half their decisions untested
 
 Twenty-second bug run, 2026-08-07, and the first one aimed at a set of fixes rather than at a file.
 B141–B148 were the integration review's own fixes (`402e9d8..e91a26e`), every one written red-first
@@ -136,6 +136,23 @@ Fixing this is test work, not code work — no defect was found in the fixes the
 mutation runs together say the code does what it claims. What they also say is that "written red-first"
 covers the defect that prompted the change and not the decisions taken around it, which is worth
 knowing before the next set of fixes is called done.
+
+**Fixed 2026-08-07**, in `8c10800` and `0c744c4`: thirteen tests, each demonstrated to fail under its
+own named mutation and pass without it, across `tests/test_lc_votes.lua`,
+`tests/test_lc_councilrows.lua`, `tests/test_lc_rolltable.lua`, `tests/test_lc_ownership.lua`,
+`tests/test_lc_tradefill.lua` and `tests/test_diagnostics.lua`. Re-running the same twenty-seven
+mutations afterwards catches **twenty-six**; the one that still survives is the `councilVoteItem` wipe
+above, which is meant to. The suite went from 3,272 to 3,316 assertions.
+
+Two things the closing found that the run itself could not:
+
+* `TearDownForRaidExit`'s wipe IS reachable from the harness, through `KARTTEST.solo` — it was written
+  up above as possibly unreachable, and that guess was wrong.
+* The first attempt at the trade-ticker test passed under its own mutation, for a reason worth keeping:
+  `LC.RestoreSessionSnapshot` starts the ticker too, on a check of its own, and masked the one under
+  test. It only isolates once the council tab is closed first, so the pending trade is the only thing
+  left that could start the clock. A test that green-lights the wrong line is the failure mode this
+  whole entry is about, and it happened once more inside the fix for it.
 
 ## B136 — NARROWED — the suite failed intermittently; 2,521 runs later it will not do it again
 
