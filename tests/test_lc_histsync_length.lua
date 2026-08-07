@@ -13,6 +13,74 @@ local RaidSim = F.RaidSim
 
 local GLOVES = KARTTEST.items[F.GLOVES].link
 
+-- What a night's history actually looks like once it is packed.
+--
+-- Every batch fixture in this file used to be ONE item link, ONE winner and one constant reason
+-- repeated n times. Deflate collapses that to a few hundred bytes however many entries are in it, so
+-- the PACK_MAX_BLOCK assertion below could not fail whatever the batch size -- which is how a
+-- 50-entry batch that a real raid packs to nearly 4 KB shipped green. A raid night has a different
+-- item almost every drop, a different winner most of the time, reasons drawn from the raid's vote
+-- buttons, and an award id per entry that is mostly incompressible by construction. That is the
+-- entropy the compressor is really handed, so it is what these fixtures hand it.
+-- Four bonus-list variants of each fixture item, which is what a tier's log really holds: the same
+-- base items at different upgrade tracks, crests and tertiaries, so no two links are byte-identical
+-- and the bonus lists themselves are the part deflate cannot fold away. Twelve items repeated
+-- verbatim across 150 awards is a fixture, not a raid.
+local ITEM_POOL = {}
+for _, id in ipairs({ F.GLOVES, F.WEAPON, F.TOKEN, F.PLATE_CHEST, F.STAFF, F.SHIELD, F.STR_MACE,
+                      F.INT_DAGGER, F.LONG_ITEM, F.TIER_TOKEN, F.RECIPE, F.BOE }) do
+    local def = KARTTEST.items[id]
+    for variant = 1, 4 do
+        local bonus = {}
+        for b = 1, 7 + variant do
+            bonus[b] = tostring(10200 + (id + variant * 37 + b * 13) % 1800)
+        end
+        ITEM_POOL[#ITEM_POOL + 1] = "|cffa335ee|Hitem:" .. id .. "::::::::80:268::14:" .. #bonus
+            .. ":" .. table.concat(bonus, ",") .. ":" .. (28 + variant) .. ":9:::::|h["
+            .. def.name .. "]|h|r"
+    end
+end
+
+-- A raid's worth of winners, not the fixture's five: a history entry's winner is a stored string, so
+-- it needs no roster behind it, and a mythic roster is what a tier's log is spread over.
+local WINNER_POOL = {}
+for i = 1, 25 do
+    WINNER_POOL[i] = { ("Raider%02d"):format(i), ("Player-1096-0A1B2%03X"):format(i), "MAGE" }
+end
+
+-- The labels this guild actually configures, long German ones included -- that is where
+-- test_lc_histsync_length's own long-reason cases come from.
+local REASON_POOL = { "BIS", "Mainspec", "Zweitspec, aber nur wenn niemand Mainspec braucht",
+                      "Offspec", "Transmog", "Kleines Upgrade" }
+-- false, not nil: a hole would break the modulo pick below, and "no reason colour" is a real case.
+local COLOR_POOL = { false, { r = 0.2, g = 0.8, b = 0.2 }, { r = 0.9, g = 0.7, b = 0.1 },
+                     { r = 0.4, g = 0.4, b = 0.9 } }
+local DIFFICULTY_POOL = { 14, 15, 16 }
+
+-- n entries with that spread. `tag` keeps two fixtures' ids apart within one run.
+local function VariedEntries(n, tag)
+    local out = {}
+    for i = 1, n do
+        local w = WINNER_POOL[(i - 1) % #WINNER_POOL + 1]
+        local at = time() - 7200 + i * 7
+        out[i] = {
+            time = at,
+            item = ITEM_POOL[(i - 1) % #ITEM_POOL + 1],
+            winner = w[1], winnerKey = w[2], class = w[3],
+            reason = REASON_POOL[(i - 1) % #REASON_POOL + 1],
+            color = COLOR_POOL[(i - 1) % #COLOR_POOL + 1] or nil,
+            difficultyID = DIFFICULTY_POOL[(i - 1) % #DIFFICULTY_POOL + 1],
+            rollID = 100 + i,
+            -- The shape LH.NewAwardID really mints: a timestamp plus six hex digits. That is most of
+            -- a record's incompressible content, and a constant prefix with a counter after it is
+            -- not -- the old "sync-1", "sync-2" ids deflate away to nothing.
+            id = string.format("%s-%d-%03x%03x", tag, at, (i * 2654) % 0x1000, (i * 977) % 0x1000),
+            epoch = 1,
+        }
+    end
+    return out
+end
+
 -- The lootmaster holds one award and a peer asks for the catch-up.
 local function SyncOne(entry)
     local sim, lm, _, raider = F.NewRaid()
@@ -133,11 +201,7 @@ end
 -- full would still put a bounded number of messages on the wire, not one per entry it holds.
 do
     local sim, lm, _, raider = F.NewRaid()
-    local many = {}
-    for i = 1, 80 do
-        many[i] = { time = time() - 1000 + i, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
-                    reason = "BIS", class = "MAGE", rollID = 200 + i, id = "many-" .. i, epoch = 1 }
-    end
+    local many = VariedEntries(80, "many")
     RaidSim.As(lm, function() lm.env.KART_LootHistory = many end)
     RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
 
@@ -149,8 +213,11 @@ do
     -- transport splits it into several chunks, so a plain prefix match on the log finds nothing.
     local sent = #RaidSim.Messages(sim, "LC_HIST_BATCH")
     T.truthy(sent > 0, "the peer answers a catch-up request")
-    T.truthy(sent <= 2,
-        "eighty entries at fifty per batch cost two messages, not one per entry it happens to hold ("
+    -- A bound on the ORDER of the answer, not on the batch size: how many entries fit under
+    -- PACK_MAX_BLOCK is decided by what they weigh once packed, so the number of batches moves with
+    -- the content. What must stay true is that it is a handful of messages and not one per award.
+    T.truthy(sent <= 6,
+        "eighty entries cost a handful of messages, not one per entry it happens to hold ("
         .. sent .. ")")
     T.eq(#raider.env.KART_LootHistory, 80, "and all eighty still arrive")
 end
@@ -163,12 +230,7 @@ end
 -- A 60-entry catch-up arrives complete, and cheaply -----------------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
-    local entries = {}
-    for i = 1, 60 do
-        entries[i] = { time = time() - 3600 + i, item = GLOVES, winner = "Alric",
-                       winnerKey = "Player-1-A", reason = "BIS", class = "MAGE", rollID = i,
-                       id = "sync-" .. i, epoch = 1 }
-    end
+    local entries = VariedEntries(60, "sync")
     RaidSim.As(lm, function() lm.env.KART_LootHistory = entries end)
     RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
     RaidSim.ClearLog(sim)
@@ -177,8 +239,8 @@ do
     RaidSim.Drain(sim, 30)
 
     T.eq(#raider.env.KART_LootHistory, 60, "all sixty awards arrive")
-    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") <= 3,
-        "sixty awards cost at most three messages, not sixty")
+    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") <= 5,
+        "sixty awards cost a handful of messages, not sixty")
 end
 
 -- A long reason is no longer truncated --------------------------------------------------------------
@@ -203,31 +265,46 @@ do
 end
 
 -- No batch is put on the wire that the decompressor will refuse ---------------------------------
--- A batch this size (150 entries, three batches of fifty) is split across several 255-byte chunks
--- by the transport, so a single log entry's .msg is not the full packed body to measure directly
--- (see RaidSim.Messages). What IS directly observable end to end is whether the receiver's own
--- decompressor ever refused one: PACK_MAX_BLOCK is enforced there, and a batch over it is counted
--- as packedUnreadable and its records are never stored -- so a clean packedUnreadable count together
--- with all 150 entries arriving is exactly the proof that no batch body exceeded it.
+-- The full 150-entry dump, at the entropy a raid night has (see VariedEntries). PACK_MAX_BLOCK is
+-- LootCouncil.lua's decompression-bomb ceiling and is enforced on the RECEIVING side: a block over
+-- it comes back nil, the whole batch is counted as packedUnreadable and NONE of its records is
+-- stored. So the sender cutting its batches by entry count alone is not a bandwidth question, it is
+-- entries silently never arriving -- and it does not heal, because the same oversized batch is
+-- rebuilt on the next join.
+--
+-- Measured two ways, because either alone can pass for the wrong reason. Wrapping the receiver's own
+-- LC.UnpackPayload weighs every block that actually reached it against the real ceiling, and names
+-- the byte count when one is over; the end-to-end count then says none was lost on some other path.
 do
     local sim, lm, _, raider = F.NewRaid()
-    local entries = {}
-    for i = 1, 150 do
-        entries[i] = { time = time() - 7200 + i, item = GLOVES, winner = "Verylongname-Silvermoon",
-                       winnerKey = "Player-1096-0A1B2C3D", reason = string.rep("x", 120),
-                       class = "MAGE", rollID = i, id = "big-" .. i, epoch = 1 }
-    end
+    local entries = VariedEntries(150, "big")
     RaidSim.As(lm, function() lm.env.KART_LootHistory = entries end)
+
+    local blocks = {}
     RaidSim.As(raider, function()
         raider.env.KART_LootHistory = {}
         raider.KART.LC.diag = raider.KART.LC.diag or {}
         raider.KART.LC.diag.packedUnreadable = 0
+        local realUnpack = raider.KART.LC.UnpackPayload
+        raider.KART.LC.UnpackPayload = function(blob)
+            local out = realUnpack(blob)
+            blocks[#blocks + 1] = { bytes = #blob, ok = out ~= nil }
+            return out
+        end
     end)
     RaidSim.ClearLog(sim)
     RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
     KARTTEST.AdvanceTime(15)
     RaidSim.Drain(sim, 60)
 
+    local refused, biggest = 0, 0
+    for _, b in ipairs(blocks) do
+        if not b.ok then refused = refused + 1 end
+        if b.bytes > biggest then biggest = b.bytes end
+    end
+    T.truthy(#blocks > 0,
+        "the answer went out packed at all -- an unpacked one would say nothing about the ceiling")
+    T.eq(refused, 0, "every batch body was inside PACK_MAX_BLOCK (biggest seen: " .. biggest .. " B)")
     T.eq(raider.KART.LC.diag.packedUnreadable, 0, "no batch body exceeded PACK_MAX_BLOCK")
     T.eq(#raider.env.KART_LootHistory, 150, "and all 150 still arrive")
 end

@@ -1218,6 +1218,23 @@ function LH.RequestHistorySync()
         KART_LootHistoryEpoch or 1, LH.HistoryChecksum(), latest))
 end
 
+-- The first guess at how many entries go in one batch, and nothing more than a guess: what actually
+-- decides is how big the batch is once PACKED, measured per batch in LH.AnswerHistoryRequest and
+-- halved until it fits.
+--
+-- An entry count cannot decide it. Measured against this repo's own LibDeflate at PACK_LEVEL, using
+-- the real EntryRecord layout and a real night's spread of items, winners and reasons, fifty entries
+-- pack to roughly 3 KB -- well over PACK_MAX_BLOCK. That ceiling is enforced on the RECEIVING side:
+-- LC.UnpackPayload refuses an oversized block, LH.HandleHistoryBatch counts it as packedUnreadable
+-- and stores NONE of the batch. So a count-only cut is not a bandwidth question, it is a raider who
+-- asked for a night they missed, got three answers, and kept nothing -- and it does not heal, because
+-- the same oversized batch is rebuilt on the next join. Design §4 said this from the start: "the dump
+-- is cut into batches, each staying under the limit."
+--
+-- PACK_MAX_BLOCK is not raised, and its number is deliberately not copied here either: it belongs to
+-- LootCouncil.lua as its decompression-bomb ceiling, and a second copy would drift the day it moves.
+-- The check asks LC.UnpackPayload instead -- the receiver's own answer to the only question that
+-- matters, which is whether this block will come back as a string over there.
 local HISTORY_BATCH_ENTRIES = 50
 
 -- One full reconcile per asker per raid night. Six hours covers an evening and has reset by the next
@@ -1465,18 +1482,39 @@ function LH.AnswerHistoryRequest(payload, senderFullName)
     while #toSend > HISTORY_SYNC_MAX_ENTRIES do table.remove(toSend, 1) end
 
     local myKey = (KASC.Identity.ResolvePlayer("player"))
-    for first = 1, #toSend, HISTORY_BATCH_ENTRIES do
-        local records = {}
-        for i = first, math.min(first + HISTORY_BATCH_ENTRIES - 1, #toSend) do
-            records[#records + 1] = EntryRecord(toSend[i])
+    local head  = string.format("LC_HIST_BATCH:%d:%s:", myEpoch, myKey)
+    local first = 1
+    while first <= #toSend do
+        local count, msg = math.min(HISTORY_BATCH_ENTRIES, #toSend - first + 1), nil
+        while true do
+            local records = {}
+            for i = first, first + count - 1 do records[#records + 1] = EntryRecord(toSend[i]) end
+            local plain  = table.concat(records, "\n")
+            local packed = LC.PackPayload(head .. "0:" .. plain, plain)
+            if not packed then
+                -- Small enough that it goes out as one plain message; no block, no ceiling.
+                msg = head .. "0:" .. plain
+                break
+            end
+            if LC.UnpackPayload(packed) then
+                msg = head .. "1:" .. packed
+                break
+            end
+            if count == 1 then
+                -- One record that will not pack small enough on its own. Sent PLAIN instead:
+                -- AceComm splits a message of any length and the receiver applies no ceiling to an
+                -- unpacked body, so it costs chunks and loses nothing. Dropping it here would be the
+                -- award silently never arriving, which is the whole failure this loop exists to
+                -- close.
+                msg = head .. "0:" .. plain
+                break
+            end
+            count = math.floor(count / 2)
         end
-        local plain  = table.concat(records, "\n")
-        local head   = string.format("LC_HIST_BATCH:%d:%s:", myEpoch, myKey)
-        local packed = LC.PackPayload(head .. "0:" .. plain, plain)
-        local msg = packed and (head .. "1:" .. packed) or (head .. "0:" .. plain)
         -- BULK: none of this is urgent, and all of it is exactly the traffic the loot flow must not
         -- wait for.
         KASC:Send(msg, "WHISPER", senderFullName, { prio = "BULK" })
+        first = first + count
     end
 end
 

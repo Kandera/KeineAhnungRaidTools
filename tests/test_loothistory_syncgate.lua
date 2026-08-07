@@ -11,8 +11,6 @@
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 
-local GLOVES = KARTTEST.items[F.GLOVES].link
-
 -- Same two-step as tests/test_lc_award.lua uses: F.Drop puts the item on the table, AssignWinner
 -- awards it. No fixture helper is added -- lc_fixture.lua is claimed by neither session.
 local function Award(sim, assigner, rollID, itemID, winner, reason)
@@ -23,12 +21,31 @@ local function Award(sim, assigner, rollID, itemID, winner, reason)
     RaidSim.Drain(sim, 10)
 end
 
+-- The peer's history, at the entropy a raid night has rather than the same link and the same reason
+-- n times over. A single-link fixture deflates to a few hundred bytes whatever n is, so the gate
+-- tests below would have been driving a catch-up of one message where a real one is several -- and
+-- the whole point of the gate is what a real catch-up does to the pipe. Same reasoning, and the same
+-- pools in miniature, as tests/test_lc_histsync_length.lua's VariedEntries.
+local ITEM_POOL = {}
+for _, id in ipairs({ F.GLOVES, F.WEAPON, F.TOKEN, F.PLATE_CHEST, F.STAFF, F.SHIELD, F.LONG_ITEM,
+                      F.TIER_TOKEN }) do
+    ITEM_POOL[#ITEM_POOL + 1] = KARTTEST.items[id].link
+end
+local REASON_POOL = { "BIS", "Mainspec", "Zweitspec, aber nur wenn niemand Mainspec braucht",
+                      "Offspec", "Transmog" }
+
 local function LoadedPeer(lm, raider, n)
     local entries = {}
     for i = 1, n do
-        entries[i] = { time = time() - 3600 + i, item = GLOVES, winner = "Alric",
-                       winnerKey = "Player-1-A", reason = "BIS", class = "MAGE", rollID = i,
-                       id = "gate-" .. i, epoch = 1 }
+        local at = time() - 3600 + i * 5
+        entries[i] = {
+            time = at, item = ITEM_POOL[(i - 1) % #ITEM_POOL + 1],
+            winner = ("Raider%02d"):format((i - 1) % 25 + 1),
+            winnerKey = ("Player-1096-0A1B2%03X"):format((i - 1) % 25 + 1),
+            reason = REASON_POOL[(i - 1) % #REASON_POOL + 1], class = "MAGE", rollID = i,
+            id = string.format("gate-%d-%03x%03x", at, (i * 2654) % 0x1000, (i * 977) % 0x1000),
+            epoch = 1,
+        }
     end
     RaidSim.As(lm, function() lm.env.KART_LootHistory = entries end)
     RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
@@ -160,12 +177,28 @@ do
     -- own collection window is a plain C_Timer.After, not a queued message) -- so it would return
     -- immediately without ever reaching DROP_COLLECT. Advance the clock directly instead, the same
     -- way tests/test_lc_baseflow.lua waits for a drop's own LC_DROP.
-    KARTTEST.AdvanceTime(1)
+    --
+    -- Stepped in the transport's own slices rather than jumped, so the drop and the catch-up can be
+    -- compared at the instant the drop lands. The property is "ALERT is not queued behind BULK", and
+    -- a wall-clock constant is not that property: this used to assert "within a second", which held
+    -- only because a 150-entry catch-up built from ONE item link and one repeated reason deflated to
+    -- almost nothing, so there was never anything for the drop to overtake. What is asserted instead
+    -- is the overtaking itself.
+    local landed, historyThen
+    for _ = 1, 20 do
+        KARTTEST.AdvanceTime(0.1)
+        -- LC_START is dead wire (see LootCouncil.lua's GUARANTEED_TOKENS comment) -- a real drop
+        -- travels as LC_DROP, ALERT priority.
+        if #RaidSim.Messages(sim, "LC_DROP") > 0 then
+            landed, historyThen = true, #raider.env.KART_LootHistory
+            break
+        end
+    end
 
-    -- LC_START is dead wire (see LootCouncil.lua's GUARANTEED_TOKENS comment) -- a real drop travels
-    -- as LC_DROP, ALERT priority.
-    T.truthy(#RaidSim.Messages(sim, "LC_DROP") > 0,
-        "the item goes on the table within a second with 150 entries queued behind it")
+    T.truthy(landed, "the item goes on the table with 150 entries queued behind it")
+    T.truthy(historyThen and historyThen < 150,
+        "and it gets there while the catch-up is still running -- ALERT is not queued behind BULK ("
+        .. tostring(historyThen) .. " of 150 had arrived)")
 end
 
 -- A client behind the raid's epoch does not award ---------------------------------------------------
