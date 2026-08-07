@@ -387,10 +387,15 @@ end
 -- A function of its own, called from Core.lua's ADDON_LOADED block (after KART_LootHistory has been
 -- given its table), and also wired to this file's own ADDON_LOADED registration below -- the test
 -- harness loads LootHistory.lua but not Core.lua (see tests/raidsim.lua), so this is what lets the
--- purge run under KARTTEST.FireEvent at all. Idempotent either way: whichever registration runs
--- first in the real game leaves KART_LootHistoryEpoch set, and the other is then a no-op.
+-- purge run under KARTTEST.FireEvent at all. Idempotent either way, and NOT dependent on which of
+-- the two registrations dispatches first: on a genuinely first-ever load both KART_LootHistory and
+-- KART_LootHistoryEpoch are nil, and WoW dispatches ADDON_LOADED to frames in registration order --
+-- LootHistory.lua's frame registers before Core.lua's (see the .toc's file order), so it can run
+-- first and must not assume Core.lua's own `KART_LootHistory = KART_LootHistory or {}` already ran.
+-- wipe(nil) errors, so this establishes the table itself rather than trusting it exists.
 function LH.PurgeIfNoEpoch()
     if KART_LootHistoryEpoch ~= nil then return end
+    KART_LootHistory = KART_LootHistory or {}
     wipe(KART_LootHistory)
     KART_LootHistoryEpoch = 1
 end

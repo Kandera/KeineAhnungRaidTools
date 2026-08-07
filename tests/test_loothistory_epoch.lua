@@ -152,6 +152,22 @@ do
     T.eq(#lm.env.KART_LootHistory, 0, "and its pre-id history is purged")
 end
 
+-- The genuinely first-ever load: no epoch AND no history table at all --------------------------
+-- RaidSim.Boot always pre-seeds KART_LootHistory to a table, which a real brand-new install does
+-- not have -- Core.lua's own `KART_LootHistory = KART_LootHistory or {}` is what creates it there,
+-- and LootHistory.lua's ADDON_LOADED frame can register (and dispatch) before Core.lua's, per the
+-- .toc's file order. LH.PurgeIfNoEpoch must not assume some other file already made the table.
+do
+    local _, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistoryEpoch = nil
+        lm.env.KART_LootHistory = nil
+        lm.KART.LH.PurgeIfNoEpoch()
+    end)
+    T.eq(lm.env.KART_LootHistoryEpoch, 1, "a client with no history table at all still starts at 1")
+    T.eq(#lm.env.KART_LootHistory, 0, "and ends up with an empty table, not a crash")
+end
+
 -- A reload changes nothing (C8) --------------------------------------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
