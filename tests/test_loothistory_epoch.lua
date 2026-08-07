@@ -382,6 +382,140 @@ do
         "stamped at the epoch it was answered at")
 end
 
+-- The two LH.AdmitEpoch guards, held one at a time -------------------------------------------------
+-- LH.HandleHistoryBatch checks the batch HEADER's epoch and LH.HandleHistoryEntry checks each
+-- RECORD's own. In every case above the two numbers are the same, so either guard alone caught
+-- everything and deleting either one on its own left the whole suite green (mutation testing,
+-- 2026-08-07) -- two guards, one of them provably free. The two blocks below separate them: each
+-- reaches a state only ONE of them can refuse.
+
+-- The header alone is above our epoch: only the batch-level guard can refuse this -----------------
+-- The records claim our own epoch, so the per-record guard admits every one of them. What the batch
+-- guard is for is stated in its own comment: a header we cannot admit discards the message WHOLE,
+-- "not just entries that fail some later filter" -- because the header is the peer's claim about the
+-- message, and a claim we cannot verify makes the contents unverifiable too.
+do
+    local _, _, council, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        time(), "hdr-only", 1, GLOVES)
+
+    RaidSim.As(raider, function()
+        raider.KART.LH.HandleHistoryBatch("2:" .. council.guid .. ":0:" .. record, council.guid)
+    end)
+
+    T.eq(#raider.env.KART_LootHistory, 0,
+        "a batch whose header we cannot admit is discarded whole, records and all")
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "and its epoch is not adopted from a non-owner")
+    RaidSim.As(raider, function()
+        T.truthy(raider.KART.LH.IsStale(), "the refused header still leaves the client knowing it is behind")
+    end)
+end
+
+-- The record alone is above our epoch: only the per-record guard can refuse this -------------------
+-- Reached without a batch header at all. LH.HandleHistoryEntry is a public function and every direct
+-- call in this suite enters it this way, so "the batch already checked" is not something it may
+-- assume -- and what it must never do is store a row above this client's own epoch, which
+-- LH.HistoryChecksum would then never look at again (see the block below).
+do
+    local _, _, council, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        time(), "rec-only", 2, GLOVES)
+
+    RaidSim.As(raider, function()
+        raider.KART.LH.HandleHistoryEntry(record, council.guid)
+    end)
+
+    T.eq(#raider.env.KART_LootHistory, 0,
+        "a single record above our epoch is refused on its own account, with no batch header to help")
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "and does not raise the epoch either")
+end
+
+-- Why that matters: a row above our own epoch is invisible to the divergence check ------------------
+-- LH.HistoryChecksum only sums entries at the CURRENT epoch. That filter is the whole reason the two
+-- guards above exist -- a row stored above our epoch is not merely wrong, it is unreachable: it takes
+-- no part in the fingerprint the catch-up compares, so no peer ever notices it, no answer ever
+-- mentions it, and it sits in the SavedVariable being exported for ever. Nothing observed that
+-- consequence, so deleting the filter left the suite green too.
+do
+    local _, lm = F.NewRaid()
+    local atEpoch, withFuture
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistoryEpoch = 1
+        lm.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", id = "chk-here", epoch = 1 },
+        }
+        atEpoch = lm.KART.LH.HistoryChecksum()
+        lm.env.KART_LootHistory[2] =
+            { time = time() - 30, item = GLOVES, winner = "Sinja", winnerKey = "Player-1-S",
+              reason = "OS", id = "chk-ahead", epoch = 2 }
+        withFuture = lm.KART.LH.HistoryChecksum()
+    end)
+    T.truthy(atEpoch ~= 0, "the checksum is not simply zero for everything")
+    T.eq(withFuture, atEpoch,
+        "a row stored above our own epoch takes no part in the fingerprint peers compare")
+end
+
+-- ...and the catch-up therefore never asks about it --------------------------------------------------
+-- The same fact end to end, which is what "held forever and never compared" actually looks like: the
+-- asker and its peer agree on the fingerprint although the asker is carrying a row the peer has never
+-- heard of, so the wire stays empty and nothing on either client can ever notice.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local shared = { time = time() - 600, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+                     reason = "BIS", class = "MAGE", rollID = 1, id = "both-hold-this", epoch = 1 }
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistoryEpoch = 1
+        lm.env.KART_LootHistory = { shared }
+    end)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistoryEpoch = 1
+        raider.env.KART_LootHistory = {
+            shared,
+            -- The stray row. Newest, so it is also what the since-timestamp is taken from -- the
+            -- incremental half of the request cannot see past it either.
+            { time = time() - 60, item = GLOVES, winner = "Sinja", winnerKey = "Player-1-S",
+              reason = "OS", class = "PRIEST", rollID = 2, id = "stray-ahead", epoch = 2 },
+        }
+    end)
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0,
+        "the two clients read as agreeing, though one is holding a row the other never heard of")
+    T.eq(#raider.env.KART_LootHistory, 2, "and the stray row is still sitting there, uncompared")
+end
+
+-- The epoch an award was DECIDED in is not the epoch of whoever logs it ------------------------------
+-- LH.LogHistory's decisionEpoch parameter exists because the two can be different numbers, and
+-- stamping the local one would make a pre-wipe award look like part of the current epoch: it would
+-- join the checksum, survive the next LH.AdoptEpoch, and be exported as this tier's -- on this client
+-- alone, since nobody else holds it. Both wire paths normalise the two through LH.AdmitEpoch before
+-- they get here (an award below our epoch is discarded, one above it is adopted first), so the only
+-- place the parameter can be seen doing its job is at LH.LogHistory's own boundary -- and until this
+-- block, replacing it with the local epoch changed nothing anywhere in the suite.
+do
+    local _, lm = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistoryEpoch = 3
+        lm.env.KART_LootHistory = {}
+        -- Decided at 2, logged by a client already at 3.
+        lm.KART.LH.LogHistory(GLOVES, "Alric", "BIS", "MAGE", nil, 71, "Player-1-A", "pre-wipe-1", 2)
+    end)
+
+    T.eq(lm.env.KART_LootHistory[1] and lm.env.KART_LootHistory[1].epoch, 2,
+        "the award is stamped with the epoch it was decided in, not this client's")
+    T.eq(RaidSim.As(lm, function() return lm.KART.LH.HistoryChecksum() end), 0,
+        "so it stays out of the fingerprint for an epoch it does not belong to")
+end
+
 -- A reload changes nothing (C8) --------------------------------------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
