@@ -346,3 +346,39 @@ do
     T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0,
         "the second divergence in the same night is not answered with another full pull")
 end
+
+-- A granted full reconcile that sends nothing does not burn the once-per-night allowance ------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    -- The peer's own history is empty at the moment it grants a full reconcile -- e.g. it just
+    -- adopted a bumped epoch and has not caught up itself yet. Nothing survives the filter, so
+    -- nothing is sent, even though a full answer was granted.
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 1, id = "asker-one", epoch = 1 },
+        }
+    end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+    T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0, "the empty peer sends nothing back")
+
+    -- The peer backfills a real entry, dated well before that no-op grant, later in the same window.
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = time() - 3600, item = GLOVES, winner = "Sinja", winnerKey = "Player-1-S",
+              reason = "OS", class = "PRIEST", rollID = 2, id = "peer-two", epoch = 1 },
+        }
+    end)
+    KARTTEST.AdvanceTime(20 * 60)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#raider.env.KART_LootHistory, 2,
+        "and the backfilled entry still reaches the asker in the same window -- the empty answer did not spend the allowance")
+end

@@ -1204,9 +1204,16 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- all evening, and every one of those joins asks again -- while a hole appears at most once. Ask
     -- a second time in the same night and you get the incremental answer; the hole is already filled
     -- by then, and if it is not, tomorrow's first join pulls it.
+    LH.fullReconciled = LH.fullReconciled or {}
+    local lastFull = LH.fullReconciled[senderFullName]
+    -- Whether THIS request earns the stamp, decided now; written below only once the answer is known
+    -- to be non-empty (matching LH.historySyncAnswered) -- a peer whose own history is empty, or has
+    -- nothing surviving the epoch/cutoff filter, sends nothing back, and stamping it anyway would
+    -- burn the asker's once-per-night allowance on a no-op: if this peer backfills real entries
+    -- later in the same window, the asker's next request would be throttled into the incremental
+    -- branch and those entries would not reach it until the cooldown expired.
+    local grantFull = false
     if full then
-        LH.fullReconciled = LH.fullReconciled or {}
-        local lastFull = LH.fullReconciled[senderFullName]
         if lastFull and now - lastFull < HISTORY_FULL_COOLDOWN then
             full = false
             -- The incremental fallback below trusts sinceTime as "everything up to here is already
@@ -1217,7 +1224,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
             -- above it: an asker with a genuinely newer sinceTime still gets exactly what changed.
             if sinceTime < lastFull then sinceTime = lastFull end
         else
-            LH.fullReconciled[senderFullName] = now
+            grantFull = true
         end
     end
     if not full and sinceTime == nil then return end
@@ -1231,6 +1238,7 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     end
     if #toSend == 0 then return end
     LH.historySyncAnswered[senderFullName] = now
+    if grantFull then LH.fullReconciled[senderFullName] = now end
 
     table.sort(toSend, function(a, b) return (a.time or 0) < (b.time or 0) end)
     while #toSend > HISTORY_SYNC_MAX_ENTRIES do table.remove(toSend, 1) end
