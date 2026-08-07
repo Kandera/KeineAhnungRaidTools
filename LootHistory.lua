@@ -1253,6 +1253,23 @@ function LH.ParkRequest(payload, senderFullName)
     C_Timer.After(1, attempt)
 end
 
+-- What /kart status prints about the loot history. Facts only, one per line: the manifest's failure
+-- procedure is "everybody run /kart status and paste it", so this is read across five clients at once
+-- and has to be comparable at a glance rather than pretty on one.
+function LH.PrintStatus()
+    local parked = 0
+    for _ in pairs(LH.parked or {}) do parked = parked + 1 end
+    print(string.format(KART.L.LH_STATUS_LINE,
+        KART_LootHistoryEpoch or 1,
+        #(KART_LootHistory or {}),
+        LH.HistoryChecksum(),
+        parked,
+        LH.GateOpen() and KART.L.LH_STATUS_OPEN or KART.L.LH_STATUS_HELD))
+    if LH.IsStale() then
+        print(string.format(KART.L.LH_STATUS_STALE, LH.heardEpoch or 0, KART_LootHistoryEpoch or 1))
+    end
+end
+
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
 -- never a visible chat message) if it actually has entries the requester is missing.
 function LH.HandleHistoryRequest(payload, senderFullName)

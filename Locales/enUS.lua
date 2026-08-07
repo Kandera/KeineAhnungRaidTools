@@ -402,6 +402,10 @@ KART.L_enUS = {
     LH_BTN_EXPORT_JSON_TIP = "Exports the currently filtered entries as JSON, in the same field format RCLootCouncil itself uses (compatible with tools built for its export).",
     LH_EXPORT_TITLE        = "RCLootCouncil-format JSON export",
     LH_EXPORT_HINT         = "Ctrl+A, Ctrl+C to copy:",
+    LH_STATUS_LINE         = "History: epoch %d, %d entries, checksum %d, %d parked sync requests, gate %s",
+    LH_STATUS_OPEN         = "open",
+    LH_STATUS_HELD         = "held",
+    LH_STATUS_STALE        = "History: STALE -- the raid is on epoch %d, this client is on %d. Awards are refused until this catches up.",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",

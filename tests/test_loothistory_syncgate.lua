@@ -186,3 +186,25 @@ do
     T.eq(#RaidSim.Messages(sim, "LC_RESULT"), 0,
         "a stale client does not write into a record it cannot see all of")
 end
+
+-- A parked request has to be visible. The manifest names /kart status as the thing a raid runs when
+-- something is wrong mid-boss, and a hold that nobody can see is the shape C14 exists to forbid.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    LoadedPeer(lm, raider, 10)
+    F.Drop(sim, 85, F.GLOVES)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    RaidSim.Drain(sim, 3)
+
+    local lines = {}
+    RaidSim.As(lm, function()
+        local realPrint = lm.env.print
+        lm.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        lm.KART.LH.PrintStatus()
+        lm.env.print = realPrint
+    end)
+
+    local joined = table.concat(lines, "\n")
+    T.truthy(joined:find("1", 1, true), "the status names the one parked request")
+    T.truthy(joined:lower():find("hist"), "and says what it is about")
+end
