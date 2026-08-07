@@ -1064,3 +1064,173 @@ do
     T.eq(raider.KART.LC.rollExpiredHere[993], true,
         "the note for an unresolved roll stays the boolean it always was -- never concatenated with the generation")
 end
+
+-- Gap 1 (mutation-run survivor, B139): the catch-up refusal must hold for a roll dismissed while still
+-- unresolved ("???") -------------------------------------------------------------------------------
+-- LC.HandleRollCatchup refuses a catch-up under a dismissed rollID only when the two items can be
+-- compared, and LC.RollNoteParts answers `nil, nil` for the boolean `true` a "???" dismissal leaves
+-- behind -- exactly a pair that cannot be compared. The pre-B139 behaviour was to refuse on the rollID
+-- alone whenever that happens, which is the conservative answer: unlike the resolved case two blocks
+-- above, where a genuinely different item IS taken (B132), an unresolved dismissal cannot tell a repeat
+-- from a reuse at all, so it takes neither. Nothing tested it, so a client that put away a roll it never
+-- managed to read could have LC_ROLL_CATCHUP push it straight back onto the panel, whatever item the
+-- catch-up named.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    local function tabbed(client, rollID)
+        for _, id in ipairs(client.KART.LC.councilTabs) do if id == rollID then return true end end
+        return false
+    end
+
+    -- The same construction the "cannot READ it" block above uses: Blizzard raises no roll here, and
+    -- the announcement that reaches this client carries no item at all (B40), so it tracks "???".
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 954, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    RaidSim.As(council, function() council.KART.LC.HandleStart("954:20:", lm.guid) end)
+    T.eq(council.KART.LC.rollItems[954], "???", "the council member holds an item it cannot read")
+    T.truthy(tabbed(council, 954), "and is tabbed all the same")
+
+    -- Closed without ever having resolved the item, so the note it stamps is the bare boolean.
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(954) end)
+    T.eq(council.KART.LC.rollDismissed[954], true,
+        "the dismissal note is the boolean true -- this client never learned what it held")
+
+    -- A catch-up naming the item it may well have held is refused...
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRollCatchup("954:15:item:" .. F.GLOVES, lm.guid)
+    end)
+    T.eq(council.KART.LC.rollItems[954], nil,
+        "...and a catch-up naming the item this client may have dismissed is refused")
+    T.eq(tabbed(council, 954), false, "with the tab it closed staying closed")
+
+    -- ...and so is one naming a different item: an unresolved dismissal cannot tell the two apart, so
+    -- it refuses on the rollID alone either way, rather than guess.
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRollCatchup("954:15:item:" .. F.WEAPON, lm.guid)
+    end)
+    T.eq(council.KART.LC.rollItems[954], nil,
+        "a different item is refused too -- the id alone is all this client has")
+    T.eq(tabbed(council, 954), false, "and the tab stays closed")
+end
+
+-- Gap 2 (mutation-run survivor, B139): LC.ForgetDismissalIfReused must not throw away an unresolved
+-- dismissal note ------------------------------------------------------------------------------------
+-- Same shape as Gap 1 from the other end: LC.RollNoteParts answers `nil, nil` for the boolean `true`
+-- a "???" dismissal leaves behind, so `dismissedItem` is nil and the guard's `dismissedItem and` is
+-- the only thing stopping ANY message that names an item from wiping the note -- after which the ask
+-- gates open and this client starts asking again for the roll it deliberately closed. Driven through
+-- LC.HandleRolls, one of its two real callers, rather than called directly.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    -- The same "cannot READ it" construction as Gap 1: this client tracks "???", never resolves it,
+    -- and dismisses it anyway.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 955, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    RaidSim.As(council, function() council.KART.LC.HandleStart("955:20:", lm.guid) end)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(955) end)
+    T.eq(council.KART.LC.rollDismissed[955], true,
+        "the dismissal note is the boolean true -- this client never learned what it held")
+
+    -- A rolled-numbers message naming a real item under the same number -- the shape LC.HandleRolls
+    -- always carries, and the only thing the guard has to compare the unresolved note against.
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls("955:@" .. F.GLOVES .. ":15=42,20=7", lm.guid)
+    end)
+    T.eq(council.KART.LC.rollDismissed[955], true,
+        "the note survives -- an unresolved dismissal cannot be compared against a named item, so it is left alone")
+end
+
+-- Gap 3 (mutation-run survivor, B139): an expiry note stamped with NO generation must not be purged by
+-- a heartbeat that carries one --------------------------------------------------------------------
+-- LC.HandleTable's expiry-note guard only releases a note on a generation mismatch when the NOTE
+-- itself carries a generation (`expiredGen`) -- a bare note said nothing about the instance, so a
+-- heartbeat naming one is not evidence against it. The mirror case (a note WITH a generation against a
+-- bare wire) and the dismissal note's own version of this rule are both covered; this is the one
+-- combination nothing exercised: a note stamped bare because the roll expired before any heartbeat had
+-- named it, followed by the first heartbeat that does.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    -- No heartbeat may reach this client before the roll expires, or LC.rollInstance[956] would
+    -- already hold a generation by the time Vote.PruneExpiredRolls stamps the note -- the ordinary
+    -- case the B139 block above already covers. TABLE_POLL_SECONDS is 2s and the vote window is 20s,
+    -- so the heartbeat has to be suppressed outright rather than merely outrun.
+    RaidSim.Blackhole(sim, "LC_TABLE")
+    F.Drop(sim, 956, F.GLOVES)
+    KARTTEST.AdvanceTime(25)   -- past the window: Vote.PruneExpiredRolls stamps the note
+
+    T.eq(raider.KART.LC.rollInstance[956], nil, "no heartbeat ever reached this client")
+    T.eq(raider.KART.LC.rollExpiredHere[956], tostring(F.GLOVES),
+        "the note is bare -- stamped before any generation was known, not \"...@1\"")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.Deliver(sim, "LC_TABLE")
+    RaidSim.As(lm, lm.KART.LC.SendTableHeartbeat)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(raider.KART.LC.rollInstance[956], "1", "the heartbeat has now named the roll's first instance")
+    T.eq(raider.KART.LC.rollExpiredHere[956], tostring(F.GLOVES),
+        "and the bare note survives it -- it never claimed to know an instance, so a generation on the wire is not a mismatch")
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ:956")) do
+        if e.from == raider.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "so no ask goes out for the item this client already watched close")
+end
+
+-- Gap 4 (mutation-run survivor, B139): PurgeStaleRoll clearing the PREVIOUS roll's generation ---------
+-- A roll STARTING under a reused number makes the remembered generation the previous roll's, not this
+-- one's -- PurgeStaleRoll clears LC.rollInstance[rollID] for exactly that reason, unconditionally and
+-- before anything else. That matters most for the case its OWN item comparison cannot catch: a SECOND
+-- physical drop of the SAME item under the reused number (two identical trash mobs) looks, item for
+-- item, exactly like Blizzard re-raising the roll that is still running, so PurgeStaleRoll returns
+-- without ever reaching Trade.ClearRollState (which would otherwise clear the generation too, on the
+-- genuinely-different-item path). Only the unconditional clear at the top resets it here. Without it, a
+-- note stamped from a tab closed in the narrow window before the first heartbeat for the NEW roll would
+-- carry the OLD roll's generation, and the next heartbeat -- correctly naming the new one -- would then
+-- read that as a mismatch and purge a note that was right: one needless ask for an item this client had
+-- already put away. The window is under two seconds (a heartbeat every TABLE_POLL_SECONDS), which is
+-- why nothing hit it by accident.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 957, F.GLOVES)
+    KARTTEST.AdvanceTime(3)   -- past TABLE_POLL_SECONDS: the heartbeat names the first instance
+    T.eq(council.KART.LC.rollInstance[957], "1", "the council member remembers generation 1")
+
+    -- A second, physically distinct drop reuses the number for the SAME item. PurgeStaleRoll runs as
+    -- part of every client's own OnStartLootRoll, so this is synchronous -- no heartbeat and no
+    -- LC_DROP round trip needed for the clear to fire, if it fires at all.
+    F.Drop(sim, 957, F.GLOVES)
+    T.eq(council.KART.LC.rollInstance[957], nil,
+        "PurgeStaleRoll clears the previous roll's generation even though the item comparison alone sees nothing stale")
+
+    -- Within the window: closed before any heartbeat has named the new roll at all.
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(957) end)
+    T.eq(council.KART.LC.rollDismissed[957], tostring(F.GLOVES),
+        "the note carries no generation -- not \"...@1\", the previous roll's -- because the clear got there first")
+
+    -- The heartbeat now arrives naming the new roll's real instance, generation 2.
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, lm.KART.LC.SendTableHeartbeat)
+    KARTTEST.AdvanceTime(0)
+
+    T.eq(council.KART.LC.rollInstance[957], "2", "the heartbeat has now named the second roll's instance")
+    T.eq(council.KART.LC.rollDismissed[957], tostring(F.GLOVES),
+        "and the bare note survives it -- it never claimed an instance, so a generation on the wire is not a mismatch")
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ:957")) do
+        if e.from == council.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "so no needless ask goes out for the item this client already put away")
+end
