@@ -2559,12 +2559,16 @@ function LC.HandleTable(payload, senderKey, sender)
     for entry in tostring(list):gmatch("[^,]+") do
         local id, item, gen = entry:match("^(%d+)=?(%d*)@?(%d*)$")
         local rollID = tonumber(id)
-        -- "the owner cannot name this one either", in both spellings it can arrive in: "=0" from a
-        -- 3.3.1 owner holding "???", and a bare id from a 3.3.0 owner, whose heartbeat carried no
-        -- items at all. Unknown is not a mismatch -- it says nothing about the item under that
-        -- number, so every comparison below is simply skipped and the ask still happens, which is
-        -- what makes a mixed-version raid degrade to exactly the old behaviour rather than to a
-        -- wrong one.
+        -- "the owner cannot name this one either", in both spellings it can arrive in: "=0" from an
+        -- owner holding "???", and a bare id from a 3.3.0 owner, whose heartbeat carried no items at
+        -- all. Unknown is not a mismatch -- it says nothing about the item under that number, so
+        -- every comparison below is simply skipped and the ask still happens.
+        --
+        -- That rule is about a field being ABSENT, not about old clients. A 3.3.x RECEIVER does not
+        -- degrade gracefully here at all and is not meant to: this pattern is anchored, so an entry
+        -- carrying B139's "@<gen>" does not match theirs, and they skip every entry and lose the
+        -- heartbeat's repair entirely. Running the current version is mandatory in this guild, and
+        -- LC.WarnOutdatedRaiders names anyone who is not at session start.
         local itemID = (item ~= "" and item ~= "0") and item or nil
         -- Which instance of the roll the owner means (B139). Absent from a sender that holds no
         -- counter for it, and absence is not a mismatch -- the same rule the itemID above follows.

@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The raidlead bar's buttons work again** — markers, Clear World Markers and Ready Check.
 - **Far less addon traffic after each boss** — the lootmaster's send queue stays clear.
 - **`/kart status` shows your loudest message types**, for pinning down addon traffic in a live raid.
+- **A second copy of the same item now reaches players who missed its announcement.**
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

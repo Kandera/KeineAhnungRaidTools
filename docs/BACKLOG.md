@@ -3502,7 +3502,7 @@ not awards. The 2026-08-06 handover expected that line to climb with awards-afte
 not, and post-award votes stop counting once the roll was decided. Reading it as "awards that
 arrived stale" misreads it in the too-low direction.
 
-## B139 — OPEN, by choice 2026-08-06 — a reused rollID carrying the SAME item cannot be told from a repeat
+## B139 — FIXED 2026-08-07 — a reused rollID carrying the SAME item cannot be told from a repeat
 
 Found by the same review session, in the corner of `baa734c` its comments do not discuss: the
 `LC.rollExpiredHere` note stores WHICH item expired precisely so Blizzard's rollID reuse can be told
@@ -3525,6 +3525,23 @@ real fix needs the wire to say which INSTANCE of a roll the heartbeat means — 
 generation counter next to the itemID in `LC_TABLE`, which is a protocol change, not a note rule.
 Re-evaluate after the next raid: if `/kart status` ever shows a raider tracking nothing for an item
 the raid is voting on twice, this is the entry.
+
+**Fixed.** The heartbeat now names the roll's instance: the loot owner counts the rolls it starts
+under each number (`LC.rollGeneration`, owner-side only) and sends it as `LC_TABLE`'s third field,
+`rollID=itemID@gen`. Receivers remember the last generation heard (`LC.rollInstance`) and stamp it
+into `LC.rollExpiredHere` / `LC.rollDismissed`, which now read `"249331@2"`. `LC.HandleTable` purges a
+note when the generation differs, alongside the itemID rule it already had.
+
+Scope was kept to the ask gates deliberately. Votes, council votes and the pass log still compare
+itemIDs, because E2 makes one vote card answer for every copy of an item on purpose and instance-aware
+votes would fight that decision. The instance rides `LC_TABLE` alone: the first heartbeat naming a
+fresh roll goes out 2.5 s after the drop, against a twenty-second vote window, so `LC_DROP`,
+`LC_START`, `LC_MANUAL_START` and `LC_ROLL_CATCHUP` needed no change and the packed drop payload was
+not touched. A counter rather than a timestamp: measured over an evening both cost the same number of
+chunks, but `time() % 100000` is not fixed width and leaves the worst-case heartbeat four bytes short
+of splitting, where the counter leaves fifty-two.
+
+Design and measurements: `docs/superpowers/specs/2026-08-06-b139-roll-instance-design.md` (local).
 
 ## B140 — FIXED 2026-08-06 — a client that reloaded mid-encounter thought comms were open
 
