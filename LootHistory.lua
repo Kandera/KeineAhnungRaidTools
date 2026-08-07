@@ -917,9 +917,37 @@ function LH.RemoveHistoryForRoll(rollID, itemLink)
     if changed and LH.historyWindow and LH.historyWindow:IsShown() then LH.Refresh() end
 end
 
-function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey)
+-- A stable identity for one award, the same string on every client that logs it.
+--
+-- rollID cannot be it. It is a small Blizzard number and it comes round again every week, which is
+-- why the revoke path had to be bounded to the roll actually being revoked (see LH.ForgetAward).
+-- The export id cannot be it either: it is an index into the FILTERED list, so it changes with the
+-- filter. The union merge, the export cut and the Companion archive all dedup on this string, so it
+-- has to survive a week, a reload and a different filter.
+--
+-- Minted by whoever assigns and carried in LC_RESULT, because every client logs from that message --
+-- a locally generated id would differ per client and the dedup would never match.
+--
+-- Colon-free by construction: it travels as a fixed field in a colon-separated payload whose tail is
+-- free text.
+local awardIDCounter = 0
+function LH.NewAwardID()
+    awardIDCounter = (awardIDCounter + 1) % 0x1000
+    return string.format("%d-%03x%03x", time(), math.random(0, 0xFFF), awardIDCounter)
+end
+
+function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef, rollID, winnerKey, awardID)
     KART_LootHistory = KART_LootHistory or {}
     local now = time()
+
+    -- An id match is proof: same award, already stored. Checked before the rollID scan below, which
+    -- can only ever be a guess -- a rollID is unique within one Blizzard session, not across a
+    -- SavedVariable spanning weeks.
+    if awardID then
+        for _, e in ipairs(KART_LootHistory) do
+            if e.id == awardID then return end
+        end
+    end
 
     -- Guards against double-logging the same win if a redelivered/duplicate LC_RESULT addon
     -- message ever reaches this client twice (HandleResult has no dedup of its own, unlike the
@@ -977,6 +1005,7 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         difficulty   = difficultyName or "",
         difficultyID = difficultyID,
         rollID       = rollID,
+        id           = awardID or LH.NewAwardID(),
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then

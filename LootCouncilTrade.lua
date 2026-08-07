@@ -19,7 +19,11 @@ LC.rollUndecidedWarned = LC.rollUndecidedWarned or {}
 
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
+--
+-- Returns the awardID minted for the broadcast (nil for a test roll, which never broadcasts), so
+-- the caller's own local LH.LogHistory call can store exactly what went out on the wire.
 function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
+    local awardID
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the
     -- tester happened to click) and no raid-chat spam.
@@ -44,8 +48,9 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
         -- that separates a confirmed reassignment from two council members clicking at once.
         --
         -- Placed BEFORE the reason, which is free text and has to stay the tail of the payload.
+        awardID = KART.LH.NewAwardID()
         LC.SendLC("LC_RESULT:" .. rollID .. ":" .. winnerKey .. ":" .. itemID .. ":" .. colorPacked
-            .. ":" .. (deliberate and "1" or "0") .. ":" .. (reason or ""))
+            .. ":" .. (deliberate and "1" or "0") .. ":" .. awardID .. ":" .. (reason or ""))
 
         if winnerKey ~= "NONE" then
             local msg = string.format(KART.L.LC_RESULT_ANNOUNCE, KASC.Identity.ResolveDisplayName(winnerKey), link)
@@ -63,6 +68,7 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
     if LC.councilPanel and LC.councilPanel:IsShown() then
         KART.LC.Council.RefreshCouncilRows()
     end
+    return awardID
 end
 
 local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
@@ -87,7 +93,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
     -- first award, so the person who confirmed a dialog naming both players is not overruled by
     -- somebody who never saw a winner at all.
     LC.assignedDeliberate[rollID] = deliberate or nil
-    Trade.AnnounceResult(rollID, playerKey, reason, colorDef, deliberate)
+    local awardID = Trade.AnnounceResult(rollID, playerKey, reason, colorDef, deliberate)
 
     if LC.IsTestRoll(rollID) then
         -- Test rolls never round-trip through the network (see AnnounceResult), so if the
@@ -100,7 +106,7 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
     else
         -- Same rule locally: our own earlier entry for this roll is superseded by this one.
         KART.LH.RemoveHistoryForRoll(rollID, LC.rollItems[rollID])
-        KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey)
+        KART.LH.LogHistory(LC.rollItems[rollID], KASC.Identity.ResolveDisplayName(playerKey), reason, classFile, colorDef, rollID, playerKey, awardID)
         -- B48: the assigner does not process its own broadcast (KASC drops the echo), so a council
         -- member who assigns an item to THEMSELVES never built their own "you are owed this" entry --
         -- while the lootmaster's queue was correct all along. The one person who cannot see what they
@@ -1512,17 +1518,17 @@ function Trade.HandleResult(payload, senderKey)
         if KART.LH and KART.LH.NoteUnauthorisedAward then KART.LH.NoteUnauthorisedAward() end
         return
     end
-    -- payload = "rollID:winnerKey:itemID:colorPacked:reason"
-    -- Reviewed 2026-07-24, NOT a bug: this pattern requires the current 5-field wire format (4
-    -- colons). A pre-itemID/pre-colorPacked build sends fewer fields and its result is dropped here
+    -- payload = "rollID:winnerKey:itemID:colorPacked:deliberate:awardID:reason"
+    -- Reviewed 2026-07-24, NOT a bug: this pattern requires the current 6-field wire format (5
+    -- colons). A build on an older wire format sends fewer fields and its result is dropped here
     -- before reaching the colour fallback below. That's intentional — running the current KART
     -- version is mandatory across a raid (an outdated sender already gets an "update available"
     -- warning), so cross-version wire compat is deliberately not supported. Do not re-flag.
-    local rollID, winnerKey, itemID, colorPacked, deliberate =
-        payload:match("^(%d+):([^:]+):(%d*):([^:]*):([01]):")
+    local rollID, winnerKey, itemID, colorPacked, deliberate, awardID =
+        payload:match("^(%d+):([^:]+):(%d*):([^:]*):([01]):([^:]*):")
     rollID = tonumber(rollID)
     if not rollID or not winnerKey then return end
-    local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:[01]:(.*)$") or ""
+    local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:[01]:[^:]*:(.*)$") or ""
     deliberate = deliberate == "1"
 
     -- A result naming a different item than the one this client dismissed under the same id is proof
@@ -1689,7 +1695,7 @@ function Trade.HandleResult(payload, senderKey)
     -- rebuilt from the itemID on the wire -- so it is right even on a client whose own tracking of
     -- that rollID is stale or was never there.
     KART.LH.RemoveHistoryForRoll(rollID, itemLink)
-    KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey)
+    KART.LH.LogHistory(itemLink, KASC.Identity.ResolveDisplayName(winnerKey), reason, classFile, color, rollID, winnerKey, awardID)
 
     -- Same reasoning as DoAssignWinner, including the "loot owner is not the same as holder" case.
     if LC.IsLootOwner() then
