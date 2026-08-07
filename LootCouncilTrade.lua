@@ -23,6 +23,12 @@ LC.rollUndecidedWarned = LC.rollUndecidedWarned or {}
 -- Returns the awardID minted for the broadcast (nil for a test roll, which never broadcasts), so
 -- the caller's own local LH.LogHistory call can store exactly what went out on the wire.
 function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
+    -- A client whose epoch is below the raid's is holding a log the raid has already discarded.
+    -- Writing an award from it would put a row into everyone's record that this client cannot see the
+    -- context of, and the epoch it stamps would be wrong. It resyncs within seconds of joining; until
+    -- then it does not decide.
+    if KART.LH and KART.LH.IsStale and KART.LH.IsStale() then return end
+
     local awardID
     -- Test rolls stay entirely local: no addon-channel broadcast (which would make every real
     -- raid member's client log a fake history entry / pop a fake "you win" for whoever the

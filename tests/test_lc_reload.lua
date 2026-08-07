@@ -810,6 +810,13 @@ do
         KARTTEST.AdvanceTime(6)
     end
 
+    -- The four rolls just opened are still open on the raider's own client (it never authorised
+    -- the council's LC_RESULT, so it never closed any of them locally) -- and the sync gate (Task 4)
+    -- correctly holds the deferred request back until they are gone. Advance past the last one's
+    -- vote deadline so the gate opens and the request that has been retrying every GATE_GRACE
+    -- seconds finally gets through.
+    KARTTEST.AdvanceTime(20)
+
     -- Counted across the whole raid rather than by sender: the request goes out from inside a timer,
     -- and which client the harness calls "active" at that moment is not the sender's identity.
     -- Nobody else in this block has a reason to ask.
@@ -825,6 +832,8 @@ do
     RaidSim.As(council, function()
         council.KART.LC.Trade.AssignWinner(110, sim.byName.Sinja.guid, "BIS", nil)
     end)
-    KARTTEST.AdvanceTime(10)
+    -- Same reasoning as above: this roll's own vote deadline has to pass, and the gate has to see
+    -- it close, before the deferred request can get out.
+    KARTTEST.AdvanceTime(30)
     T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1, "and a minute later it asks again")
 end

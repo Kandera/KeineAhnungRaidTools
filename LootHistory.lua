@@ -1130,7 +1130,24 @@ function LH.HistoryChecksum()
     return sum
 end
 
+-- Seconds of quiet after the last roll closes before the catch-up may speak. The round is not over
+-- when the winner is chosen: LC_RESULT, the winner notification and the trade reminder all still have
+-- to get out, and those are the messages the raid is standing still for.
+local GATE_GRACE = 5
+
+-- The hard ceiling on parking, regardless of roll state. The release condition above is the roll
+-- state, and the failure it has to survive is a roll that never closes -- the lootmaster walking out
+-- (C9). Hanging the exit on the same state whose failure it catches is not an exit at all, and a
+-- request parked forever is a raider with no history all evening that nobody can see (C14).
+local GATE_MAX_PARK = 60
+
 function LH.RequestHistorySync()
+    if not LH.GateOpen() then
+        LH.syncWanted = true
+        return C_Timer.After(GATE_GRACE, LH.RequestHistorySync)
+    end
+    LH.syncWanted = false
+
     -- Never earlier than the current epoch's start: the since-timestamp means "I have everything up
     -- to here", and a wipe is exactly such a line.
     local latest = KART_LootHistoryClearedAt or 0
@@ -1162,11 +1179,54 @@ local function EntryRecord(e)
         e.id or "", e.epoch or 1, e.item or "")
 end
 
+function LH.GateOpen()
+    if next(LC.rollDeadlines or {}) ~= nil then
+        LH.gateClosedUntil = GetTime() + GATE_GRACE
+        return false
+    end
+    return GetTime() >= (LH.gateClosedUntil or 0)
+end
+
+-- One pending request per sender. A peer that asks three times while a boss is being distributed has
+-- one question, and the answer to the last one already contains what the earlier ones would have got.
+function LH.ParkRequest(payload, senderFullName)
+    LH.parked = LH.parked or {}
+    local fresh = LH.parked[senderFullName] == nil
+    LH.parked[senderFullName] = { payload = payload, at = GetTime() }
+    if not fresh then return end
+
+    local function attempt()
+        local entry = LH.parked and LH.parked[senderFullName]
+        if not entry then return end
+        if LH.GateOpen() or (GetTime() - entry.at) >= GATE_MAX_PARK then
+            LH.parked[senderFullName] = nil
+            -- Still a group member? The park spans up to a minute and whispers keep working after
+            -- either side has left, so without this we would hand the log to somebody who has gone.
+            --
+            -- Calls LH.AnswerHistoryRequest directly, NOT LH.HandleHistoryRequest: the latter starts
+            -- with the same gate check that parked this request in the first place. A council member
+            -- keeps a decided roll's tab (and its LC.rollDeadlines entry) open indefinitely for
+            -- reassignment, so their own LH.GateOpen() can stay false for the rest of the raid --
+            -- the exact "never closes" case GATE_MAX_PARK exists for. Re-entering the gated function
+            -- here would just re-park the request with its clock reset, forever, the moment that cap
+            -- is what got it released.
+            if KAUtil.IsFullNameInGroup(senderFullName) then
+                LH.AnswerHistoryRequest(entry.payload, senderFullName)
+            end
+            return
+        end
+        C_Timer.After(1, attempt)
+    end
+    C_Timer.After(1, attempt)
+end
+
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
 -- never a visible chat message) if it actually has entries the requester is missing.
 function LH.HandleHistoryRequest(payload, senderFullName)
-    local theirEpoch, theirSum, sinceTime = payload:match("^(%d+):(%d+):(%d+)$")
-    theirEpoch, theirSum, sinceTime = tonumber(theirEpoch), tonumber(theirSum), tonumber(sinceTime)
+    -- Validated fully here (all three fields), even though LH.AnswerHistoryRequest below re-parses
+    -- the same payload: a malformed payload must be rejected on arrival, not parked for up to a
+    -- minute only to be dropped once it finally reaches the front of the queue.
+    local theirEpoch = tonumber((payload:match("^(%d+):(%d+):(%d+)$")))
     if not theirEpoch or not senderFullName then return end
     -- Only answer group members. CHAT_MSG_ADDON also delivers whispers and the "KART" prefix is
     -- public, so without this any stranger could ask and be handed the raid's loot history.
@@ -1176,6 +1236,25 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
     if not KAUtil.IsFullNameInGroup(senderFullName) then return end
+
+    -- A distribution is running on this client: park the request instead of answering it. BULK
+    -- traffic does not yield on its own (see the file header on ChatThrottleLib), so answering here
+    -- would compete with the very messages the raid is standing still for.
+    if not LH.GateOpen() then
+        LH.ParkRequest(payload, senderFullName)
+        return
+    end
+
+    LH.AnswerHistoryRequest(payload, senderFullName)
+end
+
+-- The actual answer. Split from LH.HandleHistoryRequest so LH.ParkRequest's release path can call it
+-- without going back through the gate check above (see the comment there for why re-entering it would
+-- defeat GATE_MAX_PARK).
+function LH.AnswerHistoryRequest(payload, senderFullName)
+    local theirEpoch, theirSum, sinceTime = payload:match("^(%d+):(%d+):(%d+)$")
+    theirEpoch, theirSum, sinceTime = tonumber(theirEpoch), tonumber(theirSum), tonumber(sinceTime)
+    if not theirEpoch then return end
 
     local myEpoch = KART_LootHistoryEpoch or 1
     -- The requester's own epoch travels in the header once again here (see LH.RequestHistorySync).
