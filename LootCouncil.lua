@@ -5835,6 +5835,13 @@ local function RevokePriorAward(itemLink)
     -- Same three steps the council panel's "No Winner" button runs: tell the raid, then do the peer
     -- side's cleanup locally too, since we do not process our own broadcast.
     local m = matches[1]
+    -- Which is exactly why the same rule applies: taking an award back is a write into the raid's loot
+    -- record, so a client whose history is behind the raid's must not make it. Asked HERE, before the
+    -- first local write, and not left to Trade.AnnounceResult's own refusal below -- that one returns
+    -- after this function has already gone on to strike the history row, drop the pending trade and
+    -- close the tab, leaving this client alone in believing the award was revoked while the raid still
+    -- holds it. The same shape, and the same reason, as Trade.DoAssignWinner's own check.
+    if LC.Trade.RefusedAsStale() then return end
     -- Trade.AnnounceResult reads the link back out of LC.rollItems to carry the itemID peers use to
     -- reject a result for a stale rollID. After a relog that table is empty while the obligation is
     -- not, so put the link the pending trade remembered back before announcing.

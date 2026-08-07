@@ -234,6 +234,48 @@ do
     T.truthy(#said > 0, "and it says the award did not happen (C14)")
 end
 
+-- ...and does not strike one either -------------------------------------------------------------------
+-- The revoke half of the same rule (LootCouncil.lua, RevokePriorAward -- the /kart add path). Taking
+-- an award BACK is a write into the raid's loot record exactly as making one is, so a client that may
+-- not make one may not strike one. Trade.AnnounceResult's own refusal is too late here for the same
+-- reason it was too late in Trade.DoAssignWinner: the local cleanup below it runs regardless, so a
+-- stale client removed the history row, dropped the pending trade and closed the tab on its own screen
+-- while the rest of the raid kept the award -- a divergence created by the very client that could see
+-- least, and nothing said.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    Award(sim, lm, 88, F.GLOVES, raider, "BIS")
+    T.eq(#lm.env.KART_LootHistory, 1, "the award is on the lootmaster's log to begin with")
+
+    -- Behind the raid, and knows it -- the same state the block above puts a client in.
+    RaidSim.As(lm, function()
+        lm.KART.LH.heardEpoch = (lm.env.KART_LootHistoryEpoch or 1) + 1
+        T.truthy(lm.KART.LH.IsStale(), "the lootmaster is behind the raid's epoch")
+    end)
+
+    RaidSim.ClearLog(sim)
+    local said = {}
+    RaidSim.As(lm, function()
+        local realPrint = lm.env.print
+        lm.env.print = function(s) said[#said + 1] = tostring(s) end
+        -- Handing the same item back to the council is what triggers the revoke: the item can only be
+        -- re-decided once whatever was decided about it last time has stopped being true.
+        lm.KART.LC.StartManualRoll(KARTTEST.items[F.GLOVES].link)
+        lm.env.print = realPrint
+    end)
+    RaidSim.Drain(sim, 10)
+
+    T.eq(#RaidSim.Messages(sim, "LC_RESULT"), 0, "no revocation goes out to the raid")
+    T.eq(#lm.env.KART_LootHistory, 1,
+        "and the award is not struck from this client's log alone")
+    T.eq(lm.KART.LC.assignedWinners[88], raider.guid, "the winner still stands on the panel")
+    T.truthy(F.Owes(lm.KART.LC.pendingTrades, 88), "and the trade is still owed")
+    -- The refusal itself, not merely "something was printed": /kart add prints on its own account
+    -- whatever happens here, so a bare non-empty check would be satisfied by that alone.
+    T.truthy(table.concat(said, "\n"):find(lm.KART.L.LH_AWARD_STALE, 1, true),
+        "and the refusal is said out loud (C14)")
+end
+
 -- A parked request has to be visible. The manifest names /kart status as the thing a raid runs when
 -- something is wrong mid-boss, and a hold that nobody can see is the shape C14 exists to forbid.
 do
