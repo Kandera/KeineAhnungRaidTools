@@ -342,3 +342,134 @@ do
     local r, g, b = ownPanel.voteProgressText:GetTextColor()
     T.truthy(r < g and b < g, "and wears the everybody-has-voted colour")
 end
+
+-- An empty straw-poll stamp still counts as "cannot tell" (B149 gap 3) -------------------------------
+-- The straw poll's own version of the two-part guard in LC.VoteIsForItem (see test_lc_votes.lua for
+-- the plain-vote half). Vote.ToggleCouncilVote stamps its pick with TrackedItemID(rollID), which is ""
+-- when the PICKER's own copy is still "???". Losing the stamped=="" branch on the receiving side
+-- compares that "" against the reader's real itemID and drops the pick from the answered count.
+do
+    local ownSim, ownLm = F.NewRaid()
+    local corvin = ownSim.byName.Corvin
+    local alric = ownSim.byName.Alric
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(alric.unit))
+    end)
+    local L = ownLm.KART.L
+
+    -- Corvin's own copy of the item never arrives -- the same "???" construction test_lc_rolltable.lua
+    -- uses (a blackholed LC_DROP, then a hand-fed LC_START-shaped message with no item field).
+    RaidSim.Blackhole(ownSim, "LC_DROP")
+    F.Drop(ownSim, 200, F.GLOVES, { noRollFor = { Corvin = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(ownSim, "LC_DROP")
+    RaidSim.As(corvin, function() corvin.KART.LC.HandleStart("200:20:", ownLm.guid) end)
+    T.eq(corvin.KART.LC.rollItems[200], "???", "corvin holds an item it cannot read")
+
+    RaidSim.As(corvin, function() corvin.KART.LC.Vote.ToggleCouncilVote(200, alricKey) end)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.eq(ownLm.KART.LC.councilPanel.voteProgressText:GetText(),
+        string.format(L.LC_COUNCIL_VOTES_PROGRESS, 1, 3),
+        "a pick with an empty item stamp still counts toward the answered total")
+end
+
+-- An unreadable OWN item does not blank the straw poll either (B149 gap 4) ---------------------------
+-- The other half: here the READER cannot read its own copy, while the picker's real stamp is fine.
+-- Losing the mine=="" branch compares that real stamp against the reader's "" and the pick disappears
+-- from a screen that is otherwise voting normally.
+do
+    local ownSim, ownLm, merrit, alric = F.NewRaid()
+    local corvin = ownSim.byName.Corvin
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(alric.unit))
+    end)
+
+    RaidSim.Blackhole(ownSim, "LC_DROP")
+    F.Drop(ownSim, 201, F.GLOVES, { noRollFor = { Corvin = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(ownSim, "LC_DROP")
+    RaidSim.As(corvin, function() corvin.KART.LC.HandleStart("201:20:", ownLm.guid) end)
+    T.eq(corvin.KART.LC.rollItems[201], "???", "corvin cannot read its own copy of the item")
+
+    RaidSim.As(merrit, function() merrit.KART.LC.Vote.ToggleCouncilVote(201, alricKey) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(corvin.KART.LC.councilPanel, "corvin still gets a council panel for the item")
+    RaidSim.As(corvin, corvin.KART.LC.Council.RefreshCouncilRows)
+    T.eq(corvin.KART.LC.councilPanel.voteProgressText:GetText(),
+        string.format(corvin.KART.L.LC_COUNCIL_VOTES_PROGRESS, 1, 3),
+        "a real-stamped pick still counts on a client that cannot read its own item")
+end
+
+-- "x of y" stops counting a council member the moment they leave (B149 gap 5) ------------------------
+-- The council SIZE denominator (LootCouncilPanel.lua:1121, one line up) is already covered against
+-- LC.CouncilNamesTable's roster-independence -- a listed member not currently in the raid does not
+-- inflate y (see the "counted against the council that is actually HERE" case above). The ANSWER
+-- count on the line below it needs the same presence check and had no test of its own: a pick from
+-- somebody who has since left stayed in x forever, because LC.CouncilNamesTable never forgets a name.
+do
+    local ownSim, ownLm = F.NewRaid()
+    local corvin = ownSim.byName.Corvin
+    local alric = ownSim.byName.Alric
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(alric.unit))
+    end)
+    local L = ownLm.KART.L
+
+    F.Drop(ownSim, 210, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(corvin, function() corvin.KART.LC.Vote.ToggleCouncilVote(210, alricKey) end)
+    KARTTEST.AdvanceTime(1)
+
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.eq(ownLm.KART.LC.councilPanel.voteProgressText:GetText(),
+        string.format(L.LC_COUNCIL_VOTES_PROGRESS, 1, 3), "corvin's pick counts while corvin is here")
+
+    RaidSim.Leave(ownSim, "Corvin")
+    RaidSim.RosterUpdate(ownSim)
+    KARTTEST.AdvanceTime(5)
+
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.eq(ownLm.KART.LC.councilPanel.voteProgressText:GetText(),
+        string.format(L.LC_COUNCIL_VOTES_PROGRESS, 0, 2),
+        "and stops counting once corvin is gone, though the denominator drops with them too")
+end
+
+-- The per-candidate tally stops counting the same departed pick (B149 gap 6) -------------------------
+-- The other reader of a straw-poll pick: the candidate's OWN row, which fills a bar for how many
+-- council members picked THEM. Same rule, same list, and this is the row the lootmaster actually
+-- reads before assigning -- a bar still filled here reads as a live endorsement from somebody no
+-- longer in the raid to answer for it.
+do
+    local ownSim, ownLm = F.NewRaid()
+    local corvin = ownSim.byName.Corvin
+    local alric = ownSim.byName.Alric
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(alric.unit))
+    end)
+
+    F.Drop(ownSim, 211, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(corvin, function() corvin.KART.LC.Vote.ToggleCouncilVote(211, alricKey) end)
+    KARTTEST.AdvanceTime(1)
+
+    local function PollFilled(key)
+        RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+        for _, row in ipairs(ownLm.KART.LC.councilPanel.rows or {}) do
+            if row.memberKey == key and row:IsShown() then
+                return row.councilVoteBtn.fill:IsShown()
+            end
+        end
+    end
+
+    T.truthy(PollFilled(alricKey),
+        "corvin's pick fills alric's straw-poll bar while corvin is in the raid")
+
+    RaidSim.Leave(ownSim, "Corvin")
+    RaidSim.RosterUpdate(ownSim)
+    KARTTEST.AdvanceTime(5)
+
+    T.truthy(not PollFilled(alricKey), "and the bar empties once corvin is gone")
+end

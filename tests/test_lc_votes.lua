@@ -511,3 +511,57 @@ do
     T.eq(CountExact(sim, "LC_ROLL_REQ"), 0,
         "nobody asks the owner to hand back a roll the whole raid has just finished with")
 end
+
+-- An empty stamp still counts as "cannot tell" (B149 gap 1) -----------------------------------------
+-- Vote.CastVote stamps a vote with TrackedItemID(rollID), which falls back to "" when the voter's own
+-- link has not arrived -- the raider is looking at "???" and has nothing to stamp with. LC.VoteIsForItem
+-- treats an empty stamp as unknown, therefore counted, per its own comment ("cannot-tell counts as
+-- belonging"). Losing that branch compares "" against the reader's real itemID, which is never equal,
+-- and the vote silently disappears from the tally on every client that DOES know the item.
+do
+    local sim, lm, _, raider = NewRaid()
+
+    -- The raider never got Blizzard's own roll, and the announcement that would tell it the item is
+    -- blackholed -- the same "???" construction test_lc_rolltable.lua uses for this state.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 150, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    RaidSim.As(raider, function() raider.KART.LC.HandleStart("150:20:", lm.guid) end)
+    T.eq(raider.KART.LC.rollItems[150], "???", "the raider holds an item it cannot read")
+
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(150, 1) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.eq(lm.KART.LC.votes[150][raider.guid].item, "",
+        "the vote arrives stamped empty -- there was nothing to stamp it with")
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.CountVotes(150) end), 1,
+        "and still counts on the lootmaster, who knows exactly what item is on the table")
+end
+
+-- An unreadable OWN item does not blank a card that is voting fine (B149 gap 2) ----------------------
+-- The other half of the same guard, called out by the function's own comment: "refusing those would
+-- blank a whole raid's votes over a link that had not arrived yet." Here it is the READER, not the
+-- voter, holding "???" -- and two other raiders vote with real stamps because THEY can read their own
+-- copies. Losing the mine=="" branch compares a real itemID against "" for both of them, which is
+-- never equal, and the reader's card would show no votes at all.
+do
+    local sim, lm, council, raider = NewRaid()
+    local sinja = sim.byName.Sinja
+
+    RaidSim.Blackhole(sim, "LC_DROP")
+    Drop(sim, 151, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    RaidSim.As(council, function() council.KART.LC.HandleStart("151:20:", lm.guid) end)
+    T.eq(council.KART.LC.rollItems[151], "???", "the reader cannot read its own copy of the item")
+
+    RaidSim.As(raider, function() raider.KART.LC.Vote.CastVote(151, 1) end)
+    RaidSim.As(sinja, function() sinja.KART.LC.Vote.CastVote(151, 2) end)
+    KARTTEST.AdvanceTime(1)
+
+    T.truthy(council.KART.LC.votes[151][raider.guid].item ~= "",
+        "the raider's own copy resolved fine, so its vote carries a real stamp")
+    T.eq(RaidSim.As(council, function() return council.KART.LC.CountVotes(151) end), 2,
+        "and both real-stamped votes still count on the client that cannot read its own")
+end
