@@ -1613,7 +1613,8 @@ function Vote.HandleVote(payload, senderKey)
 
     -- Free text from another client, rendered raw into the council row's note tooltip. Double the
     -- pipes so |c colour codes, |H hyperlinks and |T textures can't be injected there (same guard
-    -- RC_REASON and LC_HIST_ENTRY already apply on their own receive side). Vote.CastVote strips
+    -- RC_REASON and the loot-history catch-up already apply on their own receive side, see
+    -- LH.HandleHistoryEntry). Vote.CastVote strips
     -- them at input, so a well-behaved sender never has any left for this to escape.
     note = (note:gsub("|", "||"))
 

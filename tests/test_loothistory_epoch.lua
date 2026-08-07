@@ -5,7 +5,7 @@
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
--- A full item link, for hand-built LC_HIST_BATCH/LC_HIST_ENTRY records (same convention as
+-- A full item link, for hand-built LC_HIST_BATCH records (same convention as
 -- test_lc_histsync_length.lua / test_loothistory_matching.lua).
 local GLOVES = KARTTEST.items[F.GLOVES].link
 

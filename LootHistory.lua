@@ -1054,7 +1054,8 @@ end
 -- A stable identity for one award, the same string on every client that logs it.
 --
 -- rollID cannot be it. It is a small Blizzard number and it comes round again every week, which is
--- why the revoke path had to be bounded to the roll actually being revoked (see LH.ForgetAward).
+-- why the revoke path had to be bounded to the roll actually being revoked (see
+-- LH.RemoveHistoryForRoll).
 -- The export id cannot be it either: it is an index into the FILTERED list, so it changes with the
 -- filter. The union merge, the export cut and the Companion archive all dedup on this string, so it
 -- has to survive a week, a reload and a different filter.
@@ -1511,7 +1512,6 @@ function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
             grantFull = true
         end
     end
-    if not full and sinceTime == nil then return end
 
     local cutoff = now - HISTORY_SYNC_MAX_AGE
     local toSend = {}
