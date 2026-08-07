@@ -276,6 +276,47 @@ do
         "and the refusal is said out loud (C14)")
 end
 
+-- ...and the No Winner button is the same rule again ---------------------------------------------
+-- LootCouncilPanel's own copy of it, which had no coverage at all: deleting its
+-- LC.Trade.RefusedAsStale() line left the whole suite green, though it is the shipped path a council
+-- member actually clicks. Everything under it -- RemoveHistoryForRoll, ClearWinnerObligations,
+-- CloseCouncilTab -- runs unconditionally, so without the guard a stale client revokes on its own
+-- screen only.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    Award(sim, lm, 89, F.GLOVES, raider, "BIS")
+    -- The tab deliberately stays open after an award so it can be reassigned (see
+    -- Trade.DoAssignWinner), which is exactly the state the button is pressed in.
+    T.eq(lm.KART.LC.activeRollID, 89, "the panel is showing the roll that was just awarded")
+
+    -- The button is not stored on the panel, so it is found by its label among the widgets the panel
+    -- collapses -- rather than by index, which would silently follow the wrong widget the day one is
+    -- added.
+    local btn
+    for _, w in ipairs(lm.KART.LC.councilPanel.collapsible or {}) do
+        if w.text and w.text.GetText and w.text:GetText() == lm.KART.L.LC_BTN_NO_WINNER then btn = w end
+    end
+    T.truthy(btn, "the No Winner button is on the panel")
+
+    RaidSim.As(lm, function() lm.KART.LH.heardEpoch = (lm.env.KART_LootHistoryEpoch or 1) + 1 end)
+    RaidSim.ClearLog(sim)
+    local said = {}
+    RaidSim.As(lm, function()
+        local realPrint = lm.env.print
+        lm.env.print = function(s) said[#said + 1] = tostring(s) end
+        btn:GetScript("OnClick")(btn)
+        lm.env.print = realPrint
+    end)
+    RaidSim.Drain(sim, 10)
+
+    T.eq(#RaidSim.Messages(sim, "LC_RESULT"), 0, "the click puts no revocation on the wire")
+    T.eq(#lm.env.KART_LootHistory, 1, "and strikes nothing from this client's log")
+    T.eq(lm.KART.LC.assignedWinners[89], raider.guid, "the winner still stands on the panel")
+    T.truthy(F.Owes(lm.KART.LC.pendingTrades, 89), "and the trade is still owed")
+    T.truthy(table.concat(said, "\n"):find(lm.KART.L.LH_AWARD_STALE, 1, true),
+        "and the button says why it did nothing (C14)")
+end
+
 -- A parked request has to be visible. The manifest names /kart status as the thing a raid runs when
 -- something is wrong mid-boss, and a hold that nobody can see is the shape C14 exists to forbid.
 do

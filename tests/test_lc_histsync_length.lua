@@ -196,6 +196,49 @@ do
         "from a point in time that can actually be reached")
 end
 
+-- ...and never from our own wipe clock -----------------------------------------------------------
+-- The second half of the cross-client-clock fix, and the half nothing held: restoring the old
+-- `local latest = KART_LootHistoryClearedAt or 0` floor in LH.RequestHistorySync left the suite
+-- green (mutation testing, 2026-08-07), while only the matching read in LH.HandleHistoryEntry was
+-- watched.
+--
+-- KART_LootHistoryClearedAt is OUR OS clock, stamped when WE wiped. Using it as the floor of an
+-- outgoing request asks every peer for entries newer than a moment on a clock they do not share --
+-- so an award made after that wipe by a client running a few minutes slow is dated below the floor,
+-- is never asked for, and the full reconcile that would otherwise have carried it re-drops it every
+-- time. The since-timestamp is "the newest thing I hold" and nothing else.
+do
+    local sim, lm = F.NewRaid()
+    local function AskAndReadSince()
+        RaidSim.ClearLog(sim)
+        RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+        local sent = RaidSim.Sent(sim, "LC_HIST_REQ")
+        T.eq(#sent, 1, "the client asks")
+        return tonumber(((sent[1] or {}).msg or ""):match("^LC_HIST_REQ:%d+:%d+:(%d+)$"))
+    end
+
+    -- Freshly wiped: nothing held at all, and a wipe stamp on our own clock.
+    local wipedAt = time()
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {}
+        lm.env.KART_LootHistoryClearedAt = wipedAt
+    end)
+    T.eq(AskAndReadSince(), 0,
+        "a client holding nothing asks for everything, not only for what postdates its own wipe")
+
+    -- Now it holds one entry, backfilled from a peer whose clock runs five minutes slow, so the
+    -- award is dated BELOW our own wipe stamp although it was made after it.
+    KARTTEST.AdvanceTime(60)
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = wipedAt - 300, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 3, id = "slow-clock-1", epoch = 1 },
+        }
+    end)
+    T.eq(AskAndReadSince(), wipedAt - 300,
+        "and asks from the newest entry it actually holds, not from the moment it wiped")
+end
+
 -- How much one answer may be --------------------------------------------------------------------
 -- Packed into batches instead of one whisper per entry. A peer holding a long history answering in
 -- full would still put a bounded number of messages on the wire, not one per entry it holds.

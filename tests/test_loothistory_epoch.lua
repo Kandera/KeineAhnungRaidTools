@@ -168,6 +168,30 @@ do
     T.truthy(said ~= "", "and the button says why it did nothing")
 end
 
+-- Outside a group nobody clears either, and it says so ---------------------------------------------
+-- The third refusal, and the one nothing reached: deleting its print left the suite green (mutation
+-- testing, 2026-08-07) while the other two were held. A raid-wide clear is a broadcast, and alone
+-- there is nobody to send it to -- so the epoch would rise in private and walk into the next raid
+-- ahead of everyone, from a dialog that appeared to work.
+do
+    local _, lm = F.NewRaid()
+    local before
+    RaidSim.As(lm, function()
+        before = lm.env.KART_LootHistoryEpoch
+        lm.env.KART_LootHistory = { { time = time(), id = "1-eee", epoch = before or 1 } }
+    end)
+    -- This one client alone reads the world as ungrouped -- the raid around it is untouched, which
+    -- is how the harness models somebody who has actually left (see KARTTEST.solo).
+    KARTTEST.solo[lm.unit] = true
+    local said = ClearWith(lm)
+    KARTTEST.solo[lm.unit] = nil
+
+    T.eq(lm.env.KART_LootHistoryEpoch, before, "a clear outside a group does not bump the epoch")
+    T.eq(#lm.env.KART_LootHistory, 1, "and does not empty the log")
+    T.truthy(said:find(lm.KART.L.LH_CLEAR_NEEDS_GROUP, 1, true),
+        "and it names the reason rather than failing silently")
+end
+
 -- With no lootmaster set, nobody clears -- not even the raid leader -------------------------------
 -- LC.IsLootOwner falls back to the raid leader while no lootmaster is configured, so the loot flow
 -- survives the lootmaster walking out. That fallback was never a right to empty every log in the
@@ -564,11 +588,19 @@ end
 --   * a MULTISET of ids, not a set keyed by id. C7 is "the award reaches the whole raid, ONCE", and
 --     "once" is defined over the id -- so a set collapses two copies of one award into one key, and
 --     a dedup that had broken outright, filling every log with doubles, read as convergence.
+--   * the WINNER is part of that key. The winner is drawn at random per award, and until the key
+--     included it that draw was inert: pinning it to a constant left the whole check green, so the
+--     loop said nothing about a receiver that agreed which awards happened and disagreed about who
+--     got them -- which is the one thing the raid actually argues about afterwards.
 --   * EVERY client, not the three the fixture happens to name.
 --   * the catch-up tokens are delayed and lost as well as LC_RESULT. Only LC_RESULT was ever held,
 --     so LC_HIST_REQ / LC_HIST_BATCH / LC_HIST_EPOCH -- the whole catch-up machinery -- were only
 --     ever exercised in one ordering, in order, with nothing lost.
---   * more than one client calls ClearHistory, and one of them is not entitled to.
+--   * more than one client calls ClearHistory, and one of them is not entitled to -- and, separately,
+--     a non-owner puts a higher epoch on the wire directly. ClearHistory REFUSES a non-owner before
+--     it sends anything, so the entitlement half of the loop was only ever exercising that refusal;
+--     nothing ever made LH.AdoptEpoch's IsSenderLootOwner gate the thing standing between one bad
+--     client and every log in the raid, which is what it is for.
 --   * somebody ports out and comes back, which is the case a raid-wide wipe exists for (C3).
 local CATCHUP_TOKENS = { "LC_HIST_REQ", "LC_HIST_BATCH", "LC_HIST_EPOCH" }
 
@@ -618,6 +650,16 @@ do
             -- awards and epoch messages are still in flight, which is the ordering the merge rules
             -- exist for.
             if i == 8 then RaidSim.As(council, function() council.KART.LH.ClearHistory() end) end
+            -- The same client's word, this time put on the wire directly rather than through the
+            -- dialog that refuses it. LH.ClearHistory checks entitlement BEFORE it sends, so the
+            -- press above never produced an unauthorised LC_HIST_EPOCH at all -- it exercised the
+            -- refusal and stopped there, and the gate inside LH.AdoptEpoch that the whole scheme
+            -- rests on was never asked anything by this loop. A number far above anything the
+            -- lootmaster ever reaches, so adopting it would be unmistakable: every log in the raid
+            -- emptied, on one group member's say-so.
+            if i == 9 then
+                RaidSim.As(council, function() council.KART.LC.SendLC("LC_HIST_EPOCH:99") end)
+            end
             if i == 10 then RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end) end
 
             -- Ports out to the other split raid and comes back with nothing: a fresh client, no
@@ -686,22 +728,39 @@ do
         KARTTEST.AdvanceTime(120)
         RaidSim.Drain(sim, 300)
 
-        -- A COUNT per id, not a set: two copies of one award have to be visible as two.
-        local function idCounts(c)
+        -- A COUNT per (id, winner) pair, not a set of ids: two copies of one award have to be
+        -- visible as two, and a client that agrees which awards happened while recording a
+        -- different winner for one of them has not converged either. Folding the winner into the
+        -- key rather than asserting it separately is what makes the random winner draw above mean
+        -- something -- with every award going to the same player, a receiver that stored the wrong
+        -- winner would be storing the right one by accident.
+        local function awardKeys(c)
             local s = {}
-            for _, e in ipairs(c.env.KART_LootHistory or {}) do s[e.id] = (s[e.id] or 0) + 1 end
+            for _, e in ipairs(c.env.KART_LootHistory or {}) do
+                local k = tostring(e.id) .. " -> " .. tostring(e.winnerKey or e.winner)
+                s[k] = (s[k] or 0) + 1
+            end
             return s
         end
         -- Every reference held above is a corpse after the reloads (see RaidSim.Reload).
         local owner = sim.byName[lm.name]
-        local wantIDs, wantEpoch = idCounts(owner), owner.env.KART_LootHistoryEpoch
+        local wantIDs, wantEpoch = awardKeys(owner), owner.env.KART_LootHistoryEpoch
+
+        -- Three: the epoch starts at 1 and the LOOTMASTER drew the line twice. This is an absolute
+        -- anchor and not another comparison between clients, because agreement is not correctness
+        -- here -- a raid that adopts one bad client's epoch adopts it in UNISON, so every
+        -- client-against-client assertion below reads a perfectly converged raid sitting on a number
+        -- nobody was entitled to announce. Deleting LH.AdoptEpoch's IsSenderLootOwner gate lands the
+        -- whole raid on 99 (see the broadcast at i == 9) and is invisible to everything else here.
+        T.eq(wantEpoch, 3,
+            "seed " .. seed .. ": the raid ends on the epoch its lootmaster drew, and on no other")
 
         for _, c in ipairs(sim.clients) do
             T.eq(c.env.KART_LootHistoryEpoch, wantEpoch,
                 "seed " .. seed .. ": " .. c.name .. " ends on the lootmaster's epoch")
-            T.deep_eq(idCounts(c), wantIDs,
-                "seed " .. seed .. ": " .. c.name .. " holds exactly the lootmaster's awards, once each")
+            T.deep_eq(awardKeys(c), wantIDs,
+                "seed " .. seed .. ": " .. c.name
+                .. " holds exactly the lootmaster's awards, once each, to the same winners")
         end
-        T.truthy(council and raider, "seed " .. seed .. ": the raid still has both roles")
     end
 end
