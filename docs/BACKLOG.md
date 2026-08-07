@@ -3556,6 +3556,54 @@ and it was fine" is the claim a reader six months from now has no other way to c
 Design and measurements: `docs/superpowers/specs/2026-08-06-b139-roll-instance-design.md` (local,
 gitignored — the two paragraphs above are what would otherwise be lost with it).
 
+**Measured against the shipped code, 2026-08-07**, rather than against the prototype the design was
+decided on. Same offline evening as B135 — 30 clients, six bosses of six items, every client voting,
+End Round each boss — run once on `e91a26e` and once on the finished tree:
+
+| | messages | chunks | bytes | `LC_TABLE` |
+|---|---|---|---|---|
+| before | 2,100 | 2,106 | 185,764 | 12 / 912 B |
+| after | 2,100 | 2,106 | 185,908 | 12 / 1,056 B |
+
+**+144 bytes an evening (+0.08 %), and the chunk count is unchanged** — which is the number that
+decides whether anything piles up, since ChatThrottleLib despools one send at a time and a message
+AceComm had to split occupies the pipe twice. The worst-case heartbeat (`TABLE_MAX_IDS` = 12,
+six-digit roll numbers) measures 203 bytes against the 255-byte split, 52 to spare. The design
+predicted +151 B and 203 B; both hold on the real thing. A 2,000-seed soak on the same tree is clean.
+
+**Mutation-tested, 2026-08-07.** `tests/mutrun.py` cannot reach this code at all: its rule set only
+flips `<`, `>`, `<=`, `>=` and `and`/`or`, and it skips every line carrying a quote — while B139 is
+almost entirely `~=` comparisons, `type(x) ~= "string"` guards and one `LC.IsLootOwner()` call. So 26
+mutations were named by hand instead, one per decision, each phrased as a plausible wrong version:
+invert each comparison, delete each clause, drop each half of every "both sides must be comparable"
+pair, remove each lifetime clear, and let every client count instead of only the owner.
+
+Nineteen were caught on the first run. Of the seven survivors, four were real test gaps and are now
+closed (`tests/test_lc_rolltable.lua`, rolls 954-957, each demonstrated to fail under its own
+mutation): a catch-up accepted for a dismissal this client never resolved; the same unresolved note
+thrown away by `LC.ForgetDismissalIfReused`; a BARE expiry note purged by a heartbeat that carries a
+generation — the "absence is never a mismatch" rule broken on the expiry path while its mirror on the
+dismissal path was covered; and `PurgeStaleRoll` keeping the previous roll's generation, which would
+stamp a note with an instance that was already over.
+
+The three that survive on purpose, so they are not re-flagged as findings:
+
+* **`LC.ClearAllRolls` wiping `LC.rollGeneration`** — hygiene, not behaviour. The notes a stale counter
+  could collide with are wiped at End Round, so a counter that keeps rising harms nothing.
+* **`LC.ClearAllRolls` wiping `LC.rollInstance`** — equivalent by construction. Every path that starts
+  tracking a roll runs `PurgeStaleRoll`, which clears it, so a stale entry can only survive under a
+  number nothing is tracked under — where no note is stamped either.
+* **`itemID ~= "0"` in the expiry itemID comparison** — a guard standing twice. `itemID` is already nil
+  when the wire said `"0"`, set a hundred lines above, so the enclosing `expiredItem and itemID` has
+  already short-circuited.
+
+One thing the fourth gap taught while it was being covered, worth keeping: `PurgeStaleRoll`'s own
+generation clear is **redundant on the different-item branch** — that branch reaches
+`Trade.ClearRollState`, which clears the same table. It is load-bearing only for a reuse carrying the
+SAME item, where `PurgeStaleRoll` returns early. Which is to say: the one case B139 exists for is the
+one case that clear is not redundant in. A test written around a different-item reuse passes with the
+line deleted, and the first attempt at it did.
+
 ## B140 — FIXED 2026-08-06 — a client that reloaded mid-encounter thought comms were open
 
 Found comparing KASC against RCLootCouncil2's `Services.CommsRestrictions`. KASC learned the Midnight
