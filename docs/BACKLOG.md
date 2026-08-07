@@ -3439,7 +3439,7 @@ council's decision and every other client's copy of both are untouched.
 `LC.ForgetDismissalIfReused`, which `LC.HandleRolls` and `Trade.HandleResult` still use where they name
 an item themselves.
 
-## B133 — OPEN 2026-08-04 — a client that joins inside the collection window is handed the boss it missed
+## B133 — OPEN, by choice — a client that joins inside the collection window is handed the boss it missed
 
 Found in review of the one-message-per-boss change (`LC_DROP`), not by a raid.
 
@@ -3476,7 +3476,21 @@ number.
 
 Stays OPEN because the behaviour is still wrong, not because the fix is unknown.
 
-## B134 — OPEN 2026-08-04 — a reload inside the collection window loses a whole boss, and the belt only mostly works
+**Weighed against how often it happens, 2026-08-07, and settled: OPEN BY CHOICE.** The trigger needs
+somebody to join the group INSIDE the half second between a boss dying and the batch flushing. At six
+to eight bosses that is three or four seconds of exposure across a raid night of two and a half to
+four hours — the kind of thing a guild sees once a tier, if ever. Set against a cost that is visible
+and harmless (a joiner on the council panel with a vote and an empty roll column, which the council
+can see and ignore, with nothing misassigned), the effort is not earned. The maintainer's call:
+*"lohnt der Aufwand nicht für eine Sache die nie eintritt."*
+
+That the frequency argument agrees with the risk argument above is worth noting rather than glossing:
+they are independent. Even if this happened weekly, the naive fix would still trade a visible wrong
+inclusion for a silent wrong exclusion, and would still be the wrong trade. Do not re-open this on the
+strength of "but the fix is only three lines" — that is the observation the paragraph above is written
+to answer.
+
+## B134 — OPEN, by choice — a reload inside the collection window loses a whole boss, and the belt only mostly works
 
 Found in the same review as B133.
 
@@ -3505,6 +3519,29 @@ the encounter restriction is active `KASC:Send` does not send it at all — it h
 Loot drops at the end of an encounter, which is exactly when that window is closing, so this is not
 an exotic corner. It does not change the verdict — the loss is still loud and `/kart add` is still
 the recovery — but the belt is thinner than the paragraph above alone reads.
+
+**Settled 2026-08-07 as OPEN BY CHOICE, with two facts the earlier weighing did not have.**
+
+The first removes most of the trigger. A deliberate `/reload` in this window does not happen: the
+lootmaster does not reload or change character during a fight or an active distribution (maintainer,
+2026-08-06). What is left is a crash or a disconnect, which nobody chooses — and there the second fact
+applies: *"bei disconnect oder crash wird loot neu verteilt"*. The distribution is redone from
+scratch, so the announcement that was lost was going to be replaced anyway. The failure costs a
+restart of something that was already going to be restarted.
+
+The second is a measurement of the fix rather than a guess at it. Persisting `LC.pendingDrop` is the
+same shape of work as persisting the deferred-notice queue, which was done the same day (see B147's
+entry): one implementation commit, two fix rounds, a review and two re-reviews, and three separate
+findings that each reopened the very loss the change was closing. That was the EASY case — plain
+formatted strings, nothing to reconstruct. `LC.pendingDrop` carries roll numbers and an eligibility
+snapshot, so it is strictly harder. "More machinery than the risk earns" now has a number behind it.
+
+**A cheap diagnostic was considered and declined**, and the reason is worth keeping because it is not
+obvious: a line at load saying "a boss's announcement was lost to the reload — use `/kart add`" needs
+a flag set when the batch is armed and read back after. WoW writes SavedVariables on a clean logout,
+reload or exit and **not on a crash** — so the flag would be missing in exactly the case the line was
+proposed for. What it would actually cover is a clean reload where the belt above ALSO failed, which
+is rarer than the case already judged too rare to engineer for.
 
 ## B137 — FIXED 2026-08-05 — a batch can flush after a peer's table for the same rollID has already landed
 
