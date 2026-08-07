@@ -1546,29 +1546,12 @@ function Trade.HandleResult(payload, senderKey)
     local reason = payload:match("^%d+:[^:]+:%d*:[^:]*:[01]:[^:]*:%d+:(.*)$") or ""
     deliberate = deliberate == "1"
 
-    -- The epoch this award was decided in, against our own (Task 6a). Three cases, per the
-    -- maintainer's ruling:
-    --   * equal: the ordinary case -- fall through and store at wireEpoch below.
-    --   * wireEpoch < myEpoch: decided before a wipe we have already adopted. Discard the message
-    --     whole -- none of its side effects (history, owed entry, vote-list removal, winner
-    --     highlight) are meaningful once the epoch has moved past it. Merge rule 2.
-    --   * wireEpoch > myEpoch: the assigner is ahead of us. If they are the loot owner, adopt the
-    --     epoch first (LH.AdoptEpoch discards everything below it) and fall through to store --
-    --     merge rule 1. Otherwise a council member is awarding at an epoch we have not heard about
-    --     from an authorised source: do not adopt and do not store. Note that a higher epoch exists
-    --     (LH.heardEpoch, surfaced as LH.IsStale() in /kart status) and stop; the catch-up sync
-    --     refills this once the epoch is adopted from the loot owner.
-    local myEpoch = KART_LootHistoryEpoch or 1
-    if wireEpoch < myEpoch then
-        return
-    elseif wireEpoch > myEpoch then
-        if LC.IsSenderLootOwner(senderKey) then
-            KART.LH.AdoptEpoch(wireEpoch, senderKey)
-        else
-            KART.LH.heardEpoch = math.max(KART.LH.heardEpoch or 0, wireEpoch)
-            return
-        end
-    end
+    -- The epoch this award was decided in, against our own (Task 6a) -- see LH.AdmitEpoch for the
+    -- three-case ruling this shares with the loot-history catch-up path (LH.HandleHistoryBatch). A
+    -- false here discards the WHOLE message, not just the history write: none of its other side
+    -- effects (owed entry, vote-list removal, winner highlight) are meaningful either once the
+    -- epoch has moved past it, or before we can trust it.
+    if not KART.LH.AdmitEpoch(wireEpoch, senderKey) then return end
 
     -- A result naming a different item than the one this client dismissed under the same id is proof
     -- Blizzard reused the number, so the note is about a roll that no longer exists and must not gate

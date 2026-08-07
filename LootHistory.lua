@@ -442,6 +442,53 @@ function LH.AdoptEpoch(epoch, originatorKey)
     return true
 end
 
+-- The single answer to "does this wire epoch admit its message", shared by every receipt path that
+-- carries an epoch next to its payload: an award (LC_RESULT, Trade.HandleResult in
+-- LootCouncilTrade.lua) and a catch-up answer (LC_HIST_BATCH, LH.HandleHistoryBatch below). These
+-- used to ask the question two different ways (code review, Task 6a, 2026-08-07): the award path
+-- got the maintainer's three-case ruling, while the catch-up path only ever checked whether the
+-- batch epoch was BELOW ours -- so a batch from an ordinary group member (anyone may answer
+-- LC_HIST_REQ, not just the loot owner; see LH.HandleHistoryRequest) carrying that member's own,
+-- legitimately higher epoch fell straight through and was stored ABOVE this client's own
+-- KART_LootHistoryEpoch, invisible to LH.HistoryChecksum's `(e.epoch or 1) == epoch` filter forever
+-- -- exactly the state the ruling exists to prevent, and for exactly the reason it gives. One
+-- implementation from here on; two shapes of the same rule only drift again.
+--
+-- originatorKey is whoever is actually vouching for wireEpoch being real: the assigner of an
+-- award, or the peer who answered a catch-up request (their OWN epoch, not necessarily the loot
+-- owner's).
+--
+-- Returns true when the caller should go on and process/store what came with this epoch, false
+-- when the whole message must be discarded whole (not merely its history write). Three cases, per
+-- the maintainer's ruling:
+--   * wireEpoch == myEpoch: the ordinary case -- true, nothing else to do.
+--   * wireEpoch < myEpoch: decided/answered before a wipe we have already adopted -- false, discard
+--     the message whole. Merge rule 2.
+--   * wireEpoch > myEpoch: the other side is ahead of us. If originatorKey is the loot owner, adopt
+--     the epoch first (LH.AdoptEpoch discards everything below it) and return true -- merge rule 1.
+--     Otherwise we have heard of an epoch we cannot verify: note it (LH.heardEpoch, surfaced as
+--     LH.IsStale() in /kart status) and return false without adopting or storing anything.
+--
+-- Consequence worth stating plainly: a returning absentee who resyncs while the loot owner is
+-- absent cannot adopt the new epoch from an ordinary peer's catch-up answer, so it stays stale
+-- until the loot owner is around to vouch for it. That is the intended cost of "only the loot owner
+-- may wipe" (Task 2, Task 4) -- the client refuses to award while stale, and /kart status shows the
+-- condition, so nothing is lost quietly.
+function LH.AdmitEpoch(wireEpoch, originatorKey)
+    local myEpoch = KART_LootHistoryEpoch or 1
+    if wireEpoch < myEpoch then
+        return false
+    elseif wireEpoch > myEpoch then
+        if LC.IsSenderLootOwner(originatorKey) then
+            LH.AdoptEpoch(wireEpoch, originatorKey)
+            return true
+        end
+        LH.heardEpoch = math.max(LH.heardEpoch or 0, wireEpoch)
+        return false
+    end
+    return true
+end
+
 -- True while we know of an epoch above our own that we could not adopt -- we are behind the raid and
 -- our log is not the raid's log. Consumed by the award path: a client in this state must not write
 -- into a record it cannot see all of.
@@ -1443,10 +1490,9 @@ function LH.HandleHistoryBatch(payload, senderKey)
     -- not from an arbitrary whisper.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
 
-    LH.heardEpoch = math.max(LH.heardEpoch or 0, epoch)
-    LH.AdoptEpoch(epoch, originatorKey)
-    -- Below our epoch after that: pre-wipe entries. Discard, do not re-seed a wiped log.
-    if epoch < (KART_LootHistoryEpoch or 1) then return end
+    -- See LH.AdmitEpoch: below our epoch, or above it from someone who cannot vouch for a wipe, and
+    -- the whole batch is discarded -- not just entries that fail some later filter.
+    if not LH.AdmitEpoch(epoch, originatorKey) then return end
 
     if packed == "1" then
         body = LC.UnpackPayload(body)
@@ -1466,6 +1512,14 @@ function LH.HandleHistoryBatch(payload, senderKey)
 end
 
 -- Runs once per record in a batch. Parses and stores one award.
+--
+-- In practice always reached through LH.HandleHistoryBatch, which already applies LH.AdmitEpoch to
+-- the whole batch before looping into this function -- every record in one batch shares its header
+-- epoch by construction (LH.AnswerHistoryRequest only ever sends entries at its OWN current epoch).
+-- Applied again here anyway, on this record's own epoch field, rather than trusting the caller: this
+-- function is reachable on its own (every direct call in this codebase's tests does exactly that),
+-- and the one thing that must never happen -- an entry stored above this client's own epoch,
+-- invisible to LH.HistoryChecksum forever -- must not depend on which path got here first.
 function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
@@ -1474,6 +1528,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
         payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(%d+):(.*)$")
     t = tonumber(t)
     if not t or not winner then return end
+    if not LH.AdmitEpoch(tonumber(epoch) or 1, senderKey) then return end
     -- Reject a timestamp from the future. time() is each client's OS clock, so a peer with a badly
     -- set clock (or a hostile one) would otherwise write an entry dated years ahead — which then
     -- becomes the "since" watermark LH.RequestHistorySync sends, permanently asking every peer for

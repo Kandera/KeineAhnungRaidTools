@@ -5,6 +5,9 @@
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
+-- A full item link, for hand-built LC_HIST_BATCH/LC_HIST_ENTRY records (same convention as
+-- test_lc_histsync_length.lua / test_loothistory_matching.lua).
+local GLOVES = KARTTEST.items[F.GLOVES].link
 
 -- Put one item on the table and award it, using only what lc_fixture.lua already offers -- the
 -- fixture belongs to neither session and must not grow while B139 is working in this tree.
@@ -241,6 +244,54 @@ do
     end
     T.eq(hasRoll302, false, "raider does not store the award either")
     RaidSim.As(raider, function() T.truthy(raider.KART.LH.IsStale(), "raider now reads as stale") end)
+end
+
+-- The loot-history catch-up path (LC_HIST_BATCH) asks the same question the award path does, and
+-- must answer it the same way (code review finding on Task 6a, 2026-08-07). LH.HandleHistoryBatch
+-- used to only check whether the batch epoch was BELOW ours; a batch answered by an ORDINARY group
+-- member (anyone may answer LC_HIST_REQ, not just the loot owner -- see LH.HandleHistoryRequest)
+-- carrying that member's own, legitimately higher epoch fell straight through and was stored above
+-- this client's own epoch -- invisible to LH.HistoryChecksum's `(e.epoch or 1) == epoch` filter
+-- forever. Both cases below go through LH.HandleHistoryBatch directly with a hand-built record,
+-- the same convention test_lc_histsync_length.lua / test_loothistory_matching.lua use for
+-- LH.HandleHistoryEntry.
+
+-- A catch-up batch from someone who is not the loot owner, carrying a higher epoch, stores
+-- nothing and leaves the client stale ------------------------------------------------------------
+do
+    local _, _, council, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        time(), "batch-1", 2, GLOVES)
+
+    RaidSim.As(raider, function()
+        raider.KART.LH.HandleHistoryBatch("2:" .. council.guid .. ":0:" .. record, council.guid)
+    end)
+
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "raider does not adopt an epoch from a non-owner's batch")
+    T.eq(#raider.env.KART_LootHistory, 0, "and stores nothing from it")
+    RaidSim.As(raider, function() T.truthy(raider.KART.LH.IsStale(), "raider now reads as stale") end)
+end
+
+-- The same batch, from the loot owner, adopts the epoch and stores the entry ----------------------
+-- This is also the intended-cost case the ruling calls out: a returning absentee resyncing while
+-- the loot owner is around gets caught up in one step, epoch included.
+do
+    local _, lm, _, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        time(), "batch-2", 2, GLOVES)
+
+    RaidSim.As(raider, function()
+        raider.KART.LH.HandleHistoryBatch("2:" .. lm.guid .. ":0:" .. record, lm.guid)
+    end)
+
+    T.eq(raider.env.KART_LootHistoryEpoch, 2, "raider adopts the loot owner's epoch from the batch")
+    T.eq(#raider.env.KART_LootHistory, 1, "and stores the entry from it")
+    T.eq(raider.env.KART_LootHistory[1] and raider.env.KART_LootHistory[1].epoch, 2,
+        "stamped at the epoch it was answered at")
 end
 
 -- A reload changes nothing (C8) --------------------------------------------------------------------
