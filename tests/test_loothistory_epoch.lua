@@ -322,21 +322,84 @@ end
 -- Convergence. The three merge rules are meant to be commutative and idempotent: who talks to whom,
 -- and in what order, must not change where the raid ends up. That is a property, not a case, so it is
 -- checked by running the same awards and wipes through randomised orderings and losses and asserting
--- that every client lands on the same epoch and the same set of ids.
+-- that every client lands on the same epoch and the same multiset of ids.
 --
 -- Deterministic seed: a soak that cannot be re-run on the failing input is a soak that reports
 -- something nobody can fix. Compare by RATE across runs, never by seed number.
+--
+-- What each part of this is here for, because an earlier version of it could not fail on the things
+-- it claimed to check (code review, 2026-08-07):
+--
+--   * a MULTISET of ids, not a set keyed by id. C7 is "the award reaches the whole raid, ONCE", and
+--     "once" is defined over the id -- so a set collapses two copies of one award into one key, and
+--     a dedup that had broken outright, filling every log with doubles, read as convergence.
+--   * EVERY client, not the three the fixture happens to name.
+--   * the catch-up tokens are delayed and lost as well as LC_RESULT. Only LC_RESULT was ever held,
+--     so LC_HIST_REQ / LC_HIST_BATCH / LC_HIST_EPOCH -- the whole catch-up machinery -- were only
+--     ever exercised in one ordering, in order, with nothing lost.
+--   * more than one client calls ClearHistory, and one of them is not entitled to.
+--   * somebody ports out and comes back, which is the case a raid-wide wipe exists for (C3).
+local CATCHUP_TOKENS = { "LC_HIST_REQ", "LC_HIST_BATCH", "LC_HIST_EPOCH" }
+
 do
     for seed = 1, 40 do
         math.randomseed(seed)
         local sim, lm, council, raider = F.NewRaid()
+        -- Which tokens are currently delayed, and which are currently being lost. Kept apart because
+        -- the wire checks Blackhole first: a token in both states is only ever dropped, so a test
+        -- that put it in both would think it was exercising a delay and be exercising a loss.
+        local held, dark = {}, {}
 
         for i = 1, 12 do
             local winner = ({ council, raider, lm })[math.random(1, 3)]
             if math.random() < 0.25 then RaidSim.Hold(sim, "LC_RESULT") end
+            -- An award that nobody but the assigner ever hears. It is the checksum's job to notice
+            -- (the hole is BEHIND the watermark by the time anyone asks), and the answer to it is a
+            -- full reconcile -- which re-sends every award the asker already holds. That surplus is
+            -- what the id dedup is for, and without a genuinely lost award nothing in this soak ever
+            -- made a peer send one.
+            local lostResult = math.random() < 0.2
+            if lostResult then RaidSim.Blackhole(sim, "LC_RESULT") end
+
+            -- One catch-up token per round, either merely slow or lost outright for a while.
+            local tok = CATCHUP_TOKENS[math.random(1, #CATCHUP_TOKENS)]
+            if not held[tok] and not dark[tok] then
+                local r = math.random()
+                if r < 0.2 then
+                    RaidSim.Hold(sim, tok); held[tok] = true
+                elseif r < 0.35 then
+                    RaidSim.Blackhole(sim, tok); dark[tok] = true
+                end
+            end
+
             Award(sim, lm, 200 + i, F.GLOVES, winner, "BIS")
+            if lostResult then RaidSim.Deliver(sim, "LC_RESULT") end
+
             if math.random() < 0.25 then RaidSim.Release(sim, "LC_RESULT") end
+            for _, t in ipairs(CATCHUP_TOKENS) do
+                if held[t] and math.random() < 0.4 then RaidSim.Release(sim, t); held[t] = nil end
+                if dark[t] and math.random() < 0.4 then RaidSim.Deliver(sim, t); dark[t] = nil end
+            end
+
             if i == 6 then RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end) end
+            -- A second wiper, and one who may not: only the loot owner's word raises an epoch, so
+            -- the council member's press must leave the raid exactly where it was. Both land while
+            -- awards and epoch messages are still in flight, which is the ordering the merge rules
+            -- exist for.
+            if i == 8 then RaidSim.As(council, function() council.KART.LH.ClearHistory() end) end
+            if i == 10 then RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end) end
+
+            -- Ports out to the other split raid and comes back with nothing: a fresh client, no
+            -- saved history, no epoch. Everything it ends up with has to arrive over the wire.
+            if i == 7 then
+                local member = raider.member
+                RaidSim.Leave(sim, raider.name)
+                RaidSim.Drain(sim, 30)
+                raider = RaidSim.Join(sim, member)
+                RaidSim.EnterWorld(sim, raider.name)
+                RaidSim.Drain(sim, 60)
+            end
+
             -- RaidSim.Reload REPLACES the client in the sim and returns the new one; the old
             -- `raider` reference becomes a corpse (see its own comment). Without capturing the
             -- return value here, every later iteration -- and the convergence assertions below --
@@ -345,24 +408,69 @@ do
             -- indistinguishable from this harness bug: both left the post-reload raider looking
             -- behind the raid.
             if math.random() < 0.2 then raider = RaidSim.Reload(sim, raider.name) end
+
+            -- A few seconds between drops, which is what a distribution looks like. Without it the
+            -- whole run happens inside one second of time(): RaidSim.Drain only moves the clock while
+            -- something is actually queued, so twelve awards, two wipes and a rejoin all carried the
+            -- SAME timestamp -- and every since-timestamp comparison in the catch-up (which is what
+            -- an incremental answer is) degenerated to comparing a number with itself.
+            KARTTEST.AdvanceTime(5)
         end
 
         RaidSim.Release(sim, "LC_RESULT")
+        for _, t in ipairs(CATCHUP_TOKENS) do
+            RaidSim.Release(sim, t)
+            RaidSim.Deliver(sim, t)
+        end
         RaidSim.Drain(sim, 300)
 
-        local function idSet(c)
-            local s = {}
-            for _, e in ipairs(c.env.KART_LootHistory or {}) do s[e.id] = true end
-            return s
+        -- The evening's ordinary churn, which is what the catch-up is FOR: people port out and relog
+        -- all night, and every one of those joins asks its peers for what it is missing. Far enough
+        -- apart that HISTORY_SYNC_ANSWER_COOLDOWN has expired between the rounds.
+        for _ = 1, 2 do
+            KARTTEST.AdvanceTime(90)
+            for _, c in ipairs(sim.clients) do
+                RaidSim.As(c, function() c.KART.LH.RequestHistorySync() end)
+            end
+            KARTTEST.AdvanceTime(90)
+            RaidSim.Drain(sim, 300)
         end
 
-        T.eq(raider.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
-            "seed " .. seed .. ": the raider ends on the lootmaster's epoch")
-        T.eq(council.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
-            "seed " .. seed .. ": the council member does too")
-        T.deep_eq(idSet(raider), idSet(lm),
-            "seed " .. seed .. ": the raider holds exactly the lootmaster's award ids")
-        T.deep_eq(idSet(council), idSet(lm),
-            "seed " .. seed .. ": and so does the council member")
+        -- And then the next raid night, because the once-a-night full reconcile is deliberately not
+        -- available twice in one evening (design §3, variant C: "if it is not, tomorrow's first join
+        -- pulls it"). A hole that survives the first night therefore has to close on the next one, or
+        -- the merge rules are not converging at all -- they are merely usually lucky.
+        --
+        -- Logging in again IS the reset: LH.fullReconciled and LH.historySyncAnswered are memory-only,
+        -- while the history and the epoch are SavedVariables and survive. Cheaper and more honest than
+        -- winding the clock forward six hours.
+        local names = {}
+        for i, c in ipairs(sim.clients) do names[i] = c.name end
+        for _, name in ipairs(names) do RaidSim.Reload(sim, name) end
+        for _, name in ipairs(names) do RaidSim.EnterWorld(sim, name) end
+        -- Past GATE_MAX_PARK: a council member comes back with its decided rolls restored and tabbed,
+        -- so its own gate can be shut from the first instant, and the hard cap is what releases it.
+        KARTTEST.AdvanceTime(120)
+        RaidSim.Drain(sim, 300)
+        KARTTEST.AdvanceTime(120)
+        RaidSim.Drain(sim, 300)
+
+        -- A COUNT per id, not a set: two copies of one award have to be visible as two.
+        local function idCounts(c)
+            local s = {}
+            for _, e in ipairs(c.env.KART_LootHistory or {}) do s[e.id] = (s[e.id] or 0) + 1 end
+            return s
+        end
+        -- Every reference held above is a corpse after the reloads (see RaidSim.Reload).
+        local owner = sim.byName[lm.name]
+        local wantIDs, wantEpoch = idCounts(owner), owner.env.KART_LootHistoryEpoch
+
+        for _, c in ipairs(sim.clients) do
+            T.eq(c.env.KART_LootHistoryEpoch, wantEpoch,
+                "seed " .. seed .. ": " .. c.name .. " ends on the lootmaster's epoch")
+            T.deep_eq(idCounts(c), wantIDs,
+                "seed " .. seed .. ": " .. c.name .. " holds exactly the lootmaster's awards, once each")
+        end
+        T.truthy(council and raider, "seed " .. seed .. ": the raid still has both roles")
     end
 end
