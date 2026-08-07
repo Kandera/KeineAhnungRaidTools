@@ -2602,9 +2602,16 @@ function LC.HandleTable(payload, senderKey, sender)
         if rollID and itemID then
             local link = LC.rollItems[rollID]
             local held = type(link) == "string" and link:match("item:(%d+)") or nil
-            local dismissed = LC.rollDismissed[rollID]
+            local dismissedItem, dismissedGen = LC.RollNoteParts(LC.rollDismissed[rollID])
+            -- A different item under the number is Blizzard's reuse (B132). A different INSTANCE of
+            -- the same item is the same reuse wearing the one disguise the itemID cannot see (B139),
+            -- and the client it costs is the one that put this roll away and has heard nothing since.
+            -- Both need a comparable pair on both sides: an absent generation says nothing, exactly
+            -- as an unnamed item does.
             if (link ~= nil and held ~= nil and held ~= itemID)
-                or (type(dismissed) == "string" and dismissed ~= itemID) then
+                or (dismissedItem ~= nil and dismissedItem ~= itemID)
+                or (dismissedItem ~= nil and dismissedGen ~= nil and genID ~= nil
+                    and dismissedGen ~= genID) then
                 -- The ask further down is about a DIFFERENT item than the one that stamped this, so
                 -- the previous roll's cooldown must not defer it. PurgeStaleRoll cannot do it: on the
                 -- dismissal-only path it returns at "nothing tracked under this ID" long before
@@ -2644,11 +2651,17 @@ function LC.HandleTable(payload, senderKey, sender)
         -- out on this same heartbeat. Compared only when both sides are comparable, exactly like
         -- the dismissal note above -- an unresolved stamp (`true`) or an unnamed item (itemID "0")
         -- keeps the gate closed, erring towards silence about a roll this client already watched
-        -- end. A reuse carrying a second copy of the SAME item compares equal and is invisible
-        -- here -- accepted, B139: telling that apart needs the wire to name the roll's instance,
-        -- not a better note rule.
+        -- end. A reuse carrying a second copy of the SAME item compares equal here and is caught by the
+        -- generation instead (B139) -- which is the whole reason the heartbeat carries one.
         local expiredHere = rollID and LC.rollExpiredHere[rollID]
-        if type(expiredHere) == "string" and itemID and itemID ~= "0" and expiredHere ~= itemID then
+        local expiredItem, expiredGen = LC.RollNoteParts(expiredHere)
+        if expiredItem and itemID and itemID ~= "0" and expiredItem ~= itemID then
+            LC.rollExpiredHere[rollID] = nil
+            expiredHere = nil
+        elseif expiredItem and expiredGen and genID and expiredGen ~= genID then
+            -- The same item, a different instance of it: a SECOND COPY under a number Blizzard
+            -- handed out again (B139). Invisible to the comparison above by construction, and the
+            -- one case where a note about a roll that really did end here has to come off anyway.
             LC.rollExpiredHere[rollID] = nil
             expiredHere = nil
         end

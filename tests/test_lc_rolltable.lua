@@ -834,3 +834,86 @@ do
     T.eq(unknownItem, nil, "an unresolved note yields no item...")
     T.eq(unknownGen, nil, "...and no generation")
 end
+
+-- ...and a SECOND COPY of the same item under that number is a new roll, not a repeat (B139) --------
+-- The case the itemID cannot see, and the reason the generation exists. This client watched copy 1's
+-- window close, so it holds a note; Blizzard hands the number to copy 2 of the SAME item; this client
+-- gets no roll of its own for it (dead, released, out of range) and loses the announcement. Before
+-- the generation, its note compared equal to the heartbeat forever and it never learned copy 2
+-- existed -- for the rest of the round, with nothing on screen to notice it by.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcRollsEnabled = false
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+
+    F.Drop(sim, 985, F.GLOVES)
+    KARTTEST.AdvanceTime(25)
+    T.eq(raider.KART.LC.rollItems[985], nil, "the raider watched the gloves close and freed them")
+    T.eq(raider.KART.LC.rollExpiredHere[985], tostring(F.GLOVES) .. "@1",
+        "and holds a note naming the instance that ended")
+
+    -- Blackholing LC_DROP costs the rest of the raid nothing: every other client has its own
+    -- START_LOOT_ROLL and tracks the second copy from that.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 985, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    T.eq(raider.KART.LC.rollItems[985], nil,
+        "and hears nothing about the second copy under that number")
+
+    -- A few seconds, not a full window: the owner's heartbeat changed with the reuse and goes out on
+    -- the next tick, the freed note has no ask on cooldown, and the catch-up lands while the second
+    -- copy's own window still runs.
+    KARTTEST.AdvanceTime(6)
+
+    T.eq(raider.KART.LC.rollExpiredHere[985], nil,
+        "the heartbeat naming a new generation drops the note about the instance that ended")
+    T.truthy(tostring(raider.KART.LC.rollItems[985]):match("item:" .. F.GLOVES),
+        "and the second copy reaches it, off the heartbeat alone")
+
+    -- ...and the repair is not a loop. Once this client tracks copy 2 its note, when copy 2's own
+    -- window closes, names generation 2 -- which is what the owner keeps saying. A rule that kept
+    -- firing here would be the B135 burst again: one ask every thirty seconds for the rest of the
+    -- round.
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(60)
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == raider.name then asks = asks + 1 end
+    end
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLLS_REQ")) do
+        if e.from == raider.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "and no heartbeat after the repair asks again")
+end
+
+-- ...while a heartbeat that names no generation changes nothing ------------------------------------
+-- A stand-in owner holds no counter for the rolls already on the table. Unknown is not a mismatch --
+-- the same rule the itemID has always followed -- so the notes stay exactly as they are and this
+-- client stays quiet about a roll it deliberately finished with.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 986, F.GLOVES)
+    KARTTEST.AdvanceTime(25)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(986) end)
+    T.eq(council.KART.LC.rollItems[986], nil, "the council member is finished with the item")
+
+    RaidSim.As(lm, function() wipe(lm.KART.LC.rollGeneration) end)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(45)   -- several heartbeats, and past ROLL_REQ_COOLDOWN on top of them
+
+    local asks = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == council.name then asks = asks + 1 end
+    end
+    T.eq(asks, 0, "a heartbeat with no generation in it does not reopen what this client put away")
+    T.truthy(council.KART.LC.rollDismissed[986] ~= nil, "and the note survives it")
+end
