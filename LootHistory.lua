@@ -1143,10 +1143,18 @@ local GATE_MAX_PARK = 60
 
 function LH.RequestHistorySync()
     if not LH.GateOpen() then
-        LH.syncWanted = true
-        return C_Timer.After(GATE_GRACE, LH.RequestHistorySync)
+        -- LH.syncWanted holds the moment this deferral chain started, not just a flag -- read below
+        -- to cap the wait, the same way LH.ParkRequest's own `entry.at` caps a parked answer. Without
+        -- it, a client whose own gate never reopens (a council member sitting on a decided-but-still-
+        -- tabbed roll) would keep rescheduling every GATE_GRACE seconds forever and never once ask.
+        LH.syncWanted = LH.syncWanted or GetTime()
+        if GetTime() - LH.syncWanted < GATE_MAX_PARK then
+            return C_Timer.After(GATE_GRACE, LH.RequestHistorySync)
+        end
+        -- Past the cap: ask anyway, gate or no gate -- the same escape LH.ParkRequest's cap gives an
+        -- answer that would otherwise never go out.
     end
-    LH.syncWanted = false
+    LH.syncWanted = nil
 
     -- Never earlier than the current epoch's start: the since-timestamp means "I have everything up
     -- to here", and a wipe is exactly such a line.
@@ -1180,9 +1188,26 @@ local function EntryRecord(e)
 end
 
 function LH.GateOpen()
-    if next(LC.rollDeadlines or {}) ~= nil then
-        LH.gateClosedUntil = GetTime() + GATE_GRACE
-        return false
+    -- Undecided rolls only. LC.rollDeadlines[rollID] being present does not by itself mean a
+    -- distribution is in flight -- a council member's DECIDED roll deliberately stays there so its
+    -- tab can be reassigned (see Trade.DoAssignWinner: "the tab deliberately stays open"), and
+    -- Vote.PruneExpiredRolls explicitly skips clearing anything still tabbed. A plain raider's client
+    -- frees the roll at its own vote deadline, but a council member's does not -- so checking mere
+    -- presence would close this gate on the first item of the night for every council member (and
+    -- therefore the lootmaster) and never reopen it, taxing every history answer and every own
+    -- request from those clients the full GATE_MAX_PARK for the rest of the raid, every raid.
+    --
+    -- LC.assignedWinners[rollID] is set the instant a decision is made -- Trade.DoAssignWinner sets
+    -- it locally before Trade.AnnounceResult sends anything, and Trade.HandleResult sets it on every
+    -- receiving peer just as early -- so a roll stops blocking here at the same moment it stops being
+    -- "on the table," not merely once its tab eventually closes. Both LC.rollDeadlines and
+    -- LC.assignedWinners are wiped together (Trade.ClearRollState, and the bulk wipe in
+    -- LootCouncil.lua), so there is no window where one is stale relative to the other.
+    for rollID in pairs(LC.rollDeadlines or {}) do
+        if (LC.assignedWinners or {})[rollID] == nil then
+            LH.gateClosedUntil = GetTime() + GATE_GRACE
+            return false
+        end
     end
     return GetTime() >= (LH.gateClosedUntil or 0)
 end
@@ -1191,9 +1216,17 @@ end
 -- one question, and the answer to the last one already contains what the earlier ones would have got.
 function LH.ParkRequest(payload, senderFullName)
     LH.parked = LH.parked or {}
-    local fresh = LH.parked[senderFullName] == nil
+    local existing = LH.parked[senderFullName]
+    if existing then
+        -- The payload is replaced -- the newest request's answer already covers whatever an older
+        -- one asked for -- but `at` is NOT touched. GATE_MAX_PARK measures how long this sender has
+        -- been waiting, not how long since their most recent nudge; a repeat request every few
+        -- seconds (which is exactly what a client stuck deferring its own LH.RequestHistorySync
+        -- would send) must not be able to push the hard cap out indefinitely.
+        existing.payload = payload
+        return
+    end
     LH.parked[senderFullName] = { payload = payload, at = GetTime() }
-    if not fresh then return end
 
     local function attempt()
         local entry = LH.parked and LH.parked[senderFullName]
