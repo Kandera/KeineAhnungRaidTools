@@ -378,22 +378,70 @@ function LH.GetUniqueReasons()
     return list
 end
 
--- Clearing draws a line rather than just emptying a table, and the line is what makes the clear
--- stick. LH.RequestHistorySync asks peers for everything newer than the newest entry it holds; after
--- a wipe that is zero, which reads as "send me everything you have" -- so the catch-up faithfully
--- rebuilt exactly what had just been deleted, and a season started with last tier's items still in
--- the list. Reported by the maintainer, 2026-08-01.
+-- The one-time purge that opens the epoch scheme. A client with no epoch is one that has never run
+-- a build with award ids, so everything it holds is unmergeable and unexportable: no id to dedup on,
+-- no epoch to place it in. Emptying it is not data loss weighed against keeping it -- it is the only
+-- state from which every client in the raid starts on the same number. Confirmed by the maintainer
+-- on 2026-08-07; the stored data was test raids.
 --
--- Switching the sync off is not the alternative: the whole reason it exists is that items decided
--- while you were absent still reach the list you export. A line keeps both -- nothing older than it
--- ever comes back, everything after it still does.
---
--- Personal and account-wide, like the history itself. It is not synced and nobody else's clear
--- affects yours.
-function LH.ClearHistory()
+-- A function of its own, called from Core.lua's ADDON_LOADED block (after KART_LootHistory has been
+-- given its table), and also wired to this file's own ADDON_LOADED registration below -- the test
+-- harness loads LootHistory.lua but not Core.lua (see tests/raidsim.lua), so this is what lets the
+-- purge run under KARTTEST.FireEvent at all. Idempotent either way: whichever registration runs
+-- first in the real game leaves KART_LootHistoryEpoch set, and the other is then a no-op.
+function LH.PurgeIfNoEpoch()
+    if KART_LootHistoryEpoch ~= nil then return end
     wipe(KART_LootHistory)
-    KART_LootHistoryClearedAt = time()
+    KART_LootHistoryEpoch = 1
+end
+
+-- Clearing draws a line rather than just emptying a table, and the line is what makes the clear
+-- stick: LH.RequestHistorySync asks peers for what it is missing, and after a plain wipe that reads
+-- as "send me everything", so the catch-up faithfully rebuilt exactly what had just been deleted
+-- (reported by the maintainer, 2026-08-01).
+--
+-- The line used to be a personal timestamp, and personal is what was wrong with it. It protected the
+-- wiper and nobody else: a raider absent when it was drawn kept last tier's entries, exported them,
+-- and stayed permanently out of step with the raid. The line is now a raid-wide number.
+--
+-- The loot owner's call, and only in a group. Outside one there is nobody to tell, so the epoch would
+-- rise in private and win the next raid's merge from an armchair.
+function LH.ClearHistory()
+    if not IsInGroup() or not LC.IsLootOwner() then return end
+    KART_LootHistoryEpoch = (KART_LootHistoryEpoch or 1) + 1
+    wipe(KART_LootHistory)
+    KART_LootHistoryClearedAt = time()   -- display only now; the epoch is the watermark
+    LC.SendLC("LC_HIST_EPOCH:" .. KART_LootHistoryEpoch)
     LH.Refresh()
+end
+
+-- Rule 1 of the merge: a higher epoch is a wipe, and it rides along in every message rather than
+-- needing one of its own. Adopting it drops everything below it.
+--
+-- Gated on IsSenderLootOwner and not IsSenderCouncil, which is the check awards go through: a council
+-- member may award, only the loot owner may wipe. The gate is what stands between one client with a
+-- corrupted epoch and every log in the raid.
+--
+-- Monotone: it only ever moves up, and applying the same epoch twice does nothing the second time.
+-- That is what makes the merge order-independent -- who talks to whom, and when, does not matter.
+function LH.AdoptEpoch(epoch, originatorKey)
+    epoch = tonumber(epoch)
+    if not epoch or epoch <= (KART_LootHistoryEpoch or 1) then return false end
+    if not LC.IsSenderLootOwner(originatorKey) then return false end
+
+    KART_LootHistoryEpoch = epoch
+    for i = #KART_LootHistory, 1, -1 do
+        if (KART_LootHistory[i].epoch or 0) < epoch then table.remove(KART_LootHistory, i) end
+    end
+    LH.Refresh()
+    return true
+end
+
+-- True while we know of an epoch above our own that we could not adopt -- we are behind the raid and
+-- our log is not the raid's log. Consumed by the award path: a client in this state must not write
+-- into a record it cannot see all of.
+function LH.IsStale()
+    return (LH.heardEpoch or 0) > (KART_LootHistoryEpoch or 1)
 end
 
 KART.UI:RegisterStaticPopup("KART_LH_CLEAR_CONFIRM", {
@@ -1006,6 +1054,7 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         difficultyID = difficultyID,
         rollID       = rollID,
         id           = awardID or LH.NewAwardID(),
+        epoch        = KART_LootHistoryEpoch or 1,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
@@ -1062,13 +1111,18 @@ function LH.RequestHistorySync()
     for _, e in ipairs(KART_LootHistory or {}) do
         if e.time and e.time > latest then latest = e.time end
     end
-    LC.SendLC("LC_HIST_REQ:" .. latest)
+    -- Our own epoch travels in the header, once per request rather than once per entry. It matters
+    -- most for the answering side (see LH.HandleHistoryRequest): a returning absentee's request is
+    -- often the only message that ever reaches the loot owner's peers about them, and the answer
+    -- carries the epoch back regardless of whether there is a single entry left to send.
+    LC.SendLC("LC_HIST_REQ:" .. latest .. ":" .. (KART_LootHistoryEpoch or 1))
 end
 
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
 -- never a visible chat message) if it actually has entries the requester is missing.
-function LH.HandleHistoryRequest(payload, senderFullName)
-    local sinceTime = tonumber(payload)
+function LH.HandleHistoryRequest(payload, senderFullName, senderKey)
+    local sinceStr, epochStr = (payload or ""):match("^(%d+):?(%d*)$")
+    local sinceTime = tonumber(sinceStr)
     if not sinceTime or not senderFullName then return end
     -- Only answer group members. CHAT_MSG_ADDON also delivers whispers and the "KART" prefix is
     -- public, so without this any stranger could whisper LC_HIST_REQ and exfiltrate our loot history
@@ -1079,6 +1133,18 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- "Bob-Silvermoon" would resolve onto group member "Bob-Ravencrest"'s GUID and pass. Match the
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
     if not KAUtil.IsFullNameInGroup(senderFullName) then return end
+
+    -- The requester's own epoch rides along in the request header too (see LH.RequestHistorySync).
+    -- If THEY are the raid's loot owner, this is where we hear about a line they already drew --
+    -- otherwise LH.AdoptEpoch's own gate discards it.
+    if senderKey then LH.AdoptEpoch(epochStr, senderKey) end
+
+    -- The header of our answer: our own epoch, sent back once regardless of whether we have a single
+    -- entry below to go with it. A returning absentee's log is the one case where a loot owner's own
+    -- peers have nothing left to send them (their own history was just wiped too) -- without this,
+    -- the epoch that matters most would be exactly the one that never arrives.
+    KASC:Send("LC_HIST_EPOCH:" .. (KART_LootHistoryEpoch or 1), "WHISPER", senderFullName, { prio = "BULK" })
+
     -- Rate-limit the reply burst per sender: each answered request queues up to
     -- HISTORY_SYNC_MAX_ENTRIES timers spanning ~8s, so a peer repeatedly leaving and rejoining would
     -- otherwise stack bursts until the outgoing messages hit the client's throttle and the server's
@@ -1312,6 +1378,12 @@ function LH.HandleHistoryEntry(payload, senderKey)
         difficulty   = diffID and (GetDifficultyInfo(diffID) or "") or "",
         difficultyID = diffID,
         rollID       = rollID,
+        -- Stamped with OUR OWN current epoch, not anything carried on the wire: this entry is being
+        -- merged into our log at our current watermark, and that is the number LH.AdoptEpoch's later
+        -- pruning has to compare it against. An unstamped (nil) entry would read as epoch 0 and be
+        -- dropped by the very next clear, including one that has nothing to do with the award it
+        -- describes.
+        epoch        = KART_LootHistoryEpoch or 1,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
@@ -1344,6 +1416,19 @@ end
 --  Addon-message registrations
 -- =====================================================================
 KASC:RegisterMessage("LC_HIST_REQ", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender) end)
+    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_HIST_ENTRY", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LH.HandleHistoryEntry(payload, ctx:Key()) end)
+KASC:RegisterMessage("LC_HIST_EPOCH", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx)
+        LH.heardEpoch = math.max(LH.heardEpoch or 0, tonumber(payload) or 0)
+        LH.AdoptEpoch(payload, ctx:Key())
+    end)
+
+-- See LH.PurgeIfNoEpoch: Core.lua calls it directly from its own ADDON_LOADED block, but this file
+-- keeps its own registration too so the purge runs even where Core.lua is not part of the picture.
+local purgeFrame = CreateFrame("Frame")
+purgeFrame:RegisterEvent("ADDON_LOADED")
+purgeFrame:SetScript("OnEvent", function(_, event, loadedAddon)
+    if event == "ADDON_LOADED" and loadedAddon == addonName then LH.PurgeIfNoEpoch() end
+end)

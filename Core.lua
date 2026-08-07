@@ -187,6 +187,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     if event == "ADDON_LOADED" and arg1 == addonName then
         KART_Settings = KART_Settings or {}
         KART_LootHistory = KART_LootHistory or {}
+        -- The one-time purge that opens the epoch scheme (see LH.PurgeIfNoEpoch in LootHistory.lua
+        -- for why). Must run after the table above exists, so there is something to wipe.
+        KART.LH.PurgeIfNoEpoch()
         KART_LCOfficerNotes = KART_LCOfficerNotes or {}
         KART_WoWUtilsCache = KART_WoWUtilsCache or {}
         KART_Profiles = KART_Profiles or {}
