@@ -994,3 +994,73 @@ do
     T.truthy(tostring(council.KART.LC.rollItems[989]):match("item:" .. F.GLOVES),
         "and the second copy reaches it, off the heartbeat alone")
 end
+
+-- ...and the loot role moving mid-round is the case the owner-only guard exists for (B139) -----------
+-- LC.OnStartLootRoll only bumps LC.rollGeneration `if LC.IsLootOwner() then` -- the two blocks above
+-- get to the same starting point by wipe()ing the counter table directly, which exercises the SYMPTOM
+-- (an owner with no counter for a roll) without ever touching the guard that produces it. This drives
+-- the real mechanism: a stand-in who was never owner while a roll's starts happened, the way the
+-- lootmaster ports out mid-distribution and the raid leader takes over (see LC.IsLootOwner) or a
+-- designation simply changes (tests/test_lc_ownership.lua:34-38 shows the pattern this codebase uses
+-- to move the role between two named clients).
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+    local newOwner = sim.byName.Merrit
+
+    F.Drop(sim, 990, F.GLOVES)
+    KARTTEST.AdvanceTime(25)   -- past the 20s window: the plain raider frees the roll and stamps it
+    T.eq(raider.KART.LC.rollExpiredHere[990], tostring(F.GLOVES) .. "@1",
+        "the raider's note names the item and the instance that ended, generation 1 from the owner at drop time")
+
+    -- The designation moves to Merrit, who was in the raid for the drop above (so OnStartLootRoll DID
+    -- run on its client) but was never loot owner while it ran, so it counted none of it.
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster = "Merrit"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(0)
+    T.truthy(RaidSim.As(newOwner, newOwner.KART.LC.IsLootOwner), "the loot role now belongs to Merrit")
+    T.eq(newOwner.KART.LC.rollGeneration[990], nil,
+        "and it holds no counter for roll 990 -- it was never the owner while any start of it happened")
+
+    -- The new owner still tracks the roll (it was in the raid when LC_DROP announced it, and is
+    -- council, so nothing has pruned it) -- called directly rather than waited out on its own ticker,
+    -- which nothing here ever started for Merrit (LC.EnsureTableTicker only runs for the client that
+    -- was owner AT THE MOMENT a roll started or force-won one of its own).
+    RaidSim.ClearLog(sim)
+    RaidSim.As(newOwner, newOwner.KART.LC.SendTableHeartbeat)
+    KARTTEST.AdvanceTime(1)
+    local sent = RaidSim.Messages(sim, "LC_TABLE")
+    local lastTable = sent[#sent] and sent[#sent].msg or ""
+    T.truthy(lastTable:match("990=" .. F.GLOVES .. "$"),
+        "the new owner's heartbeat names the roll bare -- no generation, because it counted none of its starts")
+
+    T.eq(raider.KART.LC.rollExpiredHere[990], tostring(F.GLOVES) .. "@1",
+        "and the raider's stamped note survives it untouched -- an absent generation is not a mismatch")
+end
+
+-- ...and a roll that never resolves its item still expires cleanly with a generation known (B139) -----
+-- LC.StampRollNote's `type(itemID) ~= "string"` guard is what an unresolved "???" roll (B40) relies
+-- on: Vote.PruneExpiredRolls always stamps a note through this function, and without the guard
+-- `true .. "@" .. gen` -- concatenating a boolean with the generation -- is a hard Lua error on the
+-- expiry sweep, which otherwise runs silently once a second.
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    -- Blizzard raised no roll here and the announcement that reaches it carries no item (B40), the
+    -- same construction the "cannot READ it" block above uses.
+    RaidSim.As(raider, function() raider.KART.LC.HandleStart("993:20:", lm.guid) end)
+    T.eq(raider.KART.LC.rollItems[993], "???", "the raider tracks an item it never managed to read")
+
+    -- A generation this client heard for the roll despite never learning what it held -- the exact
+    -- combination that would concatenate a boolean with a number.
+    raider.KART.LC.rollInstance[993] = "1"
+
+    KARTTEST.AdvanceTime(25)   -- past the window: Vote.PruneExpiredRolls stamps the note
+
+    T.eq(raider.KART.LC.rollExpiredHere[993], true,
+        "the note for an unresolved roll stays the boolean it always was -- never concatenated with the generation")
+end
