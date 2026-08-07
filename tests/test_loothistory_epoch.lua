@@ -130,6 +130,21 @@ do
         "and does not keep the history the raid wiped while he was away")
 end
 
+-- Everything the confirmation dialog is allowed to do, and what it says when it will not do it.
+--
+-- A refusal that prints nothing is the same defect as everything else this module exists to close: a
+-- dialog that appears to work and then does not (C14).
+local function ClearWith(client)
+    local lines = {}
+    RaidSim.As(client, function()
+        local realPrint = client.env.print
+        client.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        client.KART.LH.ClearHistory()
+        client.env.print = realPrint
+    end)
+    return table.concat(lines, "\n")
+end
+
 -- Clearing is the loot owner's call, and only in a group -----------------------------------------
 do
     local _, _, council = F.NewRaid()
@@ -137,10 +152,83 @@ do
     RaidSim.As(council, function()
         before = council.env.KART_LootHistoryEpoch
         council.env.KART_LootHistory = { { time = time(), id = "1-ccc", epoch = before } }
-        council.KART.LH.ClearHistory()
     end)
+    local said = ClearWith(council)
     T.eq(council.env.KART_LootHistoryEpoch, before, "a council member's clear does not bump the epoch")
     T.eq(#council.env.KART_LootHistory, 1, "and does not empty the log")
+    T.truthy(said ~= "", "and the button says why it did nothing")
+end
+
+-- With no lootmaster set, nobody clears -- not even the raid leader -------------------------------
+-- LC.IsLootOwner falls back to the raid leader while no lootmaster is configured, so the loot flow
+-- survives the lootmaster walking out. That fallback was never a right to empty every log in the
+-- raid, and through the shipped UI it was reachable from a five-man: lead one, press Clear History,
+-- and an account-wide epoch rises that walks into the next raid ahead of everybody.
+do
+    local _, lm = F.NewRaid()
+    local before
+    RaidSim.As(lm, function()
+        -- The raid config's own field, not KART_Settings: an EMPTY Lootmaster setting means "not
+        -- configured" and is deliberately never written into the raid config (see LC.ApplyOwnConfig
+        -- and B76), so clearing the setting cannot produce this state. This is the raid that never
+        -- filled the field in -- the documented setup, and the one a five-man is.
+        lm.KART.LC.raidConfig.lootmaster = ""
+        before = lm.env.KART_LootHistoryEpoch
+        lm.env.KART_LootHistory = { { time = time(), id = "1-ddd", epoch = before or 1 } }
+    end)
+    T.truthy(RaidSim.As(lm, function() return lm.KART.LC.IsLootOwner() end),
+        "the raid leader still stands in for the loot flow")
+    local said = ClearWith(lm)
+    T.eq(lm.env.KART_LootHistoryEpoch, before, "but their clear does not bump the epoch")
+    T.eq(#lm.env.KART_LootHistory, 1, "and does not empty the log")
+    T.truthy(said ~= "", "and it says so instead of failing silently")
+end
+
+-- A peer's own epoch cannot switch off loot awarding for the raid --------------------------------
+-- LH.heardEpoch drives LH.IsStale(), and LH.IsStale() is a hard early return in
+-- Trade.AnnounceResult. It used to be raised with no authority check at all from two paths that
+-- carry nothing but a peer's statement about its own client: the LC_HIST_REQ header a joiner
+-- broadcasts, and the LC_HIST_EPOCH whisper any group member may send. One client whose epoch had
+-- run ahead therefore put every client that heard it -- the lootmaster included -- into refusing to
+-- award, for the rest of the night, with nothing printed anywhere.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.As(council, function()
+        council.env.KART_LootHistoryEpoch = 99      -- bumped somewhere else entirely
+        council.KART.LH.RequestHistorySync()
+    end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    for _, c in ipairs(sim.clients) do
+        if c ~= council then
+            T.eq(RaidSim.As(c, function() return c.KART.LH.IsStale() end), false,
+                c.name .. " is not put out of action by a group member's own epoch")
+        end
+    end
+
+    F.Drop(sim, 90, F.GLOVES)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(90, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    T.truthy(#RaidSim.Messages(sim, "LC_RESULT") > 0, "and the raid can still award loot")
+end
+
+-- The same over LC_HIST_EPOCH: from a group member it changes nothing, from the loot owner it is
+-- the wipe -------------------------------------------------------------------------------------
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.As(council, function() council.KART.LC.SendLC("LC_HIST_EPOCH:9") end)
+    RaidSim.Drain(sim, 10)
+    T.eq(RaidSim.As(raider, function() return raider.KART.LH.IsStale() end), false,
+        "a group member's epoch broadcast does not make anybody stale")
+    T.eq(raider.env.KART_LootHistoryEpoch, nil, "nor is it adopted")
+
+    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_HIST_EPOCH:9") end)
+    RaidSim.Drain(sim, 10)
+    T.eq(raider.env.KART_LootHistoryEpoch, 9, "the loot owner's epoch is adopted")
+    T.eq(RaidSim.As(raider, function() return raider.KART.LH.IsStale() end), false,
+        "and adopting it is not a reason to read as behind the raid")
 end
 
 -- The one-time purge on update -------------------------------------------------------------------

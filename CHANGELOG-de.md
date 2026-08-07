@@ -21,7 +21,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Vote-Buttons, Council und Würfel-Einstellung des Raids überleben ein Neuladen**, statt darauf zu warten, dass der Raid sie erneut schickt.
 - **Das Council-Panel vergleicht auch bei Tier-Token die angelegte Ausrüstung.**
 - **Das Council-Panel zeigt, wie viele Council-Mitglieder abgestimmt haben.**
-- **Das Leeren der Loot-History gilt jetzt für den ganzen Raid.** Abwesende Raider werden beim nächsten Beitritt ebenfalls geleert.
+- **Das Leeren der Loot-History gilt jetzt für den ganzen Raid, und nur der Lootmaster kann es auslösen.** Abwesende Raider werden beim nächsten Beitritt ebenfalls geleert.
 - **Der Loot-History-Abgleich ist schneller und kommt vollständig an.** Lange Begründungen und Item-Links werden unterwegs nicht mehr gekürzt.
 - **Die Lootverteilung bleibt schnell, auch wenn die Loot-History im Hintergrund noch aufholt.**
 

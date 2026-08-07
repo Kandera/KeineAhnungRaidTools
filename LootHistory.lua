@@ -411,8 +411,31 @@ end
 --
 -- The loot owner's call, and only in a group. Outside one there is nobody to tell, so the epoch would
 -- rise in private and win the next raid's merge from an armchair.
+--
+-- And only where a lootmaster is actually CONFIGURED (maintainer's ruling, 2026-08-07). LC.IsLootOwner
+-- falls back to the raid leader while no lootmaster is set at all, which exists so the loot flow
+-- survives the lootmaster walking out -- it was never meant to hand somebody the right to empty every
+-- log in the raid. Without that rule the shipped UI reaches it: lead a five-man, press Clear History,
+-- and an account-wide epoch rises that walks into the next raid ahead of everyone.
+--
+-- Every refusal is SAID. The confirmation dialog otherwise appears to work and then does nothing,
+-- which is the same class of silence as everything else this module exists to stop (C14).
 function LH.ClearHistory()
-    if not IsInGroup() or not LC.IsLootOwner() then return end
+    if not IsInGroup() then
+        print("|cffff0000KART:|r " .. KART.L.LH_CLEAR_NEEDS_GROUP)
+        return
+    end
+    -- The PRESENT lootmaster, the same answer every other authority check in the module reads. A
+    -- designated lootmaster who has left reads as "" here, so their stand-in runs the loot flow and
+    -- still does not get to wipe the raid.
+    if LC.GetLootmaster() == "" then
+        print("|cffff0000KART:|r " .. KART.L.LH_CLEAR_NEEDS_LOOTMASTER)
+        return
+    end
+    if not LC.IsLootOwner() then
+        print("|cffff0000KART:|r " .. KART.L.LH_CLEAR_NEEDS_OWNER)
+        return
+    end
     KART_LootHistoryEpoch = (KART_LootHistoryEpoch or 1) + 1
     wipe(KART_LootHistory)
     KART_LootHistoryClearedAt = time()   -- display only now; the epoch is the watermark
@@ -479,10 +502,17 @@ function LH.AdmitEpoch(wireEpoch, originatorKey)
     if wireEpoch < myEpoch then
         return false
     elseif wireEpoch > myEpoch then
-        if LC.IsSenderLootOwner(originatorKey) then
-            LH.AdoptEpoch(wireEpoch, originatorKey)
-            return true
-        end
+        -- Adopted is OBSERVED, not asserted. LH.AdoptEpoch makes the same LC.IsSenderLootOwner
+        -- decision, so asking it and reading its answer is one implementation of the rule rather than
+        -- two spellings of it that are free to drift.
+        if LH.AdoptEpoch(wireEpoch, originatorKey) then return true end
+        -- The one place that still notes an epoch it could not adopt, and deliberately the only one:
+        -- what arrived here is an epoch attached to real history DATA -- an award, or a batch of
+        -- entries -- that this client has just refused, so it knows for a fact it is missing
+        -- something. The two writers that used to sit beside this one (the LC_HIST_REQ header and the
+        -- LC_HIST_EPOCH handler) carried no data at all, only a peer's statement about its own
+        -- client, which any group member could make and which was enough to stop the whole raid
+        -- awarding loot.
         LH.heardEpoch = math.max(LH.heardEpoch or 0, wireEpoch)
         return false
     end
@@ -1306,7 +1336,7 @@ end
 
 -- One pending request per sender. A peer that asks three times while a boss is being distributed has
 -- one question, and the answer to the last one already contains what the earlier ones would have got.
-function LH.ParkRequest(payload, senderFullName)
+function LH.ParkRequest(payload, senderFullName, senderKey)
     LH.parked = LH.parked or {}
     local existing = LH.parked[senderFullName]
     if existing then
@@ -1316,9 +1346,10 @@ function LH.ParkRequest(payload, senderFullName)
         -- seconds (which is exactly what a client stuck deferring its own LH.RequestHistorySync
         -- would send) must not be able to push the hard cap out indefinitely.
         existing.payload = payload
+        existing.key     = senderKey
         return
     end
-    LH.parked[senderFullName] = { payload = payload, at = GetTime() }
+    LH.parked[senderFullName] = { payload = payload, key = senderKey, at = GetTime() }
 
     local function attempt()
         local entry = LH.parked and LH.parked[senderFullName]
@@ -1336,7 +1367,7 @@ function LH.ParkRequest(payload, senderFullName)
             -- here would just re-park the request with its clock reset, forever, the moment that cap
             -- is what got it released.
             if KAUtil.IsFullNameInGroup(senderFullName) then
-                LH.AnswerHistoryRequest(entry.payload, senderFullName)
+                LH.AnswerHistoryRequest(entry.payload, senderFullName, entry.key)
             end
             return
         end
@@ -1381,7 +1412,7 @@ end
 
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
 -- never a visible chat message) if it actually has entries the requester is missing.
-function LH.HandleHistoryRequest(payload, senderFullName)
+function LH.HandleHistoryRequest(payload, senderFullName, senderKey)
     -- Validated fully here (all three fields), even though LH.AnswerHistoryRequest below re-parses
     -- the same payload: a malformed payload must be rejected on arrival, not parked for up to a
     -- minute only to be dropped once it finally reaches the front of the queue.
@@ -1400,17 +1431,17 @@ function LH.HandleHistoryRequest(payload, senderFullName)
     -- traffic does not yield on its own (see the file header on ChatThrottleLib), so answering here
     -- would compete with the very messages the raid is standing still for.
     if not LH.GateOpen() then
-        LH.ParkRequest(payload, senderFullName)
+        LH.ParkRequest(payload, senderFullName, senderKey)
         return
     end
 
-    LH.AnswerHistoryRequest(payload, senderFullName)
+    LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
 end
 
 -- The actual answer. Split from LH.HandleHistoryRequest so LH.ParkRequest's release path can call it
 -- without going back through the gate check above (see the comment there for why re-entering it would
 -- defeat GATE_MAX_PARK).
-function LH.AnswerHistoryRequest(payload, senderFullName)
+function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
     local theirEpoch, theirSum, sinceTime = payload:match("^(%d+):(%d+):(%d+)$")
     theirEpoch, theirSum, sinceTime = tonumber(theirEpoch), tonumber(theirSum), tonumber(sinceTime)
     if not theirEpoch then return end
@@ -1422,10 +1453,17 @@ function LH.AnswerHistoryRequest(payload, senderFullName)
     -- with it -- otherwise the epoch that matters most would be exactly the one that never arrives.
     KASC:Send("LC_HIST_EPOCH:" .. myEpoch, "WHISPER", senderFullName, { prio = "BULK" })
 
-    -- They are ahead of us. We have nothing they want, and their epoch is news: ask for it properly
-    -- rather than adopting a number from an unauthenticated request.
+    -- They are ahead of us. We have nothing they want, and their epoch is news -- but it is only
+    -- news, not a wipe: LC_HIST_REQ is a group broadcast and this field is simply whatever number
+    -- the asker's own client happens to hold. Handing that number to LH.heardEpoch with no authority
+    -- check was enough for ANY group member to stop the whole raid awarding loot: LH.IsStale() is a
+    -- hard early return in Trade.AnnounceResult, so one peer that had bumped its own epoch (lead a
+    -- five-man, press Clear History) put every client that heard its next join into refusal for the
+    -- evening, silently. Only the loot owner's word raises anything here, which is exactly what
+    -- LH.AdoptEpoch already decides -- and when it is the loot owner asking, adopting is also the
+    -- right answer rather than merely noting that we are behind.
     if theirEpoch > myEpoch then
-        LH.heardEpoch = math.max(LH.heardEpoch or 0, theirEpoch)
+        LH.AdoptEpoch(theirEpoch, senderKey)
         return
     end
 
@@ -1719,14 +1757,17 @@ end
 --  Addon-message registrations
 -- =====================================================================
 KASC:RegisterMessage("LC_HIST_REQ", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender) end)
+    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender, ctx:Key()) end)
 KASC:RegisterMessage("LC_HIST_BATCH", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx) LH.HandleHistoryBatch(payload, ctx:Key()) end)
+-- LH.AdoptEpoch and nothing beside it. This used to raise LH.heardEpoch first, from any group member,
+-- unconditionally -- and LH.heardEpoch is what LH.IsStale() reads, which is a hard early return in
+-- Trade.AnnounceResult. So a single peer whispering its own inflated epoch switched loot awarding off
+-- for everyone who heard it, with nothing printed anywhere. LH.AdoptEpoch already asks the only
+-- question that matters (LC.IsSenderLootOwner), and when the answer is yes it adopts, which leaves
+-- nothing for a separate "we are behind" note to record.
 KASC:RegisterMessage("LC_HIST_EPOCH", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx)
-        LH.heardEpoch = math.max(LH.heardEpoch or 0, tonumber(payload) or 0)
-        LH.AdoptEpoch(payload, ctx:Key())
-    end)
+    function(payload, ctx) LH.AdoptEpoch(payload, ctx:Key()) end)
 
 -- See LH.PurgeIfNoEpoch: Core.lua calls it directly from its own ADDON_LOADED block, but this file
 -- keeps its own registration too so the purge runs even where Core.lua is not part of the picture.
