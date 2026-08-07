@@ -363,3 +363,70 @@ do
     T.is_nil(GateFor(corvin, 82), "an unidentifiable item records no verdict")
     T.truthy(corvin.KART.LC.rollsSeenWhileUnaware[82], "and is still remembered for the replay")
 end
+
+-- Eligibility parity: the session gate must not drift from the aware path --------------------------
+-- CouncilCouldTakeRoll (~5178) is a deliberate mirror of the councilEligible expression computed
+-- later in this same function (~5296), not a shared helper -- the two need the data at different
+-- moments and from different sources, and the comment above the helper explains why. What mirroring
+-- costs is that nothing enforces the two stay identical, and the carve-out they both encode is a
+-- standing maintainer decision that has already changed once (the recipe exception, 2026-08-06) and
+-- may change again. An edit applied to one copy and not the other would silently reopen B148 for
+-- whichever path was missed -- the pass-log ring filling again with items nobody was ever going to
+-- decide -- and nothing would say so short of a live raid's screenshot.
+--
+-- CouncilCouldTakeRoll is file-local, so it cannot be called directly. This drives both real entry
+-- points instead and compares OBSERVABLE outcomes for the same item:
+--   unaware -- a roll seen while the session is unknown: does it record an "unaware" pass-gate entry
+--              (the case the block above this one covers)?
+--   aware   -- the same roll on the LOOTMASTER's own client once the session is known: is their own
+--              roll resolved by KART at all -- force-won or auto-passed -- as opposed to left
+--              untouched for Blizzard's window to answer? The lootmaster's if/elseif pair (~5308 and
+--              ~5320) fires, one way or the other, exactly when councilEligible is true, and not at
+--              all when it is false; unlike AutoPassAnnounced for everyone else, neither branch is
+--              additionally gated by LC.GetRaidMinQuality(), so "was the lootmaster's roll touched at
+--              all" reads councilEligible's effect without councilEngages' extra condition mixed in.
+-- The two observables must agree for every item below. If they don't, one site changed and the
+-- other didn't.
+do
+    local function GateFor(client, id)
+        return RaidSim.As(client, function()
+            for _, e in ipairs(client.KART.LC.passLog) do
+                if e.rollID == id then return e.gate end
+            end
+        end)
+    end
+
+    local unawareSim = NewRaid()
+    local corvin = unawareSim.byName.Corvin
+    RaidSim.As(corvin, function()
+        corvin.KART.LC.sessionActive = false
+        corvin.KART.LC.sessionStateKnown = false
+    end)
+
+    local awareSim = NewRaid()
+
+    -- bop overrides how the harness stub reports each item's bind: it defaults every drop to
+    -- Bind-on-Pickup regardless of the item's own fixture data, so a Bind-on-Equip case has to say
+    -- so explicitly (the same convention test_lc_collectible.lua and the block above use).
+    local MATRIX = {
+        { "a Bind-on-Pickup gear item", F.GLOVES },
+        { "a Bind-on-Equip item",       F.BOE,    false },
+        { "a recipe",                   F.RECIPE, false },
+        { "a collectible (mount)",      F.MOUNT },
+        { "a tier token",               F.TOKEN },
+    }
+
+    for i, case in ipairs(MATRIX) do
+        local label, itemID, bop = case[1], case[2], case[3]
+        local rollID = 900 + i
+
+        Drop(unawareSim, rollID, itemID, { bop = bop })
+        local unaware = GateFor(corvin, rollID) == "unaware"
+
+        Drop(awareSim, rollID, itemID, { bop = bop })
+        local aware = PassedBy(awareSim, rollID, "Bramor") ~= nil
+
+        T.eq(aware, unaware,
+            label .. ": the aware path's councilEligible and the session gate's CouncilCouldTakeRoll agree")
+    end
+end
