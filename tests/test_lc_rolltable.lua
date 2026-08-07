@@ -518,6 +518,39 @@ do
         "and a different item under the same number is taken")
 end
 
+-- ...and the SAME refusal holds once the note carries a generation (B139) ----------------------------
+-- The block above closes the tab a single second after the drop -- before TABLE_POLL_SECONDS (2s) has
+-- let a single heartbeat through, so LC.rollInstance[951] is still empty and the note it stamps is
+-- bare. That is not the ordinary case: within a couple of seconds of any drop the roll has a
+-- generation, and the guard has to keep refusing a same-item catch-up once the note carries one --
+-- comparing its ITEM half through LC.RollNoteParts rather than the note whole. Before that fix,
+-- "249331@1" never compared equal to a bare "249331" itemID, the refusal stopped firing at all, and a
+-- catch-up already in flight when the tab closed reopened the card it had just been put away from.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 952, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(3)   -- past TABLE_POLL_SECONDS: at least one heartbeat has named the roll
+    T.eq(council.KART.LC.rollInstance[952], "1", "the heartbeat has named the roll's first instance")
+
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(952) end)
+    T.eq(council.KART.LC.rollDismissed[952], tostring(F.GLOVES) .. "@1",
+        "the note is stamped WITH the generation the heartbeat just named, not bare")
+
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRollCatchup("952:15:item:" .. F.GLOVES, lm.guid)
+    end)
+    T.eq(council.KART.LC.rollItems[952], nil,
+        "a catch-up for the SAME item is still refused with a generation-suffixed note")
+    T.eq(F.HasVoteRow(council, 952), false, "no vote row comes back with it")
+    local function tabbed(client, rollID)
+        for _, id in ipairs(client.KART.LC.councilTabs) do if id == rollID then return true end end
+        return false
+    end
+    T.eq(tabbed(council, 952), false, "and the tab it closed stays closed")
+end
+
 -- ...and the heartbeat alone is enough, with nothing else on the wire that names the item (B132) -----
 -- The case above is repaired in practice by LC_ROLLS: the roll table names its item, so a client that
 -- missed the announcement learns of the reuse from it. A raid can simply have rolls switched off, and
