@@ -747,7 +747,7 @@ do
     T.eq(lm.KART.LC.pendingTrades[1].timeoutWarned, true, "and only now does it count as said")
 end
 
--- The durable notice queue (B4's rest, closed 2026-08-0x) -------------------------------------------
+-- The durable notice queue (B4's rest, closed 2026-08-07) -------------------------------------------
 -- deferredNotices is memory-only, so a reload or disconnect DURING a pull used to lose whatever it
 -- was holding. For the two warnings that costs nothing -- both are regenerated from state that IS
 -- persisted (see the block above and B1's ticker). But LC_TRADE_EXPIRED and LC_TRADE_UNTRADEABLE fire
@@ -810,17 +810,28 @@ end
 
 -- Stale entries are dropped -- a queued line describes a four-hour clock (TRADE_TIMEOUT_SECONDS), and
 -- once that clock has run out the explanation is moot. Same convention as
--- Trade.RestorePersistedTrades's pruneExpired for store.pending/store.owed.
+-- Trade.RestorePersistedTrades's pruneExpired for store.pending/store.owed. A fresh entry rides
+-- alongside the stale one as a positive control: without it, a broken delayed-print branch would
+-- pass this block just as well as a working one, because there would be nothing left to print either
+-- way.
 do
     local sim, lm = F.NewRaid()
     lm.env.KART_LCTrades.notices = {
         { text = "|cffff0000KART:|r stale " .. GLOVES, at = time() - (TRADE_WINDOW + 60) },
+        { text = "|cffff0000KART:|r fresh " .. WEAPON, at = time() },
     }
-    local back = RaidSim.Reload(sim, "Bramor")
-    T.eq(#(back.env.KART_LCTrades.notices or {}), 0, "the stale entry is dropped from the store at load")
+    local back
+    local atReload = Capture(function() back = RaidSim.Reload(sim, "Bramor") end)
+    T.eq(atReload, "", "nothing prints at the moment of the reload itself")
+    T.eq(#(back.env.KART_LCTrades.notices or {}), 1,
+        "the stale entry is dropped from the store at load, the fresh one stays")
 
-    local out = Capture(function() KARTTEST.AdvanceTime(6) end) -- past the 5-second print delay
-    T.eq(out, "", "and it never prints")
+    local tooSoon = Capture(function() KARTTEST.AdvanceTime(4) end)
+    T.eq(tooSoon, "", "and nothing prints before the five-second delay is up")
+
+    local out = Capture(function() KARTTEST.AdvanceTime(2) end) -- now six seconds since the reload
+    T.truthy(out:find("fresh", 1, true) ~= nil, "the fresh entry prints once the delay elapses: " .. out)
+    T.truthy(out:find("stale", 1, true) == nil, "and the stale one, already dropped, never does: " .. out)
 end
 
 -- The cap holds and drops the oldest -- 21 removals in the same pull, one over the 20-entry guard

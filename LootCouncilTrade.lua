@@ -267,13 +267,16 @@ end)
 -- Capped at NOTICE_QUEUE_CAP, oldest dropped: unlike LC.rollsSeenWhileUnaware (keyed by rollID, no
 -- order, must drop the newest), this is a sequence, and the newest line describes the most recent
 -- truth.
-local function PersistNotice(text, key)
+-- No key parameter: both call sites that persist (LC_TRADE_EXPIRED, LC_TRADE_UNTRADEABLE) pass
+-- TradeNotice no dedupe key of their own, and a restored notice does not go back through
+-- TradeNotice's own dedupe check either -- so there is nothing here that would ever read one back.
+local function PersistNotice(text)
     KART_LCTrades = KART_LCTrades or {}
     KART_LCTrades.notices = KART_LCTrades.notices or {}
     local list = KART_LCTrades.notices
     -- Wall clock (time()), not GetTime(): read back at the next load to drop it once its four-hour
     -- window (TRADE_TIMEOUT_SECONDS) has passed, same reasoning as every other stamp in this file.
-    list[#list + 1] = { text = text, key = key, at = time() }
+    list[#list + 1] = { text = text, at = time() }
     while #list > NOTICE_QUEUE_CAP do
         table.remove(list, 1)
     end
@@ -306,7 +309,7 @@ local function TradeNotice(text, onSaid, key, persist)
             end
         end
         deferredNotices[#deferredNotices + 1] = { text = text, onSaid = onSaid, key = key }
-        if persist then PersistNotice(text, key) end
+        if persist then PersistNotice(text) end
     else
         print(text)
         if onSaid then onSaid() end
@@ -524,6 +527,13 @@ function Trade.RestorePersistedTrades()
             table.remove(store.notices, i)
         end
     end
+    -- Self-defending against a store written by a build with a different cap: PersistNotice is the
+    -- only writer today and already caps at NOTICE_QUEUE_CAP, but the read side should not depend on
+    -- that staying true forever, same "don't trust what's on disk" spirit as pruneExpired above.
+    -- Oldest dropped, same rule PersistNotice itself uses.
+    while #store.notices > NOTICE_QUEUE_CAP do
+        table.remove(store.notices, 1)
+    end
 
     LC.pendingTrades = store.pending
     LC.owedToMe      = store.owed
@@ -599,20 +609,47 @@ function Trade.RestorePersistedTrades()
     -- the restored lines belong back in the in-memory queue for the ordinary PLAYER_REGEN_ENABLED
     -- handler to print -- not printed straight into the fight, which is the whole reason this
     -- mechanism exists.
+    --
+    -- This InCombatLockdown() read and the one inside the timer below are deliberately two separate
+    -- checks, not one. RestorePersistedTrades runs from ADDON_LOADED (see Core.lua), which in the
+    -- live client fires during the loading screen, before PLAYER_ENTERING_WORLD (the harness
+    -- documents that same gap at RaidSim.EnterWorld) -- so a player who reloaded mid-pull can read as
+    -- out of combat right here and be back in the fight by the time a delayed print would fire.
     if #store.notices > 0 then
         if InCombatLockdown() then
             for _, n in ipairs(store.notices) do
-                deferredNotices[#deferredNotices + 1] = { text = n.text, key = n.key }
+                deferredNotices[#deferredNotices + 1] = { text = n.text }
             end
-            wipe(store.notices)
+            -- Left in the store rather than cleared here: PLAYER_REGEN_ENABLED's drain (see :261)
+            -- already wipes it once these are actually said, and reloading or disconnecting again
+            -- before that happens must still find them here -- repeated loss across back-to-back
+            -- reloads mid-pull is exactly what this whole change closes.
         else
-            -- Removed from the store up front rather than after printing, so a notice that gets
-            -- queued in the few seconds before this fires doesn't get swept into the same batch, and
-            -- a second reload inside that window can't print the same lines twice.
-            local notices = store.notices
-            store.notices = {}
+            -- Captured as a count, not a copy of the table: new entries append (see PersistNotice),
+            -- so the restored ones are always the first `pending` of the live store, and looping
+            -- that many times off the FRONT keeps a later append out of this batch without ever
+            -- taking these off KART_LCTrades before they are actually said. That is a deliberate
+            -- trade: a second reload inside the delay could in theory print the same line twice, but
+            -- a crash or disconnect inside it now loses only what was actually said rather than the
+            -- whole batch -- the strictly better side to be wrong on than a duplicate chat line.
+            local pending = #store.notices
             C_Timer.After(NOTICE_PRINT_DELAY, function()
-                for _, n in ipairs(notices) do print(n.text) end
+                if InCombatLockdown() then
+                    -- Combat resumed during the delay (see the comment above): what's left goes
+                    -- back into the in-memory queue instead of printing mid-fight, same as the
+                    -- combat branch above, and for the same reason.
+                    for i = 1, pending do
+                        local n = store.notices[i]
+                        if n then deferredNotices[#deferredNotices + 1] = { text = n.text } end
+                    end
+                    return
+                end
+                for _ = 1, pending do
+                    local n = store.notices[1]
+                    if not n then break end -- the PLAYER_REGEN_ENABLED drain already emptied it
+                    print(n.text)
+                    table.remove(store.notices, 1)
+                end
             end)
         end
     end

@@ -4004,7 +4004,7 @@ with a dedupe key so a pull outlasting the five-minute ticker does not queue it 
 same rule the undecided warning already follows from the other end — its latch is deliberately
 memory-only, "hearing about it once more is the right side to be wrong on".
 
-Rows three and four are NOT fixed. They are bound to the removal, and B3 (no chat mid-pull) and B47 (a
+**Recorded 2026-08-06:** rows three and four are NOT fixed. They are bound to the removal, and B3 (no chat mid-pull) and B47 (a
 row past its window is a lie whether or not anybody is in combat, and is dropped on schedule) collide
 there: holding the removal back until combat ends was tried and reverted against the test that
 encodes B47. Closing it properly means persisting the notice queue — a new `KART_LCTrades` field, a
@@ -4013,19 +4013,32 @@ locale is up, and the persisted-tables guard test. Deferred to the window before
 the season (2026-08-19), not because it is small but because it is a saved-variable change and those
 want their own gate.
 
-**Rows three and four fixed 2026-08-07.** `TradeNotice` gained a fourth argument, `persist`, set only
-at the two removal call sites (`LC_TRADE_EXPIRED`, `LC_TRADE_UNTRADEABLE`) — the two warnings are
-untouched, same call, same `onSaid`, same key. The moment one of those two is held back for combat,
-its text, dedupe key and a `time()` stamp are also written into a new `KART_LCTrades.notices` field,
+**Rows three and four fixed 2026-08-07, revised the same day after review round 1.** `TradeNotice`
+gained a fourth argument, `persist`, set only at the two removal call sites (`LC_TRADE_EXPIRED`,
+`LC_TRADE_UNTRADEABLE`) — the two warnings are untouched, same call, same `onSaid`, same key. The
+moment one of those two is held back for combat, its text and a `time()` stamp are also written into
+a new `KART_LCTrades.notices` field (no dedupe key: neither persisting call site ever passes one),
 capped at 20 (oldest dropped — this is a sequence, not a rollID-keyed table, so unlike
 `LC.rollsSeenWhileUnaware` dropping the newest would be wrong) and pruned past the same four-hour
 `TRADE_TIMEOUT_SECONDS` window at load, following `Trade.RestorePersistedTrades`'s existing
-`pruneExpired` convention. At load: still in combat means the pull that lost the reminder row is still
-going, so the restored lines go back into `deferredNotices` for the ordinary `PLAYER_REGEN_ENABLED`
-drain to print, not straight into the fight; otherwise they print themselves five seconds later, so
-they do not vanish into the rest of the login output, and the store is cleared once queued for
-printing. The two warnings stay exactly as before: the ticker regenerates the 20-minutes-left one from
-`LC.pendingTrades` itself, and a restored copy could never carry `onSaid`'s latch anyway.
+`pruneExpired` convention, which also re-applies the cap on the way in so a store written by a build
+with a different limit can't restore unbounded.
+
+At load: still in combat means the pull that lost the reminder row is still going, so the restored
+lines go back into `deferredNotices` for the ordinary `PLAYER_REGEN_ENABLED` drain to print, not
+straight into the fight — and are deliberately left in the store rather than cleared, since that
+drain already wipes it once they are said, and a second reload or disconnect before that must still
+find them. Otherwise they print themselves five seconds later, so they do not vanish into the rest of
+the login output. Combat is checked a second time inside that five-second timer, not only once at
+restore: `Trade.RestorePersistedTrades` runs from `ADDON_LOADED`, which fires during the loading
+screen, before `PLAYER_ENTERING_WORLD` — a player who reloaded mid-pull can read as out of combat
+there and be back in the fight five seconds later, which is the exact mid-fight print this closes.
+Each line is removed from the front of the live store only as it is actually printed, not swapped out
+as a batch up front: a second reload inside the five-second window could in theory print a line
+twice, but a crash or disconnect inside it now loses only what was already said, not the rest of the
+batch — the strictly better side to be wrong on than a duplicate chat line. The two warnings stay
+exactly as before: the ticker regenerates the 20-minutes-left one from `LC.pendingTrades` itself, and
+a restored copy could never carry `onSaid`'s latch anyway.
 
 
 ## B148 — FIXED 2026-08-06 — Auto-Pass read the previous item's announcement on a reused rollID
