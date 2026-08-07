@@ -703,7 +703,7 @@ do
     T.eq(#lm.env.KART_LootHistory, 0, "and stays cleared -- nobody syncs last tier back in")
     -- Not merely discarded on arrival: the request itself says where the history starts, so a peer
     -- with thirty old entries sends nothing at all rather than thirty messages nobody wants.
-    T.eq(#RaidSim.Sent(sim, "LC_HIST_ENTRY"), 0, "and nothing is put on the wire for it either")
+    T.eq(#RaidSim.Sent(sim, "LC_HIST_BATCH"), 0, "and nothing is put on the wire for it either")
 
     -- ...and the catch-up still does the job it exists for: an award decided while this client was
     -- away, AFTER the line was drawn, still reaches the list that gets exported.

@@ -113,7 +113,7 @@ do
     -- Every peer holds that entry and every one of them answers, so the deduplication is the thing
     -- worth asserting -- and it needs the number of answers to compare against, or "one row" says
     -- nothing. (The previous version repeated the line above verbatim and called it a dedup check.)
-    T.truthy(#RaidSim.Sent(sim, "LC_HIST_ENTRY") > 1, "more than one peer answered the catch-up")
+    T.truthy(#RaidSim.Sent(sim, "LC_HIST_BATCH") > 1, "more than one peer answered the catch-up")
     T.eq(#torvi.env.KART_LootHistory, 1, "and the joiner still ends up with exactly one row")
 end
 

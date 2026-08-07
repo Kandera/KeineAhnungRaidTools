@@ -14,12 +14,16 @@ local RaidSim = F.RaidSim
 local GLOVES = KARTTEST.items[F.GLOVES].link
 local WEAPON = KARTTEST.items[F.WEAPON].link
 
--- One award, told to `lm` by a raider, exactly as the catch-up sync words it.
+-- One award, told to `lm` by a raider, exactly as the catch-up sync words it (a single-record,
+-- unpacked LC_HIST_BATCH -- see LH.HandleHistoryBatch / LH.HandleHistoryEntry).
 local function Whisper(lm, raider, fields)
+    local epoch = fields.epoch or 1
+    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%d:%s"):format(
+        fields.time, fields.rollID, fields.winnerKey, fields.winner,
+        fields.reason or "BIS", fields.id or "", epoch, fields.item or "")
     RaidSim.As(raider, function()
-        raider.KASC:Send(("LC_HIST_ENTRY:%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s"):format(
-            fields.time, fields.rollID, fields.winnerKey, fields.winner,
-            fields.reason or "BIS", fields.item or ""), "WHISPER", lm.name)
+        raider.KASC:Send(("LC_HIST_BATCH:%d:%s:0:%s"):format(epoch, raider.guid, record),
+            "WHISPER", lm.name)
     end)
     KARTTEST.AdvanceTime(1)
 end
@@ -119,7 +123,7 @@ do
     -- to nobody is not "probably fine".
     local _, lm = F.NewRaid()
     Hold(lm, {})
-    local payload = ("%d:16:70:MAGE:1,1,1:Player-9-ZZZ:Nobody:BIS:%s"):format(time(), GLOVES)
+    local payload = ("%d:16:70:MAGE:1,1,1:Player-9-ZZZ:Nobody:BIS::1:%s"):format(time(), GLOVES)
 
     RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(payload, "Player-9-ZZZ") end)
     T.eq(#lm.env.KART_LootHistory, 0, "an entry from a key that is in no group is refused")
@@ -179,7 +183,7 @@ do
     RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
     KARTTEST.AdvanceTime(30)
 
-    T.eq(#RaidSim.Sent(sim, "LC_HIST_ENTRY"), 1,
+    T.eq(#RaidSim.Sent(sim, "LC_HIST_BATCH"), 1,
         "only the award the requester is actually missing is sent back")
 end
 
@@ -204,7 +208,9 @@ do
         KARTTEST.AdvanceTime(30)
     end)
     T.truthy(ok, "a burst of awards sharing one timestamp is answered rather than refused")
-    T.truthy(#RaidSim.Sent(sim, "LC_HIST_ENTRY") > 0, "and the answer actually goes out")
+    -- RaidSim.Messages, not RaidSim.Sent: 25 full item links push this batch well past 255 bytes,
+    -- so the transport splits it and a plain prefix match on the log finds nothing.
+    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") > 0, "and the answer actually goes out")
 end
 
 do
@@ -225,7 +231,7 @@ do
     RaidSim.ClearLog(sim)
     RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
     KARTTEST.AdvanceTime(30)
-    T.truthy(#RaidSim.Sent(sim, "LC_HIST_ENTRY") > 0,
+    T.truthy(#RaidSim.Sent(sim, "LC_HIST_BATCH") > 0,
         "a request a full minute after the last answer is answered again")
 end
 

@@ -1071,12 +1071,12 @@ end
 --  Loot History catch-up sync (silent — never touches chat, addon-channel only)
 -- =====================================================================
 -- When someone rejoins a raid after missing a session, their KART_LootHistory is missing whatever
--- was assigned while they were away. On join, they broadcast the timestamp of their newest known
--- entry; any peer who has newer entries whispers just those back (addon channel, invisible to the
--- player) after a small random delay so several peers answering at once don't all fire at exactly
--- the same instant. Capped and time-scoped to keep this cheap even after long absences.
+-- was assigned while they were away. On join, they broadcast their epoch, a checksum of what they
+-- hold at it, and the newest entry they know of; any peer who diverges answers with the missing
+-- entries packed into a handful of whispers (addon channel, invisible to the player) instead of one
+-- message per award. Capped and time-scoped to keep this cheap even after long absences.
 
-local HISTORY_SYNC_MAX_ENTRIES = 30
+local HISTORY_SYNC_MAX_ENTRIES = 150
 local HISTORY_SYNC_MAX_AGE     = 14 * 24 * 60 * 60 -- 14 days
 -- Minimum seconds between two answered catch-up requests from the same player. Long enough to
 -- absorb a rejoin burst, short enough that a genuine relog later in the raid still gets served.
@@ -1108,30 +1108,68 @@ function LH.NoteUnauthorisedAward()
     C_Timer.After(UNAUTHORISED_SYNC_DELAY, function() LH.RequestHistorySync() end)
 end
 
+-- An order-independent fingerprint of what we hold at the current epoch.
+--
+-- It exists because the since-timestamp can only ever find what is missing AHEAD of it. A client that
+-- is missing an entry OLDER than its newest one never asks for it and never gets it -- and the
+-- catch-up sync backfills exactly such entries, so the hole is not hypothetical. A sum over ids
+-- notices a set difference in one integer, without shipping the set.
+--
+-- Sum and not a running hash: peers hold the same entries in different ORDER (locally logged entries
+-- interleave with backfilled ones), and a fingerprint that depends on order would report a difference
+-- between two clients that agree.
+function LH.HistoryChecksum()
+    local epoch, sum = KART_LootHistoryEpoch or 1, 0
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if (e.epoch or 1) == epoch and e.id then
+            local h = 0
+            for i = 1, #e.id do h = (h * 31 + e.id:byte(i)) % 0x7FFFFFFF end
+            sum = (sum + h) % 0x7FFFFFFF
+        end
+    end
+    return sum
+end
+
 function LH.RequestHistorySync()
-    -- Never earlier than the last clear (see LH.ClearHistory). The since-timestamp already means
-    -- "I have everything up to here", so a line drawn by hand fits it exactly and no peer needs to
-    -- know anything about it.
+    -- Never earlier than the current epoch's start: the since-timestamp means "I have everything up
+    -- to here", and a wipe is exactly such a line.
     local latest = KART_LootHistoryClearedAt or 0
     for _, e in ipairs(KART_LootHistory or {}) do
         if e.time and e.time > latest then latest = e.time end
     end
-    -- Our own epoch travels in the header, once per request rather than once per entry. It matters
-    -- most for the answering side (see LH.HandleHistoryRequest): a returning absentee's request is
-    -- often the only message that ever reaches the loot owner's peers about them, and the answer
-    -- carries the epoch back regardless of whether there is a single entry left to send.
-    LC.SendLC("LC_HIST_REQ:" .. latest .. ":" .. (KART_LootHistoryEpoch or 1))
+    LC.SendLC(string.format("LC_HIST_REQ:%d:%d:%d",
+        KART_LootHistoryEpoch or 1, LH.HistoryChecksum(), latest))
+end
+
+local HISTORY_BATCH_ENTRIES = 50
+
+-- One full reconcile per asker per raid night. Six hours covers an evening and has reset by the next
+-- one; a calendar day would not, since a raid that runs past midnight is one night.
+local HISTORY_FULL_COOLDOWN = 6 * 60 * 60
+
+-- One record, in the field order the receiver parses. The item is last because item links are full of
+-- colons; winner and reason are free text, so their colons are stripped and the fixed fields stay
+-- position-stable.
+local function EntryRecord(e)
+    local colorPacked = ""
+    if e.color then
+        colorPacked = string.format("%d,%d,%d",
+            math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
+    end
+    return string.format("%d:%d:%d:%s:%s:%s:%s:%s:%s:%d:%s",
+        e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
+        e.winnerKey or "", (e.winner or ""):gsub(":", ""), (e.reason or ""):gsub(":", ""),
+        e.id or "", e.epoch or 1, e.item or "")
 end
 
 -- Runs on every peer that receives a sync request; only replies (via whisper-style addon message,
 -- never a visible chat message) if it actually has entries the requester is missing.
-function LH.HandleHistoryRequest(payload, senderFullName, senderKey)
-    local sinceStr, epochStr = (payload or ""):match("^(%d+):?(%d*)$")
-    local sinceTime = tonumber(sinceStr)
-    if not sinceTime or not senderFullName then return end
+function LH.HandleHistoryRequest(payload, senderFullName)
+    local theirEpoch, theirSum, sinceTime = payload:match("^(%d+):(%d+):(%d+)$")
+    theirEpoch, theirSum, sinceTime = tonumber(theirEpoch), tonumber(theirSum), tonumber(sinceTime)
+    if not theirEpoch or not senderFullName then return end
     -- Only answer group members. CHAT_MSG_ADDON also delivers whispers and the "KART" prefix is
-    -- public, so without this any stranger could whisper LC_HIST_REQ and exfiltrate our loot history
-    -- (winners, items, reasons).
+    -- public, so without this any stranger could ask and be handed the raid's loot history.
     --
     -- Deliberately NOT via Identity.ResolvePlayer: for a sender who isn't in the group that falls
     -- back to the persistent cache, which matches on the realm-stripped short name — so an outsider
@@ -1139,137 +1177,119 @@ function LH.HandleHistoryRequest(payload, senderFullName, senderKey)
     -- full realm-qualified name against the live roster instead, which no outsider can satisfy.
     if not KAUtil.IsFullNameInGroup(senderFullName) then return end
 
-    -- The requester's own epoch rides along in the request header too (see LH.RequestHistorySync).
-    -- If THEY are the raid's loot owner, this is where we hear about a line they already drew --
-    -- otherwise LH.AdoptEpoch's own gate discards it.
-    if senderKey then LH.AdoptEpoch(epochStr, senderKey) end
+    local myEpoch = KART_LootHistoryEpoch or 1
+    -- The requester's own epoch travels in the header once again here (see LH.RequestHistorySync).
+    -- A returning absentee's request is often the only message that ever reaches the loot owner's
+    -- peers about them, so our own epoch rides back regardless of whether we have an entry to go
+    -- with it -- otherwise the epoch that matters most would be exactly the one that never arrives.
+    KASC:Send("LC_HIST_EPOCH:" .. myEpoch, "WHISPER", senderFullName, { prio = "BULK" })
 
-    -- The header of our answer: our own epoch, sent back once regardless of whether we have a single
-    -- entry below to go with it. A returning absentee's log is the one case where a loot owner's own
-    -- peers have nothing left to send them (their own history was just wiped too) -- without this,
-    -- the epoch that matters most would be exactly the one that never arrives.
-    KASC:Send("LC_HIST_EPOCH:" .. (KART_LootHistoryEpoch or 1), "WHISPER", senderFullName, { prio = "BULK" })
+    -- They are ahead of us. We have nothing they want, and their epoch is news: ask for it properly
+    -- rather than adopting a number from an unauthenticated request.
+    if theirEpoch > myEpoch then
+        LH.heardEpoch = math.max(LH.heardEpoch or 0, theirEpoch)
+        return
+    end
 
-    -- Rate-limit the reply burst per sender: each answered request queues up to
-    -- HISTORY_SYNC_MAX_ENTRIES timers spanning ~8s, so a peer repeatedly leaving and rejoining would
-    -- otherwise stack bursts until the outgoing messages hit the client's throttle and the server's
-    -- spam kick. A cooldown rather than a once-per-session latch, and applied only once we actually
-    -- have something to send (below): a legitimate re-request after a disconnect — the entire point
-    -- of catch-up sync — must not be blocked by an earlier request that turned out to be a no-op.
     LH.historySyncAnswered = LH.historySyncAnswered or {}
     local now = time()
     if now - (LH.historySyncAnswered[senderFullName] or 0) < HISTORY_SYNC_ANSWER_COOLDOWN then return end
 
+    -- Behind us, or diverged at the same epoch: the incremental answer cannot fix either, so send the
+    -- whole epoch and let them dedup on id. Matching checksum at the same epoch: they agree with us
+    -- and the wire stays empty.
+    local full = (theirEpoch < myEpoch) or (theirSum ~= LH.HistoryChecksum())
+
+    -- Throttled to once a night per asker. In this raid people port out mid-distribution and relog
+    -- all evening, and every one of those joins asks again -- while a hole appears at most once. Ask
+    -- a second time in the same night and you get the incremental answer; the hole is already filled
+    -- by then, and if it is not, tomorrow's first join pulls it.
+    if full then
+        LH.fullReconciled = LH.fullReconciled or {}
+        local lastFull = LH.fullReconciled[senderFullName]
+        if lastFull and now - lastFull < HISTORY_FULL_COOLDOWN then
+            full = false
+            -- The incremental fallback below trusts sinceTime as "everything up to here is already
+            -- theirs" -- true for an ordinary relog (SavedVariables persist), but not for an asker
+            -- whose own copy is behind an EARLIER full answer we already gave them: an unreliable or
+            -- reset sinceTime would then read as "send me everything again", which is exactly the
+            -- repeat this cooldown exists to prevent. Floored at the last full answer, not raised
+            -- above it: an asker with a genuinely newer sinceTime still gets exactly what changed.
+            if sinceTime < lastFull then sinceTime = lastFull end
+        else
+            LH.fullReconciled[senderFullName] = now
+        end
+    end
+    if not full and sinceTime == nil then return end
+
     local cutoff = now - HISTORY_SYNC_MAX_AGE
     local toSend = {}
     for _, e in ipairs(KART_LootHistory or {}) do
-        if (e.time or 0) > sinceTime and (e.time or 0) > cutoff then
-            table.insert(toSend, e)
-        end
+        local inEpoch = (e.epoch or 1) == myEpoch
+        local wanted  = full or ((e.time or 0) > sinceTime)
+        if inEpoch and wanted and (e.time or 0) > cutoff then table.insert(toSend, e) end
     end
     if #toSend == 0 then return end
     LH.historySyncAnswered[senderFullName] = now
 
     table.sort(toSend, function(a, b) return (a.time or 0) < (b.time or 0) end)
-    if #toSend > HISTORY_SYNC_MAX_ENTRIES then
-        local trimmed = {}
-        for i = #toSend - HISTORY_SYNC_MAX_ENTRIES + 1, #toSend do
-            table.insert(trimmed, toSend[i])
-        end
-        toSend = trimmed
-    end
+    while #toSend > HISTORY_SYNC_MAX_ENTRIES do table.remove(toSend, 1) end
 
-    -- Random base delay de-collides multiple answering peers; the per-entry 0.2s spacing keeps
-    -- a 30-entry reply under the client's addon-message throttle instead of bursting one frame.
-    local baseDelay = math.random() * 2
-    for i, e in ipairs(toSend) do
-        C_Timer.After(baseDelay + (i - 1) * 0.2, function()
-            -- Re-check membership at fire time, not just when the request arrived: the burst spans
-            -- ~8 seconds, and whispers keep working after either side has left the group — so
-            -- without this we'd keep streaming loot history to someone who is no longer authorized.
-            if not KAUtil.IsFullNameInGroup(senderFullName) then return end
-            local colorPacked = ""
-            if e.color then
-                colorPacked = string.format("%d,%d,%d",
-                    math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
-            end
-            -- Item field is last on purpose: item links are full of colons internally, so only the
-            -- final field may contain them. winner (an NSRT nickname / free display name) and reason
-            -- are free text too — strip any colons so the fixed fields stay position-stable.
-            local winnerSafe = (e.winner or ""):gsub(":", "")
-            local reasonSafe = (e.reason or ""):gsub(":", "")
-            local winnerKey = e.winnerKey or "" -- stable identity key (GUID, no colons) for dedup
-            -- Wire difficultyID (locale-independent), not the localized name: history is
-            -- English-canonical, so the receiver derives both its own display name and the EN export
-            -- from the id. rollID lets a later reassignment replace this entry instead of duplicating,
-            -- and winnerKey lets the receiver dedup by identity rather than by (drifting) display name.
-            local msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
-                e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
-                winnerKey, winnerSafe, reasonSafe, e.item or "")
-            -- Full item links can run long (many bonus IDs + localized name). The transport
-            -- (KASC:Send / AceComm, see REQ_EQUIP in LootCouncilPanel.lua) splits and reassembles
-            -- anything over 255 bytes rather than dropping or corrupting it, so this is a bandwidth
-            -- choice, not a correctness one: a history catch-up is one message per award from every
-            -- peer that answers, and the compact, locale-independent item string keeps that burst to
-            -- a single addon message instead of paying for an extra chunk. The receiver rebuilds it
-            -- into a full link either way.
-            if #msg > 255 then
-                local itemStr = KAUtil.GetItemString(e.item)
-                if itemStr then
-                    msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
-                        e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
-                        winnerKey, winnerSafe, reasonSafe, itemStr)
-                end
-            end
-            -- Still over budget (a non-link item, or a very long nickname + reason): send an empty
-            -- item field rather than pay for the extra chunk the full field would cost. The entry
-            -- still syncs either way; this only keeps it inside a single addon message, with the
-            -- item showing blank on the receiver instead of arriving one chunk later.
-            if #msg > 255 then
-                msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
-                    e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
-                    winnerKey, winnerSafe, reasonSafe, "")
-            end
-            -- And if even that does not fit, the REASON is what has to give (B112). Dropping the
-            -- item was never enough on its own: the reason is a vote-button label, the settings box
-            -- limits those to 128 LETTERS, and a German label counts two bytes for every umlaut in
-            -- it -- so a raid running "Zweitspec für Nebenrolle über Mainspec" style labels produces
-            -- entries that fit LC_RESULT (fewer fields) and not a single-chunk LC_HIST_ENTRY. The
-            -- transport still delivers a message over budget whole, split into extra chunks, rather
-            -- than losing or corrupting it -- so this last cut is purely about keeping a catch-up
-            -- burst to one chunk per award, not about the award arriving at all.
-            --
-            -- Cut on a character boundary, not a byte one: a half umlaut renders as a broken box in
-            -- the reason column, and the receiver stores whatever arrives.
-            if #msg > 255 then
-                local room = #reasonSafe - (#msg - 255)
-                local cut = (room > 0) and reasonSafe:sub(1, room) or ""
-                -- Back up off a trailing UTF-8 continuation byte (0x80-0xBF).
-                while #cut > 0 do
-                    local b = cut:byte(#cut)
-                    if b < 128 or b >= 192 then break end
-                    cut = cut:sub(1, #cut - 1)
-                end
-                -- A lead byte left with nothing following it is half a character too.
-                if #cut > 0 and cut:byte(#cut) >= 192 then cut = cut:sub(1, #cut - 1) end
-                msg = string.format("LC_HIST_ENTRY:%d:%d:%d:%s:%s:%s:%s:%s:%s",
-                    e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
-                    winnerKey, winnerSafe, cut, "")
-            end
-            -- BULK: one catch-up request is answered by every peer with one message per award. None
-            -- of it is urgent, and all of it is exactly the traffic the loot flow must not wait for.
-            KASC:Send(msg, "WHISPER", senderFullName, { prio = "BULK" })
-        end)
+    local myKey = (KASC.Identity.ResolvePlayer("player"))
+    for first = 1, #toSend, HISTORY_BATCH_ENTRIES do
+        local records = {}
+        for i = first, math.min(first + HISTORY_BATCH_ENTRIES - 1, #toSend) do
+            records[#records + 1] = EntryRecord(toSend[i])
+        end
+        local plain  = table.concat(records, "\n")
+        local head   = string.format("LC_HIST_BATCH:%d:%s:", myEpoch, myKey)
+        local packed = LC.PackPayload(head .. "0:" .. plain, plain)
+        local msg = packed and (head .. "1:" .. packed) or (head .. "0:" .. plain)
+        -- BULK: none of this is urgent, and all of it is exactly the traffic the loot flow must not
+        -- wait for.
+        KASC:Send(msg, "WHISPER", senderFullName, { prio = "BULK" })
     end
 end
 
--- Runs on the requester when a peer whispers back a missing entry.
+-- Runs on the requester when a peer whispers back a batch of missing entries.
+function LH.HandleHistoryBatch(payload, senderKey)
+    local epoch, originatorKey, packed, body =
+        payload:match("^(%d+):([^:]*):([01]):(.*)$")
+    epoch = tonumber(epoch)
+    if not epoch or not body then return end
+    -- Catch-up entries land in the permanent loot history -- only from someone actually in our group,
+    -- not from an arbitrary whisper.
+    if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
+
+    LH.heardEpoch = math.max(LH.heardEpoch or 0, epoch)
+    LH.AdoptEpoch(epoch, originatorKey)
+    -- Below our epoch after that: pre-wipe entries. Discard, do not re-seed a wiped log.
+    if epoch < (KART_LootHistoryEpoch or 1) then return end
+
+    if packed == "1" then
+        body = LC.UnpackPayload(body)
+        -- nil means the block will not come back as a string at all: too large to be ours, truncated,
+        -- foreign or damaged. Treated as "this message says nothing" rather than storing half of it,
+        -- and counted, because the alternative is a client that quietly loses a whole catch-up.
+        if not body then
+            LC.diag = LC.diag or {}
+            LC.diag.packedUnreadable = (LC.diag.packedUnreadable or 0) + 1
+            return
+        end
+    end
+
+    for record in body:gmatch("[^\n]+") do
+        LH.HandleHistoryEntry(record, senderKey)
+    end
+end
+
+-- Runs once per record in a batch. Parses and stores one award.
 function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, item =
-        payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$")
+    local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, id, epoch, item =
+        payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(%d+):(.*)$")
     t = tonumber(t)
     if not t or not winner then return end
     -- Reject a timestamp from the future. time() is each client's OS clock, so a peer with a badly
@@ -1278,8 +1298,8 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- entries newer than that date and silently killing catch-up sync for good.
     if t > time() + 300 then return end
     -- Older than the line the player drew when they last cleared. The request side already asks from
-    -- there, but a reply burst spans about eight seconds -- so a clear can land in the middle of one,
-    -- with the deleted entries already on their way.
+    -- there, but a clear can land between the request and the answer, with the deleted entries
+    -- already on their way.
     if t <= (KART_LootHistoryClearedAt or 0) then return end
     -- Free text from another client, rendered raw into the history window and the export. Double the
     -- pipes so |c colour codes and |H hyperlinks can't be injected into a SavedVariable that is then
@@ -1334,6 +1354,13 @@ function LH.HandleHistoryEntry(payload, senderKey)
         if itemUnknown then return rollID ~= nil and e.rollID == rollID end
         return (incomingStr and ItemKey(e.item) == incomingStr) or (e.item == itemLink)
     end
+
+    -- Rule 3: same epoch, new id -> store it. Same id -> we already have this award.
+    if id and id ~= "" then
+        for _, e in ipairs(KART_LootHistory) do
+            if e.id == id then return end
+        end
+    end
     -- Skip if we already have this award. Compare by the stable identity key + locale-independent
     -- item string (not display name + full link, which differ between DE/EN clients), and allow a
     -- few seconds of clock skew between the two clients that logged it. Runs BEFORE the reassignment
@@ -1383,12 +1410,8 @@ function LH.HandleHistoryEntry(payload, senderKey)
         difficulty   = diffID and (GetDifficultyInfo(diffID) or "") or "",
         difficultyID = diffID,
         rollID       = rollID,
-        -- Stamped with OUR OWN current epoch, not anything carried on the wire: this entry is being
-        -- merged into our log at our current watermark, and that is the number LH.AdoptEpoch's later
-        -- pruning has to compare it against. An unstamped (nil) entry would read as epoch 0 and be
-        -- dropped by the very next clear, including one that has nothing to do with the award it
-        -- describes.
-        epoch        = KART_LootHistoryEpoch or 1,
+        id           = id,
+        epoch        = tonumber(epoch) or 1,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
@@ -1421,9 +1444,9 @@ end
 --  Addon-message registrations
 -- =====================================================================
 KASC:RegisterMessage("LC_HIST_REQ", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender, ctx:Key()) end)
-KASC:RegisterMessage("LC_HIST_ENTRY", { payload = true, group = true, enabled = lcEnabled },
-    function(payload, ctx) LH.HandleHistoryEntry(payload, ctx:Key()) end)
+    function(payload, ctx) LH.HandleHistoryRequest(payload, ctx.sender) end)
+KASC:RegisterMessage("LC_HIST_BATCH", { payload = true, group = true, enabled = lcEnabled },
+    function(payload, ctx) LH.HandleHistoryBatch(payload, ctx:Key()) end)
 KASC:RegisterMessage("LC_HIST_EPOCH", { payload = true, group = true, enabled = lcEnabled },
     function(payload, ctx)
         LH.heardEpoch = math.max(LH.heardEpoch or 0, tonumber(payload) or 0)

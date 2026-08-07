@@ -657,7 +657,7 @@ local function runOne(seed)
         end
         for _, token in ipairs({ "LC_CONFIG", "LC_CONFIG_RELAY", "LC_ACTIVE", "LC_STATE_REQ",
                                  "LC_SESSION_RESUME", "LC_RESIGN", "LC_START", "LC_ROLLS",
-                                 "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_ENTRY",
+                                 "LC_ROLL_CATCHUP", "LC_RESULT", "LC_HIST_REQ", "LC_HIST_BATCH",
                                  -- The tokens the table heartbeat rework added; a wire dump without
                                  -- them shows a repair with no visible cause (found at seed 1253).
                                  "LC_DROP", "LC_TABLE", "LC_ROLL_REQ", "LC_ROLLS_REQ", "LC_END" }) do

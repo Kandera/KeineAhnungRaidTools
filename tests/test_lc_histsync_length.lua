@@ -1,18 +1,12 @@
--- A history entry that does not fit in one addon message.
+-- A history entry too long for one addon message.
 --
--- The catch-up sync sends one LC_HIST_ENTRY per award, and SendAddonMessage takes 255 bytes. Over
--- that, nothing arrives -- not a truncated entry, no entry. The sender is told nothing either.
---
--- Two fallbacks exist for it: swap the full item link for the compact item string, and if that is
--- still too long, send the entry with an EMPTY item field. The comment on the second one states the
--- outcome as a fact -- "the entry still syncs; the item just shows blank" -- and that is what this
--- file is about, because nothing measured it.
---
--- The budget it has to fit into is small once the fixed part is counted: prefix, timestamp,
--- difficulty, rollID, class, packed colour and a GUID-shaped winner key come to roughly eighty
--- bytes, leaving about 175 for the winner's name and the REASON. The reason is a vote-button label,
--- and the settings box accepts 128 characters per label -- so "Zweitspec, aber nur wenn niemand
--- Mainspec braucht" is an ordinary thing for a raid leader to type, not an invented edge case.
+-- The catch-up sync used to send one LC_HIST_ENTRY per award, and SendAddonMessage takes 255 bytes.
+-- Over that, four staggered fallbacks gave up the item link, then the item, then part of the reason
+-- -- because each award was its own message and had to fit alone. Now the catch-up is answered in
+-- packed LC_HIST_BATCH messages instead (see LH.HandleHistoryRequest / LC.PackPayload), and none of
+-- that survives: an entry that would once have lost its reason to a byte cap now arrives whole. This
+-- file is what is left of the old budget -- the reason a raid running "Zweitspec, aber nur wenn
+-- niemand Mainspec braucht" style labels ever produced an entry too big for one message at all.
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
@@ -52,112 +46,36 @@ do
         "an award whose reason will not fit still reaches the peer -- an entry is not lost to its own length")
 end
 
--- Nothing is put on the wire that the client will refuse --------------------------------------------
--- The other half of the same statement: a message over the cap does not arrive, so sending one is
--- the same as sending nothing while believing otherwise.
-do
-    local sim, _, _ = SyncOne({
-        time = time() - 60, item = GLOVES, winner = "Verylongname-Silvermoon",
-        winnerKey = "Player-1096-0A1B2C3D",
-        reason = string.rep("Zweitspec-wenn-frei ", 12), class = "MAGE", rollID = 72,
-    })
-    -- e.msg, not e: RaidSim.Sent returns log ENTRIES. Measuring the entry counts an array with no
-    -- elements, which is 0 and always under the cap -- an assertion that cannot fail.
-    for _, e in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
-        T.truthy(#e.msg <= 255,
-            "every history message put on the wire fits the cap (" .. #e.msg .. " bytes)")
-    end
-end
-
--- The way a real raid gets there: umlauts ---------------------------------------------------------
+-- The way a real raid gets there: umlauts and other multi-byte reasons round-trip whole -------------
 -- The settings box limits a vote-button label to 128 LETTERS. A German label spends two bytes on
--- every umlaut, so "128 letters" is well over 200 bytes -- which is how an ordinary label, typed
--- into the ordinary field, produces a history entry too big for one message.
---
--- Walked across a range of WINNER NAME lengths, not reason lengths, and that distinction is the
--- whole point: how much has to go is (fixed part + reason) - 255, so the reason cancels out and the
--- cut lands at the same offset into it no matter how long it is. Lengthening the name moves the
--- fixed part, which is what walks the cut across the character boundaries. Measured, after a first
--- version of this file varied the reason and held the cut still at every one of its 25 steps.
---
--- Where the cut lands only falls INSIDE a character at some offsets: one length would pass
--- to go, and it only falls INSIDE a two-byte character at some of them. One length would pass
--- against a cut that counts bytes and knows nothing about characters.
-local function IsValidUTF8(s)
-    local i = 1
-    while i <= #s do
-        local b = s:byte(i)
-        local extra
-        if b < 0x80 then extra = 0
-        elseif b >= 0xF0 then extra = 3
-        elseif b >= 0xE0 then extra = 2
-        elseif b >= 0xC0 then extra = 1
-        else return false end
-        for k = 1, extra do
-            local c = s:byte(i + k)
-            if not c or c < 0x80 or c >= 0xC0 then return false end
-        end
-        i = i + extra + 1
-    end
-    return true
+-- every umlaut, so "128 letters" is well over 200 bytes -- long enough that the record no longer
+-- fits under PACK_MAX_MESSAGE and the batch goes out packed (LC.PackPayload). This used to be exactly
+-- the case that got cut at a byte offset that could land inside a multi-byte character; now the whole
+-- reason arrives, so an exact match is the only thing that could still be wrong -- a compression bug
+-- mangling the bytes, say.
+do
+    local label = string.rep("üä", 60)
+    local sim, _, raider = SyncOne({
+        time = time() - 60, item = GLOVES, winner = "Verylongname-Silvermoon",
+        winnerKey = "Player-1096-0A1B2C3D", reason = label, class = "MAGE", rollID = 73,
+        id = "umlaut-1", epoch = 1,
+    })
+    T.eq(#raider.env.KART_LootHistory, 1, "the award reaches the peer")
+    T.eq(raider.env.KART_LootHistory[1].reason, label, "the umlauts arrive whole, byte for byte")
+    T.truthy(#RaidSim.Sent(sim, "LC_HIST_BATCH") > 0, "sent as a batch, not silently dropped")
 end
 
 do
-    local checked, cut = 0, 0
-    for pad = 0, 24 do
-        local label = string.rep("üä", 60)
-        local sim, _, raider = SyncOne({
-            time = time() - 60, item = GLOVES,
-            winner = "Name" .. string.rep("n", pad) .. "-Silvermoon",
-            winnerKey = "Player-1096-0A1B2C3D", reason = label, class = "MAGE", rollID = 73 + pad,
-        })
-        checked = checked + 1
-        if #raider.env.KART_LootHistory ~= 1 then
-            T.truthy(false, "an award with a long German reason is lost at pad " .. pad)
-            break
-        end
-        for _, e in ipairs(RaidSim.Sent(sim, "LC_HIST_ENTRY")) do
-            if #e.msg > 255 then
-                T.truthy(false, "a message over the cap went out at pad " .. pad .. " (" .. #e.msg .. ")")
-                break
-            end
-        end
-        local got = raider.env.KART_LootHistory[1].reason or ""
-        if #got < #label then cut = cut + 1 end
-        if not IsValidUTF8(got) then
-            T.truthy(false, "the reason was cut inside a character at pad " .. pad)
-            break
-        end
-    end
-    T.eq(checked, 25, "every reason length in the range was tried")
-    T.truthy(cut > 0, "and at least one of them actually had to be cut (" .. cut .. ")")
-    T.truthy(IsValidUTF8("ü"), "the validator accepts a whole umlaut")
-end
-
-do
-    -- Three-byte characters, which is where backing up needs a LOOP rather than a single step: an
-    -- umlaut cut in half leaves one stray byte, "€" or a CJK glyph can leave two. Reachable without
-    -- leaving Europe -- the euro sign is three bytes, and item names carry it.
-    local checked = 0
-    for pad = 0, 24 do
-        local label = string.rep("€", 60)
-        local _, _, raider = SyncOne({
-            time = time() - 60, item = GLOVES,
-            winner = "Name" .. string.rep("n", pad) .. "-Silvermoon",
-            winnerKey = "Player-1096-0A1B2C3D", reason = label, class = "MAGE", rollID = 120 + pad,
-        })
-        checked = checked + 1
-        if #raider.env.KART_LootHistory ~= 1 then
-            T.truthy(false, "an award with a three-byte-character reason is lost at pad " .. pad)
-            break
-        end
-        if not IsValidUTF8(raider.env.KART_LootHistory[1].reason or "") then
-            T.truthy(false, "a three-byte character was cut apart at pad " .. pad)
-            break
-        end
-    end
-    T.eq(checked, 25, "every three-byte cut position was tried")
-    T.truthy(not IsValidUTF8(string.char(195)), "and rejects a lead byte with nothing after it")
+    -- Three-byte characters -- the euro sign is three bytes, and item names carry it -- reachable
+    -- without leaving Europe.
+    local label = string.rep("€", 60)
+    local _, _, raider = SyncOne({
+        time = time() - 60, item = GLOVES, winner = "Verylongname-Silvermoon",
+        winnerKey = "Player-1096-0A1B2C3D", reason = label, class = "MAGE", rollID = 74,
+        id = "euro-1", epoch = 1,
+    })
+    T.eq(#raider.env.KART_LootHistory, 1, "the award reaches the peer")
+    T.eq(raider.env.KART_LootHistory[1].reason, label, "the three-byte characters arrive whole")
 end
 
 -- ==========================================================================
@@ -171,25 +89,16 @@ end
 -- newer than a date nobody will ever reach. Catch-up sync is then dead on this client for good, and
 -- nothing says so.
 do
-    local sim, lm, _, raider = F.NewRaid()
+    local _, lm, _, raider = F.NewRaid()
     RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
 
+    -- Calling LH.HandleHistoryEntry directly, the per-record parser HandleHistoryBatch loops over --
+    -- this guard is unrelated to batching and lives inside it, not at the batch level.
     local far = time() + 5 * 365 * 24 * 60 * 60
-    RaidSim.As(raider, function()
-        raider.KASC:Send(("LC_HIST_ENTRY:%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s")
-            :format(far, GLOVES), "WHISPER", lm.name)
-    end)
-    KARTTEST.AdvanceTime(1)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        far, "future-1", 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
     T.eq(#lm.env.KART_LootHistory, 0, "an entry dated years ahead is refused")
-
-    -- The point of refusing it: the catch-up still works afterwards.
-    RaidSim.ClearLog(sim)
-    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
-    local asks = RaidSim.Sent(sim, "LC_HIST_REQ")
-    T.eq(#asks, 1, "and the client still asks its peers for what it is missing")
-    local since = tonumber(((asks[1] or {}).msg or ""):match("^LC_HIST_REQ:(%d+)"))
-    T.truthy(since and since <= time(),
-        "from a point in time that can actually be reached, not from the bad entry's date")
 end
 
 do
@@ -197,23 +106,37 @@ do
     -- cost them an award, while years ahead is not drift.
     local _, lm, _, raider = F.NewRaid()
     RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
-    RaidSim.As(raider, function()
-        raider.KASC:Send(("LC_HIST_ENTRY:%d:16:71:MAGE:1,1,1:Player-1-A:Alric:BIS:%s")
-            :format(time() + 120, GLOVES), "WHISPER", lm.name)
-    end)
-    KARTTEST.AdvanceTime(1)
+    local record = string.format("%d:16:71:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
+        time() + 120, "drift-1", 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
     T.eq(#lm.env.KART_LootHistory, 1, "two minutes of clock drift is accepted, not treated as an attack")
 end
 
+-- The client still asks its peers for what it is missing, from a reachable point in time ------------
+-- The other half of the future-timestamp guard: refusing the bad entry must not also break the
+-- client's OWN outgoing request -- the since-timestamp it sends is derived from its own held
+-- entries, so a client that had accepted the bad one would ask from five years out forever after.
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function() lm.KART.LH.RequestHistorySync() end)
+    local asks = RaidSim.Sent(sim, "LC_HIST_REQ")
+    T.eq(#asks, 1, "the client asks its peers for what it is missing")
+    local since = tonumber(((asks[1] or {}).msg or ""):match("^LC_HIST_REQ:%d+:%d+:(%d+)$"))
+    T.truthy(since and since <= time(),
+        "from a point in time that can actually be reached")
+end
+
 -- How much one answer may be --------------------------------------------------------------------
--- One whisper per entry, staggered. A peer holding a long history answering in full would put
--- hundreds of messages on the wire for one raider walking in.
+-- Packed into batches instead of one whisper per entry. A peer holding a long history answering in
+-- full would still put a bounded number of messages on the wire, not one per entry it holds.
 do
     local sim, lm, _, raider = F.NewRaid()
     local many = {}
     for i = 1, 80 do
         many[i] = { time = time() - 1000 + i, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
-                    reason = "BIS", class = "MAGE", rollID = 200 + i }
+                    reason = "BIS", class = "MAGE", rollID = 200 + i, id = "many-" .. i, epoch = 1 }
     end
     RaidSim.As(lm, function() lm.env.KART_LootHistory = many end)
     RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
@@ -222,8 +145,204 @@ do
     RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
     KARTTEST.AdvanceTime(30)
 
-    local sent = #RaidSim.Sent(sim, "LC_HIST_ENTRY")
+    -- RaidSim.Messages, not RaidSim.Sent: a packed batch this size is over 255 bytes and the
+    -- transport splits it into several chunks, so a plain prefix match on the log finds nothing.
+    local sent = #RaidSim.Messages(sim, "LC_HIST_BATCH")
     T.truthy(sent > 0, "the peer answers a catch-up request")
-    T.truthy(sent <= 30,
-        "with a bounded number of messages, not one per entry it happens to hold (" .. sent .. ")")
+    T.truthy(sent <= 2,
+        "eighty entries at fifty per batch cost two messages, not one per entry it happens to hold ("
+        .. sent .. ")")
+    T.eq(#raider.env.KART_LootHistory, 80, "and all eighty still arrive")
+end
+
+-- Batching. The catch-up used to be one addon message per award -- up to thirty, stretched over eight
+-- seconds, each one squeezed under 255 bytes by four staggered truncations that could cost the item
+-- link, then the item, then part of the reason. Packed into batches none of that is needed, and the
+-- entries arrive whole.
+
+-- A 60-entry catch-up arrives complete, and cheaply -----------------------------------------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local entries = {}
+    for i = 1, 60 do
+        entries[i] = { time = time() - 3600 + i, item = GLOVES, winner = "Alric",
+                       winnerKey = "Player-1-A", reason = "BIS", class = "MAGE", rollID = i,
+                       id = "sync-" .. i, epoch = 1 }
+    end
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = entries end)
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#raider.env.KART_LootHistory, 60, "all sixty awards arrive")
+    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") <= 3,
+        "sixty awards cost at most three messages, not sixty")
+end
+
+-- A long reason is no longer truncated --------------------------------------------------------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local longReason = string.rep("Zweitspec-wenn-frei ", 12)  -- 240 bytes
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Verylongname-Silvermoon",
+              winnerKey = "Player-1096-0A1B2C3D", reason = longReason, class = "MAGE",
+              rollID = 71, id = "sync-long", epoch = 1 },
+        }
+    end)
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(raider.env.KART_LootHistory[1].reason, longReason,
+        "the reason arrives whole -- a batch does not pay per award for its length")
+    T.eq(raider.env.KART_LootHistory[1].item, GLOVES, "and so does the item link")
+end
+
+-- No batch is put on the wire that the decompressor will refuse ---------------------------------
+-- A batch this size (150 entries, three batches of fifty) is split across several 255-byte chunks
+-- by the transport, so a single log entry's .msg is not the full packed body to measure directly
+-- (see RaidSim.Messages). What IS directly observable end to end is whether the receiver's own
+-- decompressor ever refused one: PACK_MAX_BLOCK is enforced there, and a batch over it is counted
+-- as packedUnreadable and its records are never stored -- so a clean packedUnreadable count together
+-- with all 150 entries arriving is exactly the proof that no batch body exceeded it.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local entries = {}
+    for i = 1, 150 do
+        entries[i] = { time = time() - 7200 + i, item = GLOVES, winner = "Verylongname-Silvermoon",
+                       winnerKey = "Player-1096-0A1B2C3D", reason = string.rep("x", 120),
+                       class = "MAGE", rollID = i, id = "big-" .. i, epoch = 1 }
+    end
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = entries end)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {}
+        raider.KART.LC.diag = raider.KART.LC.diag or {}
+        raider.KART.LC.diag.packedUnreadable = 0
+    end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 60)
+
+    T.eq(raider.KART.LC.diag.packedUnreadable, 0, "no batch body exceeded PACK_MAX_BLOCK")
+    T.eq(#raider.env.KART_LootHistory, 150, "and all 150 still arrive")
+end
+
+-- The checksum finds a hole BEHIND the watermark ---------------------------------------------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = time() - 300, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 1, id = "old-one", epoch = 1 },
+            { time = time() - 60,  item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "new-one", epoch = 1 },
+        }
+    end)
+    -- The raider holds only the NEWER of the two. The old watermark ("everything newer than my
+    -- newest") can never ask for the older one -- that is the hole the checksum exists to find.
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "new-one", epoch = 1 },
+        }
+    end)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#raider.env.KART_LootHistory, 2, "the entry older than the watermark is filled in")
+end
+
+-- Matching states say nothing at all ----------------------------------------------------------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local shared = {
+        { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+          reason = "BIS", class = "MAGE", rollID = 1, id = "same-one", epoch = 1 },
+    }
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = { shared[1] } end)
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = { shared[1] } end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0,
+        "two clients that already agree put nothing on the wire")
+end
+
+-- An entry below our epoch is discarded -------------------------------------------------------------
+do
+    local _, lm, _, raider = F.NewRaid()
+    -- One record in the batch field order: item last, id and epoch just before it.
+    local record = string.format("%d:0:0:MAGE::Player-1-A:Alric:BIS:%s:%d:%s",
+        time() - 60, "1-bbb", 2, GLOVES)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistoryEpoch = 4
+        raider.env.KART_LootHistory = {}
+        raider.KART.LH.HandleHistoryBatch(
+            string.format("2:%s:0:%s", lm.guid, record), lm.guid)
+    end)
+    T.eq(#raider.env.KART_LootHistory, 0, "a pre-wipe entry cannot be re-seeded into a wiped log")
+end
+
+-- An unreadable block is counted, not swallowed ------------------------------------------------------
+do
+    local _, lm, _, raider = F.NewRaid()
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistoryEpoch = 1
+        raider.env.KART_LootHistory = {}
+        raider.KART.LC.diag = raider.KART.LC.diag or {}
+        raider.KART.LC.diag.packedUnreadable = 0
+        -- Flagged as packed, but the body is not a deflate block at all -- what a foreign LibDeflate
+        -- or a truncated transfer produces.
+        raider.KART.LH.HandleHistoryBatch(
+            string.format("1:%s:1:%s", lm.guid, "not-a-deflate-block"), lm.guid)
+    end)
+    T.eq(#raider.env.KART_LootHistory, 0, "nothing is stored from a block that will not decompress")
+    T.eq(raider.KART.LC.diag.packedUnreadable, 1,
+        "and it is counted -- the alternative is a client that quietly loses a whole catch-up")
+end
+
+-- The full reconcile runs once a night, not once a relog ----------------------------------------------
+do
+    local sim, lm, _, raider = F.NewRaid()
+    -- The peer is missing an entry BEHIND its watermark, so every request diverges on checksum and
+    -- would otherwise pull the whole epoch again on each one.
+    RaidSim.As(lm, function()
+        lm.env.KART_LootHistory = {
+            { time = time() - 300, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 1, id = "old-two", epoch = 1 },
+            { time = time() - 60,  item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "new-two", epoch = 1 },
+        }
+    end)
+    RaidSim.As(raider, function()
+        raider.env.KART_LootHistory = {
+            { time = time() - 60, item = GLOVES, winner = "Alric", winnerKey = "Player-1-A",
+              reason = "BIS", class = "MAGE", rollID = 2, id = "new-two", epoch = 1 },
+        }
+    end)
+
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+    T.eq(#raider.env.KART_LootHistory, 2, "the first reconcile fills the hole")
+
+    -- A relog twenty minutes later. People port out mid-distribution and come back all evening; the
+    -- full pull must not fire again for each of those.
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    KARTTEST.AdvanceTime(20 * 60)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(15)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(#RaidSim.Messages(sim, "LC_HIST_BATCH"), 0,
+        "the second divergence in the same night is not answered with another full pull")
 end
