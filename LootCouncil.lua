@@ -2238,7 +2238,8 @@ function LC.HandleRollCatchup(payload, senderKey)
     local dismissed = LC.rollDismissed[rollID]
     if dismissed then
         local itemID = LC.PayloadItemID(payload:match("^%d+:%d+:?(.*)$"))
-        if itemID == "" or type(dismissed) ~= "string" or dismissed == itemID then return end
+        local dismissedItem = LC.RollNoteParts(dismissed)
+        if itemID == "" or dismissedItem == nil or dismissedItem == itemID then return end
     end
     -- LC.HandleStart re-stamps the BoP trade clock from time() on purpose (see its comment): for an
     -- announcement that is accurate to within the collection window, because the owner sends LC_DROP
@@ -2361,7 +2362,8 @@ LC.rollDismissed = LC.rollDismissed or {}
 -- client never resolved, leaves the note exactly as it was.
 function LC.ForgetDismissalIfReused(rollID, itemID)
     local dismissed = rollID and LC.rollDismissed[rollID]
-    if type(dismissed) == "string" and itemID and itemID ~= "" and dismissed ~= itemID then
+    local dismissedItem = LC.RollNoteParts(dismissed)
+    if dismissedItem and itemID and itemID ~= "" and dismissedItem ~= itemID then
         LC.rollDismissed[rollID] = nil
     end
 end
@@ -2648,11 +2650,14 @@ function LC.HandleTable(payload, senderKey, sender)
         -- A note about an item that expired HERE gates the item ask below -- but only while the
         -- heartbeat still names the item it was stamped for. A different item under the number is
         -- Blizzard's reuse (B132): the expired roll is over, the note comes off, and the ask goes
-        -- out on this same heartbeat. Compared only when both sides are comparable, exactly like
-        -- the dismissal note above -- an unresolved stamp (`true`) or an unnamed item (itemID "0")
-        -- keeps the gate closed, erring towards silence about a roll this client already watched
-        -- end. A reuse carrying a second copy of the SAME item compares equal here and is caught by the
-        -- generation instead (B139) -- which is the whole reason the heartbeat carries one.
+        -- out on this same heartbeat. Compared only when both sides are comparable -- an unresolved
+        -- stamp (`true`) or an unnamed item (itemID "0") keeps the ITEM comparison silent, erring
+        -- towards leaving a roll this client already watched end alone. A reuse carrying a second
+        -- copy of the SAME item compares equal on the item and is caught by the generation instead
+        -- (B139) -- which is the whole reason the heartbeat carries one. That check does not need the
+        -- item named either: TablePayload sends "(itemID or 0)" for an owner holding "???" for the
+        -- roll, so a differing generation alone releases the note even when the wire names no item at
+        -- all -- a generation mismatch is stronger evidence of a reuse than an item name ever was.
         local expiredHere = rollID and LC.rollExpiredHere[rollID]
         local expiredItem, expiredGen = LC.RollNoteParts(expiredHere)
         if expiredItem and itemID and itemID ~= "0" and expiredItem ~= itemID then

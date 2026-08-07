@@ -917,3 +917,47 @@ do
     T.eq(asks, 0, "a heartbeat with no generation in it does not reopen what this client put away")
     T.truthy(council.KART.LC.rollDismissed[986] ~= nil, "and the note survives it")
 end
+
+-- ...and the dismissal note survives LC_ROLLS traffic too, then releases off the heartbeat (B139) ----
+-- LC.ForgetDismissalIfReused is B132's OTHER caller (LC.HandleRolls), and unlike the heartbeat its
+-- payload carries no generation at all -- "rollID:@itemID:numbers", bare. A rolled-numbers message for
+-- the SAME item cannot prove a reuse by itself, so the note has to survive it and wait for the
+-- heartbeat's generation to say so instead. Left with rolls ENABLED (unlike the two blocks above,
+-- which turn lcRollsEnabled off): this is the path that reaches LC.ForgetDismissalIfReused at all.
+do
+    local sim, lm = F.NewRaid()
+    local council = sim.byName.Merrit
+
+    F.Drop(sim, 989, F.GLOVES)
+    KARTTEST.AdvanceTime(25)
+    RaidSim.As(council, function() council.KART.LC.Council.CloseCouncilTab(989) end)
+    T.eq(council.KART.LC.rollDismissed[989], tostring(F.GLOVES) .. "@1",
+        "the council member's note names the item and the instance it closed")
+
+    -- A rolled-numbers table for the SAME item, exactly the shape LC.HandleRolls answers with --
+    -- handed to the handler directly, as the catch-up tests above do, because the organic broadcast
+    -- only fires after a full escalation cycle this test has no need to wait out.
+    RaidSim.As(council, function()
+        council.KART.LC.HandleRolls("989:@" .. F.GLOVES .. ":15=42,20=7", lm.guid)
+    end)
+    T.truthy(council.KART.LC.rollDismissed[989] ~= nil,
+        "a rolled-numbers message for the SAME item does not release the note by itself")
+
+    -- Blackholing LC_DROP costs the rest of the raid nothing: every other client has its own
+    -- START_LOOT_ROLL and tracks the second copy from that.
+    RaidSim.Blackhole(sim, "LC_DROP")
+    F.Drop(sim, 989, F.GLOVES, { noRollFor = { Merrit = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Deliver(sim, "LC_DROP")
+    T.eq(council.KART.LC.rollItems[989], nil,
+        "and hears nothing about the second copy under that number")
+
+    -- A few seconds, not a full window: the owner's heartbeat changed with the reuse and goes out on
+    -- the next tick, and the dismissal note has no ask on cooldown to defer it.
+    KARTTEST.AdvanceTime(6)
+
+    T.eq(council.KART.LC.rollDismissed[989], nil,
+        "the heartbeat naming a new generation releases the dismissal note")
+    T.truthy(tostring(council.KART.LC.rollItems[989]):match("item:" .. F.GLOVES),
+        "and the second copy reaches it, off the heartbeat alone")
+end
