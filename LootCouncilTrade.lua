@@ -17,6 +17,28 @@ LC.rollUndecidedWarned = LC.rollUndecidedWarned or {}
 --  Result announcement & winner notification
 -- =====================================================================
 
+-- Whether this client must keep its hands off the raid's loot record right now, said out loud.
+--
+-- A client whose epoch is below the raid's is holding a log the raid has already discarded. It
+-- resyncs within seconds of joining; until then it does not decide anything -- see the same check in
+-- Trade.AnnounceResult, which is the last line of defence rather than the decision.
+--
+-- Asked BEFORE anything local is written, by every caller that writes some. Trade.AnnounceResult
+-- returning early was not enough on its own: Trade.DoAssignWinner had already set
+-- LC.assignedWinners[rollID] and went on to call LH.LogHistory afterwards, with no awardID and no
+-- epoch, so LogHistory minted a fresh id and stamped the local epoch. The council panel showed a
+-- winner, the log gained a row no other client in the raid will ever hold, nothing went on the wire,
+-- and nothing was printed -- and that phantom id then guarantees a permanent checksum mismatch and a
+-- full reconcile every night for ever.
+--
+-- Prints rather than merely answering, because "nothing is lost quietly" (C14) is the whole point of
+-- the refusal: a button that does nothing and says nothing is what this path exists to prevent.
+function Trade.RefusedAsStale()
+    if not (KART.LH and KART.LH.IsStale and KART.LH.IsStale()) then return false end
+    print("|cffff0000KART:|r " .. KART.L.LH_AWARD_STALE)
+    return true
+end
+
 -- reason (optional) is appended to the chat announcement, e.g. "(BIS)"; blank for no reason.
 -- reason also travels in the LC_RESULT broadcast so every KART user's loot history stays in sync.
 --
@@ -28,6 +50,10 @@ function Trade.AnnounceResult(rollID, winnerKey, reason, colorDef, deliberate)
     -- Writing an award from it would put a row into everyone's record that this client cannot see the
     -- context of, and the epoch it stamps would be wrong. It resyncs within seconds of joining; until
     -- then it does not decide.
+    --
+    -- The last line of defence, not the decision: every caller that writes local state around this
+    -- one asks Trade.RefusedAsStale first, because returning here after the caller has already
+    -- recorded a winner leaves that winner behind on this client alone.
     if KART.LH and KART.LH.IsStale and KART.LH.IsStale() then return end
 
     local awardID, epoch
@@ -88,6 +114,8 @@ local function DoAssignWinner(rollID, playerKey, reason, colorDef, deliberate)
     -- The roll may have been cleared (session end / tab close) between opening the reassign-confirm
     -- popup and accepting it — bail rather than logging a history entry with a nil item link.
     if not LC.rollItems[rollID] then return end
+    -- Refused before a single local write, and said out loud (see Trade.RefusedAsStale).
+    if Trade.RefusedAsStale() then return end
     local classFile
     local unit = KASC.Identity.FindUnitForKey(playerKey)
     if unit then

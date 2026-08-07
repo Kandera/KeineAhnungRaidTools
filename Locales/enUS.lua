@@ -401,6 +401,7 @@ KART.L_enUS = {
     LH_CLEAR_NEEDS_GROUP   = "Loot history not cleared: a raid-wide clear needs a group, and there is nobody here to tell.",
     LH_CLEAR_NEEDS_LOOTMASTER = "Loot history not cleared: no lootmaster is set. Clearing empties every log in the raid, so it needs a named lootmaster to be the one doing it.",
     LH_CLEAR_NEEDS_OWNER   = "Loot history not cleared: only the lootmaster can clear the raid's loot history.",
+    LH_AWARD_STALE         = "Not awarded: your loot history is behind the raid's, so this client is not deciding anything until it has caught up. Try again in a moment.",
     LH_BTN_EXPORT_JSON     = "Export JSON",
     LH_BTN_EXPORT_JSON_TIP = "Exports the currently filtered entries as JSON, in the same field format RCLootCouncil itself uses (compatible with tools built for its export).",
     LH_EXPORT_TITLE        = "RCLootCouncil-format JSON export",

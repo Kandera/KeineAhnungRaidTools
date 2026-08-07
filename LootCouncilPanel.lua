@@ -833,6 +833,11 @@ function Council.CreateCouncilPanel()
     btnNoWinner:SetScript("OnClick", function()
         if LC.activeRollID then
             local rollID = LC.activeRollID
+            -- Same rule as an award, and for the same reason: revoking is a write into the raid's
+            -- loot record too, so a client that cannot make it must not do the local half either --
+            -- the cleanup below runs unconditionally, and Trade.AnnounceResult's own refusal happens
+            -- too late to stop it (see Trade.RefusedAsStale).
+            if LC.Trade.RefusedAsStale() then return end
             LC.Trade.AnnounceResult(rollID, "NONE")
             -- We do not process our own LC_RESULT, so the cleanup the peer side does in
             -- Trade.HandleResult has to be run locally too — otherwise whoever revokes the winner is

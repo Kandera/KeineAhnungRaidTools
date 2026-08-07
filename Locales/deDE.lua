@@ -401,6 +401,7 @@ KART.L_deDE = {
     LH_CLEAR_NEEDS_GROUP   = "Loot-History nicht geleert: Ein raidweites Leeren braucht eine Gruppe, und hier ist niemand, dem man es sagen könnte.",
     LH_CLEAR_NEEDS_LOOTMASTER = "Loot-History nicht geleert: Es ist kein Lootmaster eingetragen. Leeren löscht jedes Log im Raid, dafür muss ein Lootmaster benannt sein, der es tut.",
     LH_CLEAR_NEEDS_OWNER   = "Loot-History nicht geleert: Nur der Lootmaster kann die Loot-History des Raids leeren.",
+    LH_AWARD_STALE         = "Nicht vergeben: Deine Loot-History hängt hinter der des Raids, deshalb entscheidet dieser Client nichts, bis er aufgeholt hat. Gleich noch einmal versuchen.",
     LH_BTN_EXPORT_JSON     = "JSON exportieren",
     LH_BTN_EXPORT_JSON_TIP = "Exportiert die aktuell gefilterten Einträge als JSON, im selben Feldformat, das RCLootCouncil selbst verwendet (kompatibel mit Tools, die für dessen Export gebaut wurden).",
     LH_EXPORT_TITLE        = "JSON-Export im RCLootCouncil-Format",

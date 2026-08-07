@@ -211,13 +211,27 @@ do
     RaidSim.As(raider, function() raider.KART.LH.heardEpoch = 5 end)   -- behind, and knows it
     RaidSim.ClearLog(sim)
     F.Drop(sim, 84, F.GLOVES)
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    local said = {}
     RaidSim.As(raider, function()
+        local realPrint = raider.env.print
+        raider.env.print = function(s) said[#said + 1] = tostring(s) end
         raider.KART.LC.Trade.AssignWinner(84, raider.guid, "BIS", nil)
+        raider.env.print = realPrint
     end)
     RaidSim.Drain(sim, 5)
 
     T.eq(#RaidSim.Messages(sim, "LC_RESULT"), 0,
         "a stale client does not write into a record it cannot see all of")
+    -- And leaves nothing behind locally either. Trade.AnnounceResult's own refusal comes too late:
+    -- Trade.DoAssignWinner has already recorded the winner by then and goes on to log a history row
+    -- with no awardID and no epoch, so LH.LogHistory mints a fresh id and stamps the local epoch.
+    -- The panel shows a winner, the log gains a row no other client will ever hold, nothing goes on
+    -- the wire and nothing is printed -- and that id then guarantees a permanent checksum mismatch.
+    T.eq(#raider.env.KART_LootHistory, 0,
+        "and does not write a phantom award into its own log that no other client holds")
+    T.eq(raider.KART.LC.assignedWinners[84], nil, "nor a winner into its own council panel")
+    T.truthy(#said > 0, "and it says the award did not happen (C14)")
 end
 
 -- A parked request has to be visible. The manifest names /kart status as the thing a raid runs when
