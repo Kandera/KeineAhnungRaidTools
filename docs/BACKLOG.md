@@ -3995,8 +3995,8 @@ fail the same way, which the first pass over this ran together:
 |---|---|---|---|
 | trade window closing (20 min left) | `entry.timeoutWarned` | yes — `LC.pendingTrades` IS `store.pending` | was lost for good |
 | item still undecided | `LC.rollUndecidedWarned` | no, on purpose | warns again, correct already |
-| window ran out | entry removed | yes | row and reason both gone |
-| never keepable | entry removed | yes | row and reason both gone |
+| window ran out | entry removed | yes | fixed 2026-08-07 -- durable queue restores it |
+| never keepable | entry removed | yes | fixed 2026-08-07 -- durable queue restores it |
 
 The first row is now fixed and needed no decision reversed, because the warning removes nothing: the
 latch moves from the moment the line is DECIDED to the moment it is SAID (`TradeNotice`'s `onSaid`),
@@ -4012,6 +4012,20 @@ size bound, a staleness rule (does a line from two days ago still get printed?),
 locale is up, and the persisted-tables guard test. Deferred to the window before the first raid day of
 the season (2026-08-19), not because it is small but because it is a saved-variable change and those
 want their own gate.
+
+**Rows three and four fixed 2026-08-07.** `TradeNotice` gained a fourth argument, `persist`, set only
+at the two removal call sites (`LC_TRADE_EXPIRED`, `LC_TRADE_UNTRADEABLE`) — the two warnings are
+untouched, same call, same `onSaid`, same key. The moment one of those two is held back for combat,
+its text, dedupe key and a `time()` stamp are also written into a new `KART_LCTrades.notices` field,
+capped at 20 (oldest dropped — this is a sequence, not a rollID-keyed table, so unlike
+`LC.rollsSeenWhileUnaware` dropping the newest would be wrong) and pruned past the same four-hour
+`TRADE_TIMEOUT_SECONDS` window at load, following `Trade.RestorePersistedTrades`'s existing
+`pruneExpired` convention. At load: still in combat means the pull that lost the reminder row is still
+going, so the restored lines go back into `deferredNotices` for the ordinary `PLAYER_REGEN_ENABLED`
+drain to print, not straight into the fight; otherwise they print themselves five seconds later, so
+they do not vanish into the rest of the login output, and the store is cleared once queued for
+printing. The two warnings stay exactly as before: the ticker regenerates the 20-minutes-left one from
+`LC.pendingTrades` itself, and a restored copy could never carry `onSaid`'s latch anyway.
 
 
 ## B148 — FIXED 2026-08-06 — Auto-Pass read the previous item's announcement on a reused rollID

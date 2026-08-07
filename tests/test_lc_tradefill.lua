@@ -746,3 +746,134 @@ do
     T.eq(seen, 1, "the warning arrives once the pull is over, once: " .. after)
     T.eq(lm.KART.LC.pendingTrades[1].timeoutWarned, true, "and only now does it count as said")
 end
+
+-- The durable notice queue (B4's rest, closed 2026-08-0x) -------------------------------------------
+-- deferredNotices is memory-only, so a reload or disconnect DURING a pull used to lose whatever it
+-- was holding. For the two warnings that costs nothing -- both are regenerated from state that IS
+-- persisted (see the block above and B1's ticker). But LC_TRADE_EXPIRED and LC_TRADE_UNTRADEABLE fire
+-- because an entry was just REMOVED from LC.pendingTrades, and that removal survives a reload while
+-- the explanation for it did not: a row vanished from the trade reminder with nothing said. Only
+-- those two are written into KART_LCTrades now.
+
+-- The loss this fixes: an expired trade during a pull, a reload before the pull ends, and the
+-- explanation still reaching the player afterwards. Without persisting the queue this line is gone
+-- for good the moment the client reloads.
+do
+    local sim, lm = OwingSince(TRADE_WINDOW + 60) -- already past the window
+    KARTTEST.inCombat = true
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(#lm.KART.LC.pendingTrades, 0, "the dead obligation is dropped mid-pull, same as before (B47)")
+    T.eq(out, "", "and the line about it waits for the pull to end, same as before (B3)")
+
+    -- The client reloads before the pull is over.
+    local back = RaidSim.Reload(sim, "Bramor")
+    T.eq(#back.KART.LC.pendingTrades, 0, "the removal itself already survived a reload before this fix")
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(back, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find("Gloombind", 1, true),
+        "and now the explanation reaches the player too, once the pull ends: " .. after)
+end
+
+-- The two warnings are NOT persisted -- the five-minute ticker regenerates LC_TRADE_TIMEOUT_WARNING
+-- from LC.pendingTrades itself (which IS persisted), and a restored notice could never carry its
+-- onSaid closure, so entry.timeoutWarned would never latch and the line would queue again every five
+-- minutes. Writing it to the durable store as well would print it twice.
+do
+    local sim, lm = OwingSince(TRADE_WINDOW - 600) -- ten minutes of trade window left
+    -- OwingSince replaces LC.pendingTrades outright rather than inserting into it, so it does not
+    -- keep KART_LCTrades.pending pointed at the same table the way Trade.AddPendingTrade does. This
+    -- test reloads the client and needs the entry itself (not just a queued notice) to come back, so
+    -- the alias has to be restored by hand first.
+    lm.env.KART_LCTrades.pending = lm.KART.LC.pendingTrades
+    KARTTEST.inCombat = true
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    T.eq(#(lm.env.KART_LCTrades.notices or {}), 0,
+        "the 20-minutes-left warning does not go into the durable queue")
+
+    local back = RaidSim.Reload(sim, "Bramor")
+    T.eq(#(back.env.KART_LCTrades.notices or {}), 0, "still nothing durable after the reload")
+
+    KARTTEST.inCombat = false
+    local afterReload = Capture(function()
+        RaidSim.As(back, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.eq(afterReload, "", "nothing was waiting to be said -- it was never queued in the first place")
+
+    -- The ticker comes back round (this is what actually regenerates the warning).
+    local out = Capture(function() RaidSim.As(back, back.KART.LC.Trade.CheckTradeTimeouts) end)
+    local seen = select(2, out:gsub("Gloombind", ""))
+    T.eq(seen, 1, "and it is said exactly once after the reload, not twice: " .. out)
+end
+
+-- Stale entries are dropped -- a queued line describes a four-hour clock (TRADE_TIMEOUT_SECONDS), and
+-- once that clock has run out the explanation is moot. Same convention as
+-- Trade.RestorePersistedTrades's pruneExpired for store.pending/store.owed.
+do
+    local sim, lm = F.NewRaid()
+    lm.env.KART_LCTrades.notices = {
+        { text = "|cffff0000KART:|r stale " .. GLOVES, at = time() - (TRADE_WINDOW + 60) },
+    }
+    local back = RaidSim.Reload(sim, "Bramor")
+    T.eq(#(back.env.KART_LCTrades.notices or {}), 0, "the stale entry is dropped from the store at load")
+
+    local out = Capture(function() KARTTEST.AdvanceTime(6) end) -- past the 5-second print delay
+    T.eq(out, "", "and it never prints")
+end
+
+-- The cap holds and drops the oldest -- 21 removals in the same pull, one over the 20-entry guard
+-- rail. Unlike LC.rollsSeenWhileUnaware (keyed by rollID, no order, must drop the newest), this is a
+-- sequence: the entry queued first is the one dropped, and every entry queued after it survives.
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.bags = { [0] = { GLOVES, WEAPON } }
+    KARTTEST.bagTradeTime = { [GLOVES] = "bound", [WEAPON] = "bound" }
+
+    -- Processed backwards (#list down to 1), so entry 21 -- the WEAPON one -- is the first one
+    -- queued, and the twenty GLOVES entries after it are queued later.
+    local entries = {}
+    for i = 1, 20 do
+        entries[i] = { itemLink = GLOVES, winnerKey = alric.guid, rollID = i, lootedAt = time() - 60 }
+    end
+    entries[21] = { itemLink = WEAPON, winnerKey = alric.guid, rollID = 21, lootedAt = time() - 60 }
+    RaidSim.As(lm, function() lm.KART.LC.pendingTrades = entries end)
+
+    KARTTEST.inCombat = true
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.bagTradeTime = {}
+
+    local notices = lm.env.KART_LCTrades.notices or {}
+    T.eq(#notices, 20, "the durable queue caps at 20")
+    local sawOldest = false
+    for _, n in ipairs(notices) do
+        if n.text:find(WEAPON, 1, true) then sawOldest = true end
+    end
+    T.eq(sawOldest, false, "the oldest -- queued first -- is the one dropped")
+end
+
+-- A reload mid-pull does not print into the fight -- the whole reason this mechanism exists. Still in
+-- combat when Trade.RestorePersistedTrades runs, the restored lines belong back in the in-memory
+-- queue so the ordinary PLAYER_REGEN_ENABLED drain prints them, not straight into the pull.
+do
+    local sim, lm = OwingSince(TRADE_WINDOW + 60)
+    KARTTEST.inCombat = true
+    Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+
+    local back
+    local atReload = Capture(function() back = RaidSim.Reload(sim, "Bramor") end)
+    T.eq(atReload, "", "nothing prints at the moment of the reload itself")
+
+    local stillInCombat = Capture(function() KARTTEST.AdvanceTime(10) end)
+    T.eq(stillInCombat, "",
+        "and nothing prints while the fight is still going, even once the usual few-seconds-after-" ..
+        "load delay would have elapsed")
+
+    KARTTEST.inCombat = false
+    local after = Capture(function()
+        RaidSim.As(back, function() KARTTEST.FireEvent("PLAYER_REGEN_ENABLED") end)
+    end)
+    T.truthy(after:find("Gloombind", 1, true), "only once combat ends does it arrive: " .. after)
+end

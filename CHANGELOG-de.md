@@ -37,6 +37,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Deutlich weniger Addon-Traffic nach jedem Boss** — die Sende-Warteschlange des Lootmasters bleibt frei.
 - **`/kart status` zeigt deine lautesten Nachrichtentypen**, um Addon-Traffic im echten Raid einzugrenzen.
 - **Eine zweite Kopie desselben Gegenstands erreicht jetzt auch Spieler, die die Ankündigung verpasst haben.**
+- **Eine Handelserinnerung, die mitten im Kampf abgelaufen ist, erklärt auch nach einem Neuladen noch, warum** — statt kommentarlos zu verschwinden.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben
