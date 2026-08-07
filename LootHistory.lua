@@ -1628,6 +1628,7 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- same row every night. LH.AdmitEpoch above is the line, and it is drawn in a number that does
     -- not drift: an award decided before the wipe carries the pre-wipe epoch and is discarded by
     -- merge rule 2 whatever its timestamp says.
+
     -- Free text from another client, rendered raw into the history window and the export. Double the
     -- pipes so |c colour codes and |H hyperlinks can't be injected into a SavedVariable that is then
     -- displayed forever. (RC_REASON does the same on its own receive side.)
