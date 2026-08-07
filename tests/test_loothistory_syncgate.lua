@@ -294,7 +294,13 @@ do
     end)
 
     local joined = table.concat(lines, "\n")
-    T.truthy(joined:find("1", 1, true), "the status names the one parked request")
+    -- The parked line specifically, label and count together. This used to search the whole output
+    -- for the character "1", which "History epoch: 1" already supplies on its own -- so hardcoding
+    -- the parked count to zero, or deleting the line from LH.PrintStatus altogether, left the suite
+    -- green (mutation testing, 2026-08-07). A status line nobody reads is exactly the hold nobody can
+    -- see that this block exists to forbid.
+    T.truthy(joined:find(lm.KART.L.LH_STATUS_PARKED .. ": 1", 1, true),
+        "the status names the one parked request, on its own labelled line")
     T.truthy(joined:lower():find("hist"), "and says what it is about")
 end
 

@@ -106,12 +106,6 @@ end
 -- The absentee who comes back a week later ------------------------------------------------------
 do
     local sim, lm, _, raider = F.NewRaid()
-    RaidSim.As(raider, function()
-        raider.env.KART_LootHistory = {
-            { time = time() - 60, item = "item:1", winner = "Alric", winnerKey = "Player-1-A",
-              reason = "BIS", id = "1-aaa", epoch = 1 },
-        }
-    end)
     -- RaidSim.Join takes a member def and hands back a brand-new client (fresh env, nothing
     -- persisted -- see RaidSim.Join's own comment), so the old `raider` reference is a corpse the
     -- moment it rejoins; the reassignment is what makes the assertions below look at the client that
@@ -121,6 +115,21 @@ do
     RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
     KARTTEST.AdvanceTime(7 * 24 * 60 * 60)
     raider = RaidSim.Join(sim, member)
+
+    -- The log he comes back WITH, written onto the client that actually returns. This block used to
+    -- seed the client that LEFT, which RaidSim.Join then replaced -- so the entry never existed on
+    -- the machine being asserted about and the assertion below was reading a freshly booted, empty
+    -- history. Deleting that setup entirely left the whole suite green (mutation testing,
+    -- 2026-08-07), which is what "vacuous" means in practice. A real absentee's SavedVariables hold
+    -- last tier's rows at last tier's epoch, and that is the only thing there is to wipe.
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {
+        { time = time() - 7 * 24 * 60 * 60, item = GLOVES, winner = "Alric",
+          winnerKey = "Player-1-A", reason = "BIS", class = "MAGE", rollID = 5,
+          id = "last-tier-1", epoch = 1 },
+    }
+    T.eq(#raider.env.KART_LootHistory, 1, "he comes back still holding last tier's log")
+
     RaidSim.EnterWorld(sim, raider.name)
     RaidSim.Drain(sim, 90)
 

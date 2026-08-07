@@ -213,11 +213,13 @@ do
     -- transport splits it into several chunks, so a plain prefix match on the log finds nothing.
     local sent = #RaidSim.Messages(sim, "LC_HIST_BATCH")
     T.truthy(sent > 0, "the peer answers a catch-up request")
-    -- A bound on the ORDER of the answer, not on the batch size: how many entries fit under
-    -- PACK_MAX_BLOCK is decided by what they weigh once packed, so the number of batches moves with
-    -- the content. What must stay true is that it is a handful of messages and not one per award.
-    T.truthy(sent <= 6,
-        "eighty entries cost a handful of messages, not one per entry it happens to hold ("
+    -- What this fixture actually costs, not a round number with room above it. How many entries fit
+    -- under PACK_MAX_BLOCK is decided by what they weigh once packed, so the count does move with the
+    -- content -- but leaving headroom nobody measured is how a bound stops noticing anything: three
+    -- is what eighty entries at this entropy pack into today, so three is what is asserted, and a
+    -- change that makes the answer cost more has to be looked at rather than absorbed.
+    T.truthy(sent <= 3,
+        "eighty entries cost three messages, not one per entry it happens to hold ("
         .. sent .. ")")
     T.eq(#raider.env.KART_LootHistory, 80, "and all eighty still arrive")
 end
@@ -239,8 +241,13 @@ do
     RaidSim.Drain(sim, 30)
 
     T.eq(#raider.env.KART_LootHistory, 60, "all sixty awards arrive")
-    T.truthy(#RaidSim.Messages(sim, "LC_HIST_BATCH") <= 5,
-        "sixty awards cost a handful of messages, not sixty")
+    -- Three, which is the measured value. It was loosened to five during the fix wave for no reason
+    -- the measurement supports, and a bound that sits two above what it is watching is a bound that
+    -- has stopped watching. Names the count it saw, so a failure says what changed rather than only
+    -- that something did.
+    local sent60 = #RaidSim.Messages(sim, "LC_HIST_BATCH")
+    T.truthy(sent60 <= 3,
+        "sixty awards cost three messages, not sixty (" .. sent60 .. ")")
 end
 
 -- A long reason is no longer truncated --------------------------------------------------------------
