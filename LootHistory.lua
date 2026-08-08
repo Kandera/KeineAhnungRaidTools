@@ -1828,6 +1828,15 @@ function LH.HandleHistoryEntry(payload, senderKey)
     winner = winner:gsub("|", "||")
     reason = (reason or ""):gsub("|", "||")
     instance = (instance or ""):gsub("|", "||")
+    -- An all-digit instance name is refused outright, and this is not cosmetic. Nothing
+    -- GetInstanceInfo() can produce looks like this, so no honest client originates one -- but this
+    -- client STORES what a peer sent and EntryRecord re-sends it verbatim, which makes us the relay.
+    -- One crafted record with instance = "9999999" from a hostile group member, stored here, is later
+    -- re-sent to a 3.3.x peer whose parser expects a bare (%d+) in exactly that slot for the EPOCH --
+    -- and a bogus epoch from a loot owner is adopted by LH.AdmitEpoch/LH.AdoptEpoch, wiping every
+    -- entry below it. The field ordering is fail-closed for every name a real client produces (see
+    -- EntryRecord); this closes the one shape that is not, at the cost of a cosmetic field.
+    if instance:match("^%d+$") then instance = "" end
     diffID = tonumber(diffID); if diffID == 0 then diffID = nil end
     rollID = tonumber(rollID); if rollID == 0 then rollID = nil end
     if winnerKey == "" then winnerKey = nil end

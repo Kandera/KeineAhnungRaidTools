@@ -56,6 +56,13 @@ local REASON_POOL = { "BIS", "Mainspec", "Zweitspec, aber nur wenn niemand Mains
 local COLOR_POOL = { false, { r = 0.2, g = 0.8, b = 0.2 }, { r = 0.9, g = 0.7, b = 0.1 },
                      { r = 0.4, g = 0.4, b = 0.9 } }
 local DIFFICULTY_POOL = { 14, 15, 16 }
+-- Which raid each award happened in. Several, not one: Midnight ships several raids with few bosses
+-- each and the guild moves between them in an evening (docs/MANIFEST.md, the operating reality), so a
+-- night's log really does span more than one name -- and the name is a locale-dependent string that
+-- goes on every record, which is exactly the kind of field the packed budget below is measuring. A
+-- fixture that left it out sized a record layout no 3.4.0 raid will ever send.
+local INSTANCE_POOL = { { "The Voidspire", 2912 }, { "March on Quel'Danas", 2802 },
+                        { "Der Hof der Sternenrufer", 2810 } }
 
 -- n entries with that spread. `tag` keeps two fixtures' ids apart within one run.
 local function VariedEntries(n, tag)
@@ -63,6 +70,10 @@ local function VariedEntries(n, tag)
     for i = 1, n do
         local w = WINNER_POOL[(i - 1) % #WINNER_POOL + 1]
         local at = time() - 7200 + i * 7
+        -- Not the same modulus as the winner or the reason: a raid is a run of awards, not a value
+        -- that alternates per entry, and a field that changes in lockstep with another one is
+        -- something deflate folds away for free.
+        local inst = INSTANCE_POOL[math.floor((i - 1) / 17) % #INSTANCE_POOL + 1]
         out[i] = {
             time = at,
             item = ITEM_POOL[(i - 1) % #ITEM_POOL + 1],
@@ -70,6 +81,7 @@ local function VariedEntries(n, tag)
             reason = REASON_POOL[(i - 1) % #REASON_POOL + 1],
             color = COLOR_POOL[(i - 1) % #COLOR_POOL + 1] or nil,
             difficultyID = DIFFICULTY_POOL[(i - 1) % #DIFFICULTY_POOL + 1],
+            instance = inst[1], instanceID = inst[2],
             rollID = 100 + i,
             -- The shape LH.NewAwardID really mints: a timestamp plus six hex digits. That is most of
             -- a record's incompressible content, and a constant prefix with a counter after it is

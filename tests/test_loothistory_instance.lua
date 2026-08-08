@@ -7,6 +7,14 @@
 -- long after the item dropped, once the lootmaster may have ported out or zoned, and a live read at
 -- that point would silently write the wrong raid -- or none at all -- onto an award that plainly
 -- belongs to the one it dropped in.
+--
+-- Note what this field is NOT: converged. Each client snapshots its own GetInstanceInfo(), so two
+-- clients can legitimately hold different names for the same award id -- somebody standing in the
+-- previous raid's entrance when the item drops writes that raid, and nothing ever reconciles the two
+-- (LH.HistoryChecksum sums ids only, and LH.HandleHistoryEntry dedups on the id, so whoever logged it
+-- first keeps their answer). Harmless while it is a label nobody acts on, and written down here
+-- because the Companion is about to render it: a disagreement about this field is expected, not a
+-- defect to hunt.
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
@@ -177,6 +185,17 @@ do
     T.eq(tonumber(oldEpochSlot), QUELDANAS.mapID,
         "id-before-name WOULD have let an old client read a real instanceID as the epoch -- " ..
         "confirming name-before-id is the safe order, not an arbitrary one")
+
+    -- And the ORDINARY record, which is the one an old client will actually be handed most of the
+    -- time: no instance known, so the field is empty. Empty is not a name, and the checks above say
+    -- nothing about it -- but it has to fail the old pattern for the same reason, since an empty slot
+    -- where (%d+) is expected is the only thing standing between an old client and reading the
+    -- instanceID behind it as an epoch.
+    local emptyRecord = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:some-id:%s:%d:%d:%s",
+        time(), "", 0, 1, GLOVES)
+    T.eq((emptyRecord:match(OLD_PATTERN)), nil,
+        "a record with NO instance fails an old client's pattern too -- fail-closed is the whole " ..
+        "field layout, not just the case where a raid name happens to be known")
 end
 
 -- Wire normalization: "0" and "" both fold to nil on receive, matching the snapshot side -------------
@@ -192,6 +211,80 @@ do
     T.truthy(stored, "the entry was stored")
     T.eq(stored.instance, nil, "an empty instance field on the wire is stored as absent")
     T.eq(stored.instanceID, nil, "a zero instanceID on the wire is stored as absent, same as difficultyID")
+end
+
+-- ===================================================================================================
+-- What arrives on the wire is free text from a peer, and it lands in a SavedVariable kept forever and
+-- rendered by the history window and (shortly) the Companion. Two separate things are pinned here,
+-- because the guard can fail in two ways: by being deleted, and by being moved.
+-- ===================================================================================================
+do
+    InVoidspire()
+    local _, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+
+    -- Escape codes, no colons -- the record is hand-built here, so a colon in this field would shift
+    -- every field behind it and this would be a test about field alignment instead. Colour codes are
+    -- the realistic payload anyway: a |c or |H that survives unescaped is a permanent hyperlink in a
+    -- window that renders this string for the rest of the addon's life.
+    local NASTY = "|cffff0000Raid|Hitem|h|r"
+    local record = string.format("%d:16:73:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "inject-check", NASTY, QUELDANAS.mapID, 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
+
+    local stored = lm.env.KART_LootHistory[1]
+    T.truthy(stored, "the entry was stored")
+    T.eq(stored.instance, (NASTY:gsub("|", "||")),
+        "every pipe in the instance name is doubled on receive, exactly like winner and reason -- " ..
+        "an escape code stored raw here is injected into a SavedVariable that is displayed forever")
+
+    -- ...and the guard has to run BEFORE the empty-string fold, not after it. Moved below, the fold's
+    -- nil would come back out of `(instance or ""):gsub(...)` as an empty STRING, and every award with
+    -- no instance would carry "" instead of being absent -- which is what the whole normalization
+    -- below it exists to prevent, and what the export and the Companion would then have to special-case.
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    local blank = string.format("%d:16:74:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "inject-order-check", "", 0, 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(blank, raider.guid) end)
+    T.eq(lm.env.KART_LootHistory[1].instance, nil,
+        "an absent instance is still absent, not an empty string -- the pipe guard runs before the " ..
+        "empty-fold, not after it")
+end
+
+-- An all-digit instance name is blanked on receive, because this client STORES and RE-SENDS whatever a
+-- peer sent it -----------------------------------------------------------------------------------
+--
+-- The field ordering is fail-closed for everything GetInstanceInfo() can produce, so no honest client
+-- originates one of these. The hole is the relay: a hostile group member whispers one crafted record
+-- with instance = "9999999", a 3.4.0 client stores it unvalidated, and EntryRecord later re-sends it
+-- verbatim. A 3.3.x peer answering a catch-up from that client reads 9999999 in its own epoch slot --
+-- and a bogus epoch from a loot owner is adopted by LH.AdmitEpoch/LH.AdoptEpoch, wiping every entry
+-- below it. Blanking it costs a cosmetic field on one award.
+do
+    InVoidspire()
+    local _, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+
+    local EPOCH_SHAPED = "9999999"
+    local record = string.format("%d:16:75:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "digit-instance", EPOCH_SHAPED, QUELDANAS.mapID, 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
+
+    local stored = lm.env.KART_LootHistory[1]
+    T.truthy(stored, "the record is still stored -- the award is real, only the field is not")
+    T.eq(stored.instance, nil,
+        "an all-digit instance name is refused on receive, so this client can never re-send one that " ..
+        "an older peer would read as an epoch")
+    T.eq(stored.instanceID, QUELDANAS.mapID, "the fields around it are untouched")
+
+    -- The one that proves it is not simply refusing digits everywhere: a real raid name that merely
+    -- CONTAINS digits is legitimate and must survive.
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    local mixed = string.format("%d:16:76:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "mixed-instance", "Ulduar 25", QUELDANAS.mapID, 1, GLOVES)
+    RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(mixed, raider.guid) end)
+    T.eq(lm.env.KART_LootHistory[1].instance, "Ulduar 25",
+        "a raid name that merely contains digits still arrives whole")
 end
 
 -- ===================================================================================================
@@ -305,6 +398,54 @@ do
         T.eq(snap.name, nil, "...but no name, since difficultyID is 0 (not really an instance)")
         T.eq(snap.id, nil, "...and no id either, even though GetInstanceInfo answers a real mapID")
     end)
+end
+
+-- All four doors into the flow take the snapshot, not just LC.OnStartLootRoll -------------------------
+--
+-- Each of the three below is reached on a client the others are not, so a missing call in any one of
+-- them is a whole class of client with no raid on its awards -- and every one of those awards is
+-- permanent and checksum-invisible (see the vote-deadline block above). LC.HandleStart in particular
+-- is the client Blizzard raised no roll on at all: dead, released, out of range -- the client C13 and
+-- C14 were written about. The manual pair is the maintainer's own three-man Manifest route.
+do
+    -- LC.HandleStart: Alric never gets a START_LOOT_ROLL, so LC.OnStartLootRoll cannot have run on
+    -- his client and the announcement is the only thing that reaches him.
+    InVoidspire()
+    local sim, _, _, raider = F.NewRaid()
+    F.Drop(sim, 84, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2) -- the owner's collection window, then the announcement
+    RaidSim.Drain(sim, 10)
+
+    T.eq(raider.KART.LC.rollItems[84] ~= nil, true,
+        "the raider Blizzard gave no roll window to still learned about the item")
+    local snap = raider.KART.LC.rollRaidSnapshot[84]
+    T.truthy(snap, "...and LC.HandleStart snapshotted the raid for him too")
+    T.eq(snap.name, VOIDSPIRE.name, "...the right one")
+    T.eq(snap.id, VOIDSPIRE.mapID, "...id included")
+end
+
+do
+    -- LC.StartManualRoll (the lootmaster's own /kart add) and LC.HandleManualStart (every peer's side
+    -- of it). No Blizzard roll exists anywhere for a manual item, so these two are the only sources.
+    InVoidspire()
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(GLOVES) end)
+    RaidSim.Drain(sim, 10)
+
+    local rollID = lm.KART.LC.voteListRolls[1]
+    T.truthy(rollID, "the manual item is on the lootmaster's list")
+
+    local own = lm.KART.LC.rollRaidSnapshot[rollID]
+    T.truthy(own, "LC.StartManualRoll snapshotted the raid on the client that typed the command")
+    T.eq(own.name, VOIDSPIRE.name, "...the right one")
+    T.eq(own.id, VOIDSPIRE.mapID, "...id included")
+
+    for _, c in ipairs({ council, raider }) do
+        local peer = c.KART.LC.rollRaidSnapshot[rollID]
+        T.truthy(peer, "LC.HandleManualStart snapshotted it on " .. c.name .. " as well")
+        T.eq(peer.name, VOIDSPIRE.name, c.name .. " has the right raid")
+        T.eq(peer.id, VOIDSPIRE.mapID, c.name .. " has the id too")
+    end
 end
 
 -- Fallback: no snapshot exists for this roll (a manually-logged award with no matching roll, or a
