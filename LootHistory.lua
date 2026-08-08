@@ -1807,9 +1807,11 @@ function LH.HandleHistoryEntry(payload, senderKey)
         if cr then color = {r = tonumber(cr) / 255, g = tonumber(cg) / 255, b = tonumber(cb) / 255} end
     end
 
-    -- The sender may have sent a bare item string (its full link was too long for one addon
-    -- message). Rebuild a full, locally-localized link so display/tooltip/icon work; if the item
-    -- isn't cached yet, store the string now and upgrade the entry in place once it loads.
+    -- The sender may have sent a bare item string. EntryRecord writes e.item verbatim and never
+    -- compacts it, so this is not the current sender's doing — it is an older client's format, or an
+    -- entry restored from an older SavedVariables file, arriving as-is. Rebuild a full,
+    -- locally-localized link so display/tooltip/icon work; if the item isn't cached yet, store the
+    -- string now and upgrade the entry in place once it loads.
     local needsRebuild = item ~= "" and not KAUtil.IsRealItemLink(item) and item:match("^item:") ~= nil
     local itemLink = item
     if needsRebuild then
@@ -1834,11 +1836,12 @@ function LH.HandleHistoryEntry(payload, senderKey)
         return KAUtil.GetItemString(link) or link:match("^item:.+")
     end
     local incomingStr = ItemKey(itemLink)
-    -- The sender drops the item field entirely when even the compact item string won't fit the
-    -- 255-byte cap (see LH.HandleHistoryRequest). An empty item can't be compared by item at all:
-    -- matching on `e.item == ""` would both miss the copy we already hold under its real link (→
-    -- duplicate) and collide with any other item-less award for the same winner (→ wrongly dropped).
-    -- Fall back to rollID, which identifies the award on its own.
+    -- An empty item can still arrive: EntryRecord forwards whatever the stored entry's own item
+    -- field holds, and that field can itself be empty (an entry logged with no item, or one restored
+    -- from an older SavedVariables file). An empty item can't be compared by item at all: matching on
+    -- `e.item == ""` would both miss the copy we already hold under its real link (→ duplicate) and
+    -- collide with any other item-less award for the same winner (→ wrongly dropped). Fall back to
+    -- rollID, which identifies the award on its own.
     local itemUnknown = (itemLink == "")
     local function SameItemAs(e)
         if itemUnknown then return rollID ~= nil and e.rollID == rollID end
@@ -1918,25 +1921,31 @@ function LH.HandleHistoryEntry(payload, senderKey)
         KART.LH.Refresh()
     end
 
-    -- Item wasn't cached — once it loads, swap the bare string for a real link in place.
-    if needsRebuild and not KAUtil.IsRealItemLink(itemLink) then
-        local itemID = tonumber(item:match("^item:(%d+)"))
-        if itemID then
-            Item:CreateFromItemID(itemID):ContinueOnItemLoad(function()
-                local full = select(2, C_Item.GetItemInfo(item))
-                if not full then return end
-                for _, e in ipairs(KART_LootHistory or {}) do
-                    local sameWinner = (winnerKey and e.winnerKey == winnerKey) or (e.winner == winner)
-                    if e.time == t and sameWinner and e.item == item then
-                        e.item = full
-                        break
-                    end
+    -- Item wasn't cached — once it loads, swap the bare string for a real link in place. Located by
+    -- id, not by holding a reference to the table or the index it was inserted at: by the time this
+    -- fires the entry may already be gone (a revoke via LH.RemoveHistoryForRoll, a raid-wide wipe via
+    -- LH.ClearHistory, or an eviction by TrimHistory), and indices shift under all three. If the id
+    -- can't be found any more, do nothing — quietly, same as any other stale callback.
+    --
+    -- Only entries carrying an id can be tracked this way; a payload with none (an older sender) is
+    -- left as the bare string it arrived as rather than risk matching the wrong row.
+    if needsRebuild and not KAUtil.IsRealItemLink(itemLink) and id and id ~= "" then
+        local awardID = id
+        Item:CreateFromItemLink(item):ContinueOnItemLoad(function()
+            local full = select(2, C_Item.GetItemInfo(item))
+            if not full then return end
+            for _, e in ipairs(KART_LootHistory or {}) do
+                -- Still the bare string we stored: another sync may have delivered a full link for
+                -- this same award in the meantime, and that one wins — this must not clobber it.
+                if e.id == awardID and e.item == item then
+                    e.item = full
+                    break
                 end
-                if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
-                    KART.LH.Refresh()
-                end
-            end)
-        end
+            end
+            if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
+                KART.LH.Refresh()
+            end
+        end)
     end
 end
 
