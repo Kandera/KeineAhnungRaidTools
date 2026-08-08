@@ -24,6 +24,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Das Leeren der Loot-History gilt jetzt für den ganzen Raid, und nur der Lootmaster kann es auslösen.** Abwesende Raider werden beim nächsten Beitritt ebenfalls geleert.
 - **Der Loot-History-Abgleich ist schneller und kommt vollständig an.** Lange Begründungen und Item-Links werden unterwegs nicht mehr gekürzt.
 - **Die Lootverteilung bleibt schnell, auch wenn die Loot-History im Hintergrund noch aufholt.**
+- **Der Loot-History-Export kann jetzt weglassen, was du schon exportiert hast.**
 
 ### Behoben
 - **Ein Neuladen fragt den Lootmaster nicht mehr, ob er eine laufende Session starten will**, und beendet sie nicht mehr für den Raid.

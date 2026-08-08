@@ -70,6 +70,13 @@ Two deferred minors, worth carrying rather than fixing now: `LH.GateOpen` is an 
 tracked rolls, called once a second while a request is parked; and the `LC_HIST_EPOCH` handler touches
 epoch state directly instead of going through the shared `LH.AdmitEpoch`.
 
+**2026-08-08:** Loot history export cut. Touches C8 and C14. The suite covers the three states of the
+export mark, that the cut ignores the window filters while "everything" still respects them, that
+the mark neither reaches the wire nor the exported JSON, that opening the dialog marks nothing, and
+that the mark survives a reload. Still owed: confirming in the game that a marked export really does
+import into WoWUtils without duplicates — the suite can prove what the addon emits, not what the
+other end accepts.
+
 ## Reading this file
 
 **Every heading carries its own status**, so "what is still open?" is one look at the headings and

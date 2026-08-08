@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clearing the loot history now clears it for the whole raid, and only the lootmaster can do it.** Raiders who were away are cleared too, the next time they join.
 - **The loot history catch-up is faster and arrives complete.** Long reasons and item links are no longer shortened on the way.
 - **Loot distribution stays quick even while the loot history is catching up in the background.**
+- **The loot history export can now leave out everything you have already exported.**
 
 ### Fixed
 - **A reload no longer asks the lootmaster to start a session that is already running**, and no longer ends it for the raid.
