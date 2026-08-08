@@ -543,6 +543,21 @@ function _G.CreateFrame(_, name, parent, _)
     function f:EnableKeyboard(on) keyboardEnabled = on ~= false end
     function f:IsKeyboardEnabled() return keyboardEnabled end
 
+    -- A button's enabled state is real for the same reason as alpha above: the export dialog's
+    -- mark button disables itself when there is nothing to mark, and "is it disabled" has to be
+    -- answerable, or a test asking the question measures the always-truthy catch-all instead.
+    local enabled = true
+    function f:Enable() enabled = true end
+    function f:Disable() enabled = false end
+    function f:IsEnabled() return enabled end
+    -- Click() delivers a click the way the game does: a disabled button, or one with the mouse
+    -- disabled, never gets one, so calling it is no stronger an act than a player is capable of.
+    function f:Click(button)
+        if not enabled or not mouseEnabled then return end
+        local onClick = f:GetScript("OnClick")
+        if onClick then onClick(f, button or "LeftButton") end
+    end
+
     -- Getters that must answer with something other than a frame, or callers that build strings and
     -- run loops from them go wrong in ways that look nothing like their cause -- a name concatenated
     -- into a lookup, a region count driving a for loop.

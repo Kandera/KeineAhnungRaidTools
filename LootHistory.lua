@@ -260,6 +260,49 @@ function LH.BuildRCLootCouncilJSON(entries)
     return "[" .. table.concat(objects, ",") .. "]"
 end
 
+-- Recomputes everything the dialog displays from the history, in one place, so the open path, the tab
+-- switch and the post-marking update cannot drift apart.
+function LH.RefreshExportDialog()
+    local f = LH.exportDialog
+    if not f then return end
+
+    local newOnes  = LH.UnexportedEntries()
+    local filtered = LH.FilteredEntries()
+
+    f.btnNew.text:SetText(string.format(KART.L.LH_EXPORT_TAB_NEW, #newOnes))
+    f.btnAll.text:SetText(string.format(KART.L.LH_EXPORT_TAB_ALL, #filtered))
+
+    local r, g, b = KART.UI:AccentColor()
+    local active, idle = (f.mode == "new") and f.btnNew or f.btnAll,
+                         (f.mode == "new") and f.btnAll or f.btnNew
+    active:SetBackdropBorderColor(r, g, b, 1)
+    idle:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local shown = (f.mode == "new") and newOnes or filtered
+    local json  = LH.BuildRCLootCouncilJSON(shown)
+    f.editBox.text = json
+    f.editBox:SetText(json)
+
+    -- The count rides in the label so the button cannot be read as "mark everything".
+    f.btnMark.text:SetText(string.format(KART.L.LH_EXPORT_MARK, #newOnes))
+    f.btnMark:SetShown(f.mode == "new")
+    -- Disabled rather than hidden at zero: a button that disappears raises the question of whether it
+    -- was missed. Dimming the label too, because the backdrop does not grey itself out.
+    if #newOnes > 0 then
+        f.btnMark:Enable()
+        f.btnMark.text:SetTextColor(1, 1, 1)
+    else
+        f.btnMark:Disable()
+        f.btnMark.text:SetTextColor(0.4, 0.4, 0.4)
+    end
+end
+
+function LH.SetExportMode(mode)
+    if not LH.exportDialog then return end
+    LH.exportDialog.mode = mode
+    LH.RefreshExportDialog()
+end
+
 -- Hand-rolled dialog (not a StaticPopup, same reasoning as LC.ShowOfficerNoteDialog in
 -- LootCouncil.lua) showing the export text in a read-only, pre-selected edit box so the user
 -- can Ctrl+C it out — WoW addons have no filesystem access to write a file directly.
@@ -287,8 +330,22 @@ function LH.ShowExportDialog()
         f.title:SetText(KART.L.LH_EXPORT_TITLE)
         KART.UI:RegisterLabel(f.title)
 
+        -- The two sides, as buttons rather than a dropdown: both counts have to be readable without
+        -- opening anything. Together they are the only place the player can see whether the
+        -- bookkeeping still adds up -- "New (0) · All (487)" means everything is exported, while
+        -- "New (0) · All (0)" means the log was cleared. Two numbers, two cases, no extra text.
+        f.btnNew = KART.UI:CreateModernButton(f, "")
+        f.btnNew:SetSize(120, 22)
+        f.btnNew:SetPoint("TOPLEFT", 15, -32)
+        f.btnNew:SetScript("OnClick", function() LH.SetExportMode("new") end)
+
+        f.btnAll = KART.UI:CreateModernButton(f, "")
+        f.btnAll:SetSize(120, 22)
+        f.btnAll:SetPoint("LEFT", f.btnNew, "RIGHT", 6, 0)
+        f.btnAll:SetScript("OnClick", function() LH.SetExportMode("all") end)
+
         f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        f.hint:SetPoint("TOP", 0, -32)
+        f.hint:SetPoint("TOP", 0, -58)
         f.hint:SetText(KART.L.LH_EXPORT_HINT)
         f.hint:SetTextColor(0.6, 0.6, 0.6)
         KART.UI:RegisterLabel(f.hint)
@@ -296,7 +353,7 @@ function LH.ShowExportDialog()
         -- Same inset/border colors as KART.UI:CreateStyledEditBox (the multi-line export box lives
         -- inside a ScrollFrame, so the visual box is this frame); focus accent mirrored below.
         local scrollBG = CreateFrame("Frame", nil, f, "BackdropTemplate")
-        scrollBG:SetPoint("TOPLEFT", 15, -52)
+        scrollBG:SetPoint("TOPLEFT", 15, -78)
         scrollBG:SetPoint("BOTTOMRIGHT", -15, 44)
         KART.UI:SetPixelBackdrop(scrollBG, {bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
         scrollBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
@@ -339,14 +396,21 @@ function LH.ShowExportDialog()
         btnClose:SetPoint("BOTTOM", 0, 12)
         btnClose:SetScript("OnClick", function() f:Hide() end)
 
+        f.btnMark = KART.UI:CreateModernButton(f, "")
+        f.btnMark:SetSize(190, 26)
+        f.btnMark:SetPoint("BOTTOMLEFT", 15, 12)
+        f.btnMark:SetScript("OnClick", function()
+            LH.MarkExported(LH.UnexportedEntries())
+            LH.RefreshExportDialog()
+        end)
+
         LH.exportDialog = f
         if KART.UpdateStyles then KART.UpdateStyles() end
     end
 
     local f = LH.exportDialog
-    local json = LH.BuildRCLootCouncilJSON()
-    f.editBox.text = json
-    f.editBox:SetText(json)
+    f.mode = "new"
+    LH.RefreshExportDialog()
     f:Show()
     f.editBox:SetFocus()
     f.editBox:HighlightText()

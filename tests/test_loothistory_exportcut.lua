@@ -174,3 +174,97 @@ do
     T.eq(json:find('"player":"Sinja"', 1, true), nil, "and nothing outside that list appears")
     As(function() LH.filters.playerIds = nil end)
 end
+
+-- The dialog. It opens on New, because that is the answer to the question the player came with.
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000002, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "dlg-1", epoch = 1, exported = false },
+            { time = 1785000001, item = "item:1234", winner = "Sinja", winnerKey = "K-S",
+              reason = "Upgrade", class = "MAGE", id = "dlg-2", epoch = 1, exported = true },
+        }
+        LH.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+        LH.ShowExportDialog()
+    end)
+    local f = LH.exportDialog
+
+    T.eq(f.mode, "new", "the dialog opens on the New side")
+    T.truthy(f.editBox.text:find('"player":"Alric"', 1, true), "showing the award still to export")
+    T.eq(f.editBox.text:find('"player":"Sinja"', 1, true), nil, "and not the one already exported")
+    T.truthy(f.btnMark:IsShown(), "the mark button is there on New")
+    T.truthy(f.btnMark:IsEnabled(), "and it is usable, because there is one to mark")
+end
+
+-- Switching to All shows everything and takes the mark button away ----------------------------------
+do
+    As(function() LH.SetExportMode("all") end)
+    local f = LH.exportDialog
+
+    T.eq(f.mode, "all", "the mode follows the switch")
+    T.truthy(f.editBox.text:find('"player":"Sinja"', 1, true), "All shows the exported award too")
+    T.eq(not f.btnMark:IsShown(), true,
+        "and the mark button is gone -- All follows the window filters, so marking from there would " ..
+        "cover only the filtered slice")
+end
+
+-- Nothing new: the button stays visible but cannot be pressed ---------------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000000, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "dlg-3", epoch = 1, exported = true },
+        }
+        LH.ShowExportDialog()
+    end)
+    local f = LH.exportDialog
+
+    T.eq(f.mode, "new", "the dialog opens on New again")
+    T.eq(not f.btnMark:IsEnabled(), true, "with nothing to mark, the button is disabled")
+    T.truthy(f.btnMark:IsShown(), "but still visible -- a button that vanishes reads as one you missed")
+end
+
+-- Opening the dialog marks nothing ------------------------------------------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000000, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "dlg-4", epoch = 1, exported = false },
+        }
+        LH.ShowExportDialog()
+        LH.exportDialog:Hide()
+    end)
+    T.eq(me.env.KART_LootHistory[1].exported, false,
+        "opening and closing the dialog leaves the award unexported -- the addon cannot know it was copied")
+end
+
+-- Pressing the button marks what is shown and empties the New side ----------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000000, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "dlg-5", epoch = 1, exported = false },
+        }
+        LH.ShowExportDialog()
+        local realPrint = me.env.print
+        me.env.print = function() end
+        LH.exportDialog.btnMark:Click()
+        me.env.print = realPrint
+    end)
+    local f = LH.exportDialog
+
+    T.eq(me.env.KART_LootHistory[1].exported, true, "the award is marked")
+    T.eq(f.editBox.text, "[]", "the New side is empty afterwards")
+    T.eq(not f.btnMark:IsEnabled(), true, "and the button has nothing left to do")
+end
+
+-- After a raid-wide wipe both counts read zero -------------------------------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {}
+        LH.ShowExportDialog()
+    end)
+    local f = LH.exportDialog
+    T.eq(#As(LH.UnexportedEntries), 0, "nothing is new")
+    T.eq(#As(LH.FilteredEntries), 0, "and nothing is there at all -- the two counts tell the cases apart")
+end
