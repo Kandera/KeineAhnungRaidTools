@@ -338,6 +338,12 @@ function LH.ShowExportDialog()
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
         f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
         KART.RegisterEscapeFrame(f)
+        -- Cleared on every hide, whichever of the three paths caused it (the Close button, Escape via
+        -- KART.RegisterEscapeFrame, or the edit box's own OnEscapePressed below) -- OnHide is the one
+        -- place all three converge. A stashed render can outlive the history it was rendered from, and
+        -- marking it after the dialog is shown again would report a number for entries that no longer
+        -- exist.
+        f:SetScript("OnHide", function() f.markable = nil end)
 
         f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         f.title:SetPoint("TOP", 0, -14)
@@ -414,7 +420,13 @@ function LH.ShowExportDialog()
         f.btnMark:SetSize(190, 26)
         f.btnMark:SetPoint("BOTTOMLEFT", 15, 12)
         f.btnMark:SetScript("OnClick", function()
-            LH.MarkExported(f.markable)
+            -- f.markable can be nil here: a wipe invalidates it even while the dialog stays open
+            -- (InvalidateExportMarkable, called from LH.ClearHistory / LH.AdoptEpoch), and OnHide above
+            -- covers the close/reopen case. Skipping LH.MarkExported entirely rather than calling it
+            -- with an empty list matters because that call is the one that prints a count, and a press
+            -- that never had anything real to mark must not print one. RefreshExportDialog still runs
+            -- either way, so the labels catch up to the current state regardless.
+            if f.markable then LH.MarkExported(f.markable) end
             LH.RefreshExportDialog()
         end)
 
@@ -543,6 +555,17 @@ end
 --
 -- Every refusal is SAID. The confirmation dialog otherwise appears to work and then does nothing,
 -- which is the same class of silence as everything else this module exists to stop (C14).
+--
+-- A wipe (here or in LH.AdoptEpoch below) has to invalidate the export dialog's stashed f.markable
+-- even while the dialog stays open across it: LH.Refresh does not reach this dialog by design (see
+-- LH.RefreshExportDialog), so without this a wipe would leave f.markable pointing at entries that are
+-- no longer in KART_LootHistory at all, and a press would mark those orphans and report a count for a
+-- history that is already empty. Only the stale reference is cleared here, not the rendered text or
+-- labels -- redrawing what is on screen mid-view is LH.RefreshExportDialog's call, not this one's.
+local function InvalidateExportMarkable()
+    if LH.exportDialog then LH.exportDialog.markable = nil end
+end
+
 function LH.ClearHistory()
     if not IsInGroup() then
         print("|cffff0000KART:|r " .. KART.L.LH_CLEAR_NEEDS_GROUP)
@@ -561,6 +584,7 @@ function LH.ClearHistory()
     end
     KART_LootHistoryEpoch = (KART_LootHistoryEpoch or 1) + 1
     wipe(KART_LootHistory)
+    InvalidateExportMarkable()
     -- Kept as a plain "cleared on ..." stamp and nothing else (design §6). Nothing reads it any more:
     -- it was the sync watermark, and as a watermark it was our own clock being compared against other
     -- clients' -- see LH.HandleHistoryEntry and LH.RequestHistorySync for what that cost. The epoch
@@ -588,6 +612,7 @@ function LH.AdoptEpoch(epoch, originatorKey)
     for i = #KART_LootHistory, 1, -1 do
         if (KART_LootHistory[i].epoch or 0) < epoch then table.remove(KART_LootHistory, i) end
     end
+    InvalidateExportMarkable()
     LH.Refresh()
     return true
 end

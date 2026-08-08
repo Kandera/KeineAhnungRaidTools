@@ -448,3 +448,64 @@ do
     T.eq(f.btnAll.text:GetText(), string.format(lm4.KART.L.LH_EXPORT_TAB_ALL, 0),
         "and so does All -- together the two numbers say the log was cleared, not that all is exported")
 end
+
+-- Left open across a wipe: the button must not resurrect what was rendered before it -----------------
+--
+-- LH.Refresh does not reach this dialog by design (see LH.RefreshExportDialog), so a wipe that lands
+-- while the dialog is open never touches its stashed f.markable on its own. Before this fix that stash
+-- still held entries LH.ClearHistory had just removed from KART_LootHistory, and pressing Mark set
+-- exported = true on those orphans and printed a count for a history that was already empty. Driven
+-- through LH.ClearHistory, the real wipe, for the same reason as the wipe test above: a hand-emptied
+-- table would exercise neither the epoch bump nor the invalidation this fix adds.
+do
+    local lines = {}
+    local _, lm6 = F.NewRaid()
+    local LH6 = lm6.KART.LH
+    RaidSim.As(lm6, function()
+        lm6.env.KART_LootHistory = {
+            { time = 1785000000, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "leftopen-1", epoch = 1, exported = false },
+        }
+        LH6.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+        LH6.ShowExportDialog()
+    end)
+    local f = LH6.exportDialog
+
+    RaidSim.As(lm6, function()
+        LH6.ClearHistory()
+        local realPrint = lm6.env.print
+        lm6.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        f.btnMark:Click()
+        lm6.env.print = realPrint
+    end)
+
+    T.eq(#lm6.env.KART_LootHistory, 0, "the wipe really emptied the log")
+    T.eq(#lines, 0, "and the press that follows prints nothing -- there was nothing real left to mark")
+end
+
+-- Close and reopen: the ordinary flow still marks what it should --------------------------------------
+--
+-- The fix above must not cost the normal path anything: closing and reopening the dialog re-renders
+-- and re-stashes a fresh list (LH.ShowExportDialog -> LH.RefreshExportDialog), so a press right after
+-- still marks exactly what is on screen.
+do
+    local lines = {}
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000000, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "reopen-1", epoch = 1, exported = false },
+        }
+        LH.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+        LH.ShowExportDialog()
+        LH.exportDialog:Hide()
+        LH.ShowExportDialog()
+        local realPrint = me.env.print
+        me.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        LH.exportDialog.btnMark:Click()
+        me.env.print = realPrint
+    end)
+
+    T.eq(me.env.KART_LootHistory[1].exported, true, "the award is marked after a close/reopen cycle")
+    T.eq(lines[1], "|cffff0000KART:|r " .. string.format(KART.L.LH_EXPORT_MARKED, 1),
+        "and the line reports the one that was actually marked")
+end
