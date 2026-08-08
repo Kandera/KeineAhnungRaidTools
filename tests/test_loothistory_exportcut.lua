@@ -68,3 +68,109 @@ do
     raider = RaidSim.Reload(sim3, raider.name)
     T.eq(raider.env.KART_LootHistory[1].exported, true, "the export mark survives a reload")
 end
+
+-- The cut ignores the window filters; "everything" keeps respecting them.
+--
+-- This is the one rule worth stating twice, because the alternative fails silently. Filter to one
+-- player, press the cut, and a filter-respecting cut marks only that player's awards -- the rest of
+-- the same evening stays unmarked and comes round again next time, while the player believes the
+-- night is done. "Everything" is a VIEW and may follow the filters; the cut is BOOKKEEPING and must
+-- not depend on how a filter happens to be set.
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000003, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "cut-1", epoch = 1, exported = false },
+            { time = 1785000002, item = GLOVES, winner = "Sinja", winnerKey = "K-S",
+              reason = "Upgrade", id = "cut-2", epoch = 1, exported = false },
+            { time = 1785000001, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "cut-3", epoch = 1, exported = true },
+            { time = 1785000000, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "cut-4", epoch = 1 },   -- legacy: no field at all
+        }
+        LH.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+    end)
+
+    T.eq(#As(LH.UnexportedEntries), 2, "only the two entries at exported == false count as new")
+    T.eq(#As(LH.FilteredEntries), 4, "everything shows all four")
+
+    -- Now filter to one player and ask again.
+    As(function() LH.filters.playerIds = { ["K-A"] = true } end)
+    T.eq(#As(LH.UnexportedEntries), 2,
+        "the cut still covers both players' new awards while a player filter is active")
+    T.eq(#As(LH.FilteredEntries), 3, "everything follows the filter, as it always has")
+    As(function() LH.filters.playerIds = nil end)
+end
+
+-- A legacy entry counts as exported, an explicit false does not -----------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000001, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "mig-1", epoch = 1 },                   -- no field
+            { time = 1785000000, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "mig-2", epoch = 1, exported = false },
+        }
+    end)
+    local new = As(LH.UnexportedEntries)
+    T.eq(#new, 1, "an entry written before this version counts as already exported")
+    T.eq(new[1].id, "mig-2", "and the one that is genuinely new is the one with exported == false")
+end
+
+-- Marking sets the mark and says so ----------------------------------------------------------------
+do
+    local lines = {}
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000001, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "mark-1", epoch = 1, exported = false },
+            { time = 1785000000, item = GLOVES, winner = "Sinja", winnerKey = "K-S",
+              reason = "Upgrade", id = "mark-2", epoch = 1, exported = false },
+        }
+        local realPrint = me.env.print
+        me.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        LH.MarkExported(LH.UnexportedEntries())
+        me.env.print = realPrint
+    end)
+
+    T.eq(me.env.KART_LootHistory[1].exported, true, "the first award is marked")
+    T.eq(me.env.KART_LootHistory[2].exported, true, "and so is the second")
+    T.eq(#As(LH.UnexportedEntries), 0, "nothing is left new afterwards")
+    T.eq(#lines, 1, "marking prints exactly one line")
+    T.truthy(lines[1]:find("2", 1, true), "and the line names how many were marked")
+end
+
+-- The JSON is byte-identical to what it was ---------------------------------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1786090821, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "json-1", epoch = 3, exported = false },
+        }
+        LH.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+    end)
+    local json = As(LH.BuildRCLootCouncilJSON)
+
+    T.eq(json:find("exported", 1, true), nil, "the mark does not leak into the export")
+    T.eq(json:find("epoch", 1, true), nil, "and neither does the epoch")
+    T.truthy(json:find('"player":"Alric"', 1, true), "the export still says what it always said")
+end
+
+-- Passing an explicit list overrides the filters ------------------------------------------------------
+do
+    As(function()
+        me.env.KART_LootHistory = {
+            { time = 1785000001, item = "item:1234", winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", class = "MAGE", id = "pick-1", epoch = 1, exported = false },
+            { time = 1785000000, item = "item:1234", winner = "Sinja", winnerKey = "K-S",
+              reason = "Upgrade", class = "MAGE", id = "pick-2", epoch = 1, exported = true },
+        }
+        LH.filters = { player = nil, playerIds = { ["K-S"] = true }, reason = nil, search = "" }
+    end)
+    local json = As(function() return LH.BuildRCLootCouncilJSON(LH.UnexportedEntries()) end)
+
+    T.truthy(json:find('"player":"Alric"', 1, true),
+        "an explicit list is exported whole, regardless of the window filter")
+    T.eq(json:find('"player":"Sinja"', 1, true), nil, "and nothing outside that list appears")
+    As(function() LH.filters.playerIds = nil end)
+end

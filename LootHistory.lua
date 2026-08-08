@@ -50,6 +50,49 @@ local function GetFilteredEntries()
     return filtered
 end
 
+-- The same query under a name outside this file. The export dialog needs to COUNT what "everything"
+-- would produce, and a second implementation of the filter rules would drift from this one.
+LH.FilteredEntries = GetFilteredEntries
+
+-- Every award still waiting to be exported, newest first.
+--
+-- Deliberately does NOT go through GetFilteredEntries. "Everything" is a view and may follow the
+-- window's player/reason/search filters; this is bookkeeping. A filter-respecting cut would mark only
+-- the filtered slice as exported and leave the rest of the same evening looking unexported forever --
+-- silently, because the player who set the filter sees a plausible list either way.
+--
+-- Compared against false rather than tested for truthiness: an entry with no field at all was written
+-- before this version and counts as already exported, and `not e.exported` would collapse the two.
+function LH.UnexportedEntries()
+    local out = {}
+    for _, e in ipairs(KART_LootHistory or {}) do
+        if e.exported == false then table.insert(out, e) end
+    end
+    table.sort(out, function(a, b) return (a.time or 0) > (b.time or 0) end)
+    return out
+end
+
+-- Marks a list as exported. Called from the dialog's button, never from opening it: the addon cannot
+-- see whether the text was copied, let alone whether the WoWUtils import succeeded, so the only
+-- honest moment is one the player chooses.
+--
+-- The chat line matters more than it looks. The dialog is about to be closed, and this line is what
+-- tells the player later that they really did press the button -- the difference between "I think I
+-- exported that" and a record.
+function LH.MarkExported(entries)
+    local n = 0
+    for _, e in ipairs(entries or {}) do
+        if e.exported ~= true then
+            e.exported = true
+            n = n + 1
+        end
+    end
+    if n > 0 then
+        print(string.format(KART.L.LH_EXPORT_MARKED, n))
+        LH.Refresh()
+    end
+end
+
 local function JSONEscape(s)
     s = tostring(s or "")
     s = s:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
@@ -172,8 +215,10 @@ end
 -- by LH.LogHistory — so those fields are exported empty/zeroed rather than fabricated.
 -- Respects the history window's current player/reason/search filters, same as RCLootCouncil's
 -- own export (which only exports what's currently visible).
-function LH.BuildRCLootCouncilJSON()
-    local entries = GetFilteredEntries()
+function LH.BuildRCLootCouncilJSON(entries)
+    -- Defaults to what the window is showing, which is what RCLootCouncil's own export does and what
+    -- every existing caller expects. The cut passes its own list instead.
+    entries = entries or GetFilteredEntries()
 
     local objects = {}
     for i, e in ipairs(entries) do
