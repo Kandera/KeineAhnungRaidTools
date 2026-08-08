@@ -79,18 +79,24 @@ end
 -- The chat line matters more than it looks. The dialog is about to be closed, and this line is what
 -- tells the player later that they really did press the button -- the difference between "I think I
 -- exported that" and a record.
+-- Only entries at exactly false are marked and counted, for the same three-state reason as
+-- LH.UnexportedEntries: an entry with no field already counts as exported, so touching it would count
+-- it into a number the New side and the button label never showed -- and the chat line's whole job is
+-- to agree with the button that was pressed.
+--
+-- The line goes out on every press, including the one that finds nothing left to do. Zero is an
+-- answer, and a press with no line at all is the one case where the player is left with "I think I
+-- pressed it" -- exactly the state this line exists to abolish.
 function LH.MarkExported(entries)
     local n = 0
     for _, e in ipairs(entries or {}) do
-        if e.exported ~= true then
+        if e.exported == false then
             e.exported = true
             n = n + 1
         end
     end
-    if n > 0 then
-        print(string.format(KART.L.LH_EXPORT_MARKED, n))
-        LH.Refresh()
-    end
+    print("|cffff0000KART:|r " .. string.format(KART.L.LH_EXPORT_MARKED, n))
+    LH.Refresh()
 end
 
 local function JSONEscape(s)
@@ -283,6 +289,14 @@ function LH.RefreshExportDialog()
     f.editBox.text = json
     f.editBox:SetText(json)
 
+    -- The list the mark button will mark: the one that was actually rendered and counted here, kept
+    -- on the frame rather than queried again when the button is pressed. LH.Refresh does not reach
+    -- this dialog, so an award logged while it sits open is in neither the JSON on screen nor the
+    -- count on the button -- and a fresh query at click time would mark it anyway, recording as
+    -- exported something that was never in the text the player copied. What is marked and what was
+    -- copied cannot be allowed to drift apart.
+    f.markable = newOnes
+
     -- The count rides in the label so the button cannot be read as "mark everything".
     f.btnMark.text:SetText(string.format(KART.L.LH_EXPORT_MARK, #newOnes))
     f.btnMark:SetShown(f.mode == "new")
@@ -400,7 +414,7 @@ function LH.ShowExportDialog()
         f.btnMark:SetSize(190, 26)
         f.btnMark:SetPoint("BOTTOMLEFT", 15, 12)
         f.btnMark:SetScript("OnClick", function()
-            LH.MarkExported(LH.UnexportedEntries())
+            LH.MarkExported(f.markable)
             LH.RefreshExportDialog()
         end)
 
@@ -1862,6 +1876,16 @@ function LH.HandleHistoryEntry(payload, senderKey)
         rollID       = rollID,
         id           = id,
         epoch        = tonumber(epoch) or 1,
+        -- FALSE, explicitly, for the same reason as LH.LogHistory above and not one step weaker.
+        -- "Unmarked" here means the value false, never the absence of the field: absent is the LEGACY
+        -- state and counts as already exported, so leaving it off would make every award that arrives
+        -- through the catch-up -- including one this client never saw live, and including the
+        -- corrected winner of a reassignment received over the wire, which is re-created here after
+        -- the removal above -- born silently exported. It would never appear on the New side, never
+        -- be counted on either label, and never reach WoWUtils, which is precisely the invisible loss
+        -- the timestamp cut was rejected to avoid. The mark does not travel on the wire; what the
+        -- receiver writes is its own bookkeeping, and for the receiver the award is new.
+        exported     = false,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then

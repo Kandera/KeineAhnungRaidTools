@@ -550,10 +550,13 @@ function _G.CreateFrame(_, name, parent, _)
     function f:Enable() enabled = true end
     function f:Disable() enabled = false end
     function f:IsEnabled() return enabled end
-    -- Click() delivers a click the way the game does: a disabled button, or one with the mouse
-    -- disabled, never gets one, so calling it is no stronger an act than a player is capable of.
+    -- Click() delivers a click the way the game does: a disabled button, a hidden one, or one with
+    -- the mouse disabled never gets one, so calling it is no stronger an act than a player is capable
+    -- of. Hidden counts, and not only for tidiness: the export dialog keeps its mark button off the
+    -- All side by hiding it, so a stub that clicked hidden buttons would enforce that rule with
+    -- nothing at all. IsShown() rather than the upvalue, which is declared further down this function.
     function f:Click(button)
-        if not enabled or not mouseEnabled then return end
+        if not enabled or not mouseEnabled or not f:IsShown() then return end
         local onClick = f:GetScript("OnClick")
         if onClick then onClick(f, button or "LeftButton") end
     end
