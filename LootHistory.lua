@@ -1147,6 +1147,12 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         rollID       = rollID,
         id           = awardID or LH.NewAwardID(),
         epoch        = decisionEpoch or KART_LootHistoryEpoch or 1,
+        -- FALSE, explicitly, and not simply left out. Three states have to be distinguishable: false
+        -- is new, true is exported, and ABSENT means the entry was written by a build from before the
+        -- export cut existed -- which counts as exported, because the player was exporting by hand
+        -- until then. Leaving new awards nil would collapse the two and mark every fresh award as
+        -- already exported, which is the failure this field exists to prevent.
+        exported     = false,
     })
     TrimHistory()
     if KART.LH and KART.LH.historyWindow and KART.LH.historyWindow:IsShown() then
