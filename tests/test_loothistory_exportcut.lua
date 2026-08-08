@@ -509,3 +509,88 @@ do
     T.eq(lines[1], "|cffff0000KART:|r " .. string.format(KART.L.LH_EXPORT_MARKED, 1),
         "and the line reports the one that was actually marked")
 end
+
+-- TrimHistory silently drops the oldest entry once the log passes its 500-entry cap. If that entry is
+-- the one currently stashed in the export dialog's f.markable, marking it afterward would credit an
+-- award the history no longer holds -- one of the doors the wipe-specific fix (InvalidateExportMarkable)
+-- never covered, closed instead by the intersection at press time (StillInHistory).
+--
+-- Driven through a real LH.LogHistory call, not a hand-shrunk table, so TrimHistory's actual cap logic
+-- runs. The filler entries are stamped far in the future and the entry under test far in the past, so
+-- it is the uniquely oldest row regardless of what the harness's mocked time() happens to read.
+do
+    local lines = {}
+    local _, lm7 = F.NewRaid()
+    local LH7 = lm7.KART.LH
+    RaidSim.As(lm7, function()
+        local history = {}
+        for i = 1, 499 do
+            table.insert(history, { time = 5000000000 + i, item = GLOVES, winner = "Filler",
+                winnerKey = "K-F", reason = "BIS", id = "fill-" .. i, epoch = 1, exported = true })
+        end
+        -- The one entry that must be trimmed and must not be marked: the oldest timestamp in the
+        -- table, and the only one left unexported, so it is the only thing the dialog stashes.
+        table.insert(history, { time = 1, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+            reason = "BIS", id = "trim-me", epoch = 1, exported = false })
+        lm7.env.KART_LootHistory = history
+        LH7.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+        LH7.ShowExportDialog()
+    end)
+    local f = LH7.exportDialog
+    T.eq(f.btnNew.text:GetText(), string.format(lm7.KART.L.LH_EXPORT_TAB_NEW, 1),
+        "before the trim the New label counts the one unexported award")
+
+    RaidSim.As(lm7, function()
+        -- Pushes the table to 501 entries; TrimHistory drops the single oldest one, which is
+        -- "trim-me" -- the entry just stashed above.
+        LH7.LogHistory(GLOVES, "Sinja", "Upgrade", "PRIEST", nil, 500, "K-S", "trim-new", 1)
+    end)
+    local stillThere = false
+    for _, e in ipairs(lm7.env.KART_LootHistory) do if e.id == "trim-me" then stillThere = true end end
+    T.eq(stillThere, false, "the trim really dropped the stashed entry")
+    T.eq(#lm7.env.KART_LootHistory, 500, "and the cap held")
+
+    RaidSim.As(lm7, function()
+        local realPrint = lm7.env.print
+        lm7.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        f.btnMark:Click()
+        lm7.env.print = realPrint
+    end)
+    T.eq(#lines, 0,
+        "and the press that follows prints nothing -- the only thing it had to mark is gone")
+end
+
+-- LH.RemoveHistoryForRoll -- the "No Winner" / revoke path -------------------------------------------
+--
+-- Revoking an award (a "No Winner" decision, or a re-decision of an already-awarded item) removes its
+-- history entry outright. If that entry is the one stashed in the export dialog, marking it afterward
+-- would credit an award that was just taken back -- another door InvalidateExportMarkable never
+-- covered, closed by the same intersection.
+do
+    local lines = {}
+    local _, lm8 = F.NewRaid()
+    local LH8 = lm8.KART.LH
+    RaidSim.As(lm8, function()
+        lm8.env.KART_LootHistory = {
+            { time = 1785000000, item = GLOVES, winner = "Alric", winnerKey = "K-A",
+              reason = "BIS", id = "revoke-1", rollID = 70, epoch = 1, exported = false },
+        }
+        LH8.filters = { player = nil, playerIds = nil, reason = nil, search = "" }
+        LH8.ShowExportDialog()
+    end)
+    local f = LH8.exportDialog
+    T.eq(f.btnNew.text:GetText(), string.format(lm8.KART.L.LH_EXPORT_TAB_NEW, 1),
+        "before the revoke the New label counts the award")
+
+    RaidSim.As(lm8, function() LH8.RemoveHistoryForRoll(70, GLOVES) end)
+    T.eq(#lm8.env.KART_LootHistory, 0, "the revoke really removed the entry")
+
+    RaidSim.As(lm8, function()
+        local realPrint = lm8.env.print
+        lm8.env.print = function(s) lines[#lines + 1] = tostring(s) end
+        f.btnMark:Click()
+        lm8.env.print = realPrint
+    end)
+    T.eq(#lines, 0,
+        "and the press that follows prints nothing -- the revoked award is not marked")
+end
