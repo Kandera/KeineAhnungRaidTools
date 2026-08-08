@@ -235,8 +235,10 @@ end
 -- Mirrors the field set/order RCLootCouncil itself produces via its "Standard JSON output"
 -- history export, so the result can be pasted into any tool built to read an RCLootCouncil
 -- export (e.g. wowaudit). KART doesn't track everything RCLootCouncil does though — boss,
--- instance name, vote counts, replaced-gear links and the assigning loot master aren't logged
--- by LH.LogHistory — so those fields are exported empty/zeroed rather than fabricated.
+-- vote counts, replaced-gear links and the assigning loot master aren't logged by LH.LogHistory
+-- — so those fields are exported empty/zeroed rather than fabricated. (e.instance/e.instanceID ARE
+-- logged now, but this export's own "instance" field is RCLootCouncil's difficulty slot, not ours —
+-- wiring the raid name in is a later cut, not this one.)
 -- Respects the history window's current player/reason/search filters, same as RCLootCouncil's
 -- own export (which only exports what's currently visible).
 function LH.BuildRCLootCouncilJSON(entries)
@@ -1283,6 +1285,26 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
     -- Lua, so leaving it would make DifficultyDisplay/Export take the ID branch (which resolves to
     -- nothing for 0) instead of the stored-name fallback — the two write paths must agree here.
     if difficultyID == 0 then difficultyID = nil end ---@diagnostic disable-line: cast-local-type
+
+    -- Which raid this award belongs to. Read from the snapshot LC.SnapshotRollInstance took when
+    -- this roll entered the flow (roll start, real or manual) -- NOT from GetInstanceInfo() here,
+    -- which would answer for wherever THIS client happens to be right now. LogHistory can run long
+    -- after the item dropped, and by then the lootmaster may have ported out or zoned, which would
+    -- silently write an empty (or simply wrong) instance onto an award that plainly belongs to the
+    -- raid. Falls back to a live read only when no snapshot exists for this roll: a manually-logged
+    -- award with no matching roll (a test call, e.g.), or an award for a roll this client itself
+    -- never saw enter the flow.
+    local instance, instanceID
+    local snapshot = rollID and LC.rollRaidSnapshot and LC.rollRaidSnapshot[rollID]
+    if snapshot then
+        instance, instanceID = snapshot.name, snapshot.id
+    else
+        local liveName, _, liveDifficultyID, _, _, _, _, liveMapID = GetInstanceInfo()
+        -- Same sentinel LC.SnapshotRollInstance normalizes on: difficultyID == 0 means "not really in
+        -- an instance", and both fields stay nil rather than naming an open-world zone.
+        if liveDifficultyID ~= 0 then instance, instanceID = liveName, liveMapID end
+    end
+
     table.insert(KART_LootHistory, {
         time         = now,
         item         = itemLink or "",
@@ -1293,6 +1315,8 @@ function LH.LogHistory(itemLink, winnerDisplayName, reason, classFile, colorDef,
         color        = colorDef and {r = colorDef.r, g = colorDef.g, b = colorDef.b} or nil,
         difficulty   = difficultyName or "",
         difficultyID = difficultyID,
+        instance     = instance,
+        instanceID   = instanceID,
         rollID       = rollID,
         id           = awardID or LH.NewAwardID(),
         epoch        = decisionEpoch or KART_LootHistoryEpoch or 1,
@@ -1443,18 +1467,24 @@ local HISTORY_BATCH_ENTRIES = 50
 local HISTORY_FULL_COOLDOWN = 60 * 60
 
 -- One record, in the field order the receiver parses. The item is last because item links are full of
--- colons; winner and reason are free text, so their colons are stripped and the fixed fields stay
--- position-stable.
+-- colons; winner, reason and instance are free text, so their colons are stripped and the fixed
+-- fields stay position-stable.
+--
+-- instance/instanceID sit between id and epoch -- the name BEFORE the id, deliberately. An old
+-- client's parser expects a bare (%d+) right there for the epoch; handed a raid name it fails to
+-- match the whole record and discards it (fail closed). Putting instanceID there instead would have
+-- an old client read a real number as the epoch -- and a bogus epoch from the loot owner is adopted
+-- by LH.AdmitEpoch/LH.AdoptEpoch, wiping every entry below it. Never risk that for a cosmetic field.
 local function EntryRecord(e)
     local colorPacked = ""
     if e.color then
         colorPacked = string.format("%d,%d,%d",
             math.floor(e.color.r * 255), math.floor(e.color.g * 255), math.floor(e.color.b * 255))
     end
-    return string.format("%d:%d:%d:%s:%s:%s:%s:%s:%s:%d:%s",
+    return string.format("%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%d:%d:%s",
         e.time or 0, e.difficultyID or 0, e.rollID or 0, e.class or "", colorPacked,
         e.winnerKey or "", (e.winner or ""):gsub(":", ""), (e.reason or ""):gsub(":", ""),
-        e.id or "", e.epoch or 1, e.item or "")
+        e.id or "", (e.instance or ""):gsub(":", ""), e.instanceID or 0, e.epoch or 1, e.item or "")
 end
 
 -- Whether any roll here is still undecided and therefore blocks the gate.
@@ -1770,8 +1800,9 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- Catch-up entries land in the permanent loot history — only accept them from someone
     -- actually in our current group, not from arbitrary whispers.
     if not (senderKey and KASC.Identity.FindUnitForKey(senderKey)) then return end
-    local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, id, epoch, item =
-        payload:match("^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(%d+):(.*)$")
+    local t, diffID, rollID, classFile, colorPacked, winnerKey, winner, reason, id, instance,
+          instanceID, epoch, item = payload:match(
+        "^(%d+):(%d+):(%d+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(%d+):(%d+):(.*)$")
     t = tonumber(t)
     if not t or not winner then return end
     if not LH.AdmitEpoch(tonumber(epoch) or 1, senderKey) then return end
@@ -1796,9 +1827,14 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- displayed forever. (RC_REASON does the same on its own receive side.)
     winner = winner:gsub("|", "||")
     reason = (reason or ""):gsub("|", "||")
+    instance = (instance or ""):gsub("|", "||")
     diffID = tonumber(diffID); if diffID == 0 then diffID = nil end
     rollID = tonumber(rollID); if rollID == 0 then rollID = nil end
     if winnerKey == "" then winnerKey = nil end
+    -- Same sentinel-to-nil normalization LH.LogHistory applies to its own snapshot/live read -- the
+    -- two write paths must agree here exactly as they already do for difficultyID (see there).
+    instanceID = tonumber(instanceID); if instanceID == 0 then instanceID = nil end
+    if instance == "" then instance = nil end
     item = item or ""
 
     local color
@@ -1902,6 +1938,8 @@ function LH.HandleHistoryEntry(payload, senderKey)
         color        = color,
         difficulty   = diffID and (GetDifficultyInfo(diffID) or "") or "",
         difficultyID = diffID,
+        instance     = instance,
+        instanceID   = instanceID,
         rollID       = rollID,
         id           = id,
         epoch        = tonumber(epoch) or 1,

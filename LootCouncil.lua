@@ -32,6 +32,10 @@ LC.rolls                = {}  -- [rollID][Identity key] = 1-100 random roll (opt
 LC.councilVotes         = {}  -- [rollID][council member Identity key] = candidate Identity key they picked (tally only, not binding)
 LC.councilVoteItem      = {}  -- [rollID][council member Identity key] = itemID that pick was about (see LC.CouncilVoteIsForItem)
 LC.rollItems            = {}  -- [rollID] = itemLink
+-- [rollID] = {name=, id=} the raid instance captured when this item entered the loot flow (see
+-- LC.SnapshotRollInstance), read back by LH.LogHistory at award time. Snapshotted rather than read
+-- live at award time because the lootmaster may have ported out or zoned by then.
+LC.rollRaidSnapshot     = {}
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 -- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
 -- that happen one layer below (not in our group, unknown token) — together they are the whole set of
@@ -3199,6 +3203,7 @@ function LC.ClearAllRolls()
     wipe(LC.councilVotes)
     if LC.councilVoteItem then wipe(LC.councilVoteItem) end
     wipe(LC.rollItems)
+    wipe(LC.rollRaidSnapshot)
     wipe(LC.rollDeadlines)
     wipe(LC.rollDurations)
     wipe(LC.assignedWinners)
@@ -3314,6 +3319,10 @@ local PERSISTED_ROLL_TABLES = {
     -- stamps is read as "not stale" for every entry -- which is the forgiving answer, but it is a
     -- guess where the file could simply have carried the fact.
     "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollInstance",
+    -- The raid instance snapshotted when the item entered the flow (LC.SnapshotRollInstance), read
+    -- back by LH.LogHistory at award time -- state, not an in-flight marker, so it has to survive a
+    -- reload mid-distribution exactly like rollItems does (C8).
+    "rollRaidSnapshot",
     "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
     "rollNotInOurBags", "rollAnnounced", "rollAnnouncedBy", "rollSeenHere", "relevanceHandled",
@@ -5185,6 +5194,25 @@ local function CouncilCouldTakeRoll(rollID)
            and not LC.IsCollectibleItem(itemID, classID, subclassID)
 end
 
+-- Captures the raid this item is dropping in, at the moment it enters the loot flow -- a real roll
+-- starting (LC.OnStartLootRoll, LC.HandleStart) or a manual one (LC.StartManualRoll,
+-- LC.HandleManualStart) -- rather than at award time. LH.LogHistory can run long after the item
+-- dropped, once the lootmaster may have ported out or left the instance entirely, and a live read at
+-- that point would silently write the wrong raid, or none at all, onto the award.
+--
+-- id/name pair for the same reason LH.LogHistory keeps difficultyID beside difficulty: the name is
+-- whatever the client's locale produced, the id is not.
+--
+-- Gated on difficultyID, not on the mapID itself: GetInstanceInfo's mapID is a real id for
+-- open-world zones too (Elwynn Forest has one), so it cannot tell "in a raid" from "not in one".
+-- difficultyID == 0 is the existing sentinel for that (see LH.LogHistory's own normalization), and
+-- every raid boss carries a nonzero one.
+function LC.SnapshotRollInstance(rollID)
+    local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
+    if difficultyID == 0 then name, mapID = nil, nil end
+    LC.rollRaidSnapshot[rollID] = { name = name, id = mapID }
+end
+
 function LC.OnStartLootRoll(rollID, attempt)
     if KART_Settings.lcModuleEnabled == false then return end
     if not LC.sessionActive then
@@ -5364,6 +5392,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- and GetTime() resets to ~0 on every reload, which would make a restored entry look freshly looted.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
+    -- Same moment, same "first time this roll is tracked" reasoning as the stamp above -- see
+    -- LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID)
 
     -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll
     -- above deliberately didn't purge on unresolved data) — clobbering it with "???" would blank a
@@ -5689,6 +5720,8 @@ function LC.HandleStart(payload, senderKey)
     -- case was under a second, since the owner sends LC_DROP within the collection window.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
+    -- Same overwrite-unconditionally reasoning as the stamp above -- see LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     -- GetLootRollItemLink answers only for a roll that exists on THIS client, and this handler is
@@ -5898,6 +5931,8 @@ function LC.StartManualRoll(itemsText)
         -- Wall clock, same reason as in OnStartLootRoll above.
         LC.rollLootedAt = LC.rollLootedAt or {}
         LC.rollLootedAt[rollID] = time()
+        -- Same moment, same reasoning as OnStartLootRoll -- see LC.SnapshotRollInstance.
+        LC.SnapshotRollInstance(rollID)
 
         -- Same roster snapshot a real drop takes, and the reason B79 could never be answered before:
         -- a manually added item has no Blizzard roll behind it, so there was nothing to prove with
@@ -5995,6 +6030,8 @@ function LC.HandleManualStart(payload, senderKey)
     -- real deadline by however long the vote took. Wall clock, same reason as everywhere else.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
+    -- Same moment, same reasoning as LC.HandleStart -- see LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

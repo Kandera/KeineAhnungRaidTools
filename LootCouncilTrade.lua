@@ -764,6 +764,7 @@ function Trade.ClearRollState(rollID)
     -- LC.CouncilVoteIsForItem starts filtering the NEW picks against the OLD item.
     if LC.councilVoteItem then LC.councilVoteItem[rollID] = nil end
     LC.rollItems[rollID]       = nil
+    LC.rollRaidSnapshot[rollID] = nil
     LC.rollDeadlines[rollID]   = nil
     LC.rollDurations[rollID]   = nil
     LC.assignedWinners[rollID] = nil

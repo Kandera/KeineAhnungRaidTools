@@ -170,6 +170,7 @@ dofile("tests/test_lc_histsync_length.lua")
 dofile("tests/test_loothistory_matching.lua")
 dofile("tests/test_loothistory_itemload.lua")
 dofile("tests/test_loothistory_epoch.lua")
+dofile("tests/test_loothistory_instance.lua")
 dofile("tests/test_loothistory_syncgate.lua")
 dofile("tests/test_lc_equipexchange.lua")
 -- The Manifest itself (docs/MANIFEST.md), walked C1..C12 in ONE session -- last before the soak,

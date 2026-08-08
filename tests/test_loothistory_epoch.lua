@@ -383,8 +383,8 @@ do
     local _, _, council, raider = F.NewRaid()
     raider.env.KART_LootHistoryEpoch = 1
     raider.env.KART_LootHistory = {}
-    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        time(), "batch-1", 2, GLOVES)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "batch-1", "", 0, 2, GLOVES)
 
     RaidSim.As(raider, function()
         raider.KART.LH.HandleHistoryBatch("2:" .. council.guid .. ":0:" .. record, council.guid)
@@ -402,8 +402,8 @@ do
     local _, lm, _, raider = F.NewRaid()
     raider.env.KART_LootHistoryEpoch = 1
     raider.env.KART_LootHistory = {}
-    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        time(), "batch-2", 2, GLOVES)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "batch-2", "", 0, 2, GLOVES)
 
     RaidSim.As(raider, function()
         raider.KART.LH.HandleHistoryBatch("2:" .. lm.guid .. ":0:" .. record, lm.guid)
@@ -431,8 +431,8 @@ do
     local _, _, council, raider = F.NewRaid()
     raider.env.KART_LootHistoryEpoch = 1
     raider.env.KART_LootHistory = {}
-    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        time(), "hdr-only", 1, GLOVES)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "hdr-only", "", 0, 1, GLOVES)
 
     RaidSim.As(raider, function()
         raider.KART.LH.HandleHistoryBatch("2:" .. council.guid .. ":0:" .. record, council.guid)
@@ -455,8 +455,8 @@ do
     local _, _, council, raider = F.NewRaid()
     raider.env.KART_LootHistoryEpoch = 1
     raider.env.KART_LootHistory = {}
-    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        time(), "rec-only", 2, GLOVES)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time(), "rec-only", "", 0, 2, GLOVES)
 
     RaidSim.As(raider, function()
         raider.KART.LH.HandleHistoryEntry(record, council.guid)

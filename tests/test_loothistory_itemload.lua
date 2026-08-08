@@ -19,9 +19,10 @@ local BARE_GLOVES = "item:" .. GLOVES_ID
 
 local function Whisper(lm, raider, fields)
     local epoch = fields.epoch or 1
-    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%d:%s"):format(
+    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%s:%d:%d:%s"):format(
         fields.time, fields.rollID, fields.winnerKey, fields.winner,
-        fields.reason or "BIS", fields.id or "", epoch, fields.item or "")
+        fields.reason or "BIS", fields.id or "", fields.instance or "", fields.instanceID or 0,
+        epoch, fields.item or "")
     RaidSim.As(raider, function()
         raider.KASC:Send(("LC_HIST_BATCH:%d:%s:0:%s"):format(epoch, raider.guid, record),
             "WHISPER", lm.name)

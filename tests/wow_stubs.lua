@@ -1103,11 +1103,14 @@ function _G.PlaySound() end
 -- instanceType is part of the answer, not decoration: "none" is where the player spends most of
 -- their time, and anything deciding on the difficultyID alone has to say what it expects that ID to
 -- be out there. Defaults to a raid because that is what almost every test here is about.
+-- mapID (return 8) defaults to 2912 like before; overridable via KARTTEST.instance.mapID so a test
+-- can tell two instances apart by id as well as by name (LootHistory's instance/instanceID fields).
 KARTTEST.instance = { name = "The Voidspire", instanceType = "raid",
                       difficultyID = 16, difficultyName = "Mythic" }
 function _G.GetInstanceInfo()
     local i = KARTTEST.instance
-    return i.name, i.instanceType or "raid", i.difficultyID, i.difficultyName, 20, 0, false, 2912
+    return i.name, i.instanceType or "raid", i.difficultyID, i.difficultyName, 20, 0, false,
+           i.mapID or 2912
 end
 
 -- Combat logging, as real state: AutoLog's whole job is deciding when to turn this on and, more

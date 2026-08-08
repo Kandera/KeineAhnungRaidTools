@@ -163,8 +163,8 @@ do
     -- Calling LH.HandleHistoryEntry directly, the per-record parser HandleHistoryBatch loops over --
     -- this guard is unrelated to batching and lives inside it, not at the batch level.
     local far = time() + 5 * 365 * 24 * 60 * 60
-    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        far, "future-1", 1, GLOVES)
+    local record = string.format("%d:16:70:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        far, "future-1", "", 0, 1, GLOVES)
     RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
     T.eq(#lm.env.KART_LootHistory, 0, "an entry dated years ahead is refused")
 end
@@ -174,8 +174,8 @@ do
     -- cost them an award, while years ahead is not drift.
     local _, lm, _, raider = F.NewRaid()
     RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
-    local record = string.format("%d:16:71:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%d:%s",
-        time() + 120, "drift-1", 1, GLOVES)
+    local record = string.format("%d:16:71:MAGE:1,1,1:Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time() + 120, "drift-1", "", 0, 1, GLOVES)
     RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(record, raider.guid) end)
     T.eq(#lm.env.KART_LootHistory, 1, "two minutes of clock drift is accepted, not treated as an attack")
 end
@@ -407,8 +407,8 @@ end
 do
     local _, lm, _, raider = F.NewRaid()
     -- One record in the batch field order: item last, id and epoch just before it.
-    local record = string.format("%d:0:0:MAGE::Player-1-A:Alric:BIS:%s:%d:%s",
-        time() - 60, "1-bbb", 2, GLOVES)
+    local record = string.format("%d:0:0:MAGE::Player-1-A:Alric:BIS:%s:%s:%d:%d:%s",
+        time() - 60, "1-bbb", "", 0, 2, GLOVES)
     RaidSim.As(raider, function()
         raider.env.KART_LootHistoryEpoch = 4
         raider.env.KART_LootHistory = {}

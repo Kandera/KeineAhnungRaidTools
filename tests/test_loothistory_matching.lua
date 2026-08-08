@@ -18,9 +18,10 @@ local WEAPON = KARTTEST.items[F.WEAPON].link
 -- unpacked LC_HIST_BATCH -- see LH.HandleHistoryBatch / LH.HandleHistoryEntry).
 local function Whisper(lm, raider, fields)
     local epoch = fields.epoch or 1
-    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%d:%s"):format(
+    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%s:%d:%d:%s"):format(
         fields.time, fields.rollID, fields.winnerKey, fields.winner,
-        fields.reason or "BIS", fields.id or "", epoch, fields.item or "")
+        fields.reason or "BIS", fields.id or "", fields.instance or "", fields.instanceID or 0,
+        epoch, fields.item or "")
     RaidSim.As(raider, function()
         raider.KASC:Send(("LC_HIST_BATCH:%d:%s:0:%s"):format(epoch, raider.guid, record),
             "WHISPER", lm.name)
@@ -123,7 +124,7 @@ do
     -- to nobody is not "probably fine".
     local _, lm = F.NewRaid()
     Hold(lm, {})
-    local payload = ("%d:16:70:MAGE:1,1,1:Player-9-ZZZ:Nobody:BIS::1:%s"):format(time(), GLOVES)
+    local payload = ("%d:16:70:MAGE:1,1,1:Player-9-ZZZ:Nobody:BIS:::0:1:%s"):format(time(), GLOVES)
 
     RaidSim.As(lm, function() lm.KART.LH.HandleHistoryEntry(payload, "Player-9-ZZZ") end)
     T.eq(#lm.env.KART_LootHistory, 0, "an entry from a key that is in no group is refused")

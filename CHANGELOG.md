@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The loot history catch-up is faster and arrives complete.** Long reasons and item links are no longer shortened on the way.
 - **Loot distribution stays quick even while the loot history is catching up in the background.**
 - **The loot history export can now leave out everything you have already exported.**
+- **Loot history now remembers which raid an award happened in.**
 
 ### Fixed
 - **A reload no longer asks the lootmaster to start a session that is already running**, and no longer ends it for the raid.

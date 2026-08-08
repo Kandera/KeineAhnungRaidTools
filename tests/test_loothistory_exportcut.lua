@@ -86,8 +86,8 @@ do
         }
     end)
     -- One record, worded exactly as the catch-up sync words it (see EntryRecord / HandleHistoryBatch).
-    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%d:%s"):format(
-        now + 1, 70, "Player-1-S", "Sinja", "BIS", "re-2", 1, GLOVES)
+    local record = ("%d:16:%d:MAGE:1,1,1:%s:%s:%s:%s:%s:%d:%d:%s"):format(
+        now + 1, 70, "Player-1-S", "Sinja", "BIS", "re-2", "", 0, 1, GLOVES)
     RaidSim.As(raider5, function()
         raider5.KASC:Send(("LC_HIST_BATCH:1:%s:0:%s"):format(raider5.guid, record), "WHISPER", lm5.name)
     end)
