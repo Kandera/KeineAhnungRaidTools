@@ -76,10 +76,27 @@ for name in pairs(cleared) do
     end
 end
 
+-- The other direction, and its own deliberate omission. LC.rollRaidSnapshot is per-roll state that a
+-- reload must carry (the item is still on the table) but that ClearRollState must NOT drop with the
+-- roll: it is read by the AWARD, which on a plain raider lands long after Vote.PruneExpiredRolls freed
+-- the roll at the vote deadline. Bounded by age instead -- Trade.PruneExpiredRaidSnapshots, the same
+-- shape rollLootedAt has. Named here so putting the clear back is a decision somebody makes in this
+-- file rather than a line that looks like it was forgotten.
+local PERSISTED_NOT_CLEARED = { rollRaidSnapshot = true }
+
+for name in pairs(PERSISTED_NOT_CLEARED) do
+    T.eq(cleared[name], nil,
+        "LC." .. name .. " must NOT be cleared per roll -- the award that reads it arrives after the " ..
+        "roll is gone (see Trade.PruneExpiredRaidSnapshots)")
+    T.truthy(persisted[name], "...while still being carried across a reload")
+end
+
 -- ...and nothing in the persisted list that the addon does not actually keep per roll: a name that
 -- no longer exists is saved as nothing and restored as nothing, and reads like coverage it is not.
 for name in pairs(persisted) do
-    T.truthy(cleared[name],
-        "PERSISTED_ROLL_TABLES lists LC." .. name .. ", which ClearRollState does not clear -- " ..
-        "either it is not per-roll state, or clearing it was forgotten")
+    if not PERSISTED_NOT_CLEARED[name] then
+        T.truthy(cleared[name],
+            "PERSISTED_ROLL_TABLES lists LC." .. name .. ", which ClearRollState does not clear -- " ..
+            "either it is not per-roll state, or clearing it was forgotten")
+    end
 end

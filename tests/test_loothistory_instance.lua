@@ -232,6 +232,64 @@ do
     end
 end
 
+-- The same thing again, but with the raid's real clock between the drop and the award -- which is the
+-- case the block above cannot reach, because it awards within the vote window.
+--
+-- A plain raider is not on the council, so Vote.PruneExpiredRolls frees the whole roll the moment the
+-- VOTE deadline passes (20s by default) while the council is still deliberating. If the snapshot goes
+-- with it, the award that lands minutes later finds nothing and falls back to a live read -- and the
+-- raider has usually ported out by then, so it writes nil. That copy is permanent (LH.HandleHistoryEntry
+-- dedups on the award id, so no catch-up ever repairs it) and silent (LH.HistoryChecksum sums ids only,
+-- so the raider and the lootmaster report the same checksum while holding different data -- C14 exactly
+-- as written). It is also the copy that matters: the winner is usually a plain raider, and their own
+-- history is what goes to the Companion.
+do
+    InVoidspire()
+    local sim, lm, council, raider = F.NewRaid()
+    F.Drop(sim, 82, F.GLOVES)
+    RaidSim.Drain(sim, 10)
+
+    -- Past the vote deadline, still short of a decision: the council deliberates, the raider's client
+    -- has already closed the item off its screen.
+    KARTTEST.AdvanceTime(60)
+    T.eq(F.HasVoteRow(raider, 82), false,
+        "the plain raider's vote window closed while the council was still talking")
+    T.eq(raider.KART.LC.rollItems[82], nil, "...and their roll state went with it")
+    T.truthy(raider.KART.LC.rollRaidSnapshot[82],
+        "but the raid snapshot did NOT -- the award has not been logged yet and it is the only thing " ..
+        "that still knows which raid this item dropped in")
+
+    -- Everyone has ported out by now, which is exactly what a live read at award time would see.
+    InOpenWorld()
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(82, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+
+    for _, c in ipairs({ lm, council, raider }) do
+        local stored = c.env.KART_LootHistory[1]
+        T.truthy(stored, c.name .. " logged the award")
+        T.eq(stored.instance, VOIDSPIRE.name,
+            c.name .. " still names the raid the item dropped in, a full vote window after the drop")
+        T.eq(stored.instanceID, VOIDSPIRE.mapID, c.name .. " kept the instance id too")
+    end
+end
+
+-- ...and the bound that replaces the clear: past the Bind-on-Pickup trade window the snapshot cannot
+-- matter to any award still to come, so it goes -- the same age bound Trade.PruneExpiredLootStamps
+-- puts on the BoP clock, for the same reason it is not cleared with the roll.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 83, F.GLOVES)
+    RaidSim.Drain(sim, 10)
+    T.truthy(lm.KART.LC.rollRaidSnapshot[83], "the snapshot is there while the item can still be traded")
+
+    KARTTEST.AdvanceTime(5 * 60 * 60) -- past TRADE_TIMEOUT_SECONDS (4h)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.ClearRollState(999123) end) -- any clear runs the sweep
+    T.eq(lm.KART.LC.rollRaidSnapshot[83], nil,
+        "past the trade window the snapshot is swept by age, so it cannot accumulate for the session")
+end
+
 -- LC.SnapshotRollInstance's own sentinel: a roll that starts while this client reads as being in the
 -- open world snapshots nothing, rather than the zone name -- checked directly on the snapshot table,
 -- not through an award, so this is about LC.SnapshotRollInstance specifically and not about

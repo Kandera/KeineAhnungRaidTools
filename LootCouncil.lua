@@ -34,7 +34,8 @@ LC.councilVoteItem      = {}  -- [rollID][council member Identity key] = itemID 
 LC.rollItems            = {}  -- [rollID] = itemLink
 -- [rollID] = {name=, id=} the raid instance captured when this item entered the loot flow (see
 -- LC.SnapshotRollInstance), read back by LH.LogHistory at award time. Snapshotted rather than read
--- live at award time because the lootmaster may have ported out or zoned by then.
+-- live at award time because the lootmaster may have ported out or zoned by then. Not cleared with
+-- the roll -- bounded by age, see Trade.PruneExpiredRaidSnapshots.
 LC.rollRaidSnapshot     = {}
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 -- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
@@ -2451,6 +2452,9 @@ LC.rollGeneration = LC.rollGeneration or {}
 --- heartbeat is compared against -- that is the note's own stamp against the field on the wire; a
 --- comparison against this table would be the wire against itself from the second heartbeat onward
 --- and could not fire at all.
+---
+--- "Instance" here is the roll GENERATION, not a place. LC.rollRaidSnapshot is the unrelated one that
+--- holds which raid an item dropped in; the two share a word and nothing else.
 LC.rollInstance = LC.rollInstance or {}
 
 local tableTicker
@@ -3312,16 +3316,25 @@ local RESTORE_CONFIRM_SECONDS = 60
 -- Add to ClearRollState and this list wants the same entry -- held by
 -- tests/test_lc_persistedtables.lua, which reads both lists out of the source and compares them, so
 -- a new table has to be decided about rather than forgotten. The values are numbers, strings,
--- booleans and one flat table of those (LC.votes), all of which SavedVariables round-trips.
+-- booleans and flat tables of those (LC.votes, LC.rollRaidSnapshot), all of which SavedVariables
+-- round-trips.
 local PERSISTED_ROLL_TABLES = {
     -- councilVoteItem travels with councilVotes for the same reason votedFpByMe travels with votes:
     -- it is the stamp that says which item a pick was about, and a tally that comes back without its
     -- stamps is read as "not stale" for every entry -- which is the forgiving answer, but it is a
     -- guess where the file could simply have carried the fact.
+    -- rollInstance here is the roll GENERATION last heard for a number (B139) -- nothing to do with
+    -- rollRaidSnapshot two lines down, which is the raid the item dropped in. Two unrelated senses of
+    -- the word instance sitting next to each other; do not merge them.
     "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollInstance",
     -- The raid instance snapshotted when the item entered the flow (LC.SnapshotRollInstance), read
-    -- back by LH.LogHistory at award time -- state, not an in-flight marker, so it has to survive a
-    -- reload mid-distribution exactly like rollItems does (C8).
+    -- back by LH.LogHistory at award time, so it has to survive a reload mid-distribution (C8).
+    --
+    -- Its analogue is rollLootedAt, NOT rollItems: both are read by the AWARD, which on a plain raider
+    -- lands long after Vote.PruneExpiredRolls freed the roll at the vote deadline, and neither has a
+    -- second source once it is gone (the item link reaches LH.LogHistory inside LC_RESULT; the raid
+    -- does not). So it is likewise not cleared per roll and is bounded by age instead -- see
+    -- Trade.PruneExpiredRaidSnapshots.
     "rollRaidSnapshot",
     "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
@@ -5207,10 +5220,14 @@ end
 -- open-world zones too (Elwynn Forest has one), so it cannot tell "in a raid" from "not in one".
 -- difficultyID == 0 is the existing sentinel for that (see LH.LogHistory's own normalization), and
 -- every raid boss carries a nonzero one.
+--
+-- `at` is wall clock, and it is what bounds the entry's lifetime: this table is NOT cleared with the
+-- roll (see Trade.PruneExpiredRaidSnapshots and the note in Trade.ClearRollState) because the award
+-- that reads it lands long after a plain raider's roll is gone.
 function LC.SnapshotRollInstance(rollID)
     local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
     if difficultyID == 0 then name, mapID = nil, nil end
-    LC.rollRaidSnapshot[rollID] = { name = name, id = mapID }
+    LC.rollRaidSnapshot[rollID] = { name = name, id = mapID, at = time() }
 end
 
 function LC.OnStartLootRoll(rollID, attempt)

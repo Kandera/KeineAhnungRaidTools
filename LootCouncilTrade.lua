@@ -748,6 +748,25 @@ function Trade.PruneExpiredLootStamps()
     end
 end
 
+-- The same age bound, on LC.rollRaidSnapshot, and for the same reason.
+--
+-- That table is which RAID an item dropped in (LC.SnapshotRollInstance), and the only thing that
+-- reads it is LH.LogHistory at AWARD time -- which, on a client that is not on the council, runs long
+-- after Vote.PruneExpiredRolls has freed the roll at the vote deadline (20s by default) while the
+-- council is still deliberating. Cleared with the rest of the roll state, it was gone before the award
+-- it exists for ever arrived, and LogHistory fell back to a live GetInstanceInfo() read on a raider
+-- who had already ported out -- writing nil onto the winner's own copy, permanently (the catch-up
+-- dedups on the award id, so nothing repairs it) and silently (LH.HistoryChecksum sums ids only, so
+-- two clients holding different data still report the same checksum). Age is the natural bound
+-- instead: past the trade window no award can still be coming for that roll.
+function Trade.PruneExpiredRaidSnapshots()
+    if not LC.rollRaidSnapshot then return end
+    local cutoff = time() - TRADE_TIMEOUT_SECONDS
+    for rollID, snap in pairs(LC.rollRaidSnapshot) do
+        if ((type(snap) == "table" and snap.at) or 0) < cutoff then LC.rollRaidSnapshot[rollID] = nil end
+    end
+end
+
 -- Fully forgets rollID's tracked state (vote/roll data, cached item link, assigned winner)
 -- — called when a tab is dismissed or a session ends, so a later real roll that happens to
 -- reuse the same small rollID integer never inherits stale data from a previous boss
@@ -764,7 +783,6 @@ function Trade.ClearRollState(rollID)
     -- LC.CouncilVoteIsForItem starts filtering the NEW picks against the OLD item.
     if LC.councilVoteItem then LC.councilVoteItem[rollID] = nil end
     LC.rollItems[rollID]       = nil
-    LC.rollRaidSnapshot[rollID] = nil
     LC.rollDeadlines[rollID]   = nil
     LC.rollDurations[rollID]   = nil
     LC.assignedWinners[rollID] = nil
@@ -813,7 +831,12 @@ function Trade.ClearRollState(rollID)
     LC.councilTabsNew[rollID]  = nil
     -- LC.rollLootedAt[rollID] is deliberately NOT cleared here — see Trade.PruneExpiredLootStamps
     -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves.
+    -- LC.rollRaidSnapshot is the second exception, for the same reason and read by the same
+    -- award path — see Trade.PruneExpiredRaidSnapshots above. It is NOT the analogue of rollItems: on
+    -- a plain raider the item link that reaches LH.LogHistory travels inside LC_RESULT, so the roll
+    -- being gone costs it nothing, while the raid snapshot has no second source at all.
     Trade.PruneExpiredLootStamps()
+    Trade.PruneExpiredRaidSnapshots()
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end
     if LC.rollsPendingSince then LC.rollsPendingSince[rollID] = nil end
     -- Normally cleared by its own ContinueOnItemLoad callback; clear it here too so a callback that
