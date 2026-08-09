@@ -5241,8 +5241,9 @@ end
 -- raid with a blank, which is the live read this whole field exists to avoid. Nothing is lost by
 -- keeping the older answer: a roll starting outside an instance has no raid to name either.
 --
--- Gated on the ITEM, and that is what makes the keep safe rather than a second way to write the wrong
--- raid. Blizzard reuses rollIDs and this table deliberately outlives the roll it belonged to, so what
+-- Gated on the ITEM, which narrows the keep sharply -- but does NOT make it safe, and this comment
+-- said it did until a review drove the counter-case. Blizzard reuses rollIDs and this table
+-- deliberately outlives the roll it belonged to, so what
 -- sits under this number may be the PREVIOUS roll's -- and the client that would inherit it is
 -- exactly the one the keep exists for: LC.HandleStart is the announcement path for a client Blizzard
 -- raised no roll on at all (dead, released, out of range), so it reaches somebody standing outside
@@ -5254,6 +5255,15 @@ end
 --
 -- The sweep still runs first, so what can be kept at all is inside the trade window: past it no award
 -- can still be coming and the entry is last night's whatever item it names.
+--
+-- WHAT THIS STILL GETS WRONG, measured rather than reasoned: the SAME itemID under the same reused
+-- number in a DIFFERENT raid inside the trade window inherits the first raid's name. There is no
+-- signal that separates it from the re-announce -- PurgeStaleRoll returns early when the itemID is
+-- unchanged, age is useless here by the paragraph above, and LC.rollGeneration is owner-side only.
+-- Left as it is because retail raid loot is per-instance: the same instance at another difficulty or
+-- lockout yields the same name and mapID (harmless), and items that DO span instances are
+-- collectibles and BoEs, which never enter Council at all (see docs/MANIFEST.md C6). Recorded in
+-- docs/BACKLOG.md rather than fixed. Do not upgrade this note back into a guarantee.
 --
 -- The overwrite below stays unconditional, and not for the reused-rollID case this comment used to
 -- claim (the item check owns that now): a read from INSIDE an instance is a first-hand answer about

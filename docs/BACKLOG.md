@@ -4144,3 +4144,35 @@ a session has been told, so a council-eligible item below it still gets `unaware
 
 Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number is not passed on the
 strength of the first one" (B148's first half); "B148, the deferred half" (this one).
+
+## B151 — a reused rollID carrying the same item in a different raid inherits the first raid's name
+
+Found by the re-review of B150's fix (`70fff6d`), measured end to end rather than reasoned:
+
+```
+raider snap after raid 1: name=The Voidspire item=249331
+raider snap after raid 2: name=The Voidspire id=2912   <-- wrong raid inherited
+```
+
+`LC.SnapshotRollInstance` keeps a previously snapshotted raid when a read comes from outside an
+instance AND the item matches — that keep is what lets a raider who ports out and reloads
+mid-distribution survive the catch-up's re-announce without having the restored raid replaced by a
+blank open-world read. If Blizzard reuses the rollID for the **same itemID** in a **different** raid
+inside the four-hour trade window, and the client takes `LC.HandleStart` (the announcement path, for a
+client Blizzard raised no roll on — dead, released, out of range) while standing outside the instance,
+the keep fires and the award names the wrong raid. Permanent, because `LH.HandleHistoryEntry` dedups
+on `id`; invisible, because `LH.HistoryChecksum` sums `e.id` only.
+
+**Not fixed, and there is nothing cheap to fix it with.** No signal separates this from the
+re-announce: `PurgeStaleRoll` returns early when the itemID is unchanged, age is explicitly useless
+(two raids inside one trade window is an ordinary evening), and `LC.rollGeneration` is owner-side
+only.
+
+**Why it is acceptable meanwhile:** retail raid loot is per-instance. The same instance at another
+difficulty or lockout produces the same name and mapID, which is harmless. Items that genuinely span
+instances are collectibles and BoEs, and those never enter the Council at all (C6). The rule is also
+strictly narrower than what it replaced — before the item gate, ANY reused rollID inherited.
+
+Related and also unpinned: a **kept** row does not refresh its `at`, so it dies four hours after the
+drop rather than four hours after the last re-announce. That is the safe direction, and nothing in the
+suite would notice if it flipped.
