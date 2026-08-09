@@ -85,7 +85,7 @@ do
                           winner = "Alric", item = "" })
 
     T.eq(#lm.env.KART_LootHistory, 2,
-        "an award whose item did not fit is not swallowed by an unrelated one")
+        "an award carrying no item is not swallowed by an unrelated one")
 end
 
 -- How far apart two clocks may be ------------------------------------------------------------------
