@@ -1869,9 +1869,10 @@ function LH.HandleHistoryEntry(payload, senderKey)
     -- between a rebuilt link and a still-bare "item:" string). Used for both the reassignment
     -- match below and the duplicate check further down.
     -- KAUtil.GetItemString only recognizes a FULL link ("|Hitem:..."), so it returns nil for the bare
-    -- "item:12345:..." string the oversized-link fallback sends — which is also exactly the case
-    -- where the local rebuild above can fail (item not in the client's cache yet). Fall back to the
-    -- bare form so both sides still reduce to the same locale-independent key.
+    -- "item:12345:..." string an older client's format, or an entry restored from an older
+    -- SavedVariables file, can still send (see above) — which is also exactly the case where the
+    -- local rebuild above can fail (item not in the client's cache yet). Fall back to the bare form
+    -- so both sides still reduce to the same locale-independent key.
     -- The bare pattern takes the whole rest of the field ("^item:.+"), not a character class: a live
     -- bonus list contains commas, and a class-matched fallback would truncate the bare form at the
     -- first one while KAUtil.GetItemString keeps the link form whole — the two sides would stop

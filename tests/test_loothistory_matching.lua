@@ -71,8 +71,9 @@ do
 end
 
 do
-    -- The same shape with the item field EMPTY, which is what arrives when even the compact item
-    -- string will not fit the 255-byte cap (see LH.HandleHistoryRequest). Nothing about the item
+    -- The same shape with the item field EMPTY. EntryRecord forwards whatever the stored entry's own
+    -- item field holds, and that field can itself be empty -- an entry logged with no item, or one
+    -- restored from an older SavedVariables file (see LH.HandleHistoryEntry). Nothing about the item
     -- can be compared then, so the roll id is the only thing left -- and against an entry that has
     -- none, that comparison has to fail rather than wave the award through as "the same".
     local _, lm, _, raider = F.NewRaid()
