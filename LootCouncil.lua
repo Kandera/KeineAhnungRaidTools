@@ -2265,7 +2265,13 @@ function LC.HandleRollCatchup(payload, senderKey)
     -- and that case is accepted: it is bounded by the four-hour prune and it errs towards a reminder
     -- that ends early, which is the safe direction for a promise about a trade.
     local lootedAt = LC.rollLootedAt and LC.rollLootedAt[rollID]
-    LC.HandleStart(payload, senderKey)
+    -- ...and the same distinction, one argument further on, for which RAID the item dropped in. This
+    -- is the only message that repeats an announcement, so it is the only one that may let a roll keep
+    -- the raid it already has when this client now reads as being outside an instance -- the reloaded,
+    -- ported-out raider LC.SnapshotRollInstance's keep exists for. LC.HandleStart cannot work that out
+    -- for itself: an LC_DROP arriving there is an item dropping NOW, and a row sitting under a rollID
+    -- Blizzard has handed out again belongs to the previous roll (B151).
+    LC.HandleStart(payload, senderKey, true)
     if lootedAt then LC.rollLootedAt[rollID] = lootedAt end
 end
 
@@ -5234,41 +5240,50 @@ end
 -- roll (see Trade.PruneExpiredRaidSnapshots and the note in Trade.ClearRollState) because the award
 -- that reads it lands long after a plain raider's roll is gone.
 --
--- A read from OUTSIDE an instance keeps a raid this roll already has FOR THE SAME ITEM (B150). That
--- is not hygiene, it is the other half of surviving a reload: a raider who ports out and reloads
--- mid-distribution is handed the still-open item again by the catch-up, which runs this a second time
--- with the client standing in the open world -- and an unconditional write would replace the restored
--- raid with a blank, which is the live read this whole field exists to avoid. Nothing is lost by
--- keeping the older answer: a roll starting outside an instance has no raid to name either.
+-- A read from OUTSIDE an instance keeps a raid this roll already has FOR THE SAME ITEM (B150), and
+-- only when the caller cannot be a NEW drop (B151, the `newDrop` argument). That keep is not hygiene,
+-- it is the other half of surviving a reload: a raider who ports out and reloads mid-distribution is
+-- handed the still-open item again -- by Blizzard re-raising its own roll window, or by the roll
+-- catch-up re-announcing it -- which runs this a second time with the client standing in the open
+-- world, and an unconditional write would replace the restored raid with a blank, which is the live
+-- read this whole field exists to avoid. Nothing is lost by keeping the older answer: a roll starting
+-- outside an instance has no raid to name either.
 --
--- Gated on the ITEM, which narrows the keep sharply -- but does NOT make it safe, and this comment
--- said it did until a review drove the counter-case. Blizzard reuses rollIDs and this table
--- deliberately outlives the roll it belonged to, so what
--- sits under this number may be the PREVIOUS roll's -- and the client that would inherit it is
--- exactly the one the keep exists for: LC.HandleStart is the announcement path for a client Blizzard
--- raised no roll on at all (dead, released, out of range), so it reaches somebody standing outside
--- the instance and takes this branch. Age does not separate the two: two raids inside one trade
--- window is an ordinary Midnight evening (docs/MANIFEST.md, the operating reality). The SAME item
--- under the same number is the catch-up re-announce, which is the only case the keep was written for;
--- a different item is a new roll and overwrites. An item this client could not identify counts as
--- different, so an unknown never inherits.
+-- The ITEM is not enough on its own, and this comment claimed it was until B151 was measured end to
+-- end. This table deliberately outlives the roll it belonged to and Blizzard reuses rollIDs, so what
+-- sits under this number may be the PREVIOUS roll's, carrying the same itemID; and a second raid
+-- inside one four-hour trade window is an ordinary Midnight evening (docs/MANIFEST.md, the operating
+-- reality), so age cannot separate them either. What can is WHO IS CALLING -- whether this call is an
+-- item dropping NOW or the same one being said again:
+--
+--   * LC.OnStartLootRoll passes no newDrop, so it may inherit. Blizzard raises a loot roll only on
+--     clients that were standing in the instance when the boss died, so a roll arriving here while
+--     this client reads as being OUTSIDE one cannot be a drop happening now -- it is this client's
+--     own roll window coming back after a reload, or still running after it ported out.
+--   * LC.HandleRollCatchup is the only message that repeats an announcement, and it says so
+--     (LC.HandleStart's `reannounced`), so a catch-up may inherit too. Both repair routes -- the
+--     state request's LC.SendOpenRolls and the heartbeat's LC.HandleRollRequest -- answer with that
+--     one token, so this covers every re-announce there is.
+--   * Everything else announces an item that is dropping NOW and therefore overwrites: LC.HandleStart
+--     reached from LC_DROP, which is the path for a client Blizzard raised no roll on at all (dead,
+--     released, out of range) and so reaches somebody standing outside the instance, and the two
+--     manual doors. Nothing already stored under the number can belong to a drop that is only just
+--     happening, whatever item it names.
+--
+-- An item this client could not identify counts as different, so an unknown never inherits.
 --
 -- The sweep still runs first, so what can be kept at all is inside the trade window: past it no award
 -- can still be coming and the entry is last night's whatever item it names.
 --
--- WHAT THIS STILL GETS WRONG, measured rather than reasoned: the SAME itemID under the same reused
--- number in a DIFFERENT raid inside the trade window inherits the first raid's name. There is no
--- signal that separates it from the re-announce -- PurgeStaleRoll returns early when the itemID is
--- unchanged, age is useless here by the paragraph above, and LC.rollGeneration is owner-side only.
--- Left as it is because retail raid loot is per-instance: the same instance at another difficulty or
--- lockout yields the same name and mapID (harmless), and items that DO span instances are
--- collectibles and BoEs, which never enter Council at all (see docs/MANIFEST.md C6). Recorded in
--- docs/BACKLOG.md rather than fixed. Do not upgrade this note back into a guarantee.
+-- A kept row keeps the DROP's timestamp -- the keep returns rather than rewriting -- so it dies four
+-- hours after the item was looted, which is when its trade window closes and no award can still be
+-- coming for it, and not four hours after the last re-announce.
 --
--- The overwrite below stays unconditional, and not for the reused-rollID case this comment used to
--- claim (the item check owns that now): a read from INSIDE an instance is a first-hand answer about
--- where this client is standing, which is strictly better than anything already stored.
-function LC.SnapshotRollInstance(rollID, item)
+-- The overwrite below is otherwise unconditional, and not for the reused-rollID case this comment
+-- used to claim (the item check and the caller own that now): a read from INSIDE an instance is a
+-- first-hand answer about where this client is standing, which is strictly better than anything
+-- already stored.
+function LC.SnapshotRollInstance(rollID, item, newDrop)
     -- The itemID, whatever form the caller holds the item in -- a full link, the bare "item:NNN"
     -- placeholder LC.HandleStart parks a roll under until the item is cached, or the id on its own.
     -- Same tolerance PurgeStaleRoll matches on, and for the same reason: the two ends of one roll
@@ -5277,10 +5292,12 @@ function LC.SnapshotRollInstance(rollID, item)
     local itemID = item and (tostring(item):match("item:(%d+)") or tostring(item):match("^(%d+)$")) or nil
     local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
     if difficultyID == 0 then
-        if LC.Trade and LC.Trade.PruneExpiredRaidSnapshots then LC.Trade.PruneExpiredRaidSnapshots() end
-        local prev = LC.rollRaidSnapshot[rollID]
-        if type(prev) == "table" and prev.name ~= nil and itemID ~= nil and prev.item == itemID then
-            return
+        if not newDrop then
+            if LC.Trade and LC.Trade.PruneExpiredRaidSnapshots then LC.Trade.PruneExpiredRaidSnapshots() end
+            local prev = LC.rollRaidSnapshot[rollID]
+            if type(prev) == "table" and prev.name ~= nil and itemID ~= nil and prev.item == itemID then
+                return
+            end
         end
         name, mapID = nil, nil
     end
@@ -5474,6 +5491,12 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- Same moment, same "first time this roll is tracked" reasoning as the stamp above -- see
     -- LC.SnapshotRollInstance. The itemID goes with it: it is what tells a later look from outside the
     -- instance apart from a rollID Blizzard has since handed to something else.
+    --
+    -- The one door that passes no newDrop, and deliberately: Blizzard raises a loot roll only on
+    -- clients that were in the instance when the boss died, so this running while the client reads as
+    -- being outside one is its own roll window coming back -- after a reload, or with the client
+    -- ported out and the roll still open -- never a drop happening now. That is the case B150 is
+    -- about, reached without any message at all.
     LC.SnapshotRollInstance(rollID, newItemID)
 
     -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll
@@ -5756,7 +5779,11 @@ end
 -- (B129, B131 -- and tests/test_lc_rolltable.lua holds that disagreement open on purpose). The two
 -- halves of one message therefore share one verdict about what the message SAID, and keep their own
 -- answers about who may say it, which is the design and not an oversight.
-function LC.HandleStart(payload, senderKey)
+--
+-- `reannounced` is set by LC.HandleRollCatchup and by nothing else: this handler serves both a drop
+-- being announced for the FIRST time (LC_DROP) and the same drop being said again to a client that
+-- missed it, and only the raid snapshot below has to tell those apart -- see LC.SnapshotRollInstance.
+function LC.HandleStart(payload, senderKey, reannounced)
     -- Only the loot owner announces a drop (see OnStartLootRoll; it arrives inside LC_DROP, or as a
     -- catch-up for one item) — reject forgeries that would pop fake vote windows on every client.
     if not LC.IsSenderLootOwner(senderKey) then
@@ -5804,10 +5831,11 @@ function LC.HandleStart(payload, senderKey)
     -- whole point. This handler is the announcement path for a client Blizzard raised no roll on, so
     -- it reaches somebody standing outside the instance -- and it is also the path a catch-up
     -- re-announce takes to a client that has just reloaded. The stamp above cannot tell those apart
-    -- and overwrites; the snapshot can, because the itemID goes with it: the same item is the
-    -- re-announce and keeps the raid, a different one is the reused rollID and overwrites. See
-    -- LC.SnapshotRollInstance.
-    LC.SnapshotRollInstance(rollID, itemID)
+    -- and overwrites; the snapshot can, because the caller says which of the two this is: a fresh
+    -- LC_DROP is an item dropping NOW and nothing stored under the number can belong to it, while a
+    -- catch-up is the same drop said again and keeps the raid it already has (for the same item).
+    -- See LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID, itemID, not reannounced)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     -- GetLootRollItemLink answers only for a roll that exists on THIS client, and this handler is
@@ -6018,8 +6046,9 @@ function LC.StartManualRoll(itemsText)
         LC.rollLootedAt = LC.rollLootedAt or {}
         LC.rollLootedAt[rollID] = time()
         -- Same moment, same reasoning as OnStartLootRoll, itemID included -- see
-        -- LC.SnapshotRollInstance.
-        LC.SnapshotRollInstance(rollID, itemLink)
+        -- LC.SnapshotRollInstance. A new drop, unlike OnStartLootRoll's: somebody just typed this
+        -- item in, so nothing already stored under the number can belong to it.
+        LC.SnapshotRollInstance(rollID, itemLink, true)
 
         -- Same roster snapshot a real drop takes, and the reason B79 could never be answered before:
         -- a manually added item has no Blizzard roll behind it, so there was nothing to prove with
@@ -6118,7 +6147,10 @@ function LC.HandleManualStart(payload, senderKey)
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
     -- Same moment, same reasoning as LC.HandleStart, itemID included -- see LC.SnapshotRollInstance.
-    LC.SnapshotRollInstance(rollID, itemLink)
+    -- A new drop for the same reason the sender's own call is: this handler only ever receives an
+    -- item somebody has just added, never a repeat of one (a catch-up for a manual item is answered
+    -- with LC_ROLL_CATCHUP and lands in LC.HandleStart).
+    LC.SnapshotRollInstance(rollID, itemLink, true)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

@@ -630,10 +630,10 @@ function Trade.RestorePersistedTrades()
     -- wrong shape would surface as a broken history entry rather than as a load error.
     --
     -- `snap.item` is deliberately NOT among the shapes checked, and the row is kept whatever it holds:
-    -- nothing writes it onto an award, LC.SnapshotRollInstance only ever compares it with `==`, and a
-    -- malformed one therefore matches nothing and falls through to the overwrite -- the safe
-    -- direction. Refusing the whole row over it would throw away the raid, which is the field this
-    -- store exists for.
+    -- nothing writes it onto an award, the one thing that reads it (LC.SnapshotRollInstance's keep)
+    -- only ever compares it with `==`, and a malformed one therefore matches nothing and falls through
+    -- to the overwrite -- the safe direction. Refusing the whole row over it would throw away the
+    -- raid, which is the field this store exists for.
     local raids = {}
     for rollID, snap in pairs(store.raids) do
         local id = tonumber(rollID)
@@ -877,11 +877,12 @@ function Trade.ClearRollState(rollID)
     -- being gone costs it nothing, while the raid snapshot has no second source at all.
     --
     -- What the snapshot does NOT inherit from the stamp is the sentence above it: the roll-start
-    -- handlers do not overwrite it unconditionally, so "a reused rollID gets a fresh one" is not free
-    -- here. LC.SnapshotRollInstance keeps an existing raid when the read comes from outside an
-    -- instance, and it is the ITEM travelling in the row that makes that safe -- a different item
-    -- under the same number is a new roll and overwrites, so the guarantee holds, but it holds because
-    -- of that check and not because the write is unconditional (B150).
+    -- handlers do not all overwrite it unconditionally, so "a reused rollID gets a fresh one" is not
+    -- free here. LC.SnapshotRollInstance keeps an existing raid when the read comes from outside an
+    -- instance, and two things together make that safe: the ITEM travelling in the row, and the CALLER
+    -- saying whether it is announcing a drop happening now (B150, B151). A fresh announcement
+    -- overwrites whatever the number holds; only this client's own re-raised roll window and the
+    -- catch-up may inherit, and only for the same item.
     Trade.PruneExpiredLootStamps()
     Trade.PruneExpiredRaidSnapshots()
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end
