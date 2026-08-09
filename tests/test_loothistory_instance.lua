@@ -367,6 +367,57 @@ do
     end
 end
 
+-- ...and the same raider again, with a reload in the middle of it (B149) ----------------------------
+--
+-- The vote deadline is only half of what stands between the drop and the award. The other half is a
+-- /reload, which in this guild happens constantly mid-distribution (MANIFEST.md, the operating
+-- reality). LC.SaveSessionSnapshot writes the per-roll tables only for the rolls that are ON SCREEN
+-- -- council tabs and vote rows -- and by the vote deadline a plain raider has neither, so the
+-- snapshot had nothing to come back from. What the award then wrote is the live GetInstanceInfo()
+-- read this whole feature exists to avoid, permanently (the catch-up dedups on the award id) and
+-- silently (LH.HistoryChecksum sums ids only). Asserted on the RAIDER, not the lootmaster: the
+-- lootmaster still holds the council tab, so their copy was never the broken one.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 85, F.GLOVES)
+    RaidSim.Drain(sim, 10)
+
+    -- Past the vote deadline: the raider's row is gone, so there is nothing on screen for
+    -- LC.SaveSessionSnapshot to carry this roll under.
+    KARTTEST.AdvanceTime(60)
+    T.eq(F.HasVoteRow(raider, 85), false, "the plain raider's vote row is gone before the reload")
+
+    -- Ported out and THEN reloaded, in that order, which is the order the guild actually produces --
+    -- somebody leaves for the other raid and relogs there while the council is still talking. It is
+    -- also the only order that measures anything: reloading while still standing in the raid lets the
+    -- catch-up re-snapshot the right answer by luck, so the snapshot could be lost entirely and every
+    -- assertion below would still pass.
+    InOpenWorld()
+
+    raider = RaidSim.Reload(sim, "Alric")
+    RaidSim.EnterWorld(sim, "Alric")
+    -- A reload leaves them with no council list and Trade.HandleResult refuses an award from somebody
+    -- it cannot confirm is council -- a raid produces roster changes constantly, and without one the
+    -- award never reaches this client at all and the assertions below would pass on an empty history.
+    RaidSim.RosterUpdate(sim)
+    KARTTEST.AdvanceTime(0)
+
+    local snap = raider.KART.LC.rollRaidSnapshot[85]
+    T.truthy(snap and snap.name == VOIDSPIRE.name,
+        "the raid this item dropped in came back with the reload, for a roll that was on no list -- " ..
+        "and the catch-up that re-announces the item did not overwrite it with the open world")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(85, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+
+    local stored = raider.env.KART_LootHistory[1]
+    T.truthy(stored, "the reloaded raider logged the award")
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "and it still names the raid the item dropped in, across the vote deadline AND a reload")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "the instance id survived the reload too")
+end
+
 -- ...and the bound that replaces the clear: past the Bind-on-Pickup trade window the snapshot cannot
 -- matter to any award still to come, so it goes -- the same age bound Trade.PruneExpiredLootStamps
 -- puts on the BoP clock, for the same reason it is not cleared with the roll.
@@ -398,6 +449,42 @@ do
         T.eq(snap.name, nil, "...but no name, since difficultyID is 0 (not really an instance)")
         T.eq(snap.id, nil, "...and no id either, even though GetInstanceInfo answers a real mapID")
     end)
+end
+
+-- ...and the other half of that sentinel: a read from outside an instance must not ERASE a raid this
+-- roll already has (B149). The catch-up re-announces a still-open item to a client that has just
+-- reloaded, which runs the snapshot a second time -- and by then that client is usually standing
+-- somewhere else, so an unconditional write would replace the answer the reload just rescued with the
+-- live read the field exists to avoid. Driven directly here, because the two calls are what is under
+-- test, not the route that produces them.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 86, F.GLOVES)
+    T.eq(lm.KART.LC.rollRaidSnapshot[86].name, VOIDSPIRE.name, "the drop named the raid")
+
+    InOpenWorld()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(86) end)
+    local snap = lm.KART.LC.rollRaidSnapshot[86]
+    T.eq(snap.name, VOIDSPIRE.name, "a second look from the open world leaves the raid standing")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+end
+
+-- ...but only while that raid can still belong to an award. Past the trade window it is last night's,
+-- and a rollID Blizzard has since reused must not inherit it -- which is what keeps the rule above
+-- from turning a stale entry into a permanent wrong answer.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 87, F.GLOVES)
+
+    KARTTEST.AdvanceTime(5 * 60 * 60) -- past TRADE_TIMEOUT_SECONDS (4h)
+    InOpenWorld()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(87) end)
+    local snap = lm.KART.LC.rollRaidSnapshot[87]
+    T.is_nil(snap and snap.name,
+        "a raid older than the trade window is not inherited -- it is swept first, so what the roll " ..
+        "gets is the open world's own answer and not last night's")
 end
 
 -- All four doors into the flow take the snapshot, not just LC.OnStartLootRoll -------------------------

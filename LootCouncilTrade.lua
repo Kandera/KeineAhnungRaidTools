@@ -547,6 +547,7 @@ function Trade.RestorePersistedTrades()
     store.pending = type(store.pending) == "table" and store.pending or {}
     store.owed    = type(store.owed) == "table" and store.owed or {}
     store.looted  = type(store.looted) == "table" and store.looted or {}
+    store.raids   = type(store.raids) == "table" and store.raids or {}
     store.notices = type(store.notices) == "table" and store.notices or {}
 
     local now = time()
@@ -609,6 +610,38 @@ function Trade.RestorePersistedTrades()
     -- loop above built a new table.
     store.looted     = looted
     LC.rollLootedAt  = looted
+
+    -- Which RAID each item dropped in (LC.SnapshotRollInstance), kept here for the same reason the
+    -- clock above is, and against the same failure (B149). The award is what reads it, and on a plain
+    -- raider the award lands long after Vote.PruneExpiredRolls freed the roll at the vote deadline --
+    -- so by then the roll is on no list, and LC.SaveSessionSnapshot deliberately persists only what is
+    -- ON SCREEN. A raider who reloads in that window used to come back with nothing and fall back to a
+    -- live GetInstanceInfo() read, which is the read this whole field exists to avoid: permanently
+    -- wrong (LH.HandleHistoryEntry dedups on the award id, so no catch-up repairs it) and silent
+    -- (LH.HistoryChecksum sums ids only, so two clients holding different data agree on their
+    -- checksum). Here it is kept for EVERY rollID instead, which is what the on-screen rule cannot do.
+    --
+    -- Same bound as the stamps above and as the in-memory sweep (Trade.PruneExpiredRaidSnapshots):
+    -- past the trade window no award can still be coming for that roll, so pruning on load is what
+    -- keeps this from growing across raid nights.
+    --
+    -- Rebuilt rather than adopted wholesale, exactly like `looted`: keys come back from a file and may
+    -- be stringified, and the values are read by LH.LogHistory straight onto an award, so a row of the
+    -- wrong shape would surface as a broken history entry rather than as a load error.
+    local raids = {}
+    for rollID, snap in pairs(store.raids) do
+        local id = tonumber(rollID)
+        if id and type(snap) == "table" and type(snap.at) == "number"
+           and (now - snap.at) < TRADE_TIMEOUT_SECONDS
+           and (snap.name == nil or type(snap.name) == "string")
+           and (snap.id == nil or type(snap.id) == "number") then
+            raids[id] = snap
+        end
+    end
+    -- Pointed at the saved table, same arrangement as the four above, so every later snapshot persists
+    -- without a save step -- including the ones taken for a roll nobody can see any more.
+    store.raids         = raids
+    LC.rollRaidSnapshot = raids
 
     -- Which items already HAVE a winner, rebuilt from the loot history (B77).
     --

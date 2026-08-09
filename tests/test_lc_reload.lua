@@ -151,6 +151,77 @@ do
         "a stamp taken after the restore is in the saved file straight away")
 end
 
+-- The raid each item dropped in, kept the same way and for the same reason (B149) --------------------
+-- LC.rollRaidSnapshot is read by the AWARD, which on a plain raider lands long after their vote row
+-- was pruned at the deadline -- so LC.SaveSessionSnapshot, which writes only what is on screen, has
+-- nothing to carry it under and a reload used to lose it. It lives here instead, for every rollID.
+do
+    local sim = F.NewRaid()
+    local bramor = sim.byName.Bramor
+    bramor.env.KART_LCTrades.raids = {
+        [94] = { name = "Last Night's Raid", id = 2800, at = time() - (TRADE_WINDOW + 60) },
+        [95] = { name = "The Voidspire", id = 2912, at = time() - 60 },
+    }
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.is_nil(reloaded.KART.LC.rollRaidSnapshot[94],
+        "a snapshot past the trade window is dropped on load, so the store cannot grow across nights")
+    local kept = reloaded.KART.LC.rollRaidSnapshot[95]
+    T.eq(kept and kept.name, "The Voidspire", "one still inside it comes back whole")
+    T.eq(kept and kept.id, 2912, "id included")
+end
+
+-- A SavedVariables file that comes back malformed ----------------------------------------------------
+-- Same exposure as the stamps above and then some: these values are written straight onto an award by
+-- LH.LogHistory, so a row of the wrong shape surfaces as a broken history entry rather than as a load
+-- error. Each bad row on its own, since pairs() order otherwise decides whether it is reached at all.
+do
+    local sim = F.NewRaid()
+    sim.byName.Bramor.env.KART_LCTrades.raids = { ["96"] = { name = "The Voidspire", id = 2912, at = time() - 60 } }
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.truthy(reloaded.KART.LC.rollRaidSnapshot[96], "a stringified rollID is read back as a number")
+end
+
+do
+    local sim = F.NewRaid()
+    sim.byName.Bramor.env.KART_LCTrades.raids = { [97] = { name = "The Voidspire", at = "not a time" } }
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.is_nil(reloaded.KART.LC.rollRaidSnapshot[97], "a row with no usable age is dropped")
+    T.truthy(reloaded.KART.LC.rollRaidSnapshot == reloaded.env.KART_LCTrades.raids,
+        "and the restore still finished, so later snapshots are still being saved")
+end
+
+do
+    -- Not a bad row but a bad STORE -- an older build, a schema change, or a file that came back
+    -- half-written. Walking it would throw, and the restore is pcall'd at its call site, so the whole
+    -- trade restore would end silently one step before it points the live tables anywhere.
+    local sim = F.NewRaid()
+    sim.byName.Bramor.env.KART_LCTrades.raids = "not a table at all"
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.truthy(type(reloaded.env.KART_LCTrades.raids) == "table"
+             and reloaded.KART.LC.rollRaidSnapshot == reloaded.env.KART_LCTrades.raids,
+        "a store that is not a table is replaced rather than walked, and the restore still finishes")
+end
+
+do
+    local sim = F.NewRaid()
+    sim.byName.Bramor.env.KART_LCTrades.raids = {
+        [98] = { name = { "not a name" }, id = 2912, at = time() - 60 },
+        [99] = { name = "The Voidspire", id = "not an id", at = time() - 60 },
+    }
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.is_nil(reloaded.KART.LC.rollRaidSnapshot[98],
+        "a raid name that is not a string is dropped rather than written onto an award")
+    T.is_nil(reloaded.KART.LC.rollRaidSnapshot[99], "and so is an id that is not a number")
+end
+
+-- New snapshots keep persisting after the restore ----------------------------------------------------
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 83, F.GLOVES)
+    T.eq(lm.env.KART_LCTrades.raids[83], lm.KART.LC.rollRaidSnapshot[83],
+        "a snapshot taken after the restore is in the saved file straight away")
+end
+
 -- Raid lead moves: exactly one config owner, and it is the new leader ------------------------------
 -- B70 was "nobody owns the config after a lead change, and the raid silently falls back to its own
 -- defaults for the rest of the night". The ownership rule (docs/OWNERSHIP.md) removes the question:

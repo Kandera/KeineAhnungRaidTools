@@ -4138,39 +4138,3 @@ a session has been told, so a council-eligible item below it still gets `unaware
 
 Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number is not passed on the
 strength of the first one" (B148's first half); "B148, the deferred half" (this one).
-
-## B149 — the raid snapshot survives the vote deadline but not a reload
-
-Found while fixing B-the-Critical of the instance feature (`bb29002`), verified in the re-review. Not
-scheduled: the deferral and its condition are recorded below.
-
-`LC.rollRaidSnapshot` now outlives `Trade.ClearRollState` and is bounded by age instead, so a plain
-raider still names the raid when the award lands minutes after the vote deadline. It does **not**
-outlive a reload for a roll that is no longer on screen. `LC.SaveSessionSnapshot` persists
-`PERSISTED_ROLL_TABLES` for `ids` = `councilTabs ∪ voteListRolls` only, so a raider whose vote row was
-pruned at the deadline and who reloads before the award arrives loses the snapshot again and falls
-back to the live `GetInstanceInfo()` read — the exact read the feature exists to avoid. People relog
-constantly mid-distribution (`MANIFEST.md`, the operating-reality section), so the window is not
-theoretical.
-
-**`LC.rollLootedAt` does NOT share this exposure**, contrary to what the fix wave's own report first
-claimed. `Trade.RestorePersistedTrades` (`LootCouncilTrade.lua:600-611`) points it straight at
-`KART_LCTrades.looted`, a SavedVariable, so every stamp persists for every rollID rather than the
-on-screen subset — deliberately, per B34 and the comment at `:588-595`, for precisely the reason now
-being cited for the snapshot. The analogue the fix wave adopted in every comment was followed for the
-clear and the age bound but not for the persistence. The gap is real and unmitigated, not shared.
-
-**Deferred past 3.4.0, deliberately.** Nothing in the addon reads `instance` — not a vote, not an
-award, not a trade, and not `LH.HistoryChecksum`, which sums `e.id` alone. C8's standard is that the
-item reaches the right person across a reload, and that is untouched: the failure mode is a blank
-column, not lost loot. The whole feature is under `[Unreleased]`, so no player can regress — the worst
-case at ship is a label that is sometimes absent, which is strictly better than a field that does not
-exist. And the fix is not a release-eve patch: doing it properly means a `KART_LCTrades`-style
-per-character store with its own load-time age prune, plus `.toc` and load-order wiring, not widening
-`SaveSessionSnapshot`'s `ids` — that block is built on the deliberate invariant that what is on screen
-is what there is to lose.
-
-**Condition on the deferral: fix it before anything reads the field for a decision.** Today the
-Companion renders it as a label. The moment it feeds an export column somebody reasons about, an
-absent-or-wrong raid stops being cosmetic — and like the Critical it is permanent (the catch-up dedups
-on `id`) and invisible to the checksum.

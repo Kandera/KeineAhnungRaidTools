@@ -35,7 +35,9 @@ LC.rollItems            = {}  -- [rollID] = itemLink
 -- [rollID] = {name=, id=} the raid instance captured when this item entered the loot flow (see
 -- LC.SnapshotRollInstance), read back by LH.LogHistory at award time. Snapshotted rather than read
 -- live at award time because the lootmaster may have ported out or zoned by then. Not cleared with
--- the roll -- bounded by age, see Trade.PruneExpiredRaidSnapshots.
+-- the roll -- bounded by age, see Trade.PruneExpiredRaidSnapshots. Replaced at ADDON_LOADED by the
+-- persisted table it is saved in (KART_LCTrades.raids, see Trade.RestorePersistedTrades), so a
+-- reload keeps it for every rollID and not just for what is on screen (B149).
 LC.rollRaidSnapshot     = {}
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 -- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
@@ -3302,10 +3304,14 @@ local SESSION_RESTORE_MAX = 60 * 60
 local RESTORE_CONFIRM_SECONDS = 60
 
 -- The per-roll tables worth carrying across. This is Trade.ClearRollState's list -- the addon's own
--- definition of "everything tracked under a rollID" -- minus two that are persisted elsewhere and
+-- definition of "everything tracked under a rollID" -- minus three that are persisted elsewhere and
 -- three that must NOT come back:
 --   * LC.rollDeadlines -- stored separately below, converted to wall clock;
---   * LC.rollLootedAt -- already persisted, by KART_LCTrades.
+--   * LC.rollLootedAt, LC.rollRaidSnapshot -- already persisted, by KART_LCTrades, and deliberately
+--     NOT here: both are read by the AWARD, which on a plain raider lands long after
+--     Vote.PruneExpiredRolls freed the roll at the vote deadline, so by then the roll is on neither
+--     list below and the on-screen rule would drop exactly the entry that is still needed (B149).
+--     Trade.RestorePersistedTrades keeps them for every rollID and bounds them by age instead.
 --   * LC.equipRequestedRolls, LC.rollsPendingSince, LC.pendingItemLoads -- in-flight markers, not
 --     state. Nothing is in flight after a reload, and restoring "we already asked" would stop the
 --     question being asked again: the equipped column would stay empty for the rest of the session.
@@ -3324,18 +3330,9 @@ local PERSISTED_ROLL_TABLES = {
     -- stamps is read as "not stale" for every entry -- which is the forgiving answer, but it is a
     -- guess where the file could simply have carried the fact.
     -- rollInstance here is the roll GENERATION last heard for a number (B139) -- nothing to do with
-    -- rollRaidSnapshot two lines down, which is the raid the item dropped in. Two unrelated senses of
-    -- the word instance sitting next to each other; do not merge them.
+    -- LC.rollRaidSnapshot, which is the raid the item dropped in and is persisted by KART_LCTrades
+    -- (see the note above). Two unrelated senses of the word instance; do not merge them.
     "votes", "rolls", "rollsFor", "councilVotes", "councilVoteItem", "rollItems", "rollInstance",
-    -- The raid instance snapshotted when the item entered the flow (LC.SnapshotRollInstance), read
-    -- back by LH.LogHistory at award time, so it has to survive a reload mid-distribution (C8).
-    --
-    -- Its analogue is rollLootedAt, NOT rollItems: both are read by the AWARD, which on a plain raider
-    -- lands long after Vote.PruneExpiredRolls freed the roll at the vote deadline, and neither has a
-    -- second source once it is gone (the item link reaches LH.LogHistory inside LC_RESULT; the raid
-    -- does not). So it is likewise not cleared per roll and is bounded by age instead -- see
-    -- Trade.PruneExpiredRaidSnapshots.
-    "rollRaidSnapshot",
     "rollDurations",
     "assignedWinners", "assignedDeliberate", "votedByMe", "votedFpByMe", "votedNoteByMe",
     "rollNotInOurBags", "rollAnnounced", "rollAnnouncedBy", "rollSeenHere", "relevanceHandled",
@@ -5224,9 +5221,24 @@ end
 -- `at` is wall clock, and it is what bounds the entry's lifetime: this table is NOT cleared with the
 -- roll (see Trade.PruneExpiredRaidSnapshots and the note in Trade.ClearRollState) because the award
 -- that reads it lands long after a plain raider's roll is gone.
+--
+-- A read from OUTSIDE an instance never overwrites a raid we already have for this roll (B149). That
+-- is not hygiene, it is the other half of surviving a reload: a raider who ports out and reloads
+-- mid-distribution is handed the still-open item again by the catch-up, which runs this a second time
+-- with the client standing in the open world -- and an unconditional write would replace the restored
+-- raid with a blank, which is the live read this whole field exists to avoid. Nothing is lost by
+-- keeping the older answer: a roll starting outside an instance has no raid to name either. The
+-- sweep first, so what is kept is inside the trade window rather than an inheritance from a rollID
+-- Blizzard reused hours later (the overwrite below stays unconditional for exactly that case, which
+-- is the only one that can name a DIFFERENT raid).
 function LC.SnapshotRollInstance(rollID)
     local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
-    if difficultyID == 0 then name, mapID = nil, nil end
+    if difficultyID == 0 then
+        if LC.Trade and LC.Trade.PruneExpiredRaidSnapshots then LC.Trade.PruneExpiredRaidSnapshots() end
+        local prev = LC.rollRaidSnapshot[rollID]
+        if type(prev) == "table" and prev.name ~= nil then return end
+        name, mapID = nil, nil
+    end
     LC.rollRaidSnapshot[rollID] = { name = name, id = mapID, at = time() }
 end
 
