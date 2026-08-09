@@ -667,7 +667,7 @@ do
     F.Drop(sim, 93, F.GLOVES, { noRollFor = { Alric = true } })
     KARTTEST.AdvanceTime(2)
     RaidSim.Drain(sim, 10)
-    T.eq(raider.KART.LC.rollRaidSnapshot[93].name, VOIDSPIRE.name,
+    T.eq((raider.KART.LC.rollRaidSnapshot[93] or {}).name, VOIDSPIRE.name,
         "the first raid's drop named the raid on the raider who only heard about it")
 
     -- The round ends, and an hour later the guild is in a different raid. The snapshot deliberately
@@ -684,7 +684,7 @@ do
     KARTTEST.AdvanceTime(2)
     RaidSim.Drain(sim, 10)
 
-    T.eq(lm.KART.LC.rollRaidSnapshot[93].name, QUELDANAS.name,
+    T.eq((lm.KART.LC.rollRaidSnapshot[93] or {}).name, QUELDANAS.name,
         "the lootmaster, who is standing in it, names the second raid -- so this really is a drop " ..
         "somewhere else and not the same one twice")
     local snap = raider.KART.LC.rollRaidSnapshot[93]
@@ -718,17 +718,17 @@ do
     F.Drop(sim, 94, F.GLOVES, { noRollFor = { Alric = true } })
     KARTTEST.AdvanceTime(2)
     RaidSim.Drain(sim, 10)
-    T.eq(raider.KART.LC.rollRaidSnapshot[94].name, VOIDSPIRE.name, "the drop named the raid")
+    T.eq((raider.KART.LC.rollRaidSnapshot[94] or {}).name, VOIDSPIRE.name, "the drop named the raid")
 
     -- Past the vote deadline, so his row is pruned and there is nothing of this roll on his screen for
     -- LC.SaveSessionSnapshot to write down. KART_LCTrades is what carries the raid across (B150).
     KARTTEST.AdvanceTime(60)
-    local droppedAt = raider.KART.LC.rollRaidSnapshot[94].at
+    local droppedAt = (raider.KART.LC.rollRaidSnapshot[94] or {}).at
     InOpenWorld() -- he ports out, then reloads
     raider = RaidSim.Reload(sim, "Alric")
     T.is_nil(raider.KART.LC.rollAnnounced[94],
         "the reload lost the announcement, which is what lets the catch-up through at all")
-    T.eq(raider.KART.LC.rollRaidSnapshot[94].name, VOIDSPIRE.name,
+    T.eq((raider.KART.LC.rollRaidSnapshot[94] or {}).name, VOIDSPIRE.name,
         "...but not the raid, which came back off disk")
 
     -- No hand-driven message: the state request his own recovery sends is answered with the still-open
@@ -738,7 +738,7 @@ do
     T.truthy(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP") > 0, "the owner re-announced the open roll to him")
     T.truthy(raider.KART.LC.rollAnnounced[94], "and this time he took it")
 
-    local snap = raider.KART.LC.rollRaidSnapshot[94]
+    local snap = raider.KART.LC.rollRaidSnapshot[94] or {}
     T.eq(snap.name, VOIDSPIRE.name,
         "and the raid it dropped in survived being told about it again from the open world")
     T.eq(snap.id, VOIDSPIRE.mapID, "id included")
@@ -768,7 +768,7 @@ do
     F.Drop(sim, 98, F.GLOVES) -- his own Blizzard roll this time
     KARTTEST.AdvanceTime(2)
     RaidSim.Drain(sim, 10)
-    T.eq(council.KART.LC.rollRaidSnapshot[98].name, VOIDSPIRE.name, "the drop named the raid")
+    T.eq((council.KART.LC.rollRaidSnapshot[98] or {}).name, VOIDSPIRE.name, "the drop named the raid")
 
     KARTTEST.AdvanceTime(60)
     InOpenWorld()
@@ -785,7 +785,7 @@ do
     end)
     T.eq(council.KART.LC.rollLootedAt[98], time(),
         "the handler ran all the way through -- it re-stamped the trade clock unconditionally")
-    T.eq(council.KART.LC.rollRaidSnapshot[98].name, VOIDSPIRE.name,
+    T.eq((council.KART.LC.rollRaidSnapshot[98] or {}).name, VOIDSPIRE.name,
         "...and left the raid standing, because this is his own roll coming back and not a new drop")
 end
 
@@ -799,7 +799,7 @@ do
     RaidSim.As(lm, function() lm.KART.LC.StartManualRoll(GLOVES) end)
     RaidSim.Drain(sim, 10)
     local rollID = lm.KART.LC.voteListRolls[1]
-    T.eq(raider.KART.LC.rollRaidSnapshot[rollID].name, VOIDSPIRE.name,
+    T.eq((raider.KART.LC.rollRaidSnapshot[rollID] or {}).name, VOIDSPIRE.name,
         "the manually added item named the raid on the peer")
 
     KARTTEST.AdvanceTime(60 * 60) -- still inside the trade window
@@ -807,7 +807,7 @@ do
     RaidSim.As(raider, function()
         raider.KART.LC.HandleManualStart(rollID .. ":20:" .. GLOVES, lm.guid)
     end)
-    T.is_nil(raider.KART.LC.rollRaidSnapshot[rollID].name,
+    T.is_nil((raider.KART.LC.rollRaidSnapshot[rollID] or {}).name,
         "the same number added again for the same item does not inherit the raid the first one " ..
         "dropped in -- LC.HandleManualStart only ever receives an item somebody has just added")
 
@@ -816,7 +816,7 @@ do
         lm.KART.LC.StartManualRoll(GLOVES)
     end)
     RaidSim.Drain(sim, 10)
-    T.is_nil(lm.KART.LC.rollRaidSnapshot[rollID].name,
+    T.is_nil((lm.KART.LC.rollRaidSnapshot[rollID] or {}).name,
         "...and neither does the client that typed it")
 end
 
