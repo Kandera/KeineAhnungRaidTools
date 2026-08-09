@@ -283,6 +283,11 @@ local function Boot(client, saved)
     -- only the client set and no unit, a timer armed during the restore asked UnitGUID("player")
     -- forever after and got nil -- a client that could never resolve itself, which is not what
     -- logging in looks like.
+    -- The two pcalls are the HARNESS's own containment so one broken client cannot abort a whole
+    -- suite run -- they are NOT what the game does, and no test may reason from them. Core.lua calls
+    -- both of these unguarded from ADDON_LOADED, so a throw in either one there takes the rest of that
+    -- handler with it: the other restore, KART.SyncSettingsToUI, the compartment registration. A guard
+    -- inside these functions therefore matters more than "it would fail silently", not less.
     RaidSim.As(client, function()
         if client.KART.LC.Trade and client.KART.LC.Trade.RestorePersistedTrades then
             pcall(client.KART.LC.Trade.RestorePersistedTrades)

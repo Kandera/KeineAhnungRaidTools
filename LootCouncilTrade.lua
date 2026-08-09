@@ -612,7 +612,7 @@ function Trade.RestorePersistedTrades()
     LC.rollLootedAt  = looted
 
     -- Which RAID each item dropped in (LC.SnapshotRollInstance), kept here for the same reason the
-    -- clock above is, and against the same failure (B149). The award is what reads it, and on a plain
+    -- clock above is, and against the same failure (B150). The award is what reads it, and on a plain
     -- raider the award lands long after Vote.PruneExpiredRolls freed the roll at the vote deadline --
     -- so by then the roll is on no list, and LC.SaveSessionSnapshot deliberately persists only what is
     -- ON SCREEN. A raider who reloads in that window used to come back with nothing and fall back to a
@@ -628,6 +628,12 @@ function Trade.RestorePersistedTrades()
     -- Rebuilt rather than adopted wholesale, exactly like `looted`: keys come back from a file and may
     -- be stringified, and the values are read by LH.LogHistory straight onto an award, so a row of the
     -- wrong shape would surface as a broken history entry rather than as a load error.
+    --
+    -- `snap.item` is deliberately NOT among the shapes checked, and the row is kept whatever it holds:
+    -- nothing writes it onto an award, LC.SnapshotRollInstance only ever compares it with `==`, and a
+    -- malformed one therefore matches nothing and falls through to the overwrite -- the safe
+    -- direction. Refusing the whole row over it would throw away the raid, which is the field this
+    -- store exists for.
     local raids = {}
     for rollID, snap in pairs(store.raids) do
         local id = tonumber(rollID)
@@ -863,11 +869,19 @@ function Trade.ClearRollState(rollID)
     -- LC.ClearAllRolls' wipe.
     LC.councilTabsNew[rollID]  = nil
     -- LC.rollLootedAt[rollID] is deliberately NOT cleared here — see Trade.PruneExpiredLootStamps
-    -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves.
+    -- above. A rollID Blizzard reuses gets a fresh stamp from the roll-start handlers themselves,
+    -- because those overwrite it unconditionally.
     -- LC.rollRaidSnapshot is the second exception, for the same reason and read by the same
     -- award path — see Trade.PruneExpiredRaidSnapshots above. It is NOT the analogue of rollItems: on
     -- a plain raider the item link that reaches LH.LogHistory travels inside LC_RESULT, so the roll
     -- being gone costs it nothing, while the raid snapshot has no second source at all.
+    --
+    -- What the snapshot does NOT inherit from the stamp is the sentence above it: the roll-start
+    -- handlers do not overwrite it unconditionally, so "a reused rollID gets a fresh one" is not free
+    -- here. LC.SnapshotRollInstance keeps an existing raid when the read comes from outside an
+    -- instance, and it is the ITEM travelling in the row that makes that safe -- a different item
+    -- under the same number is a new roll and overwrites, so the guarantee holds, but it holds because
+    -- of that check and not because the write is unconditional (B150).
     Trade.PruneExpiredLootStamps()
     Trade.PruneExpiredRaidSnapshots()
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end

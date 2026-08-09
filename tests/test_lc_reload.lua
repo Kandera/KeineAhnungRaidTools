@@ -127,8 +127,14 @@ end
 do
     -- On its own, not mixed in with sound entries: pairs() order decides whether a bad row is
     -- reached before or after the good ones, so a mixed table can pass by luck. What must hold is
-    -- that one bad row cannot take the whole restore down with it -- and the restore is wrapped in a
-    -- pcall at the call site, so a throw here is SILENT. The observable is further down.
+    -- that one bad row cannot take the whole restore down with it.
+    --
+    -- The pcall is the HARNESS's (raidsim.lua), not the game's: Core.lua calls
+    -- Trade.RestorePersistedTrades unguarded from ADDON_LOADED, so a throw in here does not "fail
+    -- silently" -- it aborts the rest of that handler. LC.RestoreSessionSnapshot never runs, so the
+    -- items still on the table are gone; KART.SyncSettingsToUI never runs; the addon compartment is
+    -- never registered. One malformed SavedVariables row would cost the whole login. The observable
+    -- is further down.
     local sim, lm = F.NewRaid()
     lm.env.KART_LCTrades.looted = { [93] = "not a time" }
     local reloaded = RaidSim.Reload(sim, "Bramor")
@@ -151,7 +157,7 @@ do
         "a stamp taken after the restore is in the saved file straight away")
 end
 
--- The raid each item dropped in, kept the same way and for the same reason (B149) --------------------
+-- The raid each item dropped in, kept the same way and for the same reason (B150) --------------------
 -- LC.rollRaidSnapshot is read by the AWARD, which on a plain raider lands long after their vote row
 -- was pruned at the deadline -- so LC.SaveSessionSnapshot, which writes only what is on screen, has
 -- nothing to carry it under and a reload used to lose it. It lives here instead, for every rollID.
@@ -192,8 +198,11 @@ end
 
 do
     -- Not a bad row but a bad STORE -- an older build, a schema change, or a file that came back
-    -- half-written. Walking it would throw, and the restore is pcall'd at its call site, so the whole
-    -- trade restore would end silently one step before it points the live tables anywhere.
+    -- half-written. Walking it would throw, and Core.lua calls the restore unguarded from
+    -- ADDON_LOADED (only the harness wraps it), so the throw takes the rest of that handler with it:
+    -- the trade restore ends one step before it points the live tables anywhere, and
+    -- LC.RestoreSessionSnapshot, KART.SyncSettingsToUI and the compartment registration behind it
+    -- never run at all.
     local sim = F.NewRaid()
     sim.byName.Bramor.env.KART_LCTrades.raids = "not a table at all"
     local reloaded = RaidSim.Reload(sim, "Bramor")
@@ -212,6 +221,20 @@ do
     T.is_nil(reloaded.KART.LC.rollRaidSnapshot[98],
         "a raid name that is not a string is dropped rather than written onto an award")
     T.is_nil(reloaded.KART.LC.rollRaidSnapshot[99], "and so is an id that is not a number")
+end
+
+do
+    -- A ROW that is not a table -- the shape the store's own `looted` half legitimately has, so an
+    -- older file, a half-written one or a schema that moved is exactly how it turns up. This is the
+    -- one bad row that does not merely get dropped: without the type check the `.at` read below it
+    -- throws, and Core.lua calls this restore unguarded from ADDON_LOADED (see above), so it would
+    -- take the session restore and the rest of the login with it.
+    local sim = F.NewRaid()
+    sim.byName.Bramor.env.KART_LCTrades.raids = { [95] = 42 }
+    local reloaded = RaidSim.Reload(sim, "Bramor")
+    T.is_nil(reloaded.KART.LC.rollRaidSnapshot[95], "a row that is not a table at all is dropped")
+    T.truthy(reloaded.KART.LC.rollRaidSnapshot == reloaded.env.KART_LCTrades.raids,
+        "and the restore still finished, so later snapshots are still being saved")
 end
 
 -- New snapshots keep persisting after the restore ----------------------------------------------------

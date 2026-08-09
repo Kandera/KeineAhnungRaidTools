@@ -307,6 +307,9 @@ do
         T.truthy(snap, "the roll start snapshotted an instance")
         T.eq(snap.name, VOIDSPIRE.name, "...the one the client was actually in")
         T.eq(snap.id, VOIDSPIRE.mapID, "...id included")
+        T.eq(snap.item, tostring(F.GLOVES),
+            "...and the item, which is what tells a later look from outside the instance apart " ..
+            "from a rollID Blizzard has since handed to something else (B150)")
     end)
 
     -- Every client in the raid now reads live as being in the open world -- exactly what a live
@@ -367,7 +370,7 @@ do
     end
 end
 
--- ...and the same raider again, with a reload in the middle of it (B149) ----------------------------
+-- ...and the same raider again, with a reload in the middle of it (B150) ----------------------------
 --
 -- The vote deadline is only half of what stands between the drop and the award. The other half is a
 -- /reload, which in this guild happens constantly mid-distribution (MANIFEST.md, the operating
@@ -434,6 +437,40 @@ do
         "past the trade window the snapshot is swept by age, so it cannot accumulate for the session")
 end
 
+-- End Round does not take it either, which is the same exception LC.rollLootedAt has had all along
+-- and was decided for this table on 2026-08-09 (see the comment in LC.ClearAllRolls).
+--
+-- Not a hypothetical ordering: End Round is one addon message and it does not reach every client at
+-- the same moment -- "End Round did not end it for one council member, three rounds running" is on
+-- the Manifest's own failure list (B118). So a raider can take LC_END and the award for the same item
+-- in that order, and on 2026-08-03 somebody did. Driven that way here: the raider is handed End Round
+-- while the council is still deciding, then the decision arrives. Wiping the snapshot there sent the
+-- award back to the live GetInstanceInfo() read, which by then answers the open world -- and since the
+-- table IS KART_LCTrades.raids, the wipe emptied the SavedVariable too, so a reload afterwards could
+-- not repair it either.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 92, F.GLOVES)
+    RaidSim.Drain(sim, 10)
+
+    InOpenWorld()
+    RaidSim.As(raider, function() raider.KART.LC.HandleEndRound(lm.guid) end)
+    T.is_nil(raider.KART.LC.rollItems[92], "the raider's roll state is gone with the round")
+
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(92, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+
+    local stored = raider.env.KART_LootHistory[1]
+    T.truthy(stored, "the award still reached the raider after End Round")
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "and it names the raid the item dropped in -- End Round ends the ROLLS, not the record of " ..
+        "where they came from")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "id included")
+    T.truthy(raider.env.KART_LCTrades.raids[92],
+        "...and the saved store still holds it, so a reload after End Round cannot lose it either")
+end
+
 -- LC.SnapshotRollInstance's own sentinel: a roll that starts while this client reads as being in the
 -- open world snapshots nothing, rather than the zone name -- checked directly on the snapshot table,
 -- not through an award, so this is about LC.SnapshotRollInstance specifically and not about
@@ -452,7 +489,7 @@ do
 end
 
 -- ...and the other half of that sentinel: a read from outside an instance must not ERASE a raid this
--- roll already has (B149). The catch-up re-announces a still-open item to a client that has just
+-- roll already has (B150). The catch-up re-announces a still-open item to a client that has just
 -- reloaded, which runs the snapshot a second time -- and by then that client is usually standing
 -- somewhere else, so an unconditional write would replace the answer the reload just rescued with the
 -- live read the field exists to avoid. Driven directly here, because the two calls are what is under
@@ -464,10 +501,87 @@ do
     T.eq(lm.KART.LC.rollRaidSnapshot[86].name, VOIDSPIRE.name, "the drop named the raid")
 
     InOpenWorld()
-    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(86) end)
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(86, GLOVES) end)
     local snap = lm.KART.LC.rollRaidSnapshot[86]
     T.eq(snap.name, VOIDSPIRE.name, "a second look from the open world leaves the raid standing")
     T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+end
+
+-- ...but only for the SAME ITEM, which is what makes the rule above safe rather than a second way of
+-- writing the wrong raid (B150). Blizzard reuses rollIDs and this table deliberately outlives the
+-- roll, so the number alone proves nothing -- and the client that would inherit is precisely the one
+-- the keep exists for: LC.HandleStart is the path for a client Blizzard raised no roll on, so it runs
+-- with the client standing outside the instance. Well inside the trade window on purpose: two raids
+-- in one evening is normal here, so AGE cannot tell the two cases apart and only the item can.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 88, F.GLOVES)
+    T.eq(lm.KART.LC.rollRaidSnapshot[88].name, VOIDSPIRE.name, "the drop named the raid")
+
+    KARTTEST.AdvanceTime(60 * 60) -- an hour later, still well inside the 4h trade window
+    InOpenWorld()
+    local WEAPON = KARTTEST.items[F.WEAPON].link
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(88, WEAPON) end)
+
+    local snap = lm.KART.LC.rollRaidSnapshot[88]
+    T.truthy(snap, "the roll still has an entry")
+    T.is_nil(snap.name,
+        "a DIFFERENT item under the same rollID is a new roll, so it does not inherit the raid the " ..
+        "previous one dropped in -- the entry is blank, not last night's raid")
+    T.is_nil(snap.id, "and no id either")
+
+    -- And the award proves it is not merely the table that is right: this is the value that becomes
+    -- permanent (LH.HandleHistoryEntry dedups on the award id) and checksum-invisible.
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function()
+        lm.KART.LH.LogHistory(GLOVES, "Alric", "BIS", "MAGE", nil, 88, "Player-1-A")
+    end)
+    T.eq(lm.env.KART_LootHistory[1].instance, nil,
+        "so the award carries no raid rather than confidently naming the wrong one")
+end
+
+-- An item this client could not identify counts as DIFFERENT, including when NEITHER side knows it.
+-- Unknown matching unknown would inherit across exactly the reuse the check above refuses.
+--
+-- The row with no item is not invented: an announcement whose item part is empty is a payload shape
+-- LC.HandleStart still accepts and resolves locally, so a client can genuinely hold the raid for a
+-- roll it cannot name the item of.
+do
+    InVoidspire()
+    local _, lm, _, raider = F.NewRaid()
+    RaidSim.As(raider, function() raider.KART.LC.HandleStart("89:20:", lm.guid) end)
+    local first = raider.KART.LC.rollRaidSnapshot[89]
+    T.truthy(first, "an announcement with no item part still snapshots the raid")
+    T.eq(first.name, VOIDSPIRE.name, "...naming it")
+    T.is_nil(first.item, "...with no item, because the payload carried none")
+
+    InOpenWorld()
+    RaidSim.As(raider, function() raider.KART.LC.SnapshotRollInstance(89, nil) end)
+    local snap = raider.KART.LC.rollRaidSnapshot[89]
+    T.truthy(snap, "the roll still has an entry")
+    T.is_nil(snap.name,
+        "an unknown item does not match an unknown item -- two blanks are not proof this is the " ..
+        "same roll, and the raid is not kept on them")
+end
+
+-- ...and the overwrite that is still unconditional: a read from INSIDE an instance is first-hand and
+-- wins, even over a raid this roll already has and even for the same item. This is the only branch
+-- that can name a DIFFERENT raid, and moving the keep above it -- so an existing raid is never
+-- overwritten at all -- is a mutation nothing else in this suite can see.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 90, F.GLOVES)
+    T.eq(lm.KART.LC.rollRaidSnapshot[90].name, VOIDSPIRE.name, "the drop named the raid")
+
+    InQuelDanas()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(90, GLOVES) end)
+    local snap = lm.KART.LC.rollRaidSnapshot[90]
+    T.eq(snap.name, QUELDANAS.name,
+        "standing in a raid, the snapshot is taken again -- the keep is for the blank read, not for " ..
+        "every read")
+    T.eq(snap.id, QUELDANAS.mapID, "id included")
 end
 
 -- ...but only while that raid can still belong to an award. Past the trade window it is last night's,
@@ -480,11 +594,58 @@ do
 
     KARTTEST.AdvanceTime(5 * 60 * 60) -- past TRADE_TIMEOUT_SECONDS (4h)
     InOpenWorld()
-    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(87) end)
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(87, GLOVES) end)
+    -- The entry EXISTS and is blank, which is not the same thing as being gone -- and the difference
+    -- is load-bearing at LH.LogHistory, which reads "no snapshot" as permission to look live. An
+    -- assertion that only says "no name" passes either way and would let the sweep-then-write become
+    -- a plain sweep.
     local snap = lm.KART.LC.rollRaidSnapshot[87]
-    T.is_nil(snap and snap.name,
+    T.truthy(snap, "the roll is snapshotted again rather than left with nothing")
+    T.is_nil(snap.name,
         "a raid older than the trade window is not inherited -- it is swept first, so what the roll " ..
         "gets is the open world's own answer and not last night's")
+    T.is_nil(snap.id, "and no id either")
+end
+
+-- The blank entry is REWRITTEN, not merely left alone, and that is what keeps it alive.
+--
+-- Two mutations hide here and nothing else in the suite sees either. Keeping on `prev ~= nil` instead
+-- of on a NAMED prev never refreshes a blank row's `at`, so the sweep eventually drops it -- and a
+-- roll with no snapshot at all is exactly what LH.LogHistory reads as permission to take a live
+-- GetInstanceInfo(). The second is on the reader itself: `if snapshot then` deciding to look live only
+-- when the snapshot has a NAME does the same thing in one step. Both end with the award naming
+-- whatever raid the client happens to be standing in hours later, which is the failure this whole
+-- field exists to prevent -- and this raid genuinely is somewhere else by then.
+do
+    InOpenWorld()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 91, F.GLOVES)
+    T.truthy(lm.KART.LC.rollRaidSnapshot[91], "a drop outside an instance still snapshots something")
+    T.is_nil(lm.KART.LC.rollRaidSnapshot[91].name, "...blank, since difficultyID is 0")
+
+    -- Three hours on, the catch-up re-announces the still-open item. Still outside an instance, so
+    -- this is the keep branch reading a BLANK previous answer.
+    KARTTEST.AdvanceTime(3 * 60 * 60)
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(91, GLOVES) end)
+
+    -- Ninety more minutes: 4.5h since the drop, but only 1.5h since the rewrite above.
+    KARTTEST.AdvanceTime(90 * 60)
+    InQuelDanas()
+    RaidSim.As(lm, function() lm.KART.LC.Trade.ClearRollState(999125) end) -- any clear runs the sweep
+    T.truthy(lm.KART.LC.rollRaidSnapshot[91],
+        "the blank entry survives the sweep, because the second look rewrote its `at` rather than " ..
+        "returning early")
+
+    RaidSim.As(lm, function() lm.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function()
+        lm.KART.LH.LogHistory(GLOVES, "Alric", "BIS", "MAGE", nil, 91, "Player-1-A")
+    end)
+    local stored = lm.env.KART_LootHistory[1]
+    T.truthy(stored, "the award was logged")
+    T.eq(stored.instance, nil,
+        "and it names NO raid -- a blank snapshot is an answer (this item dropped outside an " ..
+        "instance), not a gap for the live read to fill with wherever this client stands now")
+    T.eq(stored.instanceID, nil, "no id either")
 end
 
 -- All four doors into the flow take the snapshot, not just LC.OnStartLootRoll -------------------------
@@ -494,6 +655,14 @@ end
 -- permanent and checksum-invisible (see the vote-deadline block above). LC.HandleStart in particular
 -- is the client Blizzard raised no roll on at all: dead, released, out of range -- the client C13 and
 -- C14 were written about. The manual pair is the maintainer's own three-man Manifest route.
+--
+-- Every door also has to hand the ITEM over, not just call the function: without it the row cannot
+-- tell a catch-up re-announce from a rollID Blizzard has reused, and the keep in
+-- LC.SnapshotRollInstance either stops working or starts inheriting (B150). Asserted on the stored
+-- row rather than through a scenario, because two of the four doors have no second read behind them
+-- today and a scenario for those would be invented rather than observed.
+local GLOVES_ID = tostring(F.GLOVES)
+
 do
     -- LC.HandleStart: Alric never gets a START_LOOT_ROLL, so LC.OnStartLootRoll cannot have run on
     -- his client and the announcement is the only thing that reaches him.
@@ -509,6 +678,7 @@ do
     T.truthy(snap, "...and LC.HandleStart snapshotted the raid for him too")
     T.eq(snap.name, VOIDSPIRE.name, "...the right one")
     T.eq(snap.id, VOIDSPIRE.mapID, "...id included")
+    T.eq(snap.item, GLOVES_ID, "...and the item the row has to compare against later")
 end
 
 do
@@ -526,12 +696,14 @@ do
     T.truthy(own, "LC.StartManualRoll snapshotted the raid on the client that typed the command")
     T.eq(own.name, VOIDSPIRE.name, "...the right one")
     T.eq(own.id, VOIDSPIRE.mapID, "...id included")
+    T.eq(own.item, GLOVES_ID, "...and the item")
 
     for _, c in ipairs({ council, raider }) do
         local peer = c.KART.LC.rollRaidSnapshot[rollID]
         T.truthy(peer, "LC.HandleManualStart snapshotted it on " .. c.name .. " as well")
         T.eq(peer.name, VOIDSPIRE.name, c.name .. " has the right raid")
         T.eq(peer.id, VOIDSPIRE.mapID, c.name .. " has the id too")
+        T.eq(peer.item, GLOVES_ID, c.name .. " has the item too")
     end
 end
 

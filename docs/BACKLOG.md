@@ -77,6 +77,12 @@ that the mark survives a reload. Still owed: confirming in the game that a marke
 import into WoWUtils without duplicates — the suite can prove what the addon emits, not what the
 other end accepts.
 
+**2026-08-09:** the raid snapshot surviving a reload was filed and fixed as **B149**, which was already
+taken — B149 is the mutation-run entry below, still in this file, and `git log --grep=B149` returns
+that bug's commits alongside it. It is **B150** from now on, in every code comment and test that names
+it. Commit `60f0fe8` still carries the old number in its own subject and cannot be rewritten, so:
+`git log --grep=B150` finds the fix and the diagnosis, `--grep=B149` finds the introduction as well.
+
 ## Reading this file
 
 **Every heading carries its own status**, so "what is still open?" is one look at the headings and

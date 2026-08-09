@@ -37,7 +37,7 @@ LC.rollItems            = {}  -- [rollID] = itemLink
 -- live at award time because the lootmaster may have ported out or zoned by then. Not cleared with
 -- the roll -- bounded by age, see Trade.PruneExpiredRaidSnapshots. Replaced at ADDON_LOADED by the
 -- persisted table it is saved in (KART_LCTrades.raids, see Trade.RestorePersistedTrades), so a
--- reload keeps it for every rollID and not just for what is on screen (B149).
+-- reload keeps it for every rollID and not just for what is on screen (B150).
 LC.rollRaidSnapshot     = {}
 LC.voteListRolls        = {}  -- ordered list of rollIDs currently shown as rows in the looter's vote list
 -- What this client REFUSED, and why. Companion to KASC:Diagnostics(), which counts the two refusals
@@ -3203,13 +3203,25 @@ function LC.ClearAllRolls()
     -- obligations that intentionally survive a session end. It outlives roll tracking on purpose and
     -- is bounded by age instead — see Trade.PruneExpiredLootStamps, which the ClearRollState loops
     -- above already ran.
+    --
+    -- LC.rollRaidSnapshot is the SECOND exception, decided 2026-08-09 rather than inherited: it used
+    -- to be wiped here, which was the one place the two analogues disagreed. They are analogues --
+    -- both are read by the AWARD, both deliberately outlive Trade.ClearRollState, both are bounded by
+    -- age instead — so the award that arrives after End Round is the case both of them are for. It is
+    -- a real ordering, not a hypothetical: End Round is one addon message and does not reach every
+    -- client at the same moment — "End Round did not end it for one council member, three rounds
+    -- running" is on the Manifest's own failure list (B118) — so a client can take LC_END and then the
+    -- award for the same item, and it logged that award with the snapshot already gone: falling back
+    -- to the live GetInstanceInfo() read this field exists to avoid, permanently (LH.HandleHistoryEntry
+    -- dedups on the award id) and silently (LH.HistoryChecksum sums ids only). Since
+    -- Trade.RestorePersistedTrades points this table at KART_LCTrades.raids, the wipe also emptied the
+    -- SavedVariable, so a reload after End Round lost it for good.
     wipe(LC.votes)
     wipe(LC.rolls)
     wipe(LC.rollsFor)
     wipe(LC.councilVotes)
     if LC.councilVoteItem then wipe(LC.councilVoteItem) end
     wipe(LC.rollItems)
-    wipe(LC.rollRaidSnapshot)
     wipe(LC.rollDeadlines)
     wipe(LC.rollDurations)
     wipe(LC.assignedWinners)
@@ -3310,7 +3322,7 @@ local RESTORE_CONFIRM_SECONDS = 60
 --   * LC.rollLootedAt, LC.rollRaidSnapshot -- already persisted, by KART_LCTrades, and deliberately
 --     NOT here: both are read by the AWARD, which on a plain raider lands long after
 --     Vote.PruneExpiredRolls freed the roll at the vote deadline, so by then the roll is on neither
---     list below and the on-screen rule would drop exactly the entry that is still needed (B149).
+--     list below and the on-screen rule would drop exactly the entry that is still needed (B150).
 --     Trade.RestorePersistedTrades keeps them for every rollID and bounds them by age instead.
 --   * LC.equipRequestedRolls, LC.rollsPendingSince, LC.pendingItemLoads -- in-flight markers, not
 --     state. Nothing is in flight after a reload, and restoring "we already asked" would stop the
@@ -5222,24 +5234,52 @@ end
 -- roll (see Trade.PruneExpiredRaidSnapshots and the note in Trade.ClearRollState) because the award
 -- that reads it lands long after a plain raider's roll is gone.
 --
--- A read from OUTSIDE an instance never overwrites a raid we already have for this roll (B149). That
+-- A read from OUTSIDE an instance keeps a raid this roll already has FOR THE SAME ITEM (B150). That
 -- is not hygiene, it is the other half of surviving a reload: a raider who ports out and reloads
 -- mid-distribution is handed the still-open item again by the catch-up, which runs this a second time
 -- with the client standing in the open world -- and an unconditional write would replace the restored
 -- raid with a blank, which is the live read this whole field exists to avoid. Nothing is lost by
--- keeping the older answer: a roll starting outside an instance has no raid to name either. The
--- sweep first, so what is kept is inside the trade window rather than an inheritance from a rollID
--- Blizzard reused hours later (the overwrite below stays unconditional for exactly that case, which
--- is the only one that can name a DIFFERENT raid).
-function LC.SnapshotRollInstance(rollID)
+-- keeping the older answer: a roll starting outside an instance has no raid to name either.
+--
+-- Gated on the ITEM, and that is what makes the keep safe rather than a second way to write the wrong
+-- raid. Blizzard reuses rollIDs and this table deliberately outlives the roll it belonged to, so what
+-- sits under this number may be the PREVIOUS roll's -- and the client that would inherit it is
+-- exactly the one the keep exists for: LC.HandleStart is the announcement path for a client Blizzard
+-- raised no roll on at all (dead, released, out of range), so it reaches somebody standing outside
+-- the instance and takes this branch. Age does not separate the two: two raids inside one trade
+-- window is an ordinary Midnight evening (docs/MANIFEST.md, the operating reality). The SAME item
+-- under the same number is the catch-up re-announce, which is the only case the keep was written for;
+-- a different item is a new roll and overwrites. An item this client could not identify counts as
+-- different, so an unknown never inherits.
+--
+-- The sweep still runs first, so what can be kept at all is inside the trade window: past it no award
+-- can still be coming and the entry is last night's whatever item it names.
+--
+-- The overwrite below stays unconditional, and not for the reused-rollID case this comment used to
+-- claim (the item check owns that now): a read from INSIDE an instance is a first-hand answer about
+-- where this client is standing, which is strictly better than anything already stored.
+function LC.SnapshotRollInstance(rollID, item)
+    -- The itemID, whatever form the caller holds the item in -- a full link, the bare "item:NNN"
+    -- placeholder LC.HandleStart parks a roll under until the item is cached, or the id on its own.
+    -- Same tolerance PurgeStaleRoll matches on, and for the same reason: the two ends of one roll
+    -- legitimately hold the item in different forms, and requiring a full link would make them fail
+    -- to compare on the client that has the placeholder -- which is the reloaded one.
+    local itemID = item and (tostring(item):match("item:(%d+)") or tostring(item):match("^(%d+)$")) or nil
     local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
     if difficultyID == 0 then
         if LC.Trade and LC.Trade.PruneExpiredRaidSnapshots then LC.Trade.PruneExpiredRaidSnapshots() end
         local prev = LC.rollRaidSnapshot[rollID]
-        if type(prev) == "table" and prev.name ~= nil then return end
+        if type(prev) == "table" and prev.name ~= nil and itemID ~= nil and prev.item == itemID then
+            return
+        end
         name, mapID = nil, nil
     end
-    LC.rollRaidSnapshot[rollID] = { name = name, id = mapID, at = time() }
+    -- The item travels WITH the snapshot, and is why the row is not just (name, id, at): it is
+    -- persisted, so the comparison above has to still be possible on the client that reloaded, which
+    -- is the client the whole rule is for. Nothing else reads it -- LH.LogHistory takes name and id
+    -- only -- so a row that comes back from a file with a malformed one simply never matches and
+    -- falls through to the overwrite, which is the safe direction.
+    LC.rollRaidSnapshot[rollID] = { name = name, id = mapID, at = time(), item = itemID }
 end
 
 function LC.OnStartLootRoll(rollID, attempt)
@@ -5422,8 +5462,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
     -- Same moment, same "first time this roll is tracked" reasoning as the stamp above -- see
-    -- LC.SnapshotRollInstance.
-    LC.SnapshotRollInstance(rollID)
+    -- LC.SnapshotRollInstance. The itemID goes with it: it is what tells a later look from outside the
+    -- instance apart from a rollID Blizzard has since handed to something else.
+    LC.SnapshotRollInstance(rollID, newItemID)
 
     -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll
     -- above deliberately didn't purge on unresolved data) — clobbering it with "???" would blank a
@@ -5749,8 +5790,14 @@ function LC.HandleStart(payload, senderKey)
     -- case was under a second, since the owner sends LC_DROP within the collection window.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
-    -- Same overwrite-unconditionally reasoning as the stamp above -- see LC.SnapshotRollInstance.
-    LC.SnapshotRollInstance(rollID)
+    -- NOT the same rule as the stamp above, and this is the call site where the difference is the
+    -- whole point. This handler is the announcement path for a client Blizzard raised no roll on, so
+    -- it reaches somebody standing outside the instance -- and it is also the path a catch-up
+    -- re-announce takes to a client that has just reloaded. The stamp above cannot tell those apart
+    -- and overwrites; the snapshot can, because the itemID goes with it: the same item is the
+    -- re-announce and keeps the raid, a different one is the reused rollID and overwrites. See
+    -- LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID, itemID)
 
     LC.votes[rollID]     = LC.votes[rollID] or {}
     -- GetLootRollItemLink answers only for a roll that exists on THIS client, and this handler is
@@ -5960,8 +6007,9 @@ function LC.StartManualRoll(itemsText)
         -- Wall clock, same reason as in OnStartLootRoll above.
         LC.rollLootedAt = LC.rollLootedAt or {}
         LC.rollLootedAt[rollID] = time()
-        -- Same moment, same reasoning as OnStartLootRoll -- see LC.SnapshotRollInstance.
-        LC.SnapshotRollInstance(rollID)
+        -- Same moment, same reasoning as OnStartLootRoll, itemID included -- see
+        -- LC.SnapshotRollInstance.
+        LC.SnapshotRollInstance(rollID, itemLink)
 
         -- Same roster snapshot a real drop takes, and the reason B79 could never be answered before:
         -- a manually added item has no Blizzard roll behind it, so there was nothing to prove with
@@ -6059,8 +6107,8 @@ function LC.HandleManualStart(payload, senderKey)
     -- real deadline by however long the vote took. Wall clock, same reason as everywhere else.
     LC.rollLootedAt = LC.rollLootedAt or {}
     LC.rollLootedAt[rollID] = time()
-    -- Same moment, same reasoning as LC.HandleStart -- see LC.SnapshotRollInstance.
-    LC.SnapshotRollInstance(rollID)
+    -- Same moment, same reasoning as LC.HandleStart, itemID included -- see LC.SnapshotRollInstance.
+    LC.SnapshotRollInstance(rollID, itemLink)
 
     if LC.IsCouncil() then
         KART.LC.Council.ShowCouncilPanel(rollID, secs or 20)

@@ -80,7 +80,7 @@ end
 -- the roll nor carried by the session snapshot, and both halves are on purpose: it is read by the
 -- AWARD, which on a plain raider lands long after Vote.PruneExpiredRolls freed the roll at the vote
 -- deadline, so by then it is on neither of the lists LC.SaveSessionSnapshot writes for and the
--- on-screen rule would drop exactly the entry still needed (B149). It lives in KART_LCTrades instead,
+-- on-screen rule would drop exactly the entry still needed (B150). It lives in KART_LCTrades instead,
 -- for every rollID and bounded by age -- the same arrangement rollLootedAt has, and the reason both
 -- are exempt above. Named here so putting either the clear or the session entry back is a decision
 -- somebody makes in this file rather than a line that looks like it was forgotten.
@@ -89,7 +89,7 @@ local PERSISTED_ELSEWHERE = { rollRaidSnapshot = true, rollLootedAt = true }
 for name in pairs(PERSISTED_ELSEWHERE) do
     T.eq(persisted[name], nil,
         "LC." .. name .. " must NOT be in PERSISTED_ROLL_TABLES -- the award that reads it arrives " ..
-        "after the roll has left every list that block saves for (B149); KART_LCTrades keeps it")
+        "after the roll has left every list that block saves for (B150); KART_LCTrades keeps it")
     T.truthy(trade:find("LC%." .. name .. "%s*=%s*[%w_]") ~= nil,
         "...and Trade.RestorePersistedTrades points LC." .. name .. " at the saved table, so every " ..
         "later write persists on its own")
