@@ -4243,6 +4243,29 @@ close this AND the documented non-convergence of the field. It cannot be appende
 format — the item string is the last field of both the entry format and the `LC_START` payload — so it
 belongs to a protocol release.
 
+**Scheduled for 3.5.0, under investigation as of 2026-08-10.** The objection above was "no
+backward-compatible append against a 3.4.0 floor", and the 3.4.0 release going out now is exactly what
+lifts that floor: `LC.PROTOCOL_VERSION` moves with the next protocol release and a 3.5.0 may change the
+format.
+
+What makes this worth more than closing one entry: **the snapshot exists only because receivers
+guess.** Every one of B149, B150, B151, B152 and B153 was a variation on "this client was somewhere
+else when it was told about the item". If the announcement carries the raid, nobody guesses — and the
+keep rule, the item comparison, `newDrop`/`reannounced`, the four-hour age bound and the
+`KART_LCTrades.raids` store may all become dead code rather than code that has to be got right.
+
+Not started, and deliberately not before the release. The maintainer's own note on reopening this
+entry applies to reversing it too: it was marked open **by choice** on the premise that no signal
+exists, and claiming one now is the same kind of premise that three earlier rounds each shipped and
+the next refuted. What is running instead is a read-only investigation —
+`.superpowers/raid-on-the-wire-research.md` — covering whether the owner reliably knows the raid at
+drop time (dead, released, just reloaded, `/kart add`, a raid leader standing in, open-world group
+loot), which of the paths that first tell a client about an award would have to carry it, the byte
+cost against the drop path's packing, what can actually be deleted versus what a client learning of an
+award through a *peer's* history catch-up still needs, and which direction a mixed-version raid fails
+in. Fail-closed is the standing preference; the `instance` field's own wire placement was chosen for
+that reason.
+
 Related, and pinned rather than unpinned: a **kept** row does not refresh its `at`, so it dies four
 hours after the drop rather than four hours after the last re-announce. That is the safe direction —
 the trade window has closed by then and no award can still be coming — and
