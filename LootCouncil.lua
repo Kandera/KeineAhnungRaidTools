@@ -4926,8 +4926,24 @@ local ANNOUNCE_WAIT = START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5
 --
 -- A roll still waiting for its announcement therefore stays in the list, and LC.HandleStart picks it
 -- up from there when the announcement lands.
+--
+-- EXCEPT ON THE LOOT OWNER, and that exception is the whole of B158. LC.HandleStart is the only writer
+-- of LC.rollAnnounced, and the announcer never runs it for its own roll -- KASC drops the self-echo. So
+-- on the owner the flag is nil by construction, the replay refused for ever, and the roll sat in the
+-- list: nothing force-won the item (C4), nothing announced it (C5), and the raid never learned it
+-- existed. It left on Blizzard's ordinary roll with the council panel empty, and /kart status said
+-- "unaware" on the one client the Manifest asks the raid to photograph.
+--
+-- The gate's reason does not apply there, which is why this is an exception and not a hole in it: it
+-- exists because replaying an unannounced roll leaves a client holding the item with no vote row and no
+-- way to be sent one. The owner is the client that SENDS the announcement -- "the announcement has not
+-- arrived" is not a state it can be in. Running the handler is what produces one.
+--
+-- Asked at replay time rather than remembered from the drop, and that is the correct question even for
+-- a stand-in who was not owner when the roll started: LC.OnStartLootRoll re-decides IsLootOwner itself,
+-- and Blizzard's own window is the other gate below -- a client with no live roll force-wins nothing.
 local function ReplayOne(rollID)
-    if not LC.rollAnnounced[rollID] then return false end
+    if not (LC.rollAnnounced[rollID] or LC.IsLootOwner()) then return false end
     LC.rollsSeenWhileUnaware[rollID] = nil
     -- Only rolls that are still live. A nil texture means Blizzard's window is gone -- expired, or
     -- answered by hand in the meantime -- and there is nothing left to pass or force-win.

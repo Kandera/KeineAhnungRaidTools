@@ -931,3 +931,45 @@ do
     KARTTEST.AdvanceTime(30)
     T.eq(#RaidSim.Sent(sim, "LC_HIST_REQ"), 1, "and a minute later it asks again")
 end
+
+-- B158: the boss dies while the LOOTMASTER is still asking whether a session is running -------------
+-- LC.OnStartLootRoll returns on its second line while LC.sessionActive is false, and every reload,
+-- relog and disconnect lands in that window: the state request takes seconds (STATE_REQ_BACKOFF).
+-- B148 built the repair for it -- the roll is remembered in LC.rollsSeenWhileUnaware and the handler
+-- is run for real once the state arrives (LC.ReplaySeenWhileUnaware).
+--
+-- That repair cannot reach the one client the raid cannot do without. ReplayOne refuses any roll
+-- without LC.rollAnnounced, and LC.HandleStart is the only writer of that flag -- the announcer never
+-- runs it for its own roll, because KASC drops the self-echo. So on the loot owner the flag is nil by
+-- construction, the replay refuses, and the roll stays in the list for ever.
+--
+-- What that costs is not a missing Auto-Pass. Nothing force-wins the item (C4), nothing announces it
+-- (C5), and the raid never learns it existed: it leaves on Blizzard's ordinary roll while the council
+-- panel stays empty. /kart status says "unaware" on the one client the Manifest asks to be photographed.
+do
+    local sim, lm = F.NewRaid()
+
+    -- The lootmaster reloads and comes back mid-question, which is the ordinary state after one.
+    local back = RaidSim.Reload(sim, lm.name)
+    T.eq(back.KART.LC.sessionStateKnown, false, "the setup: the reloaded lootmaster is still asking")
+    T.eq(back.KART.LC.sessionActive, false, "...and reads the session as off until it is told")
+
+    -- The boss dies inside that window.
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 1200, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(back.KART.LC.rollsSeenWhileUnaware[1200], "the roll is remembered rather than forgotten")
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 0, "and nothing is announced yet, correctly")
+
+    -- The raid answers: a session IS running.
+    RaidSim.As(back, function() back.KART.LC.HandleActive("1", back.guid) end)
+    KARTTEST.AdvanceTime(2)
+
+    T.eq(back.KART.LC.rollsSeenWhileUnaware[1200], nil,
+        "B158: the replay reaches the loot owner's own roll -- nothing else ever will, since only " ..
+        "LC.HandleStart sets LC.rollAnnounced and the owner never runs it for its own drop")
+    T.truthy(back.KART.LC.rollItems[1200] ~= nil,
+        "B158: so the lootmaster tracks the item")
+    T.truthy(#RaidSim.Sent(sim, "LC_DROP") > 0,
+        "B158: and the raid is told the item exists (C5) instead of it leaving on Blizzard's own roll")
+end

@@ -4489,3 +4489,81 @@ Held by `tests/test_loothistory_epoch.lua`, beside the block that proves the ref
 test has to outlast `GATE_MAX_PARK`: the stale client refused the award, so its own `assignedWinners` was
 never set and the roll still reads as undecided there — which is precisely the state the park cap exists
 for. Verified to fail with the one added call removed.
+
+## B158 — FIXED 2026-08-10 — a boss dying while the lootmaster was still asking about the session lost the item outright
+
+Found while measuring B157 (below), and it is the more serious of the two by a distance.
+
+`LC.OnStartLootRoll` returns on its second line while `LC.sessionActive` is false, and every reload,
+relog and disconnect lands in that window -- the state request takes seconds (`STATE_REQ_BACKOFF`), and
+this guild's operating reality is people relogging mid-session. B148 built the repair: the roll is
+remembered in `LC.rollsSeenWhileUnaware` and the handler runs for real once the state arrives
+(`LC.ReplaySeenWhileUnaware`).
+
+**The repair could not reach the loot owner, structurally.** `ReplayOne` refuses any roll without
+`LC.rollAnnounced`, and `LC.HandleStart` is the only writer of that flag -- which the announcer never
+runs for its own roll, because KASC drops the self-echo. So on the owner the flag is nil by
+construction. Measured:
+
+```
+session known right after the reload: false  active: false
+owner remembered it as unaware: true
+owner tracks the item: nil
+announcements on the wire: 0
+owner rolled Need (force-win): nil
+--- after the session state arrives ---
+still remembered as unaware: true
+announcements on the wire: 0
+pass log verdict: unaware
+```
+
+Nothing force-won the item (**C4**), nothing announced it (**C5**), and the raid never learned it
+existed: it left on Blizzard's ordinary roll with every council panel empty. `/kart status` reported
+`unaware` on the one client the Manifest asks the raid to photograph -- which is the only reason this
+would ever have been diagnosable at all, and is not the same thing as it working.
+
+Note that this is not a C8 edge. C8 is a reload DURING a distribution and it holds; this is a reload
+followed by a boss kill, which is what a lootmaster who disconnects during the fight comes back into.
+
+**Fixed 2026-08-10.** `ReplayOne` also replays when `LC.IsLootOwner()`. The gate's own reason does not
+apply there and that is why this is an exception rather than a hole in it: the gate exists because
+replaying an unannounced roll leaves a client holding the item with no vote row and no way to be sent
+one, and the owner is the client that SENDS the announcement -- "the announcement has not arrived" is not
+a state it can be in. Running the handler is what produces one.
+
+Asked at replay time rather than remembered from the drop, which is the right question even for a
+stand-in who was not owner when the roll started: `LC.OnStartLootRoll` re-decides `IsLootOwner` itself,
+and Blizzard's own window is the second gate -- a client with no live roll force-wins nothing.
+
+Held by `tests/test_lc_reload.lua`, which drives a real `RaidSim.Reload` of the lootmaster and asserts
+the three things that were all false: the entry clears, the item is tracked, and an `LC_DROP` goes out.
+
+## B157 — NO DEFECT 2026-08-10 — the roll generation does not restart after an owner reload
+
+Raised by the review of `v3.3.2..HEAD` and withdrawn on measurement. Recorded because the reasoning is
+worth having next to B139, and because the first attempted fix broke B139 outright.
+
+The concern: `LC.rollGeneration` is owner-side and not persisted, while receivers' `LC.rollInstance` is.
+So after a lootmaster reload the counter appeared to restart at 0, the next `START_LOOT_ROLL` for a
+still-open roll would send `@1` against notes stamped `@2`, every receiver would read a generation
+mismatch, release its expiry note and whisper the owner for an item it had watched close -- the B135
+burst, off a reload.
+
+**It does not happen, and the reason is B158.** On a freshly reloaded owner the re-raised roll never
+reaches the bump at all: `LC.OnStartLootRoll` returns at the session gate, the roll goes into
+`LC.rollsSeenWhileUnaware`, and the replay refused it. So the counter stays absent, `TablePayload` sends
+no `@gen`, and an absent generation is explicitly not a mismatch. Measured across a three-item table with
+the whole raid holding stamped notes: **0 notes released, 0 `LC_ROLL_REQ`, 0 catch-up answers.**
+
+Worth being exact about what changed underneath: B158's fix means the reloaded owner's replay now DOES
+run, so the counter is bumped once for a roll whose previous generation was lost. What the receivers then
+see is a number where they held a different one -- so the burst this entry withdrew is reachable again,
+once per reloaded-owner roll, and bounded by `ROLL_REQ_COOLDOWN`. Traded knowingly: B158 loses the item.
+
+**The fix that was tried and reverted:** bump the generation only where this client cannot prove it
+already held the same item under the number. That is exactly B139's own case -- a second copy of the SAME
+item under a reused rollID -- and the rule cannot tell it from a Blizzard re-raise by item identity,
+which is what B139's design says in the first place ("same item under the number is exactly the case
+where that knowledge says nothing"). Seven B139 assertions failed. A real fix needs the counter to
+survive a reload, which means a `KART_LCTrades` field and the saved-variable gate that goes with it; not
+worth it against a bounded, once-per-roll ask.

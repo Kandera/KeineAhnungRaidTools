@@ -47,6 +47,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Item, das du bei einem späteren Boss verpasst, findet dich auch**, nicht nur beim ersten.
 - **Die Abstimmungsuhr springt nicht mehr zurück**, und der ganze Raid zählt dasselbe Fenster herunter.
 - **Ein Client, der hinter die Loot-History des Raids fällt, holt von selbst auf** — statt bis zum Neuladen jede Vergabe zu verweigern.
+- **Ein Boss, der kurz nach einem Reload des Lootmasters stirbt, erreicht das Council trotzdem** — statt dass sein Loot über Blizzards eigenen Wurf weggeht.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben
