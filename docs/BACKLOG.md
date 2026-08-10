@@ -4155,14 +4155,21 @@ raider snap after raid 1: name=The Voidspire item=249331
 raider snap after raid 2: name=The Voidspire id=2912   <-- wrong raid inherited
 ```
 
-`LC.SnapshotRollInstance` keeps a previously snapshotted raid when a read comes from outside an
-instance AND the item matches — that keep is what lets a raider who ports out mid-distribution survive
-being told about the item again without having the raid replaced by a blank open-world read. If
-Blizzard reuses the rollID for the **same itemID** in a **different** raid inside the four-hour trade
-window, and the client takes `LC.HandleStart` (the announcement path, for a client Blizzard raised no
-roll on — dead, released, out of range) while standing outside the instance, the keep fires and the
-award names the wrong raid. Permanent, because `LH.HandleHistoryEntry` dedups on `id`; invisible,
-because `LH.HistoryChecksum` sums `e.id` only.
+`LC.SnapshotRollInstance` keeps a previously snapshotted raid when the item matches — that keep is
+what lets a raider who ports out mid-distribution survive being told about the item again without
+having the raid replaced by wherever he has walked to. If Blizzard reuses the rollID for the **same
+itemID** in a **different** raid inside the four-hour trade window, and the client takes
+`LC.HandleStart` (the announcement path, for a client Blizzard raised no roll on — dead, released, out
+of range), the keep fires and the award names the wrong raid. Permanent, because
+`LH.HandleHistoryEntry` dedups on `id`; invisible, because `LH.HistoryChecksum` sums `e.id` only.
+
+**Widened 2026-08-10 by B153's fix, knowingly.** Until then the keep was refused for a client standing
+inside an instance, so this cost the wrong raid only to clients who were outside one — the lootmaster
+and everybody still in the second raid read it correctly. The keep is no longer gated on that branch
+(a read from inside an instance says where the CLIENT is, and this field records where the ITEM
+dropped), so a reused number now carries the first raid's name on every client that has its row. The
+trade is deliberate: the narrower answer only held for the case retail raid loot does not produce
+(below), and what it cost was the raider porting out, which is every evening.
 
 **Closed once and reopened.** `f522b24` fixed it by telling `LC.SnapshotRollInstance` which CALLER was
 asking — only a repeat of an announcement may inherit — on the premise that `LC.HandleRollCatchup` is
@@ -4263,37 +4270,5 @@ chain of defects has been comments claiming guarantees the code does not hold:
 * `Trade.PruneExpiredRaidSnapshots()` runs only on the branch that may keep, an unremarked side effect
   of `f522b24` moving it inside the new condition. The behaviour is fine — the sweep is a precondition
   of the keep and of nothing else, and `Trade.ClearRollState` sweeps on every roll it clears — so it is
-  noted where it happens rather than changed.
-
-## B153 — a repeat announcement arriving from ANOTHER instance overwrites the raid with the wrong one
-
-Found by the final review of B152's fix (`d692aa0`), measured on the shipped code and confirmed
-identical on `70fff6d`, `c7ddfd3` and `b555cbf` — **pre-existing, not introduced by that chain.**
-
-`LC.SnapshotRollInstance`'s `difficultyID ~= 0` branch overwrites unconditionally, on the reasoning
-that a read from inside an instance is a first-hand answer about where the client is standing. It is —
-but this field records where the **item dropped**, and for a repeat of an announcement those are two
-different questions. A raider who ports out of the raid into another instance while the distribution
-is still running has his correct raid replaced by the one he walked into:
-
-```
-ZONED gap=  5s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
-ZONED gap= 30s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
-ZONED gap= 90s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
-```
-
-**Worse than B151 on both axes that matter.** It needs one raid plus *any* other instance rather than
-two raid instances sharing a council-eligible itemID, and `docs/MANIFEST.md`'s operating-reality
-section names exactly this movement as normal. And it costs a **wrong** label where B152 cost a blank
-one — this repo's own tests call blank recoverable and wrong permanent, since `LH.HandleHistoryEntry`
-dedups on `id` and `LH.HistoryChecksum` sums ids alone.
-
-**No test covers it.** Re-snapshotting inside the *same* instance is pinned; nothing drives a repeat
-arriving from a *different* one. The same shape of coverage hole that let B152 survive a full-looking
-mutation table: no mutation can find a route nothing drives.
-
-**The fix** is to let a repeat keep its raid on this branch too — the `newDrop` signal that already
-distinguishes a fresh announcement from a repeat is available here. It flips assertions that currently
-pin the opposite behaviour deliberately, so it wants its own design pass and its own review rather
-than a release-eve edit. The comment at `LC.SnapshotRollInstance` now states the limit of the
-justification instead of overclaiming it.
+  noted where it happens rather than changed. (Since 2026-08-10 the keep is not branch-gated at all,
+  so the sweep runs for every repeat; `git log --grep=B153`.)

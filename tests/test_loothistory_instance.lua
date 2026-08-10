@@ -33,6 +33,13 @@ local function InVoidspire() KARTTEST.instance = VOIDSPIRE end
 local QUELDANAS = { name = "March on Quel'Danas", instanceType = "raid",
                      difficultyID = 17, difficultyName = "Heroic", mapID = 2802 }
 local function InQuelDanas() KARTTEST.instance = QUELDANAS end
+-- The instance a raider WALKS INTO, which is the whole of B153 and is not a raid: the guild runs a
+-- key or a delve while the council is still deciding. A party instance on purpose -- the code reads
+-- difficultyID and nothing else, so this is the case a fixture built only from raids cannot state,
+-- and it is the one that was measured (The Voidspire in, Operation Floodgate out).
+local FLOODGATE = { name = "Operation Floodgate", instanceType = "party",
+                     difficultyID = 8, difficultyName = "Mythic Keystone", mapID = 2773 }
+local function InFloodgate() KARTTEST.instance = FLOODGATE end
 -- Open world: difficultyID 0 is the sentinel LH.LogHistory already normalizes to nil for
 -- difficultyID/difficulty, and the same sentinel now governs instance/instanceID (see
 -- LC.SnapshotRollInstance). Give it its own nonzero mapID so a mutant that stops gating on
@@ -565,23 +572,99 @@ do
         "same roll, and the raid is not kept on them")
 end
 
--- ...and the overwrite that is still unconditional: a read from INSIDE an instance is first-hand and
--- wins, even over a raid this roll already has and even for the same item. This is the only branch
--- that can name a DIFFERENT raid, and moving the keep above it -- so an existing raid is never
--- overwritten at all -- is a mutation nothing else in this suite can see.
+-- ...and the same keep from INSIDE another instance, which is B153 and is a REVERSAL: until
+-- 2026-08-10 this branch overwrote unconditionally, and the block that stood here asserted exactly
+-- that ("standing in a raid, the snapshot is taken again -- the keep is for the blank read, not for
+-- every read"). The justification was that a read from inside an instance is a first-hand answer
+-- about where this client is standing. It is -- and this field records where the ITEM DROPPED, which
+-- for a repeat is a different question. The raider ports into a key while the council deliberates and
+-- his award named the dungeon: measured at 5s, 30s and 90s alike, on shipped code identical back to
+-- 70fff6d. So the keep is no longer gated on the branch, and the assertion is turned round with it.
+--
+-- Driven directly here, on the two calls under test; the route that actually produces them -- the
+-- owner re-announcing a still-open roll to a raider who has walked out -- is at the foot of this file.
 do
     InVoidspire()
     local sim, lm = F.NewRaid()
     F.Drop(sim, 90, F.GLOVES)
     T.eq(lm.KART.LC.rollRaidSnapshot[90].name, VOIDSPIRE.name, "the drop named the raid")
 
-    InQuelDanas()
+    InFloodgate()
     RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(90, GLOVES) end)
     local snap = lm.KART.LC.rollRaidSnapshot[90]
-    T.eq(snap.name, QUELDANAS.name,
-        "standing in a raid, the snapshot is taken again -- the keep is for the blank read, not for " ..
-        "every read")
-    T.eq(snap.id, QUELDANAS.mapID, "id included")
+    T.eq(snap.name, VOIDSPIRE.name,
+        "a second look from inside ANOTHER instance leaves the raid the item dropped in standing -- " ..
+        "where this client walked to is not a second opinion about where the item dropped")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+
+    -- The other raid, not just the other dungeon: docs/MANIFEST.md's operating reality is people
+    -- porting out of one raid INTO ANOTHER, so a rule that only survived non-raid instances would
+    -- miss the case it was written for -- and the code reads difficultyID, which cannot tell them
+    -- apart, so nothing but a test says which of the two this covers.
+    InQuelDanas()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(90, GLOVES) end)
+    T.eq(lm.KART.LC.rollRaidSnapshot[90].name, VOIDSPIRE.name,
+        "and walking into a second RAID does not take it either")
+end
+
+-- What the keep did NOT become on this branch: unconditional. Three things still overwrite a row from
+-- inside an instance, and each is a mutation the block above cannot see on its own.
+do
+    -- A caller that can prove the item is only just being announced. Both manual doors do, and the
+    -- number they hand out is minted by this client (LC.nextManualRollID), so it comes round again on
+    -- its own counter -- this time with the client standing in a raid rather than in the open world,
+    -- which is what the manual block further down drives.
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 95, F.GLOVES)
+    T.eq(lm.KART.LC.rollRaidSnapshot[95].name, VOIDSPIRE.name, "the drop named the raid")
+
+    InQuelDanas()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(95, GLOVES, true) end)
+    T.eq(lm.KART.LC.rollRaidSnapshot[95].name, QUELDANAS.name,
+        "a caller declaring a NEW drop still overwrites from inside an instance -- newDrop is what " ..
+        "separates a fresh announcement from a repeat, and the fresh one is never kept")
+    T.eq(lm.KART.LC.rollRaidSnapshot[95].id, QUELDANAS.mapID, "id included")
+
+    -- A BLANK row is no answer rather than an older one, so the read from inside improves on it. This
+    -- is the repair route the `prev.name ~= nil` half of the keep exists for: a client that was
+    -- zoning, dead outside or freshly logged in when the announcement first landed holds a blank, and
+    -- an in-instance read is the only thing that can ever name the raid for him.
+    InOpenWorld()
+    RaidSim.As(raider, function() raider.KART.LC.SnapshotRollInstance(99, GLOVES) end)
+    T.is_nil(raider.KART.LC.rollRaidSnapshot[99].name, "the first read, from outside, named nothing")
+    InVoidspire()
+    RaidSim.As(raider, function() raider.KART.LC.SnapshotRollInstance(99, GLOVES) end)
+    T.eq(raider.KART.LC.rollRaidSnapshot[99].name, VOIDSPIRE.name,
+        "a blank row does not block the write -- being told about the item again while standing in " ..
+        "the raid is what gives this client a raid at all")
+    T.eq(raider.KART.LC.rollRaidSnapshot[99].id, VOIDSPIRE.mapID, "id included")
+
+    -- And a row for a DIFFERENT item is the previous tenant of a reused rollID (B150), inside an
+    -- instance exactly as outside one.
+    InQuelDanas()
+    local WEAPON = KARTTEST.items[F.WEAPON].link
+    RaidSim.As(raider, function() raider.KART.LC.SnapshotRollInstance(99, WEAPON) end)
+    T.eq(raider.KART.LC.rollRaidSnapshot[99].name, QUELDANAS.name,
+        "a different item under the same number is a new roll and takes the raid it is standing in, " ..
+        "not the one the previous tenant dropped in")
+end
+
+-- ...and the sweep that has to run before the keep now runs on this branch too, which it did not have
+-- to before: a row older than the trade window is last night's, and inside an instance it would
+-- otherwise be kept forever by a rollID Blizzard has since reused for the same item.
+do
+    InVoidspire()
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 79, F.GLOVES)
+
+    KARTTEST.AdvanceTime(5 * 60 * 60) -- past TRADE_TIMEOUT_SECONDS (4h)
+    InQuelDanas()
+    RaidSim.As(lm, function() lm.KART.LC.SnapshotRollInstance(79, GLOVES) end)
+    T.eq(lm.KART.LC.rollRaidSnapshot[79].name, QUELDANAS.name,
+        "past the trade window the old raid is swept before the keep can read it, so the roll takes " ..
+        "the raid it is actually in rather than last night's")
+    T.eq(lm.KART.LC.rollRaidSnapshot[79].id, QUELDANAS.mapID, "id included")
 end
 
 -- ...but only while that raid can still belong to an award. Past the trade window it is last night's,
@@ -678,6 +761,14 @@ do
     KARTTEST.AdvanceTime(60 * 60) -- still well inside the four-hour trade window
 
     InQuelDanas()
+    -- A drop under a number nobody has used before, taken in the same breath as the reused one: it is
+    -- what says the raid really did move, on the addon's own reading rather than on the fixture's.
+    -- The lootmaster's snapshot for 93 can no longer say it (see below), and a scenario that cannot
+    -- show its own premise is a scenario asserting nothing.
+    F.Drop(sim, 78, F.WEAPON)
+    T.eq((lm.KART.LC.rollRaidSnapshot[78] or {}).name, QUELDANAS.name,
+        "the guild really is in the second raid -- a fresh number dropping here names it")
+
     F.Drop(sim, 93, F.GLOVES, { noRollFor = { Alric = true } })
     -- ...and this time Alric has ported out, which is what puts his read on the difficultyID == 0
     -- branch when the announcement lands.
@@ -685,9 +776,18 @@ do
     KARTTEST.AdvanceTime(2)
     RaidSim.Drain(sim, 10)
 
-    T.eq((lm.KART.LC.rollRaidSnapshot[93] or {}).name, QUELDANAS.name,
-        "the lootmaster, who is standing in it, names the second raid -- so this really is a drop " ..
-        "somewhere else and not the same one twice")
+    -- The lootmaster is standing in the second raid and his snapshot names the FIRST one. That is
+    -- B153's fix widening this entry, and it is the assertion this block used to make the other way
+    -- round ("the lootmaster, who is standing in it, names the second raid"): until 2026-08-10 the
+    -- keep was refused for anyone inside an instance, so B151 cost the wrong raid only to clients who
+    -- were outside. It now costs it to all of them, him included. Traded knowingly (see
+    -- LC.SnapshotRollInstance): the narrower answer only held for the case retail raid loot does not
+    -- produce -- one council-eligible itemID dropping in two different raid instances inside four
+    -- hours, under a rollID Blizzard reused for it -- while what it cost was the raider porting out,
+    -- which is every evening.
+    T.eq((lm.KART.LC.rollRaidSnapshot[93] or {}).name, VOIDSPIRE.name,
+        "and even the lootmaster standing in the second raid inherits the FIRST one now, because " ..
+        "nothing on any client separates a reused number from the same drop being announced again")
 
     -- THE KNOWN COST, HELD OPEN ON PURPOSE (B151). The raider standing outside inherits raid ONE's
     -- name for raid TWO's drop, because an announcement of a reused number and a repeat of the first
@@ -727,8 +827,9 @@ end
 -- ordinary LC_DROP goes out again with the same rollID and the same item. No catch-up, no reload, no
 -- message the raider asked for.
 --
--- And by then the raider is normally somewhere else: "Leute porten schon aus dem Raid ... während die
--- Lootverteilung startet ist normal" (docs/MANIFEST.md, the operating reality). Alric is dead when the
+-- And by then the raider is normally somewhere else: "Leute z.B. schon aus dem Raid porten und in
+-- einen anderen gehen während die Lootverteilung startet ist normal" (docs/MANIFEST.md, the
+-- operating reality, quoted as it stands there). Alric is dead when the
 -- boss dies, so the announcement is the only thing that ever reaches him -- the one client for whom
 -- this snapshot has no second source at all.
 --
@@ -899,6 +1000,163 @@ do
         "...and left the raid standing, because this is his own roll coming back and not a new drop")
 end
 
+-- ===================================================================================================
+-- B153: the same repeats again, from INSIDE ANOTHER INSTANCE -- the routes nothing drove
+-- ===================================================================================================
+-- Every block above sends the raider to the OPEN WORLD, and that is the whole of why B153 lived
+-- through three rounds of this mechanism: no mutation can find a route nothing drives. The difference
+-- is not cosmetic -- a blank read and a read from Operation Floodgate take different branches of
+-- LC.SnapshotRollInstance, and until 2026-08-10 the second one overwrote the raid unconditionally, so
+-- the award named the key the raider had walked into. Measured on shipped code at gaps of 5s, 30s and
+-- 90s, identical back to 70fff6d.
+--
+-- What the guild actually does, in the maintainer's words: "In Midnight gibt es mehrere Raids mit
+-- wenig Bossen, d.h. dass Leute z.B. schon aus dem Raid porten und in einen anderen gehen während die
+-- Lootverteilung startet ist normal." (docs/MANIFEST.md, the operating reality.)
+--
+-- The same four doors as above, one block each, because each is reached on a client the others are
+-- not.
+
+-- 1. The owner's own re-announcement, with the roll still live -- the ordinary case, and the one that
+--    needs nothing to go wrong: Blizzard re-raises START_LOOT_ROLL on the owner, a second LC_DROP
+--    goes out, and by then the raider is in a key. Alric is dead when the boss dies, so the
+--    announcement is the only thing that ever reaches him.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 100, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.KART.LC.rollRaidSnapshot[100] or {}).name, VOIDSPIRE.name,
+        "the drop named the raid on the raider who only heard about it")
+
+    KARTTEST.AdvanceTime(5) -- the 5-second gap from the measurement
+    F.Drop(sim, 100, F.GLOVES, { noRollFor = { Alric = true } })
+    InFloodgate() -- he ports out of the raid and into a key, mid-distribution
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 2,
+        "the owner really did announce the same roll a second time")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0,
+        "and nothing repaired anything -- what reached him is the ordinary announcement")
+
+    local snap = raider.KART.LC.rollRaidSnapshot[100] or {}
+    T.eq(snap.name, VOIDSPIRE.name,
+        "being told about the item again from ANOTHER INSTANCE does not replace the raid it dropped " ..
+        "in with the one he walked into (B153)")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(100, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    local stored = raider.env.KART_LootHistory[1] or {}
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "so his award names the raid the item dropped in, not the dungeon -- which is the value that " ..
+        "becomes permanent (LH.HandleHistoryEntry dedups on the award id) and checksum-invisible")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "id on the award too")
+end
+
+-- 2. The same, with his own row already gone -- the 30s and 90s rows of the measurement. Past the
+--    vote deadline Vote.PruneExpiredRolls has taken the roll off his screen, so nothing on this
+--    client still says he was ever told about it; the snapshot has to survive to the AWARD anyway.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 101, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.KART.LC.rollRaidSnapshot[101] or {}).name, VOIDSPIRE.name, "the drop named the raid")
+
+    KARTTEST.AdvanceTime(45) -- past the vote deadline
+    T.is_nil(raider.KART.LC.rollAnnounced[101],
+        "his roll is gone, so nothing on this client still says it was ever announced to him")
+
+    F.Drop(sim, 101, F.GLOVES, { noRollFor = { Alric = true } })
+    InFloodgate()
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0, "and no repair was involved")
+    T.eq((raider.KART.LC.rollRaidSnapshot[101] or {}).name, VOIDSPIRE.name,
+        "the raid survives the repeat from inside the key as well, long after his row went")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(101, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.env.KART_LootHistory[1] or {}).instance, VOIDSPIRE.name,
+        "and so does the award, on the client whose row is the only copy of it")
+end
+
+-- 3. The catch-up, to a raider who ported into ANOTHER RAID and relogged there -- which is the guild's
+--    own habit twice over ("Bei uns reloggen Leute oft"). The reload loses the announcement flag, so
+--    the owner answers his state request with the still-open roll, and the re-announcement lands while
+--    he is standing in raid two. A raid rather than a key here on purpose: the code reads difficultyID
+--    only, so raid-to-raid and raid-to-key are the same branch, and the operating reality names both.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 102, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.KART.LC.rollRaidSnapshot[102] or {}).name, VOIDSPIRE.name, "the drop named the raid")
+
+    KARTTEST.AdvanceTime(60) -- past the vote deadline: nothing of this roll is on his screen
+    local droppedAt = (raider.KART.LC.rollRaidSnapshot[102] or {}).at
+    InQuelDanas() -- he ports into the other raid, then relogs there
+    raider = RaidSim.Reload(sim, "Alric")
+    T.is_nil(raider.KART.LC.rollAnnounced[102],
+        "the reload lost the announcement, which is what lets the catch-up through at all")
+
+    RaidSim.EnterWorld(sim, "Alric")
+    RaidSim.Drain(sim, 10)
+    T.truthy(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP") > 0, "the owner re-announced the open roll to him")
+    T.truthy(raider.KART.LC.rollAnnounced[102], "and this time he took it")
+
+    local snap = raider.KART.LC.rollRaidSnapshot[102] or {}
+    T.eq(snap.name, VOIDSPIRE.name,
+        "the raid it dropped in survived being told about it again from inside the OTHER raid")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+    T.eq(snap.at, droppedAt,
+        "and the kept row still keeps the DROP's timestamp on this branch too, so it dies four hours " ..
+        "after the item was looted rather than four hours after the last re-announce")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(102, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.env.KART_LootHistory[1] or {}).instance, VOIDSPIRE.name,
+        "so the award names the raid the item dropped in, not the one he is standing in")
+end
+
+-- 4. And the door with no message behind it, from inside another instance: Blizzard hands this
+--    client's own roll window back after a reload, which runs LC.OnStartLootRoll again -- by then with
+--    the raider in a key. Merrit again, for the same reason as the block above: he clicks Blizzard's
+--    roll himself, so he still has a roll window for the game to hand back.
+do
+    InVoidspire()
+    local sim, _, council = F.NewRaid()
+    F.Drop(sim, 103, F.GLOVES)
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((council.KART.LC.rollRaidSnapshot[103] or {}).name, VOIDSPIRE.name, "the drop named the raid")
+
+    KARTTEST.AdvanceTime(60)
+    InFloodgate()
+    council = RaidSim.Reload(sim, "Merrit")
+    RaidSim.EnterWorld(sim, "Merrit")
+    RaidSim.Drain(sim, 10)
+    T.truthy(council.KART.LC.sessionActive, "the reloaded client is back in the session")
+
+    KARTTEST.AdvanceTime(30)
+    RaidSim.As(council, function()
+        KARTTEST.FireEvent("START_LOOT_ROLL", 103)
+        council.KART.LC.OnStartLootRoll(103)
+    end)
+    T.eq(council.KART.LC.rollLootedAt[103], time(),
+        "the handler ran all the way through -- it re-stamped the trade clock unconditionally")
+    T.eq((council.KART.LC.rollRaidSnapshot[103] or {}).name, VOIDSPIRE.name,
+        "...and left the raid standing, from inside the key as well as from the open world")
+end
+
 -- The two manual doors are new drops as well, and say so: nothing already stored under a number can
 -- belong to an item somebody has only just typed in. A manual rollID is handed out by this client
 -- rather than by Blizzard (LC.nextManualRollID), so the collision needs that counter's own ~28-hour
@@ -913,6 +1171,20 @@ do
         "the manually added item named the raid on the peer")
 
     KARTTEST.AdvanceTime(60 * 60) -- still inside the trade window
+
+    -- From inside ANOTHER RAID first, which is where the fresh-announcement path can actually be seen
+    -- to hold: this is the branch B153 turned into a keep, so a fix that stopped honouring newDrop
+    -- here would leave raid ONE's name on an item somebody has just typed into raid TWO -- and the
+    -- open-world half below cannot see that, because there the previous raid is replaced by a blank
+    -- either way.
+    InQuelDanas()
+    RaidSim.As(raider, function()
+        raider.KART.LC.HandleManualStart(rollID .. ":20:" .. GLOVES, lm.guid)
+    end)
+    T.eq((raider.KART.LC.rollRaidSnapshot[rollID] or {}).name, QUELDANAS.name,
+        "the same number added again in a different raid takes THAT raid -- a manual add is always a " ..
+        "new drop, and a new drop never keeps")
+
     InOpenWorld()
     RaidSim.As(raider, function()
         raider.KART.LC.HandleManualStart(rollID .. ":20:" .. GLOVES, lm.guid)
