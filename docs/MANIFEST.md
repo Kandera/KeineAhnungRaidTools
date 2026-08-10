@@ -18,7 +18,7 @@ complete) and C14 (nothing is lost quietly), both named from failures that eveni
 ## How to read this
 
 Ten out of ten means **in the game, with two clients, ten separate attempts** — not ten green test
-runs. The automated suite is the floor, not the standard: it is 1263 assertions and a 30000-run
+runs. The automated suite is the floor, not the standard: it is 4301 assertions and a 30000-run
 convergence soak, and it still cannot see a cursor, a Blizzard roll window, or a real reload.
 
 Each item says what must be TRUE at the end, not what to click. If an item needs a third body, an alt
@@ -112,9 +112,19 @@ same moment.
 
 ## C6 — Collectibles, BoEs and anything below the threshold stay out
 
-A mount, a pet, a toy, a piece of housing decor, a Bind-on-Equip and an item below the minimum
-quality all drop. KART touches none of them: no force-win, no forced pass, Blizzard's own roll window
-behaves normally and the raid rolls on them the way it would without the addon.
+A mount, a pet, a toy, a piece of housing decor and a Bind-on-Equip all drop. KART touches none of
+them: no force-win, no forced pass, Blizzard's own roll window behaves normally and the raid rolls on
+them the way it would without the addon.
+
+**An item below the minimum quality is the one NAMED exception, settled by the maintainer on
+2026-08-10** after the review measured it. Nobody force-wins it and the council never announces it --
+that half is as strict as for everything above -- but Auto-Pass clients DO pass it, so it goes to
+whichever raider has Auto-Pass switched off, or to nobody. That is deliberate and it is not the failure
+the *Protects* clause below is about: a raider's "don't make me click loot windows" setting is their own
+call and not the raid leader's, which is why Auto-Pass is tied to council eligibility and not to the
+raid's rarity threshold (`LootCouncil.lua`, and do not re-tie it). In practice the items concerned are
+trash blues. What C6 still checks here is that KART does not force-win one and does not put it on the
+council panel.
 
 Housing decor is checked by ITEM CLASS, not by subclass: Midnight moved it out of Miscellaneous into
 a class of its own, and mounts, pets and toys are the ones caught by their journal APIs whatever

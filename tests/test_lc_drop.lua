@@ -816,3 +816,79 @@ do
     T.truthy(plainClient.KART.LC.rollItems[968] ~= nil,
         "the same payload sent plain is a batch this client accepts")
 end
+
+-- C6, C12 and C15 walked end to end, one item class per case -----------------------------------------
+-- tests/test_lc_collectible.lua compiles LC.IsCollectibleItem out of the source and covers the
+-- CLASSIFIER exhaustively. Nothing walked the whole flow -- force-win, announcement, vote window,
+-- forced pass -- for each class in a running raid, which is how the Manifest states these three items
+-- and which is where a carve-out written one word too wide actually shows up. Added after round four of
+-- the v3.3.2..HEAD review measured the matrix by hand and found the C6 exception below undocumented.
+--
+-- "Out" is asserted on every count, not merely on the announcement: C6 names the forced pass explicitly
+-- ("no force-win, no forced pass"), because Auto-Pass quietly handing every collectible to whichever
+-- raider is NOT running KART is its own failure.
+do
+    local MATRIX = {
+        { what = "a Bind-on-Pickup epic",   item = F.GLOVES,        want = "in"  },
+        { what = "a set token (C12)",       item = F.TOKEN,         want = "in"  },
+        { what = "a tier token (C12)",      item = F.TIER_TOKEN,    want = "in"  },
+        { what = "a recipe (C15)",          item = F.RECIPE,        want = "in",
+          opts = { bop = false } },
+        { what = "a mount (C6)",            item = F.MOUNT,         want = "out" },
+        { what = "a battle pet (C6)",       item = F.PET,           want = "out" },
+        { what = "a housing item (C6)",     item = F.HOUSING,       want = "out" },
+        { what = "housing decor (C6)",      item = F.HOUSING_DECOR, want = "out" },
+        { what = "a Bind-on-Equip (C6)",    item = F.BOE,           want = "out",
+          opts = { bop = false } },
+    }
+
+    local rollID = 1710
+    for _, case in ipairs(MATRIX) do
+        rollID = rollID + 1
+        local sim, lm = F.NewRaid()
+        local raider = sim.byName.Alric
+        RaidSim.ClearLog(sim)
+        F.Drop(sim, rollID, case.item, case.opts)
+        KARTTEST.AdvanceTime(1)
+
+        local forceWon  = (KARTTEST.rolled[rollID] or {})[lm.unit] == 1
+        local announced = #Announced(sim) > 0
+        local voteRow   = F.HasVoteRow(raider, rollID)
+        local forcedPass = false
+        for _, c in ipairs(sim.clients) do
+            if c ~= lm and (KARTTEST.rolled[rollID] or {})[c.unit] == 0 then forcedPass = true end
+        end
+
+        if case.want == "in" then
+            T.truthy(forceWon, case.what .. " is force-won by the lootmaster")
+            T.truthy(announced, "..." .. case.what .. " is announced to the raid")
+            T.truthy(voteRow, "...and a raider gets a vote window for it")
+        else
+            T.eq(forceWon, false, case.what .. " is not force-won")
+            T.eq(announced, false, "..." .. case.what .. " is not announced")
+            T.eq(voteRow, false, "...no vote window is opened for it")
+            T.eq(forcedPass, false, "...and nobody is made to pass on it")
+        end
+    end
+
+    -- The one NAMED exception, settled by the maintainer 2026-08-10 and written into C6: an item below
+    -- the raid's minimum quality is not force-won and never announced -- as strict as everything above
+    -- -- but Auto-Pass clients DO pass it. A raider's "don't make me click loot windows" setting is
+    -- their own call and not the raid leader's, which is why Auto-Pass is tied to council eligibility
+    -- rather than to the raid's rarity threshold. Pinned here so nobody "fixes" it back to match the
+    -- older wording of C6, and so the half that IS strict cannot quietly go with it.
+    do
+        local sim, lm = F.NewRaid()
+        local raider = sim.byName.Alric
+        RaidSim.ClearLog(sim)
+        F.Drop(sim, 1730, F.RARE)
+        KARTTEST.AdvanceTime(1)
+
+        T.eq((KARTTEST.rolled[1730] or {})[lm.unit] == 1, false,
+            "an item below the raid's minimum quality is not force-won")
+        T.eq(#Announced(sim) > 0, false, "...and never reaches the council")
+        T.eq(F.HasVoteRow(raider, 1730), false, "...so nobody gets a vote window for it")
+        T.eq((KARTTEST.rolled[1730] or {})[raider.unit], 0,
+            "...but an Auto-Pass client does pass it -- C6's named exception, not an oversight")
+    end
+end
