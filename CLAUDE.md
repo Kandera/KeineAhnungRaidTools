@@ -29,3 +29,24 @@ not the standard: it cannot see a cursor, a Blizzard roll window or a real reloa
 
 `docs/OWNERSHIP.md` is the settled rule for who owns the settings and who hands out the loot. A
 change that touches ownership is a change to that document first.
+
+## Before proposing a change
+
+`docs/REVIEW-DECISIONS.md` records findings we deliberately did not change, and the
+`docs/BACKLOG.md` headings carry their own verdict (`FIXED` / `NO DEFECT`). Check both before
+raising a concern. Re-opening a settled decision costs a round of explanation that these
+documents exist to prevent.
+
+## Lua and WoW
+
+- **API facts come from the ketho.wow-api annotations** (12.0.1, client 12.1). The addon targets
+  Midnight (12.x). Never assert API behaviour from memory.
+- **WoW runs Lua 5.1 on LuaJIT.** No `goto`, `unpack` not `table.unpack`, no integer division.
+- **The comm layer is `Libs/KASC-1.0` (`KASC:Send`)**, over AceComm-3.0 since 2026-08-03. There
+  is no `KARTSync.lua`.
+- **SavedVariables have no central migration.** Each structure guards its own shape --
+  `Droptimizer.lua` checks a `schemaVersion`, `OfficerNotes.MigrateOfficerNoteKey` renames a key.
+  A shape change without such a guard corrupts existing users on their next login. The
+  authoritative list of variables is the `.toc`.
+- **Enchant, spell and item ID tables are per-patch maintenance, not defects.** `GOOD_ENCHANTS`
+  in `Utils.lua` is the documented case, see `REVIEW-DECISIONS.md`.
