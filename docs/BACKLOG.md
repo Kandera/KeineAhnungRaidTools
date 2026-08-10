@@ -4264,3 +4264,36 @@ chain of defects has been comments claiming guarantees the code does not hold:
   of `f522b24` moving it inside the new condition. The behaviour is fine — the sweep is a precondition
   of the keep and of nothing else, and `Trade.ClearRollState` sweeps on every roll it clears — so it is
   noted where it happens rather than changed.
+
+## B153 — a repeat announcement arriving from ANOTHER instance overwrites the raid with the wrong one
+
+Found by the final review of B152's fix (`d692aa0`), measured on the shipped code and confirmed
+identical on `70fff6d`, `c7ddfd3` and `b555cbf` — **pre-existing, not introduced by that chain.**
+
+`LC.SnapshotRollInstance`'s `difficultyID ~= 0` branch overwrites unconditionally, on the reasoning
+that a read from inside an instance is a first-hand answer about where the client is standing. It is —
+but this field records where the **item dropped**, and for a repeat of an announcement those are two
+different questions. A raider who ports out of the raid into another instance while the distribution
+is still running has his correct raid replaced by the one he walked into:
+
+```
+ZONED gap=  5s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
+ZONED gap= 30s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
+ZONED gap= 90s  after1=The Voidspire  after2=Operation Floodgate  award=Operation Floodgate
+```
+
+**Worse than B151 on both axes that matter.** It needs one raid plus *any* other instance rather than
+two raid instances sharing a council-eligible itemID, and `docs/MANIFEST.md`'s operating-reality
+section names exactly this movement as normal. And it costs a **wrong** label where B152 cost a blank
+one — this repo's own tests call blank recoverable and wrong permanent, since `LH.HandleHistoryEntry`
+dedups on `id` and `LH.HistoryChecksum` sums ids alone.
+
+**No test covers it.** Re-snapshotting inside the *same* instance is pinned; nothing drives a repeat
+arriving from a *different* one. The same shape of coverage hole that let B152 survive a full-looking
+mutation table: no mutation can find a route nothing drives.
+
+**The fix** is to let a repeat keep its raid on this branch too — the `newDrop` signal that already
+distinguishes a fresh announcement from a repeat is available here. It flips assertions that currently
+pin the opposite behaviour deliberately, so it wants its own design pass and its own review rather
+than a release-eve edit. The comment at `LC.SnapshotRollInstance` now states the limit of the
+justification instead of overclaiming it.

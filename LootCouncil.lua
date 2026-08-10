@@ -5304,8 +5304,18 @@ end
 --
 -- The overwrite below is otherwise unconditional, and not for the reused-rollID case this comment
 -- used to claim (the item check owns as much of that as anything can): a read from INSIDE an instance
--- is a first-hand answer about where this client is standing, which is strictly better than anything
--- already stored.
+-- is a first-hand answer about where this client is standing.
+--
+-- And that is EXACTLY as far as the justification goes -- B153. This field records where the ITEM
+-- DROPPED, not where the client is standing, and for a repeat of an announcement the two are
+-- different questions. A raider who ports out of the raid into another instance while the
+-- distribution runs (docs/MANIFEST.md's operating reality names that as normal) has this branch
+-- overwrite his correct raid with the one he walked into. Measured: The Voidspire in, Operation
+-- Floodgate out, at 5s, 30s and 90s alike. Unlike B151 that needs only ONE raid plus any other
+-- instance, and it costs a WRONG label where B152 cost a blank one -- which this file elsewhere
+-- calls the worse of the two. Not fixed here: the fix is to let a repeat keep its raid on this
+-- branch too, which flips assertions that currently pin the opposite, so it is a change with its
+-- own design and its own review rather than a release-eve edit.
 function LC.SnapshotRollInstance(rollID, item, newDrop)
     -- The itemID, whatever form the caller holds the item in -- a full link, the bare "item:NNN"
     -- placeholder LC.HandleStart parks a roll under until the item is cached, or the id on its own.
