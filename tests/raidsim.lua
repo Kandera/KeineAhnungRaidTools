@@ -629,9 +629,22 @@ function RaidSim.Install(sim)
 
     -- What an OnUpdate frame does in the game. Runs each client's despool AS that client, because a
     -- queued message is sent by whoever queued it -- not by whoever the clock happened to stop on.
+    -- Returns true when every client's despool frame is hidden -- i.e. nobody has anything queued
+    -- and no further slice of this same span could do anything at all. See PumpTo in wow_stubs.lua,
+    -- which stops slicing on that answer.
     KARTTEST.PumpComms = function(delta)
+        local idle = true
         for _, c in ipairs(sim.clients) do
-            if c.CTL and c.CTL.Frame then
+            -- CTL drives its despool from a frame's OnUpdate, and it SHOWS that frame when it
+            -- queues (Enqueue) and HIDES it again the moment both rings run dry (OnUpdate). So a
+            -- hidden frame is the library's own statement that it has nothing to do -- and in the
+            -- game a hidden frame gets no OnUpdate at all. Pumping one anyway is what this harness
+            -- used to do, and it is both slower and less faithful than the client it stands in for:
+            -- the only things such a call touches are UpdateAvail (time-based, and an idle client
+            -- sits pinned at BURST either way) and the two delay accumulators, which the next real
+            -- update recomputes from GetTime regardless.
+            if c.CTL and c.CTL.Frame and c.CTL.Frame:IsShown() then
+                idle = false
                 -- Handed to As as function-plus-arguments rather than wrapped in a closure: As
                 -- pcalls it either way, so this is the same call under the same active client, minus
                 -- one closure allocated per client per 0.1 s slice. The suite pumps ~660k slices, so
@@ -640,6 +653,7 @@ function RaidSim.Install(sim)
             end
         end
         KARTTEST.FlushEcho()
+        return idle
     end
 end
 

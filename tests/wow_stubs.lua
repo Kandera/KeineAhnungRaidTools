@@ -259,6 +259,15 @@ _G.C_Timer = {
 -- Slices matter: CTL despools once per 0.08 s of accumulated delay and only lets a throttled queue
 -- back in every 0.35 s, so a single jump of ten seconds would despool exactly once and measure
 -- something no client ever does.
+--
+-- ...but only while somebody actually has something queued. Nothing else runs inside this loop --
+-- no timer, no test line, no handler -- so once every client's despool frame is hidden, no later
+-- slice of this same span can queue anything, and every remaining iteration is provably a no-op.
+-- PumpComms says so by returning true and the loop stops there, which is what makes a span measured
+-- in hours affordable: the trade-window and epoch tests advance the clock by four hours, five hours
+-- and (once) seven DAYS, and at a tenth of a second per slice that last one is six million rounds of
+-- pumping an empty queue for every simulated client. That one advance was 63% of every line the
+-- suite executed.
 local PUMP_SLICE = 0.1
 local function PumpTo(to)
     if not KARTTEST.PumpComms then
@@ -268,7 +277,7 @@ local function PumpTo(to)
     while KARTTEST.now < to do
         local step = math.min(PUMP_SLICE, to - KARTTEST.now)
         KARTTEST.now = KARTTEST.now + step
-        KARTTEST.PumpComms(step)
+        if KARTTEST.PumpComms(step) then break end
     end
     KARTTEST.now = to
 end
