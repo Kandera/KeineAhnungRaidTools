@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A second copy of the same item now reaches players who missed its announcement.**
 - **A trade reminder that expired mid-fight still explains why after a reload**, instead of vanishing with no reason given.
 - **A loot history award whose item wasn't cached yet now upgrades itself** once the item loads, instead of staying a bare, unexportable string forever.
+- **An item you miss at a later boss finds you too**, not only at the first one.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

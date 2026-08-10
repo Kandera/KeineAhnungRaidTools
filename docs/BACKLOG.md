@@ -4347,3 +4347,58 @@ chain of defects has been comments claiming guarantees the code does not hold:
   of the keep and of nothing else, and `Trade.ClearRollState` sweeps on every roll it clears — so it is
   noted where it happens rather than changed. (Since 2026-08-10 the keep is not branch-gated at all,
   so the sweep runs for every repeat; `git log --grep=B153`.)
+
+## B154 — FIXED 2026-08-10 — the round-ended note never released, so the next boss's reused rollID was unaskable
+
+Found by the review of `v3.3.2..HEAD`, reproduced in the offline harness before anything was changed.
+
+B145 gave a client a note saying "the round this roll belonged to is over", so an ask about it could be
+refused: a vote heartbeat or an ack still despooling when End Round overtook it names rolls that are
+gone, and `LC.ClearAllRolls` has wiped every other gate by then. The note was `LC.rollRoundEnded[id] =
+true`.
+
+**It never came off.** Its two siblings are notes about an ITEM — `LC.rollDismissed` and
+`LC.rollExpiredHere` both release when a heartbeat names a different one under the number — and this one
+is a note about a MOMENT, with nothing under the number to compare against. Blizzard hands the same low
+rollIDs out at the next boss, so:
+
+```
+PROBE round-2 asks by the deaf client: 0
+PROBE rollRoundEnded[1000] still set: true
+PROBE deaf holds item for 1000: nil
+```
+
+A client that stays in the raid and is deaf again under one of those numbers — dead, out of range,
+mid-reload, or simply another lost `LC_DROP` — had **all three** ask paths shut for the rest of the
+round: `LC.HandleTable`'s `needItem`, `AskForUnannounced` (the ack overheard from somebody else) and
+`AskOwnerForUnknownRoll` (the vote heartbeat). No card, no Auto-Pass, no repair. That is C5 and C14 in
+one sentence, and it is the sentence B118 already wrote: "one raider never learned an item existed and
+lost it outright".
+
+Worse for the client that needs it most: `LC.ClearAllRolls` notes the number from `LC.rollReqSent` as
+well as from `LC.rollItems`, which is deliberate (B145's own point — a deaf client holds no `rollItems`)
+— so the client that asked once and got nothing is exactly the one the stale note then silenced.
+
+**Why the existing tests missed it.** `tests/test_lc_rolltable.lua`'s B145 gaps 3 and 4 both step around
+this client. Gap 3 releases the note through `PurgeStaleRoll`, which needs this client to get its OWN
+Blizzard roll for the reused number; Gap 4 releases it through `TearDownForRaidExit`, which needs it to
+leave the raid. Gap 4's own comment names the mechanism ("any roll start it DOES see runs
+PurgeStaleRoll") and then tests the raid-exit route instead. Nothing drove a client that stays put.
+
+**Fixed 2026-08-10.** The note stores `GetTime()` instead of `true` and is read only through
+`LC.RoundEndedRecently`, which drops an entry older than `ROLL_REQ_COOLDOWN * 2` as it reads it. Derived,
+not picked: what the note silences is an ask, the ask gate already refuses a second one for a whole
+cooldown, so anything the note can prevent happens inside one — and twice that is slack for a queue
+still despooling behind the three `LC_END_ROUND` repeats (B145 measured six asks per client per roll
+inside seven seconds). Far below the minutes between two bosses, which is what makes the reuse askable
+again. Dropping on read also bounds the table across an evening, which `true` never did.
+
+**Not decided on the roll GENERATION**, which would be evidence rather than a clock and is already on
+the wire (B139). It cannot carry this gate on its own: a stand-in owner who took the role over mid-round
+never counted the roll's start, so `LC.rollGeneration` holds nothing for it and `TablePayload` sends no
+`@gen` at all — that is C9, the lootmaster walking out. The clock would still be needed underneath it,
+and one rule beats two. (An owner that reloaded is the other such client, and is its own entry.)
+
+Held by two blocks in `tests/test_lc_rolltable.lua`: the reused number in the next round is askable, and
+a heartbeat held across End Round is still refused — the second is B145 itself, so the two cannot be
+traded against each other by accident.

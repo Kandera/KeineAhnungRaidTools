@@ -2447,14 +2447,49 @@ function LC.RollNoteParts(note)
 end
 
 --- The rolls this client cleared because the ROUND ended, as opposed to because their own window ran
---- out (LC.rollExpiredHere) or because they threw them away (LC.rollDismissed). Same shape, same
---- lifetime, same readers -- the three ask paths -- and it exists because End Round is the one of the
---- three that wipes every other note on its way past (see LC.ClearAllRolls).
+--- out (LC.rollExpiredHere) or because they threw them away (LC.rollDismissed). Same readers -- the
+--- three ask paths -- and it exists because End Round is the one of the three that wipes every other
+--- note on its way past (see LC.ClearAllRolls).
 ---
 --- Deliberately NOT wiped there: it is what that function leaves behind, and a message still in
 --- flight when the round ended is the case it is for. Cleared per rollID when a roll starts under
 --- that number, and wholesale when the raid is left.
+---
+--- [rollID] = GetTime() when the round ended, NOT `true`, and that is the whole of B154. The two
+--- siblings above are notes about an ITEM, so a heartbeat naming a different one releases them; this
+--- one is a note about a MOMENT and there is nothing under the number to compare. So it never released
+--- at all, and Blizzard hands the same low rollIDs out again at the next boss: a client that stays in
+--- the raid and is deaf again under one of them -- dead, out of range, mid-reload, another lost LC_DROP
+--- -- had every ask path shut for the rest of the round, which is C5 and C14 in one. Read through
+--- LC.RoundEndedRecently, never directly, so the three gates cannot drift.
 LC.rollRoundEnded = LC.rollRoundEnded or {}
+
+--- Whether a round ending is still recent enough to explain a message about that roll.
+---
+--- Derived from ROLL_REQ_COOLDOWN rather than picked: what this note has to silence is an ask, the ask
+--- gate already refuses a second one for a whole cooldown, so anything the note can prevent happens
+--- inside one -- and twice that is slack for a queue still despooling behind the three LC_END_ROUND
+--- repeats (B145 measured six asks per client per roll inside seven seconds). Far below the minutes
+--- between two bosses, which is what makes the next round's reuse askable again.
+---
+--- NOT decided on the roll GENERATION instead, which would be evidence rather than a clock (B139's
+--- mechanism, and it is right there on the wire). It cannot carry this gate: a stand-in owner who took
+--- the role over mid-round never counted the roll's start, so LC.rollGeneration holds nothing for it
+--- and TablePayload sends no "@gen" at all -- that is C9, the lootmaster walking out. The clock would
+--- still be needed underneath, and one rule beats two.
+local ROUND_ENDED_QUIET = ROLL_REQ_COOLDOWN * 2
+
+function LC.RoundEndedRecently(rollID)
+    local at = rollID and LC.rollRoundEnded and LC.rollRoundEnded[rollID]
+    if not at then return false end
+    -- A note older than the window is about the previous tenant of this number. Dropped as it is read,
+    -- so the table does not grow across an evening either.
+    if (GetTime() - at) >= ROUND_ENDED_QUIET then
+        LC.rollRoundEnded[rollID] = nil
+        return false
+    end
+    return true
+end
 
 --- Which INSTANCE of a roll a number currently means (B139). Blizzard reuses roll numbers within
 --- seconds, and when the reuse carries a second copy of the SAME item, the itemID comparison
@@ -2744,9 +2779,10 @@ function LC.HandleTable(payload, senderKey, sender)
         -- alone, and it is no longer the blind reader it used to be (B132).
         -- The round ending is a third reason not to ask (B145), alongside the dismissal and the
         -- expiry note. It reaches this path the same way it reaches the other two asks: a heartbeat
-        -- from before End Round can still be in flight when it lands.
+        -- from before End Round can still be in flight when it lands. Time-bounded, unlike the other
+        -- two, because there is nothing under the number to compare it against (B154).
         if (needItem or needRolls) and not LC.rollDismissed[rollID]
-            and not (LC.rollRoundEnded and LC.rollRoundEnded[rollID])
+            and not LC.RoundEndedRecently(rollID)
             and (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) >= ROLL_REQ_COOLDOWN then
             local askedBefore = LC.rollReqSent[rollID] ~= nil
             LC.rollReqSent[rollID] = now
@@ -3189,14 +3225,18 @@ function LC.ClearAllRolls()
     -- over": a vote heartbeat or an ack still despooling when End Round overtook it names rolls that
     -- are gone, and without this every gate is open by then -- the clearing below wipes rollItems,
     -- rollDismissed, rollExpiredHere and rollReqSent alike (B145).
+    --
+    -- WHEN, not merely that it happened -- see LC.RoundEndedRecently for why a bare `true` shut the
+    -- repair down for the whole round once Blizzard handed the number out again (B154).
     LC.rollRoundEnded = LC.rollRoundEnded or {}
-    for id in pairs(LC.rollItems) do LC.rollRoundEnded[id] = true end
+    local endedAt = GetTime()
+    for id in pairs(LC.rollItems) do LC.rollRoundEnded[id] = endedAt end
     -- ...and the numbers we have been ASKING about, which is not the same set and is the important
     -- half. The client this protects is the one that never got the announcement: it holds no
     -- rollItems at all, so the loop above would note nothing for it and it would go on asking about
     -- rolls the raid has finished with -- exactly the client that asks most. LC.rollReqSent is wiped
     -- further down this function, so it has to be read here.
-    for id in pairs(LC.rollReqSent or {}) do LC.rollRoundEnded[id] = true end
+    for id in pairs(LC.rollReqSent or {}) do LC.rollRoundEnded[id] = endedAt end
     for i = #LC.councilTabs, 1, -1 do
         LC.Trade.ClearRollState(LC.councilTabs[i])
     end
@@ -5089,11 +5129,11 @@ local function AskForUnannounced(rollID)
     -- in its own bags would be an answer nobody can give.
     if LC.IsLootOwner() then return end
     if LC.rollDismissed[rollID] or LC.rollExpiredHere[rollID] then return end
-    -- ...and a round that has ended is not a gap either (B145). Without it, the three LC_END_ROUND
-    -- repeats each wipe LC.rollReqSent and hand the acks still despooling behind them a fresh
-    -- cooldown: measured at six asks per client per roll inside seven seconds, where the gate on its
-    -- own allows one.
-    if LC.rollRoundEnded and LC.rollRoundEnded[rollID] then return end
+    -- ...and a round that has RECENTLY ended is not a gap either (B145). Without it, the three
+    -- LC_END_ROUND repeats each wipe LC.rollReqSent and hand the acks still despooling behind them a
+    -- fresh cooldown: measured at six asks per client per roll inside seven seconds, where the gate on
+    -- its own allows one. Recently, because the next boss gets the same numbers (B154).
+    if LC.RoundEndedRecently(rollID) then return end
     local now = GetTime()
     LC.rollReqSent = LC.rollReqSent or {}
     if (now - (LC.rollReqSent[rollID] or -ROLL_REQ_COOLDOWN)) < ROLL_REQ_COOLDOWN then return end

@@ -1359,3 +1359,62 @@ do
         "Gap 4 (B145): TearDownForRaidExit wiped the stale round-ended note on the way out, so the " ..
         "new raid's roll under the same number is askable again")
 end
+
+-- B154: the round-ended note must not outlive the round it is about --------------------------------
+-- The case Gaps 3 and 4 both step around. Gap 3 clears the note through PurgeStaleRoll, which needs
+-- this client to get its OWN Blizzard roll for the reused number; Gap 4 clears it through
+-- TearDownForRaidExit, which needs it to leave the raid. Neither happens to the client B145's gate is
+-- read on: a raider who stays in the raid and is deaf AGAIN under a number Blizzard hands out for the
+-- next boss -- dead, out of range, mid-reload, or simply another lost LC_DROP.
+--
+-- What that costs is the whole of C5 and C14: no card, no Auto-Pass, no ask, and no repair for the
+-- rest of the round. "One raider never learned an item existed and lost it outright" (B118) is the
+-- same sentence.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Sinja
+    DeafAsksOnce(sim, deaf, 1030, F.GLOVES)
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    T.truthy(deaf.KART.LC.rollRoundEnded and deaf.KART.LC.rollRoundEnded[1030],
+        "the setup: the round-ended note is in place for 1030, same construction as Gaps 1 and 2")
+
+    -- The next boss, minutes later, in the SAME raid -- and the same number, with this client deaf to
+    -- it again. Nothing here runs PurgeStaleRoll and nothing tears the raid down, so the note is the
+    -- only thing standing between the heartbeat and the ask.
+    KARTTEST.AdvanceTime(120)
+    F.Drop(sim, 1030, F.WEAPON, { noRollFor = { [deaf.name] = true } })
+    KARTTEST.AdvanceTime(1)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(3)
+
+    local asked = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == deaf.name then asked = asked + 1 end
+    end
+    T.truthy(asked > 0,
+        "B154: a client deaf to a REUSED rollID in the NEXT round still asks the owner for it -- the " ..
+        "round-ended note is quiet for seconds, not for the evening")
+end
+
+-- ...and it is still quiet for the seconds B145 needs it to be --------------------------------------
+-- The other half of the same change: the gate has to keep doing its own job. A heartbeat sent before
+-- End Round and delivered after it must still find the note in place, or B145 is simply back.
+do
+    local sim, lm = F.NewRaid()
+    local deaf = sim.byName.Sinja
+    DeafAsksOnce(sim, deaf, 1040, F.GLOVES)
+
+    RaidSim.Hold(sim, "LC_TABLE")
+    KARTTEST.AdvanceTime(30)
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+
+    RaidSim.ClearLog(sim)
+    local released = RaidSim.Release(sim, "LC_TABLE")
+    T.truthy(released > 0, "the heartbeat held since before End Round lands only now")
+    local asked = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_ROLL_REQ")) do
+        if e.from == deaf.name then asked = asked + 1 end
+    end
+    T.eq(asked, 0,
+        "B154 does not undo B145: a heartbeat in flight across End Round is still refused")
+end
