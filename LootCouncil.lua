@@ -105,17 +105,6 @@ LC.rollDurations        = {}  -- [rollID] = original vote-window length in secon
                                -- the council header's time-bar fill (rollDeadlines alone gives a
                                -- deadline but not the window's original length)
 
--- The one place the two UI entry points write a voting clock, so there is one place that can see a
--- clock being pushed forward on an item that was already running one. Behaviour is unchanged -- the
--- deadline is written whatever the answer -- and the only product is LC.diag.clockRestarted; see
--- there for the report this is trying to settle.
---
--- source names the writer rather than the roll: the count is only useful if it says WHERE, and a
--- rollID means nothing to whoever pastes the status line.
---
--- A second of slack, because both writers rebuild the deadline from whole seconds and a repeat that
--- faithfully carries the remaining time still lands a fraction away from where it started. That is
--- not the thing being looked for.
 -- Which of the two counters a message about an untracked roll belongs in.
 --
 -- LC.rollLootedAt is the discriminator, and it is the right one by construction: every path that
@@ -136,6 +125,39 @@ function LC.Diag.CountUntracked(rollID)
     end
 end
 
+-- The one place the two UI entry points write a voting clock -- so it is also the one place that can
+-- refuse to move one, which is what #28 turned out to need (B155).
+--
+-- A clock still in the FUTURE is left exactly as it is, deadline and duration both. Every caller means
+-- "show this item with N seconds on it", and for a roll that is already on screen the only thing that
+-- says twice is Blizzard re-raising START_LOOT_ROLL for a roll still in progress: the owner's handler
+-- runs again, it announces again, and the raid was handed a fresh twenty seconds. Reported as "die
+-- Items verschwinden immer wieder und tauchen dann im LC wieder auf. Die Zeit wird immer wieder zurück
+-- gesetzt".
+--
+-- Here rather than in LC.HandleStart, which is where the first attempt at this sat. That handler only
+-- ever sees the RECEIVERS: the announcer does not process its own LC_DROP (KASC drops the self-echo),
+-- so the owner's clock was written straight through by its own path and restarted from twenty while
+-- the rest of the raid counted down correctly -- and the owner is usually the client holding the
+-- council panel. A council reading a tally at twenty seconds while the raid's windows shut at seven is
+-- scoring a partial set (C13).
+--
+-- Also why the DURATION is kept and not merely the deadline: it sizes the council header's time bar,
+-- and a repeat that faithfully carried the remaining seconds wrote 7 where 20 opened -- so the bar
+-- refilled to full and drained again on a client whose countdown was already right.
+--
+-- Nothing legitimate is blocked. A rollID Blizzard reused for a different item has been through
+-- PurgeStaleRoll, which clears this table via Trade.ClearRollState, so there is no clock to protect; a
+-- catch-up for an item whose window has already run out writes the past deadline itself and does not
+-- come through here at all; and there is no setting that gives one item a longer window than another.
+--
+-- The count stays, and it stays useful: it now measures how often a repeat TRIED, which is exactly the
+-- number #28 asked for -- if a raider still sees the clock move and this is zero, the clock is not what
+-- is moving. source names the writer rather than the roll, because a rollID means nothing to whoever
+-- pastes the status line.
+--
+-- A second of slack, because both writers rebuild from whole seconds and a faithful repeat lands a
+-- fraction away from where it started. That is not the thing being counted.
 function LC.SetRollDeadline(rollID, seconds, source)
     local deadline = GetTime() + (seconds or 20)
     local running = LC.rollDeadlines[rollID]
@@ -143,6 +165,7 @@ function LC.SetRollDeadline(rollID, seconds, source)
         LC.diag.clockRestarted = LC.diag.clockRestarted + 1
         LC.diag.clockRestartedBy = source
     end
+    if running and running > GetTime() then return end
     LC.rollDeadlines[rollID] = deadline
     LC.rollDurations[rollID] = seconds or 20
 end
@@ -6052,17 +6075,20 @@ function LC.HandleStart(payload, senderKey)
     -- cast. So the deadline is set into the past and the vote row is skipped; a council member gets
     -- the item on the panel with its timer already run out, which is exactly what the clients that
     -- were there are looking at.
-    -- A clock this item is already running keeps running. The seconds in the payload say how long the
-    -- OWNER thinks is left, and every announcement carries them -- including the second and third one
-    -- for an item that is already on the table. Blizzard re-raises START_LOOT_ROLL for a roll still in
-    -- progress (see LC.DrawRollTable, which has carried its own guard against exactly that for
-    -- longer), so the owner announces again and every receiver restarted the countdown.
+    -- WHAT THIS CLIENT IS ALREADY COUNTING wins over the seconds in the payload. Every announcement
+    -- carries them, including the second and third one for an item that is already on the table:
+    -- Blizzard re-raises START_LOOT_ROLL for a roll still in progress (see LC.DrawRollTable, which has
+    -- carried its own guard against exactly that for longer), so the owner announces again.
     --
     -- What that looked like from a raid, reported as #28: "die Items verschwinden immer wieder und
-    -- tauchen dann im LC wieder auf, die Zeit wird immer wieder zurückgesetzt". Both halves are this
-    -- line. The timer visibly jumped back, and an item whose row had already expired and been swept
-    -- (Vote.PruneExpiredRolls) was handed a fresh twenty seconds and reappeared -- on a screen where
-    -- the raider had finished with it.
+    -- tauchen dann im LC wieder auf, die Zeit wird immer wieder zurückgesetzt". The timer visibly jumped
+    -- back, and an item whose row had already expired and been swept (Vote.PruneExpiredRolls) was handed
+    -- a fresh twenty seconds and reappeared -- on a screen where the raider had finished with it.
+    --
+    -- Read here for the secs == 0 decision below, and for nothing else: LC.SetRollDeadline refuses to
+    -- move a clock that is still running (B155), so the two windows opened further down cannot restart
+    -- it whatever number they are handed. That is where the rule lives now, because it has to cover the
+    -- ANNOUNCER too -- it never runs this handler for its own roll.
     --
     -- Safe to trust a surviving deadline: PurgeStaleRoll ran above, and for a rollID Blizzard reused
     -- for a DIFFERENT item it has already cleared this table via Trade.ClearRollState. So a deadline
@@ -6083,10 +6109,6 @@ function LC.HandleStart(payload, senderKey)
     -- can declare their own BIS like any raider. The popup shows for everyone; council additionally
     -- gets the panel above.
     LC.Vote.ShowVotePopup(rollID, LC.rollItems[rollID], secs or 20)
-    -- Both of those set the deadline from whole seconds, so handing them the remainder of a clock
-    -- that is already running would still shave the fraction off it on every repeat. Put the exact
-    -- value back.
-    if running then LC.rollDeadlines[rollID] = running end
     return true
 end
 

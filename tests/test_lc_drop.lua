@@ -205,6 +205,54 @@ do
     T.eq(written, 1, "and is written into it once, not twice")
 end
 
+-- ...and the whole raid keeps ONE clock for it (B155, #28) --------------------------------------------
+-- "Die Items verschwinden immer wieder und tauchen dann im LC wieder auf. Die Zeit wird immer wieder
+-- zurück gesetzt" -- reported by a council member as #28. LC.HandleStart learned to keep a running
+-- deadline across a repeat, which fixed every RECEIVER. It could not fix the announcer: the owner never
+-- processes its own LC_DROP, so its clock is written by its own path and restarted from twenty.
+--
+-- Two separate statements here, and both matter for a decision:
+--   * the remaining time is the same number on every client, owner included. A council reading a tally
+--     at 20 seconds while the raid's windows shut at 7 is scoring a partial set (C13), and the owner is
+--     usually the one holding the panel.
+--   * LC.rollDurations survives too. It is what sizes the council header's time bar, and setting it to
+--     the REMAINING seconds refilled the bar to full on every repeat -- the visible half of #28 on a
+--     client whose countdown was already correct.
+do
+    local sim, lm = F.NewRaid()
+    F.Drop(sim, 972, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local before = {}
+    for _, c in ipairs(sim.clients) do before[c.name] = c.KART.LC.rollDeadlines[972] end
+    T.truthy(before[lm.name], "the setup: the owner is running a clock for it too")
+
+    -- Thirteen seconds into a twenty-second window, Blizzard re-raises the roll and the owner announces
+    -- it again -- the ordinary repeat, nothing gone wrong.
+    KARTTEST.AdvanceTime(12)
+    F.Drop(sim, 972, F.GLOVES)
+    KARTTEST.AdvanceTime(0.6)
+
+    local remaining = {}
+    for _, c in ipairs(sim.clients) do
+        local d = c.KART.LC.rollDeadlines[972]
+        remaining[#remaining + 1] = { name = c.name, left = d and (d - GetTime()) or nil,
+                                      duration = c.KART.LC.rollDurations[972] }
+    end
+    for _, r in ipairs(remaining) do
+        T.truthy(r.left ~= nil and r.left < 10,
+            "B155: " .. r.name .. " still counts down the ORIGINAL window, not a fresh twenty (" ..
+            tostring(r.left) .. "s left)")
+        T.eq(r.duration, 20,
+            "B155: and " .. r.name .. "'s time bar is still sized to the window that opened")
+    end
+
+    -- The measurement the report asked for stays a measurement: the counter records that a repeat
+    -- tried, which is what tells "the clock is not what is moving" from "nobody looked".
+    T.truthy(lm.KART.LC.diag.clockRestarted > 0,
+        "and the attempt is still counted for /kart status")
+end
+
 -- A roll RE-RAISED after the participant set changed -------------------------------------------------
 -- Blizzard raises START_LOOT_ROLL again for a roll that is still running, and by then the roster walk
 -- can answer differently -- but LC.DrawRollTable refuses to redraw a table the raid has already been

@@ -4402,3 +4402,53 @@ and one rule beats two. (An owner that reloaded is the other such client, and is
 Held by two blocks in `tests/test_lc_rolltable.lua`: the reused number in the next round is askable, and
 a heartbeat held across End Round is still refused — the second is B145 itself, so the two cannot be
 traded against each other by accident.
+
+## B155 — FIXED 2026-08-10 — the announcer restarted its own vote clock, and the time bar restarted on everybody
+
+The rest of #28, found by the review of `v3.3.2..HEAD`. "Die items verschwinden immer wieder und tauchen
+dann im LC wieder auf. Die Zeit wird immer wieder zurück gesetzt" — reported by a council member, and
+answered once already: `LC.HandleStart` learned to keep a deadline that is still running rather than take
+the seconds off the repeat. That fixed the receivers and could not fix the client the report came from.
+
+**The announcer does not process its own announcement.** KASC drops the self-echo, so the owner never
+runs `LC.HandleStart` for its own roll — its clock is written by its own path (`FlushPendingDrop` →
+`Council.ShowCouncilPanel` / `Vote.ShowVotePopup`), which had no such guard. Measured in the harness,
+a twenty-second window with the roll re-raised at thirteen seconds:
+
+```
+Bramor  council=true  owner=true  remaining=19.3  duration=20
+Merrit  council=true  owner=false remaining=6.8   duration=7
+Alric   council=false owner=false remaining=6.8   duration=7
+```
+
+Two defects in one table:
+
+* **The owner keeps a different clock from the raid.** 19.3 against 6.8. The owner is usually the client
+  holding the council panel, so the council reads its tally at twenty seconds while the raid's vote
+  windows shut at seven — a tie-breaker scored on a partial set, which is C13's whole subject.
+* **`LC.rollDurations` was set to the REMAINING seconds** on every client. It sizes the council header's
+  time-bar fill, so 7 where 20 opened means the bar refills to full and drains again — the visible half
+  of the report, on clients whose countdown was already correct. `LC.HandleStart` restored the exact
+  deadline afterwards and never the duration.
+
+Note what the earlier fix's own comment claimed while this stood: "the owner's own deadline does not
+move" was listed as one of the three refuted explanations for #28. It was the true one.
+
+**Fixed 2026-08-10** in `LC.SetRollDeadline`, which is already the single place both UI doors write a
+clock: a deadline still in the future is left exactly as it is, deadline and duration both. Every caller
+means "show this item with N seconds on it", and the only thing that says that twice for a roll already
+on screen is Blizzard re-raising `START_LOOT_ROLL`. `LC.HandleStart`'s local restore is gone with it —
+one rule, one place, announcer included.
+
+Nothing legitimate is blocked, and this is why: a rollID reused for a different item has been through
+`PurgeStaleRoll`, which clears the table via `Trade.ClearRollState`, so there is no clock to protect; a
+catch-up for an item whose window has already run out writes its past deadline directly and does not go
+through `LC.SetRollDeadline` at all; and no setting gives one item a longer window than another.
+
+`LC.diag.clockRestarted` stays and gets better: it now counts how often a repeat TRIED, which is the
+number the report actually asked for — if a raider still sees the clock move and this is zero, the clock
+is not what is moving.
+
+Held by `tests/test_lc_drop.lua`, which asserts the remaining time and the duration across the re-raise
+for **every client in the raid** rather than for a receiver — an assertion on one receiver would have
+passed against the broken build.
