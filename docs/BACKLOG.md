@@ -4606,3 +4606,35 @@ over "keep our own stamp" is accuracy on a stamp that is already right to within
 
 Held by `tests/test_lc_tradefill.lua`, beside B144's own two-copy block -- the one that must keep passing
 unchanged, since it is the decision this does not touch.
+
+## B160 — FIXED 2026-08-10 — the unaware-roll list filled with rolls Blizzard had finished with
+
+Found by the review of `v3.3.2..HEAD`. `LC.rollsSeenWhileUnaware` (B148) remembers a roll Blizzard raised
+while this client did not yet know a session was running, so `LC.OnStartLootRoll` can be run for it once
+the state arrives. Entries left it only through a replay, which needs the announcement -- or, since B158,
+being the loot owner.
+
+**Nothing else ever cleared it, and the case that fills it has no End Round to come and sweep it:** a
+client sitting in a raid before the lootmaster starts a session, or with the module on and the session
+off, sees every Bind-on-Pickup roll of the evening and remembers each one. The cap is forty and it drops
+the NEWEST entry when full -- deliberately, because the table is keyed by rollID and has no order to drop
+by -- so past forty the roll that actually needs the replay is the one thrown away. Measured:
+
+```
+B160: entries for rolls Blizzard has closed do not accumulate (40 held)   <- the cap, as designed
+B160: so a live roll arriving late in the evening is still remembered     <- expected: true, actual: false
+```
+
+**Fixed 2026-08-10** by bounding it on Blizzard's answer rather than on an age: an entry is worth keeping
+exactly while the roll window it names is still open, because `ReplayOne` does nothing for a roll Blizzard
+has closed (`GetLootRollItemInfo` goes blank, which is already its second gate). So the sweep needs no
+constant and no assumption about how long Blizzard's window lasts -- the client is asked, and the answer
+is exact. Run where an entry is about to be added, the only moment the table can grow.
+
+**No changelog line, on purpose.** Reaching the harm needs forty unaware rolls followed by more unaware
+rolls whose replay still matters -- a whole evening with the module effectively idle, and then a session
+starting at exactly the right moment. It is a real leak with a bound that was claimed and not implemented
+("none of them is worth remembering past the boss it belongs to"), and no player-visible symptom anybody
+has seen.
+
+Held by `tests/test_lc_autopass.lua`, beside B148's own block.

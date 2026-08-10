@@ -4898,6 +4898,25 @@ LC.rollsSeenWhileUnaware = LC.rollsSeenWhileUnaware or {}
 -- Well above what a boss can drop, far below anything that matters as a table.
 local SEEN_WHILE_UNAWARE_MAX = 40
 
+-- ...and what makes that sentence true (B160). Entries only ever left through a replay, which needs the
+-- announcement -- and the situation that fills this table is precisely the one with no session, so End
+-- Round never comes to sweep it either. A client sitting in a raid before the lootmaster starts one
+-- remembered every Bind-on-Pickup roll of the evening, and past forty the cap drops the NEWEST entry:
+-- the roll that actually needs the replay is the one thrown away.
+--
+-- Bounded by asking Blizzard rather than by an age. An entry is worth keeping exactly while the roll
+-- window it names is still open, because ReplayOne does nothing for a roll Blizzard has closed
+-- (GetLootRollItemInfo goes blank, which is its own second gate). So this needs no constant and no
+-- assumption about how long Blizzard's window lasts -- the client is asked, and the answer is exact.
+--
+-- Run where an entry is about to be added, which is the only moment the size can grow at all. A handful
+-- of API calls against a table the cap holds to forty.
+local function ForgetClosedUnawareRolls()
+    for id in pairs(LC.rollsSeenWhileUnaware) do
+        if not GetLootRollItemInfo(id) then LC.rollsSeenWhileUnaware[id] = nil end
+    end
+end
+
 -- [rollID] = the identity key of whoever announced this item to us. NOT the same question as "who
 -- hands out the loot": that one is about the raid right now, this one is about a moment in the past,
 -- and the numbers belong to that moment. Keeping them apart is what stops a client that disagrees
@@ -5510,6 +5529,9 @@ function LC.OnStartLootRoll(rollID, attempt)
         -- the roll window Blizzard put on screen outlives that wait by minutes. See
         -- LC.rollsSeenWhileUnaware for what this cost in a live raid.
         --
+        -- Anything Blizzard has since closed goes first, so the cap below is reached by rolls that
+        -- are still live rather than by a whole evening of finished ones (B160).
+        ForgetClosedUnawareRolls()
         -- Counted rather than measured with # : the table is keyed by rollID, so it is not a
         -- sequence, and dropping the oldest is not possible without an order nobody has. Once it is
         -- full the newest is dropped instead, which is the safe direction -- a client that has been

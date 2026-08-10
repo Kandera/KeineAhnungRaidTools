@@ -430,3 +430,43 @@ do
             label .. ": the aware path's councilEligible and the session gate's CouncilCouldTakeRoll agree")
     end
 end
+
+-- B160: the unaware list must not fill up with rolls Blizzard has finished with ---------------------
+-- LC.rollsSeenWhileUnaware is capped, and once full the NEWEST entry is dropped rather than the
+-- oldest -- deliberately, because it is keyed by rollID and has no order to drop by. The comment says
+-- "none of them is worth remembering past the boss it belongs to", and nothing did that: entries only
+-- ever left through a replay, which needs the announcement (or, since B158, being the loot owner).
+--
+-- The case that fills it is precisely the one with no session, so End Round never comes to sweep it:
+-- a client sitting in a raid before the lootmaster starts one, or with the module on and the session
+-- off, sees every Bind-on-Pickup roll of the evening and remembers each one for ever. Past forty, the
+-- roll that actually needs the replay is the one thrown away.
+--
+-- Bounded by asking Blizzard rather than by an age: an entry is worth keeping exactly while the roll
+-- window it names is still open, because ReplayOne does nothing for a roll Blizzard has closed. That
+-- needs no constant and no assumption about how long Blizzard's window lasts.
+do
+    local sim = NewRaid()
+    local corvin = sim.byName.Corvin
+    RaidSim.As(corvin, function()
+        corvin.KART.LC.sessionActive = false
+        corvin.KART.LC.sessionStateKnown = false
+    end)
+
+    -- A whole evening of drops in a raid with no session, each one's roll window closing behind it.
+    -- Forty is SEEN_WHILE_UNAWARE_MAX; the point is to walk past it.
+    for i = 1, 45 do
+        Drop(sim, 400 + i, F.GLOVES)
+        KARTTEST.lootRolls[400 + i] = nil   -- Blizzard's window for it is gone
+    end
+
+    local held = 0
+    for _ in pairs(corvin.KART.LC.rollsSeenWhileUnaware) do held = held + 1 end
+    T.truthy(held < 45,
+        "B160: entries for rolls Blizzard has closed do not accumulate (" .. held .. " held)")
+
+    -- ...and the roll that comes in after all that, with a live window, is the one that matters.
+    Drop(sim, 499, F.GLOVES)
+    T.truthy(corvin.KART.LC.rollsSeenWhileUnaware[499],
+        "B160: so a live roll arriving late in the evening is still remembered for the replay")
+end
