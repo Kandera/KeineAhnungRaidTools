@@ -19,6 +19,9 @@ jobs:
       - name: Moved-symbol gate
         run: bash tests/check-moved.sh
 
+      - name: Locale gate
+        run: bash tests/check-locale.sh
+
       - name: Luacheck
         run: luacheck .
 
