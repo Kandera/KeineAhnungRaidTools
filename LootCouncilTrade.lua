@@ -418,7 +418,7 @@ function Trade.CheckTradeTimeouts()
         -- What the ITEM says, where we are holding it (see Trade.TradeTimeRemainingFor). Correcting
         -- the stamp rather than acting on the reading directly keeps every branch below on one
         -- clock: the warning, the expiry and the persisted entry all stay in agreement.
-        local remaining = Trade.TradeTimeRemainingFor(entry.itemLink)
+        local remaining, copies = Trade.TradeTimeRemainingFor(entry.itemLink)
         -- An item whose four hours ran out IS soulbound with no trade line, which is exactly what
         -- "never keepable" reads as -- so the two are indistinguishable from the item alone, and
         -- testing the item first made the ordinary expiry (B47) report itself as the other one. Our
@@ -434,7 +434,15 @@ function Trade.CheckTradeTimeouts()
             TradeNotice(string.format("|cffff0000KART:|r " .. KART.L.LC_TRADE_UNTRADEABLE,
                 entry.itemLink or "?", KASC.Identity.ResolveDisplayName(entry.winnerKey)), nil, nil, true)
         else
-            if remaining then
+            -- ...and only where exactly one copy answered (B159). The reading is the LONGEST across
+            -- every copy in the bags, which is the right answer to "can this be handed over at all"
+            -- and the wrong one to "how long has THIS obligation got": two pending trades for one item
+            -- -- what the "(1/2)" duplicate marking exists for -- share one number, so the copy looted
+            -- hours ago was handed the copy looted just now's window. Its warning then never went out
+            -- and it died silently, and LC.pendingTrades IS the saved table, so the wrong stamp
+            -- survived the reload. With two copies in the bags our own stamp is the better of the two
+            -- answers, and it is what the code did before the item was ever read.
+            if remaining and copies == 1 then
                 local implied = TRADE_TIMEOUT_SECONDS - (now - (entry.lootedAt or now))
                 -- The tooltip counts in whole minutes, so only a real disagreement moves the stamp
                 -- -- otherwise every pass would rewrite it by a few seconds for nothing.
@@ -1346,18 +1354,28 @@ end
 -- a window is proof this item CAN be handed over, while a bound copy only proves that particular one
 -- cannot. nil stays nil -- "cannot read it" must never become "no time left" (B60, the stand-in loot
 -- owner who has the obligation and not the item).
+--
+-- Second return: how many copies actually ANSWERED, which is what makes longest-wins safe to reuse
+-- (B159). It is the right rule for "can this be handed over at all" and the wrong one for "how long has
+-- THIS obligation got": two pending trades for one item -- the case the "(1/2)" duplicate marking exists
+-- for -- share one reading, so the copy looted hours ago was handed the copy looted just now's window.
+-- The caller correcting a stamp asks for the count and leaves the stamp alone unless exactly one copy
+-- spoke; the untradeable question ignores it, unchanged.
 function Trade.TradeTimeRemainingFor(itemLink)
     if not LC.IsRealItemLink(itemLink) then return nil end
-    local best, skip = nil, nil
+    local best, answered, skip = nil, 0, nil
     while true do
         local bag, slot = FindItemInBags(itemLink, skip)
         if not bag then break end
         local remaining = Trade.GetBagTradeTimeRemaining(bag, slot)
-        if remaining and (best == nil or remaining > best) then best = remaining end
+        if remaining then
+            answered = answered + 1
+            if best == nil or remaining > best then best = remaining end
+        end
         skip = skip or {}
         skip[bag .. ":" .. slot] = true
     end
-    return best
+    return best, answered
 end
 
 -- "" normally, or " (i/N)" when N >= 2 currently-active rolls (LC.rollItems is only ever

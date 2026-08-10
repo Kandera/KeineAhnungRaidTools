@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The vote timer no longer jumps back**, and the whole raid counts down the same window.
 - **A client that falls behind the raid's loot history catches up by itself** instead of refusing to award anything until a reload.
 - **A boss that dies just after the lootmaster reloads still reaches the council**, instead of its loot leaving on Blizzard's own roll.
+- **A trade reminder for one of two identical items runs on its own clock**, instead of borrowing the other copy's and expiring unannounced.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

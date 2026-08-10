@@ -716,6 +716,43 @@ do
     T.eq(out, "", "so nothing is said about handing it over being impossible")
 end
 
+-- ...but the longest reading must not RE-STAMP the other copy's clock (B159) -------------------------
+-- Longest-wins is right for the question B144 asked it: "can this item be handed over at all", where a
+-- copy naming a window proves yes and a bound copy only proves that particular one cannot. The same
+-- reading is also written back into entry.lootedAt to keep the warning, the expiry and the persisted
+-- entry on one clock -- and that consumer was never weighed against longest-wins.
+--
+-- Two obligations for the same item is not exotic; it is the case the "(1/2)" duplicate marking exists
+-- for. The copy looted hours ago and the copy looted just now answer with one number, the longer one, so
+-- the near-expiry entry's stamp is pushed forward by the difference. Its 20-minutes-left warning never
+-- goes out and it dies silently -- and LC.pendingTrades IS the saved table, so the wrong stamp survives
+-- the reload too.
+do
+    local sim, lm = F.NewRaid()
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+    KARTTEST.bags = { [0] = { GLOVES, GLOVES } }
+    -- Copy one has ten minutes left, copy two the whole window.
+    KARTTEST.bagTradeTime = { [GLOVES] = { 10 * 60, TRADE_WINDOW } }
+    local oldStamp = time() - (TRADE_WINDOW - 600)
+    RaidSim.As(lm, function()
+        lm.KART.LC.pendingTrades = {
+            { itemLink = GLOVES, winnerKey = alric.guid, rollID = 90, lootedAt = oldStamp },
+            { itemLink = GLOVES, winnerKey = sinja.guid, rollID = 91, lootedAt = time() },
+        }
+    end)
+
+    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.Trade.CheckTradeTimeouts) end)
+    KARTTEST.bagTradeTime = {}
+
+    local near = F.Owes(lm.KART.LC.pendingTrades, 90)
+    T.truthy(near, "the near-expiry obligation is still listed")
+    T.eq(near and near.lootedAt, oldStamp,
+        "B159: the other copy's window does not push the near-expiry one's clock forward")
+    T.truthy(near and near.timeoutWarned,
+        "B159: so its 20-minutes-left warning goes out instead of the item dying quietly")
+    T.truthy(out:find("Gloombind", 1, true) ~= nil, "and it is said out loud: " .. out)
+end
+
 -- A warning nobody heard has not been given ---------------------------------------------------------
 -- B3 holds the chat line back until the pull is over; the "said once" latch was set when the line was
 -- QUEUED, not when it was said. LC.pendingTrades is the saved table itself (Trade.RestorePersistedTrades

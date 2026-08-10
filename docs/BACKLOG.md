@@ -4567,3 +4567,42 @@ which is what B139's design says in the first place ("same item under the number
 where that knowledge says nothing"). Seven B139 assertions failed. A real fix needs the counter to
 survive a reload, which means a `KART_LCTrades` field and the saved-variable gate that goes with it; not
 worth it against a bounded, once-per-roll ask.
+
+## B159 — FIXED 2026-08-10 — a second copy in the bags pushed the near-expiry obligation's clock forward
+
+Found by the review of `v3.3.2..HEAD`, and it is a consequence of a settled decision rather than a
+reversal of one. B144 asked `Trade.TradeTimeRemainingFor` for the LONGEST reading across every copy of
+the item in the bags, and gave the reason: "a copy that still names a window proves the item CAN be
+handed over, a bound copy only proves that particular one cannot". That reasoning is about the `0` --
+"can this be handed over at all" -- and it stands.
+
+The same reading has a second consumer that entry never weighs: `Trade.CheckTradeTimeouts` writes it back
+into `entry.lootedAt`, so that the warning, the expiry and the persisted entry stay on one clock. For
+"how long has THIS obligation got", longest-wins is the wrong rule, and two pending trades for one item
+is not exotic -- it is the case the `(1/2)` duplicate marking exists for.
+
+Measured: copy one looted 3h50m ago (ten minutes left), copy two looted just now.
+
+```
+PROBE entry 90 lootedAt moved by (s): 13800
+PROBE entry 90 timeoutWarned: nil
+PROBE chat: (nothing said)
+```
+
+The near-expiry obligation's stamp is pushed forward by the difference, its 20-minutes-left warning never
+goes out, and the item dies silently -- **C7**, the half of it that is about the holder actually owing it.
+`LC.pendingTrades` IS the saved table (`Trade.RestorePersistedTrades` points the live list at
+`store.pending`), so the wrong stamp survives a reload as well.
+
+**Fixed 2026-08-10.** `Trade.TradeTimeRemainingFor` also returns how many copies actually ANSWERED, and
+the stamp correction runs only when exactly one did. The untradeable question is untouched and still
+takes the longest reading, so B144's decision is not reopened. With two copies in the bags the entry
+keeps our own stamp -- which is the better of the two answers there, and what the code did before the
+item was ever read.
+
+Not fixed by binding a bag slot to each entry, which would be correct for both copies: slots move when
+the player sorts their bags, so the binding would need re-establishing on every pass, and what it buys
+over "keep our own stamp" is accuracy on a stamp that is already right to within the collection window.
+
+Held by `tests/test_lc_tradefill.lua`, beside B144's own two-copy block -- the one that must keep passing
+unchanged, since it is the decision this does not touch.
