@@ -288,10 +288,13 @@ local MANUAL_ROLL_ID_BASE = 500000
 --
 -- What that buys is a seed that MOVES, not a distinct range per session, and this comment used to
 -- claim the second. The modulus wraps every 100000 seconds, so two sessions about 27.8 hours apart
--- seed identically; and two reloads seconds apart seed seconds apart, so a raid that added twelve
--- items in the twelve seconds before a reload hands out twelve numbers it has already used. Both are
--- collisions the arithmetic allows and neither is guarded here. In practice the counter outruns
--- nothing: an evening adds a handful of items and a reload costs longer than that in seconds.
+-- seed identically; and a reload reseeds by the seconds that have PASSED, not by the numbers already
+-- handed out, so it hands out a used number once for every add this session made in EXCESS of the
+-- seconds since it seeded. Twelve items in the twelve seconds before a reload therefore reuse nothing
+-- -- the new seed is exactly the first unused number -- while twelve items inside five seconds leave
+-- the new seed seven numbers back, and the next seven adds repeat numbers this session already used.
+-- Both are collisions the arithmetic allows and neither is guarded here. In practice the counter
+-- outruns nothing: an evening adds a handful of items and a reload costs longer than that in seconds.
 -- Nothing downstream is built on the claim either — both manual doors declare a new drop
 -- (LC.SnapshotRollInstance's `newDrop`), so a reused manual number cannot inherit a raid, and
 -- PurgeStaleRoll clears the old item's state when the item differs.
@@ -5281,11 +5284,29 @@ end
 --     an instance exactly as outside one.
 --
 -- What is left is the case nothing can separate, and it is B151, now the same size on both branches:
--- the SAME itemID under the same reused number in a DIFFERENT raid keeps the first raid's name on
+-- the SAME itemID under the same reused number in a DIFFERENT instance keeps the first one's name on
 -- every client, not merely on the ones standing outside. It used to be right for whoever was standing
--- in the second raid, which is a narrower wrong answer -- traded knowingly, because that narrowness
--- only holds for the case retail raid loot does not produce (see below), while the case it cost is
--- the one that happens every evening.
+-- in the second one, which is a narrower wrong answer -- traded knowingly, because what the narrowness
+-- cost was the raider porting out, and that happens every evening.
+--
+-- AND THE COST IS WIDER THAN THAT ONE CASE. The first record of this fix priced it as a widening of
+-- B151 and nothing else, and that was wrong. The in-instance read was also the only REPAIR route this
+-- field ever had: a row written from the wrong place used to fix itself the moment the client stood in
+-- the right one. That route is gone, so the real cost class is ANY WRONG NON-BLANK FIRST WRITE, AND IT
+-- IS NOW PERMANENT. No reuse of a rollID is needed to reach it: the item drops in raid TWO while this
+-- client is still standing in raid ONE -- zoning between two raids, or a catch-up reaching him minutes
+-- later from somewhere else -- so his first write is wrong and not blank, and no later read can take
+-- it back. Only a BLANK row is still repairable, which is the first bullet above. Measured against
+-- both commits and pinned in tests/test_loothistory_instance.lua (rollID 120).
+--
+-- The trade is still the right way round, and that is why the code stays as it is: B153 needs the
+-- client elsewhere at a REPEAT, which lands throughout the minutes of a distribution -- exactly when
+-- people move. This needs him elsewhere at the FIRST announcement, a second or two after the boss
+-- kill; the one non-instantaneous way in is a client who missed the original announcement entirely and
+-- whose first-ever write comes from a catch-up minutes later while he is in another instance. Narrower
+-- than what the fix bought, but real, and it carries the same two properties that made B153 worth
+-- fixing: permanent (LH.HandleHistoryEntry dedups on `id`) and checksum-invisible (LH.HistoryChecksum
+-- sums ids only).
 --
 -- The ITEM is not enough on its own, and this comment claimed it was until B151 was measured end to
 -- end. This table deliberately outlives the roll it belonged to and Blizzard reuses rollIDs, so what
@@ -5314,19 +5335,29 @@ end
 --     claimed away.
 --
 -- SO WHAT B151 STILL COSTS, measured rather than reasoned: the SAME itemID under the same reused
--- number in a DIFFERENT raid inside the trade window inherits the first raid's name -- on every
--- client that has the first raid's row, wherever it is standing when the second announcement lands
--- (it used to be only the ones outside an instance; B153's fix is what widened it, and the trade is
--- weighed above). Kept this way deliberately. The alternative -- overwrite, and blank it -- was
--- shipped for two commits and cost the ported-out raider his raid name on an ORDINARY evening, which
--- is the case this whole field exists for; B151 needs one council-eligible itemID to drop in two
--- different raid instances inside four hours, and raid loot is per-instance (the same instance at
--- another difficulty or lockout gives the same name and mapID, which is harmless, and the items that
--- genuinely span instances are collectibles and BoEs, which never enter Council at all --
--- docs/MANIFEST.md C6). A rare wrong label against a routine lost one. Both are labels; neither loses
--- an item. Recorded in docs/BACKLOG.md (B151, B152). Do not upgrade this note back into a guarantee,
--- and do not close it with a receiver-side signal: there is none, and two of them have now been
--- measured failing.
+-- number in a DIFFERENT instance inside the trade window inherits the first one's name -- on every
+-- client that has the first row, wherever it is standing when the second announcement lands (it used
+-- to be only the ones outside an instance; B153's fix is what widened it, and the trade is weighed
+-- above). Kept this way deliberately. The alternative -- overwrite, and blank it -- was shipped for
+-- two commits and cost the ported-out raider his raid name on an ORDINARY evening, which is the case
+-- this whole field exists for. A rare wrong label against a routine lost one. Both are labels; neither
+-- loses an item.
+--
+-- TWO FENCES THIS NOTE USED TO PUT ROUND THAT RARITY ARE FALSE, and neither may be put back:
+--
+--   * "two different RAID instances" is not what the code asks for. GetInstanceInfo's instanceType is
+--     discarded into `_` below -- the only gate is difficultyID == 0 -- so a dungeon, a key, a delve or
+--     a scenario fills this row exactly as a raid does, and any two instances of any kind under one
+--     reused number reach this case. tests/test_loothistory_instance.lua states it in its own fixtures
+--     (Operation Floodgate is a party instance on purpose) and again where it walks the same repeat
+--     into a second raid.
+--   * "collectibles and BoEs never enter Council at all (C6)" is true only of collectibles. A RECIPE is
+--     Bind-on-Equip and reaches the council by explicit rule -- docs/MANIFEST.md C15, and
+--     `councilEligible = (bindOnPickUp or isRecipe) and not isCollectible` in LC.OnStartLootRoll -- so
+--     "the items that genuinely span instances never get here" does not hold either.
+--
+-- Recorded in docs/BACKLOG.md (B151, B152). Do not upgrade this note back into a guarantee, and do not
+-- close it with a receiver-side signal: there is none, and two of them have now been measured failing.
 --
 -- An item this client could not identify counts as different, so an unknown never inherits -- and
 -- that is a consequence, not a safety property: it is the clause that BLANKS the raid of a roll whose
@@ -5357,9 +5388,18 @@ function LC.SnapshotRollInstance(rollID, item, newDrop)
     -- to compare on the client that has the placeholder -- which is the reloaded one.
     local itemID = item and (tostring(item):match("item:(%d+)") or tostring(item):match("^(%d+)$")) or nil
     local name, _, difficultyID, _, _, _, _, mapID = GetInstanceInfo()
-    -- The sentinel first, so the keep below reads one question -- "does this roll already have a raid
-    -- for this item" -- rather than two different ones on two branches. difficultyID == 0 means this
-    -- client is not standing in an instance at all, so there is no raid to name whatever mapID says.
+    -- difficultyID == 0 means this client is not standing in an instance at all, so there is no raid
+    -- to name whatever mapID says -- the same sentinel LH.LogHistory normalizes on. Note what is NOT
+    -- read: instanceType is discarded into `_` above, so a dungeon, a key, a delve and a raid all fill
+    -- this row identically, and every note about "another raid" below means "another instance".
+    --
+    -- Its POSITION buys nothing, and this comment used to claim it bought the keep's single question
+    -- ("does this roll already have a raid for this item?"). It does not: the keep below reads `prev`
+    -- and `itemID` and never touches `name` or `mapID`. What gives it one question instead of two
+    -- different ones per branch is that it no longer sits INSIDE the difficultyID == 0 branch (B153) --
+    -- not that this line runs first. Measured: moving it after the keep block leaves the whole suite
+    -- green. It is first for the reader, so the two variables are normalized once, ahead of the only
+    -- statement that uses them.
     if difficultyID == 0 then name, mapID = nil, nil end
     if not newDrop then
         if LC.Trade and LC.Trade.PruneExpiredRaidSnapshots then LC.Trade.PruneExpiredRaidSnapshots() end
@@ -5571,8 +5611,9 @@ function LC.OnStartLootRoll(rollID, attempt)
     -- reporting difficultyID == 0 -- a world boss, an open-world rare -- so a first roll CAN arrive
     -- here from outside an instance. Practically harmless (it would have to reuse the same rollID AND
     -- the same itemID inside four hours, and a world boss and a raid boss do not share item ids;
-    -- collectibles and BoEs never reach Council at all -- docs/MANIFEST.md C6), and in any case a roll
-    -- that starts outside an instance has no raid of its own to lose. Nothing is built on it.
+    -- collectibles never reach Council at all -- docs/MANIFEST.md C6, and note that BoEs DO when they
+    -- are recipes, C15), and in any case a roll that starts outside an instance has no raid of its own
+    -- to lose. Nothing is built on it.
     LC.SnapshotRollInstance(rollID, newItemID)
 
     -- Keep any still-valid link we already had if this event's link is unresolved (PurgeStaleRoll

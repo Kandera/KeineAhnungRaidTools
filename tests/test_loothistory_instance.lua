@@ -829,9 +829,9 @@ end
 --
 -- And by then the raider is normally somewhere else: "Leute z.B. schon aus dem Raid porten und in
 -- einen anderen gehen während die Lootverteilung startet ist normal" (docs/MANIFEST.md, the
--- operating reality, quoted as it stands there). Alric is dead when the
--- boss dies, so the announcement is the only thing that ever reaches him -- the one client for whom
--- this snapshot has no second source at all.
+-- operating reality, quoted as it stands there). Alric is dead when the boss dies, so the
+-- announcement is the only thing that ever reaches him -- the one client for whom this snapshot has
+-- no second source at all.
 --
 -- Driven through the wire on both sides, not by calling the handler: the whole point is that the
 -- SECOND message is indistinguishable from the first, and only the owner's own re-raise produces it.
@@ -1147,6 +1147,15 @@ do
     T.truthy(council.KART.LC.sessionActive, "the reloaded client is back in the session")
 
     KARTTEST.AdvanceTime(30)
+    -- BOTH calls belong, and which one carries which half was measured rather than assumed.
+    -- KARTTEST.FireEvent reaches LootCouncilRelevance.lua's own START_LOOT_ROLL frame, which
+    -- snapshots Blizzard's per-roll verdict before anything resolves the roll -- the same reason
+    -- F.Drop fires the event before calling the handler. It does NOT reach LC.OnStartLootRoll:
+    -- the frame that routes this event to it lives in Core.lua, which the offline harness cannot
+    -- load at all (tests/run.lua says so, and tests/test_core_wiring.lua checks that wiring against
+    -- the source instead). Measured by deleting each in turn: event only -> this block FAILS, the
+    -- trade clock is never re-stamped; direct call only -> it passes, minus the relevance frame.
+    -- So the direct call stands in for Core.lua's dispatcher and the event stands in for the game.
     RaidSim.As(council, function()
         KARTTEST.FireEvent("START_LOOT_ROLL", 103)
         council.KART.LC.OnStartLootRoll(103)
@@ -1155,6 +1164,69 @@ do
         "the handler ran all the way through -- it re-stamped the trade clock unconditionally")
     T.eq((council.KART.LC.rollRaidSnapshot[103] or {}).name, VOIDSPIRE.name,
         "...and left the raid standing, from inside the key as well as from the open world")
+end
+
+-- 5. WHAT THE KEEP COSTS ON THIS BRANCH, pinned rather than described: any WRONG NON-BLANK first
+--    write is now permanent. Before 2026-08-10 an in-instance read overwrote, so a row written from
+--    the wrong place repaired itself the moment this client stood in the right one. That repair
+--    route is gone -- only a BLANK row is still repairable (the block above, rollID 99).
+--
+--    The route is not exotic: the item drops in raid TWO, the announcement reaches a client who is
+--    still standing in raid ONE (zoning between two raids, or a catch-up minutes later while he is
+--    somewhere else), so his FIRST write already names the wrong raid and is not blank. He then
+--    zones into the raid it actually dropped in and is re-announced to -- and nothing repairs it.
+--
+--    Narrower than what the fix bought, and that is the whole of why it is a cost and not a defect:
+--    B153 needs the client elsewhere at a REPEAT, which lands throughout the minutes of a
+--    distribution -- exactly when people move. This needs him elsewhere at the FIRST announcement, a
+--    second or two after the boss kill. Same two properties that made B153 worth fixing, though:
+--    permanent (LH.HandleHistoryEntry dedups on the award id) and checksum-invisible
+--    (LH.HistoryChecksum sums ids only). Asserted as the CURRENT behaviour, not as the wanted one.
+do
+    InQuelDanas()
+    local sim, lm, _, raider = F.NewRaid()
+    -- The item drops in raid TWO. Alric is dead when the boss dies, so no roll is raised on him and
+    -- the announcement is the only thing that ever reaches him -- and it reaches him while he is
+    -- still standing in raid ONE.
+    F.Drop(sim, 120, F.GLOVES, { noRollFor = { Alric = true } })
+    InVoidspire()
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((lm.KART.LC.rollRaidSnapshot[120] or {}).name, QUELDANAS.name,
+        "the item really did drop in raid TWO -- the owner, who was standing in it, says so")
+    local first = raider.KART.LC.rollRaidSnapshot[120] or {}
+    T.eq(first.name, VOIDSPIRE.name,
+        "and his FIRST write already names the wrong raid, and is not blank -- which is true on " ..
+        "both sides of B153's fix, because a first write has nothing to keep")
+    T.eq(first.id, VOIDSPIRE.mapID, "id too, wrong and non-blank together")
+
+    -- He zones into the raid the item actually dropped in, and the owner re-announces the still-open
+    -- roll. Until 2026-08-10 this read repaired him.
+    KARTTEST.AdvanceTime(5)
+    F.Drop(sim, 120, F.GLOVES, { noRollFor = { Alric = true } })
+    InQuelDanas()
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 2,
+        "the owner really did announce the same roll a second time")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0,
+        "and nothing else repaired anything -- what reached him is the ordinary announcement")
+
+    local snap = raider.KART.LC.rollRaidSnapshot[120] or {}
+    T.eq(snap.name, VOIDSPIRE.name,
+        "standing in the RIGHT raid and being told about the item again no longer repairs a wrong " ..
+        "non-blank row -- the keep cannot tell a wrong first answer from a right one, so this is " ..
+        "the cost of B153's fix and it is permanent")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id stays wrong with it")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(120, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    local stored = raider.env.KART_LootHistory[1] or {}
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "so his award names a raid the item never dropped in, on the client whose row is the only " ..
+        "copy of it -- and no later read can take it back")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "id on the award too")
 end
 
 -- The two manual doors are new drops as well, and say so: nothing already stored under a number can

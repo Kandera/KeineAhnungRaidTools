@@ -4167,9 +4167,39 @@ of range), the keep fires and the award names the wrong raid. Permanent, because
 inside an instance, so this cost the wrong raid only to clients who were outside one — the lootmaster
 and everybody still in the second raid read it correctly. The keep is no longer gated on that branch
 (a read from inside an instance says where the CLIENT is, and this field records where the ITEM
-dropped), so a reused number now carries the first raid's name on every client that has its row. The
-trade is deliberate: the narrower answer only held for the case retail raid loot does not produce
-(below), and what it cost was the raider porting out, which is every evening.
+dropped), so a reused number now carries the first instance's name on every client that has its row.
+What it cost was the raider porting out, which is every evening, so the trade is deliberate.
+
+**And the widening is wider than a reused rollID — the first record of it priced this wrong, corrected
+2026-08-10.** The in-instance read was also the only REPAIR route this field ever had: a row written
+from the wrong place used to fix itself the moment the client stood in the right one. That route is
+gone. So the real cost class is **any wrong non-blank first write, and it is now permanent** — no reuse
+of a number is needed to reach it. The item drops in raid TWO while a client is still standing in raid
+ONE (zoning between two raids, or a catch-up reaching him minutes later from somewhere else); his first
+write is wrong and not blank; he then zones into the raid it actually dropped in and is re-announced
+to, and nothing repairs it. Only a **blank** row is still repairable. Measured against both commits and
+pinned in `tests/test_loothistory_instance.lua` (rollID 120), which fails against `8744b5a`.
+
+The trade is still net-positive and the code stays: B153 needs the client elsewhere at a **repeat**,
+which lands throughout the minutes of a distribution — exactly when people move — while this needs him
+elsewhere at the **first** announcement, a second or two after the boss kill. The one non-instantaneous
+way in is a client who missed the original announcement entirely and whose first-ever write comes from
+a catch-up minutes later while he is in another instance. Narrower, but real, and it carries the same
+two properties that made B153 worth fixing: permanent (`LH.HandleHistoryEntry` dedups on `id`) and
+checksum-invisible (`LH.HistoryChecksum` sums ids only).
+
+**Two fences this entry used to carry are false, and neither may be put back:**
+
+* **"two different *raid* instances"** is not what the code asks for. `LC.SnapshotRollInstance`
+  discards `GetInstanceInfo`'s `instanceType` into `_` and gates on `difficultyID == 0` alone, so a
+  dungeon, a key, a delve or a scenario fills the snapshot row exactly as a raid does — any two
+  instances of any kind under one reused number reach this case.
+  `tests/test_loothistory_instance.lua` says so in its own fixtures (Operation Floodgate is a party
+  instance on purpose) and again where it walks the same repeat into a second raid.
+* **"BoEs never enter Council at all (C6)"** is true only of collectibles. A **recipe** is
+  Bind-on-Equip and reaches the council by explicit rule — `docs/MANIFEST.md` **C15**, and
+  `councilEligible = (bindOnPickUp or isRecipe) and not isCollectible` in `LC.OnStartLootRoll`. So
+  "the items that genuinely span instances never get here" does not hold either.
 
 **Closed once and reopened.** `f522b24` fixed it by telling `LC.SnapshotRollInstance` which CALLER was
 asking — only a repeat of an announcement may inherit — on the premise that `LC.HandleRollCatchup` is
@@ -4200,13 +4230,12 @@ Three candidates have now been measured failing rather than argued down:
   rejected in the round that produced `f522b24`.
 
 **Why it is acceptable meanwhile, and why the other side of the trade is worse.** Reaching this needs
-one council-eligible itemID to drop in two different raid instances inside four hours. Retail raid
-loot is per-instance: the same instance at another difficulty or lockout produces the same name and
-mapID, which is harmless, and the items that genuinely span instances are collectibles and BoEs, which
-never enter the Council at all (Manifest C6). The alternative — refuse the keep on the announcement
-path — costs the ported-out raider his raid name on an ORDINARY evening (B152), which is the case the
-field exists for. Both errors are a label on an award; neither loses an item. A rare wrong label is
-the cheaper of the two, and it is the one that is written down.
+Blizzard to hand the same rollID out again for the same council-eligible itemID inside four hours, in
+two places this client reads as different instances — uncommon, but not fenced off by anything, and
+the two claims that used to fence it are struck above. The alternative — refuse the keep on the
+announcement path — costs the ported-out raider his raid name on an ORDINARY evening (B152), which is
+the case the field exists for. Both errors are a label on an award; neither loses an item. The rarer
+wrong label is the cheaper of the two, and it is the one that is written down.
 
 **The real fix is the raid at the source**: the owner is inside the instance when it announces
 (`LC_DROP` goes out within `DROP_COLLECT` of the loot event), so stating the raid on the wire would
@@ -4265,8 +4294,9 @@ chain of defects has been comments claiming guarantees the code does not hold:
   were in the instance when the boss died". Open-world group loot — a world boss, an open-world rare —
   raises `START_LOOT_ROLL` with `GetInstanceInfo()` reporting `difficultyID == 0`. Practically harmless
   (it needs the same rollID *and* itemID inside four hours, and raid-boss and world-boss item ids do
-  not collide; collectibles and BoEs never reach Council at all, C6), and nothing is built on it — but
-  it claimed impossibility where it had only improbability, and now says so.
+  not collide; collectibles never reach Council at all, C6 — BoEs do when they are recipes, C15), and
+  nothing is built on it — but it claimed impossibility where it had only improbability, and now says
+  so.
 * `Trade.PruneExpiredRaidSnapshots()` runs only on the branch that may keep, an unremarked side effect
   of `f522b24` moving it inside the new condition. The behaviour is fine — the sweep is a precondition
   of the keep and of nothing else, and `Trade.ClearRollState` sweeps on every roll it clears — so it is
