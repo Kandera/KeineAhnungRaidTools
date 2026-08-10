@@ -299,7 +299,7 @@ end
 -- Held before it can send, so it is still in flight when the loot owner wipes the raid. Every
 -- receiver -- not just the assigner, who wiped its own copy directly -- must end up without it.
 do
-    local sim, lm, council, raider = F.NewRaid()
+    local sim, lm, _, raider = F.NewRaid()
     RaidSim.Hold(sim, "LC_RESULT")
     Award(sim, lm, 300, F.GLOVES, raider, "BIS")
     RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
@@ -323,7 +323,7 @@ end
 -- raider never hears the wipe broadcast itself (held back); the award from the loot owner is what
 -- reaches it first, and that alone must be enough to bring it up to date.
 do
-    local sim, lm, council, raider = F.NewRaid()
+    local sim, lm, _, raider = F.NewRaid()
     RaidSim.Hold(sim, "LC_HIST_EPOCH")
     RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
     RaidSim.Drain(sim, 10)

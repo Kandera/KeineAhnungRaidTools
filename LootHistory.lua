@@ -1723,7 +1723,8 @@ function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
     local head  = string.format("LC_HIST_BATCH:%d:%s:", myEpoch, myKey)
     local first = 1
     while first <= #toSend do
-        local count, msg = math.min(HISTORY_BATCH_ENTRIES, #toSend - first + 1), nil
+        local count = math.min(HISTORY_BATCH_ENTRIES, #toSend - first + 1)
+        local msg
         while true do
             local records = {}
             for i = first, first + count - 1 do records[#records + 1] = EntryRecord(toSend[i]) end
