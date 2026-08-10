@@ -115,3 +115,19 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   font-fallback label. Kept: the language picker always triggers `ReloadUI` (see DESC_LANGUAGE), so
   these are rebuilt on reload — registering them for live refresh would be dead code with no live
   effect. "Friz Quadrata" is a font proper noun.
+
+## Verified, no change needed (2026-08 review of v3.3.2..HEAD)
+
+- **A merged vote card's "(2x)" disagrees with the council's "(1/3)"** (LootCouncilVote.lua
+  `Vote.CardItemSuffix` vs LootCouncilTrade.lua `Trade.GetDuplicateOrdinal`). Raised as a defect,
+  withdrawn on reading. The two answer different questions on purpose: the ordinal's denominator counts
+  every copy in `LC.rollItems`, closed and awarded ones included, while the card's count is
+  `DuplicateGroup`'s set -- the copies still answerable on this client, which is exactly the set
+  `Vote.CastVote` fans the answer out to. So the number on the card is the number of rolls the click
+  answers, and a card reading "2x" beside three council tabs is correct. Both comments now say so.
+  Do not "reconcile" the two numbers.
+
+- **`CollapseCopies` picks a survivor the ordinal does not call (1/N)** (same file). The comment claimed
+  it did; corrected rather than the code. What the merge needs is that clients holding the same
+  answerable copies pick the same one, which the lowest answerable rollID gives. A closed copy with a
+  lower number makes the survivor (2/N) in the ordinal, and nothing rests on those agreeing.

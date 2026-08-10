@@ -122,6 +122,13 @@ end
 -- What a merged card says where a single one shows Trade.GetDuplicateOrdinal's "(1/2)": that marking
 -- names ONE copy, and this card is all of them. A bare count needs no locale string of its own --
 -- "2x" reads the same in both the languages this addon ships.
+--
+-- The count is HOW MANY COPIES THIS ANSWER COVERS, which is DuplicateGroup's set: the copies still
+-- answerable on this client. That is deliberately not the ordinal's denominator, which counts every copy
+-- in LC.rollItems including the closed and awarded ones -- so a card can read "2x" on an item the
+-- council is holding three tabs for, and that is right rather than a disagreement. Raised as a defect
+-- in the v3.3.2..HEAD review and withdrawn: the fan-out in Vote.CastVote uses the same set, so the
+-- number on the card is exactly the number of rolls the click answers. Do not "reconcile" the two.
 function Vote.CardItemSuffix(rollID)
     local group = DuplicateGroup(rollID)
     if not group then return LC.Trade.GetDuplicateOrdinal(rollID) end
@@ -379,9 +386,14 @@ function Vote.FilteredRolls()
 end
 
 -- One card per ITEM, out of a list that is one entry per roll. The copy that survives is the lowest
--- rollID present, which is the one Trade.GetDuplicateOrdinal calls (1/N), so every client draws the
--- same one. Applied to the ALREADY-FILTERED list rather than to LC.voteListRolls: if one copy is
--- hidden and another is not, the card has to be the one that is still on screen.
+-- rollID still ANSWERABLE, so two clients holding the same answerable copies draw the same one.
+-- Applied to the ALREADY-FILTERED list rather than to LC.voteListRolls: if one copy is hidden and
+-- another is not, the card has to be the one that is still on screen.
+--
+-- Deliberately NOT "the one Trade.GetDuplicateOrdinal calls (1/N)", which is what this comment used to
+-- claim: that function counts every copy in LC.rollItems, closed and awarded ones included, so a copy
+-- with a lower rollID that is already decided makes the survivor (2/N) there. Nothing rests on the two
+-- numbers agreeing -- see Vote.CardItemSuffix, which answers a different question on purpose.
 --
 -- /kart showall does not lift this, unlike the two filters below it. Showing both copies would put
 -- two answer paths on screen for one answer that is cast for both anyway -- the merge is not
