@@ -710,6 +710,13 @@ local GUARANTEED_TOKENS = {
     LC_CONFIG = true, LC_CONFIG_RELAY = true,
     LC_VOTE = true, LC_CVOTE = true, LC_ROLLS = true,
     LC_RESULT = true, LC_ONOTE = true,
+    -- Added 2026-08-10 (B156). One message per Clear History, so the traffic is nothing -- and it is
+    -- the single message that redraws the line every client's loot history is measured against. A
+    -- client that misses it holds an epoch below the raid's, refuses the next award it is asked to
+    -- make and cannot verify the higher epoch it then hears about from anybody but the loot owner.
+    -- Nothing else re-sends it on its own account: the whisper in LH.AnswerHistoryRequest only goes
+    -- to a client that asks.
+    LC_HIST_EPOCH = true,
 }
 
 -- ChatThrottleLib splits the available bandwidth evenly across its three priorities, so this table

@@ -669,6 +669,15 @@ function LH.AdmitEpoch(wireEpoch, originatorKey)
         -- client, which any group member could make and which was enough to stop the whole raid
         -- awarding loot.
         LH.heardEpoch = math.max(LH.heardEpoch or 0, wireEpoch)
+        -- ...and go and get what is missing, rather than sit here knowing about it (B156). Refusing an
+        -- epoch we cannot verify is right; refusing it and then doing nothing was not. LH.RequestHistorySync
+        -- runs on a raid JOIN, so a client that went stale mid-evening stayed stale for the rest of it,
+        -- refusing every award it was asked to make (Trade.RefusedAsStale) with no way back but a relog.
+        --
+        -- No new message needed: LH.AnswerHistoryRequest whispers the answerer's OWN epoch back to whoever
+        -- asked, so a request that reaches the loot owner returns the number this client is allowed to
+        -- adopt. Rate-limited with the unauthorised-award ask because a distribution produces both at once.
+        LH.AskForCatchUpSoon()
         return false
     end
     return true
@@ -1365,13 +1374,20 @@ local HISTORY_SYNC_ANSWER_COOLDOWN = 60
 local UNAUTHORISED_SYNC_DELAY    = 5
 local UNAUTHORISED_SYNC_COOLDOWN = 60
 
-function LH.NoteUnauthorisedAward()
+-- "Something reached this client that proves it is missing history" -- ask for a catch-up shortly.
+-- Shared by every such moment rather than one limiter each, because they arrive together during a
+-- distribution and the answer to one request already carries what the others would have asked for.
+function LH.AskForCatchUpSoon()
     local now = GetTime()
     if LH.lastUnauthorisedSync and (now - LH.lastUnauthorisedSync) < UNAUTHORISED_SYNC_COOLDOWN then
         return
     end
     LH.lastUnauthorisedSync = now
     C_Timer.After(UNAUTHORISED_SYNC_DELAY, function() LH.RequestHistorySync() end)
+end
+
+function LH.NoteUnauthorisedAward()
+    LH.AskForCatchUpSoon()
 end
 
 -- An order-independent fingerprint of what we hold at the current epoch.

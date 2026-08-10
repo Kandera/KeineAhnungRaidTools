@@ -4452,3 +4452,40 @@ is not what is moving.
 Held by `tests/test_lc_drop.lua`, which asserts the remaining time and the duration across the re-raise
 for **every client in the raid** rather than for a receiver — an assertion on one receiver would have
 passed against the broken build.
+
+## B156 — FIXED 2026-08-10 — a client that fell behind the raid's epoch stayed behind, and refused to award all evening
+
+Found by the review of `v3.3.2..HEAD`. Two halves of one hole, both on the message that redraws the line
+every client's loot history is measured against.
+
+**`LC_HIST_EPOCH` was not guaranteed.** `LH.ClearHistory` broadcasts it once through `LC.SendLC`, the
+token was absent from `GUARANTEED_TOKENS`, and nothing re-sends it on its own account — the whisper in
+`LH.AnswerHistoryRequest` only ever goes to a client that asks. One send, no retry, for the single
+message that moves the raid's epoch. B118 is the standing proof that a send can simply not arrive.
+
+**And going stale was a dead end.** A client holding an epoch below the raid's then hears the new one
+from an ordinary council member's award — `LH.AdmitEpoch` correctly refuses to adopt it (only the loot
+owner may wipe, Task 2/Task 4) and notes `LH.heardEpoch`. `LH.IsStale()` is then a hard early return in
+`Trade.AnnounceResult` and a printed refusal in `Trade.RefusedAsStale`, so this client refuses every
+award it is asked to make. What happened next was nothing: `LH.RequestHistorySync` runs on a raid JOIN,
+so a client that went stale in the middle of an evening stayed stale for the rest of it, with no way
+back short of a relog.
+
+The ruling this rests on says the cost out loud — "a returning absentee who resyncs while the loot owner
+is absent cannot adopt the new epoch from an ordinary peer's catch-up answer, so it stays stale until the
+loot owner is around to vouch for it". That is the intended cost and it is not what this entry is about.
+What was not intended is never asking.
+
+**Fixed 2026-08-10**, and neither half needed a new message:
+
+* `LC_HIST_EPOCH` joins `GUARANTEED_TOKENS`. One message per Clear History, so the traffic is nothing.
+* Raising `LH.heardEpoch` now also arms a catch-up request. `LH.AnswerHistoryRequest` already whispers
+  the answerer's OWN epoch back to whoever asked, so a request that reaches the loot owner returns the
+  number this client is allowed to adopt. Rate-limited through the same limiter as the unauthorised-award
+  ask (`LH.AskForCatchUpSoon`, which `LH.NoteUnauthorisedAward` now calls too) — a distribution produces
+  both at once, and the answer to one request carries what the other would have asked for.
+
+Held by `tests/test_loothistory_epoch.lua`, beside the block that proves the refusal itself is right. The
+test has to outlast `GATE_MAX_PARK`: the stale client refused the award, so its own `assignedWinners` was
+never set and the roll still reads as undecided there — which is precisely the state the park cap exists
+for. Verified to fail with the one added call removed.

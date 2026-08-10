@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A loot history award whose item wasn't cached yet now upgrades itself** once the item loads, instead of staying a bare, unexportable string forever.
 - **An item you miss at a later boss finds you too**, not only at the first one.
 - **The vote timer no longer jumps back**, and the whole raid counts down the same window.
+- **A client that falls behind the raid's loot history catches up by itself** instead of refusing to award anything until a reload.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

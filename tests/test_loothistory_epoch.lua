@@ -367,6 +367,44 @@ do
     RaidSim.As(raider, function() T.truthy(raider.KART.LH.IsStale(), "raider now reads as stale") end)
 end
 
+-- ...and stale is a state it tries to LEAVE (B156) --------------------------------------------------
+-- Refusing an epoch it cannot verify is right, and it is where the previous block stops. What happened
+-- next was nothing: LH.RequestHistorySync runs on a raid JOIN, so a client that went stale in the
+-- middle of an evening stayed stale for the rest of it -- refusing every award it was asked to make
+-- (Trade.RefusedAsStale) with no way back short of a relog.
+--
+-- The way out already exists and needs no new message: LH.AnswerHistoryRequest whispers the answerer's
+-- own epoch back to whoever asked, so a request that reaches the loot owner comes back with the number
+-- this client is allowed to adopt. It just has to ask.
+do
+    local sim, lm, council, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
+    raider.env.KART_LootHistoryEpoch = 1
+    raider.env.KART_LootHistory = {}
+    RaidSim.ClearLog(sim)
+
+    Award(sim, council, 303, F.GLOVES, lm, "BIS")
+    RaidSim.As(raider, function() T.truthy(raider.KART.LH.IsStale(), "the setup: the raider is stale") end)
+
+    -- Long enough for the delayed ask (UNAUTHORISED_SYNC_DELAY) and for the sync gate to let it out.
+    -- The gate is not a formality here: the raider REFUSED the award, so its own assignedWinners never
+    -- got set and the roll still reads as undecided on this client -- which is exactly the shape
+    -- GATE_MAX_PARK exists for. Past that cap the request goes out gate or no gate.
+    for _ = 1, 8 do
+        KARTTEST.AdvanceTime(10)
+        RaidSim.Drain(sim, 10)
+    end
+
+    local asked = 0
+    for _, e in ipairs(RaidSim.Sent(sim, "LC_HIST_REQ")) do
+        if e.from == raider.name then asked = asked + 1 end
+    end
+    T.truthy(asked > 0,
+        "B156: a client that has just learned it is behind asks for a catch-up instead of sitting " ..
+        "there refusing awards for the rest of the evening")
+end
+
 -- The loot-history catch-up path (LC_HIST_BATCH) asks the same question the award path does, and
 -- must answer it the same way (code review finding on Task 6a, 2026-08-07). LH.HandleHistoryBatch
 -- used to only check whether the batch epoch was BELOW ours; a batch answered by an ORDINARY group

@@ -46,6 +46,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Loot-History-Eintrag, dessen Item noch nicht im Cache war, aktualisiert sich jetzt selbst**, sobald das Item lädt, statt für immer eine nackte, nicht exportierbare Zeichenkette zu bleiben.
 - **Ein Item, das du bei einem späteren Boss verpasst, findet dich auch**, nicht nur beim ersten.
 - **Die Abstimmungsuhr springt nicht mehr zurück**, und der ganze Raid zählt dasselbe Fenster herunter.
+- **Ein Client, der hinter die Loot-History des Raids fällt, holt von selbst auf** — statt bis zum Neuladen jede Vergabe zu verweigern.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben
