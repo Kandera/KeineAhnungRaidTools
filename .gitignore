@@ -16,3 +16,8 @@ docs/superpowers/
 # Coverage output (KART_COVERAGE=1 luajit tests/run.lua)
 luacov.stats.out
 luacov.report.out
+
+# Arbeitsverzeichnis der subagent-driven-development-Laeufe (Ledger, Briefings,
+# Berichte, Review-Diffs). Reines Geruest: die Diagnosen, die bleiben sollen,
+# stehen in docs/BACKLOG.md und in den Kommentaren am Code.
+.superpowers/
