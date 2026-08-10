@@ -1695,8 +1695,21 @@ function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
 
     -- Throttled to once per HISTORY_FULL_COOLDOWN per asker. In this raid people port out
     -- mid-distribution and relog all evening, and every one of those joins asks again -- while a hole
-    -- appears at most once. Ask again inside the window and you get the incremental answer; the hole
-    -- is already filled by then, and if it is not, the request after the cooldown pulls it.
+    -- appears at most once.
+    --
+    -- What "ask again inside the window" actually gets is EVERYTHING SINCE THE LAST FULL ANSWER, not an
+    -- incremental answer against the asker's own newest entry -- see the floor a few lines down, which
+    -- is the whole point of the fallback and not a detail of it. So a hole that opened after that answer
+    -- is filled on the next request, which is the ordinary case; one that was already there before it,
+    -- or that the full answer itself failed to deliver, waits out the cooldown. That second case is real
+    -- and is what the hour is for: nothing acknowledges a batch, the stamp is written on send, and this
+    -- comment used to promise a repair the floor cannot give. Measured, 2026-08-10: a client whose
+    -- history is behind the last full answer asks again inside the hour and receives nothing at all.
+    --
+    -- What keeps that from mattering in practice is redundancy rather than this branch: every peer
+    -- holding the entry answers a request (tests/test_lc_churn.lua asserts more than one does, and the
+    -- award id deduplicates them), so a full answer is several independent whispers and losing all of
+    -- them is a different order of unlikely from losing one.
     LH.fullReconciled = LH.fullReconciled or {}
     local lastFull = LH.fullReconciled[senderFullName]
     -- Whether THIS request earns the stamp, decided now; written below only once the answer is known

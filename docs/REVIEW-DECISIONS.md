@@ -131,3 +131,19 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   it did; corrected rather than the code. What the merge needs is that clients holding the same
   answerable copies pick the same one, which the lowest answerable rollID gives. A closed copy with a
   lower number makes the survivor (2/N) in the ordinal, and nothing rests on those agreeing.
+
+- **A second catch-up request inside `HISTORY_FULL_COOLDOWN` can return nothing at all**
+  (LootHistory.lua `LH.AnswerHistoryRequest`). Measured in round three of the 2026-08 review and kept.
+  The floor at `if sinceTime < lastFull then sinceTime = lastFull end` is deliberate -- an asker whose
+  own copy is behind an earlier full answer would otherwise read as "send me everything again", which is
+  the repeat the cooldown exists to prevent -- so a hole that predates the last full answer, or one that
+  answer failed to deliver, waits the hour out. The hour is itself the chosen recovery bound for exactly
+  that case (maintainer's ruling, 2026-08-07: "an hour lets that client recover the same evening
+  instead"). What keeps it from mattering is redundancy, not this branch: every peer holding the entry
+  answers, so a full answer is several independent whispers. The misleading half of the comment ("you
+  get the incremental answer") is corrected; the behaviour is not.
+
+- **Several peers answer one catch-up request** (LootHistory.lua `LH.HandleHistoryRequest`). By design,
+  asserted as such in `tests/test_lc_churn.lua` ("more than one peer answered the catch-up"), and the
+  award id deduplicates the copies. Measured at four answering peers in a five-client raid; the B135/B139
+  message counts were taken against 30 clients on this same code. Not a traffic defect.
