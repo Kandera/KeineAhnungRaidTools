@@ -973,3 +973,62 @@ do
     T.truthy(#RaidSim.Sent(sim, "LC_DROP") > 0,
         "B158: and the raid is told the item exists (C5) instead of it leaving on Blizzard's own roll")
 end
+
+-- B161: a client that becomes loot owner mid-roll must not force-win it a second time -------------
+-- The other end of the same replay (B158), and older than it. ReplayOne runs LC.OnStartLootRoll,
+-- whose owner branch force-wins -- and IsLootOwner is asked at replay time, not at the drop. So a
+-- client that was session-unaware while a roll was live and is the loot owner by the time the state
+-- arrives rolls Need on an item the previous owner already force-won. Blizzard awards the higher of
+-- the two, so the item can end up with the wrong person entirely: C4 says force-won BY EXACTLY ONE
+-- PERSON, and C7's holder then owes an item that is not in their bags.
+--
+-- Both ways in are Manifest items: the designation moving (C10) and the lootmaster walking out so the
+-- leader stands in (C9). Both land inside Blizzard's own roll window, which is minutes, and every
+-- reload, relog and disconnect puts a client in the unaware state to begin with.
+--
+-- Pre-B158 the gate was LC.rollAnnounced alone, and a client that RECEIVED the announcement while
+-- unaware had it -- so this was reachable before that commit too. What separates the two cases is
+-- exactly the announcement: an announced roll already has an owner who took it up, and a replay must
+-- not take it up again; an UNANNOUNCED one has none, which is the whole of B158.
+do
+    local sim, lm = F.NewRaid()
+    local heir = sim.byName.Merrit
+
+    -- The heir is mid-reload when the boss dies: it remembers the roll and does nothing with it.
+    RaidSim.As(heir, function()
+        heir.KART.LC.sessionActive = false
+        heir.KART.LC.sessionStateKnown = false
+    end)
+    F.Drop(sim, 1210, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(heir.KART.LC.rollsSeenWhileUnaware[1210], "the setup: the heir remembered the roll")
+    T.eq((KARTTEST.rolled[1210] or {})[lm.unit], 1, "and the real lootmaster force-won it")
+    T.is_nil((KARTTEST.rolled[1210] or {})[heir.unit], "while the heir answered nothing")
+
+    -- The designation moves to the heir while the roll is still live -- the pattern this codebase uses
+    -- to move the loot role between two named clients (see tests/test_lc_ownership.lua).
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.lcLootmaster = "Merrit"
+        lm.KART.LC.ApplyOwnConfig()
+        lm.KART.LC.BroadcastRaidConfig()
+    end)
+    KARTTEST.AdvanceTime(1)
+    T.truthy(RaidSim.As(heir, heir.KART.LC.IsLootOwner), "the heir owns the loot flow now")
+
+    -- ...and only now does it learn a session is running. Driven directly: the state answer from the
+    -- previous owner is refused by LC.IsSenderLootOwner once the designation has moved, which is the
+    -- sender guard working, and not what is under test here.
+    RaidSim.As(heir, function()
+        heir.KART.LC.sessionActive = true
+        heir.KART.LC.sessionStateKnown = true
+        heir.KART.LC.ReplaySeenWhileUnaware()
+    end)
+    KARTTEST.AdvanceTime(1)
+
+    T.is_nil((KARTTEST.rolled[1210] or {})[heir.unit],
+        "B161: the new owner does not roll Need on an item the previous one already force-won")
+    T.eq((KARTTEST.rolled[1210] or {})[lm.unit], 1,
+        "and the original force-win is untouched")
+    T.is_nil(heir.KART.LC.rollsSeenWhileUnaware[1210],
+        "B161: the entry is still let go, so it cannot be retried on the next replay either")
+end

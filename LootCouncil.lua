@@ -4958,11 +4958,29 @@ local ANNOUNCE_WAIT = START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5
 -- way to be sent one. The owner is the client that SENDS the announcement -- "the announcement has not
 -- arrived" is not a state it can be in. Running the handler is what produces one.
 --
--- Asked at replay time rather than remembered from the drop, and that is the correct question even for
--- a stand-in who was not owner when the roll started: LC.OnStartLootRoll re-decides IsLootOwner itself,
--- and Blizzard's own window is the other gate below -- a client with no live roll force-wins nothing.
+-- Asked at replay time rather than remembered from the drop, which is what makes it answer for a
+-- stand-in as well -- and is also why the announcement decides which of the two replays this is (B161).
+--
+-- AN ANNOUNCED ROLL ALREADY HAS AN OWNER WHO FORCE-WON IT, so this client must not take it up again.
+-- LC.OnStartLootRoll's owner branch calls ForceWinRoll, and IsLootOwner is asked when the replay runs,
+-- not when the roll started: a client that was unaware while a roll was live and is the owner by the
+-- time the state arrives rolled Need on an item the previous owner already held. Blizzard awards the
+-- higher of the two, so the item can end up with the wrong person -- C4 says force-won BY EXACTLY ONE
+-- PERSON, and C7's holder then owes an item that is not in their bags. Both ways in are Manifest items:
+-- the designation moving (C10) and the lootmaster walking out so the leader stands in (C9), each landing
+-- inside Blizzard's own roll window, which is minutes.
+--
+-- Older than B158: the gate was LC.rollAnnounced alone, and a client that RECEIVED the announcement
+-- while unaware had it, so the replay ran and force-won. Nothing is lost by stopping here either --
+-- what the replay exists to set is LC.rollSeenHere, which only Auto-Pass reads, and the owner does not
+-- pass. The entry is still let go, so the next replay cannot retry it.
 local function ReplayOne(rollID)
-    if not (LC.rollAnnounced[rollID] or LC.IsLootOwner()) then return false end
+    local announced = LC.rollAnnounced[rollID]
+    if not (announced or LC.IsLootOwner()) then return false end
+    if announced and LC.IsLootOwner() then
+        LC.rollsSeenWhileUnaware[rollID] = nil
+        return true
+    end
     LC.rollsSeenWhileUnaware[rollID] = nil
     -- Only rolls that are still live. A nil texture means Blizzard's window is gone -- expired, or
     -- answered by hand in the meantime -- and there is nothing left to pass or force-win.

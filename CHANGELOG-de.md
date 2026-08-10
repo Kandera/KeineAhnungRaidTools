@@ -49,6 +49,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Client, der hinter die Loot-History des Raids fällt, holt von selbst auf** — statt bis zum Neuladen jede Vergabe zu verweigern.
 - **Ein Boss, der kurz nach einem Reload des Lootmasters stirbt, erreicht das Council trotzdem** — statt dass sein Loot über Blizzards eigenen Wurf weggeht.
 - **Eine Handelserinnerung für eines von zwei gleichen Items läuft auf ihrer eigenen Uhr** — statt die der anderen Kopie zu übernehmen und unangekündigt abzulaufen.
+- **Ein Item bleibt von einer Person gewonnen, wenn der Lootmaster mitten im Wurf wechselt** — statt dass der neue ebenfalls Need würfelt.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben

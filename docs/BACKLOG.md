@@ -4638,3 +4638,42 @@ starting at exactly the right moment. It is a real leak with a bound that was cl
 has seen.
 
 Held by `tests/test_lc_autopass.lua`, beside B148's own block.
+
+## B161 — FIXED 2026-08-10 — a client that became loot owner mid-roll force-won the item a second time
+
+Found by probing B158's own fix, and older than it. `ReplayOne` runs `LC.OnStartLootRoll`, whose owner
+branch calls `ForceWinRoll` -- and `IsLootOwner` is asked when the replay runs, not when the roll started.
+
+So: a client is session-unaware while a roll is live (every reload, relog and disconnect), becomes loot
+owner while it is still live, and then learns a session is running. Measured:
+
+```
+after the drop, Need rolls:   raid1=1 raid3=0 raid4=0 raid5=0
+stand-in is loot owner now:   true
+after the replay, Need rolls: raid1=1 raid2=1 raid3=0 raid4=0 raid5=0
+```
+
+`raid2=1` is a second Need roll on an item the previous owner already force-won. Blizzard awards the
+higher of the two, so the item can end up with the wrong person entirely -- **C4** says force-won BY
+EXACTLY ONE PERSON -- and **C7**'s holder then owes an item that is not in their bags while the raid's
+record names the other one.
+
+Both ways in are Manifest items, and both are on the standing result's "not reached at all" list: the
+designation moving (**C10**) and the lootmaster walking out so the leader stands in (**C9**). Each lands
+inside Blizzard's own roll window, which is minutes, not seconds.
+
+**Not caused by B158.** The gate was `LC.rollAnnounced` alone, and a client that RECEIVED the
+announcement while unaware had it -- so the replay ran and force-won. B158 widened the gate to the
+unannounced case; this entry is the announced one, which was always open.
+
+**Fixed 2026-08-10.** The announcement is what separates the two replays, and that is the whole rule: an
+ANNOUNCED roll already has an owner who took it up, so a replay must not take it up again; an
+UNANNOUNCED one has none, which is B158. `ReplayOne` now lets an announced roll go without running the
+handler when this client reads as loot owner.
+
+Nothing is lost by stopping there. What the replay exists to set is `LC.rollSeenHere`, which only
+Auto-Pass reads, and the owner does not pass. The entry is still let go, so the next replay cannot retry
+it.
+
+Held by `tests/test_lc_reload.lua`, beside B158 -- the two share `ReplayOne` and pull it in opposite
+directions, so they belong next to each other.
