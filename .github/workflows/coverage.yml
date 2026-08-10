@@ -17,12 +17,17 @@ name: Coverage
 # coverage report that answers in two hours are both fine; one run that looks like it takes two
 # hours is not.
 #
-# Scheduled and manual rather than per-push: nobody reads a coverage number on every commit, and a
-# nightly one answers the question it exists for just as well.
+# ON DEMAND ONLY, and deliberately not on a schedule.
+#
+# What coverage is actually FOR here is tests/mutrun.py: the mutation sweep has to know which lines
+# the suite reaches at all, or it spends its time mutating code no test executes. That makes coverage
+# a precondition of a deliberate piece of work, not a background metric -- and the run that matters
+# is the LOCAL one, immediately before the sweep, on the tree being swept.
+#
+# A number produced at 03:00 on a runner and read by nobody answers no question anyone asked, and it
+# burns close to two hours doing it. So: available when someone wants it, silent otherwise.
 
 on:
-  schedule:
-    - cron: "0 3 * * *"
   workflow_dispatch:
 
 jobs:
