@@ -649,16 +649,17 @@ do
 end
 
 -- ===================================================================================================
--- B151: the same rollID, the same item, a DIFFERENT raid -- and no inheritance
+-- B151/B152: the same rollID, the same item -- who may inherit the raid, and who may not
 -- ===================================================================================================
--- The item check above is not enough on its own, and the three blocks here are the routes rather than
--- the function: what separates "this item is dropping now" from "this item is being said again" is
--- WHO IS CALLING, and only a route can drive that.
+-- The item check above is not enough on its own, and the blocks here are the routes rather than the
+-- function: what a route can drive, and a direct call cannot, is WHO IS CALLING.
 --
--- Blizzard reuses rollIDs, this table deliberately outlives the roll it belonged to, and two raids
--- inside one four-hour trade window is an ordinary evening -- so a number carrying the same itemID in
--- the SECOND raid used to inherit the first raid's name. Permanent (LH.HandleHistoryEntry dedups on
--- the award id) and checksum-invisible (LH.HistoryChecksum sums ids only).
+-- The answer is not the same for every door, and it is not the same for every door that ANNOUNCES.
+-- Only the two manual doors can prove an item is being named for the first time. LC.HandleStart
+-- cannot: it serves the catch-up AND the owner's own re-announcement of a roll Blizzard re-raised,
+-- and neither the message nor this client's state tells either of those apart from a genuinely new
+-- drop under a number Blizzard has handed out again. It therefore keeps -- see the next block for
+-- what that costs, which is measured here rather than argued away.
 do
     InVoidspire()
     local sim, lm, _, raider = F.NewRaid()
@@ -687,31 +688,140 @@ do
     T.eq((lm.KART.LC.rollRaidSnapshot[93] or {}).name, QUELDANAS.name,
         "the lootmaster, who is standing in it, names the second raid -- so this really is a drop " ..
         "somewhere else and not the same one twice")
+
+    -- THE KNOWN COST, HELD OPEN ON PURPOSE (B151). The raider standing outside inherits raid ONE's
+    -- name for raid TWO's drop, because an announcement of a reused number and a repeat of the first
+    -- announcement are the same bytes and the same client state. Asserted as what it is rather than
+    -- left to drift: it is permanent (LH.HandleHistoryEntry dedups on the award id) and
+    -- checksum-invisible (LH.HistoryChecksum sums ids only), and the alternative -- refuse the keep
+    -- here -- costs the ported-out raider his raid on an ordinary evening, which is B152 and is the
+    -- block below. Reaching it needs one council-eligible itemID to drop in two different raid
+    -- instances inside four hours, which retail raid loot does not do (Manifest C6).
     local snap = raider.KART.LC.rollRaidSnapshot[93]
     T.truthy(snap, "the raider snapshotted the second drop too")
-    T.is_nil(snap.name,
-        "and it does NOT name the first raid: an announcement is an item dropping now, so nothing " ..
-        "already stored under that number can belong to it")
-    T.is_nil(snap.id, "no id either")
+    T.eq(snap.name, VOIDSPIRE.name,
+        "and it still names the FIRST raid -- the accepted cost, because nothing in an announcement " ..
+        "separates a reused number from the same drop being said again")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id and name travel together, right or wrong")
 
     -- The value that becomes permanent. Asserted on the plain raider, because the award is logged on
-    -- every client from its own snapshot and his is the one that used to be confidently wrong.
+    -- every client from its own snapshot and his is the one that carries the wrong answer.
     RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
     RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(93, raider.guid, "BIS", nil) end)
     RaidSim.Drain(sim, 10)
     local stored = raider.env.KART_LootHistory[1]
     T.truthy(stored, "the raider logged the award")
-    T.eq(stored.instance, nil,
-        "and it carries no raid rather than the first raid's name -- blank is recoverable, wrong is " ..
-        "permanent and checksum-invisible")
-    T.eq(stored.instanceID, nil, "no id on the award either")
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "so his award names the wrong raid, which is what B151 costs and what the note in " ..
+        "LC.SnapshotRollInstance says it costs")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "id too")
 end
 
--- The other side of the same rule, and the reason it cannot simply overwrite everywhere: the catch-up
--- is the one message that REPEATS an announcement, and it is what repairs the raider who ported out
--- and reloaded mid-distribution. Both repair routes -- the state request's LC.SendOpenRolls and the
--- heartbeat's LC.HandleRollRequest -- answer with that one token, so this covers every re-announce
--- there is.
+-- B152: THE SAME DOOR TWICE -- a second LC_DROP for a roll this client has already been told about.
+--
+-- This is the route the suite never drove, and it is why "an announcement is always an item dropping
+-- now" survived a full mutation table: no mutation can find a route nothing drives. Blizzard re-raises
+-- START_LOOT_ROLL for a roll that is still in progress -- the addon says so in the present tense in
+-- LC.OnStartLootRoll's batch note, in LC.HandleStart's deadline note, and in tests/test_lc_rolls.lua
+-- ("the re-raised roll is announced again") -- so the OWNER's handler runs a second time and an
+-- ordinary LC_DROP goes out again with the same rollID and the same item. No catch-up, no reload, no
+-- message the raider asked for.
+--
+-- And by then the raider is normally somewhere else: "Leute porten schon aus dem Raid ... während die
+-- Lootverteilung startet ist normal" (docs/MANIFEST.md, the operating reality). Alric is dead when the
+-- boss dies, so the announcement is the only thing that ever reaches him -- the one client for whom
+-- this snapshot has no second source at all.
+--
+-- Driven through the wire on both sides, not by calling the handler: the whole point is that the
+-- SECOND message is indistinguishable from the first, and only the owner's own re-raise produces it.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 96, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.KART.LC.rollRaidSnapshot[96] or {}).name, VOIDSPIRE.name,
+        "the drop named the raid on the raider who only heard about it")
+    T.truthy(raider.KART.LC.rollAnnounced[96],
+        "...and he counts as told about it, which is what makes the next message a REPEAT")
+
+    -- Blizzard re-raises the still-running roll on the owner, who is of course still standing in the
+    -- raid; the raider has ported out by the time the second announcement lands.
+    KARTTEST.AdvanceTime(5)
+    F.Drop(sim, 96, F.GLOVES, { noRollFor = { Alric = true } })
+    InOpenWorld()
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+
+    T.eq(#RaidSim.Sent(sim, "LC_DROP"), 2,
+        "the owner really did announce the same roll a second time -- the same door, twice")
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0,
+        "and nothing repaired anything: no catch-up was sent, so what reached him is the ordinary " ..
+        "announcement and nothing else")
+    T.eq((lm.KART.LC.rollRaidSnapshot[96] or {}).name, VOIDSPIRE.name,
+        "the owner, still inside, still names the raid")
+
+    local snap = raider.KART.LC.rollRaidSnapshot[96] or {}
+    T.eq(snap.name, VOIDSPIRE.name,
+        "and being told about the item AGAIN from the open world does not take the raid off it -- " ..
+        "which is exactly what a fix that believed only the catch-up repeats an announcement did")
+    T.eq(snap.id, VOIDSPIRE.mapID, "id included")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(96, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    local stored = raider.env.KART_LootHistory[1] or {}
+    T.eq(stored.instance, VOIDSPIRE.name,
+        "so the award on his own client still names the raid the item dropped in, rather than the " ..
+        "blank an open-world read would have written")
+    T.eq(stored.instanceID, VOIDSPIRE.mapID, "id on the award too")
+end
+
+-- ...and the same door twice again, this time with the raider's own row already GONE.
+--
+-- Written because of a candidate fix that looked like it worked: keep the raid when this client is
+-- already flagged as told about the roll (LC.rollAnnounced). That flag does not live as long as the
+-- snapshot does -- Vote.PruneExpiredRolls hands a plain raider's expired roll to
+-- Trade.ClearRollState, which clears it about a second after the vote deadline (20s by default),
+-- while the snapshot has to survive until the AWARD, which lands whenever the council is done. So the
+-- flag is nil for most of the window this rule exists for, and a keep resting on it blanks the raid
+-- for exactly the raider it was written for. Measured on this scenario: green at a 5-second gap,
+-- red at 19, 25 and 45.
+--
+-- Nothing repairs him here either: no catch-up is sent (asserted), because he asked for nothing --
+-- he is not on the council, his vote row simply ran out, and he never reloaded.
+do
+    InVoidspire()
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 97, F.GLOVES, { noRollFor = { Alric = true } })
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.KART.LC.rollRaidSnapshot[97] or {}).name, VOIDSPIRE.name, "the drop named the raid")
+
+    KARTTEST.AdvanceTime(45) -- past the vote deadline: his row, and the flag with it, are swept
+    T.is_nil(raider.KART.LC.rollAnnounced[97],
+        "his roll is gone, so nothing on this client still says it was ever announced to him")
+
+    F.Drop(sim, 97, F.GLOVES, { noRollFor = { Alric = true } })
+    InOpenWorld()
+    KARTTEST.AdvanceTime(2)
+    RaidSim.Drain(sim, 10)
+    T.eq(#RaidSim.Sent(sim, "LC_ROLL_CATCHUP"), 0, "and no repair was involved")
+    T.eq((raider.KART.LC.rollRaidSnapshot[97] or {}).name, VOIDSPIRE.name,
+        "the raid survives the repeat anyway -- the keep cannot depend on state the vote deadline " ..
+        "takes away, because the award it is kept for lands long after that")
+
+    RaidSim.As(raider, function() raider.env.KART_LootHistory = {} end)
+    RaidSim.As(lm, function() lm.KART.LC.Trade.AssignWinner(97, raider.guid, "BIS", nil) end)
+    RaidSim.Drain(sim, 10)
+    T.eq((raider.env.KART_LootHistory[1] or {}).instance, VOIDSPIRE.name,
+        "and so does the award, on the client whose row is the only copy of it")
+end
+
+-- The other side of the same rule: the catch-up repeats an announcement as well, and it is what
+-- repairs the raider who ported out and RELOADED mid-distribution. Both repair routes -- the state
+-- request's LC.SendOpenRolls and the heartbeat's LC.HandleRollRequest -- answer with that one token,
+-- so this covers the message half of the re-announce; the block above covers the other half.
 do
     InVoidspire()
     local sim, lm, _, raider = F.NewRaid()

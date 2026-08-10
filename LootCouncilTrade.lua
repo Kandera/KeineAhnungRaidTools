@@ -877,12 +877,12 @@ function Trade.ClearRollState(rollID)
     -- being gone costs it nothing, while the raid snapshot has no second source at all.
     --
     -- What the snapshot does NOT inherit from the stamp is the sentence above it: the roll-start
-    -- handlers do not all overwrite it unconditionally, so "a reused rollID gets a fresh one" is not
-    -- free here. LC.SnapshotRollInstance keeps an existing raid when the read comes from outside an
-    -- instance, and two things together make that safe: the ITEM travelling in the row, and the CALLER
-    -- saying whether it is announcing a drop happening now (B150, B151). A fresh announcement
-    -- overwrites whatever the number holds; only this client's own re-raised roll window and the
-    -- catch-up may inherit, and only for the same item.
+    -- handlers do not all overwrite it unconditionally, so "a reused rollID gets a fresh one" is NOT
+    -- true here and must not be assumed anywhere. LC.SnapshotRollInstance keeps an existing raid when
+    -- the read comes from outside an instance and the ITEM in the row matches; only the two manual
+    -- doors declare a new drop and overwrite regardless. So a rollID Blizzard reuses for the same item
+    -- can carry the previous roll's raid, which is accepted and written down (B150, B151, B152) --
+    -- read that note before building anything on this clear.
     Trade.PruneExpiredLootStamps()
     Trade.PruneExpiredRaidSnapshots()
     if LC.equipRequestedRolls then LC.equipRequestedRolls[rollID] = nil end

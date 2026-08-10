@@ -4144,3 +4144,123 @@ a session has been told, so a council-eligible item below it still gets `unaware
 
 Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number is not passed on the
 strength of the first one" (B148's first half); "B148, the deferred half" (this one).
+
+
+## B151 — OPEN, by choice — a reused rollID carrying the same item in a different raid inherits the first raid's name
+
+Found by the re-review of B150's fix (`70fff6d`), measured end to end rather than reasoned:
+
+```
+raider snap after raid 1: name=The Voidspire item=249331
+raider snap after raid 2: name=The Voidspire id=2912   <-- wrong raid inherited
+```
+
+`LC.SnapshotRollInstance` keeps a previously snapshotted raid when a read comes from outside an
+instance AND the item matches — that keep is what lets a raider who ports out mid-distribution survive
+being told about the item again without having the raid replaced by a blank open-world read. If
+Blizzard reuses the rollID for the **same itemID** in a **different** raid inside the four-hour trade
+window, and the client takes `LC.HandleStart` (the announcement path, for a client Blizzard raised no
+roll on — dead, released, out of range) while standing outside the instance, the keep fires and the
+award names the wrong raid. Permanent, because `LH.HandleHistoryEntry` dedups on `id`; invisible,
+because `LH.HistoryChecksum` sums `e.id` only.
+
+**Closed once and reopened.** `f522b24` fixed it by telling `LC.SnapshotRollInstance` which CALLER was
+asking — only a repeat of an announcement may inherit — on the premise that `LC.HandleRollCatchup` is
+the only message that repeats one. That premise is false, and the repository's own green suite said so
+(`tests/test_lc_rolls.lua`, "the re-raised roll is announced again"): Blizzard re-raises
+`START_LOOT_ROLL` for a roll still in progress, the owner's handler runs again, and an ordinary
+`LC_DROP` goes out carrying the same rollID and the same item. That is **B152**, and reverting it is
+what reopened this entry.
+
+**There is no receiver-side signal, and that is now stronger than "none was found".** The two
+situations are the same bytes and the same client state: same rollID, same itemID, a snapshot naming a
+raid, a client reading as outside an instance, inside the four-hour window. Everything that could
+separate them lives on the OWNER (`LC.rollGeneration`, its own `GetInstanceInfo`) or in the world.
+Three candidates have now been measured failing rather than argued down:
+
+* **the caller** (`f522b24`) — false premise, see B152;
+* **`LC.rollAnnounced[rollID]` as "this client has already been told"** — the flag does not live as
+  long as the snapshot. `Vote.PruneExpiredRolls` hands a plain raider's expired roll to
+  `Trade.ClearRollState`, which clears it about a second after the vote deadline (20s by default),
+  while the snapshot has to survive until the AWARD. Measured on the port-out scenario: green at a
+  5-second gap, **red at 19, 25 and 45**. The full list of what clears the flag, which earlier traces
+  had incomplete: `Vote.PruneExpiredRolls` → `ClearRollState`; `Council.CloseCouncilTab` →
+  `ClearRollState`; `PurgeStaleRoll` → `ClearRollState`, but only when the itemID DIFFERS (it returns
+  early otherwise); and `LC.ClearAllRolls` (End Round) both through its two `ClearRollState` loops and
+  through `wipe(LC.rollAnnounced)`. It is in `PERSISTED_ROLL_TABLES`, so a reload keeps whatever the
+  session snapshot still held;
+* **age**, **a restored-from-SavedVariables mark**, **a last-raid-seen stamp** — all measured and
+  rejected in the round that produced `f522b24`.
+
+**Why it is acceptable meanwhile, and why the other side of the trade is worse.** Reaching this needs
+one council-eligible itemID to drop in two different raid instances inside four hours. Retail raid
+loot is per-instance: the same instance at another difficulty or lockout produces the same name and
+mapID, which is harmless, and the items that genuinely span instances are collectibles and BoEs, which
+never enter the Council at all (Manifest C6). The alternative — refuse the keep on the announcement
+path — costs the ported-out raider his raid name on an ORDINARY evening (B152), which is the case the
+field exists for. Both errors are a label on an award; neither loses an item. A rare wrong label is
+the cheaper of the two, and it is the one that is written down.
+
+**The real fix is the raid at the source**: the owner is inside the instance when it announces
+(`LC_DROP` goes out within `DROP_COLLECT` of the loot event), so stating the raid on the wire would
+close this AND the documented non-convergence of the field. It cannot be appended to the current
+format — the item string is the last field of both the entry format and the `LC_START` payload — so it
+belongs to a protocol release.
+
+Related, and pinned rather than unpinned: a **kept** row does not refresh its `at`, so it dies four
+hours after the drop rather than four hours after the last re-announce. That is the safe direction —
+the trade window has closed by then and no award can still be coming — and
+`tests/test_loothistory_instance.lua` asserts it.
+
+## B152 — FIXED 2026-08-10 — "only the catch-up repeats an announcement" was false, and it blanked the ported-out raider's raid
+
+Introduced by `f522b24` and shipped in `b555cbf`; found by the re-review of that fix, measured against
+both commits:
+
+```
+=== b555cbf (shipped) ===      === c7ddfd3 (before f522b24) ===
+raider snap.name: nil          raider snap.name: The Voidspire
+award instance:   nil          award instance:   The Voidspire
+```
+
+Alric is dead when the boss dies, so Blizzard raises no roll on him and the announcement is the only
+thing that ever reaches him; his snapshot correctly names the raid. He then ports out while the item is
+still on the table, Blizzard re-raises `START_LOOT_ROLL` on the OWNER, and the owner announces the same
+roll again. That second `LC_DROP` reached `LC.HandleStart` with `reannounced` nil, so it declared
+itself a new drop, the keep was skipped, and the raid he had was replaced by the open-world blank.
+
+**The premise, written at `LC.HandleRollCatchup`'s call into `LC.HandleStart`, was "This is the only
+message that repeats an announcement."** It never was. The addon states the opposite in the present
+tense in several places — `LC.HandleStart`'s own deadline note ("Blizzard re-raises START_LOOT_ROLL for
+a roll still in progress, so the owner announces again"), the owner-side batch guard,
+`LC.DrawRollTable`'s redraw guard — and `tests/test_lc_rolls.lua` has asserted the second announcement
+goes out since long before any of this. No reload is involved, nothing is lost on the wire, and the
+raider does not have to do anything: porting out mid-distribution is the operating reality the Manifest
+is written against.
+
+**Fixed 2026-08-10.** `LC.HandleStart` passes no `newDrop` and may inherit again, and its `reannounced`
+argument is gone rather than left saying something untrue. `newDrop` survives where a caller can
+actually prove it — the two manual doors, where somebody has just typed the item in.
+`LC.OnStartLootRoll` is unchanged. The cost is that the announcement path can no longer refuse a reused
+number, which is B151, reopened above with its measurements.
+
+**Why it survived a full mutation table:** no mutation can find a route nothing drives. Every existing
+test drove the announcement door once, or drove the double announcement (`tests/test_lc_rolls.lua`,
+`tests/test_lc_table.lua`) and asserted only on the roll table and the wire bytes. Nothing drove the
+same door twice and then looked at the raid. `tests/test_loothistory_instance.lua` now does, in two
+blocks: one with the roll still live, one after the vote deadline has taken the raider's row away.
+Both fail against `b555cbf`.
+
+**Also corrected while here**, because in this repository the comments are the contract and this whole
+chain of defects has been comments claiming guarantees the code does not hold:
+
+* `LC.OnStartLootRoll`'s note stated as a law that "Blizzard raises a loot roll only on clients that
+  were in the instance when the boss died". Open-world group loot — a world boss, an open-world rare —
+  raises `START_LOOT_ROLL` with `GetInstanceInfo()` reporting `difficultyID == 0`. Practically harmless
+  (it needs the same rollID *and* itemID inside four hours, and raid-boss and world-boss item ids do
+  not collide; collectibles and BoEs never reach Council at all, C6), and nothing is built on it — but
+  it claimed impossibility where it had only improbability, and now says so.
+* `Trade.PruneExpiredRaidSnapshots()` runs only on the branch that may keep, an unremarked side effect
+  of `f522b24` moving it inside the new condition. The behaviour is fine — the sweep is a precondition
+  of the keep and of nothing else, and `Trade.ClearRollState` sweeps on every roll it clears — so it is
+  noted where it happens rather than changed.
