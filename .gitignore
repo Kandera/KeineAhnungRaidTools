@@ -1,8 +1,13 @@
 # VSCode Ordner
 .vscode/
 
-# Claude Code Ordner (lokale Tool-Berechtigungen etc.)
-.claude/
+# Claude Code Ordner: settings.json, settings.local.json und worktrees/ sind lokal.
+# agents/ und hooks/ sind dagegen Projektwerkzeug und gehoeren ins Repo. Deshalb
+# .claude/* statt .claude/ -- eine Negation kann eine Datei nicht zurueckholen,
+# solange ihr Verzeichnis selbst ausgeschlossen ist.
+.claude/*
+!.claude/agents/
+!.claude/hooks/
 
 # Gepackte Addon-Archive
 *.zip
