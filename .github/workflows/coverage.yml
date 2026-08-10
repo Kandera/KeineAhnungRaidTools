@@ -1,0 +1,45 @@
+name: Coverage
+
+# Its own workflow, not a step in Check, and this is the whole point of the split.
+#
+# Coverage answers a different question from "do the tests pass": which branches the suite never
+# reaches at all, which is where a fix lands quietly wrong. It has never had a veto -- it ran with
+# continue-on-error and could not fail the build.
+#
+# But it ran INSIDE Check, so a push showed one run that stayed amber for as long as coverage took,
+# and there was no way to see from the outside that the part which decides "may this ship" had
+# finished in about eighty seconds. On 2026-08-10 that mattered: coverage had grown to 107 minutes
+# (luacov turns LuaJIT's compiler off, and the loot-history tests advance simulated time across the
+# four-hour trade window through second-by-second tickers), while the gate ahead of it -- the
+# moved-symbol check, luacheck and the offline suite -- still took 80 seconds all together.
+#
+# The maintainer ships fixes DURING a raid night. A gate that answers in eighty seconds and a
+# coverage report that answers in two hours are both fine; one run that looks like it takes two
+# hours is not.
+#
+# Scheduled and manual rather than per-push: nobody reads a coverage number on every commit, and a
+# nightly one answers the question it exists for just as well.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luajit lua5.1 luarocks
+          sudo luarocks install luacov
+
+      # Still informational: a coverage number is a prompt to look, never a reason to stop a release.
+      - name: Coverage
+        continue-on-error: true
+        run: |
+          KART_COVERAGE=1 luajit tests/run.lua
+          sed -n '/^Summary$/,$p' luacov.report.out

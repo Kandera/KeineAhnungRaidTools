@@ -24,14 +24,3 @@ jobs:
 
       - name: Offline tests
         run: luajit tests/run.lua
-
-      # Informational only: never fails the build. Coverage answers a different question from "do
-      # the tests pass" -- which branches the suite never reaches at all, which is where a fix lands
-      # quietly wrong. Run separately from the gate above so the gate stays fast and independent of
-      # this rock being installable.
-      - name: Coverage (informational)
-        continue-on-error: true
-        run: |
-          sudo luarocks install luacov
-          KART_COVERAGE=1 luajit tests/run.lua
-          sed -n '/^Summary$/,$p' luacov.report.out
