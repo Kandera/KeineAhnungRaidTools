@@ -4146,7 +4146,29 @@ Tests: `tests/test_lc_autopass.lua`, "the unannounced item reusing that number i
 strength of the first one" (B148's first half); "B148, the deferred half" (this one).
 
 
-## B151 — OPEN, by choice — a reused rollID carrying the same item in a different raid inherits the first raid's name
+## B151 — CLOSED 2026-08-10, unreachable — a reused rollID carrying the same item in a different raid inherits the first raid's name
+
+**Closed by the maintainer on a fact the entry below never used: a given item drops from exactly one
+boss, so it cannot appear in two instances at all.** This defect's precondition is "the same
+council-eligible itemID drops in two different instances inside four hours". That is not rare, it is
+impossible — and the same fact disposes of the field's documented non-convergence, since two clients
+holding different raid names for one award do not have two valid answers, they have one client that
+wrote down where it was standing instead of where the item came from.
+
+Everything below is kept as the diagnosis and the measurements, and because two of the fences it
+argued from turned out to be false (see the correction inside it). The reasoning that closes it needs
+none of them.
+
+*Note on what this does NOT close:* the raid is still recorded by each client reading its own
+`GetInstanceInfo()`, because the addon has no item-to-instance table — the fact above makes the bug
+unreachable, it does not make the mechanism unnecessary. And `/kart add` takes a live read at the
+moment it is typed, so an item added after leaving the instance records no raid. That is a blank
+label, not a wrong one, and the Companion tells it apart from a genuine gap by the roll number
+(manual rolls are seeded from `MANUAL_ROLL_ID_BASE` = 500000).
+
+---
+
+### The original entry (kept for the diagnosis)
 
 Found by the re-review of B150's fix (`70fff6d`), measured end to end rather than reasoned:
 
