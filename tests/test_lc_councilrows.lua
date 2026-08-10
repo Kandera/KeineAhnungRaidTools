@@ -131,6 +131,40 @@ do
     T.truthy(row and row.rollText:GetText():find("ffd200", 1, true),
         "and 84 is not")
     LC.rolls[ROLL][key] = nil
+
+    -- ...and an empty cell has to say WHICH kind of empty it is (B162, Manifest C13) -----------------
+    -- C13 states it outright: "An empty roll cell must mean 'this person is not in this decision',
+    -- never 'their number did not make it'. If a number is genuinely unknown, the panel has to say so
+    -- rather than render the same dash a non-participant gets." The reason is in the same item: the
+    -- council cannot see that a column is incomplete, because a missing 97 and a missing 3 look
+    -- identical -- so the whole value of the feature depends on the set being whole, and the council
+    -- has to be able to tell that it is not.
+    --
+    -- The two states are separable, and the discriminator is the table rather than the cell: the owner
+    -- draws for everybody in its roster snapshot and the numbers travel as ONE message, so a client
+    -- either holds the whole table or none of it. No table under a roll this client tracks, with rolls
+    -- on raid-wide, is "the numbers have not arrived"; a table that simply has no entry for this raider
+    -- is "not in this decision", which is what the dash has always meant.
+    local heldRolls = LC.rolls[ROLL]
+    LC.rolls[ROLL] = nil
+    Refresh()
+    row = RowFor(key)
+    local unknownCell = row and row.rollText:GetText()
+    T.truthy(unknownCell and unknownCell:find(lm.KART.L.LC_ROLL_UNKNOWN, 1, true),
+        "B162: a roll column this client holds no numbers for says so instead of showing a dash")
+    T.truthy(row and row.rollHitbox and row.rollHitbox:IsMouseEnabled(),
+        "B162: ...and the cell explains itself, like the vote column's own unknown marker")
+
+    -- The other kind of empty, unchanged: the table is here and this raider is not in it.
+    LC.rolls[ROLL] = { ["someone-else"] = 50 }
+    Refresh()
+    row = RowFor(key)
+    T.truthy(row and row.rollText:GetText():find("444444", 1, true),
+        "B162: a raider who is not in the decision still gets the plain dash")
+    T.truthy(row and row.rollHitbox and not row.rollHitbox:IsMouseEnabled(),
+        "B162: with nothing to explain")
+
+    LC.rolls[ROLL] = heldRolls
 end
 
 -- The straw-poll button ----------------------------------------------------------------------------

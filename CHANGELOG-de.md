@@ -50,6 +50,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein Boss, der kurz nach einem Reload des Lootmasters stirbt, erreicht das Council trotzdem** — statt dass sein Loot über Blizzards eigenen Wurf weggeht.
 - **Eine Handelserinnerung für eines von zwei gleichen Items läuft auf ihrer eigenen Uhr** — statt die der anderen Kopie zu übernehmen und unangekündigt abzulaufen.
 - **Ein Item bleibt von einer Person gewonnen, wenn der Lootmaster mitten im Wurf wechselt** — statt dass der neue ebenfalls Need würfelt.
+- **Eine leere Würfelspalte sagt jetzt, ob die Zahlen fehlen oder ob dort einfach keine hingehören** — statt in beiden Fällen gleich auszusehen.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben

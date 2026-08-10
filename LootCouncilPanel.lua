@@ -1084,6 +1084,19 @@ function Council.RefreshCouncilRows()
     Council.UpdateSessionButton()
 
     local rollsEnabled = LC.GetRollsEnabled()
+    -- Whether the roll column is EMPTY or UNKNOWN, which Manifest C13 requires the panel to tell apart:
+    -- "an empty roll cell must mean 'this person is not in this decision', never 'their number did not
+    -- make it'". Both rendered the same dash, and the item's own reasoning says why that matters -- the
+    -- council cannot see that a column is incomplete, because a missing 97 and a missing 3 look
+    -- identical, so the whole value of the feature depends on the set being whole.
+    --
+    -- Decided on the TABLE rather than on the cell, which is what makes the two separable at all: the
+    -- owner draws for everybody in its roster snapshot and the numbers travel as one message, so a
+    -- client holds the whole table or none of it. No table under a roll we track, with rolls on
+    -- raid-wide, is "they have not arrived" -- and LC.HandleTable is already asking for them
+    -- (needRolls). A table with no entry for one raider is "not in this decision", the dash's own
+    -- long-standing meaning, and stays a dash.
+    local rollsUnknown = rollsEnabled and rollID ~= nil and LC.rolls[rollID] == nil
     local dtEnabled = KART_Settings.dtModuleEnabled ~= false
     -- hRoll/hGain are part of f.collapsible, so a minimized panel has deliberately hidden them —
     -- don't re-show them here (this runs on every incoming vote/note/equip reply, which would
@@ -1345,6 +1358,11 @@ function Council.RefreshCouncilRows()
             row.rollText:SetPoint("LEFT", 395, 0)
             row.rollText:SetWidth(34)
             row.rollText:SetJustifyH("CENTER")
+            -- Only ever enabled for the unknown-column marker below (B162), the same arrangement
+            -- voteHitbox has: a cell saying something no single glyph can carry on its own.
+            row.rollHitbox = CreateFrame("Frame", nil, row)
+            row.rollHitbox:SetPoint("LEFT", row.rollText, "LEFT")
+            row.rollHitbox:SetSize(34, 16)
 
             -- Council straw-poll: click to vote for this candidate (toggles), shows a running
             -- tally of how many council members picked them. Purely informational — see
@@ -1583,12 +1601,29 @@ function Council.RefreshCouncilRows()
                     row.rollText:SetShadowColor(0, 0, 0, 1)
                     row.rollText:SetShadowOffset(1, -1)
                 end
+            elseif rollsUnknown then
+                -- Not empty, UNKNOWN (B162, C13). Same shape the vote column's own "?" uses, and the
+                -- same colour, because it is the same statement: this client cannot answer, and saying
+                -- nothing would be a second false claim in place of the first.
+                row.rollText:SetText("|cffffaa00" .. KART.L.LC_ROLL_UNKNOWN .. "|r")
+                row.rollText:SetShadowColor(0, 0, 0, 1)
+                row.rollText:SetShadowOffset(1, -1)
             else
                 row.rollText:SetText("|cff444444—|r")
                 row.rollText:SetShadowColor(0, 0, 0, 1)
                 row.rollText:SetShadowOffset(1, -1)
             end
         end
+        -- One glyph, one sentence behind it -- a "?" in a column of numbers means nothing on its own.
+        row.rollHitbox:SetShown(rollsEnabled)
+        row.rollHitbox:EnableMouse(rollsEnabled and rollsUnknown and true or false)
+        row.rollHitbox:SetScript("OnEnter", function(self)
+            if not rollsUnknown then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(KART.L.LC_ROLL_UNKNOWN_TIP, 1, 0.67, 0, 1, true)
+            GameTooltip:Show()
+        end)
+        row.rollHitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         -- Council straw-poll button: tally of how many council members (including possibly
         -- yourself) picked this candidate, and a toggle for your own pick.

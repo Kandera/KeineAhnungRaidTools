@@ -4677,3 +4677,47 @@ it.
 
 Held by `tests/test_lc_reload.lua`, beside B158 -- the two share `ReplayOne` and pull it in opposite
 directions, so they belong next to each other.
+
+## B162 — FIXED 2026-08-10 — the roll column's empty cell did not say which kind of empty it was
+
+A Manifest requirement that was never implemented, found by walking C13 in round two of the
+`v3.3.2..HEAD` review. C13 states it outright:
+
+> An empty roll cell must mean "this person is not in this decision", never "their number did not make
+> it". If a number is genuinely unknown, the panel has to say so rather than render the same dash a
+> non-participant gets.
+
+And gives the reason in the same item: *"The council cannot see that a column is incomplete -- a missing
+97 and a missing 3 look identical -- so the whole value of the feature depends on the set being whole."*
+C13 has failed in a live raid twice (B71, then B121).
+
+`Council.RefreshCouncilRows` rendered `|cff444444—|r` for both states. So a council member whose roll
+table never arrived read a full column of dashes as "nobody in this raid rolled", and decided on it.
+
+**The two ARE separable, and the discriminator is the table rather than the cell.** The owner draws for
+everybody in its roster snapshot and the numbers travel as one message (`LC.DrawRollTable`, and the table
+rides inside `LC_DROP`), so a client holds the whole table or none of it. No table under a roll this
+client tracks, with rolls on raid-wide, is "the numbers have not arrived" -- and `LC.HandleTable`'s
+`needRolls` is already asking for them. A table that simply has no entry for one raider is "not in this
+decision", which is the dash's long-standing meaning and stays a dash.
+
+Measured first, so the claim is not a guess -- four probes over C13, all otherwise clean:
+
+```
+A. a raider Blizzard gave no roll window to     -> still carries a number (the owner draws from the roster)
+B. every client agrees about every number       -> 0 missing tables, 0 per-entry disagreements
+C. a raider who reloads between drop and vote   -> number intact on both sides
+D. a council member whose table never arrived   -> asks for it (1 request)
+```
+
+D is this entry: the ask works, so the window is short -- but while it is open the panel makes a positive
+false statement, and C13's whole point is that the council cannot tell.
+
+**Fixed 2026-08-10.** An unknown column renders `?` in the same amber the vote column's own unknown
+marker uses, with a `rollHitbox` carrying the sentence behind it (`LC_ROLL_UNKNOWN`,
+`LC_ROLL_UNKNOWN_TIP`, both locales). The hitbox is enabled only for that state, the same arrangement
+`voteHitbox` has.
+
+Held by `tests/test_lc_councilrows.lua`, which asserts BOTH kinds of empty -- the unknown marker with its
+hitbox live, and the plain dash with the hitbox off. Verified to fail with the discriminator forced to
+false.
