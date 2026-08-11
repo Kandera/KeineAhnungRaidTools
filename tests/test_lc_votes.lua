@@ -565,3 +565,47 @@ do
     T.eq(RaidSim.As(council, function() return council.KART.LC.CountVotes(151) end), 2,
         "and both real-stamped votes still count on the client that cannot read its own")
 end
+
+-- The copy that opened before its own announcement went out (B167) ---------------------------------
+-- E2 makes one card answer for every copy of an item: click once, and Vote.CastVote fans the answer
+-- out to the other copies. A copy that arrives AFTER the raider has already answered inherits instead
+-- -- InheritCopyAnswer, called from Vote.ShowVotePopup.
+--
+-- On the LOOT OWNER that call has to be held back, and Vote.ApplyInheritedAnswers on the prune tick is
+-- what comes back for it. The owner tracks a roll from its own START_LOOT_ROLL and announces it a
+-- moment later, once the batch it belongs to is flushed (LC.pendingDrop) -- so in between it is the
+-- only client that knows the number exists, and a vote sent for it is refused by every receiver as
+-- untracked. Found by the soak walk at seed 25, on a reused rollID: the announcer inherited its copy's
+-- answer, the message went out ahead of the announcement, and that client stood alone with a vote
+-- nobody could accept until the next heartbeat repeated it.
+--
+-- Vote.ApplyInheritedAnswers had no test: mutating it to a no-op left the whole suite green. It is the
+-- half of E2 that runs on the one client whose vote the rest of the raid cannot repair, which is what
+-- makes the silence expensive rather than merely untidy.
+do
+    local sim, lm = F.NewRaid()
+
+    F.Drop(sim, 3101, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(lm, function() lm.KART.LC.Vote.CastVote(3101, 1) end)
+    T.eq(lm.KART.LC.votedByMe[3101], 1, "the setup: the owner has answered the first copy")
+
+    -- A second copy of the SAME item. While the batch is still collecting, the raid has not been told
+    -- this number exists at all.
+    F.Drop(sim, 3102, F.GLOVES)
+    T.truthy(lm.KART.LC.pendingDrop ~= nil, "the second copy is still inside the collection window")
+    T.is_nil(lm.KART.LC.votedByMe[3102],
+        "B167: nothing is inherited while the raid could not accept a vote for it yet")
+
+    -- Past DROP_COLLECT the batch goes out -- but ShowVotePopup already ran and was held back, so the
+    -- answer is still missing at this point. This is the assertion the retry exists for.
+    KARTTEST.AdvanceTime(0.6)
+    T.eq(lm.KART.LC.pendingDrop, nil, "the batch has been announced")
+    T.is_nil(lm.KART.LC.votedByMe[3102],
+        "B167: and the card that opened before it was announced is still unanswered")
+
+    -- The prune ticker comes round and picks it up.
+    KARTTEST.AdvanceTime(1.2)
+    T.eq(lm.KART.LC.votedByMe[3102], 1,
+        "B167: Vote.ApplyInheritedAnswers casts the answer the raider already gave, without a second click")
+end
