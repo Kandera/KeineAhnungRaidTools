@@ -2322,7 +2322,7 @@ The rule itself stands. This is the exception it is measured against, not a prec
 floor with every release: the next bump wants the same measurement, and the same argument made out
 loud, or it should not move.
 
-## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item — NARROWED 2026-07-30; remainder OPEN BY CHOICE, re-checked 2026-08-02
+## B63 — one broadcaster: if the loot owner gets no roll event, nobody sees the item — NARROWED 2026-07-30; re-checked 2026-08-02; **the Auto-Pass half REVERSED 2026-08-11 by B174**
 
 `LC_START` for a real drop is sent from exactly one place, inside the loot owner's own
 `START_LOOT_ROLL` handler. The owner is subject to the same conditions as everyone else — out of
@@ -2335,6 +2335,11 @@ anywhere.
 owner never rolled on produces a vote whose winner can never be handed the item — a decision nobody
 can execute, which is exactly the trap the collectible carve-out exists to avoid. So the item still
 does not reach the council when the owner misses the event.
+
+> **Superseded, read B174 first.** The paragraph below describes the rule from 2026-07-30 to
+> 2026-08-11. Auto-Pass no longer waits for the announcement: it asks whether the raid is running a
+> council somebody else owns, the way RCLootCouncil has always asked it. What that costs, and why the
+> maintainer accepted it, is written out in B174.
 
 **What was fixed is the loss.** Auto-Pass no longer fires on faith. It passes only once the council
 demonstrably has the item, so when nothing is announced Blizzard's window is left alone and the raid
@@ -5034,3 +5039,65 @@ found the same defect class in 2026-08-03. Verified to fail with the `TOKEN_PRIO
 votes complete at 15.5 seconds of the window, and that number was measuring the wrong thing: it drained
 the queue before anybody voted, so the clock had already been run forward by the mass-join storm the
 fixture creates. The distribution is not tight on time. The traffic finding above is what survived.
+
+## B174 — FIXED 2026-08-11 — Auto-Pass waited for a message, so a raider could be left clicking
+
+Not found by a probe. Stated by the maintainer, 2026-08-11, as the bar the module is actually judged
+on: everyone auto-passes, everyone sees every item, everyone can press their buttons, the council sees
+the votes correctly, the items get handed out. **"Wenn nur eine dieser Sachen für eine Sekunde nicht
+geht, dann schreit mein Raid: bad addon, zurück zu RC Loot Council."** And the raid's own comparison is
+that RC does it immediately and always.
+
+So the comparison was made against RC's source rather than against our own reasoning. Three places on
+the hot path:
+
+| | RCLootCouncil | KART, before this |
+|---|---|---|
+| Auto-Pass | local bit test, 50 ms, **no message** | waited for `LC_DROP`, **per item** |
+| Blizzard's roll window | removed within 50 ms | never touched |
+| rolls for the council | drawn centrally, one message | drawn centrally, one message |
+
+The rolls are the same design in both, so nothing there. The first line is the defect.
+
+`RCLootCouncil/Classes/Utils/GroupLoot.lua` decides in its own `START_LOOT_ROLL` handler, off
+`ShouldPassOnLoot`, which is a bit test over: addon enabled, in a group, RC handles loot, there is a
+valid master looter, we have received their settings block, we are not them. Every one of those is a
+fact about the SESSION. Nothing is asked about the item, and nothing has to arrive.
+
+B63 asked it per item. That put a message on the hot path: in the good case the raider watched
+Blizzard's window for the second `LC_DROP` took to travel; in the bad case it never came, B63's rule
+said "we deliberately never pass", and the raider had to answer the window by hand. That second case is
+the single failure that costs this module its raid, and it is unbounded — no retry budget makes a
+message certain.
+
+**Fixed 2026-08-11.** `LC.CouncilRunsHere` asks RC's question in KART's vocabulary, and each test is one
+of RC's bits: in a group and module on; `LC.sessionActive` **and** `LC.sessionStateKnown` (a client
+that has merely not been told yet must not pass); not the loot owner; the owner resolves to a unit
+standing here; and a raid config that was given to us rather than invented — that last one because
+`LC.GetRaidMinQuality` falls back to 4 without it, so the `councilEngages` that brought us in would be
+a guess, and passing on a guess is the one thing this must not do.
+
+The announcement is still accepted on its own, so a client that has not been told the session state is
+covered by the message exactly as before.
+
+**What it costs, stated plainly, because it is a real reversal.** Where the loot owner gets no roll
+event of their own — dead, released, out of range at the moment of the kill — nobody announces, the
+raid passes anyway, and the item goes to whoever is not running KART. That is precisely what B63 was
+built to prevent. It is accepted for the reason RC accepts it: the alternative costs every raider a
+visible window on every drop, and that failure is CONSTANT while this one needs the owner to be absent
+at the moment the boss dies. **The maintainer's ruling: adopt RC's model — "die haben unzählig mehr
+Erfahrung und auch Tester, wir haben nur uns."**
+
+One regression came with it and is fixed in the same commit: the pass now runs inside
+`LC.OnStartLootRoll`, several lines before it writes `LC.rollItems`, so `RecordPassGate` recorded a
+verdict with no item beside it and `/kart status` listed a bare line. It falls back to
+`GetLootRollItemLink`, and the verdict is written BEFORE `RollOnLoot` rather than after, because
+answering a roll makes Blizzard's API go blank for that id.
+
+Held by `tests/test_lc_autopass.lua`, rewritten to the new rule rather than adjusted — including an
+assertion that says out loud what the reversal costs, so undoing it later means changing a test that
+states the price. Verified: 13 assertions fail with `CouncilRunsHere()` removed from the gate.
+
+**Still open, same file, same complaint:** KART never touches Blizzard's group loot frame — no
+`GroupLootContainer` reference exists anywhere in the addon. RC removes the frame within 50 ms of
+rolling. Ours closes only because the roll was answered, which is usually enough and occasionally not.

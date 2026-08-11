@@ -1,13 +1,25 @@
--- B63: a real drop is announced from exactly one place, the LC_DROP the loot owner's own
--- START_LOOT_ROLL handler collects the item into. The owner is subject to the same conditions as
--- everyone else -- out of range, dead, released, ineligible -- and there is no second broadcaster.
+-- What Auto-Pass is allowed to act on. Rewritten 2026-08-11 for B174, which reverses the answer B63
+-- gave this file: the question is asked of the SESSION now, not of the item.
 --
--- Auto-Pass did not depend on that announcement, so the whole raid passed on an item nobody had
--- force-won: it went to whichever raider is NOT running KART, or to nobody, with no vote window
--- anywhere. Passing is now conditional on the council demonstrably having taken the item up.
+-- B63 made passing conditional on the council demonstrably having taken THIS item up -- the owner's
+-- LC_DROP had to arrive first. That put a message on the hot path. In the good case the raider looked
+-- at Blizzard's window for the second it took to travel; in the bad case it never came and they had
+-- to answer the window by hand, which is the single complaint that costs this module its raid.
 --
--- Which of the two paths does the passing depends on the order the local roll event and the owner's
--- message happen to arrive in, and BOTH orders occur, so both are exercised here.
+-- RCLootCouncil has answered it at session level for years (Classes/Utils/GroupLoot.lua,
+-- ShouldPassOnLoot): a bit test over "addon enabled, in a group, valid master looter, their settings
+-- received, not us". Nothing on the wire at the moment an item drops. KART now asks the same question
+-- through LC.CouncilRunsHere.
+--
+-- THE TRADE, STATED PLAINLY, because it is a real one and it is the maintainer's decision of
+-- 2026-08-11: where the loot owner never gets a roll event of their own, the raid now passes on an
+-- item nobody force-won and it goes to whoever is not running KART. B63 rejected exactly that. It is
+-- accepted here for the reason RC accepts it -- the alternative costs every raider a visible window
+-- on every drop, and that failure is constant while this one needs the owner to be dead, released or
+-- out of range at the moment of the kill.
+--
+-- The announcement is still accepted on its own, so a client that has NOT been told the session state
+-- is covered by the message the way it always was. Both orders occur; both are exercised here.
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
@@ -66,10 +78,10 @@ do
     T.eq(PassedBy(sim, 50, "Bramor"), 1, "and the lootmaster force-won it rather than passing")
 end
 
--- The other arrival order: the local roll event first, the announcement second --------------------
--- The fixture drops in raid order, so the owner announces before the other clients have run their
--- own handler. Reversing it puts the announcement second, which is the order the live game produces
--- far more often -- Blizzard raises the event on every client at once and the message has to travel.
+-- The local roll event alone is enough (B174) ------------------------------------------------------
+-- The fixture drops in raid order, so the owner normally announces before the other clients run their
+-- own handler. Driving the raiders' handlers WITHOUT the owner ever running theirs is what isolates
+-- the local path: no LC_DROP has been built, let alone sent, and the pass still has to happen.
 do
     local sim, lm = NewRaid()
     KARTTEST.lootRolls[51] = { itemID = F.GLOVES, bop = true, forNames = {} }
@@ -77,18 +89,20 @@ do
     for _, c in ipairs(sim.clients) do
         if c ~= lm then RaidSim.As(c, function() c.KART.LC.OnStartLootRoll(51) end) end
     end
+    T.eq(#RaidSim.Messages(sim, "LC_DROP"), 0, "nothing has been announced at this point")
     for _, name in ipairs(AUTOPASSERS) do
-        T.is_nil(PassedBy(sim, 51, name), name .. " does not pass before the council has said anything")
+        T.truthy(not sim.byName[name].KART.LC.rollAnnounced[51],
+            name .. " has heard nothing about this item")
+        T.eq(PassedBy(sim, 51, name), 0, name .. " passes anyway, off their own roll event")
     end
-
-    RaidSim.As(lm, function() lm.KART.LC.OnStartLootRoll(51) end)
-    KARTTEST.AdvanceTime(1)
-    for _, name in ipairs(AUTOPASSERS) do
-        T.eq(PassedBy(sim, 51, name), 0, "and passes as soon as the announcement arrives -- " .. name)
-    end
+    T.is_nil(PassedBy(sim, 51, "Merrit"), "a raider with Auto-Pass off is still left to answer it")
 end
 
--- B63 itself: the owner never gets the roll event -------------------------------------------------
+-- What B63 protected, now accepted: the owner never gets the roll event ----------------------------
+-- The owner is dead, released or out of range when the boss dies, so nobody ever announces. Under
+-- B63 the raid kept its windows and rolled by hand. It now passes, and the item goes to whoever is
+-- not running KART. Asserted rather than merely allowed, so that reversing this decision later means
+-- changing a test that says what it costs.
 do
     local sim, lm = NewRaid()
     Drop(sim, 52, F.GLOVES, { noRollFor = { Bramor = true } })
@@ -97,28 +111,27 @@ do
     T.eq(#RaidSim.Messages(sim, "LC_DROP"), 0, "nobody announces the item, because only the owner ever does")
     T.is_nil(lm.KART.LC.rollItems[52], "and the owner is not tracking an item they never saw")
 
-    -- The defect: every one of these used to pass, handing the item to whoever is not running KART.
     for _, name in ipairs(AUTOPASSERS) do
-        T.is_nil(PassedBy(sim, 52, name), name .. " does not pass an item the council never took up")
+        T.eq(PassedBy(sim, 52, name), 0, name .. " passes on the session, not on the announcement")
     end
-    -- Blizzard's own window is therefore still live for them, which is the whole point: the raid can
-    -- roll on it the way it would without this addon.
-    T.truthy(RaidSim.As(sim.byName.Corvin, function() return GetLootRollItemLink(52) end),
-        "so their roll window is still open to answer by hand")
+    T.is_nil(RaidSim.As(sim.byName.Corvin, function() return GetLootRollItemLink(52) end),
+        "so no raider is left holding a window to answer by hand -- which is the point of B174")
 end
 
--- ...and after the wait, the people it affects are told why ---------------------------------------
+-- ...and nobody is told anything about it ----------------------------------------------------------
+-- The warning exists for a raider still looking at a window nobody explained. Under B174 there is no
+-- such raider, so the line must not appear -- and that matters on its own account: a raid reads any
+-- red KART line as "broken again", whether or not it names a real fault.
 do
     local sim = NewRaid()
     Drop(sim, 53, F.GLOVES, { noRollFor = { Bramor = true } })
     local corvin = sim.byName.Corvin
 
-    local early = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT - 5) end)
-    T.truthy(not early:find("Loot Council", 1, true), "nothing is said while the announcement could still arrive")
-
-    local out = Capture(function() KARTTEST.AdvanceTime(10) end)
-    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true), "then the item is named")
-    T.truthy(not corvin.KART.LC.rollAnnounced[53], "and it is still on record as never announced")
+    local out = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
+    T.truthy(not out:find(KARTTEST.items[F.GLOVES].name, 1, true),
+        "the wait runs out in silence, because the window it was about is gone")
+    T.truthy(not corvin.KART.LC.rollAnnounced[53], "the item is still on record as never announced")
+    T.eq(PassedBy(sim, 53, "Corvin"), 0, "and it was passed all the same")
 end
 
 do
@@ -256,16 +269,21 @@ do
     Drop(sim, 70, F.GLOVES)
     KARTTEST.AdvanceTime(1)
 
+    -- Since B174 the first link of that rope is no longer load-bearing for the PASS: the raider is
+    -- already done with Blizzard's window before any repair runs. The rope still matters for the vote
+    -- row, and the block below it is what holds that.
     for _, name in ipairs(AUTOPASSERS) do
-        T.is_nil(PassedBy(sim, 70, name), name .. " cannot pass yet -- nobody has told them anything")
+        T.eq(PassedBy(sim, 70, name), 0,
+            name .. " passed without the announcement, so the loss is not theirs to notice")
     end
     T.eq(PassedBy(sim, 70, "Bramor"), 1, "while the lootmaster force-won it regardless of the message")
 
-    -- Nothing is re-sent by hand. The heartbeat falls due, the clients ask, the owner answers.
+    -- Nothing is re-sent by hand. The heartbeat falls due, the clients ask, the owner answers -- and
+    -- THAT is what puts the item on their screen to vote on.
     KARTTEST.AdvanceTime(4)
     for _, name in ipairs(AUTOPASSERS) do
-        T.eq(PassedBy(sim, 70, name), 0,
-            name .. " passes once the repair reaches them, without the announcement ever arriving")
+        T.truthy(sim.byName[name].KART.LC.rollItems[70],
+            name .. " is tracking the item once the repair reaches them")
     end
 end
 

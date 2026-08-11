@@ -5108,19 +5108,61 @@ local function RecordPassGate(rollID, gate)
     end
     -- Whatever this client knows the item as. A roll it never saw has no link here at all, which is
     -- itself part of the answer.
-    entry.item = LC.rollItems[rollID] or entry.item
+    --
+    -- Blizzard's own link is the fallback, and since B174 it is the usual case rather than a corner:
+    -- the pass now runs inside LC.OnStartLootRoll, which reaches this several lines BEFORE it writes
+    -- LC.rollItems -- so every ordinary pass recorded nothing, and /kart status listed a verdict with
+    -- no item beside it. GetLootRollItemLink is the one source that is certainly there at that moment,
+    -- because the roll window this is about is what raised the event.
+    entry.item = LC.rollItems[rollID] or GetLootRollItemLink(rollID) or entry.item
     entry.gate = gate
 end
 LC.RecordPassGate = RecordPassGate -- read by LC.OnStartLootRoll's session gate, one layer up
 
--- Passes Blizzard's roll for a council item, but only once the owner has announced it. Called from
--- both roll-start paths: whichever of the two runs SECOND is the one that finds both halves true, so
--- the order the event and the message arrive in does not matter.
+-- RCLootCouncil's ShouldPassOnLoot, in KART's vocabulary (B174, 2026-08-11).
+--
+-- The question a client has to answer when Blizzard puts a roll window up is "is this raid running a
+-- loot council that somebody else owns" -- and that is a fact about the SESSION, not about the item.
+-- B63 answered it per item, by waiting for the owner's announcement, and that put a message on the
+-- hot path: the pass could not happen before LC_DROP arrived, and where it never arrived the window
+-- stayed open and the raider had to answer it by hand. RC has answered it at session level for years
+-- (Classes/Utils/GroupLoot.lua) -- a bit test over "addon on, in a group, valid master looter, their
+-- settings received, not us" -- and needs nothing on the wire at the moment an item drops.
+--
+-- Each test below is one of RC's status bits, named.
+local function CouncilRunsHere()
+    if not (IsInGroup() and KART_Settings.lcModuleEnabled ~= false) then return false end
+    -- The session is on, and that belief is an ANSWER rather than a starting value: LC.sessionActive
+    -- is also false on a client that has simply not been told yet (see LC.sessionStateKnown), and
+    -- those two states must not pass the same item.
+    if not (LC.sessionActive and LC.sessionStateKnown) then return false end
+    -- Somebody else owns the loot -- RC's isMasterLooter bit, which has to be 0 for a pass.
+    if LC.IsLootOwner() then return false end
+    -- And they are standing here. RC's "group has a valid master looter": an owner we cannot resolve
+    -- to a unit is one nobody could be handed the item by either.
+    local ownerKey = LC.GetLootOwnerKey()
+    if ownerKey == "" or not KASC.Identity.FindUnitForKey(ownerKey) then return false end
+    -- Their settings reached us -- RC's mldb bit. Concrete here, not ceremony: LC.GetRaidMinQuality
+    -- falls back to 4 without a config, so the councilEngages that brought us in would be a GUESS,
+    -- and passing on a guess is the one thing this must not do.
+    return LC.raidConfig ~= nil and next(LC.raidConfig) ~= nil and not LC.raidConfig.fromSelf
+end
+LC.CouncilRunsHere = CouncilRunsHere -- read by the tests, and by nothing else
+
+-- Passes Blizzard's roll for a council item. Called from both roll-start paths: whichever of the two
+-- runs SECOND is the one that finds every half true, so the order the event and the message arrive in
+-- does not matter -- and since B174 the local path no longer needs the message at all.
 local function AutoPassAnnounced(rollID)
     if not KART_Settings.lcAutoPass then RecordPassGate(rollID, "off") return end
-    if not LC.rollAnnounced[rollID] then RecordPassGate(rollID, "unannounced") return end
     -- The owner force-wins instead of passing, and never processes their own LC_START anyway.
     if LC.IsLootOwner() then RecordPassGate(rollID, "owner") return end
+    -- Announced, OR a session demonstrably running under an owner we can see. The first is still
+    -- accepted on its own because it is the stronger statement of the two and arrives on clients the
+    -- second cannot cover -- one that has not been told the session state yet, and is told by the
+    -- announcement itself.
+    if not (LC.rollAnnounced[rollID] or CouncilRunsHere()) then
+        RecordPassGate(rollID, "unannounced") return
+    end
     -- Not before this client has run its OWN roll handler. Answering a roll makes Blizzard's API go
     -- blank for it, so passing from a message that beat the local event -- which the harness produces
     -- and the game may -- left OnStartLootRoll with no quality, no bind flag and no link, so it bailed
@@ -5130,8 +5172,11 @@ local function AutoPassAnnounced(rollID)
     -- No roll of our own to answer: this client was never eligible, or has already answered it.
     -- GetLootRollItemInfo goes blank in both cases, which is what keeps this from passing twice.
     if not GetLootRollItemInfo(rollID) then RecordPassGate(rollID, "gone") return end
-    RollOnLoot(rollID, 0)
+    -- Recorded BEFORE the roll is answered, not after: RollOnLoot makes Blizzard's API go blank for
+    -- this rollID, and on the local path (B174) that link is the only thing /kart status has to name
+    -- the item with -- LC.rollItems is not written until several lines further down its handler.
     RecordPassGate(rollID, "passed")
+    RollOnLoot(rollID, 0)
 end
 
 -- Armed by a non-owner when a council item drops; says so if the announcement never arrives.

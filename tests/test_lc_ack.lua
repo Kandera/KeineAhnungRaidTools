@@ -86,7 +86,10 @@ do
     restore()
 
     T.eq(deaf.KART.LC.rollAnnounced[941], nil, "with the acks lost too, nothing reaches it")
-    T.is_nil(PassedBy(sim, 941, "Alric"), "and it is still holding a roll window it cannot answer")
+    -- What it costs this client is the vote row, and only that. Since B174 the roll window is not
+    -- part of the damage: the pass runs off the session, so a raider who hears nothing all evening
+    -- still never has to click one.
+    T.eq(PassedBy(sim, 941, "Alric"), 0, "though the window was still passed for them")
     RaidSim.Deliver(sim, "LC_ACK")
 end
 

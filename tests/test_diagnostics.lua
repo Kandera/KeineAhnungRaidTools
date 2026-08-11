@@ -353,7 +353,11 @@ do
     local sim = F.NewRaid()
     local raider = sim.byName.Alric -- Auto-Pass on, and not the loot owner
 
-    -- The announcement never comes: the owner never had the roll, so nobody broadcasts it (B63).
+    -- The announcement never comes (the owner never had the roll), AND this client holds no raid
+    -- config, so LC.CouncilRunsHere cannot stand in for it either -- since B174 both have to be
+    -- missing before a raider is left with a window. Which is itself the point of the line: the
+    -- remaining cause is no longer guessable from the outside.
+    RaidSim.As(raider, function() raider.KART.LC.raidConfig = {} end)
     F.Drop(sim, 70, F.GLOVES, { noRollFor = { Bramor = true } })
     KARTTEST.AdvanceTime(1)
     T.is_nil((KARTTEST.rolled[70] or {})[raider.unit], "the item was not passed for this raider")
@@ -561,14 +565,27 @@ do
     KARTTEST.AdvanceTime(2)
     T.eq(GateFor(70), "passed", "the gloves were passed, and the probe says so")
 
-    -- The same number, a different item, and this client is never told about it -- which is the case
-    -- the probe is for: the raider is staring at a roll window nothing has explained.
+    -- The same number, a different item. Since B174 this one is passed too, so the verdict alone no
+    -- longer tells the two apart -- what has to be shown is that the entry was RE-TAKEN rather than
+    -- left standing, or /kart status would name the previous item on a reused number.
+    local function ItemFor(id)
+        local found = RaidSim.As(raider, function()
+            for _, e in ipairs(raider.KART.LC.passLog) do
+                if e.rollID == id then return e.item end
+            end
+            return ""
+        end)
+        return tostring(found or "")
+    end
+    T.truthy(ItemFor(70):find("item:" .. F.GLOVES, 1, true),
+        "and the entry names the item it was actually about")
+
     KARTTEST.rolled[70] = nil
     RaidSim.Blackhole(sim, "LC_DROP")
     F.Drop(sim, 70, F.WEAPON)
     KARTTEST.AdvanceTime(2)
     RaidSim.Deliver(sim, "LC_DROP")
 
-    T.truthy(GateFor(70) ~= "passed",
-        "and the unrelated item reusing that number does not inherit the verdict")
+    T.truthy(ItemFor(70):find("item:" .. F.WEAPON, 1, true),
+        "and the unrelated item reusing that number does not inherit the previous entry")
 end
