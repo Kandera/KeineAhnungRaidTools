@@ -1695,7 +1695,18 @@ function LH.AnswerHistoryRequest(payload, senderFullName, senderKey)
     -- A returning absentee's request is often the only message that ever reaches the loot owner's
     -- peers about them, so our own epoch rides back regardless of whether we have an entry to go
     -- with it -- otherwise the epoch that matters most would be exactly the one that never arrives.
-    KASC:Send("LC_HIST_EPOCH:" .. myEpoch, "WHISPER", senderFullName, { prio = "BULK" })
+    -- ...but only when it would TELL them something (B171). The request carries their epoch, so a peer
+    -- can see that it already matches and stay quiet. The absentee case the paragraph above is about is
+    -- untouched -- theirs differs by definition, which is why they are the one being caught up.
+    --
+    -- Measured, and this is why it is conditional now: every request draws one of these from every other
+    -- client. Unconditional, that is 24 whispers per request in a real raid, and a reconcile at each
+    -- round end would have made it 3,600 over an evening against B135's whole-evening baseline of about
+    -- 1,680 messages. In a five-client fixture it was already 80 of the 100 extra chunks the reconcile
+    -- cost, which is the whole of its price.
+    if theirEpoch ~= myEpoch then
+        KASC:Send("LC_HIST_EPOCH:" .. myEpoch, "WHISPER", senderFullName, { prio = "BULK" })
+    end
 
     -- They are ahead of us. We have nothing they want, and their epoch is news -- but it is only
     -- news, not a wipe: LC_HIST_REQ is a group broadcast and this field is simply whatever number

@@ -4917,3 +4917,65 @@ because this addon does not process its own broadcasts.
 
 Held by `tests/test_lc_councilrows.lua`, beside the "x of y have voted" block, asserting both consumers.
 Verified to fail with the one added line removed.
+
+## B171 — FIXED 2026-08-10 — a lost award stayed lost for the evening, and nothing said so
+
+Found by simulating a whole evening and then asking the only question that catches a defect nobody
+thought to test for: do the clients still agree? Five bosses, three items each, a reload per boss, and
+one message token lost per boss.
+
+```
+awards logged per client, LC_RESULT lost on one boss:
+  Bramor  15      <- the assigner
+  Merrit  12
+  Corvin  12
+  Alric   12
+  Sinja   12
+diagnostics on Alric and Sinja: unknownRoll=0 staleRoll=0 votesCapped=0 sendGaveUp=0
+```
+
+Twenty further minutes changed nothing. So: **C7** ("every client names the same winner") and **C14**
+("where something IS lost, some client says so") both fail, and the loot history four clients would
+export is short three rows each with a clean `/kart status` on top.
+
+`LC_RESULT` is in `GUARANTEED_TOKENS`, and that covers the SENDER: KASC re-sends one the transport
+refused, and the encounter restriction holds it and flushes it afterwards. What it does not cover is a
+message that went out fine and one client never received -- which is exactly the shape B118 measured
+("four raiders pressed a button and their votes never arrived"). Nothing repaired the award:
+`LH.RequestHistorySync` runs on a raid JOIN, on an unauthorised award and (since B156) on an epoch that
+cannot be adopted. Nothing polls.
+
+The machinery to notice was already complete and already correct -- `LH.HistoryChecksum` exists
+precisely because "the since-timestamp can only ever find what is missing AHEAD of it", and
+`LH.AnswerHistoryRequest` is silent when the checksums match. It simply never ran during a raid.
+
+**Fixed 2026-08-10.** `LC.HandleEndRound` asks for a catch-up through `LH.AskForCatchUpSoon`. End Round
+rather than a poll: one moment per boss when the raid is demonstrably between distributions, which is
+also when `LH.GateOpen` lets a request out, and the shared rate limit means it cannot storm.
+
+**Measured before deciding, both runs five clients, five bosses, identical spacing:**
+
+| | chunks | bytes | `HIST_REQ` | `HIST_BATCH` | awards per client |
+|---|---|---|---|---|---|
+| before | 177 | 8,535 | 0 | 0 | 15 15 15 15 15 |
+| before, award lost | 177 | 8,527 | 0 | 0 | **15 12 12 12 12** |
+| naive reconcile | 277 | 10,419 | 20 | 0 | 15 15 15 15 15 |
+| **shipped** | **197** | **9,219** | 20 | 0 | 15 15 15 15 15 |
+| **shipped, award lost** | 217 | 13,447 | 20 | 10 | **15 15 15 15 15** |
+
+**The naive version cost three times as much, and the measurement said why.** `LH.AnswerHistoryRequest`
+whispered its own epoch back to every asker UNCONDITIONALLY -- 80 of the 100 extra chunks in this
+fixture, and 24 per request in a real raid, about 3,600 over an evening against B135's whole-evening
+baseline of roughly 1,680 messages. The request already carries the asker's epoch, so a peer that
+matches it has nothing to tell them; it is conditional now. The absentee the whisper was built for is
+untouched, since theirs differs by definition.
+
+What ships therefore costs **+20 chunks and +684 bytes** on an evening where nothing is lost -- the asks
+themselves, answer side silent. Roughly 9% of B135's baseline at raid scale. **The maintainer's ruling on
+that trade, 2026-08-10: the Manifest comes first, loot has to work.**
+
+Held by `tests/test_loothistory_epoch.lua`: the award repaired at round end and matched by id rather
+than minted locally, plus both directions of the conditional whisper. Both halves verified to fail with
+their own line removed. The 40-seed catch-up soak in the same file already held the repair mechanism
+itself -- it holds and blackholes `LC_HIST_EPOCH` and `LC_RESULT` -- which is why only the trigger was
+missing rather than the machinery.

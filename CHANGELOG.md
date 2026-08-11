@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An empty roll column now says whether the numbers are missing or simply not yours to see**, instead of looking the same either way.
 - **Tier tokens are judged by the classes they name in every language**, not only where the tooltip happens to be worded simply.
 - **A damaged settings file no longer stops loot from working** — a bad value is ignored instead of breaking every drop.
+- **An award that never reached you is picked up at the end of the round**, instead of missing from your loot history for the rest of the evening.
 
 ## [3.3.2] - 2026-08-05
 ### Fixed

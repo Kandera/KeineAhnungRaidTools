@@ -903,3 +903,91 @@ do
     T.eq(raider.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
         "B156: and the library's own retry carries the new epoch to the raid after all")
 end
+
+-- A lost award is noticed at the end of the round (B171) --------------------------------------------
+-- LC_RESULT is guaranteed, so KASC re-sends one the transport REFUSED. That covers the sender. The case
+-- B118 measured is a message that went out fine and one client never got, and nothing repaired the
+-- award: LH.RequestHistorySync runs on a raid JOIN, on an unauthorised award and on an epoch we cannot
+-- adopt, and nothing polls. Measured over a five-boss evening before this: the lootmaster held 15
+-- awards and every other client 12, every diagnostic counter zero, and twenty further minutes changed
+-- nothing. C7 says every client names the same winner; C14 says where something is lost, some client
+-- says so. Neither held.
+--
+-- End Round is the trigger rather than a poll: one moment per boss when the raid is demonstrably between
+-- distributions, which is also when LH.GateOpen lets a request out. It goes through
+-- LH.AskForCatchUpSoon, so it shares the existing rate limit and cannot storm.
+--
+-- The cost was measured rather than assumed (five clients, five bosses, same spacing both runs):
+-- +20 chunks and +684 bytes on an evening where nothing is lost -- the asks themselves, with the answer
+-- side silent because the checksums match. The maintainer's ruling on that trade, 2026-08-10: the
+-- Manifest comes first, loot has to work.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    F.Drop(sim, 320, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    -- The award goes out and this one client never sees it.
+    RaidSim.Blackhole(sim, "LC_RESULT")
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AssignWinner(320, sim.byName.Alric.guid, "BIS", nil)
+    end)
+    RaidSim.Drain(sim, 20)
+    RaidSim.Deliver(sim, "LC_RESULT")
+
+    local function AwardCount(c)
+        local n = 0
+        for _, e in ipairs(c.env.KART_LootHistory or {}) do if e.id then n = n + 1 end end
+        return n
+    end
+    T.eq(AwardCount(lm), 1, "the setup: the assigner logged it")
+    T.eq(AwardCount(raider), 0, "and the client that lost the message has nothing")
+
+    -- The round ends. Nothing else in the raid mentions this award again.
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    RaidSim.Drain(sim, 30)
+    KARTTEST.AdvanceTime(10)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(AwardCount(raider), 1,
+        "B171: the round ending is where the client notices its record disagrees with the raid's")
+    local mine, theirs
+    for _, e in ipairs(raider.env.KART_LootHistory) do mine = e.id end
+    for _, e in ipairs(lm.env.KART_LootHistory) do theirs = e.id end
+    T.eq(mine, theirs, "B171: and it is the same award, by id, not a second one minted locally")
+end
+
+-- ...and the epoch whisper that answer used to drag with it (B171) ----------------------------------
+-- LH.AnswerHistoryRequest whispered its own epoch back to every asker UNCONDITIONALLY. With a reconcile
+-- at each round end that is one whisper per peer per ask -- 24 per request in a real raid, about 3,600
+-- over an evening against B135's whole-evening baseline of roughly 1,680 messages. Measured in the
+-- five-client fixture it was 80 of the 100 extra chunks the reconcile cost, which was the whole of its
+-- price.
+--
+-- The request already carries the asker's epoch, so a peer that matches it has nothing to tell them.
+-- The absentee the whisper was built for is untouched: theirs differs by definition, which is why they
+-- are the one being caught up.
+-- No item is put on the table in this block, deliberately: an undecided roll closes LH.GateOpen and the
+-- request is parked for GATE_MAX_PARK, so a version of this that dropped one asserted "no epoch traffic"
+-- while nothing had been ASKED at all -- vacuous in the first half, and only caught because the second
+-- half expects traffic and did not get any either.
+do
+    local sim, lm, _, raider = F.NewRaid()
+
+    -- Everybody is on the same epoch here, so a request should draw no epoch traffic at all.
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(10)
+    RaidSim.Drain(sim, 30)
+    T.eq(#RaidSim.Messages(sim, "LC_HIST_EPOCH"), 0,
+        "B171: a peer whose epoch already matches the asker's says nothing")
+
+    -- Put the asker a full epoch behind, and the whisper is exactly what has to arrive.
+    RaidSim.As(raider, function() raider.env.KART_LootHistoryEpoch = 1 end)
+    RaidSim.As(lm, function() lm.env.KART_LootHistoryEpoch = 5 end)
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function() raider.KART.LH.RequestHistorySync() end)
+    KARTTEST.AdvanceTime(10)
+    RaidSim.Drain(sim, 30)
+    T.truthy(#RaidSim.Messages(sim, "LC_HIST_EPOCH") > 0,
+        "B171: while a peer that is ahead of them still says so")
+end

@@ -6042,6 +6042,22 @@ end
 function LC.HandleEndRound(senderKey)
     if not LC.IsSenderCouncil(senderKey) then LC.diag.refusedSender = LC.diag.refusedSender + 1 return end
     LC.ClearAllRolls()
+    -- ...and one look at whether this client's record of the round agrees with the raid's (B171).
+    --
+    -- A lost LC_RESULT is the hole. It is GUARANTEED, so KASC re-sends one the transport REFUSED -- but
+    -- that covers the sender, and the case B118 measured is a message that went out fine and one client
+    -- never got. Nothing then repaired the award: LH.RequestHistorySync runs on a raid JOIN, on an
+    -- unauthorised award and on an epoch we cannot adopt, and nothing polls -- so that client's loot
+    -- history was short a row for the rest of the evening, and its /kart status said nothing at all.
+    -- Measured over a five-boss evening: the lootmaster held 15 awards, every other client 12, every
+    -- diagnostic counter zero, and twenty further minutes changed nothing. That is C7 and C14 both.
+    --
+    -- End Round rather than a poll: it is the one moment per boss when the raid is demonstrably between
+    -- distributions, which is also when LH.GateOpen will let a request out. Through
+    -- LH.AskForCatchUpSoon, so it shares the existing rate limit and delay and cannot storm -- and the
+    -- answering side is already silent when the checksums match, so an evening where nothing was lost
+    -- pays for the asks and nothing else: measured at +20 chunks and +684 bytes over five bosses.
+    if KART.LH and KART.LH.AskForCatchUpSoon then KART.LH.AskForCatchUpSoon() end
 end
 
 -- Returns whether the payload described an item this client could act on AT ALL -- which is what

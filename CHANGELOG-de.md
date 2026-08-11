@@ -53,6 +53,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Eine leere Würfelspalte sagt jetzt, ob die Zahlen fehlen oder ob dort einfach keine hingehören** — statt in beiden Fällen gleich auszusehen.
 - **Tier-Tokens werden in jeder Sprache nach den Klassen beurteilt, die sie nennen** — nicht nur dort, wo der Tooltip zufällig einfach formuliert ist.
 - **Eine beschädigte Einstellungsdatei bringt die Lootverteilung nicht mehr zum Stehen** — ein kaputter Wert wird ignoriert statt jeden Drop zu brechen.
+- **Eine Vergabe, die dich nie erreicht hat, wird am Ende der Runde nachgeholt** — statt für den Rest des Abends aus deiner Loot-History zu fehlen.
 
 ## [3.3.2] - 2026-08-05
 ### Behoben
