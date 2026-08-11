@@ -255,7 +255,19 @@ local function ClassLocked(itemLink, classDisplayName)
     if not (C_TooltipInfo and C_TooltipInfo.GetHyperlink) then return nil end
     local data = C_TooltipInfo.GetHyperlink(itemLink)
     if not (data and data.lines) then return nil end
-    local pattern = ITEM_CLASSES_ALLOWED:gsub("%%s", "(.+)")
+    -- The insertion is lifted out FIRST, then everything else is escaped, then the capture goes back
+    -- (B163). Exactly the order Trade.GetBagTradeTimeRemaining already uses, and for the same reason:
+    -- this is a localized client sentence, so it can carry a positional insertion ("%1$s") or any
+    -- pattern magic character, and swapping only "%s" left both in the pattern. It fails QUIETLY --
+    -- the line does not match, this function answers nil, and the item counts as relevant -- which is
+    -- the safe direction and exactly why nothing would have noticed: the whole token rule would be off
+    -- on such a client, on the drops a new tier is made of. \1 as the placeholder because it is not a
+    -- magic character and cannot occur in a client string.
+    local pattern = ITEM_CLASSES_ALLOWED
+        :gsub("%%%d+%$s", "\1")
+        :gsub("%%s", "\1")
+        :gsub("([%^%$%(%)%.%[%]%*%+%-%?%%])", "%%%1")
+        :gsub("\1", "(.+)")
     for _, line in ipairs(data.lines) do
         local listed = line.leftText and line.leftText:match(pattern)
         if listed then

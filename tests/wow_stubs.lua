@@ -1262,7 +1262,13 @@ _G.C_TooltipInfo = {
         if not it or it.cached == false then return nil end
         local lines = { { leftText = it.name } }
         if it.classesAllowed then
-            lines[#lines + 1] = { leftText = string.format(_G.ITEM_CLASSES_ALLOWED,
+            -- Normalized the same way TradeLine does above, and for the same reason: several locales
+            -- write their insertion positionally ("%1$s"), that is a real client string, and Lua's
+            -- string.format cannot take it -- so without this the harness cannot model such a locale
+            -- at all, which is exactly why B163's failure was untestable. The addon reads the RAW
+            -- global, which is the point of the exercise.
+            local fmt = (_G.ITEM_CLASSES_ALLOWED:gsub("%%%d+%$s", "%%s"))
+            lines[#lines + 1] = { leftText = string.format(fmt,
                                                            table.concat(it.classesAllowed, ", ")) }
         end
         return { lines = lines }

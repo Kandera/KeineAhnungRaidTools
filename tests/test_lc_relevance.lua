@@ -538,3 +538,48 @@ if AUTO_TRANSMOG then do
     T.eq(builds, perDrop * 3, "B54: and each one cost the same as the first — no nested rebuild")
     T.eq(perDrop, 1, "B54: which is one rebuild per item, not two")
 end end
+
+-- A localized "Classes:" line must not silently switch the token rule off (B163) --------------------
+-- ClassLocked builds a Lua pattern out of ITEM_CLASSES_ALLOWED, a client string, and swapped only
+-- "%s" -- nothing else was escaped. That is the same shape B144 fixed for BIND_TRADE_TIME_REMAINING,
+-- where "%1$s" left "%1" in the pattern and Lua refused it as a back reference.
+--
+-- It fails QUIETLY here rather than erroring: the line does not match, ClassLocked answers nil ("says
+-- nothing"), and the item is treated as relevant. That is the safe direction -- nobody is auto-passed
+-- on something they can use -- but the whole tier-token rule is off, on the drops a new tier is made
+-- of, with nothing to notice it by. Several real locale forms reach it: a positional insertion, and
+-- any bracket, plus or other magic character in the sentence.
+--
+-- Measured before the fix: "%1$s", "Classes (only): %s" and "Classes+ %s" all left the priest seeing
+-- a token restricted to Death Knight, Paladin and Warrior.
+do
+    local REAL = _G.ITEM_CLASSES_ALLOWED
+    local FORMS = {
+        { "a positional insertion", "Classes: %1$s" },
+        { "a bracket",              "Classes (only): %s" },
+        { "a plus",                 "Classes+ %s" },
+        { "a dot",                  "Classes. %s" },
+        { "a dash",                 "Classes - %s" },
+        -- Deliberately NOT a "%%" case. The raw global's "%%" renders as ONE percent sign, so a
+        -- pattern built from the raw string cannot match the rendered line without un-escaping it
+        -- first -- and no client string writes a literal percent here. Trade.GetBagTradeTimeRemaining
+        -- has the same property for the same reason.
+    }
+    local rollID = 1960
+    for _, form in ipairs(FORMS) do
+        rollID = rollID + 1
+        _G.ITEM_CLASSES_ALLOWED = form[2]
+        local sim = F.NewRaid()
+        local corvin, sinja = sim.byName.Corvin, sim.byName.Sinja  -- PALADIN named, PRIEST not
+        local ok = pcall(function()
+            F.Drop(sim, rollID, F.TIER_TOKEN, { canNeed = false, canTransmog = false })
+            KARTTEST.AdvanceTime(1)
+        end)
+        T.truthy(ok, "B163: " .. form[1] .. " does not error out of the relevance pass")
+        T.truthy(sinja.KART.LC.hiddenIrrelevant[rollID],
+            "B163: " .. form[1] .. " still hides a token this class cannot use")
+        T.truthy(not corvin.KART.LC.hiddenIrrelevant[rollID],
+            "B163: " .. form[1] .. " still shows it to a class the token names")
+    end
+    _G.ITEM_CLASSES_ALLOWED = REAL
+end

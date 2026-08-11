@@ -4721,3 +4721,51 @@ marker uses, with a `rollHitbox` carrying the sentence behind it (`LC_ROLL_UNKNO
 Held by `tests/test_lc_councilrows.lua`, which asserts BOTH kinds of empty -- the unknown marker with its
 hitbox live, and the plain dash with the hitbox off. Verified to fail with the discriminator forced to
 false.
+
+## B163 — FIXED 2026-08-10 — the tier-token relevance rule switched itself off on a locale it could not parse
+
+Found in round six of the `v3.3.2..HEAD` review, in code that arrived with that range. `ClassLocked`
+(`LootCouncilRelevance.lua`) is the only rule that can judge a TIER TOKEN -- a token is Miscellaneous
+with no armor weight and no weapon subclass, so nothing else answers anything about it, and a raid on
+new content is full of them. It reads the restriction off the tooltip line and built its pattern like
+this:
+
+```lua
+local pattern = ITEM_CLASSES_ALLOWED:gsub("%%s", "(.+)")
+```
+
+Only `%s` is swapped. Nothing else is escaped. `ITEM_CLASSES_ALLOWED` is a localized client sentence,
+so it can carry a positional insertion (`%1$s`) or any pattern magic character -- exactly the shape
+B144 fixed for `BIND_TRADE_TIME_REMAINING`, where `%1$s` left `%1` in the pattern and Lua refused it
+as a back reference.
+
+**It fails QUIETLY here, which is why nothing would have found it.** The line simply does not match,
+`ClassLocked` answers nil ("says nothing"), the item counts as relevant, and the raider sees a token
+their class cannot use. That is the safe direction -- nobody is auto-passed on something usable -- and
+it is also invisible: the whole token rule is off, on the drops a new tier is made of, with nothing on
+any screen saying so. Measured against a Priest and a Paladin over a token restricted to Death Knight,
+Paladin and Warrior:
+
+```
+plain %s               priest hidden=true  paladin hidden=false  OK
+positional %1$s        priest hidden=false paladin hidden=false  WRONG
+a bracket              priest hidden=false paladin hidden=false  WRONG
+a plus                 priest hidden=false paladin hidden=false  WRONG
+```
+
+Not reachable on the two locales this guild ships (`Classes: %s` / `Klassen: %s`, no magic characters),
+and fixed anyway for the reason B144's own note gives: nothing about the parser knows which locales are
+in use, and RCLootCouncil strips the same insertion for the same reason.
+
+**Fixed 2026-08-10** with the same three steps `Trade.GetBagTradeTimeRemaining` already uses -- lift the
+insertion out first, positional form included, escape everything else, then put the capture back.
+
+**The harness could not model this**, which is the more transferable half. `C_TooltipInfo.GetHyperlink`
+built its line with a raw `string.format(ITEM_CLASSES_ALLOWED, ...)`, and Lua's `string.format` cannot
+take `%1$s` at all -- so a test for the positional form failed in the STUB rather than in the addon.
+B144 had already solved this next door (`TradeLine` normalizes the insertion before formatting) and the
+newer stub did not inherit it. Now it does.
+
+Deliberately NOT covered: a `%%` in the raw string. It renders as one percent sign, so a pattern built
+from the raw string cannot match the rendered line without un-escaping first, and no client string
+writes a literal percent here. `Trade.GetBagTradeTimeRemaining` has the same property.
