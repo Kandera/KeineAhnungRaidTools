@@ -835,3 +835,25 @@ do
     end)
     T.truthy(ok, "B164: and awarding works again")
 end
+
+-- B165, the history half: KART_LootHistory must be a table before anything walks it ----------------
+-- Twenty sites iterate it with `#KART_LootHistory` or `ipairs`, so a per-site guard is not the answer
+-- -- and the existing `if not KART_LootHistory then return end` shape does not catch the case that
+-- matters. A STRING answers `#` with its length and `[i]` with nil, both without erroring, so a loop
+-- runs the wrong number of times and dies indexing a nil row. LH.PurgeIfNoEpoch already establishes
+-- this store at load, so it is the one place that can settle the shape for every reader.
+do
+    local _, _, _, raider = F.NewRaid()
+    raider.env.KART_LootHistory = "corrupt"
+    RaidSim.As(raider, function() raider.KART.LH.PurgeIfNoEpoch() end)
+    T.eq(type(raider.env.KART_LootHistory), "table",
+        "B165: a history that is not a table at all is replaced with one at load")
+
+    local ok = pcall(function()
+        RaidSim.As(raider, function()
+            raider.KART.LH.RemoveHistoryForRoll(1, "item:1")
+            return raider.KART.LH.HistoryChecksum()
+        end)
+    end)
+    T.truthy(ok, "B165: so the readers that walk it by index do not die on it")
+end

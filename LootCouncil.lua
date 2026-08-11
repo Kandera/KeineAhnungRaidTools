@@ -749,11 +749,21 @@ end
 
 -- Minimum item quality is authoritative from the raid leader, same reasoning as GetButtonConfig.
 -- NOTE: this does NOT gate Auto-Pass (see OnStartLootRoll) — that stays a personal preference.
+-- Coerced through tonumber on BOTH branches, and this is the single place that has to do it (B165):
+-- the answer goes straight into `quality < LC.GetRaidMinQuality()` in LC.OnStartLootRoll, so anything
+-- but a number there errors on every Bind-on-Pickup drop -- the loot flow stopping for that client for
+-- the rest of the evening. `or 4` does not cover it; it only answers nil.
+--
+-- Both branches, because B164 guarded one of the two stores behind them and that was not enough. The
+-- peer branch reads LC.raidConfig, restored from KART_LCSession; the owner branch reads KART_Settings,
+-- which LC's profile apply writes straight out of KART_Profiles (`= data.minQuality`) -- so a bad value
+-- travels profile -> settings -> loot path with no file edited by hand at all, and B93 is the precedent
+-- that KART_Profiles does get corrupt in practice. Guarding the READER covers every road into it.
 function LC.GetRaidMinQuality()
     if LC.IsConfigOwner() then
-        return KART_Settings.lcMinQuality or 4
+        return tonumber(KART_Settings.lcMinQuality) or 4
     end
-    return LC.raidConfig.minQuality or 4
+    return tonumber(LC.raidConfig.minQuality) or 4
 end
 
 -- Applies the LootCouncil-specific font size (KART_Settings.lcFontSize, independent from the main

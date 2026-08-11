@@ -561,8 +561,18 @@ function LH.PurgeIfNoEpoch()
             return
         end
     end
-    KART_LootHistory = KART_LootHistory or {}
-    wipe(KART_LootHistory)
+    -- Type-checked, not `or {}` (B165). `or` only answers nil, and the shape that actually costs
+    -- something here is a non-table: `wipe` runs `pairs` over its argument, so a string reached this
+    -- line and threw -- out of ADDON_LOADED, in the one function whose job is to establish this store.
+    -- And a string that survives to the readers is worse than the throw: twenty sites walk this table
+    -- with `#` or `ipairs`, and on a string `#` answers its LENGTH while `[i]` answers nil, both without
+    -- erroring, so a loop runs the wrong number of times and dies indexing a row that was never there.
+    -- Wiped in place when it IS a table, so anything holding the reference keeps it.
+    if type(KART_LootHistory) ~= "table" then
+        KART_LootHistory = {}
+    else
+        wipe(KART_LootHistory)
+    end
     KART_LootHistoryEpoch = 1
 end
 

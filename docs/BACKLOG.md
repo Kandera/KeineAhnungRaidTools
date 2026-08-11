@@ -4823,3 +4823,43 @@ either, which is the state it already exists for.
 
 Held by `tests/test_lc_reload.lua` (four bad shapes, and a healthy config still restoring) and
 `tests/test_loothistory_epoch.lua` (a coercible epoch kept with its history, an unusable one purged).
+
+## B165 — FIXED 2026-08-10 — B164's fix was half of it, and the other half was the shorter road
+
+Found immediately after B164, by finishing the same sweep. Two more reads of the same shape, and the
+first one is B164's own function.
+
+**`LC.GetRaidMinQuality` has two branches and B164 guarded one.** The peer branch reads
+`LC.raidConfig.minQuality`, restored from `KART_LCSession` -- that is what B164 fixed. The config
+owner's branch reads `KART_Settings.lcMinQuality` raw, and both answers go into the same
+`quality < LC.GetRaidMinQuality()` in `LC.OnStartLootRoll`:
+
+```
+lcMinQuality a table    ERROR: attempt to compare number with table
+lcMinQuality a string   ERROR: attempt to compare number with string
+```
+
+And this is the SHORTER road, not a rarer one. `LootCouncil.lua`'s profile apply writes
+`KART_Settings.lcMinQuality = data.minQuality` straight out of `KART_Profiles`, so a bad value travels
+profile → settings → loot path with nobody editing a settings file, and B93 is the precedent that
+`KART_Profiles` does get corrupt in practice. Fixed by coercing in the READER, which is the one place
+every road into it passes through -- `or 4` never covered this, since `or` only answers nil.
+
+**`LH.PurgeIfNoEpoch` threw on a non-table history**, which is the function whose entire job is to
+establish that store at load. `KART_LootHistory = KART_LootHistory or {}` lets a string through, and
+`wipe` runs `pairs` over its argument -- so it errored out of `ADDON_LOADED`. Found by the test written
+for B164's epoch guard, in the fix's own path.
+
+A string surviving to the readers would have been worse than the throw: twenty sites walk this table
+with `#KART_LootHistory` or `ipairs`, and on a string `#` answers its LENGTH while `[i]` answers nil --
+both without erroring -- so a loop runs the wrong number of times and dies indexing a row that was never
+there. A per-site guard is not the answer at twenty sites; this function already establishes the store,
+so it settles the shape for every reader. The table is wiped in place when it is one, so anything holding
+the reference keeps it.
+
+Held by `tests/test_lc_drop.lua` (three bad thresholds, plus a real threshold still keeping an item out)
+and `tests/test_loothistory_epoch.lua`.
+
+**The lesson, which is the transferable part:** B164 fixed the store and not the reader. One value read
+in two branches needs the guard where it is READ, or the fix covers whichever road the reviewer happened
+to walk first.

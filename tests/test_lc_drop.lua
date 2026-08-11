@@ -892,3 +892,36 @@ do
             "...but an Auto-Pass client does pass it -- C6's named exception, not an oversight")
     end
 end
+
+-- B165: the OTHER branch of LC.GetRaidMinQuality ---------------------------------------------------
+-- B164 guarded the peer branch (LC.raidConfig.minQuality, restored from KART_LCSession) and left this
+-- one, which is the config owner's: KART_Settings.lcMinQuality, read raw and handed into
+-- `quality < LC.GetRaidMinQuality()` in LC.OnStartLootRoll. One function, two branches, one of them
+-- fixed -- so the same drop-breaking error was still reachable by the shorter road.
+--
+-- And it IS the shorter road. LootCouncil.lua's profile apply writes
+-- `KART_Settings.lcMinQuality = data.minQuality` straight out of KART_Profiles, so a bad value travels
+-- profile -> settings -> loot path without anyone editing a settings file. B93 is the precedent that
+-- this table does get corrupt in practice.
+do
+    local CASES = { { "a table", {} }, { "a string", "4" }, { "nonsense", "abc" } }
+    local rollID = 2300
+    for _, case in ipairs(CASES) do
+        rollID = rollID + 1
+        local sim, lm = F.NewRaid()
+        RaidSim.As(lm, function() lm.env.KART_Settings.lcMinQuality = case[2] end)
+        local ok = pcall(function()
+            F.Drop(sim, rollID, F.GLOVES)
+            KARTTEST.AdvanceTime(1)
+        end)
+        T.truthy(ok, "B165: lcMinQuality as " .. case[1] .. " does not break the drop")
+    end
+
+    -- ...and a real threshold still does its job, which is the whole point of the field.
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_Settings.lcMinQuality = 4 end)
+    RaidSim.ClearLog(sim)
+    F.Drop(sim, 2310, F.RARE)   -- below Epic
+    KARTTEST.AdvanceTime(1)
+    T.eq(#Announced(sim), 0, "B165: and an item below the threshold is still kept out")
+end
