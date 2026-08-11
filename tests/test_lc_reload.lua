@@ -1051,6 +1051,11 @@ end
 -- The comment on SaveSessionSnapshot already claims "flat scalars throughout"; this makes the reader
 -- enforce the claim instead of trusting it.
 do
+    -- Asserted on LC.raidConfig itself, NOT on "the next drop still works". That weaker assertion is
+    -- what the first version made, and it passed with this whole filter deleted -- because B165 later
+    -- guarded LC.GetRaidMinQuality's readers too, and a downstream symptom cannot say which of two
+    -- guards is doing the work. Found by the bug run over this session's own commits, same shape as
+    -- B165's own first cut. Each guard needs a test that fails when THAT guard is removed.
     local CASES = {
         { "a table where a number belongs",  { minQuality = {},    buttonLabels = "BIS;Upgrade" } },
         { "a string where a number belongs", { minQuality = "4",   buttonLabels = "BIS;Upgrade" } },
@@ -1064,6 +1069,17 @@ do
         local raider = sim.byName.Alric
         raider.env.KART_LCSession = { savedAt = time(), config = case[2], council = {} }
         RaidSim.As(raider, function() raider.KART.LC.RestoreSessionSnapshot() end)
+
+        -- Nothing that is not a scalar reaches the live config, whatever the file said.
+        for key in pairs(case[2]) do
+            T.truthy(type(raider.KART.LC.raidConfig[key]) ~= "table",
+                "B164: " .. case[1] .. " -- " .. key .. " does not arrive as a table")
+        end
+        -- ...and minQuality is a NUMBER or absent, never the string a file can carry: it is the field
+        -- the loot path orders against, and tonumber is what its wire-side writer uses.
+        local mq = raider.KART.LC.raidConfig.minQuality
+        T.truthy(mq == nil or type(mq) == "number",
+            "B164: " .. case[1] .. " -- minQuality is a number or nothing")
 
         local ok = pcall(function()
             F.Drop(sim, rollID, F.GLOVES)
