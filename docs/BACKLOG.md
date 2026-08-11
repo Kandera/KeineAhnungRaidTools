@@ -4769,3 +4769,57 @@ newer stub did not inherit it. Now it does.
 Deliberately NOT covered: a `%%` in the raw string. It renders as one percent sign, so a pattern built
 from the raw string cannot match the rendered line without un-escaping first, and no client string
 writes a literal percent here. `Trade.GetBagTradeTimeRemaining` has the same property.
+
+## B164 — FIXED 2026-08-10 — two saved values were read without a shape guard, and both stopped the loot flow
+
+Found in round nine of the `v3.3.2..HEAD` review, by walking the hazard `CLAUDE.md` names outright:
+*"SavedVariables have no central migration. Each structure guards its own shape ... A shape change
+without such a guard corrupts existing users on their next login."*
+
+Both values are new in this range, and both are read by code that orders them against a number.
+
+**`KART_LCSession.config`** (the D2 config restore) was copied field by field with no check:
+
+```lua
+for key, value in pairs(store.config) do LC.raidConfig[key] = value end
+```
+
+`LC.GetRaidMinQuality` then hands `minQuality` into `quality < LC.GetRaidMinQuality()` inside
+`LC.OnStartLootRoll`. Measured:
+
+```
+minQuality a table    restore ok, drop ERROR: attempt to compare number with table
+minQuality a string   restore ok, drop ERROR: attempt to compare number with string
+```
+
+That is an error on **every** Bind-on-Pickup drop -- the loot flow stopping for that client for the
+rest of the evening, out of a file nobody looked at. `Trade.RestorePersistedTrades` has always
+type-checked and rebuilt its own store rather than adopting it; this block, added in the same range,
+did not.
+
+**`KART_LootHistoryEpoch`** is ordered against `LH.heardEpoch` in `LH.IsStale()`, and
+`Trade.RefusedAsStale` reads `IsStale` before every award:
+
+```
+IsStale with a string epoch:  ERROR: attempt to compare string with number
+```
+
+So a non-numeric epoch means the client refuses to award anything -- and `LH.HistoryChecksum` survives
+the same value only because its own test is an equality rather than an ordering, which is luck rather
+than a guard.
+
+**Neither is reachable through the addon's own writers.** `TryAcceptConfig` does `tonumber(minQ) or 4`,
+`LC.ApplyOwnConfig` writes scalars, and every writer of the epoch produces a number. This is about what
+a truncated file, a crash mid-write or a hand edit carries -- which is precisely the case the standing
+rule is written for, and the reason it says *reader*, not *writer*.
+
+**Fixed 2026-08-10.** The config restore type-checks on the way in and coerces `minQuality` through
+`tonumber`, which is exactly what its wire-side counterpart does with the same field -- so `"4"` from a
+file becomes the 4 that writer would have produced, a table is dropped, and the field falls back to
+whatever the wire says once the raid answers. `LH.PurgeIfNoEpoch` gained the epoch's shape guard, since
+that function is already the one place the epoch's absence is handled: coerce first, and purge only if
+no number can be made of it -- because then the number every entry is stamped against cannot be trusted
+either, which is the state it already exists for.
+
+Held by `tests/test_lc_reload.lua` (four bad shapes, and a healthy config still restoring) and
+`tests/test_loothistory_epoch.lua` (a coercible epoch kept with its history, an unusable one purged).

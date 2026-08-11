@@ -543,8 +543,24 @@ end
 -- LootHistory.lua's frame registers before Core.lua's (see the .toc's file order), so it can run
 -- first and must not assume Core.lua's own `KART_LootHistory = KART_LootHistory or {}` already ran.
 -- wipe(nil) errors, so this establishes the table itself rather than trusting it exists.
+-- Also the one place the epoch's SHAPE is guarded, which is the same job (B164). LH.IsStale() orders it
+-- against LH.heardEpoch, and Trade.RefusedAsStale reads IsStale before every award -- so a
+-- non-numeric value on disk errors on the comparison and the client cannot award at all. Measured:
+-- LH.HistoryChecksum survives the same value only because its own test is an equality rather than an
+-- ordering, which is luck, not a guard.
+--
+-- Coerced first, purged only if it cannot be a number. A numeric-looking string is the value this
+-- module's own writers would have produced, so "2" becomes 2 and the history it stamps is kept.
+-- Anything else means the number every entry is stamped against cannot be trusted either, which is
+-- exactly the state this function already exists for.
 function LH.PurgeIfNoEpoch()
-    if KART_LootHistoryEpoch ~= nil then return end
+    if KART_LootHistoryEpoch ~= nil then
+        local asNumber = tonumber(KART_LootHistoryEpoch)
+        if asNumber then
+            KART_LootHistoryEpoch = asNumber
+            return
+        end
+    end
     KART_LootHistory = KART_LootHistory or {}
     wipe(KART_LootHistory)
     KART_LootHistoryEpoch = 1

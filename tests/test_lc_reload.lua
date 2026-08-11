@@ -1032,3 +1032,56 @@ do
     T.is_nil(heir.KART.LC.rollsSeenWhileUnaware[1210],
         "B161: the entry is still let go, so it cannot be retried on the next replay either")
 end
+
+-- B164: a restored config must not be trusted field by field ---------------------------------------
+-- CLAUDE.md states the standing hazard outright: SavedVariables have no central migration, each
+-- structure guards its own shape, and a shape a reader does not expect corrupts existing users on
+-- their next login. Trade.RestorePersistedTrades follows that rule meticulously -- every row of its
+-- store is type-checked and rebuilt rather than adopted. The config restore added in the same range
+-- copies field by field with no check at all:
+--
+--     for key, value in pairs(store.config) do LC.raidConfig[key] = value end
+--
+-- and LC.GetRaidMinQuality hands minQuality straight into `quality < LC.GetRaidMinQuality()` in
+-- LC.OnStartLootRoll. Measured: a table or a string there errors on EVERY Bind-on-Pickup drop, which
+-- is the loot flow stopping for that client for the rest of the evening.
+--
+-- Not reachable through the addon's own writers -- TryAcceptConfig does `tonumber(minQ) or 4` and
+-- LC.ApplyOwnConfig writes scalars -- so this is about what a truncated or hand-edited file carries.
+-- The comment on SaveSessionSnapshot already claims "flat scalars throughout"; this makes the reader
+-- enforce the claim instead of trusting it.
+do
+    local CASES = {
+        { "a table where a number belongs",  { minQuality = {},    buttonLabels = "BIS;Upgrade" } },
+        { "a string where a number belongs", { minQuality = "4",   buttonLabels = "BIS;Upgrade" } },
+        { "a table where a string belongs",  { minQuality = 4,     buttonLabels = {} } },
+        { "a nested table",                  { minQuality = 4,     nested = { deep = {} } } },
+    }
+    local rollID = 2100
+    for _, case in ipairs(CASES) do
+        rollID = rollID + 1
+        local sim = F.NewRaid()
+        local raider = sim.byName.Alric
+        raider.env.KART_LCSession = { savedAt = time(), config = case[2], council = {} }
+        RaidSim.As(raider, function() raider.KART.LC.RestoreSessionSnapshot() end)
+
+        local ok = pcall(function()
+            F.Drop(sim, rollID, F.GLOVES)
+            KARTTEST.AdvanceTime(1)
+        end)
+        T.truthy(ok, "B164: " .. case[1] .. " in a restored config does not break the next drop")
+    end
+
+    -- ...and a healthy config still comes back, which is what the restore is for (D2).
+    local sim = F.NewRaid()
+    local raider = sim.byName.Alric
+    raider.env.KART_LCSession = {
+        savedAt = time(),
+        config = { minQuality = 3, buttonLabels = "BIS;Upgrade;Offspec", rollsEnabled = true },
+        council = {},
+    }
+    RaidSim.As(raider, function() raider.KART.LC.RestoreSessionSnapshot() end)
+    T.eq(raider.KART.LC.raidConfig.minQuality, 3, "B164: a healthy minQuality is still restored")
+    T.eq(raider.KART.LC.raidConfig.buttonLabels, "BIS;Upgrade;Offspec",
+        "B164: and so are the raid's button labels")
+end

@@ -3569,7 +3569,30 @@ function LC.RestoreSessionSnapshot()
     -- so a config this client invented for itself before the reload is still recognisable as one
     -- afterwards and StateStillNeeded keeps asking for a real one.
     if type(store.config) == "table" and (time() - store.savedAt) < CONFIG_RESTORE_MAX then
-        for key, value in pairs(store.config) do LC.raidConfig[key] = value end
+        -- Field by field, and TYPE-CHECKED on the way in (B164). The write side's own comment claims
+        -- "flat scalars throughout", and this is the reader enforcing that claim rather than trusting
+        -- it -- which is the rule CLAUDE.md states for every SavedVariable: each structure guards its
+        -- own shape, because there is no central migration and a shape a reader does not expect
+        -- corrupts existing users on their next login. Trade.RestorePersistedTrades has always done
+        -- this for its own store; this block was adopting whatever was on disk.
+        --
+        -- What it costs to skip: LC.GetRaidMinQuality hands minQuality straight into
+        -- `quality < LC.GetRaidMinQuality()` in LC.OnStartLootRoll, so a table or a string there
+        -- errors on EVERY Bind-on-Pickup drop -- the loot flow stopping for that client for the rest
+        -- of the evening, from a file nobody looked at. Measured both ways round.
+        --
+        -- minQuality is coerced rather than merely checked: `tonumber` is exactly what TryAcceptConfig
+        -- does when it parses the same field off the wire, so "4" from a file becomes the 4 that
+        -- writer would have produced. Everything else must simply be a scalar; a table is dropped,
+        -- and the field then falls back to whatever the wire says once the raid answers.
+        for key, value in pairs(store.config) do
+            local t = type(value)
+            if key == "minQuality" then
+                LC.raidConfig[key] = tonumber(value)
+            elseif t == "string" or t == "number" or t == "boolean" then
+                LC.raidConfig[key] = value
+            end
+        end
         LC.CouncilNamesTable = {}
         for _, key in ipairs(type(store.council) == "table" and store.council or {}) do
             LC.CouncilNamesTable[key] = true

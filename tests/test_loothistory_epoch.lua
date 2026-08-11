@@ -802,3 +802,36 @@ do
         end
     end
 end
+
+-- B164, the epoch half: a non-numeric epoch on disk must not stop awarding ------------------------
+-- LH.IsStale() compares KART_LootHistoryEpoch against LH.heardEpoch, and Trade.RefusedAsStale reads
+-- IsStale before every award. A string there -- what a truncated or hand-edited SavedVariables file
+-- can carry -- errors on the comparison, so the client cannot award at all. LH.HistoryChecksum
+-- survives the same value only because its own test is an equality rather than an ordering.
+do
+    local _, _, _, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = "2"
+    RaidSim.As(raider, function() raider.KART.LH.PurgeIfNoEpoch() end)
+    T.eq(type(raider.env.KART_LootHistoryEpoch), "number",
+        "B164: a numeric-looking string epoch is normalized at load rather than left on disk")
+
+    local ok = pcall(function()
+        RaidSim.As(raider, function() return raider.KART.LH.IsStale() end)
+    end)
+    T.truthy(ok, "B164: so IsStale answers instead of erroring, and awards are not blocked")
+end
+
+do
+    local _, _, _, raider = F.NewRaid()
+    -- Genuinely unusable: no number can be made of it, so the epoch every entry is stamped against
+    -- cannot be trusted either -- which is the state PurgeIfNoEpoch already exists for.
+    raider.env.KART_LootHistoryEpoch = { 2 }
+    raider.env.KART_LootHistory = { { id = "x", epoch = 1 } }
+    RaidSim.As(raider, function() raider.KART.LH.PurgeIfNoEpoch() end)
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "B164: an unusable epoch falls back to the opening one")
+    T.eq(#raider.env.KART_LootHistory, 0, "...and the history it could not place goes with it")
+    local ok = pcall(function()
+        RaidSim.As(raider, function() return raider.KART.LH.IsStale() end)
+    end)
+    T.truthy(ok, "B164: and awarding works again")
+end
