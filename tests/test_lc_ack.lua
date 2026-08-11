@@ -343,3 +343,54 @@ do
     end
     T.eq(asks, 0, "and nobody asks about a roll the round has already ended")
 end
+
+-- The redraw an ack triggers is the throttled one (B169) --------------------------------------------
+-- Every assertion above reads Council.AnswerState directly, which is the right level for what the
+-- state MEANS -- and it leaves the path that puts it on screen unheld. LC.HandleAck refreshes through
+-- Council.RefreshCouncilRowsThrottled and through nothing else, and mutating that function to a no-op
+-- left the whole suite green.
+--
+-- What it costs is C14 read literally: "the council sees who has not answered yet". The states are
+-- computed correctly and never drawn, so the panel keeps showing the answer it had when something
+-- else last happened to redraw it -- which on a quiet distribution is the moment the item dropped.
+--
+-- Isolated to the timer on purpose: rendered once so the row is known stale, then an ack delivered,
+-- then the row read BEFORE the throttle is due and again after. Nothing else calls a refresh in
+-- between, so only that timer can account for the change.
+do
+    local sim, lm = F.NewRaid()
+    local acker = sim.byName.Alric
+    F.Drop(sim, 985, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+
+    local ackerKey = RaidSim.As(lm, function()
+        return (lm.KASC.Identity.ResolvePlayer(acker.unit))
+    end)
+    local function RowText()
+        local out
+        RaidSim.As(lm, function()
+            for _, r in ipairs(lm.KART.LC.councilPanel.rows or {}) do
+                if r:IsShown() and r.memberKey == ackerKey then out = tostring(r.voteText:GetText()) end
+            end
+        end)
+        return out or ""
+    end
+
+    -- Put the row into the "said nothing yet" state and draw it once, so what follows can only come
+    -- from the redraw under test.
+    RaidSim.As(lm, function()
+        lm.KART.LC.rollAcked[985] = nil
+        lm.KART.LC.Council.RefreshCouncilRows()
+    end)
+    T.truthy(not RowText():find(lm.KART.L.LC_ANSWER_ACKED, 1, true),
+        "the setup: the row does not yet say this raider has the item")
+
+    -- The ack lands. LC.HandleAck asks for a throttled redraw and does nothing else to the panel.
+    RaidSim.As(lm, function() lm.KART.LC.HandleAck("985", ackerKey) end)
+    T.truthy(not RowText():find(lm.KART.L.LC_ANSWER_ACKED, 1, true),
+        "B169: the panel has not redrawn yet -- the refresh is throttled, not immediate")
+
+    KARTTEST.AdvanceTime(0.5)
+    T.truthy(RowText():find(lm.KART.L.LC_ANSWER_ACKED, 1, true),
+        "B169: and once the throttle is due the council sees that this raider has the item (C14)")
+end
