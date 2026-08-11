@@ -147,3 +147,14 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   asserted as such in `tests/test_lc_churn.lua` ("more than one peer answered the catch-up"), and the
   award id deduplicates the copies. Measured at four answering peers in a five-client raid; the B135/B139
   message counts were taken against 30 clients on this same code. Not a traffic defect.
+
+- **`ENCHANTED_TOOLTIP` does not handle a positional insertion either** (Utils.lua
+  `EnchantNameForSlot`). The third site of B163's defect class, found by sweeping for it. This one
+  escapes correctly and then turns `%%s` into a capture, which is the right order -- but a locale
+  writing `%1$s` survives the escaping as `%%1$s`, no capture is ever made, the pattern matches
+  nothing and the function answers nil. Left as-is, and the reason is reachability rather than
+  correctness: it has exactly one caller, `KART.PrintEnchantDump` behind `/kart ench`, which is a
+  maintenance tool the maintainer runs on their own client; both shipped locales write the plain form;
+  and the failure is a "?" in a printed dump. `ENCHANTED_TOOLTIP` is not even in the harness, so fixing
+  it means building stub support for a maintenance command. B163 was fixed instead of recorded because
+  it sits in the loot path and runs on every drop -- that is the difference, not the pattern.
