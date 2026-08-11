@@ -621,7 +621,7 @@ end
 -- the ordinal's denominator, which counts every copy in LC.rollItems including closed and awarded
 -- ones. The two answer different questions and must not be "reconciled".
 do
-    local sim, lm = F.NewRaid()
+    local sim = F.NewRaid()
     local raider = sim.byName.Alric
 
     -- One item on its own: no marking at all.
