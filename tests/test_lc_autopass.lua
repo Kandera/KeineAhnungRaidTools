@@ -34,18 +34,19 @@ local function PassedBy(sim, rollID, name)
     return (KARTTEST.rolled[rollID] or {})[client.unit]
 end
 
--- The wait before a client that heard nothing says so. Read out of the source rather than repeated:
--- it is derived from the owner's link-retry budget, so a copy here would silently stop matching.
-local ANNOUNCE_WAIT
-do
-    local src = assert(io.open("LootCouncil.lua", "r")):read("*a")
-    local attempts = tonumber(src:match("START_ROLL_MAX_ATTEMPTS%s*=%s*(%d+)"))
-    local retryMax = tonumber(src:match("START_ROLL_RETRY_MAX%s*=%s*(%d+)"))
-    local expr = src:match("local ANNOUNCE_WAIT%s*=%s*([^\r\n]+)")
-    T.truthy(attempts and retryMax and expr, "the announcement wait was found in LootCouncil.lua")
-    ANNOUNCE_WAIT = attempts * retryMax + 5
-    T.eq(expr, "START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5",
-        "and is still derived from the owner's own retry budget, not a hand-picked number")
+-- Longer than anything KART schedules against a roll: the announcement warning B175 removed fired at
+-- 45 seconds, Blizzard's own window is shorter, and the heartbeat repairs within seconds. A silence
+-- assertion has to outlast every one of them, or it passes by arriving too early.
+local PAST_EVERY_TIMER = 90
+
+-- No chat line may name a looted item. Not "no line for this case" -- none at all, on any client, for
+-- any of the reasons a roll window can go unexplained. Reported from raids as the thing that reads as
+-- "KART ist schon wieder kaputt" whether or not it names a real fault, and reported as growing MORE
+-- frequent over time, which is what more traffic and later announcements produce.
+local function SaysNothingAboutLoot(out, label)
+    for _, id in ipairs({ F.GLOVES, F.WEAPON, F.RARE }) do
+        T.truthy(not out:find(KARTTEST.items[id].name, 1, true), label)
+    end
 end
 
 local function Capture(fn)
@@ -127,9 +128,8 @@ do
     Drop(sim, 53, F.GLOVES, { noRollFor = { Bramor = true } })
     local corvin = sim.byName.Corvin
 
-    local out = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
-    T.truthy(not out:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "the wait runs out in silence, because the window it was about is gone")
+    local out = Capture(function() KARTTEST.AdvanceTime(PAST_EVERY_TIMER) end)
+    SaysNothingAboutLoot(out, "an item the council never took up is not mentioned in chat")
     T.truthy(not corvin.KART.LC.rollAnnounced[53], "the item is still on record as never announced")
     T.eq(PassedBy(sim, 53, "Corvin"), 0, "and it was passed all the same")
 end
@@ -139,18 +139,16 @@ do
     -- click the window anyway.
     local sim = NewRaid()
     Drop(sim, 54, F.GLOVES)
-    local out = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
-    T.truthy(not out:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "a drop the council took up says nothing when the wait runs out")
+    local out = Capture(function() KARTTEST.AdvanceTime(PAST_EVERY_TIMER) end)
+    SaysNothingAboutLoot(out, "and neither is one it did")
 
     -- Everyone, because Capture cannot tell one client's chat from another's -- and a raid where
     -- nobody uses Auto-Pass must stay completely silent about an item it simply rolls on by hand.
     local sim2 = NewRaid()
     for _, c in ipairs(sim2.clients) do c.env.KART_Settings.lcAutoPass = false end
     Drop(sim2, 55, F.GLOVES, { noRollFor = { Bramor = true } })
-    local out2 = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
-    T.truthy(not out2:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "and a raider who answers their own loot windows is not told either")
+    local out2 = Capture(function() KARTTEST.AdvanceTime(PAST_EVERY_TIMER) end)
+    SaysNothingAboutLoot(out2, "and a raider who answers their own loot windows is not told either")
 end
 
 -- The owner never waits for their own announcement ------------------------------------------------
@@ -164,10 +162,9 @@ do
 
     T.is_nil(PassedBy(sim, 58, "Bramor"), "the lootmaster had no roll type to claim it with")
     T.truthy(RaidSim.As(lm, function() return GetLootRollItemLink(58) end),
-        "so their window is still open when the wait runs out")
-    local out = Capture(function() KARTTEST.AdvanceTime(ANNOUNCE_WAIT + 5) end)
-    T.truthy(not out:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "and the client that did the announcing is not told nobody announced it")
+        "so their window is still open long after every timer has run")
+    local out = Capture(function() KARTTEST.AdvanceTime(PAST_EVERY_TIMER) end)
+    SaysNothingAboutLoot(out, "and the client that did the announcing is not told anything either")
 end
 
 -- Below the raid's rarity threshold: unchanged ----------------------------------------------------

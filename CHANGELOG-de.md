@@ -28,6 +28,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Loot-History merkt sich jetzt, in welchem Raid ein Item vergeben wurde.**
 
 ### Behoben
+- **KART schreibt nicht mehr in den Chat, wenn es ein Würfelfenster nicht übernehmen konnte.**
 - **Auto-Pass beantwortet Blizzards Würfelfenster jetzt sofort**, ohne auf die Ankündigung des Councils zu warten.
 - **Das Council sieht die vollständige Auswertung auch dann, wenn der Raid gerade gemeinsam neu geladen hat.**
 - **Ein Neuladen fragt den Lootmaster nicht mehr, ob er eine laufende Session starten will**, und beendet sie nicht mehr für den Raid.

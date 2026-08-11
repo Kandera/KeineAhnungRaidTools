@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Loot history now remembers which raid an award happened in.**
 
 ### Fixed
+- **KART no longer writes to chat about a loot window it could not handle.**
 - **Auto-Pass now answers Blizzard's roll window immediately**, without waiting for the council to announce the item.
 - **The council sees the complete tally even when the raid has just reloaded together.**
 - **A reload no longer asks the lootmaster to start a session that is already running**, and no longer ends it for the raid.

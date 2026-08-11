@@ -4967,7 +4967,6 @@ LC.rollAnnouncedBy = LC.rollAnnouncedBy or {}
 -- How long to wait for that announcement before saying it never came. Derived from the owner's own
 -- link retry above rather than picked: they can legitimately spend that whole budget before sending
 -- anything, and a message that fires on a raid which was merely slow is worse than no message.
-local ANNOUNCE_WAIT = START_ROLL_MAX_ATTEMPTS * START_ROLL_RETRY_MAX + 5
 
 -- Runs the roll handler for everything that arrived while this client did not know there was a
 -- session (see LC.rollsSeenWhileUnaware). Called the moment the state stops being a guess -- from
@@ -5179,30 +5178,28 @@ local function AutoPassAnnounced(rollID)
     RollOnLoot(rollID, 0)
 end
 
--- Armed by a non-owner when a council item drops; says so if the announcement never arrives.
--- Only for Auto-Pass users: they are exactly the people whose expectation -- "KART deals with loot
--- windows for me" -- has quietly not been met, and who are now looking at a window they have to
--- answer themselves. Anyone else was going to click it regardless and does not need the line.
-local function WaitForAnnouncement(rollID, link)
-    if not KART_Settings.lcAutoPass then return end
-    C_Timer.After(ANNOUNCE_WAIT, function()
-        if LC.rollAnnounced[rollID] then return end
-        -- Blizzard reuses rollIDs within seconds (see PurgeStaleRoll). Naming the wrong item is
-        -- worse than saying nothing.
-        if LC.rollItems[rollID] ~= link then return end
-        -- Gone: expired, or answered by hand in the meantime. Nothing left to explain.
-        if not GetLootRollItemInfo(rollID) then return end
-        print("|cffff0000KART:|r " .. string.format(KART.L.LC_ROLL_UNANNOUNCED, link or "?"))
-    end)
-end
+-- REMOVED 2026-08-11 (B175). A non-owner used to arm a timer here and print, after ANNOUNCE_WAIT,
+-- that an item had never been announced and had therefore not been passed for them.
+--
+-- Two reasons it is gone. B174 took away most of its occasions -- Auto-Pass no longer needs the
+-- announcement, so the raider it was written for is not looking at a window any more. And the raid
+-- reads ANY red KART line as "kaputt, schon wieder", whether or not it names a real fault: that cost
+-- is paid on every appearance, while the line's value is paid out only to somebody who was going to
+-- look at Blizzard's window anyway. It was reported as growing more frequent over time, which is what
+-- a raid with more traffic and later announcements produces.
+--
+-- The DIAGNOSIS is not lost, only the shouting: LC.RecordPassGate has already written "unannounced"
+-- against that rollID by the time this would have fired, and /kart status prints the verdict beside
+-- the item (D1, tests/test_diagnostics.lua).
 
 -- ==========================================================================
 --  B118: the announcement, said back
 -- ==========================================================================
 --
--- The print above is all that happened to a client whose announcement was swallowed while Blizzard
--- HAD given it a roll window -- and it happens at ANNOUNCE_WAIT, which is longer than Blizzard's
--- window. By then the item is decided. On 2026-08-03 that cost a raider an item outright.
+-- A line in chat, forty-five seconds late, was all that happened to a client whose announcement was
+-- swallowed while Blizzard HAD given it a roll window. By then the item is decided. On 2026-08-03 that
+-- cost a raider an item outright. (That line is gone since B175, and the machinery below is what
+-- replaced it -- a repair rather than a complaint.)
 --
 -- The other repairs do not reach this client. LC.HandleTable's needItem is false (its own roll event
 -- wrote LC.rollItems), and needRolls is false whenever the raid does not roll -- which is the DEFAULT
@@ -5906,10 +5903,6 @@ function LC.OnStartLootRoll(rollID, attempt)
         end
         if entry then entries[#entries + 1] = entry end
     end
-
-    -- Nobody but the owner broadcasts, so a non-owner has no way of knowing the difference between
-    -- "the announcement is still coming" and "it is never coming" except by waiting (B63).
-    if not isLootmaster then WaitForAnnouncement(rollID, LC.rollItems[rollID]) end
 
     -- The broadcaster does not process their own LC_START, so they open their own windows here —
     -- same treatment HandleStart gives every other client, gated the same way (council gets the

@@ -5101,3 +5101,42 @@ states the price. Verified: 13 assertions fail with `CouncilRunsHere()` removed 
 **Still open, same file, same complaint:** KART never touches Blizzard's group loot frame — no
 `GroupLootContainer` reference exists anywhere in the addon. RC removes the frame within 50 ms of
 rolling. Ours closes only because the roll was answered, which is usually enough and occasionally not.
+
+## B175 — FIXED 2026-08-11 — the "never announced" line in chat, removed
+
+Named by the maintainer, 2026-08-11, out of the GitHub tickets rather than out of a probe:
+
+```
+LC_ROLL_UNANNOUNCED = "%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich
+                       gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst."
+```
+
+**"Diese Meldungen regen auf und lenken ab und sorgen sofort für 'ich hab hier WIEDER nen Fehler'. Ob's
+wirklich nen Fehler ist, ist dann irrelevant."** Reported as appearing more and more often, which is
+what a raid with more traffic and later announcements produces.
+
+Worth recording, because it shaped the decision: a whole simulated evening was measured for chat volume
+first -- five bosses, fifteen items, twenty-five clients -- and then again with `LC_DROP` lost across a
+boss, `LC_RESULT` lost, a reload mid-evening and an owner with no roll event. **Two lines both times,
+both on the lootmaster at startup.** Every other warning is latched (`KART.UpdateWarned`,
+`LC.outdatedWarned`). So this was not a spam problem in the sense of volume; it was one line that fired
+in exactly the situation a raider was already annoyed by, and read as the addon confessing.
+
+**Fixed 2026-08-11.** `WaitForAnnouncement` and `ANNOUNCE_WAIT` are gone, along with the locale key in
+both files. B174 had already taken away most of its occasions -- Auto-Pass no longer needs the
+announcement, so the raider the line was written for is not looking at a window any more -- and what
+remained was a red line about a fault the reader cannot act on.
+
+**Nothing diagnostic is lost.** `LC.RecordPassGate` has already written `unannounced` against that
+rollID by the time the timer would have fired, and `/kart status` prints the verdict beside the item
+(D1). The information moved from the raid's chat to the one place somebody asks for it.
+
+Held by `tests/test_lc_autopass.lua`: `SaysNothingAboutLoot` asserts across four scenarios that no chat
+line names a looted item, at 90 seconds -- past every timer KART schedules against a roll. Verified not
+to be vacuous: a delayed print naming the item fails all four.
+
+**Adjacent, from the same tickets, NOT addressed here.** Issue #31 carries a real `/kart status` from a
+raid where Auto-Pass failed, and its counters read `672 unknown item` with `118 queued` sends on a
+client tracking five rolls. Those numbers are the item-visibility question (C2), not this one. B174
+fixes the Auto-Pass half of #31 -- that client reads `Session: on (told)`, `Settings in force: received
+from Kandypal`, `That is me: no`, so `LC.CouncilRunsHere` is true for it and the pass no longer waits.

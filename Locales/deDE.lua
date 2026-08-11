@@ -288,7 +288,6 @@ KART.L_deDE = {
     LC_TRADE_EXPIRED       = "Das Handelsfenster für %s (%s) ist zu -- es lässt sich nicht mehr übergeben, die Erinnerung ist deshalb weg.",
     LC_AWARD_CLASH         = "Zwei Council-Mitglieder haben %s im selben Moment vergeben -- %s und %s. KART hat auf allen Clients %s behalten, damit der Raid sich einig ist; weis es neu zu, falls das falsch ist.",
     LC_LOOTMASTER_EMPTY_WARN = "Dein Lootmaster-Feld ist leer -- der Raid läuft nur so lange auf deinen Einstellungen, wie du Raidlead hast. Trag einen Namen ein, deinen eigenen reicht, sonst verliert der Raid sie kommentarlos.",
-    LC_ROLL_UNANNOUNCED    ="%s wurde dem Loot Council nie angekündigt und deshalb nicht für dich gepasst -- würfle selbst im Blizzard-Fenster, wenn du es willst.",
     LC_FORCEWIN_LOST       = "%s ging an %s, nicht an dich -- schau in deine Taschen, bevor du es jemandem zusagst.",
     LC_STATUS_OUTDATED     = "Raider unter KART %s: %d",
     LC_STATUS_DROPS        = "Hier verworfene Nachrichten: %d Absender, %d nicht in der Gruppe, %d unbekanntes Item, %d unbekanntes Token -- eigene Sendungen abgelehnt: %d (%d in Warteschlange), wegen Sperre zurückgehalten: %d, dabei verworfen: %d",
