@@ -507,3 +507,53 @@ do
 
     T.truthy(not PollFilled(alricKey), "and the bar empties once corvin is gone")
 end
+
+-- ...and NOT counted when the pick was about the previous item under that number (B166) -------------
+-- LC.CouncilVoteIsForItem exists because Vote.HandleCouncilVote's own comment promised a pick naming a
+-- different item would be "kept, not dropped, and filtered when it is read" -- and nothing read it. So
+-- both consumers of LC.councilVotes counted a pick made about the previous occupant of a reused rollID:
+-- the "x of y have voted" line above, and the per-candidate tally on the row.
+--
+-- The function was added in v3.3.2..HEAD with no test at all, found by mutating it to `return true` --
+-- the whole suite stayed green. Which matters more than usual here: the two numbers this filters sit
+-- side by side on the screen the item is handed out from, and a council reading "0 of 3 have voted"
+-- beside a candidate wearing a 1 has no way to tell which of them is lying.
+do
+    local ownSim, ownLm = F.NewRaid()
+    F.Drop(ownSim, 91, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    local ownPanel = ownLm.KART.LC.councilPanel
+    local L = ownLm.KART.L
+    local alricKey = RaidSim.As(ownLm, function()
+        return (ownLm.KASC.Identity.ResolvePlayer(ownSim.byName.Alric.unit))
+    end)
+
+    -- Three council members pick, all about the item that is actually on the table.
+    for _, name in ipairs({ "Bramor", "Merrit", "Corvin" }) do
+        local c = ownSim.byName[name]
+        RaidSim.As(c, function() c.KART.LC.Vote.ToggleCouncilVote(91, alricKey) end)
+    end
+    RaidSim.Drain(ownSim, 5)
+    RaidSim.As(ownLm, ownLm.KART.LC.Council.RefreshCouncilRows)
+    T.eq(ownPanel.voteProgressText:GetText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 3, 3),
+        "the setup: three picks about the item on the table read as three")
+
+    -- Blizzard hands 91 to a DIFFERENT item. The picks above are still in LC.councilVotes -- that is
+    -- the design, they are filtered on read rather than dropped -- and each carries the itemID it was
+    -- made about, so every one of them must now be ignored.
+    RaidSim.As(ownLm, function()
+        ownLm.KART.LC.rollItems[91] = KARTTEST.items[F.WEAPON].link
+        ownLm.KART.LC.Council.RefreshCouncilRows()
+    end)
+    T.eq(ownPanel.voteProgressText:GetText(), string.format(L.LC_COUNCIL_VOTES_PROGRESS, 0, 3),
+        "B166: a pick made about the previous item under this number counts for nothing")
+
+    -- ...and the same filter on the other consumer: the per-candidate tally on Alric's own row.
+    local row
+    for _, r in ipairs(ownPanel.rows or {}) do
+        if r:IsShown() and r.memberKey == alricKey then row = r end
+    end
+    T.truthy(row, "Alric has a row")
+    T.truthy(row and not row.councilVoteBtn.text:GetText():find("3", 1, true),
+        "B166: and the candidate's own tally does not still show three either")
+end

@@ -4885,3 +4885,35 @@ with the guard removed.
 
 Same lesson as the entry above it, one level in: B164 guarded the store and not the reader, and B165's
 own first cut guarded the branch and not the function.
+
+## B166 — FIXED 2026-08-10 — your own straw-poll pick was the one that could never be filtered
+
+Found by mutation-screening the guards that arrived in `v3.3.2..HEAD`: setting
+`LC.CouncilVoteIsForItem` to `return true` left the whole suite green, so the filter it was added to
+provide had no test at all. Writing that test turned up a defect in the same breath.
+
+`LC.CouncilVoteIsForItem` exists because `Vote.HandleCouncilVote`'s own comment promised a pick naming
+a different item would be *"kept, not dropped, and filtered when it is read"* -- and nothing read it, so
+both consumers of `LC.councilVotes` counted a pick made about the previous occupant of a reused rollID.
+That is the two numbers side by side on the screen the item is handed out from: the "x of y have voted"
+line and the per-candidate tally. A council reading "0 of 3 have voted" beside a candidate wearing a 1
+has no way to tell which of them is lying.
+
+**But it could never filter YOUR OWN pick.** `LC.councilVoteItem` was written only by
+`Vote.HandleCouncilVote` -- the RECEIVE side -- and KASC drops the self-echo, so that handler never runs
+for the pick you cast. `LC.CouncilVoteIsForItem` forgives an unstamped pick by design ("it says nothing
+about the item"), so on a reused rollID your own stale pick survived the filter, on your own council
+panel. Measured: three picks about the item on the table, the number reused for a different item, and the
+line still read `1 von 3` instead of `0 von 3`.
+
+Note that one of the two documented reasons for that forgiveness -- "an older client" -- is not a live
+case in this guild (see `docs/REVIEW-DECISIONS.md` on cross-version wire compat). What remains is "a pick
+made before the item was known here", which is real and which is why the forgiveness stays.
+
+**Fixed 2026-08-10.** `Vote.ToggleCouncilVote` records the stamp locally as well as sending it, with
+exactly the value that goes on the wire so the two sides agree by construction. The same shape as
+`LC.votedFpByMe` beside `LC.votes`, and as the assigner logging its own award (B48) -- all three exist
+because this addon does not process its own broadcasts.
+
+Held by `tests/test_lc_councilrows.lua`, beside the "x of y have voted" block, asserting both consumers.
+Verified to fail with the one added line removed.

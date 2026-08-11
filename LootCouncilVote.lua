@@ -1277,6 +1277,15 @@ function Vote.ToggleCouncilVote(rollID, candidateKey)
     LC.councilVotes[rollID] = LC.councilVotes[rollID] or {}
     local retracting = (LC.councilVotes[rollID][myKey] == candidateKey)
     LC.councilVotes[rollID][myKey] = (not retracting) and candidateKey or nil
+    -- WHICH ITEM this pick was about, recorded locally as well as sent (B166). The same reason
+    -- LC.votedFpByMe is written beside LC.votes and the assigner logs its own award: we do not process
+    -- our own broadcast (KASC drops the self-echo), so Vote.HandleCouncilVote never runs for this pick
+    -- and never stamps it. LC.CouncilVoteIsForItem forgives an UNSTAMPED pick by design -- "it says
+    -- nothing about the item" -- so without this line your own pick was the one that could never be
+    -- filtered out on a reused rollID, on your own council panel, which is the screen the item is handed
+    -- out from. Stamped with exactly what goes on the wire, so the two sides agree by construction.
+    LC.councilVoteItem[rollID] = LC.councilVoteItem[rollID] or {}
+    LC.councilVoteItem[rollID][myKey] = (not retracting) and TrackedItemID(rollID) or nil
 
     if not LC.IsTestRoll(rollID) then
         LC.SendLC("LC_CVOTE:" .. rollID .. ":@" .. TrackedItemID(rollID) .. ":"
