@@ -1001,3 +1001,96 @@ do
     end)
     T.truthy(after:find(WEAPON, 1, true) ~= nil, "and it still arrives once combat ends: " .. after)
 end
+
+-- Three items, all the way through the close-out, with the client's real slot timing --------------
+-- B122's own case above is two items and stops at the slots. Round five of the v3.3.2..HEAD review
+-- walked the rest: three items -- more copies than the race was ever found with -- and the whole
+-- close-out behind them, because placing correctly and TICKING OFF correctly are two different
+-- things and only the first had a test with the lag on. The follow-on report (#10) was precisely the
+-- second half: an item that never entered the window is never in LC.tradeWindowItemStrings, so
+-- Trade.OnTradeClosed cannot confirm it.
+--
+-- WHAT A COMPLETED TRADE TAKES, all four, in this order -- written down because getting it wrong
+-- reads as a defect in the addon rather than in the test, twice over during that review:
+--   1. KARTTEST.tradePartnerUnit + Trade.OnTradeShow()  -- who the window is with, and the auto-fill
+--   2. Trade.OnTradeAcceptUpdate()                      -- reads the ACTUAL window, so hand-placed
+--                                                          items are counted too (this is the only
+--                                                          writer of LC.tradeWindowItemStrings)
+--   3. Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE) -- Blizzard's "it went through"
+--   4. bags emptied, then Trade.OnTradeClosed()         -- the item has left; the bag fallback in
+--                                                          OnTradeClosed reads this
+-- Leave any of them out and the obligation is correctly KEPT -- a cancelled trade must not tick
+-- anything off -- which looks exactly like the bug this file exists for.
+do
+    local CHEST = KARTTEST.items[F.PLATE_CHEST].link
+    KARTTEST.tradeSlotLag = true
+    local _, lm, alric = TradeWith(function(a)
+        return {
+            { itemLink = GLOVES, winnerKey = a.guid, rollID = 76, lootedAt = time() },
+            { itemLink = WEAPON, winnerKey = a.guid, rollID = 77, lootedAt = time() },
+            { itemLink = CHEST,  winnerKey = a.guid, rollID = 78, lootedAt = time() },
+        }
+    end, { [0] = { GLOVES, WEAPON, CHEST } })
+    for _ = 1, 4 do KARTTEST.AdvanceTime(1) end
+    KARTTEST.tradeSlotLag = false
+
+    local seen, distinct = {}, 0
+    for i = 1, 6 do
+        local link = KARTTEST.tradePlayerItems[i]
+        if link and not seen[link] then seen[link] = true distinct = distinct + 1 end
+    end
+    T.eq(distinct, 3, "three items owed to one raider take three distinct slots, not one twice over")
+
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.OnTradeAcceptUpdate()
+        lm.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+        KARTTEST.bags = {}
+        lm.KART.LC.Trade.OnTradeClosed()
+    end)
+    T.eq(#lm.KART.LC.pendingTrades, 0,
+        "...and all three obligations are ticked off, not just the ones the client had acknowledged")
+    T.is_nil(F.Owes(lm.KART.LC.pendingTrades, 77), "the middle one included")
+    T.eq(#(alric.KART.LC.owedToMe or {}), 0, "and the winner's own side agrees it is settled")
+end
+
+-- Traded to the WRONG person ------------------------------------------------------------------------
+-- LC_TRADED_WRONG_PERSON had no test at all before round five, which is worth stating plainly: it is
+-- the one message whose whole job is to catch the human error that loses an item to the wrong player,
+-- and it is unreachable except through the full four-signal sequence above -- so nothing exercised it.
+--
+-- The addon never auto-fills for a partner the item is not owed to, so reaching this case at all means
+-- the lootmaster put the item in BY HAND. That is why Trade.OnTradeAcceptUpdate reading the real window
+-- rather than the addon's own placements is load-bearing here and not defensive: it is the only reason
+-- a hand-placed item is in LC.tradeWindowItemStrings for the warning to find.
+do
+    local sim, lm = F.NewRaid()
+    local alric, sinja = sim.byName.Alric, sim.byName.Sinja
+    KARTTEST.tradePlayerItems = {}
+    KARTTEST.tradeTargetItems = {}
+    KARTTEST.cursorItem = nil
+    KARTTEST.bags = { [0] = { GLOVES } }
+    KARTTEST.tradePartnerUnit = sinja.unit   -- the window is with Sinja...
+
+    local out = Capture(function()
+        RaidSim.As(lm, function()
+            -- ...while the item is owed to Alric.
+            lm.KART.LC.pendingTrades = {
+                { itemLink = GLOVES, winnerKey = alric.guid, rollID = 79, lootedAt = time() },
+            }
+            lm.KART.LC.Trade.OnTradeShow()
+            T.is_nil(KARTTEST.tradePlayerItems[1],
+                "nothing is auto-filled for a partner the item is not owed to")
+            KARTTEST.tradePlayerItems[1] = GLOVES   -- the lootmaster does it by hand
+            lm.KART.LC.Trade.OnTradeAcceptUpdate()
+            lm.KART.LC.Trade.OnTradeInfoMessage(LE_GAME_ERR_TRADE_COMPLETE)
+            KARTTEST.bags = {}
+            lm.KART.LC.Trade.OnTradeClosed()
+        end)
+    end)
+
+    T.truthy(out:find("Alric", 1, true) and out:find("Sinja", 1, true),
+        "the lootmaster is told, by both names, that it went to the wrong person: " .. out)
+    T.eq(#lm.KART.LC.pendingTrades, 1,
+        "and the obligation is KEPT -- the person who was owed it still is")
+    KARTTEST.bags = {}
+end
