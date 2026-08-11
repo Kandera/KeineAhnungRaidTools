@@ -31,6 +31,10 @@ jobs:
             --exclude='dist' \
             --exclude='.pkgmeta' \
             --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='.codex' \
+            --exclude='.superpowers' \
+            --exclude='AGENTS.md' \
             --exclude='.vscode' \
             --exclude='.gitignore' \
             --exclude='.luacheckrc' \

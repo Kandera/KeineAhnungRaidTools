@@ -9,6 +9,10 @@
 !.claude/agents/
 !.claude/hooks/
 
+# Codex-Ordner: dasselbe Werkzeug wie .claude/, nur fuer einen anderen Client.
+# Anders als dort komplett lokal -- kein Teil davon muss ins Repo.
+.codex/
+
 # Gepackte Addon-Archive
 *.zip
 
