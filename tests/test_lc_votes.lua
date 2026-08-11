@@ -648,3 +648,44 @@ do
     T.eq(RaidSim.As(raider, function() return raider.KART.LC.Vote.CardItemSuffix(3204) end), "",
         "B168: and a different item is not folded in with them")
 end
+
+-- The ordinal every copy rule is defined against (B170) ----------------------------------------------
+-- Trade.GetDuplicateOrdinal marks a single card as "(1/2)". Mutating it to "" left the whole suite
+-- green, which is worth more than the marking itself: half the duplicate machinery cites this function
+-- as the DEFINITION of "the same item", bonus IDs included -- Vote.CardItemSuffix falls back to it when
+-- nothing merges, CopyKey uses the same KAUtil.GetItemString comparison, and B159's trade-clock guard
+-- reasons about "the case the (1/2) marking exists for". A definition nothing asserts is a definition
+-- that can drift under all of them at once.
+do
+    local sim = F.NewRaid()
+    local lm = sim.byName.Bramor
+
+    F.Drop(sim, 3301, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.Trade.GetDuplicateOrdinal(3301) end), "",
+        "B170: one drop of an item is not a copy of anything")
+
+    F.Drop(sim, 3302, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.Trade.GetDuplicateOrdinal(3301) end), " (1/2)",
+        "B170: the lower rollID is the first copy")
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.Trade.GetDuplicateOrdinal(3302) end), " (2/2)",
+        "B170: and the higher one the second -- ordered by rollID, so every client agrees")
+
+    F.Drop(sim, 3303, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.Trade.GetDuplicateOrdinal(3301) end), " (1/3)",
+        "B170: a third copy renumbers the denominator rather than being ignored")
+
+    -- The definition itself: SAME ITEM means the same item STRING, bonus IDs included. Two drops of one
+    -- itemID at different upgrade levels are two different items to a raider deciding, and they must
+    -- not be folded together -- which is exactly what E2's merge and B159's trade clock both rest on.
+    -- Written straight into LC.rollItems because the fixture hands out one link per item id, and it is
+    -- the string comparison under test rather than the drop path.
+    RaidSim.As(lm, function()
+        lm.KART.LC.rollItems[3311] = "|cffa335ee|Hitem:249331::::::::80:268::14:2:9999,1111:::::|h[A]|h|r"
+        lm.KART.LC.rollItems[3312] = "|cffa335ee|Hitem:249331::::::::80:268::14:2:8888,2222:::::|h[A]|h|r"
+    end)
+    T.eq(RaidSim.As(lm, function() return lm.KART.LC.Trade.GetDuplicateOrdinal(3311) end), "",
+        "B170: the same itemID with different bonus IDs is a different item, not a copy")
+end
