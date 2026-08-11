@@ -168,6 +168,36 @@ do
     T.truthy(bulkBefore < 20, "and does not wait for all twenty of them")
 end
 
+-- Priority: the tally does not queue behind a reload wave ------------------------------------------
+-- The same shape as the test above, found the same way and one storm further along (B173). Everything
+-- a state request is answered with is whispered PER ASKER, so a raid that reloads together puts one
+-- copy per asker in the loot owner's outbox -- measured at 12.8 KB against 1.1 KB for the same boss on
+-- a quiet raid. It shared NORMAL with LC_VOTES, and LC_VOTES is what fills the vote panel on every
+-- council seat that is not the owner's: measured, the second seat saw a complete tally 26 seconds
+-- after the drop, six seconds after the window it was meant to decide in had closed.
+do
+    local sim, lm = F.NewRaid()
+    for _, c in ipairs(sim.clients) do c.CTL.avail = 0 end
+
+    -- Through the real send path, priorities included -- same reasoning as the test above.
+    RaidSim.As(lm, function()
+        for i = 1, 20 do
+            lm.KART.LC.SendLC("LC_ROLL_CATCHUP:" .. i .. ":20:item:249331", "Alric-TarrenMill")
+        end
+        lm.KART.LC.SendLC("LC_VOTES:900:@249331:" .. string.rep("x", 40))
+    end)
+    RaidSim.ClearLog(sim)
+    KARTTEST.AdvanceTime(0.4)
+
+    local votes, catchupBefore = nil, 0
+    for i, e in ipairs(sim.log) do
+        if e.msg:sub(1, 9) == "LC_VOTES:" then votes = i break end
+        if e.msg:sub(1, 16) == "LC_ROLL_CATCHUP:" then catchupBefore = catchupBefore + 1 end
+    end
+    T.truthy(votes ~= nil, "the tally leaves while the reload wave's catch-up is still draining")
+    T.truthy(catchupBefore < 20, "and does not wait out all twenty answers")
+end
+
 -- Two buffers in a row ------------------------------------------------------------------------
 -- What an encounter held back (B128) is released all at once, into a pipe that is narrow at exactly
 -- that moment -- loot drops at the END of a boss, which is when everything else is talking too. Held

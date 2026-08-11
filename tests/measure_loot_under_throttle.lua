@@ -26,9 +26,16 @@
 --   THROTTLED  30 clients | announced 1.0s | all votes in 16.8s | settled 46.8s | tally gap 0/30
 --
 -- Nothing is lost: every raider's answer reaches the council, no client ends up short an award, and
--- no send is given up on. What the numbers say is where the MARGIN is -- the votes are complete at
--- about 15.5 seconds of a twenty-second window, so roughly four and a half seconds of slack at 25 and
--- three at 30.
+-- no send is given up on.
+--
+-- READ THE "all votes in" COLUMN AS A DRAIN TIME, NOT AS A MARGIN. It was first read as one, and that
+-- was wrong: this file drains the whole queue before anybody votes, so the clock has already been run
+-- forward by the mass-join storm the fixture creates when it puts twenty-five clients in a raid in the
+-- same instant. Walk the clock instead and the loot owner's tally is complete three seconds after the
+-- drop, in every scenario tried, storm or no storm -- votes travel INBOUND from twenty-five clients
+-- that each have their own ChatThrottleLib budget, so they cannot congest one another. The
+-- distribution is not tight on time. See B173 for what the traffic measurement did find, and for the
+-- one pipe that IS single: the loot owner's outbox.
 --
 -- AND THIS IS THE OPTIMISTIC READING. Here every simulated client owns its own ChatThrottleLib. In
 -- the game there is one per client, shared by every addon installed -- DBM, WeakAuras, Details and

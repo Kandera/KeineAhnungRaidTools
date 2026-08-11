@@ -734,6 +734,14 @@ local TOKEN_PRIO = {
     LC_DROP = "ALERT",
     LC_START = "ALERT", LC_MANUAL_START = "ALERT", LC_END_ROUND = "ALERT",
     LC_HIST_REQ = "BULK",
+    -- The third storm, and the one that arrives at the worst moment (B173). Everything a state
+    -- request is answered with is per-asker, so a reload wave puts one copy per asker in the loot
+    -- owner's outbox: measured at 12.8 KB with twenty-four of them, against 1.1 KB for the same
+    -- boss on a quiet raid. None of it is time-critical -- a client that has just come back can
+    -- wait a second for its config -- but it was sharing NORMAL with LC_VOTES, so the tally the
+    -- OTHER council seats read was queued behind it. Measured: the second seat saw a complete
+    -- tally 26 seconds after the drop, six seconds after the vote window had closed.
+    LC_ROLL_CATCHUP = "BULK", LC_CONFIG_RELAY = "BULK", LC_SESSION_RESUME = "BULK",
 }
 
 function LC.SendLC(msg, target)

@@ -28,6 +28,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Loot-History merkt sich jetzt, in welchem Raid ein Item vergeben wurde.**
 
 ### Behoben
+- **Das Council sieht die vollständige Auswertung auch dann, wenn der Raid gerade gemeinsam neu geladen hat.**
 - **Ein Neuladen fragt den Lootmaster nicht mehr, ob er eine laufende Session starten will**, und beendet sie nicht mehr für den Raid.
 - **Das Council-Fenster nennt niemanden mehr stumm**, dessen Empfangsbestätigung nur verloren ging.
 - **Die Warnung zu unentschiedenen Items läuft weiter**, auch nach dem letzten Trade und nach einem Neuladen.

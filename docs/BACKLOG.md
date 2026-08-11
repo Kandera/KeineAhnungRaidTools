@@ -4979,3 +4979,58 @@ than minted locally, plus both directions of the conditional whisper. Both halve
 their own line removed. The 40-seed catch-up soak in the same file already held the repair mechanism
 itself -- it holds and blackholes `LC_HIST_EPOCH` and `LC_RESULT` -- which is why only the trigger was
 missing rather than the machinery.
+
+## B173 — FIXED 2026-08-11 — a reload wave delayed the tally on every council seat but the owner's
+
+Found by asking what is actually in the pipe during the vote window, rather than how long the window
+takes to drain. The breakdown, 25 clients with ChatThrottleLib's real limiter on:
+
+```
+LC_CONFIG_RELAY   230 chunks  17,710 bytes  41%
+LC_VOTE           150 chunks  10,350 bytes  24%
+LC_VOTES           75 chunks   9,750 bytes  22%
+LC_SESSION_RESUME 270 chunks   4,590 bytes  11%
+```
+
+Nearly two thirds of it is not loot. Everything a state request is answered with is whispered PER
+ASKER — `LC_ROLL_CATCHUP` from `LC.SendOpenRolls`, the config, the session flag — so a raid that comes
+back together (a wipe and a round of reloads, a server hiccup, an addon update before the pull) puts
+one copy per asker in the loot owner's outbox.
+
+**The owner's own tally was never at risk, and that is the part worth stating plainly.** Votes travel
+INBOUND from twenty-five clients that each have their own ChatThrottleLib budget, so they cannot
+congest each other. Measured at 3.0 seconds in every scenario below. What is fed from the owner's
+single outbox is `LC_VOTES`, and that is what fills the vote panel on every council seat that is not
+the owner's:
+
+```
+                          owner's tally    every council seat   owner outbox
+quiet raid                     3.0s              3.0s             1,108 bytes
+24 reload, boss dies +1s       3.0s             26.0s LATE       13,883 bytes
+24 reload, boss dies +4s       3.0s              7.0s             3,340 bytes
+24 reload, boss dies +10s      3.0s              3.0s             1,108 bytes
+```
+
+Twenty-six seconds against a twenty-second window: a council member who is not the loot owner decides
+on an incomplete picture. The trigger window is narrow — at four seconds' separation it is already
+fine — so this is a rare raid, not a normal one.
+
+**Fixed 2026-08-11.** `LC_ROLL_CATCHUP`, `LC_CONFIG_RELAY` and `LC_SESSION_RESUME` join `TOKEN_PRIO`
+as BULK, which is what that table already says BULK is for ("traffic that arrives in storms"). None of
+it is time-critical: a client that has just come back can wait a second for its config. ChatThrottleLib
+hands each priority an equal share, so `LC_VOTES` no longer queues behind any of it. **Measured after:
+26.0s → 19.0s.**
+
+Inside the window, and honestly stated: by one second. The rest of the owner's outbox in that
+scenario is `LC_ROLL_CATCHUP` (5.0 KB, now in its own lane) and `LC_CONFIG` (3.4 KB, still NORMAL
+because the same token carries the authoritative broadcast on a settings change and splitting it on
+"is it whispered" was more machinery than the remaining second is worth). Left deliberately; revisit
+if the shape of a distribution changes.
+
+Held by `tests/test_transport.lua`, as a sibling of the End-Round-behind-a-handshake-storm test that
+found the same defect class in 2026-08-03. Verified to fail with the `TOKEN_PRIO` line removed.
+
+**Correction to the measurement that led here.** `tests/measure_loot_under_throttle.lua` reported the
+votes complete at 15.5 seconds of the window, and that number was measuring the wrong thing: it drained
+the queue before anybody voted, so the clock had already been run forward by the mass-join storm the
+fixture creates. The distribution is not tight on time. The traffic finding above is what survived.
