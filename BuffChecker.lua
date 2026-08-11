@@ -704,6 +704,23 @@ end
 -- Comparing aura.spellId can throw if the aura carries "secret" (private-aura) values, which
 -- pcall safely catches. Hoisted out of the per-aura loop below (up to 40 players * 100 auras per
 -- update) instead of being recreated as a closure on every single call.
+-- Built for 12.1's secret aura values. A PROBE rather than a predicate, and the name stays as it is
+-- because docs/BACKLOG-12.1.md's P3 entry refers to it by name -- do not rename it without editing that.
+--
+-- 12.x hands out private auras whose fields are SECRET: reading one is fine, COMPARING one raises. So
+-- what this function is for is performing a comparison inside a pcall. The caller reads pcall's `ok` and
+-- DISCARDS what this returns, which is correct and deliberate -- and it means the constant is arbitrary:
+-- `== 0` tests nothing, any comparison against aura.spellId would do the same job.
+--
+-- Two ways to "tidy" this break the whole buff check silently, so both are named here. Reading pcall's
+-- SECOND return (`local ok, safe = pcall(...)`) would then require spellId to actually be 0, and no aura
+-- would ever match again. Removing the comparison because it looks pointless takes away the only thing
+-- that throws, after which a secret aura reaches the match loop below.
+--
+-- What this does NOT cover is stated in P3 and measured there: 12.1 moves the error onto the index call
+-- itself (`C_UnitAuras.GetAuraDataByIndex`), before there is anything to guard. That was measured on
+-- 12.1.0 with two people -- another group member's name and spellId are both usable, no error -- so P3
+-- is closed and this loop works as shipped. It is closed on a measurement, not on a guarantee.
 local function IsAuraSafe(aura)
     return aura.spellId == 0 and type(aura.name) == "string"
 end
@@ -884,18 +901,21 @@ function KART.UpdateBuffCheck(isPreview)
             or (KART.ReadyCheckStatus and shortName and KART.ReadyCheckStatus[shortName])
         KART.SetReadyCheckIcon(row.rcIcon, rcStatus)
 
-        wipe(KART.BuffStatesCache) -- Vor jedem Spieler leeren
-        
-        -- Zurück zu deiner sicheren und 100% stabilen C_UnitAuras Schleife
+        wipe(KART.BuffStatesCache) -- emptied per player, not per raid
+
+        -- Walking this unit's helpful auras by index. Whether an INDEX call is legal at all while auras
+        -- are secret is what docs/BACKLOG-12.1.md's P3 is about; it was measured on 12.1.0 with two
+        -- people and this loop works as shipped, which is why it is still an index scan.
         for j = 1, 100 do
             local aura = C_UnitAuras.GetAuraDataByIndex(unit, j, "HELPFUL")
             if not aura then break end
-            
-            -- Überprüfen, ob die Aura "geheime" (secret) Werte enthält (Private Auras).
-            -- Ein Vergleich (==) löst bei Secrets einen Fehler aus, den pcall sicher abfängt.
-            local isSafe = pcall(IsAuraSafe, aura)
 
-            if isSafe and aura.name then
+            -- Whether this aura's fields can be COMPARED at all. A private aura's are secret: reading
+            -- one is fine, comparing one raises -- so the probe does a comparison and pcall catches it.
+            -- Only pcall's `ok` is read; see IsAuraSafe for why its return value deliberately is not.
+            local comparable = pcall(IsAuraSafe, aura)
+
+            if comparable and aura.name then
                 for k = 1, buffDataCount do
                     local buff = KART.BuffData[k]
                     local match = false
