@@ -4863,3 +4863,25 @@ and `tests/test_loothistory_epoch.lua`.
 **The lesson, which is the transferable part:** B164 fixed the store and not the reader. One value read
 in two branches needs the guard where it is READ, or the fix covers whichever road the reviewer happened
 to walk first.
+
+**Corrected 2026-08-10, same day, by the bug run over this session's own commits.** B165's history
+guard was written INSIDE the purge branch -- the branch a real client almost never takes, since its
+epoch is healthy and `LH.PurgeIfNoEpoch` returns two lines above. So the ordinary case was never
+covered:
+
+```
+epoch after boot: nil          <- which is why the first test passed
+healthy epoch + corrupt history -> history type after PurgeIfNoEpoch: string  (want table)
+                                -> readers: ERROR: attempt to index local 'e' (a nil value)
+```
+
+The test that was supposed to hold it passed for the wrong reason: after boot the epoch is nil, so it
+drove the purge path rather than the ordinary one. That is the vacuous-test shape this repository
+already names elsewhere ("deleting that setup entirely left the whole suite green ... which is what
+vacuous means in practice"). The shape check now runs unconditionally, before any early return, and
+`tests/test_loothistory_epoch.lua` drives BOTH paths -- healthy epoch and absent one -- with the healthy
+one first, because that is the client every raider is running. Verified to take the whole suite down
+with the guard removed.
+
+Same lesson as the entry above it, one level in: B164 guarded the store and not the reader, and B165's
+own first cut guarded the branch and not the function.

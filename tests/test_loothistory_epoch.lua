@@ -842,12 +842,19 @@ end
 -- matters. A STRING answers `#` with its length and `[i]` with nil, both without erroring, so a loop
 -- runs the wrong number of times and dies indexing a nil row. LH.PurgeIfNoEpoch already establishes
 -- this store at load, so it is the one place that can settle the shape for every reader.
+-- WITH A HEALTHY EPOCH, which is the whole point of this block and what the first version got wrong.
+-- After boot the epoch is nil, so a test that does not set one drives the PURGE path -- and the guard
+-- used to live only on that path, so it passed while the ordinary case (a real client, healthy epoch,
+-- early return two lines up) was never covered. That is the vacuous-test shape this file already warns
+-- about elsewhere; found in the bug run over this session's own commits.
 do
     local _, _, _, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = 1
     raider.env.KART_LootHistory = "corrupt"
     RaidSim.As(raider, function() raider.KART.LH.PurgeIfNoEpoch() end)
     T.eq(type(raider.env.KART_LootHistory), "table",
-        "B165: a history that is not a table at all is replaced with one at load")
+        "B165: a history that is not a table is replaced with one at load, healthy epoch and all")
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "...and a healthy epoch is left exactly where it was")
 
     local ok = pcall(function()
         RaidSim.As(raider, function()
@@ -856,4 +863,14 @@ do
         end)
     end)
     T.truthy(ok, "B165: so the readers that walk it by index do not die on it")
+end
+
+-- ...and the purge path still normalizes it too, which is what the first version did cover.
+do
+    local _, _, _, raider = F.NewRaid()
+    raider.env.KART_LootHistoryEpoch = nil
+    raider.env.KART_LootHistory = "corrupt"
+    RaidSim.As(raider, function() raider.KART.LH.PurgeIfNoEpoch() end)
+    T.eq(type(raider.env.KART_LootHistory), "table", "B165: and on the purge path as well")
+    T.eq(raider.env.KART_LootHistoryEpoch, 1, "...which opens the epoch scheme as before")
 end

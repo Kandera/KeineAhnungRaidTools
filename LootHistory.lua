@@ -554,6 +554,12 @@ end
 -- Anything else means the number every entry is stamped against cannot be trusted either, which is
 -- exactly the state this function already exists for.
 function LH.PurgeIfNoEpoch()
+    -- The SHAPE first and unconditionally, before any early return. This sat inside the purge branch
+    -- when B165 first wrote it, which is the branch a real client almost never takes -- its epoch is
+    -- healthy, so the function returned two lines up and the store was never looked at. The test that
+    -- was supposed to hold it passed for the wrong reason: after boot the epoch is nil, so it drove the
+    -- purge path rather than the ordinary one. Guarding here covers both.
+    if type(KART_LootHistory) ~= "table" then KART_LootHistory = {} end
     if KART_LootHistoryEpoch ~= nil then
         local asNumber = tonumber(KART_LootHistoryEpoch)
         if asNumber then
@@ -561,18 +567,13 @@ function LH.PurgeIfNoEpoch()
             return
         end
     end
-    -- Type-checked, not `or {}` (B165). `or` only answers nil, and the shape that actually costs
-    -- something here is a non-table: `wipe` runs `pairs` over its argument, so a string reached this
-    -- line and threw -- out of ADDON_LOADED, in the one function whose job is to establish this store.
-    -- And a string that survives to the readers is worse than the throw: twenty sites walk this table
-    -- with `#` or `ipairs`, and on a string `#` answers its LENGTH while `[i]` answers nil, both without
-    -- erroring, so a loop runs the wrong number of times and dies indexing a row that was never there.
-    -- Wiped in place when it IS a table, so anything holding the reference keeps it.
-    if type(KART_LootHistory) ~= "table" then
-        KART_LootHistory = {}
-    else
-        wipe(KART_LootHistory)
-    end
+    -- Guaranteed a table by the line at the top, so this is a plain wipe -- and it wipes IN PLACE, so
+    -- anything holding the reference keeps it. Why the shape is guarded at all (B165): `wipe` runs
+    -- `pairs` over its argument, so a string reached here and threw, out of ADDON_LOADED, in the one
+    -- function whose job is to establish this store. The quieter half is worse: twenty sites walk this
+    -- table with `#` or `ipairs`, and on a string `#` answers its LENGTH while `[i]` answers nil, both
+    -- without erroring, so a loop runs the wrong number of times and dies indexing a row never there.
+    wipe(KART_LootHistory)
     KART_LootHistoryEpoch = 1
 end
 
