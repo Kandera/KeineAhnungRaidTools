@@ -158,3 +158,45 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   and the failure is a "?" in a printed dump. `ENCHANTED_TOOLTIP` is not even in the harness, so fixing
   it means building stub support for a maintenance command. B163 was fixed instead of recorded because
   it sits in the loot path and runs on every drop -- that is the difference, not the pattern.
+
+- **A client that loses BOTH an award and the reconcile answer stays short until the next raid**
+  (LootHistory.lua `LH.AnswerHistoryRequest`, the `HISTORY_FULL_COOLDOWN` branch). Measured and left,
+  2026-08-10, on the maintainer's reasoning.
+
+  The sequence needs two independent losses on ONE client in one window: the `LC_RESULT` for an award,
+  and then the `LC_HIST_BATCH` that B171's round-end reconcile pulls in to repair it. Every peer stamps
+  its full-answer allowance on the SEND (nothing acknowledges a batch), so all of them fall back to the
+  incremental answer, which is floored at that stamp -- and the missing rows are older than the floor.
+  Measured at 9 of 12 awards over a four-boss evening, silently, and it does not recover inside the
+  evening because past the cooldown nothing asks again.
+
+  **Why it is left:** measured, it heals at the next raid.
+
+  ```
+  after the evening:   lm=3  raider=0
+  after the next raid: lm=3  raider=3
+  assigner ever short? false
+  ```
+
+  A raid JOIN asks, the hour is long gone by then, and a full answer lands. What is short in between is
+  one raider's own history WINDOW. It is not what reaches WoWUtils: that comes from the Companion, fed
+  by the client that exports, and the exporting client is the assigner -- which logs its own award
+  locally and cannot be short one by this path at all.
+
+  **The fix that was built and reverted:** one extra full answer per cooldown window when the asker's
+  checksum still differs after the first, which is evidence the first never landed. It works (12/12) and
+  it does NOT touch the relog storm the cooldown was written for -- measured, a genuine relog keeps its
+  SavedVariables and its checksum matches exactly (`171759418` before and after), so five relogs in a row
+  produce zero full answers even with the rule active. It was still reverted: the gain is a display
+  window between two raids, and the cost is reopening a maintainer ruling ("an hour, and deliberately not
+  an evening") plus rewriting the test that encodes it.
+
+  Note the test in question models its relog by emptying `KART_LootHistory`, which is not what a relog
+  does. If this is ever revisited, that construction is the thing to look at first.
+
+- **B171's own value, stated correctly.** The same measurement re-prices the round-end reconcile that
+  shipped: a single lost `LC_RESULT` would also have healed at the next raid join. What B171 buys is
+  WHEN -- the end of the round rather than days later -- and that C7 holds as written, "every client
+  names the same winner", rather than eventually. At +20 chunks and +684 bytes per evening that is worth
+  having, but the justification is the Manifest's wording and not data the raid would otherwise lose.
+  The first write-up of it implied the latter; it should not be read that way.
