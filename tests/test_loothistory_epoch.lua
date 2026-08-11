@@ -991,3 +991,52 @@ do
     T.truthy(#RaidSim.Messages(sim, "LC_HIST_EPOCH") > 0,
         "B171: while a peer that is ahead of them still says so")
 end
+
+-- ...and the shape B118 actually measured: ONE client deaf, the rest fine (B171) -------------------
+-- The block above loses LC_RESULT for the whole raid, which is the easier half: every client is in the
+-- same state and the addon's repairs are much better at noticing that. Every failure on the Manifest's
+-- own list is an ASYMMETRY -- "four raiders pressed a button and their votes never arrived", "one
+-- raider never learned an item existed", "End Round did not end it for one council member". Asymmetry
+-- is what makes a divergence invisible: the other twenty-four clients agree with each other, so nothing
+-- on any screen looks wrong, and the one client that is short does not know it is alone.
+--
+-- RaidSim.DeafTo exists for this and only affects RECEIVING -- a deaf client still sends, still votes,
+-- still answers, which is exactly why B118 was so quiet: the raider's own screen said "Voted", because
+-- the vote left.
+--
+-- Measured with the round-end reconcile removed: this raider ended a four-boss evening holding 6 of 12
+-- awards with every diagnostic counter at zero.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    RaidSim.DeafTo(sim, raider.name, "LC_RESULT")
+
+    F.Drop(sim, 330, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    RaidSim.As(lm, function()
+        lm.KART.LC.Trade.AssignWinner(330, sim.byName.Alric.guid, "BIS", nil)
+    end)
+    RaidSim.Drain(sim, 25)
+
+    local function AwardCount(c)
+        local n = 0
+        for _, e in ipairs(c.env.KART_LootHistory or {}) do if e.id then n = n + 1 end end
+        return n
+    end
+    T.eq(AwardCount(lm), 1, "the setup: the assigner logged it")
+    T.eq(AwardCount(raider), 0, "and the one deaf client heard nothing, while the raid heard it")
+    for _, c in ipairs(sim.clients) do
+        if c ~= raider then
+            T.eq(AwardCount(c), 1, "everybody else has it, which is what makes this invisible: " .. c.name)
+        end
+    end
+
+    -- Hearing comes back -- the message itself is long gone, so only a reconcile can close this.
+    RaidSim.Hears(sim, raider.name, "LC_RESULT")
+    RaidSim.As(lm, function() lm.KART.LC.EndRound() end)
+    RaidSim.Drain(sim, 30)
+    KARTTEST.AdvanceTime(10)
+    RaidSim.Drain(sim, 30)
+
+    T.eq(AwardCount(raider), 1,
+        "B171: the round ending catches up the one client that was short, not just a whole raid that was")
+end

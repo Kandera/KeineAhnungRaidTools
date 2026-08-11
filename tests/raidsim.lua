@@ -621,7 +621,24 @@ function RaidSim.Install(sim)
             -- where nobody in the game receives the answer looked like a pass.
             if to ~= from and (channel ~= "WHISPER" or target == to.name
                                or target == to.name .. "-" .. to.realm) then
-                DeliverTo(to, prefix, msg, channel, sender)
+                -- ONE client not receiving, which is a different failure from the message being lost
+                -- (Blackhole, above) and the one the Manifest's own list is built out of. B118: "four
+                -- raiders pressed a button and their votes never arrived", "one raider never learned
+                -- an item existed", "End Round did not end it for one council member" -- every one of
+                -- those is an asymmetry, and asymmetry is what makes a divergence invisible: the other
+                -- twenty-four clients agree with each other, so nothing on any screen looks wrong.
+                --
+                -- Blackhole cannot build it. Dropping a token raid-wide leaves every client in the
+                -- same state, which the addon's repairs are much better at noticing -- a whole raid
+                -- missing an award asks for it; one client missing one does not know it is alone.
+                local deaf = sim.deaf and sim.deaf[to.name]
+                local heard = true
+                if deaf then
+                    for token in pairs(deaf) do
+                        if text:sub(1, #token) == token then heard = false break end
+                    end
+                end
+                if heard then DeliverTo(to, prefix, msg, channel, sender) end
             end
         end
         return 0 -- Enum.SendAddonMessageResult.Success, the same answer the live client gives
@@ -730,6 +747,22 @@ end
 
 function RaidSim.Deliver(sim, token)
     if sim.blackholed then sim.blackholed[token] = nil end
+end
+
+-- ONE client stops receiving `token`, while the rest of the raid goes on getting it. The asymmetric
+-- half of message loss, and the one every failure on the Manifest's own list is made of -- see the
+-- delivery loop above for why Blackhole cannot stand in for it.
+--
+-- Deliberately only the RECEIVING side: a deaf client still sends normally, still votes, still answers.
+-- That is what made B118 so quiet -- the raider's own screen said "Voted", because the vote left.
+function RaidSim.DeafTo(sim, name, token)
+    sim.deaf = sim.deaf or {}
+    sim.deaf[name] = sim.deaf[name] or {}
+    sim.deaf[name][token] = true
+end
+
+function RaidSim.Hears(sim, name, token)
+    if sim.deaf and sim.deaf[name] then sim.deaf[name][token] = nil end
 end
 
 -- Holds every message whose token matches, instead of dropping it. See the wire above for why this
