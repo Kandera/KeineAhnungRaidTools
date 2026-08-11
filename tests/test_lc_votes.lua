@@ -609,3 +609,42 @@ do
     T.eq(lm.KART.LC.votedByMe[3102], 1,
         "B167: Vote.ApplyInheritedAnswers casts the answer the raider already gave, without a second click")
 end
+
+-- What a merged card says it stands for (B168) -------------------------------------------------------
+-- Vote.CardItemSuffix is the raider's only on-screen sign that one card answers for more than one
+-- item. Mutating it to "" left the whole suite green, so nothing held it -- including the contract its
+-- own comment states, which was written during this review when a "disagreement" with
+-- Trade.GetDuplicateOrdinal was raised and withdrawn.
+--
+-- That contract, asserted here rather than only described: the count is HOW MANY COPIES THIS ANSWER
+-- COVERS -- DuplicateGroup's set, the copies still answerable on this client -- and deliberately not
+-- the ordinal's denominator, which counts every copy in LC.rollItems including closed and awarded
+-- ones. The two answer different questions and must not be "reconciled".
+do
+    local sim, lm = F.NewRaid()
+    local raider = sim.byName.Alric
+
+    -- One item on its own: no marking at all.
+    F.Drop(sim, 3201, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(raider, function() return raider.KART.LC.Vote.CardItemSuffix(3201) end), "",
+        "B168: a single drop carries no copy marking")
+
+    -- A second copy of the same item, both answerable: one card, and it says it stands for two.
+    F.Drop(sim, 3202, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(raider, function() return raider.KART.LC.Vote.CardItemSuffix(3201) end), " (2x)",
+        "B168: two answerable copies make one card that says it answers for both")
+
+    -- A third, to prove the number is counted rather than hardcoded for the pair.
+    F.Drop(sim, 3203, F.GLOVES)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(raider, function() return raider.KART.LC.Vote.CardItemSuffix(3201) end), " (3x)",
+        "B168: and three copies say three")
+
+    -- A DIFFERENT item under its own number is not a copy of anything.
+    F.Drop(sim, 3204, F.WEAPON)
+    KARTTEST.AdvanceTime(1)
+    T.eq(RaidSim.As(raider, function() return raider.KART.LC.Vote.CardItemSuffix(3204) end), "",
+        "B168: and a different item is not folded in with them")
+end
