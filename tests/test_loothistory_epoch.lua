@@ -874,3 +874,32 @@ do
     T.eq(type(raider.env.KART_LootHistory), "table", "B165: and on the purge path as well")
     T.eq(raider.env.KART_LootHistoryEpoch, 1, "...which opens the epoch scheme as before")
 end
+
+-- The wipe broadcast survives a refused send (B156) ------------------------------------------------
+-- LC_HIST_EPOCH joined GUARANTEED_TOKENS because it is the single message that moves the raid's
+-- epoch, and nothing re-sends it on its own account -- the whisper in LH.AnswerHistoryRequest only
+-- goes to a client that asks. Nothing asserted the entry itself, though, and a token list is data:
+-- deleting a line from it is silent, and the cost only shows up on an evening where a send is refused.
+--
+-- Driven the way tests/test_transport.lua drives it: sim.sendResult = 8 is ChannelThrottle, which the
+-- library counts as "not sent" rather than retrying at the ChatThrottleLib layer.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    RaidSim.As(lm, function() lm.env.KART_Settings.lcLootmaster = lm.name end)
+    RaidSim.As(lm, function() lm.KART.LC.ApplyOwnConfig() lm.KART.LC.BroadcastRaidConfig() end)
+    KARTTEST.AdvanceTime(0)
+
+    local before = raider.env.KART_LootHistoryEpoch
+    sim.sendResult = 8
+    RaidSim.As(lm, function() lm.KART.LH.ClearHistory() end)
+    RaidSim.Drain(sim, 10)
+    T.eq(raider.env.KART_LootHistoryEpoch, before,
+        "the refused wipe broadcast reaches nobody on the first attempt")
+
+    -- The pipe recovers before the retry falls due; nobody re-sends by hand.
+    sim.sendResult = nil
+    KARTTEST.AdvanceTime(1)
+    RaidSim.Drain(sim, 10)
+    T.eq(raider.env.KART_LootHistoryEpoch, lm.env.KART_LootHistoryEpoch,
+        "B156: and the library's own retry carries the new epoch to the raid after all")
+end
