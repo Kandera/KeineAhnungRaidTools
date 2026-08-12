@@ -76,6 +76,51 @@ A change that touches ownership is a change to that document first.
 
 ---
 
+## 2a. Where the project actually stands (2026-08-12)
+
+The chapter this document was missing. Everything above says how the work is judged; this says what
+the current score is.
+
+**The Manifest has two recorded runs, and the last one is not a pass.**
+
+| run | version | date | result |
+| :--- | :--- | :--- | :--- |
+| three-man `/kart add` | 3.2.0 | 2026-07-31 | clean |
+| guild raid, ~20 people | 3.3.0 | 2026-08-03 | **C5, C11, C13, C14 failed; C7 and C12 damaged** |
+
+There is no third row, and none is missing: **nothing has been raided since.** The evidence is in the
+repo. The 2026-08-03 raid left fifteen reports, GitHub issues #18–#25 and nine backlog entries
+(B118–B126) — that is what a raid looks like here. Everything found afterwards came from a probe
+instead: B171 "found by simulating a whole evening", B174 "Not found by a probe. Stated by the
+maintainer". Tags confirm the timeline: `v3.3.2` on 2026-08-05, then `v3.4.1` on 2026-08-11 (there is
+no `v3.4.0` tag — the release planned for that evening went out as 3.4.1). So **3.4.1 has been
+shipped for one day and never seen a raid**, and C5/C11/C13/C14 stand as failed. That is the live
+Manifest state, not a bookkeeping gap.
+
+**The Loot Council module is on probation.** Since 2026-08-06 there are no test raids any more. The
+next real raid decides whether the module stays at all, and Auto-Pass is the yardstick
+(`kart-module-on-trial`). Until that raid is through, everything downstream of it is a plan, not an
+assignment.
+
+**The next assignment is 3.5.0 — WoWUtils data in KART — and it is locked.** Scope settled
+2026-08-10, not started. Spec:
+`docs/superpowers/specs/2026-08-10-wowutils-data-in-kart-design.md` (12.8 KB, untracked like
+everything under `docs/superpowers/` — it has to travel with the memory export).
+
+The lock is deliberate, and the chain is: **raid → a Manifest run that puts C5, C13 and C14 back at
+ten of ten → then 3.5.0.** All three failed on lost messages (B118). Introducing new message types
+before that measurement makes the measurement unreadable — two changes at once, and a silent loss
+could no longer be attributed.
+
+Settled in that scope, not to be re-opened: no write-back to WoWUtils; no direct API access instead
+of the bridge; no vault; the file pattern is dropped. Everything new travels `BULK`, never `NORMAL`;
+nothing waits on the extra data; none of it enters the reload state (C8); and an empty cell must
+distinguish three states, or C13 repeats. On the Companion side the one write path into the game —
+`WriteBlock` in `KARTCompanion/SyncEngine.cs:100` — goes away, while `DT.GetGainPercent` stays intact
+in the addon so the old route remains a real fallback.
+
+---
+
 ## 3. Documents that govern the work — read order
 
 | File | Read it | Why |
@@ -725,8 +770,10 @@ docs: leave the double-loss divergence alone, and re-price B171 honestly
 - **KART-Companion** — C# tray app, `github.com/Kandera/KART-Companion`. Syncs WoWUtils droptimizer
   sims into the Loot Council. Split out of this repo on purpose: 99 % of users don't need it, and it
   would force .NET concerns onto every KART CI run. It has its own workflows, versioning and README;
-  the addon repo only links to it. On this machine it sits, confusingly, next to the addon under
-  `E:\World of Warcraft\_retail_\Interface\AddOns\` — it is *not* a WoW addon.
+  the addon repo only links to it. On this machine it is at `E:\Projects\KART-Companion`
+  (`KARTCompanion\SyncEngine.cs` is the file §2a names). It used to sit under
+  `E:\World of Warcraft\_retail_\Interface\AddOns\`, which is why older notes place it there — it is
+  *not* a WoW addon and is no longer in that folder.
 - **KART Discord bot** — PHP, `e:\Projects\KART-Discord-Bot`, deployed by FTP. Mirrors forum posts to
   GitHub issues and comments both ways.
 - **WoWUtils** — a third-party service KART imports sim data from. The integration contract is in the
