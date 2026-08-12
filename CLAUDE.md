@@ -41,6 +41,11 @@ documents exist to prevent.
 
 - **API facts come from the ketho.wow-api annotations** (12.0.1, client 12.1). The addon targets
   Midnight (12.x). Never assert API behaviour from memory.
+- **A local mirror of Blizzard's FrameXML source sits at `E:\Projects\.refs\wow-ui-source`**
+  (one level above this repo, sibling of `KeineAhnungRaidTools`). Not wired into any tool
+  config — nothing loads it automatically. Pull it in as a secondary source when tracing FrameXML
+  behaviour or patch diffs, alongside the ketho annotations and the `gh api repos/Gethe/wow-ui-source`
+  fetches in `docs/BACKLOG-12.1.md` — don't rely on it alone, it may lag the target patch.
 - **WoW runs Lua 5.1 on LuaJIT.** No `goto`, `unpack` not `table.unpack`, no integer division.
 - **The comm layer is `Libs/KASC-1.0` (`KASC:Send`)**, over AceComm-3.0 since 2026-08-03. There
   is no `KARTSync.lua`.
