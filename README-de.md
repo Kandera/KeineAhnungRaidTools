@@ -10,7 +10,7 @@ Ein leichtgewichtiges und modulares World of Warcraft Addon, das speziell für R
 Alle automatischen Gruppen-Funktionen gebündelt in einem Tab:
 *   **Keyword-Invite:** Reagiert auf konfigurierbare Schlagworte (z. B. "inv", "+") im Flüstern, Gildenchat oder über das Battle.net. Der Gildenchat-Trigger ist ein eigener Schalter (standardmäßig deaktiviert), um versehentliche Invites durch normale Gildenchat-Gespräche zu vermeiden.
 *   **Auto-Promote:** Befördert vordefinierte Spieler automatisch zu Assistenten, sobald sie der Gruppe beitreten. Ideal für Co-Leiter und feste Rollen im Raid. Jeder Eintrag akzeptiert wahlweise einen Charakternamen oder einen [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) Nickname, sodass er automatisch weitergilt, auch wenn diese Person auf einen anderen Charakter wechselt.
-*   **Auto-Raid:** Wandelt die Gruppe automatisch in einen Schlachtzug um, sobald 5 Mitglieder in ihr sind.
+*   **Auto-Raid:** Wandelt die Gruppe automatisch in einen Schlachtzug um, sobald ein 6. Spieler um eine Einladung bittet; eine volle 5er-Gruppe bleibt eine Gruppe.
 
 ### 2. Raidlead-Leiste
 Eine kompakte, verschiebbare Leiste für den schnellen Zugriff auf:

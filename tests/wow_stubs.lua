@@ -29,6 +29,23 @@ function KARTTEST.SetParty(members)
     end
 end
 
+-- Lets a test that installs its own roster put back whatever was there before, for whatever test
+-- file runs next -- the same reason KARTTEST.activeUnit / KARTTEST.solo are saved and restored by
+-- hand wherever a test changes those.
+function KARTTEST.SnapshotRoster()
+    return { roster = roster, isRaid = isRaid, count = count }
+end
+
+function KARTTEST.RestoreRoster(snapshot)
+    roster, isRaid, count = snapshot.roster, snapshot.isRaid, snapshot.count
+end
+
+-- Flips only the group TYPE, leaving the roster and its keys exactly as they are. A multi-client
+-- RaidSim scenario (tests/raidsim.lua) always addresses its clients with the raid1..raidN scheme, see
+-- its Reindex, so re-keying through SetParty would strand those unit tokens -- this is how such a
+-- scenario is read as "same people, but a party" without that.
+function KARTTEST.SetGroupIsRaid(value) isRaid = value end
+
 function KARTTEST.SetNSAPI(enabled)
     _G.NSAPI = enabled and {
         GetName = function(_, unit)

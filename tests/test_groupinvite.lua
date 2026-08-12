@@ -17,7 +17,11 @@ local env = setmetatable({}, { __index = _G })
 env.KART_Settings = { inviteKeywords = "inv;invite", autoConvertToRaid = false }
 
 local invited = {}
-env.C_PartyInfo = { InviteUnit = function(name) invited[#invited + 1] = name end }
+local converted = false
+env.C_PartyInfo = {
+    InviteUnit = function(name) invited[#invited + 1] = name end,
+    ConvertToRaid = function() converted = true end,
+}
 
 local KART = {}
 env.KART = KART
@@ -40,6 +44,7 @@ T.truthy(KART.InviteKeywordsTable["inv"], "the keyword table is built from the s
 
 local function Invite(msg, sender)
     invited = {}
+    converted = false
     local ok, err = pcall(KART.HandleChatInvite, msg, sender, "CHAT_MSG_WHISPER")
     return ok, invited, err
 end
@@ -151,6 +156,39 @@ end
 do
     local _, got = BNInvite("not a keyword", 77)
     T.eq(#got, 0, "an unrelated Battle.net whisper invites nobody")
+end
+
+-- Auto-Raid conversion, the whole point of GroupLogic's part of the setting now (2026-08-12) -------
+-- Before, the party converted the instant it hit 5 members (a Core.lua roster-event check, since
+-- removed); this branch was practically dead. Now it is the only place autoConvertToRaid acts on an
+-- actual chat invite, so it needs its own group of 5 rather than the solo setup above -- which means
+-- overriding KARTTEST.solo for the duration, same as the file-level override at the top exists for.
+do
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevSolo2 = KARTTEST.solo
+    KARTTEST.solo = {}
+    env.KART_Settings.autoConvertToRaid = true
+    KARTTEST.SetParty({
+        { name = "Merrit", realm = "TarrenMill" },
+        { name = "Corvin", realm = "TarrenMill" },
+        { name = "Alric", realm = "TarrenMill" },
+        { name = "Sinja", realm = "TarrenMill" },
+        { name = "Bramor", realm = "TarrenMill", leader = true },
+    })
+
+    local ok, got = Invite("inv", "Kandera-TarrenMill")
+    T.truthy(ok, "a keyword whisper that would be a 6th member is handled without error")
+    T.truthy(converted, "and converts the full party to a raid")
+    T.eq(got[1], "Kandera-TarrenMill", "and still invites the whisperer")
+
+    local ok2, got2 = Invite("inv", "Alric-TarrenMill")
+    T.truthy(ok2, "a keyword whisper from an existing member is handled without error")
+    T.truthy(not converted, "and does not convert -- that member already has a seat (FIX 1)")
+    T.eq(got2[1], "Alric-TarrenMill", "though the sender is still invited like any other match")
+
+    env.KART_Settings.autoConvertToRaid = false
+    KARTTEST.solo = prevSolo2
+    KARTTEST.RestoreRoster(prevRoster)
 end
 
 -- Leave the harness as found, for whatever file runs next.

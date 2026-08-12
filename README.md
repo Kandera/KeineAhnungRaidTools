@@ -10,7 +10,7 @@ A lightweight, modular World of Warcraft addon built specifically for raid and g
 All automatic group functions bundled into a single tab:
 *   **Keyword Invite:** Reacts to configurable keywords (e.g. "inv", "+") in whispers, guild chat, or Battle.net messages. The guild-chat trigger is a separate toggle (disabled by default) to avoid accidental invites from casual guild chat.
 *   **Auto-Promote:** Automatically promotes predefined players to assistant as soon as they join the group. Ideal for co-leads and fixed raid roles. Each entry accepts either a character name or a [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) nickname, so it keeps applying automatically even after that person switches to a different character.
-*   **Auto-Raid:** Automatically converts the group into a raid as soon as 5 members are in it.
+*   **Auto-Raid:** Automatically converts the group into a raid when a 6th player requests an invite; a full 5-man party stays a party.
 
 ### 2. Raid Lead Bar
 A compact, movable bar for quick access to:

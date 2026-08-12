@@ -170,3 +170,43 @@ do
 
     T.truthy(ok2, "and survives a client that refuses every question it asks -- which is the point")
 end
+
+-- The party never converts itself, only a 6th player does (2026-08-12) -------------------------------
+-- Converting the instant a party reaches 5 members catches groups that never wanted a 6th at all.
+-- Core.lua itself needs the game to load, so this lifts the exact roster-event condition out of the
+-- source and runs it standalone against a real 5-man fixture, the same way test_lc_relevance.lua
+-- lifts DecideAutoResponse -- a plain substring check could not tell "does not convert" from "was
+-- never reached at all".
+do
+    local snippet = code:match("if KART%.pendingBulkRaidConvert.-\nend\n")
+    T.truthy(snippet, "the roster-event conversion check was found in Core.lua")
+    snippet = snippet or "" -- so a missed extraction fails the assertion above, not the whole file
+
+    local chunk = assert(loadstring("local KART = ...\nreturn function() " .. snippet .. " end"))
+    local KART = {}
+    local check = chunk(KART)
+
+    local prevInCombat, prevActive = KARTTEST.inCombat, KARTTEST.activeUnit
+    local prevRoster = KARTTEST.SnapshotRoster()
+    KARTTEST.inCombat = false
+    KARTTEST.activeUnit = nil
+    KARTTEST.SetParty({
+        { name = "Bramor" }, { name = "Corvin" }, { name = "Merrit" }, { name = "Sinja" },
+        { name = "Kandera", leader = true },
+    })
+
+    KARTTEST.ClearInvites()
+    KART.pendingBulkRaidConvert = false
+    check()
+    T.truthy(not KARTTEST.convertedToRaid,
+        "a full 5-man party does not convert itself -- only a 6th invite request does that now")
+
+    KARTTEST.ClearInvites()
+    KART.pendingBulkRaidConvert = true
+    check()
+    T.truthy(KARTTEST.convertedToRaid,
+        "a bulk WoWUtils invite that just filled the party still converts (regression guard)")
+
+    KARTTEST.inCombat, KARTTEST.activeUnit = prevInCombat, prevActive
+    KARTTEST.RestoreRoster(prevRoster)
+end

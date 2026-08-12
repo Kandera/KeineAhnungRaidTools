@@ -53,10 +53,7 @@ function KART.HandleChatInvite(msg, sender, event, ...)
     local message = KAUtil.TrimString(KAUtil.CaseFold(msg))
 
     if KART.InviteKeywordsTable[message] and (not IsInGroup() or KAUtil.HasGroupPermissions()) then
-        if KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player") and IsInGroup() and not IsInRaid() and GetNumGroupMembers() >= 5 and not InCombatLockdown() then
-            C_PartyInfo.ConvertToRaid()
-        end
-
+        local target
         if event == "CHAT_MSG_BN_WHISPER" then
             local bnetIDAccount = select(11, ...)
             if bnetIDAccount then
@@ -66,15 +63,25 @@ function KART.HandleChatInvite(msg, sender, event, ...)
                 -- silently invites nobody). Resolve the friend's current WoW character from their
                 -- Battle.net account info and invite that.
                 if ga and ga.characterName and ga.characterName ~= "" then
-                    local target = ga.characterName
+                    target = ga.characterName
                     if ga.realmName and ga.realmName ~= "" then
                         target = target .. "-" .. ga.realmName
                     end
-                    C_PartyInfo.InviteUnit(target)
                 end
             end
         else
-            C_PartyInfo.InviteUnit(sender)
+            target = sender
+        end
+
+        if target then
+            if KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player") and IsInGroup() and not IsInRaid()
+               and GetNumGroupMembers() >= 5 and not InCombatLockdown()
+               -- A whisper from someone already in the group needs no seat -- converting for them
+               -- would turn a full 5-man party into a raid for nothing.
+               and not KAUtil.IsFullNameInGroup(target) then
+                C_PartyInfo.ConvertToRaid()
+            end
+            C_PartyInfo.InviteUnit(target)
         end
     end
 end

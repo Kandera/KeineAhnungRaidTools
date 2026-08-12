@@ -200,3 +200,17 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   names the same winner", rather than eventually. At +20 chunks and +684 bytes per evening that is worth
   having, but the justification is the Manifest's wording and not data the raid would otherwise lose.
   The first write-up of it implied the latter; it should not be read that way.
+
+## Verified, no change needed (2026-08-12 review of the Auto-Raid conversion fix)
+
+- **A deferred bulk-invite conversion is skipped for good if combat is active when the party fills
+  up** (`KART.pendingBulkRaidConvert`, set in Invite.lua's bulk WoWUtils invite). It is only read on
+  `GROUP_ROSTER_UPDATE` (Core.lua:401); `PLAYER_REGEN_ENABLED` (Core.lua:496) never touches it, so a
+  flag armed while in combat is never re-checked once combat ends, and the 120-second timer
+  (Invite.lua:209) clears it silently in the meantime. Deliberate: this fails closed rather than
+  retrying the conversion after combat.
+
+- **The 120-second expiry timer on that same flag is not generation-counted per invite**
+  (Invite.lua:205-209). A second bulk invite started within 120 seconds of the first inherits the
+  remainder of the first invite's window instead of getting its own. Deliberate -- the flag is
+  one-shot and cheap, not worth a generation counter.

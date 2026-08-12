@@ -156,6 +156,37 @@ do
         "but it is said again the next time the role arrives")
 end
 
+-- The announcement is raid-only, not group-only ----------------------------------------------------
+-- LC.IsConfigOwner does not care which kind of group it is, only who leads it, so a party leader's
+-- own settings still apply locally (the owner branch still runs). What must not happen is the RAID
+-- announcement: it is worded for a raid ("the raid now runs on YOUR settings"), and a 5-man party
+-- led by an accidental promotion is not one.
+do
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local sim = F.NewRaid()
+    local sinja = sim.byName.Sinja
+    RaidSim.Promote(sim, "Sinja")
+
+    KARTTEST.SetGroupIsRaid(false)
+    local out = Capture(function()
+        RaidSim.As(sinja, sinja.KART.LC.ApplyOwnConfig)
+    end)
+    T.truthy(RaidSim.As(sinja, sinja.KART.LC.IsConfigOwner),
+        "the party leader still owns the config -- that check does not look at group type")
+    T.truthy(not out:find(sinja.KART.L.LC_CONFIG_OWNER_NOW, 1, true),
+        "but is not told the raid runs on their settings -- there is no raid")
+
+    -- Same five people, same leader, converted to a raid: now the announcement is owed.
+    KARTTEST.SetGroupIsRaid(true)
+    local raidOut = Capture(function()
+        RaidSim.As(sinja, sinja.KART.LC.ApplyOwnConfig)
+    end)
+    T.truthy(raidOut:find(sinja.KART.L.LC_CONFIG_OWNER_NOW, 1, true),
+        "and fires once it actually is one")
+
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
 -- A designation the config owner cannot place is said out loud (B59) ------------------------------
 -- The old shape of this was fatal and silent: ownership was derived from "does my own field name
 -- me?", so a lootmaster who typed their own nickname on a nickname-blind client owned neither the

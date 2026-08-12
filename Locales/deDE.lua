@@ -162,7 +162,7 @@ KART.L_deDE = {
     DESC_BC_COMBAT_DELAY = "Stellt ein, wie viele Sekunden nach Kampfbeginn der Buff-Checker automatisch ausgeblendet wird (0 = fast sofort).",
     DESC_GRAY_OFFLINE = "Spieler, die nicht eingeloggt sind, werden in der Buff-Liste ausgegraut dargestellt.",
     DESC_MINIMAP = "Zeigt oder blendet das KART-Symbol an der Minimap aus.",
-    DESC_AUTO_RAID = "Wandelt eine Gruppe automatisch in einen Schlachtzug um, sobald sie voll ist (5 Mitglieder).",
+    DESC_AUTO_RAID = "Wandelt eine Gruppe automatisch in einen Schlachtzug um, sobald ein 6. Spieler eine Einladung anfragt. Eine volle 5er-Gruppe bleibt eine Gruppe.",
     DESC_INVITE_VIA_GUILD_CHAT = "Wenn deaktiviert, lösen die Invite-Begriffe nur bei Flüstern aus, nicht bei Nachrichten im Gildenchat. Nützlich, um versehentliche Invites durch normale Gildenchat-Gespräche zu vermeiden.",
     DESC_AL_ENABLED = "Startet das Combat-Logging automatisch beim Betreten des unten ausgewählten Contents und stoppt es beim Verlassen. Aktiviert auch Advanced Combat Logging (nötig für Warcraft Logs). Manuell per /combatlog gestartetes Logging wird nie angefasst.",
     DESC_AL_MIN_KEY = "Keys unterhalb dieser Stufe werden nicht geloggt.",

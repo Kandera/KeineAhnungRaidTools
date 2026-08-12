@@ -162,7 +162,7 @@ KART.L_enUS = {
     DESC_BC_COMBAT_DELAY = "Sets how many seconds after combat starts the Buff-Checker will automatically hide (0 = almost instantly).",
     DESC_GRAY_OFFLINE = "Players who are logged out will be grayed out in the buff list.",
     DESC_MINIMAP = "Shows or hides the KART icon on the minimap.",
-    DESC_AUTO_RAID = "Automatically converts a party into a raid once it is full (5 members).",
+    DESC_AUTO_RAID = "Automatically converts a party into a raid when a 6th player requests an invite. A full 5-man party stays a party.",
     DESC_INVITE_VIA_GUILD_CHAT = "If disabled, the invite keywords only trigger on whispers, not on messages in guild chat. Useful to avoid accidental invites from casual guild chat.",
     DESC_AL_ENABLED = "Automatically starts combat logging when you enter content selected below and stops it when you leave. Also enables Advanced Combat Logging (needed for Warcraft Logs). Logging you started manually via /combatlog is never touched.",
     DESC_AL_MIN_KEY = "Keys below this level are not logged.",

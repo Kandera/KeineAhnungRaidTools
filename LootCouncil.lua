@@ -1120,9 +1120,10 @@ function LC.ApplyOwnConfig()
     -- or while standing in for a moment, would otherwise switch the whole raid onto their own defaults
     -- without a word, and lcRollsEnabled defaults to OFF. Say it once per time the role arrives.
     --
-    -- Ungrouped is not the raid's business: LC.IsConfigOwner is true there so the settings tab works
-    -- solo, and announcing it would fire on every settings change outside a group.
-    if IsInGroup() and not LC.configOwnerAnnounced then
+    -- IsInRaid(), not IsInGroup(): outside a raid there is no raid to run on your settings, so a
+    -- 5-man party leader is not told about one. The settings tab still works solo and in a party --
+    -- LC.IsConfigOwner is true there too -- this only gates the raid-worded announcement.
+    if IsInRaid() and not LC.configOwnerAnnounced then
         LC.configOwnerAnnounced = true
         print("|cffff0000KART:|r " .. KART.L.LC_CONFIG_OWNER_NOW)
     end

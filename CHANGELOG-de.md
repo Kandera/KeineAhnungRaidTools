@@ -9,6 +9,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unreleased]
 ### Behoben
 - **Ein Stun lässt dein Abstimmungsfenster nicht mehr geschlossen zurück.**
+- **Eine volle 5er-Gruppe wandelt sich nicht mehr selbst in einen Schlachtzug um** — das passiert jetzt nur noch, wenn ein 6. Spieler eine Einladung anfragt.
+- **Das Leiten einer 5er-Gruppe kündigt nicht mehr an, dass der Schlachtzug auf deinen Einstellungen läuft.**
 
 ## [3.4.1] - 2026-08-11
 ### Geändert

@@ -393,7 +393,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
 
-        if (KART_Settings.autoConvertToRaid or KART.pendingBulkRaidConvert) and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() >= 5 and not IsInRaid() then
+        -- The autoConvertToRaid setting itself does NOT trigger here: converting the instant a
+        -- party reaches 5 members catches groups that never wanted a 6th. The setting instead
+        -- converts when a 6th player requests an invite (GroupLogic.lua), or via a bulk WoWUtils
+        -- invite (Invite.lua). The roster event below only serves the latter's deferred one-shot
+        -- flag, converting once the invitees actually fill the party.
+        if KART.pendingBulkRaidConvert and not InCombatLockdown() and UnitIsGroupLeader("player") and GetNumGroupMembers() >= 5 and not IsInRaid() then
             C_PartyInfo.ConvertToRaid()
         end
         -- One-shot flag set by a bulk WoWUtils invite (Invite.lua) that started while solo/small:
