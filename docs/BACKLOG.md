@@ -5140,3 +5140,49 @@ raid where Auto-Pass failed, and its counters read `672 unknown item` with `118 
 client tracking five rolls. Those numbers are the item-visibility question (C2), not this one. B174
 fixes the Auto-Pass half of #31 -- that client reads `Session: on (told)`, `Settings in force: received
 from Kandypal`, `That is me: no`, so `LC.CouncilRunsHere` is true for it and the pass no longer waits.
+
+## B176 — FIXED 2026-08-12 — the stun repair only worked if our handler happened to run first
+
+Found by the `lua-reviewer` agent on 2026-08-12, reviewing `Utils.lua` during a tool-chain check.
+Not from a raid, and not from a probe.
+
+The 3.3.2 repair (`KART.OnControlLost`, no backlog number of its own — it went out inside the release
+commit `1c2f041`) opened a one-frame window and let the hides report themselves through
+`RegisterEscapeFrame`'s `OnHide` hook. Its own comment claimed the order of the two
+`PLAYER_CONTROL_LOST` handlers "must not matter". It mattered:
+
+* **KART first** — window opens, Blizzard's `CloseSpecialWindows` hides everything, each hide is
+  booked, the next frame puts them back. This is the case the test held.
+* **Blizzard first** — the frames are already hidden when `OnControlLost` runs. Nothing was booked,
+  because the window was not open yet. Nothing comes back. The repair does nothing at all.
+
+And Blizzard first is the likely order, not the exotic one: `UIParent` registers the event in its
+`OnLoad`, before any addon frame exists.
+
+**Why the suite did not see it.** `tests/test_lc_chrome.lua:221-224` runs `OnControlLost()` and then
+`vote:Hide()`, in that order — the favourable one, and the only one ever exercised. The assertion
+that followed was true and measured the wrong half of the problem.
+
+**Held by `tests/test_lc_controlloss_order.lua`**, a new file that runs the same scenario with the
+hide first. It was red before the fix (`expected: true, actual: false`) and is green after. It sits
+at the **end** of `run.lua` for the usual reason (B70).
+
+**Fixed 2026-08-12.** `OnControlLost` now looks both ways: forwards through the existing one-frame
+window, and backwards at the hides already booked in the current frame. `GetTime()` is constant
+within a frame, so "same frame" is one comparison; `thisFrameHides` is wiped whenever the stamp
+changes and therefore holds one frame's worth at most.
+
+**What this widens, said plainly.** The pre-existing exposure — a window the player closed in the
+same instant a stun landed comes back for one frame — now reaches backwards as well as forwards. It
+is the same trade in the mirror, and it is still the vanishingly rare case the original comment
+named.
+
+**Ungemessen, and left that way.** A programmatic hide in the same frame as `PLAYER_CONTROL_LOST` —
+an `LC_END` closing the vote window and its cards while a stun lands — would be undone too, and the
+window would come back empty on a round that is over. The reviewer raised it against the forward
+window; this change gives it a second way in. Nobody has measured whether the two can land in one
+frame. Touches C11.
+
+**Not verified in the game.** The whole finding is about an event order the harness cannot observe,
+so the offline suite proves the repair now survives both orders and nothing more. Touches C5: vote
+window open, get stunned, ten times.

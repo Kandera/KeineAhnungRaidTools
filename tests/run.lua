@@ -186,6 +186,7 @@ dofile("tests/test_transport.lua")
 dofile("tests/test_lc_rolltable.lua")
 dofile("tests/test_lc_drop.lua")
 dofile("tests/test_lc_ack.lua")
+dofile("tests/test_lc_controlloss_order.lua")
 
 print(string.format("\n%d assertions, %d failures", total, failures))
 

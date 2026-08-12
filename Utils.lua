@@ -31,29 +31,45 @@ KART.L = KART.L or {}
 -- voting has no window to vote in and no reason to suspect one existed.
 --
 -- The repair is deliberately NOT "leave UISpecialFrames": Escape closing these windows is wanted.
--- Instead, a hide that lands inside the one frame after PLAYER_CONTROL_LOST is treated as Blizzard's
--- and undone. A hide the player asked for -- Escape, the "x" -- happens outside that window and is
--- left alone, apart from the vanishingly rare case of pressing Escape in the same instant a stun
--- lands, which costs one frame of a window staying open.
+-- Instead, a hide that lands in the SAME frame as PLAYER_CONTROL_LOST is treated as Blizzard's and
+-- undone -- whether it arrives before our handler or after it. A hide the player asked for --
+-- Escape, the "x" -- happens in some other frame and is left alone, apart from the vanishingly rare
+-- case of pressing Escape in the same instant a stun lands, which costs one frame of a window
+-- staying open.
 local controlLossWindow = false
 local hiddenByControlLoss = {}
+-- The hides of the current frame, kept so a Blizzard handler that runs BEFORE ours is not lost.
+-- GetTime() is constant within a frame, which is what makes "same frame" cheap to ask.
+local thisFrameHides, thisFrameAt = {}, nil
 
 function KART.RegisterEscapeFrame(frame)
     local name = frame and frame.GetName and frame:GetName()
     if not name then return end
     table.insert(UISpecialFrames, name)
     frame:HookScript("OnHide", function(self)
+        local now = GetTime()
+        if now ~= thisFrameAt then
+            wipe(thisFrameHides)
+            thisFrameAt = now
+        end
+        thisFrameHides[#thisFrameHides + 1] = self
         if controlLossWindow then hiddenByControlLoss[#hiddenByControlLoss + 1] = self end
     end)
 end
 
 -- Called from Core.lua's PLAYER_CONTROL_LOST handler. Which of the two handlers runs first, ours or
--- Blizzard's, is decided by registration order and must not matter -- so this does not snapshot what
--- is currently shown (that reads empty when Blizzard went first). It opens a window and lets the
--- hides report themselves.
+-- Blizzard's, is decided by registration order -- and UIParent registers the event in its OnLoad,
+-- so Blizzard going first is the likely case, not the exotic one. This therefore looks both ways:
+-- backwards at the hides already booked in this frame, and forwards through the window below. It
+-- does not snapshot what is currently shown, which reads empty in exactly the backwards case.
 function KART.OnControlLost()
     if controlLossWindow then return end
     controlLossWindow = true
+    if GetTime() == thisFrameAt then
+        for _, frame in ipairs(thisFrameHides) do
+            hiddenByControlLoss[#hiddenByControlLoss + 1] = frame
+        end
+    end
     C_Timer.After(0, function()
         controlLossWindow = false
         for _, frame in ipairs(hiddenByControlLoss) do frame:Show() end
