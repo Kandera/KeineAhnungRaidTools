@@ -25,6 +25,10 @@ jobs:
           # block, plus the build leftovers the BigWigs packager strips on its own
           # (.git, dist, .pkgmeta). Keep the two in step -- a GitHub download that
           # differs from the CurseForge one is a difference nobody thinks to check.
+          # The READMEs and both changelogs ship on purpose: CurseForge renders the
+          # description from the packaged files, so stripping them leaves the
+          # language switch pointing at nothing. LICENSE ships because MIT requires
+          # its notice to travel with every copy.
           mkdir -p dist/KeineAhnungRaidTools
           rsync -a \
             --exclude='.git' \
@@ -40,10 +44,6 @@ jobs:
             --exclude='.luacheckrc' \
             --exclude='tests' \
             --exclude='docs' \
-            --exclude='README.md' \
-            --exclude='README-de.md' \
-            --exclude='CHANGELOG-de.md' \
-            --exclude='LICENSE' \
             --exclude='KAimg.jpg' \
             --exclude='CLAUDE.md' \
             . dist/KeineAhnungRaidTools/
