@@ -5186,3 +5186,42 @@ frame. Touches C11.
 **Not verified in the game.** The whole finding is about an event order the harness cannot observe,
 so the offline suite proves the repair now survives both orders and nothing more. Touches C5: vote
 window open, get stunned, ten times.
+
+## B177 — FIXED 2026-08-12 — the whisper/broadcast boundary stood on nothing
+
+First mutation sweep run from the new platform, 2026-08-12, on `Utils.lua`. Recorded because the run
+itself is the finding as much as the survivor is.
+
+**What the tool could see.** `Utils.lua` has 149 executed lines and the rule set found **7** of them
+mutable -- 4.7 %. That is the documented limit doing what it does: only `>=`, `<=`, `>`, `<` and
+`and`->`or`, and every line carrying a quote is skipped. A sweep of this file is not a statement
+about this file; it is a statement about seven lines of it.
+
+**Four survivors, sorted.**
+
+* `Utils.lua:296` and `:297` -- `if a1 ~= b1 then return a1 < b1 end`, `<` to `<=`. **Kein Loch**: the
+  enclosing `a1 ~= b1` has already excluded the equality case, so the two operators cannot be told
+  apart here. The gegenprobe is one line down: `:298` (`return a3 < b3`, with no such guard) did
+  **not** survive, so the patch level of `IsOlderVersion` is pinned.
+* `Utils.lua:46` -- `frame and frame.GetName and ...` to `frame or ...`. **Kein Loch**: defensive code
+  nothing reaches. All seven callers pass a frame they just created. Worth writing down anyway,
+  because the mutation would not be harmless if it were reachable -- it puts a *table* into
+  `UISpecialFrames`, and Blizzard's `CloseSpecialWindows` resolves entries through `_G[name]`.
+* `Utils.lua:337` -- `if #missing > HELLO_WHISPER_MAX then`, `>` to `>=`. **Echte Lücke.**
+
+**The real one.** `HELLO_WHISPER_MAX` is 5, and the comparison decides whether five people get a
+whisper nobody else sees or the whole raid hears one `KA_HELLO_REQ` that *every* client answers.
+`tests/test_hello.lua` only ever ran 0 missing and 2 missing, so the number was free to drift by one
+in either direction with the suite staying green -- on a line whose whole job is to keep a burst off
+the raid channel (B120).
+
+**Fixed 2026-08-12** in `tests/test_hello.lua`, in the eight-Probe raid that block already builds:
+five missing asserts five whispers, six missing asserts one broadcast on `RAID`. Re-running the sweep
+afterwards leaves three survivors instead of four, all three the `Kein Loch` ones above.
+
+**Method note, since this was the first sweep here.** It ran in a throwaway `git worktree`
+(`.claude/worktrees/`), with its own `KART_COVERAGE=1` run first, because `mutrun.py` writes mutated
+source to disk and the working tree had a second session attached to it. Removed afterwards -- and
+the first attempt to write this entry went into the worktree's copy of the file and died with it,
+which is its own small argument for absolute paths. The line numbers above are true for `db507b9`
+and will not stay true.

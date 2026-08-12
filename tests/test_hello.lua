@@ -105,6 +105,28 @@ do
     T.eq(reqs[1].channel, "RAID", "to the group")
     T.eq(reqs[1].target, nil, "and to nobody in particular")
 
+    -- The line between the two, and both sides of it. HELLO_WHISPER_MAX is 5: it decides whether
+    -- five people get a whisper nobody else sees, or the whole raid hears one request that EVERY
+    -- client answers. Nothing stood on the boundary until B177 -- mutating the `>` to `>=` left the
+    -- suite green, so the number was free to drift by one without anything noticing.
+    local others = {}
+    for _, c in ipairs(sim.clients) do
+        if c ~= me then others[#others + 1] = c.name end
+    end
+
+    local function KnowAllBut(n)
+        me.KART.PlayerVersions = {}
+        for i = 1, #others - n do me.KART.PlayerVersions[others[i]] = "3.3.1" end
+        RaidSim.ClearLog(sim)
+        RaidSim.As(me, me.KART.RequestMissingHellos)
+        return Requests(sim)
+    end
+
+    T.eq(#KnowAllBut(5), 5, "five missing is still five whispers")
+    local six = KnowAllBut(6)
+    T.eq(#six, 1, "one more, and it is a single broadcast instead")
+    T.eq(six[1].channel, "RAID", "which the whole raid answers -- the reason the line is there")
+
     -- Never about ourselves: we do not process our own broadcast, so PlayerVersions has no entry for
     -- us by design. Counting it as missing would ask again on every roster change for the rest of the
     -- evening, which is precisely the traffic this is trying not to add.
