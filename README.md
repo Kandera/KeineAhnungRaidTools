@@ -1,4 +1,4 @@
-**English** | [Deutsch](README-de.md)
+**English** | [Deutsch](https://github.com/Kandera/KeineAhnungRaidTools/blob/main/README-de.md)
 
 # Keine Ahnung Raid Tools (KART)
 

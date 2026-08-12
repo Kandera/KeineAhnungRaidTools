@@ -1,4 +1,4 @@
-[English](CHANGELOG.md) | **Deutsch**
+[English](https://github.com/Kandera/KeineAhnungRaidTools/blob/main/CHANGELOG.md) | **Deutsch**
 
 # Changelog
 
