@@ -39,6 +39,10 @@ documents exist to prevent.
 
 ## Lua and WoW
 
+- **Never read a large file whole.** `grep -n '^-- =====' -A1 <file>` prints its section banners
+  with current line numbers; read only the range you need. `LootCouncil.lua` (~6.8k lines) has 27
+  and is always worth grepping first; the other files carry the same banner style but fewer of
+  them. A new section of a few hundred lines gets a banner in that style.
 - **API facts come from the ketho.wow-api annotations** (12.0.1, client 12.1). The addon targets
   Midnight (12.x). Never assert API behaviour from memory.
 - **A local mirror of Blizzard's FrameXML source sits at `E:\Projects\.refs\wow-ui-source`**

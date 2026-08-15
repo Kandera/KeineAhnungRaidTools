@@ -636,6 +636,9 @@ function LC.GetPassButtonIndex()
     return n
 end
 
+-- ==========================================================================
+--  Council membership and the lootmaster lookup
+-- ==========================================================================
 -- The loot owner counts as council without having to be listed in the council-member field. He is
 -- the one who physically wins every item (ForceWinRoll) and the only one who may end the session, so
 -- a lootmaster left out of that list ended up with no council panel at all — no way to assign a
@@ -1041,6 +1044,9 @@ local function BuildCouncilPayload(prefix, council)
     return prefix .. council
 end
 
+-- ==========================================================================
+--  Config broadcast and relay
+-- ==========================================================================
 -- Whether WE own the raid config, i.e. whether our own settings name us as the lootmaster. Only the
 -- config owner broadcasts it (see LC.BroadcastRaidConfig) and only their broadcast is accepted (see
 -- LC.HandleConfig). Reads KART_Settings directly rather than LC.GetLootmaster, which for a non-owner
@@ -1409,6 +1415,9 @@ function LC.BroadcastRaidConfigThrottled()
     end)
 end
 
+-- ==========================================================================
+--  Config acceptance from the wire
+-- ==========================================================================
 -- Authority is the configured LOOTMASTER, not the raid leader: the config is only accepted when the
 -- sender is the very player the payload names as lootmaster. That is self-validating — no prior
 -- state is needed, so it works for a client that has never seen a config — and it means handing raid
@@ -1965,6 +1974,9 @@ function LC.HandleConfig(payload, senderKey)
     end
 end
 
+-- ==========================================================================
+--  Pending resolutions and roll catch-up
+-- ==========================================================================
 -- GROUP_ROSTER_UPDATE fires in bursts during mass-invite/raid formation, and re-scanning every
 -- pending entry on every single firing burns CPU for no benefit — same leading-edge throttle
 -- pattern as KART.HandleAutoPromoteThrottled in GroupLogic.lua.
@@ -2661,6 +2673,9 @@ function LC.StopTableTicker()
     lastTablePayload, lastTablePayloadAt = nil, 0
 end
 
+-- ==========================================================================
+--  Table heartbeat, session resume, settings sync
+-- ==========================================================================
 -- The receiving half of the heartbeat: ask for what we are missing, and nothing else. Deliberately
 -- has no branch that removes anything -- see the comment above the constants for what that branch
 -- would cost the first time the loot role moves mid-round.
@@ -3071,6 +3086,9 @@ KART.UI:RegisterStaticPopup("KART_LC_STAND_IN", {
 
 LC.IsRealItemLink = KAUtil.IsRealItemLink -- kept as LC.* alias; call sites across the LC modules use this name
 
+-- ==========================================================================
+--  Item colour, icons and vote counting
+-- ==========================================================================
 -- Pulls the (r,g,b) quality colour for an item link/coloured string. The leading colour escape is
 -- tried first (|cAARRGGBB, decoded directly) — this is the only form test mode's fake
 -- coloured-string items ever use, so that path alone still covers them. A real item link can
@@ -4534,6 +4552,9 @@ function LC.DrawRollTable(rollID, itemID, silent)
     if msg then LC.SendLC(msg) end
 end
 
+-- ==========================================================================
+--  Whole-table roll updates and answer slots
+-- ==========================================================================
 -- Receives the whole raid's rolls for an item and writes them wholesale rather than one entry at a
 -- time, which is the point of the change: one writer instead of 25, so there is no longer a state
 -- where two clients know a different number of rolls and neither of them can tell.
@@ -5441,6 +5462,9 @@ local function CouncilCouldTakeRoll(rollID)
            and not LC.IsCollectibleItem(itemID, classID, subclassID)
 end
 
+-- ==========================================================================
+--  Roll instance snapshot and the roll entry point
+-- ==========================================================================
 -- Captures the raid this item is dropping in, at the moment it enters the loot flow -- a real roll
 -- starting (LC.OnStartLootRoll, LC.HandleStart) or a manual one (LC.StartManualRoll,
 -- LC.HandleManualStart) -- rather than at award time. LH.LogHistory can run long after the item
@@ -6271,6 +6295,9 @@ function LC.HandleStart(payload, senderKey)
     return true
 end
 
+-- ==========================================================================
+--  Manual roll and LC_DROP
+-- ==========================================================================
 -- Entry point for /kart add <item1> <item2> ... — lets the designated lootmaster hand item(s)
 -- they're currently holding back to Council for a (re)decision, without a real Blizzard loot
 -- roll behind them. Only the lootmaster may do this — same person ForceWinRoll makes physically
