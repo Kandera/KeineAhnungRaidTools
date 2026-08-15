@@ -13,6 +13,10 @@
 # Anders als dort komplett lokal -- kein Teil davon muss ins Repo.
 .codex/
 
+# Serena-Ordner: Projektkonfiguration und Symbolindex des Lua-Language-Servers.
+# Wird beim ersten Lauf erzeugt und ist maschinengebunden -- gehoert nicht ins Repo.
+.serena/
+
 # Gepackte Addon-Archive
 *.zip
 
