@@ -336,29 +336,6 @@ function KART.RequestMissingHellosThrottled()
     end)
 end
 
--- ==========================================================================
---  B124: the guild ranks nobody asked the client for
--- ==========================================================================
---
--- The council panel reads GetGuildInfo(unit) per row. For units other than the player that answers
--- only once this client actually holds guild data, and KART never asked for any: not one
--- C_GuildInfo.GuildRoster call and not one GUILD_ROSTER_UPDATE registration in the whole addon. So
--- the column was filled for whoever happened to have had their guild frame open and empty for
--- everybody else, which is exactly how it was reported -- missing for the raid, present on some
--- screenshots.
---
--- Blizzard rate-limits this call (roughly one every ten seconds); asking more often is not an error,
--- it simply does nothing. The throttle here is so a panel refresh -- which runs several times a
--- second while an item is being decided -- does not ask on every one of them.
-local lastGuildRosterRequest = 0
-function KART.RequestGuildRoster()
-    if not IsInGuild() then return end
-    local now = GetTime()
-    if now - lastGuildRosterRequest < 10 then return end
-    lastGuildRosterRequest = now
-    if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() end
-end
-
 -- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside
 -- KAUI-1.0's own copy) purely so the settings-tab strata slider (MainFrame.lua) has a name list
 -- and count to build its range and value display from. The strata registries and the apply/

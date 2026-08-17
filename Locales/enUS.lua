@@ -195,11 +195,6 @@ KART.L_enUS = {
     ENCH_SCAN_NOT_IN_GROUP = "The raid scan needs a group. Use \"/kart ench\" for your own.",
     HELP_HELP    = "show this help",
 
-    -- Loot Council
-    LC_DEFAULT_BUTTONS     = "BIS;Upgrade;Offspec;Other;Pass",
-
-    -- Loot History
-
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",
     WU_TITLE               = "WoWUtils Import",

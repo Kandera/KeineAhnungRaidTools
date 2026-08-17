@@ -13,10 +13,6 @@ frame:RegisterEvent("CHAT_MSG_GUILD")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
--- The council panel's guild rank column (B124). The data arrives asynchronously after
--- KART.RequestGuildRoster, long after the rows were drawn, so without this the ranks appear only on
--- the next refresh that happens to follow -- or never, on a panel nobody touches.
-frame:RegisterEvent("GUILD_ROSTER_UPDATE")
 frame:RegisterEvent("READY_CHECK")
 frame:RegisterEvent("READY_CHECK_CONFIRM")
 frame:RegisterEvent("READY_CHECK_FINISHED")
@@ -173,10 +169,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             for k, v in pairs(KART.L_deDE) do KART.L[k] = v end
         end
 
-        -- The default vote-button set is user-visible text — pick it from the active locale
-        -- before the Defaults merge fills a fresh KART_Settings.
-        KART.Defaults.lcButtonLabels = KART.L.LC_DEFAULT_BUTTONS
-
         -- Fill in any missing defaults (top-level and nested). MergeDefaults deep-copies table
         -- defaults (keybinds, minimap) rather than assigning them by reference — a reference would
         -- let the live settings mutate KART.Defaults itself, which then made "Reset Defaults" a
@@ -226,9 +218,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if event ~= "CHAT_MSG_GUILD" or KART_Settings.inviteViaGuildChat then
             KART.HandleChatInvite(arg1, arg2, event, ...)
         end
-
-    elseif event == "GUILD_ROSTER_UPDATE" then
-        -- Reserved for future guild-roster-driven UI refresh.
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         -- Before anything reads a unit token: the tokens have just been renumbered, so what this
