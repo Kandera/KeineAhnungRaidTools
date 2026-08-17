@@ -13,6 +13,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Desktop-KART-Companion wird nicht weiterentwickelt.** Das ist nicht die WowUtils-Bridge.
 
 ### Behoben
+- **Council-Mitglieder können Items wieder zuweisen.** Die Bestätigung bricht nicht mehr mit einem Lua-Fehler ab.
+- **Der WowUtils-Paste auf Automation überdeckt AutoLog nicht mehr.**
 - **Eine volle 5er-Gruppe wandelt sich nicht mehr selbst in einen Schlachtzug um** — das passiert jetzt nur noch, wenn ein 6. Spieler eine Einladung anfragt.
 - **Das Leiten einer 5er-Gruppe kündigt nicht mehr an, dass der Schlachtzug auf deinen Einstellungen läuft.**
 

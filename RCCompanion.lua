@@ -150,16 +150,34 @@ local function CallMLMethod(ml, name)
     pcall(fn, ml)
 end
 
+-- RC's masterLooter is a Player table (name/guid/class), not a string. AceComm
+-- WHISPER requires a character name.
+local function WhisperName(ml)
+    if type(ml) == "string" and ml ~= "" then return ml end
+    if type(ml) == "table" then
+        if type(ml.name) == "string" and ml.name ~= "" then return ml.name end
+        if type(ml.GetName) == "function" then
+            local ok, name = pcall(ml.GetName, ml)
+            if ok and type(name) == "string" and name ~= "" then return name end
+        end
+    end
+    return nil
+end
+
 local function GetMLName()
     local addon = RC.GetAddon()
     if not addon then return nil end
-    if addon.masterLooter then return addon.masterLooter end
+    local fromField = WhisperName(addon.masterLooter)
+    if fromField then return fromField end
     if type(addon.GetML) == "function" then
-        local ok, name = pcall(addon.GetML, addon)
-        if ok and name then return name end
+        local ok, ml = pcall(addon.GetML, addon)
+        if ok then
+            local fromGet = WhisperName(ml)
+            if fromGet then return fromGet end
+        end
     end
     if addon.isMasterLooter then
-        return UnitName("player")
+        return WhisperName(UnitName("player")) or UnitName("player")
     end
     return nil
 end

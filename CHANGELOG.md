@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desktop KART Companion is discontinued.** It is not the WowUtils Bridge.
 
 ### Fixed
+- **Council members can assign items again.** Confirming the award no longer errors.
+- **The WowUtils paste on Automation no longer covers AutoLog.**
 - **A full 5-man party no longer converts itself to a raid** — only a 6th player requesting an invite does that now.
 - **Leading a 5-man party no longer announces that the raid runs on your settings.**
 

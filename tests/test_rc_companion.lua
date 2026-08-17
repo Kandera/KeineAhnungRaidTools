@@ -122,6 +122,23 @@ RC.RequestAward(1, "Ann-TarrenMill", 1)
 T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeAward, 1,
     "council non-ML sends RC_AWARD whisper to the master looter")
 
+RCLootCouncil.masterLooter = {
+    name = "Lead-TarrenMill",
+    guid = "Player-1-AAAA",
+    class = "WARRIOR",
+}
+local origSend = KASC.Send
+local seenTarget
+function KASC:Send(msg, channel, target, opts)
+    seenTarget = target
+    return origSend(self, msg, channel, target, opts)
+end
+RC.RequestAward(1, "Ann-TarrenMill", "Offspec")
+KASC.Send = origSend
+T.eq(type(seenTarget), "string",
+    "whisper target is a name string, not RC's Player table")
+T.eq(seenTarget, "Lead-TarrenMill", "Player.name is the whisper target")
+
 KARTTEST.activeUnit = awardPrevActive
 KARTTEST.RestoreRoster(awardSnap)
 

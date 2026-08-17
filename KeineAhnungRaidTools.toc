@@ -1,33 +1,33 @@
-## Interface: 120005, 120007, 120100
-## Title: Keine Ahnung Raid Tools
-## Notes: Raid tools and RCLootCouncil companion — invites, auto-promote, buff-checks.
-## Author: Kandera
-## Version: 4.0.0-alpha1
-## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
-## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache
-## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil
-## X-Curse-Project-ID: 1603461
-## X-Wago-ID: QN53ZOKB
-
-Libs\LibStub\LibStub.lua
-Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
-Libs\AceComm-3.0\ChatThrottleLib.lua
-Libs\AceComm-3.0\AceComm-3.0.lua
-Libs\KAUtil-1.0\KAUtil-1.0.lua
-Libs\KAGS-1.0\KAGS-1.0.lua
-Libs\KASC-1.0\KASC-1.0.lua
-Libs\KAUI-1.0\KAUI-1.0.lua
-
-Locales\enUS.lua
-Locales\deDE.lua
-
-Utils.lua
-MainFrame.lua
-GroupLogic.lua
-RaidleadBar.lua
-Profiles.lua
-BuffChecker.lua
-Invite.lua
-AutoLog.lua
-Core.lua
-RCCompanion.lua
+## Interface: 120005, 120007, 120100
+## Title: Keine Ahnung Raid Tools
+## Notes: Raid tools and RCLootCouncil companion — invites, auto-promote, buff-checks.
+## Author: Kandera
+## Version: 4.0.0-alpha2
+## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
+## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache
+## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil
+## X-Curse-Project-ID: 1603461
+## X-Wago-ID: QN53ZOKB
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceComm-3.0\ChatThrottleLib.lua
+Libs\AceComm-3.0\AceComm-3.0.lua
+Libs\KAUtil-1.0\KAUtil-1.0.lua
+Libs\KAGS-1.0\KAGS-1.0.lua
+Libs\KASC-1.0\KASC-1.0.lua
+Libs\KAUI-1.0\KAUI-1.0.lua
+
+Locales\enUS.lua
+Locales\deDE.lua
+
+Utils.lua
+MainFrame.lua
+GroupLogic.lua
+RaidleadBar.lua
+Profiles.lua
+BuffChecker.lua
+Invite.lua
+AutoLog.lua
+Core.lua
+RCCompanion.lua

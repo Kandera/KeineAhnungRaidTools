@@ -432,7 +432,6 @@ function WU.RefreshBossList()
     end
 
     panel:SetHeight(math.max(totalH, 24))
-    -- Boss list height feeds the WoWUtils tab's scroll range.
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
 
@@ -444,7 +443,14 @@ function WU.BuildPanel(parent)
     local L = KART.L
 
     local wuTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    wuTitle:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -430)
+    -- Stack under AutoLog. Magic Y from the panel top overlapped AutoLog once
+    -- this paste block moved onto Automation (the dedicated tab used -252 for
+    -- the boss list; only the title was shifted to -430).
+    if KART.AutoLogCard then
+        wuTitle:SetPoint("TOPLEFT", KART.AutoLogCard, "BOTTOMLEFT", 0, -18)
+    else
+        wuTitle:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
+    end
     wuTitle:SetText(L.WU_TITLE)
     KART.UI:RegisterLabel(wuTitle)
 
@@ -580,26 +586,26 @@ function WU.BuildPanel(parent)
     local sep = parent:CreateTexture(nil, "ARTWORK")
     sep:SetColorTexture(0.22, 0.22, 0.22, 1)
     sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT",  5, -252)
-    sep:SetPoint("TOPRIGHT", -5, -252)
+    sep:SetPoint("TOPLEFT", importCard, "BOTTOMLEFT", -15, -12)
+    sep:SetPoint("TOPRIGHT", importCard, "BOTTOMRIGHT", 15, -12)
 
     local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hBoss:SetPoint("TOPLEFT", 8, -262)
+    hBoss:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 3, -8)
     hBoss:SetText("|cffaaaaaa" .. L.WU_COL_BOSS .. "|r")
     KART.UI:RegisterLabel(hBoss)
 
     local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hInvite:SetPoint("TOPRIGHT", -110, -262)
+    hInvite:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -95, -8)
     hInvite:SetText("|cffaaaaaa" .. L.WU_BTN_INVITE .. "|r")
     KART.UI:RegisterLabel(hInvite)
 
     local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hRemove:SetPoint("TOPRIGHT", -38, -262)
+    hRemove:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -23, -8)
     hRemove:SetText("|cffaaaaaa" .. L.WU_BTN_REMOVE .. "|r")
     KART.UI:RegisterLabel(hRemove)
 
     WU.bossListFrame = CreateFrame("Frame", nil, parent)
-    WU.bossListFrame:SetPoint("TOPLEFT",  5, -278)
+    WU.bossListFrame:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 0, -24)
     WU.bossListFrame:SetPoint("RIGHT", parent, "RIGHT", -5, 0)
     WU.bossListFrame:SetHeight(24)
     WU.bossListFrame.rows = {}

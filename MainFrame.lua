@@ -177,7 +177,7 @@ scrollFrame.scrollBarHideable = true
 -- scroll range collapses to zero when everything fits. Heights include headroom for large
 -- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 475, -- Automation: promote/invite card + AutoLog + WoWUtils paste (measured below)
+    [1] = 475, -- Automation: unused static floor; tab 1 is measured live below
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
@@ -188,7 +188,8 @@ function KART.UpdateScrollRange()
     local h = PANEL_CONTENT_HEIGHTS[tab]
     if tab == 1 then
         local bl = KART.WU and KART.WU.bossListFrame
-        h = 680 + ((bl and bl:GetHeight()) or 24)
+        -- Promote card + AutoLog + WoWUtils paste, then the boss rows.
+        h = 720 + ((bl and bl:GetHeight()) or 24)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -501,6 +502,7 @@ KART.UI:RegisterLabel(alTitle)
 local alCard = KART.UI:CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
 alCard:SetSize(500, 200)
+KART.AutoLogCard = alCard
 
 local function AutoLogChanged()
     if KART.AutoLog then KART.AutoLog.Evaluate() end
