@@ -76,3 +76,36 @@ RC.Enable()
 T.eq(KART_Settings.rcCouncilMembers, "", "second Enable does not restore lc into cleared rc")
 KARTTEST.InstallRC()
 
+-- Council award relay -------------------------------------------------------------------
+RCLootCouncil.isMasterLooter = true
+RCLootCouncil.db.profile.council = { "Player-1-BBBB" }
+local awardSnap = KARTTEST.SnapshotRoster()
+local awardPrevActive = KARTTEST.activeUnit
+KARTTEST.SetRaid({
+    { name = "Lead", guid = "Player-1-AAAA", leader = true },
+    { name = "Bob",  guid = "Player-1-BBBB", realm = "TarrenMill" },
+})
+
+local ctx = { sender = "Bob-TarrenMill", channel = "WHISPER" }
+RC.HandleAwardRequest("1:Ann-TarrenMill:1", ctx)
+T.eq(#KARTTEST.rcAwards, 1, "ML client calls RC Award once")
+T.eq(KARTTEST.rcAwards[1].session, 1, "session is forwarded")
+T.eq(KARTTEST.rcAwards[1].winner, "Ann-TarrenMill", "winner name is forwarded")
+
+KARTTEST.rcAwards = {}
+ctx.sender = "Eve-TarrenMill"
+RC.HandleAwardRequest("1:Ann-TarrenMill:1", ctx)
+T.eq(#KARTTEST.rcAwards, 0, "non-council whisper is ignored")
+
+RCLootCouncil.isMasterLooter = false
+RCLootCouncil.masterLooter = "Lead-TarrenMill"
+KARTTEST.activeUnit = "raid2"
+local KASC = LibStub("KASC-1.0")
+local beforeAward = KASC.diag.sentByToken.RC_AWARD or 0
+RC.RequestAward(1, "Ann-TarrenMill", 1)
+T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeAward, 1,
+    "council non-ML sends RC_AWARD whisper to the master looter")
+
+KARTTEST.activeUnit = awardPrevActive
+KARTTEST.RestoreRoster(awardSnap)
+

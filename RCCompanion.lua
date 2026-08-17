@@ -2,9 +2,11 @@ local addonName, KART = ...
 KART.RC = KART.RC or {}
 local RC = KART.RC
 local KAUtil = LibStub("KAUtil-1.0")
-local Identity = LibStub("KASC-1.0").Identity
+local KASC = LibStub("KASC-1.0")
+local Identity = KASC.Identity
 
 local mlMissingWarned = {}
+local awardRegistered = false
 
 function RC.GetAddon()
     return _G.RCLootCouncil
@@ -47,6 +49,84 @@ local function CallMLMethod(ml, name)
     pcall(fn, ml)
 end
 
+local function GetMLName()
+    local addon = RC.GetAddon()
+    if not addon then return nil end
+    if addon.masterLooter then return addon.masterLooter end
+    if type(addon.GetML) == "function" then
+        local ok, name = pcall(addon.GetML, addon)
+        if ok and name then return name end
+    end
+    if addon.isMasterLooter then
+        return UnitName("player")
+    end
+    return nil
+end
+
+local function IsCouncilGUID(guid)
+    if not Identity.IsResolvedKey(guid) then return false end
+    local addon = RC.GetAddon()
+    local council = addon and addon.db and addon.db.profile and addon.db.profile.council
+    if council then
+        for _, g in ipairs(council) do
+            if g == guid then return true end
+        end
+    end
+    for _, g in ipairs(RC.ResolvedCouncilGUIDs()) do
+        if g == guid then return true end
+    end
+    return false
+end
+
+function RC.RequestAward(session, winnerName, responseID)
+    if not RC.IsRCLoaded() then return end
+    local addon = RC.GetAddon()
+    if addon.isMasterLooter then
+        local ml = _G.RCLootCouncilML
+        if not ml then return end
+        if type(ml.Award) ~= "function" then
+            if not mlMissingWarned.Award then
+                mlMissingWarned.Award = true
+                print("|cffff0000KART:|r RCLootCouncilML.Award is missing")
+            end
+            return
+        end
+        pcall(ml.Award, ml, session, winnerName, responseID)
+        return
+    end
+    if KASC.CommsRestricted() then
+        print((KART.L and KART.L.RC_AWARD_RESTRICTED)
+            or "Award relay blocked while addon comms are restricted.")
+        return
+    end
+    local mlName = GetMLName()
+    if not mlName then return end
+    KASC:Send("RC_AWARD:" .. session .. ":" .. winnerName .. ":" .. responseID,
+        "WHISPER", mlName, { prio = "ALERT" })
+end
+
+function RC.HandleAwardRequest(payload, ctx)
+    if ctx.channel ~= "WHISPER" then return end
+    local addon = RC.GetAddon()
+    if not addon or not addon.isMasterLooter then return end
+    local session, winner, response = payload:match("^(%d+):(.*):(%d+)$")
+    if not session then return end
+    session = tonumber(session)
+    response = tonumber(response)
+    local guid = Identity.ResolvePlayer(ctx.sender)
+    if not IsCouncilGUID(guid) then return end
+    local ml = _G.RCLootCouncilML
+    if not ml then return end
+    if type(ml.Award) ~= "function" then
+        if not mlMissingWarned.Award then
+            mlMissingWarned.Award = true
+            print("|cffff0000KART:|r RCLootCouncilML.Award is missing")
+        end
+        return
+    end
+    pcall(ml.Award, ml, session, winner, response)
+end
+
 function RC.PushCouncilToRC()
     if not UnitIsGroupLeader("player") or not RC.IsRCLoaded() then return end
     local addon = RC.GetAddon()
@@ -71,5 +151,12 @@ function RC.Enable()
         KART_Settings.rcCouncilMigrated = true
     end
     KART_Settings.rcCouncilMembers = KART_Settings.rcCouncilMembers or ""
+    if not awardRegistered then
+        awardRegistered = true
+        KASC:RegisterMessage("RC_AWARD", { payload = true, group = true, enabled = RC.IsRCLoaded },
+            function(payload, ctx)
+                RC.HandleAwardRequest(payload, ctx)
+            end)
+    end
     if not RC.IsRCLoaded() then return end
 end

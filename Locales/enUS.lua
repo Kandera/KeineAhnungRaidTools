@@ -143,6 +143,7 @@ KART.L_enUS = {
     RC_REASON_1MIN = "1 Min",
     RC_REASON_SEND = "Send",
     RC_REASON_RECEIVED = "|cff00ff00KART:|r %s is not ready: |cffffaa00%s|r",
+    RC_AWARD_RESTRICTED = "|cffff0000KART:|r Cannot relay the award while addon communication is restricted.",
     RL_CLEAR_WM = "Clear all World Markers",
     RL_READYCHECK = "Start Ready Check",
     RL_BUFFCHECK = "Toggle Buff-Checker",

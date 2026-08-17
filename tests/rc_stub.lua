@@ -7,7 +7,9 @@ function KARTTEST.InstallRC()
         db = { profile = { council = {} } },
         isMasterLooter = false,
         isCouncil = false,
+        masterLooter = "Lead-TarrenMill",
         player = { name = "Lead-TarrenMill" },
+        GetML = function() return "Lead-TarrenMill" end,
     }
     _G.RCLootCouncilML = {
         SendCouncil = function()

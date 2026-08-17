@@ -143,6 +143,7 @@ KART.L_deDE = {
     RC_REASON_1MIN = "1 Min",
     RC_REASON_SEND = "Senden",
     RC_REASON_RECEIVED = "|cff00ff00KART:|r %s ist nicht bereit: |cffffaa00%s|r",
+    RC_AWARD_RESTRICTED = "|cffff0000KART:|r Auszeichnung kann nicht weitergeleitet werden, solange Addon-Kommunikation eingeschränkt ist.",
     RL_PULL_LABEL = "P",
     RL_CLEAR_WM = "Alle Weltmarker löschen",
     RL_READYCHECK = "Bereitschaftscheck starten",
