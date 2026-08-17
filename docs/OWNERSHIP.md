@@ -28,5 +28,6 @@ was.
 
 ## What must stay true (raid-lead tools)
 
-Held to the 10-out-of-10 standard in `MANIFEST.md` for the two RC companion contracts, and to
-the same bar for invite, promote and buff-check behaviour that shipped before 4.0.
+Held to the 10-out-of-10 standard in `MANIFEST.md`: the companion must not hinder, abort, or
+break RCLootCouncil's loot flow. Invite, promote and buff-check keep the bar they shipped
+with before 4.0. Nick push and award relay are specified in `docs/4.0-RC-COMPANION.md`.

@@ -22,9 +22,9 @@ Each changelog entry is **one line, at most two lines for big changes**. Bold le
 
 ## The Manifest
 
-`docs/MANIFEST.md` is the list of core functions and the standard they are held to: **ten attempts in
-the game, ten successes.** Refer to it by that name -- "gegen das Manifest getestet", "das bricht C7"
--- and check a change against it before calling the change done. The automated suite is the floor,
+`docs/MANIFEST.md` is the 10/10 in-game bar: the companion must not hinder, abort, or break
+RCLootCouncil's loot flow. Refer to it by that name -- "gegen das Manifest getestet" -- and
+check a change against it before calling the change done. The automated suite is the floor,
 not the standard: it cannot see a cursor, a Blizzard roll window or a real reload.
 
 `docs/OWNERSHIP.md` is the settled rule for who owns the settings and who hands out the loot. A

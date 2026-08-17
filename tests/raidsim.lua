@@ -40,17 +40,6 @@ local LIB_FILES = {
     "Libs/KAUI-1.0/KAUI-1.0.lua",
 }
 
--- LibDeflate is deliberately NOT in LIB_FILES: unlike the libraries above it holds no per-client
--- mutable state (no handler tables, no identity cache -- just compression functions), so re-parsing
--- and re-executing its 3500 lines on every one of Boot's per-client reloads bought nothing but
--- wall-clock. run.lua loads it once, globally, before any test requires this file; Boot below just
--- re-registers that same instance in LibStub's wiped registry so LibStub("LibDeflate") keeps
--- resolving for whichever client is currently booted.
-local LibDeflateLib, LibDeflateMinor
-if LibStub then
-    LibDeflateLib, LibDeflateMinor = LibStub:GetLibrary("LibDeflate", true)
-end
-
 local function slurp(path)
     local f = assert(io.open(path, "r"), "raidsim: cannot open " .. path)
     local text = f:read("*a")
@@ -178,13 +167,6 @@ local function Boot(client, saved)
     -- no way to tell two clients apart.
     wipe(LibStub.libs)
     wipe(LibStub.minors)
-
-    -- Re-register the single shared LibDeflate instance the wipe above just dropped -- see the
-    -- comment on LibDeflateLib above for why this is a registry write, not a reload.
-    if LibDeflateLib then
-        rawset(LibStub.libs, "LibDeflate", LibDeflateLib)
-        rawset(LibStub.minors, "LibDeflate", LibDeflateMinor)
-    end
 
     -- ChatThrottleLib is NOT a LibStub library: it lives in _G behind a version guard, so loading
     -- the file a second time is a no-op. Left alone, all twenty clients would share one queue --

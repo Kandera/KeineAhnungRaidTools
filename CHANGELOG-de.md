@@ -9,9 +9,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unreleased]
 ### Geändert
 - **Loot Council ist jetzt RCLootCouncil.** KART füllt die Council-Liste aus Northern-Sky-Nicknames und lässt Council-Mitglieder zuweisen, während der Raidlead handelt.
+- **Loot-Spalten kommen von WowUtils (Addon und Bridge).** KART liefert und fängt diese Daten nicht.
+- **Der Desktop-KART-Companion wird nicht weiterentwickelt.** Das ist nicht die WowUtils-Bridge.
 
 ### Behoben
-- **Ein Stun lässt dein Abstimmungsfenster nicht mehr geschlossen zurück.**
 - **Eine volle 5er-Gruppe wandelt sich nicht mehr selbst in einen Schlachtzug um** — das passiert jetzt nur noch, wenn ein 6. Spieler eine Einladung anfragt.
 - **Das Leiten einer 5er-Gruppe kündigt nicht mehr an, dass der Schlachtzug auf deinen Einstellungen läuft.**
 

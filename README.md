@@ -35,14 +35,14 @@ A detailed window for checking raid readiness:
 *   **Module Toggle:** The Buff Checker can be fully disabled to save CPU when not needed. The background KART sync (oil/ilvl/gear answers for others) stays active regardless, so the raid lead still sees correct data about this player.
 
 ### 5. RCLootCouncil companion
-KART 4.0 no longer ships a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. The raid also runs the **WowUtils** addon (distributed with RC) for sim columns on RC's voting frame.
+KART 4.0 no longer ships a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. **WowUtils** (addon + Bridge) paints sim columns on RC's voting frame.
 
 KART adds two hooks on top of RC:
 
 *   **Council by nickname:** On the Settings tab, the raid leader lists council members as [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) nicknames (or character names). KART pushes only the GUIDs of members whose current alt is in the raid into RC's council list whenever the roster changes.
 *   **Award relay:** Council members click Award in RC's voting frame; KART whispers the raid leader, whose client calls RC's `Award()` so the lead can keep trading instead of living in the voting UI.
 
-Everyone who should click Award, and the raid leader who receives those clicks, needs KART. Other raiders need RC and WowUtils only.
+Everyone who should click Award, and the raid leader who receives those clicks, needs KART. Other raiders need RCLootCouncil and WowUtils (addon + Bridge). The old desktop **KART Companion** tray app is discontinued; it is not the WowUtils Bridge.
 
 ### 6. WoWUtils roster paste (Automation tab)
 *   Raid compositions can be imported from WoWUtils via copy-paste on the **Automation** tab (boss-by-boss format with encounter, difficulty, and invite list).
@@ -60,7 +60,8 @@ Everyone who should click Award, and the raid leader who receives those clicks, 
 ## Requirements
 
 *   **RCLootCouncil** — loot council (required for loot features).
-*   **WowUtils** — RC voting-frame columns (installed alongside RC in this guild).
+*   **WowUtils addon** — RC voting-frame columns.
+*   **WowUtils Bridge** — WowUtils' data pipe (not the discontinued KART Companion tray app).
 *   **Northern Sky Raid Tools** (optional) — nicknames for auto-promote and RC council list; falls back to character names when absent.
 
 ## Slash Commands
@@ -85,7 +86,6 @@ Bundled unmodified, each under its own license:
 
 *   **[Ace3](https://www.wowace.com/projects/ace3)** (AceComm-3.0, CallbackHandler-1.0) — © Ace3 Development Team, BSD-style license.
 *   **ChatThrottleLib** by Mikk — released into the Public Domain.
-*   **[LibDeflate](https://github.com/SafeteeWoW/LibDeflate)** by Haoqian He — zlib license.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE.md file for details.

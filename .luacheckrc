@@ -4,7 +4,7 @@
 std = "lua51"
 max_line_length = false
 -- vendored verbatim, not ours to lint
-exclude_files = { "Libs/LibStub/", "Libs/CallbackHandler-1.0/", "Libs/AceComm-3.0/", "Libs/LibDeflate/", "archive/" }
+exclude_files = { "Libs/LibStub/", "Libs/CallbackHandler-1.0/", "Libs/AceComm-3.0/", "archive/" }
 
 -- WoW hands every event/callback a fixed signature; addon code routinely ignores arguments
 -- it doesn't need (e.g. `event` in an OnEvent handler). That is normal WoW addon style, not

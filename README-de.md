@@ -35,14 +35,14 @@ Ein detailliertes Fenster zur Überprüfung der Raid-Vorbereitung:
 *   **Modul-Schalter:** Der Buff-Checker lässt sich komplett deaktivieren, um CPU zu sparen, wenn man ihn nicht braucht. Der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bleibt davon unberührt aktiv, damit der Raidleiter trotzdem korrekte Daten über diesen Spieler sieht.
 
 ### 5. RCLootCouncil-Begleiter
-KART 4.0 bringt keinen eingebauten Loot Council mehr mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. Der Raid nutzt zusätzlich das **WowUtils**-Addon (mit RC ausgerollt) für Sim-Spalten im RC-Abstimmungsfenster.
+KART 4.0 bringt keinen eingebauten Loot Council mehr mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. **WowUtils** (Addon + Bridge) malt Sim-Spalten ins RC-Abstimmungsfenster.
 
 KART ergänzt zwei Hooks:
 
 *   **Council per Nickname:** Auf dem Settings-Tab trägt der Raidleiter Council-Mitglieder als [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools)-Nicknames (oder Charakternamen) ein. KART schreibt nur die GUIDs von Mitgliedern, deren aktueller Alt im Raid steht, bei Roster-Änderungen in RCs Council-Liste.
 *   **Award-Weiterleitung:** Council-Mitglieder klicken Award im RC-Abstimmungsfenster; KART flüstert dem Raidlead zu, dessen Client RCs `Award()` aufruft, während der Lead weiter handelt.
 
-Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KART. Alle anderen brauchen nur RC und WowUtils.
+Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KART. Alle anderen brauchen RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
 
 ### 6. WoWUtils-Roster per Paste (Automation-Tab)
 *   Raid-Zusammenstellungen lassen sich auf dem **Automation**-Tab per Copy-Paste aus WoWUtils importieren (Boss-für-Boss-Format mit Encounter, Difficulty und Invite-Liste).
@@ -60,7 +60,8 @@ Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KAR
 ## Voraussetzungen
 
 *   **RCLootCouncil** — Loot Council (für Loot-Features erforderlich).
-*   **WowUtils** — Spalten im RC-Abstimmungsfenster.
+*   **WowUtils-Addon** — Spalten im RC-Abstimmungsfenster.
+*   **WowUtils-Bridge** — WowUtils-Datenpipe (nicht die eingestellte KART-Companion-Tray-App).
 *   **Northern Sky Raid Tools** (optional) — Nicknames für Auto-Promote und RC-Council; sonst Charakternamen.
 
 ## Slash-Befehle
@@ -85,7 +86,6 @@ Unverändert mitgeliefert, jede unter ihrer eigenen Lizenz:
 
 *   **[Ace3](https://www.wowace.com/projects/ace3)** (AceComm-3.0, CallbackHandler-1.0) — © Ace3 Development Team, BSD-artige Lizenz.
 *   **ChatThrottleLib** von Mikk — gemeinfrei (Public Domain).
-*   **[LibDeflate](https://github.com/SafeteeWoW/LibDeflate)** von Haoqian He — zlib-Lizenz.
 
 ## Lizenz
 Dieses Projekt lizenziert unter der MIT-Lizenz - siehe die LICENSE.md Datei für Details.

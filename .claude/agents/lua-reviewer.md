@@ -1,6 +1,6 @@
 ---
 name: lua-reviewer
-description: Reviews KART's Lua for the defect classes static analysis cannot see - taint and protected calls, frame lifecycle, SavedVariables shape, comm limits, event symmetry. Filters every finding against the project's settled decisions before reporting. Reviews the working-tree diff by default; pass a file or glob for a wider sweep. Use for KART addon code only - not for KART-Companion (C#) or the Discord bot (PHP).
+description: Reviews KART's Lua for the defect classes static analysis cannot see - taint and protected calls, frame lifecycle, SavedVariables shape, comm limits, event symmetry. Filters every finding against the project's settled decisions before reporting. Reviews the working-tree diff by default; pass a file or glob for a wider sweep. Use for KART addon code only - not for the discontinued KART-Companion (C#) or the Discord bot (PHP).
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -55,7 +55,7 @@ These are the classes `luacheck` structurally cannot see:
   and port out constantly, so roster rebuilds are frequent.
 - **SavedVariables shape.** Eight globals plus two per-character, listed in the `.toc`. A new
   field or a changed shape without a migration corrupts existing users on their next login.
-- **Comm limits.** KASC-1.0 over AceComm-3.0 with LibDeflate and ChatThrottleLib. Prefix
+- **Comm limits.** KASC-1.0 over AceComm-3.0 with ChatThrottleLib. Prefix
   registration, chunking, throttle starvation, and separator collisions with user-supplied
   text (see `StripColons` in REVIEW-DECISIONS.md for that class already found once).
 - **Event symmetry.** `RegisterEvent` without an `UnregisterEvent`; `OnUpdate` scripts left
