@@ -380,6 +380,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
         if KART.AutoLog then KART.AutoLog.Evaluate() end
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
+        if KART.RC then KART.RC.HookVotingFrame() end
     elseif event == "PLAYER_CONTROL_LOST" then
         KART.OnControlLost()
     elseif event == "CHALLENGE_MODE_START" then

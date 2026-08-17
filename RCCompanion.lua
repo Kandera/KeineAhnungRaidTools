@@ -41,12 +41,12 @@ local function WrapAward(addon)
     local ml = _G.RCLootCouncilML
     if not ml or type(ml.Award) ~= "function" then return false end
     local originalAward = ml.Award
-    ml.Award = function(self, session, winnerName, responseID)
+    ml.Award = function(self, session, winnerName, response, ...)
         if suppressAward then return end
         if addon.isMasterLooter then
-            return originalAward(self, session, winnerName, responseID)
+            return originalAward(self, session, winnerName, response, ...)
         end
-        RC.RequestAward(session, winnerName, responseID)
+        RC.RequestAward(session, winnerName, response, ...)
     end
     awardWrapped = true
     return true
@@ -179,7 +179,7 @@ local function IsCouncilGUID(guid)
     return false
 end
 
-function RC.RequestAward(session, winnerName, responseID)
+function RC.RequestAward(session, winnerName, response, ...)
     if not RC.IsRCLoaded() then return end
     local addon = RC.GetAddon()
     if addon.isMasterLooter then
@@ -192,7 +192,7 @@ function RC.RequestAward(session, winnerName, responseID)
             end
             return
         end
-        pcall(ml.Award, ml, session, winnerName, responseID)
+        pcall(ml.Award, ml, session, winnerName, response, ...)
         return
     end
     if KASC.CommsRestricted() then
@@ -202,7 +202,7 @@ function RC.RequestAward(session, winnerName, responseID)
     end
     local mlName = GetMLName()
     if not mlName then return end
-    KASC:Send("RC_AWARD:" .. session .. ":" .. winnerName .. ":" .. responseID,
+    KASC:Send("RC_AWARD:" .. session .. ":" .. winnerName .. ":" .. tostring(response),
         "WHISPER", mlName, { prio = "ALERT" })
 end
 
@@ -210,10 +210,9 @@ function RC.HandleAwardRequest(payload, ctx)
     if ctx.channel ~= "WHISPER" then return end
     local addon = RC.GetAddon()
     if not addon or not addon.isMasterLooter then return end
-    local session, winner, response = payload:match("^(%d+):(.*):(%d+)$")
+    local session, winner, response = payload:match("^(%d+):(.*):(.+)$")
     if not session then return end
     session = tonumber(session)
-    response = tonumber(response)
     local guid = Identity.ResolvePlayer(ctx.sender)
     if not IsCouncilGUID(guid) then return end
     local ml = _G.RCLootCouncilML
@@ -234,12 +233,15 @@ function RC.PushCouncilToRC()
     addon.db.profile.council = RC.ResolvedCouncilGUIDs()
     local ml = _G.RCLootCouncilML
     if not ml then return end
-    CallMLMethod(ml, "SendCouncil")
     CallMLMethod(ml, "UpdateGroupCouncil")
+    CallMLMethod(ml, "SendCouncil")
 end
 
 function RC.OnRosterUpdate()
     RC.PushCouncilToRC()
+    if RC.IsRCLoaded() and not votingFrameHooked then
+        RC.HookVotingFrame()
+    end
 end
 
 function RC.UpdateStatusLabel()

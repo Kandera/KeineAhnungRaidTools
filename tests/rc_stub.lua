@@ -1,8 +1,13 @@
 -- In-process RCLootCouncil double for the companion tests. Not the game.
+local transmitCouncil = {}
+
 function KARTTEST.InstallRC()
     KARTTEST.rcLoaded = true
     KARTTEST.rcCouncilSent = 0
+    KARTTEST.rcCouncilSentList = nil
+    KARTTEST.rcCouncilUpdated = false
     KARTTEST.rcAwards = {}
+    transmitCouncil = {}
     _G.RCLootCouncil = {
         db = { profile = { council = {} } },
         isMasterLooter = false,
@@ -12,13 +17,29 @@ function KARTTEST.InstallRC()
         GetML = function() return "Lead-TarrenMill" end,
     }
     _G.RCLootCouncilML = {
-        SendCouncil = function()
-            KARTTEST.rcCouncilSent = KARTTEST.rcCouncilSent + 1
+        UpdateGroupCouncil = function()
+            transmitCouncil = {}
+            local council = RCLootCouncil.db.profile.council
+            for i, g in ipairs(council) do
+                transmitCouncil[i] = g
+            end
+            KARTTEST.rcCouncilUpdated = true
         end,
-        UpdateGroupCouncil = function() end,
-        Award = function(_, session, winner, response)
+        SendCouncil = function()
+            if not KARTTEST.rcCouncilUpdated then
+                error("SendCouncil before UpdateGroupCouncil")
+            end
+            KARTTEST.rcCouncilSentList = {}
+            for i, g in ipairs(transmitCouncil) do
+                KARTTEST.rcCouncilSentList[i] = g
+            end
+            KARTTEST.rcCouncilSent = KARTTEST.rcCouncilSent + 1
+            KARTTEST.rcCouncilUpdated = false
+        end,
+        Award = function(_, session, winner, response, ...)
+            local extra = { ... }
             KARTTEST.rcAwards[#KARTTEST.rcAwards + 1] =
-                { session = session, winner = winner, response = response }
+                { session = session, winner = winner, response = response, extra = extra }
             return true
         end,
     }
@@ -26,6 +47,7 @@ end
 
 function KARTTEST.RemoveRC()
     KARTTEST.rcLoaded = false
+    transmitCouncil = {}
     _G.RCLootCouncil = nil
     _G.RCLootCouncilML = nil
 end

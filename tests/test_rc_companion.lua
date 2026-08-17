@@ -69,6 +69,9 @@ RC.PushCouncilToRC()
 T.deep_eq(RCLootCouncil.db.profile.council,
     { "Player-1-BBBB", "Player-1-CCCC", "Player-1-DDDD" },
     "semicolon council list resolves live raid names into GUIDs")
+T.deep_eq(KARTTEST.rcCouncilSentList,
+    { "Player-1-BBBB", "Player-1-CCCC", "Player-1-DDDD" },
+    "SendCouncil broadcasts council filled by UpdateGroupCouncil")
 
 -- lcCouncilMembers -> rcCouncilMembers one-shot migration --------------------------------
 local KAUtil = LibStub("KAUtil-1.0")
@@ -99,6 +102,11 @@ RC.HandleAwardRequest("1:Ann-TarrenMill:1", ctx)
 T.eq(#KARTTEST.rcAwards, 1, "ML client calls RC Award once")
 T.eq(KARTTEST.rcAwards[1].session, 1, "session is forwarded")
 T.eq(KARTTEST.rcAwards[1].winner, "Ann-TarrenMill", "winner name is forwarded")
+
+KARTTEST.rcAwards = {}
+RC.HandleAwardRequest("1:Ann-TarrenMill:Mainspec", ctx)
+T.eq(#KARTTEST.rcAwards, 1, "ML client accepts response text")
+T.eq(KARTTEST.rcAwards[1].response, "Mainspec", "response text is forwarded not tonumber")
 
 KARTTEST.rcAwards = {}
 ctx.sender = "Eve-TarrenMill"
@@ -144,6 +152,8 @@ vf.scrollCols[1] = { colName = "name", DoCellUpdate = vf.SetCellName }
 local menuFrame = { initialize = vf.RightClickMenu }
 _G.RCLootCouncil_VotingFrame_RightclickMenu = menuFrame
 local prevGetActiveModule = RCLootCouncil.GetActiveModule
+RCLootCouncil.GetActiveModule = function() return nil end
+RC.HookVotingFrame()
 RCLootCouncil.GetActiveModule = function(_, name)
     if name == "votingframe" then return vf end
 end
@@ -153,7 +163,7 @@ KARTTEST.rcMenuOpened = nil
 RC.HookVotingFrame()
 menuFrame.initialize(vf)
 T.eq(KARTTEST.rcMenuOpened, true,
-    "menuFrame.initialize opens the RC right-click menu for council")
+    "HookVotingFrame succeeds on a later call and opens the RC right-click menu for council")
 
 local cellText = {}
 local frame = {
@@ -172,15 +182,32 @@ RCLootCouncil.isMasterLooter = false
 RCLootCouncil.masterLooter = "Lead-TarrenMill"
 KARTTEST.activeUnit = "raid1"
 local beforeRelay = KASC.diag.sentByToken.RC_AWARD or 0
-RCLootCouncilML.Award(RCLootCouncilML, 2, "Bob-TarrenMill", 1)
+local relayPayload
+local origSend = KASC.Send
+KASC.Send = function(self, msg, ...)
+    if type(msg) == "string" and msg:sub(1, 9) == "RC_AWARD:" then
+        relayPayload = msg
+    end
+    return origSend(self, msg, ...)
+end
+RCLootCouncilML.Award(RCLootCouncilML, 2, "Bob-TarrenMill", "Mainspec", "reason", function() end, "extra")
+KASC.Send = origSend
 T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeRelay, 1,
     "council non-ML Award wrap relays via RequestAward")
+T.eq(relayPayload, "RC_AWARD:2:Bob-TarrenMill:Mainspec",
+    "council relay whisper carries response text")
 
 KARTTEST.rcAwards = {}
 RCLootCouncil.isMasterLooter = true
 local beforeML = KASC.diag.sentByToken.RC_AWARD or 0
-RCLootCouncilML.Award(RCLootCouncilML, 3, "Ann-TarrenMill", 1)
+local mlReason = { tier = 1 }
+local mlCallback = function() end
+RCLootCouncilML.Award(RCLootCouncilML, 3, "Ann-TarrenMill", "Mainspec", mlReason, mlCallback, "extra")
 T.eq(#KARTTEST.rcAwards, 1, "ML Award uses originalAward")
+T.eq(KARTTEST.rcAwards[1].response, "Mainspec", "ML Award keeps response text")
+T.eq(KARTTEST.rcAwards[1].extra[1], mlReason, "ML Award forwards reason")
+T.eq(KARTTEST.rcAwards[1].extra[2], mlCallback, "ML Award forwards callback")
+T.eq(KARTTEST.rcAwards[1].extra[3], "extra", "ML Award forwards varargs")
 T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeML, 0,
     "ML Award does not send RC_AWARD")
 
