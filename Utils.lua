@@ -252,6 +252,7 @@ KART.Defaults = {
     lcVoteSeconds = 20,
     lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass", -- placeholder; localized in Core.lua ADDON_LOADED via LC_DEFAULT_BUTTONS
     lcCouncilMembers = "",
+    rcCouncilMembers = "",
     lcLootmaster = "",
     lcShowNickNames = false,
     lcVoteLayoutCompact = false,
