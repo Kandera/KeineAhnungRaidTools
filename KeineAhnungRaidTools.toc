@@ -6,7 +6,7 @@
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
 ## SavedVariables: KART_Settings, KART_LootHistory, KART_LootHistoryClearedAt, KART_LootHistoryEpoch, KART_LCOfficerNotes, KART_WoWUtilsCache, KART_Profiles, KART_PlayerCache
 ## SavedVariablesPerCharacter: KART_LCTrades, KART_LCSession
-## OptionalDeps: NorthernSkyRaidTools
+## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil
 ## X-Curse-Project-ID: 1603461
 ## X-Wago-ID: QN53ZOKB
 
@@ -42,3 +42,4 @@ LootHistory.lua
 Invite.lua
 AutoLog.lua
 Core.lua
+RCCompanion.lua

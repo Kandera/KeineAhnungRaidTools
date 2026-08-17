@@ -727,6 +727,13 @@ _G.PixelUtil = {
     end,
 }
 
+-- Optional addon presence ---------------------------------------------------------------
+_G.C_AddOns = _G.C_AddOns or {}
+function C_AddOns.IsAddOnLoaded(name)
+    if name == "RCLootCouncil" then return not not _G.KARTTEST.rcLoaded end
+    return false
+end
+
 -- Addon restrictions --------------------------------------------------------------------
 -- The Midnight-era gate on what an addon may do while an encounter or a Mythic+ run is active
 -- (Enum.AddOnRestrictionType, ADDON_RESTRICTION_STATE_CHANGED). Addon messages are among the things
