@@ -2,8 +2,11 @@
 name: lua-reviewer
 description: Reviews KART's Lua for the defect classes static analysis cannot see - taint and protected calls, frame lifecycle, SavedVariables shape, comm limits, event symmetry. Filters every finding against the project's settled decisions before reporting. Reviews the working-tree diff by default; pass a file or glob for a wider sweep. Use for KART addon code only - not for KART-Companion (C#) or the Discord bot (PHP).
 tools: Read, Grep, Glob, Bash
-model: opus
+model: inherit
 ---
+
+The model is the session's reasoning model (currently Grok 4.6). Do not pin Opus or
+Composer. See `.cursor/rules/model-routing.mdc`: Manifest / comm / design review stays there.
 
 # KART Lua reviewer
 

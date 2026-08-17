@@ -1,0 +1,25 @@
+---
+description: Which model does thinking vs coding in this repo
+alwaysApply: true
+---
+
+# Model routing
+
+Split by decision density, not by "code vs no code". Current names: reasoning = Grok 4.6, coding = Composer. Use those names in the session; treat them as the current examples of the two jobs.
+
+**Reasoning model (Grok 4.6)** — think, plan, review, investigate, decide.
+- Specs, design, Manifest/Ownership/backlog, "should we"
+- New protocol, SavedVariables shape, comm priority, Frame-lifecycle semantics
+- Defect / Manifest / design review (C5/C13/C14). `lua-reviewer` stays here.
+- Small, decision-dense edits (one matcher, one status line, this kind of rule)
+
+**Coding model (Composer)** — volume after the call is settled.
+- Agreed plan: Lua / C# / tests / locales / `.toc` / fixtures
+- GitHub Actions YAML syntax, mechanical renames, "tests red / key missing"
+- C# Companion one-call deletes
+
+**Handoff, not a ban.** Reasoning may touch `.lua` when the edit is small and the decision is the work. Stop and hand off a short plan (do not invent architecture in the coding pass) when the next step is more than ~2 files or executing an already-written plan. Coding stops and switches back when the next step is a design or Manifest call.
+
+CI *policy* (what the suite must prove) is a reasoning call. YAML plumbing is coding.
+
+Tiny exception: coding may fix a typo or a one-line CI glitch without a round-trip.
