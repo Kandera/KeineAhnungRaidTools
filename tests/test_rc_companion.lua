@@ -125,8 +125,10 @@ local originalMenu = function()
 end
 local vf = {
     RightClickMenu = originalMenu,
-    SetCellName = function(self, frame, data, _, realrow)
-        if frame and frame.text then frame.text:SetText(data[realrow].name) end
+    SetCellName = function(rowFrame, frame, data, cols, row, realrow)
+        if frame and frame.text and data[realrow] then
+            frame.text:SetText("|T123:0|t" .. data[realrow].name)
+        end
     end,
     scrollCols = {},
 }
@@ -146,9 +148,17 @@ T.eq(KARTTEST.rcMenuOpened, true,
     "menuFrame.initialize opens the RC right-click menu for council")
 
 local cellText = {}
-local frame = { text = { SetText = function(_, t) cellText[1] = t end } }
-vf:SetCellName(frame, { [1] = { name = "Bob-TarrenMill" } }, nil, 1)
-T.eq(cellText[1], "Bobby", "name cell shows the NSRT nick")
+local frame = {
+    text = {
+        _text = "",
+        SetText = function(self, t) self._text = t; cellText[1] = t end,
+        GetText = function(self) return self._text end,
+    },
+}
+local data = { [1] = { name = "Wrong" }, [2] = { name = "Bob-TarrenMill" } }
+vf.scrollCols[1].DoCellUpdate(nil, frame, data, vf.scrollCols, 1, 2)
+T.eq(cellText[1], "|T123:0|tBobby",
+    "name cell uses realrow and keeps the owner-loot toast prefix")
 
 RCLootCouncil.isMasterLooter = false
 RCLootCouncil.masterLooter = "Lead-TarrenMill"

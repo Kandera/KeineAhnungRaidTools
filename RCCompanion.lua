@@ -45,10 +45,18 @@ end
 local function HookSetCellName(vf)
     if type(vf.SetCellName) ~= "function" then return end
     local originalSetCellName = vf.SetCellName
-    vf.SetCellName = function(self, frame, data, _, realrow)
-        pcall(originalSetCellName, self, frame, data, _, realrow)
+    vf.SetCellName = function(rowFrame, frame, data, cols, row, realrow, column, fShow, table, ...)
+        pcall(originalSetCellName, rowFrame, frame, data, cols, row, realrow, column, fShow, table, ...)
         if frame and frame.text and data and data[realrow] and data[realrow].name then
-            pcall(frame.text.SetText, frame.text, RC.DisplayName(data[realrow].name))
+            local display = RC.DisplayName(data[realrow].name)
+            if type(frame.text.GetText) == "function" then
+                local ok, prior = pcall(frame.text.GetText, frame.text)
+                if ok and prior then
+                    local prefix = prior:match("^(|T.-|t)")
+                    if prefix then display = prefix .. display end
+                end
+            end
+            pcall(frame.text.SetText, frame.text, display)
         end
     end
     if vf.scrollCols then
