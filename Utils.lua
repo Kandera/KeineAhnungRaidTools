@@ -254,6 +254,7 @@ KART.Defaults = {
     lcCouncilMembers = "",
     rcCouncilMembers = "",
     rcCouncilMigrated = false,
+    rcShowNickNames = true,
     lcLootmaster = "",
     lcShowNickNames = false,
     lcVoteLayoutCompact = false,

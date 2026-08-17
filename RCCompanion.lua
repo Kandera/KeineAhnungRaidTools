@@ -5,23 +5,33 @@ local KAUtil = LibStub("KAUtil-1.0")
 local KASC = LibStub("KASC-1.0")
 local Identity = KASC.Identity
 
+local function SettingsStore() return KART_Settings end
+
 local mlMissingWarned = {}
 local awardRegistered = false
 local votingFrameHooked = false
 local awardWrapped = false
 local suppressAward = false
 
+local function ShowNickNames()
+    return KART_Settings and KART_Settings.rcShowNickNames ~= false
+end
+
 function RC.DisplayName(unitOrName)
     if UnitExists(unitOrName) then
-        local _, original = Identity.GetNickname(unitOrName)
-        if original then return original end
+        if ShowNickNames() then
+            local _, original = Identity.GetNickname(unitOrName)
+            if original then return original end
+        end
         return Ambiguate(UnitName(unitOrName) or unitOrName, "short")
     end
-    local key = Identity.ResolvePlayer(unitOrName)
-    local unit = Identity.FindUnitForKey(key)
-    if unit then
-        local _, original = Identity.GetNickname(unit)
-        if original then return original end
+    if ShowNickNames() then
+        local key = Identity.ResolvePlayer(unitOrName)
+        local unit = Identity.FindUnitForKey(key)
+        if unit then
+            local _, original = Identity.GetNickname(unit)
+            if original then return original end
+        end
     end
     return Ambiguate(unitOrName, "short")
 end
@@ -178,7 +188,7 @@ function RC.RequestAward(session, winnerName, responseID)
         if type(ml.Award) ~= "function" then
             if not mlMissingWarned.Award then
                 mlMissingWarned.Award = true
-                print("|cffff0000KART:|r RCLootCouncilML.Award is missing")
+                print("|cffff0000KART:|r RCLootCouncilML Award is missing")
             end
             return
         end
@@ -211,7 +221,7 @@ function RC.HandleAwardRequest(payload, ctx)
     if type(ml.Award) ~= "function" then
         if not mlMissingWarned.Award then
             mlMissingWarned.Award = true
-            print("|cffff0000KART:|r RCLootCouncilML.Award is missing")
+            print("|cffff0000KART:|r RCLootCouncilML Award is missing")
         end
         return
     end
@@ -232,6 +242,67 @@ function RC.OnRosterUpdate()
     RC.PushCouncilToRC()
 end
 
+function RC.UpdateStatusLabel()
+    local lbl = RC.StatusLabel
+    if not lbl then return end
+    local L = KART.L or {}
+    if RC.IsRCLoaded() then
+        lbl:SetText(L.RC_STATUS_DETECTED or "RCLootCouncil detected")
+        lbl:SetTextColor(0.2, 0.8, 0.2)
+    else
+        lbl:SetText(L.RC_STATUS_MISSING or "RCLootCouncil not loaded")
+        lbl:SetTextColor(0.8, 0.5, 0.2)
+    end
+end
+
+function RC.BuildSettingsCard()
+    if RC.settingsBuilt or not KART.SettingsPanel or not KART.UI then return end
+    RC.settingsBuilt = true
+    local L = KART.L or {}
+    local CONTENT_WIDTH = 460
+
+    local card = KART.UI:CreateCard(KART.SettingsPanel)
+    if KART.BtnProfile then
+        local profCard = KART.BtnProfile:GetParent()
+        card:SetPoint("TOPLEFT", profCard, "BOTTOMLEFT", 0, -20)
+    else
+        card:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -400)
+    end
+    card:SetSize(500, 175)
+    RC.SettingsCard = card
+
+    RC.StatusLabel = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    RC.StatusLabel:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -20)
+    RC.StatusLabel:SetWidth(CONTENT_WIDTH)
+    RC.StatusLabel:SetJustifyH("LEFT")
+    KART.UI:RegisterLabel(RC.StatusLabel)
+
+    RC.CbShowNickNames = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_RCShowNickNames", label = L.RC_SET_SHOW_NICKNAMES or "Show NSRT nicknames in RC voting frame",
+        store = SettingsStore, key = "rcShowNickNames", y = -45,
+        tooltip = L.RC_DESC_SHOW_NICKNAMES,
+    })
+
+    local lblCouncil = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    lblCouncil:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -85)
+    lblCouncil:SetWidth(CONTENT_WIDTH)
+    lblCouncil:SetJustifyH("LEFT")
+    lblCouncil:SetText(L.RC_SET_COUNCIL or "Council members (semicolon-separated):")
+    KART.UI:RegisterLabel(lblCouncil)
+
+    RC.CouncilMembersEditBox = KART.UI:CreateStyledEditBox(card, "KART_RCCouncilMembers")
+    local eb = RC.CouncilMembersEditBox
+    eb:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -105)
+    eb:SetSize(CONTENT_WIDTH, 28)
+    eb:SetMaxLetters(255)
+    eb:SetScript("OnTextChanged", function(self)
+        KART_Settings.rcCouncilMembers = self:GetText()
+        RC.PushCouncilToRC()
+    end)
+
+    RC.UpdateStatusLabel()
+end
+
 function RC.Enable()
     if not KART_Settings.rcCouncilMigrated then
         local rc = KART_Settings.rcCouncilMembers
@@ -249,6 +320,15 @@ function RC.Enable()
                 RC.HandleAwardRequest(payload, ctx)
             end)
     end
-    if not RC.IsRCLoaded() then return end
+    RC.BuildSettingsCard()
+    RC.UpdateStatusLabel()
+    if not RC.IsRCLoaded() then
+        if not RC.warnedMissing then
+            RC.warnedMissing = true
+            print((KART.L and KART.L.RC_NEED_ADDON)
+                or "|cffff0000KART:|r RCLootCouncil is not loaded — install it to use the RC companion.")
+        end
+        return
+    end
     RC.HookVotingFrame()
 end

@@ -100,6 +100,8 @@ function KART.SyncSettingsToUI()
     if KART.LC and KART.LC.SldStrata then settingsMap[KART.LC.SldStrata] = "lcFrameStrata" end
     if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
     if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
+    if KART.RC and KART.RC.CouncilMembersEditBox then settingsMap[KART.RC.CouncilMembersEditBox] = "rcCouncilMembers" end
+    if KART.RC and KART.RC.CbShowNickNames then settingsMap[KART.RC.CbShowNickNames] = "rcShowNickNames" end
     if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
     if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
     if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
@@ -248,6 +250,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- addon version into a settings blob saved before they existed.
         KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
 
+        if KART.RC then KART.RC.Enable() end
+
         -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
         -- the Defaults merge above — Defaults.minimap = {}).
         local dbIcon = LibStub("LibDBIcon-1.0", true)
@@ -305,6 +309,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.LC and KART.LC.RetryPendingResolutionsThrottled then
             KART.LC.RetryPendingResolutionsThrottled()
         end
+        if arg1 == "RCLootCouncil" and KART.RC then KART.RC.Enable() end
 
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
         if event ~= "CHAT_MSG_GUILD" or KART_Settings.inviteViaGuildChat then
@@ -405,6 +410,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- convert once the invitees fill the party, then clear it (also on leaving the group).
         if IsInRaid() or not IsInGroup() then KART.pendingBulkRaidConvert = false end
         KART.HandleAutoPromoteThrottled()
+        if KART.RC then KART.RC.OnRosterUpdate() end
         
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})

@@ -69,6 +69,7 @@ local SOURCES = {
     "LootCouncil.lua", "LootCouncilPanel.lua", "LootCouncilSettings.lua", "LootCouncilTrade.lua",
     "LootCouncilVote.lua", "LootCouncilRelevance.lua", "LootCouncilOfficerNotes.lua",
     "LootHistory.lua",
+    "RCCompanion.lua",
 }
 
 local function Slurp(path)

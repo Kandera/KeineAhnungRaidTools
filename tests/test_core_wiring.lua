@@ -114,6 +114,23 @@ do
         "and that branch actually refreshes the council rows")
 end
 
+-- RC companion enable and roster push (4.0) ---------------------------------------------------------
+Wired("KART.RC.OnRosterUpdate()", "RC council is pushed on roster change")
+Wired("KART.RC.Enable()", "RC companion Enable is wired from Core.lua")
+
+do
+    local branch = code:match('elseif event == "GROUP_ROSTER_UPDATE" then\n(.-)\nelseif event ==')
+    T.truthy(branch and branch:find("KART.RC.OnRosterUpdate()", 1, true),
+        "the roster branch calls RC.OnRosterUpdate")
+end
+
+do
+    local branch = code:match('elseif event == "ADDON_LOADED" then\n(.-)\nelseif event ==')
+    T.truthy(branch and branch:find('arg1 == "RCLootCouncil"', 1, true)
+        and branch:find("KART.RC.Enable()", 1, true),
+        "RCLootCouncil ADDON_LOADED re-enables the RC companion")
+end
+
 -- Identity resolution after an optional dependency loads (B126) --------------------------------------
 -- NSRT's nickname API does not exist until NSRT has set itself up, and KART's retry pass is driven by
 -- the roster event alone -- so a client that loaded first held plain text where everybody else held
