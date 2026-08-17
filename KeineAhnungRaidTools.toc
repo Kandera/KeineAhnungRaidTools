@@ -2,7 +2,7 @@
 ## Title: Keine Ahnung Raid Tools
 ## Notes: Raid tools and RCLootCouncil companion — invites, auto-promote, buff-checks.
 ## Author: Kandera
-## Version: 4.0.0-alpha2
+## Version: 4.0.0
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
 ## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache
 ## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil

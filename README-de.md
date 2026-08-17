@@ -44,8 +44,8 @@ KART ergänzt zwei Hooks:
 
 Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KART. Alle anderen brauchen RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
 
-### 6. WoWUtils-Roster per Paste (Automation-Tab)
-*   Raid-Zusammenstellungen lassen sich auf dem **Automation**-Tab per Copy-Paste aus WoWUtils importieren (Boss-für-Boss-Format mit Encounter, Difficulty und Invite-Liste).
+### 6. WoWUtils-Roster per Paste
+*   Raid-Zusammenstellungen lassen sich auf dem **WoWUtils**-Tab per Copy-Paste aus WoWUtils importieren (Boss-für-Boss-Format mit Encounter, Difficulty und Invite-Liste).
 *   Pro Boss eine Zeile mit **Einladen**- und **Entfernen**-Buttons zum schnellen Umbau der Zusammensetzung.
 *   Mehrere Imports werden nach Encounter + Difficulty zusammengeführt; **Zurücksetzen** leert die gespeicherte Liste.
 

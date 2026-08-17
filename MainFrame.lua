@@ -17,6 +17,7 @@ function KART.ShowTab(tabIndex)
         KART.RaidleadPanel,
         KART.BuffCheckPanel,
         KART.SettingsPanel,
+        KART.WoWUtilsPanel,
     }
     for i, panel in ipairs(panels) do
         if panel then panel:SetShown(i == tabIndex) end
@@ -27,6 +28,7 @@ function KART.ShowTab(tabIndex)
         KART.BtnRaidlead,
         KART.BtnBuffCheck,
         KART.BtnSettings,
+        KART.BtnWoWUtils,
     }
     for i, btn in ipairs(buttons) do
         if btn then btn:SetActive(i == tabIndex) end
@@ -121,8 +123,15 @@ KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
+KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS)
+KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
+KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(5) end)
+
+-- The Settings tab must always be the last entry in the sidebar. When adding a new tab
+-- button, anchor it above this one (i.e. insert it between the previous last tab and
+-- Settings, and re-anchor Settings to the new button).
 KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS)
-KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
+KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
 -- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px).
@@ -153,6 +162,10 @@ KART.BuffCheckPanel:SetAllPoints()
 KART.SettingsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.SettingsPanel:SetAllPoints()
 
+KART.WoWUtilsPanel = CreateFrame("Frame", nil, scrollChild)
+KART.WoWUtilsPanel:SetAllPoints()
+KART.WoWUtilsPanel:Hide()
+
 -- Scrollbar Thumb, accent-tinted via KART.UI's accent-texture registry
 local scrollThumb = KART.UI:StripScrollbarTextures(scrollFrame)
 if scrollThumb then scrollThumb:SetSize(8, 30) end
@@ -172,12 +185,12 @@ scrollFrame.scrollBarHideable = true
 
 -- Per-tab scroll range. With the old fixed 750px scroll child, every tab was scrollable even
 -- when its content fully fit into view (e.g. Raidlead). Static content heights for the fixed
--- tabs; Loot Council and WoWUtils are measured live because the amber raid box (wrapped text)
--- and the boss list (row count) vary. The child height is floored to the visible height so the
--- scroll range collapses to zero when everything fits. Heights include headroom for large
--- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
+-- tabs; WoWUtils is measured live because the boss list (row count) varies. The child height
+-- is floored to the visible height so the scroll range collapses to zero when everything fits.
+-- Heights include headroom for large content fonts where a title's wrap height feeds into the
+-- layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 475, -- Automation: unused static floor; tab 1 is measured live below
+    [1] = 475, -- Automation: promote/invite card + AutoLog title + card
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
@@ -186,10 +199,10 @@ function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
-    if tab == 1 then
+    if tab == 5 then
+        -- Import card + separator/headers above the boss list + bottom padding.
         local bl = KART.WU and KART.WU.bossListFrame
-        -- Promote card + AutoLog + WoWUtils paste, then the boss rows.
-        h = 720 + ((bl and bl:GetHeight()) or 24)
+        h = 270 + ((bl and bl:GetHeight()) or 24)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -502,7 +515,6 @@ KART.UI:RegisterLabel(alTitle)
 local alCard = KART.UI:CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
 alCard:SetSize(500, 200)
-KART.AutoLogCard = alCard
 
 local function AutoLogChanged()
     if KART.AutoLog then KART.AutoLog.Evaluate() end
@@ -962,12 +974,13 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnPromote.text:SetText(L.TAB_PROMOTE)
     KART.BtnRaidlead.text:SetText(L.TAB_RAIDLEAD)
     KART.BtnBuffCheck.text:SetText(L.TAB_BUFFCHECK)
+    KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
     KART.TabTitles[1]:SetText(L.TAB_PROMOTE)
     KART.TabTitles[2]:SetText(L.LABEL_RAIDLEAD_TOOLS)
     KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
     KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
-    -- TabTitles[5]/[6] belong to LootCouncil.lua / Invite.lua and are refreshed there.
+    -- TabTitles[5] belongs to Invite.lua and is refreshed there.
 
     -- Raidlead tab
     KART.CbActivate.text:SetText(L.SET_RL_ACTIVATE)   KART.CbActivate.tooltipText = L.DESC_RL_ACTIVATE

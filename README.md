@@ -44,8 +44,8 @@ KART adds two hooks on top of RC:
 
 Everyone who should click Award, and the raid leader who receives those clicks, needs KART. Other raiders need RCLootCouncil and WowUtils (addon + Bridge). The old desktop **KART Companion** tray app is discontinued; it is not the WowUtils Bridge.
 
-### 6. WoWUtils roster paste (Automation tab)
-*   Raid compositions can be imported from WoWUtils via copy-paste on the **Automation** tab (boss-by-boss format with encounter, difficulty, and invite list).
+### 6. WoWUtils roster paste
+*   Raid compositions can be imported from WoWUtils via copy-paste on the **WoWUtils** tab (boss-by-boss format with encounter, difficulty, and invite list).
 *   Each imported boss gets its own row with **Invite** and **Remove** buttons to swap compositions quickly.
 *   Multiple imports merge by encounter + difficulty; **Reset** clears the saved list.
 

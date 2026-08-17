@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.0.0] - 2026-08-17
 ### Geändert
 - **Loot Council ist jetzt RCLootCouncil.** KART füllt die Council-Liste aus Northern-Sky-Nicknames und lässt Council-Mitglieder zuweisen, während der Raidlead handelt.
 - **Loot-Spalten kommen von WowUtils (Addon und Bridge).** KART liefert und fängt diese Daten nicht.
@@ -14,7 +16,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Behoben
 - **Council-Mitglieder können Items wieder zuweisen.** Die Bestätigung bricht nicht mehr mit einem Lua-Fehler ab.
-- **Der WowUtils-Paste auf Automation überdeckt AutoLog nicht mehr.**
+- **Der WowUtils-Paste hat wieder einen eigenen Sidebar-Tab.**
 - **Eine volle 5er-Gruppe wandelt sich nicht mehr selbst in einen Schlachtzug um** — das passiert jetzt nur noch, wenn ein 6. Spieler eine Einladung anfragt.
 - **Das Leiten einer 5er-Gruppe kündigt nicht mehr an, dass der Schlachtzug auf deinen Einstellungen läuft.**
 
@@ -767,7 +769,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...v1.9.1

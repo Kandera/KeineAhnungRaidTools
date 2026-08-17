@@ -52,11 +52,15 @@ do
     T.eq(KART.CurrentTab, 1, "showing a tab records which one is current")
     As(function() KART.ShowTab(4) end)
     T.eq(KART.CurrentTab, 4, "and switching updates it")
+    As(function() KART.ShowTab(5) end)
+    T.eq(KART.CurrentTab, 5, "the WoWUtils tab is its own ShowTab index")
+    T.truthy(KART.WoWUtilsPanel and KART.WoWUtilsPanel:IsShown(), "and shows the WoWUtils panel")
+    T.eq(KART.PromotePanel:IsShown(), false, "not stacked on Automation")
 
     -- Exactly one content panel visible at a time. Two showing at once is the shape of every
     -- "settings are drawn over the loot council tab" report.
     local visible = 0
-    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel }) do
+    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel }) do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")

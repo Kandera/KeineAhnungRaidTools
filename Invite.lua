@@ -432,30 +432,21 @@ function WU.RefreshBossList()
     end
 
     panel:SetHeight(math.max(totalH, 24))
+    -- Boss list height feeds the WoWUtils tab's scroll range.
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
 
 -- =====================================================================
---  Panel builder  (fills the Automation tab's WoWUtils paste section)
+--  Panel builder  (fills KART.WoWUtilsPanel)
 -- =====================================================================
 
 function WU.BuildPanel(parent)
     local L = KART.L
 
-    local wuTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    -- Stack under AutoLog. Magic Y from the panel top overlapped AutoLog once
-    -- this paste block moved onto Automation (the dedicated tab used -252 for
-    -- the boss list; only the title was shifted to -430).
-    if KART.AutoLogCard then
-        wuTitle:SetPoint("TOPLEFT", KART.AutoLogCard, "BOTTOMLEFT", 0, -18)
-    else
-        wuTitle:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    end
-    wuTitle:SetText(L.WU_TITLE)
-    KART.UI:RegisterLabel(wuTitle)
+    KART.CreateTabTitle(5, L.WU_TITLE)
 
     local importCard = KART.UI:CreateCard(parent)
-    importCard:SetPoint("TOPLEFT", wuTitle, "BOTTOMLEFT", 0, -10)
+    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
     importCard:SetSize(500, 190)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -618,7 +609,9 @@ function WU.BuildPanel(parent)
 
     KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
-        wuTitle:SetText(Lx.WU_TITLE)
+        if KART.TabTitles and KART.TabTitles[5] then
+            KART.TabTitles[5]:SetText(Lx.WU_TITLE)
+        end
         pasteLabel:SetText(Lx.WU_LABEL_PASTE)
         WU.BtnImport.text:SetText(Lx.WU_BTN_IMPORT)
         WU.BtnReset.text:SetText(Lx.WU_BTN_RESET)
@@ -633,6 +626,6 @@ function WU.BuildPanel(parent)
 end
 
 -- Invite.lua loads after MainFrame.lua, so the panel already exists here.
-if KART.PromotePanel then
-    WU.BuildPanel(KART.PromotePanel)
+if KART.WoWUtilsPanel then
+    WU.BuildPanel(KART.WoWUtilsPanel)
 end

@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.0.0] - 2026-08-17
 ### Changed
 - **Loot council is now RCLootCouncil.** KART fills the council list from Northern Sky nicknames and lets council members assign while the raid leader trades.
 - **Loot columns come from WowUtils (addon and Bridge).** KART does not ship or intercept that data.
@@ -14,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Council members can assign items again.** Confirming the award no longer errors.
-- **The WowUtils paste on Automation no longer covers AutoLog.**
+- **The WowUtils paste is its own sidebar tab again.**
 - **A full 5-man party no longer converts itself to a raid** — only a 6th player requesting an invite does that now.
 - **Leading a 5-man party no longer announces that the raid runs on your settings.**
 
@@ -767,7 +769,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.0...v1.9.1

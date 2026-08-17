@@ -493,7 +493,7 @@ KART.KeybindActions = {
     { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
 }
 
--- Maps each of the 6 main-window tab-content panels to its ShowTab index. Used by
+-- Maps each of the 5 main-window tab-content panels to its ShowTab index. Used by
 -- KART.BuildSearchIndex to figure out which tab a given label belongs to, by walking up the
 -- label's parent chain until one of these panels is found.
 local SEARCH_TAB_PANELS = {
@@ -501,13 +501,14 @@ local SEARCH_TAB_PANELS = {
     { panel = "RaidleadPanel", tabIndex = 2 },
     { panel = "BuffCheckPanel", tabIndex = 3 },
     { panel = "SettingsPanel", tabIndex = 4 },
+    { panel = "WoWUtilsPanel", tabIndex = 5 },
 }
 
 -- Builds the settings search index by walking KART.UI's label registry — every settings label
 -- already gets registered there by its creation site (checkboxes, sliders, card titles, hints,
 -- tab titles), so no per-widget registration is needed here. A label whose parent chain never
--- reaches one of the 6 main tab panels (e.g. one that belongs to a popup window like Loot
--- History) is silently skipped, which is how "only the 6 main tabs are searchable" enforces itself.
+-- reaches one of the 5 main tab panels (e.g. one that belongs to a popup window like Loot
+-- History) is silently skipped, which is how "only the 5 main tabs are searchable" enforces itself.
 function KART.BuildSearchIndex()
     local index = {}
     for _, fs in ipairs(KART.UI:GetLabels()) do
