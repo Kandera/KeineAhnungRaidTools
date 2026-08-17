@@ -7,6 +7,56 @@ local Identity = KASC.Identity
 
 local mlMissingWarned = {}
 local awardRegistered = false
+local votingFrameHooked = false
+local awardWrapped = false
+local menuBuilding = false
+
+function RC.DisplayName(unitOrName)
+    if UnitExists(unitOrName) then
+        local _, original = Identity.GetNickname(unitOrName)
+        if original then return original end
+        return Ambiguate(UnitName(unitOrName) or unitOrName, "short")
+    end
+    return Ambiguate(unitOrName, "short")
+end
+
+local function WrapAward(addon)
+    if awardWrapped then return end
+    local ml = _G.RCLootCouncilML
+    if not ml or type(ml.Award) ~= "function" then return end
+    local originalAward = ml.Award
+    ml.Award = function(self, session, winnerName, responseID)
+        if menuBuilding or not addon.isMasterLooter then
+            RC.RequestAward(session, winnerName, responseID)
+            return
+        end
+        return originalAward(self, session, winnerName, responseID)
+    end
+    awardWrapped = true
+end
+
+function RC.HookVotingFrame()
+    if votingFrameHooked then return end
+    local addon = RC.GetAddon()
+    if not addon then return end
+    WrapAward(addon)
+    local ok, vf = pcall(function() return addon:GetActiveModule("votingframe") end)
+    if not ok or not vf or type(vf.RightClickMenu) ~= "function" then return end
+    local originalRightClickMenu = vf.RightClickMenu
+    vf.RightClickMenu = function(self, ...)
+        if not addon.isMasterLooter and not addon.isCouncil then
+            return originalRightClickMenu(self, ...)
+        end
+        local wasML = addon.isMasterLooter
+        if not wasML then addon.isMasterLooter = true end
+        menuBuilding = true
+        local callOk, err = pcall(originalRightClickMenu, self, ...)
+        menuBuilding = false
+        addon.isMasterLooter = wasML
+        if not callOk then error(err) end
+    end
+    votingFrameHooked = true
+end
 
 function RC.GetAddon()
     return _G.RCLootCouncil
@@ -159,4 +209,5 @@ function RC.Enable()
             end)
     end
     if not RC.IsRCLoaded() then return end
+    RC.HookVotingFrame()
 end

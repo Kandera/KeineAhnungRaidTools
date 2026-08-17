@@ -109,3 +109,35 @@ T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeAward, 1,
 KARTTEST.activeUnit = awardPrevActive
 KARTTEST.RestoreRoster(awardSnap)
 
+-- DisplayName and voting-frame hook -----------------------------------------------------
+local nickSnap = KARTTEST.SnapshotRoster()
+KARTTEST.SetNSAPI(true)
+KARTTEST.SetRaid({ { name = "Bob", guid = "Player-1-BBBB", nickname = "Bobby" } })
+local KASC = LibStub("KASC-1.0")
+local folded, original = KASC.Identity.GetNickname("raid1")
+T.eq(RC.DisplayName("raid1"), original or "Bob", "display prefers the NSRT nick")
+T.eq(RC.DisplayName("Bob-TarrenMill"), "Bob", "a bare name is ambiguated short")
+
+local vf = { RightClickMenu = function() KARTTEST.rcMenuOpened = true end }
+local prevGetActiveModule = RCLootCouncil.GetActiveModule
+RCLootCouncil.GetActiveModule = function(_, name)
+    if name == "votingframe" then return vf end
+end
+RCLootCouncil.isMasterLooter = false
+RCLootCouncil.isCouncil = true
+KARTTEST.rcMenuOpened = nil
+RC.HookVotingFrame()
+vf:RightClickMenu()
+T.eq(KARTTEST.rcMenuOpened, true, "council members get the RC right-click menu")
+
+RCLootCouncil.isMasterLooter = false
+RCLootCouncil.masterLooter = "Lead-TarrenMill"
+KARTTEST.activeUnit = "raid1"
+local beforeRelay = KASC.diag.sentByToken.RC_AWARD or 0
+RCLootCouncilML.Award(RCLootCouncilML, 2, "Bob-TarrenMill", 1)
+T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeRelay, 1,
+    "council non-ML Award wrap relays via RequestAward")
+
+RCLootCouncil.GetActiveModule = prevGetActiveModule
+KARTTEST.RestoreRoster(nickSnap)
+
