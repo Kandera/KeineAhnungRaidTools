@@ -37,3 +37,6 @@ luacov.report.out
 # Berichte, Review-Diffs). Reines Geruest: die Diagnosen, die bleiben sollen,
 # stehen in docs/BACKLOG.md und in den Kommentaren am Code.
 .superpowers/
+
+# Local 3.x loot council archive (not shipped, not committed)
+archive/

@@ -1,42 +1,10 @@
--- What this client refused, and what its own sends were refused for.
---
--- Written after the raid of 2026-08-03, where four different messages went missing -- an End Round,
--- two roll announcements and four votes -- and not one client anywhere said so (B118, B120). Every
--- loss looked like a different bug on a different screen. These counters do not fix that; they make
--- the NEXT raid able to say which of the causes it was, which is the part that was missing.
---
--- Three causes have to stay distinguishable, because their fixes are unrelated:
---   * this client refused the message      -> a guard is wrong, or an identity did not resolve
---   * this client never recognised it      -> the peer is on a protocol this one does not have
---   * our own send never left the client   -> Blizzard's rate limiter, and a send queue is the answer
--- All counters at zero while a raider is missing an item is itself the answer: the message was never
--- delivered at all, which is nothing a guard change can reach and needs the catch-up instead.
+-- KASC transport diagnostics (4.0: built-in LC /kart status removed).
 
 local F = dofile("tests/lc_fixture.lua")
 local RaidSim = F.RaidSim
 
-local STRANGER = "Player-4711-DEADBEEF"
 local OUTSIDER = "Nobody-Elsewhere"
 
-local function Capture(fn)
-    local realPrint = _G.print
-    local lines = {}
-    _G.print = function(...)
-        local parts = {}
-        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
-        lines[#lines + 1] = table.concat(parts, " ")
-    end
-    local ok, err = pcall(fn)
-    _G.print = realPrint
-    if not ok then error(err, 0) end
-    return table.concat(lines, "\n")
-end
-
--- The send side ------------------------------------------------------------------------------------
--- The live API answers every send with Enum.SendAddonMessageResult. Since the transport moved onto
--- ChatThrottleLib the two kinds of refusal have different fates, and the counters have to keep them
--- apart: one the library can retry its way out of (a throttle -- it re-queues and tries again), and
--- one it cannot (NotInGroup and the rest -- that message is simply refused).
 do
     local sim, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
@@ -46,21 +14,17 @@ do
     T.eq(diag.sendRejected, before, "a send the client accepts is not counted as rejected")
     T.eq(diag.sendQueued, 0, "and not counted as queued either")
 
-    sim.sendResult = 5 -- NotInGroup: a refusal no retry can fix
+    sim.sendResult = 5
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
     sim.sendResult = nil
     T.eq(diag.sendRejected, before + 1, "a refusal the transport cannot fix is counted")
 
-    -- The refusal has to stop the message reaching anybody, not merely label it: a harness that
-    -- delivered it anyway would make every recovery test pass for free.
     local heard = 0
     for _, c in ipairs(sim.clients) do
         RaidSim.As(c, function()
             c.KASC:RegisterMessage("LC_DIAGPROBE", {}, function() heard = heard + 1 end)
         end)
     end
-    -- Sent once WITHOUT the refusal first, or the assertion below would also pass on a probe nobody
-    -- was ever listening for.
     RaidSim.As(lm, function() lm.KASC:Send("LC_DIAGPROBE") end)
     local delivered = heard
     T.truthy(delivered > 0, "the probe reaches the raid when the client accepts it")
@@ -70,10 +34,7 @@ do
     sim.sendResult = nil
     T.eq(heard, delivered, "and a refused message reaches nobody")
 
-    -- The throttle goes LAST, because it leaves the queue blocked: every message this client sends
-    -- afterwards waits behind it until the clock lets the retry through, and an assertion about
-    -- delivery placed below this would be measuring the blockage rather than what it says it does.
-    sim.sendResult = 3 -- AddonMessageThrottle: the transport holds on to this one
+    sim.sendResult = 3
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
     sim.sendResult = nil
     T.eq(diag.sendRejected, before + 2, "a throttle is not counted as a refusal")
@@ -81,11 +42,6 @@ do
     KARTTEST.AdvanceTime(2)
 end
 
--- Which conversation the sends belonged to ---------------------------------------------------------
--- The counters above say whether the pipe struggled; this one says WHAT this client's own sends
--- were, per token, so a live evening can name its loudest sender the way B135's offline measurement
--- did. Counted where the message reaches the transport -- a send the restriction gate swallows never
--- went anywhere and must not appear here.
 do
     local _, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
@@ -96,47 +52,24 @@ do
     T.eq(diag.sentByToken.LC_TOKENPROBE, before + 2, "two sends under one token count twice")
 
     RaidSim.As(lm, function()
-        lm.KASC:OnRestrictionChanged(1, 2) -- Encounter, Active
+        lm.KASC:OnRestrictionChanged(1, 2)
         lm.KASC:Send("LC_TOKENPROBE:during")
         lm.KASC:OnRestrictionChanged(1, 0)
     end)
     T.eq(diag.sentByToken.LC_TOKENPROBE, before + 2,
         "a send the restriction gate dropped counts as no message on the wire")
 
-    -- The upgrade case every KASC minor has to survive: an OLDER minor initialized KASC.diag first,
-    -- so `KASC.diag or {...}` kept a table with no sentByToken in it. One embedder today, but the
-    -- library is shipped to be embedded (and a KALC split would make two copies real) -- a counter
-    -- that only exists when THIS minor won the LibStub race would error on every send otherwise.
     RaidSim.As(lm, function()
         lm.KASC.diag.sentByToken = nil
         lm.KASC:Send("LC_TOKENPROBE:after-upgrade")
     end)
     T.eq(lm.KASC:Diagnostics().sentByToken.LC_TOKENPROBE, 1,
         "a diag table inherited from an older minor grows the counter instead of erroring the send")
-
-    -- The status line names the loudest tokens; whatever else the raid has said by now, the probe
-    -- token exists and must appear with its count when it is among them -- and the line itself must
-    -- appear once anything was sent at all.
-    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    T.truthy(out:match("LC_")
-        and out:match(lm.KART.L.LC_STATUS_SENDTOKENS) ~= nil,
-        "/kart status prints the per-token send line")
 end
 
--- A client that answers with nothing at all --------------------------------------------------------
--- "No answer" must never read as "everything failed", or the line in /kart status would accuse the
--- transport on every client that does not return the value. ChatThrottleLib maps a send that returned
--- nothing to Success, and this asserts that KASC agrees rather than counting it as a refusal.
 do
     local _, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
-    -- Replaced directly rather than through the sim: what is under test is how the transport reads a
-    -- client that says nothing, and the sim always answers with a code.
-    --
-    -- `function() end`, NOT `function() return nil end`, and the difference is real: ChatThrottleLib
-    -- takes the LAST returned value and only treats NO returned value as success (its
-    -- MapToSendResult). A client that returns an explicit nil is read as a failed send. What is being
-    -- modelled here is the client that answers nothing at all, which is the one that exists.
     local realSend = _G.C_ChatInfo.SendAddonMessage
     _G.C_ChatInfo.SendAddonMessage = function() end
     RaidSim.As(lm, function() lm.KASC:Send("LC_PROBE") end)
@@ -144,7 +77,6 @@ do
     T.eq(diag.sendRejected, 0, "a client that returns nothing is not treated as a refusal")
 end
 
--- The receive side, one layer below the addon ------------------------------------------------------
 do
     local _, lm = F.NewRaid()
     local diag = lm.KASC:Diagnostics()
@@ -152,440 +84,10 @@ do
     RaidSim.As(lm, function() lm.KASC.Dispatch("LC_NO_SUCH_TOKEN:1", "RAID", OUTSIDER) end)
     T.eq(diag.dropUnknownToken, 1, "a token this client has no handler for is counted, not just dropped")
 
-    RaidSim.As(lm, function() lm.KASC.Dispatch("LC_START:80:20:1", "WHISPER", OUTSIDER) end)
-    T.eq(diag.dropNotInGroup, 1, "and so is a message from somebody outside the group")
-    T.eq(diag.dropUnknownToken, 1, "each drop counts once, against its own reason")
-end
-
--- The receive side, in the addon's own guards ------------------------------------------------------
-do
-    local _, lm = F.NewRaid()
-    local lc = lm.KART.LC
-
-    local before = lc.diag.refusedSender
-    RaidSim.As(lm, function() lc.HandleStart("80:20:1", STRANGER) end)
-    T.eq(lc.diag.refusedSender, before + 1, "a roll announcement from a non-owner is counted as refused")
-
-    RaidSim.As(lm, function() lc.HandleEndRound(STRANGER) end)
-    T.eq(lc.diag.refusedSender, before + 2, "so is an End Round from somebody who is not council")
-
-    RaidSim.As(lm, function() lc.HandleActive("0", STRANGER) end)
-    T.eq(lc.diag.refusedSender, before + 3, "and a session flag from a non-owner")
-    T.eq(lc.sessionActive, true, "and the session it tried to end is still running")
-end
-
--- A vote for an item this client has never heard of -------------------------------------------------
--- The council side of B118: the vote arrives, the roll does not exist here, and the tally is short by
--- one with nothing anywhere saying why. Distinct from a refused sender, because the fix is different --
--- this one says the item is missing, not the person.
-do
-    local sim, _, council = F.NewRaid()
-    local lc = council.KART.LC
-    local voter = sim.byName.Merrit
-
-    local before = lc.diag.unknownRoll
-    RaidSim.As(council, function() lc.Vote.HandleVote("4242:2:#6:@:", voter.guid) end)
-    T.eq(lc.diag.unknownRoll, before + 1, "a vote for an untracked roll is counted")
-    T.eq(lc.votes[4242], nil, "and still not stored, which is what it was refused for")
-end
-
--- ...but an item this client had and has let go of is NOT the same finding ---------------------------
--- One client went from 2 to 181 of these in seven minutes on 2026-08-05 while holding no rolls at
--- all, and every one was a raider voting on an item it had already finished with -- twenty senders
--- times however many the boss dropped, which is ordinary traffic. It buried the counter that had
--- found the message loss the night before. LC.rollLootedAt tells the two apart: it is stamped by
--- every path that tracks a roll and deliberately outlives the roll itself.
-do
-    local sim, _, council = F.NewRaid()
-    local lc = council.KART.LC
-    local voter = sim.byName.Merrit
-
-    F.Drop(sim, 96, F.GLOVES)
-    KARTTEST.AdvanceTime(1)
-    T.truthy(lc.rollItems[96], "the council member had the item")
-
-    -- Its time runs out and the roll is released, exactly as an evening does it.
-    RaidSim.As(council, function() lc.Trade.ClearRollState(96) end)
-    T.eq(lc.rollItems[96], nil, "and has let it go")
-
-    local unknownBefore, staleBefore = lc.diag.unknownRoll, lc.diag.staleRoll
-    RaidSim.As(council, function() lc.Vote.HandleVote("96:2:#6:@:", voter.guid) end)
-    T.eq(lc.diag.staleRoll, staleBefore + 1, "a late vote for it counts as stale, not as unknown")
-    T.eq(lc.diag.unknownRoll, unknownBefore,
-        "so the counter that means 'the message never reached me' stays readable")
-end
-
--- /kart status ---------------------------------------------------------------------------------------
--- The line has to be absent on a clean evening: a raider pastes this output into an issue, and a row
--- of zeroes reads as "something went wrong" to everybody who sees it.
--- Counted by LINES, not by matching the text: this line exists in both locales and asserting an
--- English word would pass or fail on which client the fixture happened to build.
-local function Lines(s)
-    local n = 0
-    for _ in s:gmatch("[^\n]+") do n = n + 1 end
-    return n
-end
-
-do
-    local _, lm = F.NewRaid()
-    local clean = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-
-    lm.KART.LC.diag.refusedSender = 2
-    local dirty = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    lm.KART.LC.diag.refusedSender = 0
-
-    T.eq(Lines(dirty), Lines(clean) + 1, "a client that refused something prints one more line")
-    T.truthy(dirty:find("2", 1, true), "and the line carries the count, not just the fact")
-
-    local again = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    T.eq(Lines(again), Lines(clean), "a client that lost nothing prints no such line at all")
-
-    -- The packed-block refusal is on the same list and on the same terms. It has its own line rather
-    -- than a slot in the refusal line above because it is the one refusal that costs a whole boss at
-    -- once, and because it names a cause none of the others do -- another addon's LibDeflate.
-    lm.KART.LC.diag.packedUnreadable = 3
-    local unreadable = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    lm.KART.LC.diag.packedUnreadable = 0
-
-    T.eq(Lines(unreadable), Lines(clean) + 1, "a client that could not unpack something says so")
-    T.truthy(unreadable:find("3", 1, true), "with the count, like every other counter here")
-end
-
--- Addon restrictions ---------------------------------------------------------------------------------
--- Midnight stops addon messages while an encounter or a Mythic+ run is active. Loot drops at the END
--- of an encounter, so this is not a corner case for a loot addon -- it is the exact window every roll
--- announcement goes out in. A message lost there is not delayed, it is gone (B118, B128).
-do
-    local sim, lm = F.NewRaid()
-    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
-
-    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, ACTIVE) end)
-    RaidSim.ClearLog(sim)
-
     RaidSim.As(lm, function()
-        lm.KART.LC.SendLC("LC_START:900:20:item:249331")
-        lm.KART.LC.SendLC("LC_TABLE:1:900")
+        lm.KASC:RegisterMessage("DIAG_GROUPPROBE", { payload = true, group = true }, function() end)
+        lm.KASC.Dispatch("DIAG_GROUPPROBE:1", "WHISPER", OUTSIDER)
     end)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "an announcement is not sent while comms are restricted")
-    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 0, "and neither is a heartbeat")
-
-    -- Sent twice inside the window, as a retry would be.
-    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:900:20:item:249331") end)
-
-    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 1,
-        "the announcement goes out once the encounter releases the comms, exactly once")
-    T.eq(#RaidSim.Sent(sim, "LC_TABLE"), 0,
-        "while the heartbeat is dropped rather than delivered late -- the asker has moved on")
-
-    local diag = lm.KASC:Diagnostics()
-    T.truthy(diag.sendHeldBack >= 1, "what was held is counted")
-    T.truthy(diag.sendDroppedRestricted >= 1, "and so is what was dropped")
-end
-
--- ...and a client that RELOADED while the encounter was already running (B140) -----------------------
--- ADDON_RESTRICTION_STATE_CHANGED is the only thing that ever told KASC about the gate, and it was
--- raised while this client was gone. People in this guild reload mid-pull, so a client that comes back
--- believing comms are open is the normal case, not a corner: its guaranteed sends skip the hold queue,
--- get refused, burn all three retries in six seconds and are then genuinely lost -- the B118 shape the
--- whole hold/retry machinery exists to prevent.
-do
-    local sim, lm = F.NewRaid()
-    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
-
-    -- Set WITHOUT firing the event, which is the whole point: the state changed while this client did
-    -- not exist, so nothing will ever tell it after the fact.
-    KARTTEST.restrictions[ENCOUNTER] = ACTIVE
-    lm = RaidSim.Reload(sim, lm.name)
-    RaidSim.ClearLog(sim)
-
-    local diag = lm.KASC:Diagnostics()
-    local held = diag.sendHeldBack
-    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:901:20:item:249331") end)
-    RaidSim.Drain(sim)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0,
-        "a client that reloaded mid-encounter does not hand its announcement to a refusing transport")
-    T.eq(diag.sendHeldBack, held + 1, "it holds it, like any other client under the restriction")
-
-    -- The seed has to compose with the existing machinery, not replace it: the release still arrives
-    -- as an event, and what was held still goes out on it.
-    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
-    RaidSim.Drain(sim)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "and sends it once the encounter releases the comms")
-end
-
--- The same question asked at the other moment a login can answer it (B140) --------------------------
--- ADDON_LOADED runs behind the loading screen, before the world is there, and whether the client can
--- already answer for the encounter it is reloading INTO is not something this addon gets to decide.
--- PLAYER_ENTERING_WORLD is the moment the world exists and the answer is certainly true, so the same
--- question is asked again there -- which is also what catches a state that changed between the two.
-do
-    local sim, lm = F.NewRaid()
-    local ENCOUNTER, ACTIVE, INACTIVE = 1, 2, 0
-
-    -- Drained first: this client has been talking since the fixture built it, and a message still
-    -- despooling in its transport would count as one this test sent.
-    RaidSim.Drain(sim)
-    KARTTEST.restrictions[ENCOUNTER] = ACTIVE
-    RaidSim.As(lm, function() KARTTEST.FireEvent("PLAYER_ENTERING_WORLD") end)
-    RaidSim.ClearLog(sim)
-
-    RaidSim.As(lm, function() lm.KART.LC.SendLC("LC_START:902:20:item:249331") end)
-    RaidSim.Drain(sim)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 0, "entering the world under an active restriction closes the gate")
-
-    RaidSim.As(lm, function() KARTTEST.SetRestriction(ENCOUNTER, INACTIVE) end)
-    RaidSim.Drain(sim)
-    T.eq(#RaidSim.Sent(sim, "LC_START"), 1, "and what waited behind it goes out on the release")
-end
-
--- Why an item was NOT auto-passed (D1) ---------------------------------------------------------------
--- The bar the module is judged on is a raider never having to click Blizzard's roll window. When that
--- fails, five separate conditions could have held it -- the setting, the announcement, being the loot
--- owner, this client's own roll event, and the window still being live -- plus the session gate one
--- layer up, and NONE of them left a trace. The diagnosis was archaeology across three logs; it has to
--- be one screenshot.
---
--- Verdicts are recorded per rollID at the moment the decision was taken, not re-derived at print time:
--- by then GetLootRollItemInfo has gone blank for every roll that was answered, so every line would
--- read "the window was already gone".
-do
-    local sim = F.NewRaid()
-    local raider = sim.byName.Alric -- Auto-Pass on, and not the loot owner
-
-    -- The announcement never comes (the owner never had the roll), AND this client holds no raid
-    -- config, so LC.CouncilRunsHere cannot stand in for it either -- since B174 both have to be
-    -- missing before a raider is left with a window. Which is itself the point of the line: the
-    -- remaining cause is no longer guessable from the outside.
-    RaidSim.As(raider, function() raider.KART.LC.raidConfig = {} end)
-    F.Drop(sim, 70, F.GLOVES, { noRollFor = { Bramor = true } })
-    KARTTEST.AdvanceTime(1)
-    T.is_nil((KARTTEST.rolled[70] or {})[raider.unit], "the item was not passed for this raider")
-
-    local L = raider.KART.L
-    local out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
-    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true), "/kart status names the item it did not pass")
-    T.truthy(out:find(L.LC_PASSGATE_UNANNOUNCED, 1, true), "and says the announcement is what was missing")
-
-    -- The same client, one item later, with everything in place: the line has to be able to say the
-    -- ordinary answer too, or a raider reading it cannot tell a working evening from a broken one.
-    F.Drop(sim, 71, F.WEAPON)
-    KARTTEST.AdvanceTime(1)
-    T.eq((KARTTEST.rolled[71] or {})[raider.unit], 0, "the next item was passed")
-
-    out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
-    T.truthy(out:find(L.LC_PASSGATE_PASSED, 1, true), "and the probe says so")
-    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "while the item before it is still on the list -- the probe is a ring, not a last-item report")
-end
-
--- ...and the loot owner's OWN verdict, not an empty block (B148, B149 mutation gap) -------------------
--- The owner force-wins a council item rather than passing it -- a completely different branch from
--- AutoPassAnnounced, which LC.OnStartLootRoll's isLootmaster arm takes over before the AutoPassAnnounced
--- arm is ever reached for this client. Without its own LC.RecordPassGate(rollID, "owner") call, the one
--- client the Manifest asks the raid to screenshot prints an EMPTY Auto-Pass block for an item it just
--- force-won -- "nothing was decided here", a different claim entirely from "we took it, so there was
--- nothing to pass".
-do
-    local sim, lm = F.NewRaid()
-    F.Drop(sim, 97, F.GLOVES)
-    KARTTEST.AdvanceTime(1)
-    T.eq((KARTTEST.rolled[97] or {})[lm.unit], 1, "the setup: the loot owner force-won it, not passed it")
-
-    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    T.truthy(out:find(KARTTEST.items[F.GLOVES].name, 1, true),
-        "Gap 7 (B148): /kart status names the item on the owner's own client")
-    T.truthy(out:find(lm.KART.L.LC_PASSGATE_OWNER, 1, true),
-        "and says it was won rather than passed, instead of printing an empty Auto-Pass block")
-end
-
--- ...including the gate one layer up, in the roll handler itself ------------------------------------
--- A client that does not yet know a session is running returns before any of the five conditions is
--- even reached (LC.rollsSeenWhileUnaware). That is the shape reported from a live raid on 2026-08-05 --
--- four unanswered roll windows and nothing anywhere saying why -- so it needs a verdict of its own.
-do
-    local sim = F.NewRaid()
-    local raider = sim.byName.Alric
-    RaidSim.As(raider, function() raider.KART.LC.sessionActive = false end)
-
-    F.Drop(sim, 72, F.GLOVES)
-    KARTTEST.AdvanceTime(1)
-
-    local out = Capture(function() RaidSim.As(raider, raider.KART.LC.PrintStatus) end)
-    T.truthy(out:find(raider.KART.L.LC_PASSGATE_UNAWARE, 1, true),
-        "a client that did not know there was a session says that, not something about the item")
-end
-
--- A raider who switched Auto-Pass off is not a fault -------------------------------------------------
--- It is the single most common answer to "Auto-Pass does not work" and it was asked four times on one
--- evening. The status line already prints the setting; the probe has to name it per item as well, or a
--- raid comparing two screenshots reads a silent probe as a broken one.
-do
-    local sim = F.NewRaid()
-    local merrit = sim.byName.Merrit -- the fixture's one raider who clicks the window themselves
-
-    F.Drop(sim, 73, F.GLOVES)
-    KARTTEST.AdvanceTime(1)
-
-    local out = Capture(function() RaidSim.As(merrit, merrit.KART.LC.PrintStatus) end)
-    T.truthy(out:find(merrit.KART.L.LC_PASSGATE_OFF, 1, true), "the probe names the setting, per item")
-end
-
--- The raid's config across a reload (D2) -------------------------------------------------------------
--- The rolls on the table survive a reload (B81); the config the raid runs on does not. So a reloaded
--- raider comes back on their OWN vote buttons, their OWN roll setting and an empty council list, and
--- stays there until a message reaches them -- seconds at best (LC_STATE_REQ's backoff), the rest of the
--- evening when the answer is lost. Both halves of that were paid for already: B25 is what mismatched
--- buttons cost, and the roll setting decides whether this raider rolls at all.
---
--- Between bosses is the case with nothing on the table at all, which is exactly when the roll snapshot
--- writes nothing -- so the config has to be saved on its own terms, not as a passenger of the rolls.
-do
-    local sim = F.NewRaid()
-    local council = sim.byName.Merrit
-
-    T.eq(RaidSim.As(council, council.KART.LC.GetRollsEnabled), true, "the raid rolls, by the raid's config")
-    T.truthy(RaidSim.As(council, council.KART.LC.IsCouncil), "and this raider is on its council")
-    T.eq(council.env.KART_Settings.lcRollsEnabled, false, "while their own setting says otherwise")
-
-    local back = RaidSim.Reload(sim, "Merrit")
-    T.eq(RaidSim.As(back, back.KART.LC.GetRollsEnabled), true,
-        "after a reload the raid's roll setting is in force before any message has arrived")
-    T.truthy(RaidSim.As(back, back.KART.LC.IsCouncil), "and so is the council list")
-    T.eq(back.KART.LC.raidConfig.fromSelf, nil,
-        "and it is still the RAID's config, not one this client invented for itself")
-
-    -- The line the whole snapshot is not allowed to cross. Whether a session is running is a live
-    -- claim the raid answers; a config is settings. Restoring the first from disk is what the comment
-    -- in LC.RestoreSessionSnapshot refuses, and this pins that the config work did not weaken it.
-    T.eq(back.KART.LC.sessionActive, false, "the session itself is still the raid's answer, not the file's")
-end
-
--- ...and a config old enough to belong to another raid is not brought back --------------------------
--- The bound is tighter than the roll snapshot's hour on purpose. A stale config is not merely useless,
--- it is actively wrong: it names a lootmaster who was never in this raid, and LC.IsSenderLootOwner then
--- rejects the real one's announcements (the cross-raid half of B29, which TearDownForRaidExit exists
--- for). A reload takes seconds and a disconnect minutes; nothing legitimate needs an hour.
-do
-    local sim = F.NewRaid()
-    local council = sim.byName.Merrit
-    RaidSim.As(council, function() council.KART.LC.SaveSessionSnapshot() end)
-    local saved = council.env.KART_LCSession
-    T.truthy(saved.config, "the snapshot carries the config even with nothing on the table")
-
-    -- Half an hour old: still inside the hour the ROLLS are kept for, and well past the config's own
-    -- bound. Aged that way on purpose -- it is what tells the two bounds apart, and a day-old file
-    -- would be refused by the outer one before the config was ever looked at.
-    local stale = { savedAt = saved.savedAt - (30 * 60), config = saved.config, council = saved.council }
-
-    local back = RaidSim.Reload(sim, "Merrit")
-    RaidSim.As(back, function()
-        wipe(back.KART.LC.raidConfig)
-        back.KART.LC.CouncilNamesTable = {}
-        back.env.KART_LCSession = stale
-        back.KART.LC.RestoreSessionSnapshot()
-    end)
-    T.is_nil(next(back.KART.LC.raidConfig), "yesterday's config is not brought back")
-    T.eq(RaidSim.As(back, back.KART.LC.GetRollsEnabled), false,
-        "so this client is back on the wire's answer, exactly as it was before")
-end
-
--- ...and the restored config must not put the session question back on screen ----------------------
--- The prompt asks "start a session?", and answering No runs LC.SetSessionActive(false), which
--- broadcasts LC_ACTIVE:0 and ends the distribution for the whole raid. It is gated on
--- LC.IsLootOwner(), and before D2 a reloaded client held no config, so a DESIGNATED lootmaster --
--- someone who hands out the loot without leading the raid -- read as not-the-loot-owner and was
--- never asked. Restoring the config from disk made that gate true again on the one client whose
--- "No" the whole raid accepts, over a session that is still running.
---
--- The condition that tells the two apart is not "do we own the loot" but "have we been told". A
--- snapshot that carried a config is evidence a session was running when it was written, so the
--- question waits for the wire to answer rather than being asked over the top of it.
-do
-    local sim = F.NewSplitRaid()       -- Corvin leads, Bramor hands out the loot
-    KARTTEST.AdvanceTime(3)
-
-    -- Losing the reply is the whole case. Mid-encounter that is Blizzard shutting comms (B140), but
-    -- a dropped answer does it just as well, and the client cannot tell the two apart.
-    RaidSim.Blackhole(sim, "LC_STATE_REQ")
-    local back = RaidSim.Reload(sim, "Bramor")
-    RaidSim.EnterWorld(sim, "Bramor")
-    KARTTEST.AdvanceTime(5)            -- past the three seconds the prompt is armed on
-
-    T.truthy(next(back.KART.LC.raidConfig) ~= nil, "the config is back from disk")
-    T.truthy(RaidSim.As(back, back.KART.LC.IsLootOwner), "so this client knows it hands out the loot")
-    T.eq(back.KART.LC.sessionActive, false, "and its own session flag is still unanswered")
-
-    local shown = RaidSim.As(back, function()
-        local f = back.KART.LC.sessionPromptFrame
-        return (f ~= nil and f:IsShown()) or false
-    end)
-    T.eq(shown, false, "and it is NOT asked whether to start a session the raid never said had ended")
-
-    -- The question is deferred, not thrown away: if nobody ever answers, the snapshot stops being
-    -- evidence and the loot owner is asked after all. Otherwise a lootmaster who reloads into a raid
-    -- that really has no session spends the evening never being offered one.
-    KARTTEST.AdvanceTime(75)           -- past RESTORE_CONFIRM_SECONDS (60)
-    local askedLater = RaidSim.As(back, function()
-        local f = back.KART.LC.sessionPromptFrame
-        return (f ~= nil and f:IsShown()) or false
-    end)
-    T.eq(askedLater, true, "once the raid has had its chance to answer and did not, the question comes")
-end
-
--- ...and a client that has passed nothing at all prints nothing ---------------------------------------
--- Same rule as every counter above: a raider pastes this output into an issue, and an empty block
--- reads as something having gone wrong.
-do
-    local _, lm = F.NewRaid()
-    local out = Capture(function() RaidSim.As(lm, lm.KART.LC.PrintStatus) end)
-    T.truthy(not out:find(lm.KART.L.LC_STATUS_PASSLOG, 1, true),
-        "no item has been decided about, so there is no Auto-Pass block")
-end
-
--- The gate probe must not answer for the previous occupant of a rollID -------------------------------
--- Blizzard reuses roll numbers within seconds -- that is what PurgeStaleRoll exists for (B132). The
--- probe keyed its entry on the rollID alone and kept a "passed" verdict for ever, so a later item
--- arriving under the same number found the guard and returned: /kart status then names the FIRST
--- item and says it passed, while the raider is looking at an unanswered window for a different one.
--- The probe lying is worse than no probe, because it is read exactly when something has gone wrong.
-do
-    local sim = F.NewRaid()
-    local raider = sim.byName.Alric
-
-    local function GateFor(id)
-        return RaidSim.As(raider, function()
-            for _, e in ipairs(raider.KART.LC.passLog) do
-                if e.rollID == id then return e.gate end
-            end
-        end)
-    end
-
-    F.Drop(sim, 70, F.GLOVES)
-    KARTTEST.AdvanceTime(2)
-    T.eq(GateFor(70), "passed", "the gloves were passed, and the probe says so")
-
-    -- The same number, a different item. Since B174 this one is passed too, so the verdict alone no
-    -- longer tells the two apart -- what has to be shown is that the entry was RE-TAKEN rather than
-    -- left standing, or /kart status would name the previous item on a reused number.
-    local function ItemFor(id)
-        local found = RaidSim.As(raider, function()
-            for _, e in ipairs(raider.KART.LC.passLog) do
-                if e.rollID == id then return e.item end
-            end
-            return ""
-        end)
-        return tostring(found or "")
-    end
-    T.truthy(ItemFor(70):find("item:" .. F.GLOVES, 1, true),
-        "and the entry names the item it was actually about")
-
-    KARTTEST.rolled[70] = nil
-    RaidSim.Blackhole(sim, "LC_DROP")
-    F.Drop(sim, 70, F.WEAPON)
-    KARTTEST.AdvanceTime(2)
-    RaidSim.Deliver(sim, "LC_DROP")
-
-    T.truthy(ItemFor(70):find("item:" .. F.WEAPON, 1, true),
-        "and the unrelated item reusing that number does not inherit the previous entry")
+    T.eq(diag.dropNotInGroup, 1, "and so is a group-scoped message from somebody outside the group")
+    T.eq(diag.dropUnknownToken, 1, "each drop counts once, against its own reason")
 end

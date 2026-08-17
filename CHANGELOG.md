@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- **Loot council is now RCLootCouncil.** KART fills the council list from Northern Sky nicknames and lets council members assign while the raid leader trades.
+
 ### Fixed
 - **A stun no longer leaves your vote window closed.**
 - **A full 5-man party no longer converts itself to a raid** — only a 6th player requesting an invite does that now.

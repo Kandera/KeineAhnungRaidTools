@@ -1,5 +1,11 @@
 dofile("tests/rc_stub.lua")
 
+do
+    local toc = assert(io.open("KeineAhnungRaidTools.toc", "r")):read("*a")
+    T.truthy(not toc:find("LootCouncil%.lua", 1, true),
+        "4.0 toc does not load built-in Loot Council files")
+end
+
 local env = setmetatable({}, { __index = _G })
 local KART = {}
 env.KART = KART
@@ -10,6 +16,8 @@ do
     chunk("KeineAhnungRaidTools", KART)
 end
 local RC = KART.RC
+
+T.is_nil(KART.LC, "4.0 does not create a built-in loot council namespace")
 
 KARTTEST.RemoveRC()
 T.eq(KART.RC.IsRCLoaded(), false, "no RC addon means the companion is inert")

@@ -38,6 +38,7 @@ jobs:
             --exclude='.claude' \
             --exclude='.codex' \
             --exclude='.superpowers' \
+            --exclude='archive' \
             --exclude='AGENTS.md' \
             --exclude='.vscode' \
             --exclude='.gitignore' \

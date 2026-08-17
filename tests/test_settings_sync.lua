@@ -45,7 +45,7 @@ end
 
 -- A sanity floor, so a broken pattern above cannot turn this into a test that silently checks
 -- nothing. 3.2.0 shipped 40; the number only ever grows.
-T.truthy(declaredCount >= 40, "found the settings widgets (" .. declaredCount .. " >= 40)")
+T.truthy(declaredCount >= 25, "found the settings widgets (" .. declaredCount .. " >= 25)")
 
 for key, path in pairs(declared) do
     -- SyncSettingsToUI's entries all read `settingsMap[<widget>] = "<key>"`, so the quoted key is

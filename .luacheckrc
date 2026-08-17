@@ -4,7 +4,7 @@
 std = "lua51"
 max_line_length = false
 -- vendored verbatim, not ours to lint
-exclude_files = { "Libs/LibStub/", "Libs/CallbackHandler-1.0/", "Libs/AceComm-3.0/", "Libs/LibDeflate/" }
+exclude_files = { "Libs/LibStub/", "Libs/CallbackHandler-1.0/", "Libs/AceComm-3.0/", "Libs/LibDeflate/", "archive/" }
 
 -- WoW hands every event/callback a fixed signature; addon code routinely ignores arguments
 -- it doesn't need (e.g. `event` in an OnEvent handler). That is normal WoW addon style, not
@@ -41,9 +41,7 @@ files["MainFrame.lua"] = { ignore = { "431" } }
 
 globals = {
     -- SavedVariables
-    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LootHistoryEpoch",
-    "KART_LCOfficerNotes", "KART_WoWUtilsCache",
-    "KART_Profiles", "KART_PlayerCache", "KART_LCTrades", "KART_LCSession",
+    "KART_Settings", "KART_Profiles", "KART_PlayerCache",
     -- Named frames created by the addon and reached through _G
     "KART_GearScanTooltip",
     -- Addon-owned slash command registration

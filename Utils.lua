@@ -247,31 +247,10 @@ KART.Defaults = {
     accentR = 0, accentG = 60, accentB = 100,
     bgR = 10, bgG = 10, bgB = 10,
     language = "Auto",
-    lcModuleEnabled = false,
-    lcAutoPass = true,
-    lcVoteSeconds = 20,
-    lcButtonLabels = "BIS;Upgrade;Offspec;Sonstiges;Pass", -- placeholder; localized in Core.lua ADDON_LOADED via LC_DEFAULT_BUTTONS
-    lcCouncilMembers = "",
     rcCouncilMembers = "",
     rcCouncilMigrated = false,
     rcShowNickNames = true,
-    lcLootmaster = "",
-    lcShowNickNames = false,
-    lcVoteLayoutCompact = false,
-    lcFontSize = 12,
-    lcScale = 100, -- percent, independent of uiScale (which only ever touches KART.MainFrame)
-    lcFrameStrata = 4, -- index into KART.StrataLevels (4 = HIGH), independent of frameStrata
-    lcRollsEnabled = false,
-    lcVotedItemDisplay = "full",
-    lcHideIrrelevant = false,
-    lcAutoTransmogVote = false,
-    wuModuleEnabled = false,
     wuImportText = "",
-    dtModuleEnabled = false,
-    lcVotePopupPos = false,
-    lcCouncilPanelPos = false,
-    lcHistoryWindowPos = false,
-    lcMinQuality = 4,
     frameStrata = 4, -- index into KART.StrataLevels (4 = HIGH)
     autoLogEnabled = false,
     autoLogRaidLFR = false,
@@ -545,8 +524,6 @@ local SEARCH_TAB_PANELS = {
     { panel = "RaidleadPanel", tabIndex = 2 },
     { panel = "BuffCheckPanel", tabIndex = 3 },
     { panel = "SettingsPanel", tabIndex = 4 },
-    { panel = "LootCouncilPanel", tabIndex = 5 },
-    { panel = "WoWUtilsPanel", tabIndex = 6 },
 }
 
 -- Builds the settings search index by walking KART.UI's label registry — every settings label

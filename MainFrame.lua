@@ -17,23 +17,16 @@ function KART.ShowTab(tabIndex)
         KART.RaidleadPanel,
         KART.BuffCheckPanel,
         KART.SettingsPanel,
-        KART.LootCouncilPanel,
-        KART.WoWUtilsPanel,
     }
     for i, panel in ipairs(panels) do
         if panel then panel:SetShown(i == tabIndex) end
     end
 
-    -- Buttons are created further down in this file (after this function is defined), so guard
-    -- against calling ShowTab before they exist (not expected in practice, but SetActive would
-    -- error on a nil button otherwise).
     local buttons = {
         KART.BtnPromote,
         KART.BtnRaidlead,
         KART.BtnBuffCheck,
         KART.BtnSettings,
-        KART.BtnLootCouncil,
-        KART.BtnWoWUtils,
     }
     for i, btn in ipairs(buttons) do
         if btn then btn:SetActive(i == tabIndex) end
@@ -128,19 +121,8 @@ KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK)
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnLootCouncil = KART.UI:CreateTabButton(clickArea, L.TAB_LOOTCOUNCIL)
-KART.BtnLootCouncil:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
-KART.BtnLootCouncil:SetScript("OnClick", function() KART.ShowTab(5) end)
-
-KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS)
-KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnLootCouncil, "BOTTOMLEFT", 0, -5)
-KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(6) end)
-
--- The Settings tab must always be the last entry in the sidebar. When adding a new tab
--- button, anchor it above this one (i.e. insert it between the previous last tab and
--- Settings, and re-anchor Settings to the new button).
 KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS)
-KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
+KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
 -- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px).
@@ -171,14 +153,6 @@ KART.BuffCheckPanel:SetAllPoints()
 KART.SettingsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.SettingsPanel:SetAllPoints()
 
-KART.LootCouncilPanel = CreateFrame("Frame", nil, scrollChild)
-KART.LootCouncilPanel:SetAllPoints()
-KART.LootCouncilPanel:Hide()
-
-KART.WoWUtilsPanel = CreateFrame("Frame", nil, scrollChild)
-KART.WoWUtilsPanel:SetAllPoints()
-KART.WoWUtilsPanel:Hide()
-
 -- Scrollbar Thumb, accent-tinted via KART.UI's accent-texture registry
 local scrollThumb = KART.UI:StripScrollbarTextures(scrollFrame)
 if scrollThumb then scrollThumb:SetSize(8, 30) end
@@ -203,7 +177,7 @@ scrollFrame.scrollBarHideable = true
 -- scroll range collapses to zero when everything fits. Heights include headroom for large
 -- content fonts where a title's wrap height feeds into the layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 475, -- Automation: promote/invite card + AutoLog title + card
+    [1] = 475, -- Automation: promote/invite card + AutoLog + WoWUtils paste (measured below)
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
@@ -212,19 +186,9 @@ function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
-    if tab == 5 then
-        -- 552 = everything around the raid box, which is the only variable-height part:
-        --   12 top inset + 425 prefs card + 20 gap  (= 457, the raid box's own top)
-        -- + 16 gap + 28 test buttons + 8 gap + 28 history button + 15 bottom padding.
-        -- (Was 342 while the prefs card was 215 tall, then 387 for 260 — and stayed at 387 while the
-        -- card grew to 350 for the scale/layer sliders and to 425 for the irrelevant-item switches,
-        -- which is why its bottom 165px had no scroll range to reach them by.)
-        local rb = KART.LC and KART.LC.RaidBox
-        h = 552 + ((rb and rb:GetHeight()) or 420)
-    elseif tab == 6 then
-        -- 293 = import card block + separator/headers above the boss list + bottom padding
+    if tab == 1 then
         local bl = KART.WU and KART.WU.bossListFrame
-        h = 293 + ((bl and bl:GetHeight()) or 24)
+        h = 680 + ((bl and bl:GetHeight()) or 24)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -996,8 +960,6 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnPromote.text:SetText(L.TAB_PROMOTE)
     KART.BtnRaidlead.text:SetText(L.TAB_RAIDLEAD)
     KART.BtnBuffCheck.text:SetText(L.TAB_BUFFCHECK)
-    KART.BtnLootCouncil.text:SetText(L.TAB_LOOTCOUNCIL)
-    KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
     KART.TabTitles[1]:SetText(L.TAB_PROMOTE)
     KART.TabTitles[2]:SetText(L.LABEL_RAIDLEAD_TOOLS)

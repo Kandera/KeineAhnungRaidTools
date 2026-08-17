@@ -7,6 +7,9 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Geändert
+- **Loot Council ist jetzt RCLootCouncil.** KART füllt die Council-Liste aus Northern-Sky-Nicknames und lässt Council-Mitglieder zuweisen, während der Raidlead handelt.
+
 ### Behoben
 - **Ein Stun lässt dein Abstimmungsfenster nicht mehr geschlossen zurück.**
 - **Eine volle 5er-Gruppe wandelt sich nicht mehr selbst in einen Schlachtzug um** — das passiert jetzt nur noch, wenn ein 6. Spieler eine Einladung anfragt.

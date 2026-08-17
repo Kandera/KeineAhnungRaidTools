@@ -1,45 +1,34 @@
-## Interface: 120005, 120007, 120100
-## Title: Keine Ahnung Raid Tools
-## Notes: Ein Tool für Invites, Auto-Promote und Buff-Checks.
-## Author: Kandera
-## Version: 3.4.1
-## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
-## SavedVariables: KART_Settings, KART_LootHistory, KART_LootHistoryClearedAt, KART_LootHistoryEpoch, KART_LCOfficerNotes, KART_WoWUtilsCache, KART_Profiles, KART_PlayerCache
-## SavedVariablesPerCharacter: KART_LCTrades, KART_LCSession
-## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil
-## X-Curse-Project-ID: 1603461
-## X-Wago-ID: QN53ZOKB
-
-Libs\LibStub\LibStub.lua
-Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
-Libs\AceComm-3.0\ChatThrottleLib.lua
-Libs\AceComm-3.0\AceComm-3.0.lua
-Libs\LibDeflate\LibDeflate.lua
-Libs\KAUtil-1.0\KAUtil-1.0.lua
-Libs\KAGS-1.0\KAGS-1.0.lua
-Libs\KASC-1.0\KASC-1.0.lua
-Libs\KAUI-1.0\KAUI-1.0.lua
-
-Locales\enUS.lua
-Locales\deDE.lua
-
-Utils.lua
-MainFrame.lua
-GroupLogic.lua
-RaidleadBar.lua
-Profiles.lua
-BuffChecker.lua
-LootCouncil.lua
-LootCouncilTokenData.lua
-LootCouncilOfficerNotes.lua
-LootCouncilRelevance.lua
-LootCouncilVote.lua
-LootCouncilTrade.lua
-LootCouncilPanel.lua
-LootCouncilSettings.lua
-Droptimizer.lua
-LootHistory.lua
-Invite.lua
-AutoLog.lua
-Core.lua
-RCCompanion.lua
+## Interface: 120005, 120007, 120100
+## Title: Keine Ahnung Raid Tools
+## Notes: Raid tools and RCLootCouncil companion — invites, auto-promote, buff-checks.
+## Author: Kandera
+## Version: 4.0.0
+## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
+## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache
+## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil
+## X-Curse-Project-ID: 1603461
+## X-Wago-ID: QN53ZOKB
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceComm-3.0\ChatThrottleLib.lua
+Libs\AceComm-3.0\AceComm-3.0.lua
+Libs\LibDeflate\LibDeflate.lua
+Libs\KAUtil-1.0\KAUtil-1.0.lua
+Libs\KAGS-1.0\KAGS-1.0.lua
+Libs\KASC-1.0\KASC-1.0.lua
+Libs\KAUI-1.0\KAUI-1.0.lua
+
+Locales\enUS.lua
+Locales\deDE.lua
+
+Utils.lua
+MainFrame.lua
+GroupLogic.lua
+RaidleadBar.lua
+Profiles.lua
+BuffChecker.lua
+Invite.lua
+AutoLog.lua
+Core.lua
+RCCompanion.lua

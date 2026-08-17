@@ -34,51 +34,34 @@ A detailed window for checking raid readiness:
 *   **Ready Check Integration:** Opens automatically when a ready check starts.
 *   **Module Toggle:** The Buff Checker can be fully disabled to save CPU when not needed. The background KART sync (oil/ilvl/gear answers for others) stays active regardless, so the raid lead still sees correct data about this player.
 
-### 5. Loot Council
-Coordinated loot distribution directly inside the addon, no external tools required:
-*   **Session Activation:** When entering a raid, the lootmaster — or the raid lead, if no lootmaster is set — is asked whether Loot Council should be enabled for this session (simply decline for fun runs). Can be toggled manually at any time.
-*   **Raider Voting:** As soon as an item is up for distribution, a list with up to five configurable vote buttons (default: BIS / Upgrade / Offspec / Other / Pass) plus a fixed Transmog button appears simultaneously for all raiders, along with an optional note field to comment on their own vote. When multiple items drop at once (the normal case for most bosses), each item gets its own row with its own countdown — all drops are visible at the same time, so you can decide independently per item (e.g. BIS on one, Pass on another) instead of having to clear one item before the next even becomes visible. A row marks itself as done immediately after voting and disappears once its own voting time runs out. A personal settings toggle switches this list between a spacious layout (larger cards, the default) and a compact one (smaller single-line rows with icon-only vote chips) for a much smaller window footprint. A separate personal toggle controls what happens to a row once you've voted on it: it can stay full-size, shrink, or disappear entirely (`/kart showall` brings it back). Two further personal toggles keep items your class cannot equip out of your way: one hides them and answers them with your last configured response, the other votes Transmog on them while their appearance is still missing from your collection — both are off by default, and `/kart showall` brings a hidden item back.
-*   **Council Panel:** The council members the raid leader lists — plus whoever hands out the loot, who is always in the council — see a movable, scrollable panel with all votes (class-colored), sorted by vote priority. It also shows, per player, the item level (including icon) of the currently equipped comparison item in the relevant slot, so it's immediately clear who would get an upgrade, plus a Guild Rank column right next to the name to make it easy to spot alts of the same player at a glance. A minimize button collapses the panel down to just its header and item name so it can stay on screen during normal raiding, without losing track of any active vote in the background. An optional personal toggle shows each candidate's NSRT nickname instead of their character name here, falling back to the character name automatically wherever no nickname is set. When multiple rolls run at the same time, each item gets its own tab on the left edge (colored by item quality, with a "votes/total" display) — clicking switches the view without an assignment automatically closing the tab, so you can calmly compare between items and change your mind if needed. Hovering over a tab immediately shows the full vote breakdown for that item, even without switching to it; a newly arriving tab only gets a small "new" dot instead of yanking away the tab you're currently viewing.
-*   **Lootmaster:** The raid lead can designate one player — by character name or by NSRT nickname — who must win every roll (Need, or Greed/Disenchant if Need isn't available) instead of passing, so they can physically receive each item and hand it out to whoever the council picked. Overrides that player's own Auto-Pass setting; controlled by the raid lead like the council member list below, not something a raider can turn off for themselves.
-*   **1-100 Random Rolls:** Optionally enabled via a setting (raid lead setting). When enabled, every raider eligible for the item at the moment it comes up for vote is dealt a unique value from 1-100, drawn without replacement from a single pool so no two raiders can ever get the same number (a raider who joins after the item was announced gets no number for it) — shown as its own column in the council panel, purely informational with no automatic effect on the assignment.
-*   **Council Vote Counter:** Every row in the council panel has a "CV" button that lets each council member mark their personal favorite; the number next to it shows the total council votes for that player. Purely for guidance — the actual assignment still only happens via right-click → Assign.
-*   **Persistent Player Notes:** Via "Edit Note" in the right-click menu, you can attach a permanent note to a player (e.g. "already has BIS trinket"), visible for every item, not just a single one — unlike a raider's per-vote note. It's distributed to all currently online council members and survives reloads.
-*   **Armor Type Hint:** Rows for players who can't wear the current item's armor type at all (e.g. plate on a mage) are shown dimmed — purely visual, assigning via right-click still works for any row.
-*   **Right-Click Assignment:** Right-clicking a raider row opens a menu with three options — **Assign** (uses the submitted vote as the reason) and **Assign without reason** (handy when nobody wants the item, without polluting the loot history) both award the item; a lock with a confirmation dialog prevents accidental double assignments. **Change Vote** (submenu with all configured vote buttons) is purely cosmetic and awards nothing — it only lets you manually correct a player's displayed vote, e.g. if someone voted via whisper instead of clicking. An assignment does not automatically close its tab — the "×" directly on the tab dismisses only that one item, "No Winner" closes its tab automatically as well, and the "Close" button or the "×" in the top right only minimizes the whole window (all tabs are preserved and reappear on the next item).
-*   **Winner Notification:** The chosen player receives a green notification window; the decision is automatically announced in raid/party chat.
-*   **Trade Reminder with Auto-Trade:** After an item is assigned to another player, KART remembers who still needs to be traded what, and shows a small, movable reminder window with all pending trades (including a manual checkmark button). If you open a trade window with exactly the right player, the matching item is automatically placed from your bags into the trade window — the trade still has to be confirmed manually. Each pending trade is tracked against the item's real 4-hour Bind-on-Pickup trade window; KART warns 20 minutes before it expires and silently drops the entry once it does, rather than leaving an untradeable item sitting in the list.
-*   **Auto-Pass:** Optional checkbox – as soon as a loot roll starts, all KART users automatically pass, so nobody accidentally clicks Need/Greed/Transmog while the council is voting. This setting is always purely personal and independent of the minimum item quality.
-*   **Raid-Wide Authority:** Voting timer, vote buttons, the council member list, minimum item quality, and the random rolls option always apply raid-wide according to the raid lead's settings — not each individual player's local settings. This prevents someone from, say, adding themselves to the council without authorization or shortening the voting time for their own benefit. Visually set apart in its own box in the options menu, with a live status label for one of three states: your own settings apply to the raid (you're the raid lead), the raid lead's settings apply to you instead, or — if you've typed someone else's name into the Lootmaster field — your settings don't apply anywhere yet, until you send them over with "Sync Settings to Player..." below. Council members, like the Lootmaster above, can each be entered as a character name or an NSRT nickname.
-*   **Minimum Item Quality:** Items below the selected quality (default: Epic) don't trigger Loot Council at all — the normal WoW roll window is used instead.
-*   **Loot History:** Fully synchronized, searchable log of the newest 500 assignments (item, player, reason, raid difficulty, timestamp; oldest entries are trimmed once the log is full). Filter by player, reason, and item name, plus a button to clear the history. Every KART user automatically keeps the same history — not just the loot master. If someone rejoins a raid after missing a session, clients silently reconcile missing entries via the addon channel, with nothing shown in chat. The history window paginates once it grows too long for one page, and an Export JSON button saves the currently filtered entries to a file, with item/reason/instance/slot fields normalized to English regardless of your client's language so a mixed-language raid still produces one consistent export — in the same field format an RCLootCouncil export uses, so tools built for that format can read it too.
-*   **Module Toggle:** Loot Council can be fully disabled (e.g. during a testing phase or when conflicting with another loot addon like RCLootCouncil) — no messages from other KART users are processed at all, no auto-pass, no popups.
-*   **KART Status Warning:** In the council panel, a red icon per raider indicates that KART wasn't detected, an outdated version is running, or the player has disabled Loot Council locally (details in the tooltip).
-*   **Test Mode:** Two test buttons simulate the flow from the looter's perspective (vote list) and from the loot master's perspective (council panel with tabs), independent of your actual raid role — and they work together: a vote cast in the looter test window immediately shows up in the open master test panel, even fully solo without a group. Four real (but consequence-free) items are distributed at once (three weapons plus one ring, so the two-slot comparison for rings/trinkets gets tested too), so you can also test the behavior with multiple simultaneous drops (vote list and tab bar) — including real item icons, tooltips, armor type hints, and gear comparison. Test rolls stay purely local (no broadcast, no raid chat announcement, no entry in the real loot history, no trade reminder).
+### 5. RCLootCouncil companion
+KART 4.0 no longer ships a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. The raid also runs the **WowUtils** addon (distributed with RC) for sim columns on RC's voting frame.
 
-### 6. WoWUtils Import
-*   Raid compositions can be imported directly from WoWUtils via copy-paste (boss-by-boss format with encounter, difficulty, and invite list).
-*   Each imported boss gets its own row with a player count and two buttons:
-    *   **Invite:** Invites all players from the boss list who aren't already in the raid (members already present are skipped).
-    *   **Remove:** Kicks all current raid members who are NOT on the boss list – ideal for quickly switching between boss compositions.
-*   Multiple imports are merged instead of overwritten: if you paste the Normal composition first and then the Heroic one, both difficulties stay in the list at the same time (matched by encounter + difficulty). A **Reset** button (with confirmation) clears the list entirely.
-*   **Split Raids:** If you import a second, different roster for the same boss and difficulty (e.g. Team A and Team B for a split), it isn't overwritten but added as its own row, automatically distinguishable as "Boss Name A" / "Boss Name B", etc.
-*   The import is saved across sessions and loaded automatically on login.
-*   **Module Toggle:** Can be fully disabled if not needed.
+KART adds two hooks on top of RC:
 
-### 7. Droptimizer Gains
-*   Shows a **Gain** column in the Loot Council panel with each candidate's simulated %DPS/HPS gain from the item currently being rolled, sourced from droptimizer sims already imported into WoWUtils (Raidbots or QE Live).
-*   Requires the separate **[KART Companion](https://github.com/Kandera/KART-Companion)** app — a small system-tray tool in its own repository, since WoW addons can't reach the internet on their own. Most raiders don't need it: only one person, typically the loot master/officer, has to run it, since the WoWUtils group key already grants access to the whole roster's sim data.
-*   The companion syncs on an interval (or on demand) into a dedicated SavedVariable the addon reads on `/reload` — it never touches your regular settings or loot history.
-*   Hover a candidate's small equipped-item icon to see the rolled item and their currently equipped item side by side.
-*   **Module Toggle:** Off by default; enable via "Show droptimizer gain % in Loot Council" in the Loot Council settings. Sync status (last synced, player count) is shown in General Settings.
+*   **Council by nickname:** On the Settings tab, the raid leader lists council members as [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) nicknames (or character names). KART pushes only the GUIDs of members whose current alt is in the raid into RC's council list whenever the roster changes.
+*   **Award relay:** Council members click Award in RC's voting frame; KART whispers the raid leader, whose client calls RC's `Award()` so the lead can keep trading instead of living in the voting UI.
 
-### 8. Customization (Settings)
-*   Fully customizable interface (colors, transparency, fonts). The two Loot Council windows additionally have their own scale, font size, and frame-layer sliders, independent of the main window.
+Everyone who should click Award, and the raid leader who receives those clicks, needs KART. Other raiders need RC and WowUtils only.
+
+### 6. WoWUtils roster paste (Automation tab)
+*   Raid compositions can be imported from WoWUtils via copy-paste on the **Automation** tab (boss-by-boss format with encounter, difficulty, and invite list).
+*   Each imported boss gets its own row with **Invite** and **Remove** buttons to swap compositions quickly.
+*   Multiple imports merge by encounter + difficulty; **Reset** clears the saved list.
+
+### 7. Customization (Settings)
+*   Fully customizable interface (colors, transparency, fonts).
 *   Standard-compliant controls: windows and text fields can be closed/deselected with ESC.
 *   English and German language support.
 *   Access via minimap icon or the Addon Compartment frame.
 *   Version checker: check whether all raiders are running the latest KART version (`/kart v`).
-*   **Modular Disabling:** Loot Council, Buff Checker, WoWUtils, and Droptimizer Gains can each be individually disabled — handy during testing phases or to save CPU for raiders who don't need certain features.
+*   **Modular disabling:** The Buff Checker can be fully disabled to save CPU when not needed.
+
+## Requirements
+
+*   **RCLootCouncil** — loot council (required for loot features).
+*   **WowUtils** — RC voting-frame columns (installed alongside RC in this guild).
+*   **Northern Sky Raid Tools** (optional) — nicknames for auto-promote and RC council list; falls back to character names when absent.
 
 ## Slash Commands
 
@@ -86,13 +69,7 @@ Coordinated loot distribution directly inside the addon, no external tools requi
 | :--- | :--- |
 | `/kart` | Opens or closes the main configuration window. |
 | `/kart version` (`/kart v`) | Requests the KART version from everyone in your current guild, raid, or party, and prints the responses. |
-| `/kart add <item link(s)>` | Lootmaster only. Manually starts a Loot Council roll for one or more pasted item links, as if the item(s) had just dropped. |
-| `/kart lc` | Reopens the Loot Council vote/council window if a roll is still active. |
-| `/kart trade` | Reopens the trade reminder window if a trade is still pending. |
-| `/kart owed` | Reopens the list of items you're still owed — the only way to bring it back once its own "×" has closed it. |
-| `/kart showall` | Reveals roll rows currently hidden by your personal display settings (voted-item display or "hide items I can't equip"). |
-| `/kart status` | Prints a local diagnostic block (module state, session state, lootmaster, vote buttons, tracked rolls, and more) for troubleshooting why an item isn't showing up correctly for someone. |
-| `/kart ench [raid]` | **Maintenance tool, not for regular play.** Prints the enchant IDs this client (or, with `raid`, the whole group) actually reports, used to keep the addon's enchant-check data current each tier. |
+| `/kart ench [raid]` | **Maintenance tool, not for regular play.** Prints enchant IDs for tier-table maintenance. |
 | `/kart help` (`/kart h`) | Prints this command list. |
 
 ## Installation

@@ -65,10 +65,7 @@ end
 
 local SOURCES = {
     "Core.lua", "MainFrame.lua", "Utils.lua", "Profiles.lua", "AutoLog.lua",
-    "BuffChecker.lua", "Droptimizer.lua", "GroupLogic.lua", "Invite.lua", "RaidleadBar.lua",
-    "LootCouncil.lua", "LootCouncilPanel.lua", "LootCouncilSettings.lua", "LootCouncilTrade.lua",
-    "LootCouncilVote.lua", "LootCouncilRelevance.lua", "LootCouncilOfficerNotes.lua",
-    "LootHistory.lua",
+    "BuffChecker.lua", "GroupLogic.lua", "Invite.lua", "RaidleadBar.lua",
     "RCCompanion.lua",
 }
 
@@ -108,10 +105,6 @@ do
         T.truthy(en[key] ~= nil, "BuffData's " .. key .. " has a string")
     end
     T.truthy(seen >= 12, "and every row of BuffData was actually looked at (" .. seen .. ")")
-
-    for i = 0, 5 do
-        T.truthy(en["LC_QUALITY_" .. i] ~= nil, "the quality menu has a name for quality " .. i)
-    end
 end
 
 do
@@ -168,7 +161,7 @@ do
     table.sort(bad)
     T.eq(table.concat(bad, " | "), "",
         "every string.format on a locale string is given as many arguments as it has placeholders")
-    T.truthy(checked >= 40, "and enough call sites were actually reached (" .. checked .. ")")
+    T.truthy(checked >= 8, "and enough call sites were actually reached (" .. checked .. ")")
 end
 
 -- ===================================================================================
@@ -181,7 +174,8 @@ end
 -- cannot hide among them.
 do
     local NIL_BY_DESIGN = {
-        activeProfile = true,  -- no profile loaded yet
+        activeProfile = true,
+        lcCouncilMembers = true, -- legacy WTF only; RC migration reads it once
         -- Window geometry, written when a window is first moved. Every reader supplies its own
         -- default position (`KART_Settings.bcX or 200`), which is what makes "unset" meaningful.
         bcPoint = true, bcRelativePoint = true, bcX = true, bcY = true,
@@ -217,5 +211,5 @@ do
     for name, path in pairs(missing) do names[#names + 1] = name .. " (" .. path .. ")" end
     table.sort(names)
     T.eq(table.concat(names, ", "), "", "every setting the addon reads has a default")
-    T.truthy(seen >= 200, "and enough reads were actually reached (" .. seen .. ")")
+    T.truthy(seen >= 80, "and enough reads were actually reached (" .. seen .. ")")
 end

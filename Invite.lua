@@ -136,7 +136,6 @@ end
 -- =====================================================================
 
 function WU.InviteBoss(idx)
-    if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
     -- "Not in a group at all" is not a lack of permission, it is the ordinary starting point: open
@@ -272,7 +271,6 @@ end
 -- The count is in the question, because "remove everyone not on this roster" reads very differently
 -- when the answer is two people and when it is eighteen.
 function WU.RemoveForBoss(idx)
-    if KART_Settings.wuModuleEnabled == false then return end
     local boss = WU.bosses[idx]
     if not boss then return end
     -- Leader OR assistant may uninvite in-game, so gate the same way WU.InviteBoss does rather than
@@ -439,23 +437,19 @@ function WU.RefreshBossList()
 end
 
 -- =====================================================================
---  Panel builder  (fills KART.WoWUtilsPanel)
+--  Panel builder  (fills the Automation tab's WoWUtils paste section)
 -- =====================================================================
 
 function WU.BuildPanel(parent)
     local L = KART.L
 
-    KART.CreateTabTitle(6, L.WU_TITLE)
-
-    -- Master switch: fully disables the WoWUtils import/invite module.
-    KART.WU.CbModuleEnabled = KART.UI:CreateSettingsCheckbox(parent, {
-        name = "KART_WUModuleEnabled", label = L.WU_SET_MODULE_ENABLED,
-        store = SettingsStore, key = "wuModuleEnabled", y = -7,
-        tooltip = L.WU_DESC_MODULE_ENABLED,
-    })
+    local wuTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    wuTitle:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -430)
+    wuTitle:SetText(L.WU_TITLE)
+    KART.UI:RegisterLabel(wuTitle)
 
     local importCard = KART.UI:CreateCard(parent)
-    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -47)
+    importCard:SetPoint("TOPLEFT", wuTitle, "BOTTOMLEFT", 0, -10)
     importCard:SetSize(500, 190)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -534,7 +528,6 @@ function WU.BuildPanel(parent)
     WU.BtnImport:SetSize(180, 26)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
-        if KART_Settings.wuModuleEnabled == false then return end
         local text = WU.ImportEditBox:GetText()
         if KAUtil.TrimString(text) ~= "" and text == WU.lastImportedText then
             -- Identical to what's already loaded (e.g. auto-parsed from the saved text at login) —
@@ -570,7 +563,6 @@ function WU.BuildPanel(parent)
     WU.BtnReset:SetSize(100, 26)
     WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
     WU.BtnReset:SetScript("OnClick", function()
-        if KART_Settings.wuModuleEnabled == false then return end
         -- Also offer the reset when the visible list is empty but a saved import text still exists:
         -- that text is what rebuilds the list on the next login/profile switch, so it is exactly what
         -- needs clearing (see WU.ResetBosses). Only a truly clean slate is a no-op.
@@ -620,9 +612,7 @@ function WU.BuildPanel(parent)
 
     KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
-        KART.TabTitles[6]:SetText(Lx.WU_TITLE)
-        KART.WU.CbModuleEnabled.text:SetText(Lx.WU_SET_MODULE_ENABLED)
-        KART.WU.CbModuleEnabled.tooltipText = Lx.WU_DESC_MODULE_ENABLED
+        wuTitle:SetText(Lx.WU_TITLE)
         pasteLabel:SetText(Lx.WU_LABEL_PASTE)
         WU.BtnImport.text:SetText(Lx.WU_BTN_IMPORT)
         WU.BtnReset.text:SetText(Lx.WU_BTN_RESET)
@@ -637,6 +627,6 @@ function WU.BuildPanel(parent)
 end
 
 -- Invite.lua loads after MainFrame.lua, so the panel already exists here.
-if KART.WoWUtilsPanel then
-    WU.BuildPanel(KART.WoWUtilsPanel)
+if KART.PromotePanel then
+    WU.BuildPanel(KART.PromotePanel)
 end

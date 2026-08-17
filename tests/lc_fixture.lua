@@ -121,11 +121,11 @@ F.RECIPE, F.HOUSING_DECOR = 249412, 249413
 -- everyone is on defaults is a raid nobody has. The base flow has to hold for all of them at once:
 -- whatever someone has switched on for themselves, the council must still see their answer.
 F.SETTINGS = {
-    Bramor = {},                                                     -- lootmaster, defaults
-    Merrit = { lcAutoPass = false },                                 -- clicks Blizzard's roll themselves
-    Corvin = { lcHideIrrelevant = true },                            -- hides what they cannot equip
-    Alric  = { lcAutoTransmogVote = true },                          -- wants the appearances
-    Sinja  = { lcHideIrrelevant = true, lcAutoTransmogVote = true }, -- both
+    Bramor = {},
+    Merrit = {},
+    Corvin = {},
+    Alric  = {},
+    Sinja  = {},
 }
 
 -- Real-length GUIDs on purpose: "Player-<realmID>-<8 hex>", about twice the width of the
@@ -162,13 +162,6 @@ function F.NewRaid()
         for k, v in pairs(opts) do c.env.KART_Settings[k] = v end
     end
 
-    RaidSim.As(lm, function()
-        lm.env.KART_Settings.lcLootmaster     = "Bramor"
-        lm.env.KART_Settings.lcCouncilMembers = "Bramor;Merrit;Corvin"
-        lm.env.KART_Settings.lcRollsEnabled   = true
-        lm.KART.LC.ApplyOwnConfig()
-        lm.KART.LC.SetSessionActive(true)
-    end)
     return sim, lm, council, raider
 end
 

@@ -56,8 +56,7 @@ do
     -- Exactly one content panel visible at a time. Two showing at once is the shape of every
     -- "settings are drawn over the loot council tab" report.
     local visible = 0
-    for _, panel in pairs({ KART.PromotePanel, KART.InvitePanel, KART.BuffPanel, KART.SettingsPanel,
-                            KART.LootCouncilPanel, KART.WoWUtilsPanel }) do
+    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel }) do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")
@@ -66,7 +65,7 @@ end
 -- The settings search ------------------------------------------------------------------------------
 do
     local index = As(KART.BuildSearchIndex)
-    T.truthy(#index > 0, "the search index finds the settings widgets")
+    T.truthy(#index >= 20, "the search index finds the settings widgets")
 
     local withTab, withWidget = 0, 0
     for _, e in ipairs(index) do
@@ -101,9 +100,9 @@ end
 
 do
     me.env.KART_Profiles = {
-        raid   = { lcVoteSeconds = 42 },
-        solo   = { lcVoteSeconds = 7 },
-        alltag = { lcVoteSeconds = 21 },
+        raid   = { pullTimerDuration = 42 },
+        solo   = { pullTimerDuration = 7 },
+        alltag = { pullTimerDuration = 21 },
     }
     As(function() KART.BtnProfile:GetScript("OnClick")(KART.BtnProfile) end)
     local labels = KARTTEST.MenuLabels()
@@ -112,7 +111,7 @@ do
         "sorted, so the same profile is in the same place every time it is opened")
 
     T.truthy(As(function() return KARTTEST.ClickMenu("raid") end), "picking one loads it")
-    T.eq(me.env.KART_Settings.lcVoteSeconds, 42, "the settings it stored are in force")
+    T.eq(me.env.KART_Settings.pullTimerDuration, 42, "the settings it stored are in force")
     T.eq(me.env.KART_Settings.activeProfile, "raid", "and it is recorded as the active one")
     T.eq(KART.BtnProfile.text:GetText(), KART.L.PROFILE_LABEL_PREFIX .. "raid",
         "with the button naming it rather than still saying none")
@@ -201,7 +200,7 @@ end
 -- The one control here that cannot be undone. It wipes KART_Settings and rebuilds it from defaults.
 do
     local S = me.env.KART_Settings
-    S.lcVoteSeconds = 99
+    S.pullTimerDuration = 99
     S.inviteKeywords = "meins"
     S.minimap.hide = true
     local minimapTable = S.minimap
@@ -211,11 +210,11 @@ do
     -- reset that could be reached without it would be the finding.
     As(function() KART.BtnReset:GetScript("OnClick")(KART.BtnReset) end)
     T.eq(#KARTTEST.popups, 1, "the reset asks before it wipes anything")
-    T.eq(me.env.KART_Settings.lcVoteSeconds, 99, "and changes nothing until it is answered")
+    T.eq(me.env.KART_Settings.pullTimerDuration, 99, "and changes nothing until it is answered")
     T.truthy(As(function() return KARTTEST.AcceptPopup("KART_RESET_CONFIRM") end),
         "and the confirmation is answerable")
 
-    T.eq(me.env.KART_Settings.lcVoteSeconds, KART.Defaults.lcVoteSeconds,
+    T.eq(me.env.KART_Settings.pullTimerDuration, KART.Defaults.pullTimerDuration,
         "a changed setting is back at its default")
     T.eq(me.env.KART_Settings.inviteKeywords, KART.Defaults.inviteKeywords,
         "and so is a typed one")

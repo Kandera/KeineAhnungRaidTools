@@ -5,7 +5,6 @@ local KASC = LibStub("KASC-1.0")
 
 KART.Version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "0.0.0"
 KASC:RegisterAddon("KART", KART.Version)
-KASC:RegisterCapability("KART", "LC", function() return KART_Settings.lcModuleEnabled ~= false end)
 
 local frame = CreateFrame("Frame")
 
@@ -29,19 +28,6 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 -- KART.RegisterEscapeFrame for the whole story.
 frame:RegisterEvent("PLAYER_CONTROL_LOST")
 frame:RegisterEvent("CHALLENGE_MODE_START")
-frame:RegisterEvent("START_LOOT_ROLL")
--- The outcome of a group-loot roll, which is the only way to notice the lootmaster lost one (B60).
---
--- pcall'd, and this one is not defensive habit. RegisterEvent THROWS on a name the client does not
--- know, and this name was taken from generated API annotations for 12.0.1 while the live client is
--- 12.1. Unprotected, a rename would abort Core.lua at load and take the whole addon with it -- every
--- core function in docs/MANIFEST.md, for a warning that only ever prints a line. The cost of being
--- wrong has to be "this one feature is silent", never "KART does not load".
-pcall(frame.RegisterEvent, frame, "LOOT_HISTORY_UPDATE_DROP")
-frame:RegisterEvent("TRADE_SHOW")
-frame:RegisterEvent("TRADE_CLOSED")
-frame:RegisterEvent("TRADE_ACCEPT_UPDATE")
-frame:RegisterEvent("UI_INFO_MESSAGE")
 frame:RegisterEvent("PLAYER_LOGOUT")
 -- Border widths are in frame units, which stop being whole pixels when the UI scale or the
 -- resolution changes under us (B23). Both events fire without the addon touching anything.
@@ -73,8 +59,6 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
 -- (AddonCompartment registration, event handler setup) since those must never run twice.
 function KART.SyncSettingsToUI()
     KART.UpdateCache()
-    if KART.LC and KART.LC.BroadcastRaidConfig then KART.LC.BroadcastRaidConfig() end
-    if KART.DT and KART.DT.RebuildIndex then KART.DT.RebuildIndex() end
 
     -- Sammel-Initialisierung der UI Elemente
     local settingsMap = {}
@@ -87,25 +71,9 @@ function KART.SyncSettingsToUI()
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
     if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
-    if KART.LC and KART.LC.CbModuleEnabled then settingsMap[KART.LC.CbModuleEnabled] = "lcModuleEnabled" end
-    if KART.LC and KART.LC.CbAutoPass then settingsMap[KART.LC.CbAutoPass] = "lcAutoPass" end
-    if KART.LC and KART.LC.CbCompactVoteLayout then settingsMap[KART.LC.CbCompactVoteLayout] = "lcVoteLayoutCompact" end
-    if KART.LC and KART.LC.CbShowNickNames then settingsMap[KART.LC.CbShowNickNames] = "lcShowNickNames" end
-    if KART.LC and KART.LC.CbHideIrrelevant then settingsMap[KART.LC.CbHideIrrelevant] = "lcHideIrrelevant" end
-    if KART.LC and KART.LC.CbAutoTransmogVote then settingsMap[KART.LC.CbAutoTransmogVote] = "lcAutoTransmogVote" end
-    if KART.LC and KART.LC.CbRollsEnabled then settingsMap[KART.LC.CbRollsEnabled] = "lcRollsEnabled" end
-    if KART.LC and KART.LC.SldVoteTimer then settingsMap[KART.LC.SldVoteTimer] = "lcVoteSeconds" end
-    if KART.LC and KART.LC.SldFontSize then settingsMap[KART.LC.SldFontSize] = "lcFontSize" end
-    if KART.LC and KART.LC.SldScale then settingsMap[KART.LC.SldScale] = "lcScale" end
-    if KART.LC and KART.LC.SldStrata then settingsMap[KART.LC.SldStrata] = "lcFrameStrata" end
-    if KART.LC and KART.LC.ButtonLabelEditBox then settingsMap[KART.LC.ButtonLabelEditBox] = "lcButtonLabels" end
-    if KART.LC and KART.LC.CouncilMembersEditBox then settingsMap[KART.LC.CouncilMembersEditBox] = "lcCouncilMembers" end
     if KART.RC and KART.RC.CouncilMembersEditBox then settingsMap[KART.RC.CouncilMembersEditBox] = "rcCouncilMembers" end
     if KART.RC and KART.RC.CbShowNickNames then settingsMap[KART.RC.CbShowNickNames] = "rcShowNickNames" end
-    if KART.LC and KART.LC.LootmasterEditBox then settingsMap[KART.LC.LootmasterEditBox] = "lcLootmaster" end
-    if KART.WU and KART.WU.CbModuleEnabled then settingsMap[KART.WU.CbModuleEnabled] = "wuModuleEnabled" end
     if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
-    if KART.DT and KART.DT.CbModuleEnabled then settingsMap[KART.DT.CbModuleEnabled] = "dtModuleEnabled" end
     if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
     if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
     if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
@@ -158,20 +126,6 @@ function KART.SyncSettingsToUI()
         end
     end
 
-    if KART.LC and KART.LC.BtnMinQuality and KART.LC.QualityLabel then
-        KART.LC.BtnMinQuality.text:SetText(KART.LC.QualityLabel(KART_Settings.lcMinQuality or 4))
-    end
-
-    if KART.LC and KART.LC.BtnVotedItemDisplay and KART.LC.VotedItemDisplayLabel then
-        KART.LC.BtnVotedItemDisplay.text:SetText(KART.LC.VotedItemDisplayLabel(KART_Settings.lcVotedItemDisplay or "full"))
-    end
-
-    -- Derived from lcLootmaster, so it belongs to this push like every widget above. The panel builds
-    -- itself before KART_Settings exists and can only render "not the owner" there; without this it
-    -- would stay wrong until the next roster change or the next keystroke in the lootmaster field.
-    if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
-    if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
-
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
 
     KART.UpdateMinimapButton()
@@ -188,12 +142,6 @@ end
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     if event == "ADDON_LOADED" and arg1 == addonName then
         KART_Settings = KART_Settings or {}
-        KART_LootHistory = KART_LootHistory or {}
-        -- The one-time purge that opens the epoch scheme (see LH.PurgeIfNoEpoch in LootHistory.lua
-        -- for why). Must run after the table above exists, so there is something to wipe.
-        KART.LH.PurgeIfNoEpoch()
-        KART_LCOfficerNotes = KART_LCOfficerNotes or {}
-        KART_WoWUtilsCache = KART_WoWUtilsCache or {}
         KART_Profiles = KART_Profiles or {}
         KART_PlayerCache = KART_PlayerCache or {}
         KASC:AttachCache(KART_PlayerCache)
@@ -204,21 +152,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         for guid, entry in pairs(KART_PlayerCache) do
             if (entry.lastSeen or 0) < pruneCutoff then KART_PlayerCache[guid] = nil end
         end
-        -- Officer notes are standing per-person notes with no natural expiry, but HandleOfficerNote
-        -- inserts network-supplied keys, so a long-lived install can accumulate entries for players
-        -- who left the guild. Cap the table as a runaway backstop — real councils never approach this.
-        local MAX_OFFICER_NOTES = 250
-        local noteCount = 0
-        for _ in pairs(KART_LCOfficerNotes) do noteCount = noteCount + 1 end
-        if noteCount > MAX_OFFICER_NOTES then
-            local excess = noteCount - MAX_OFFICER_NOTES
-            for key in pairs(KART_LCOfficerNotes) do
-                KART_LCOfficerNotes[key] = nil
-                excess = excess - 1
-                if excess <= 0 then break end
-            end
-        end
-        -- Reconcile the "KART owns the combat log" flag with reality. ADDON_LOADED fires on /reload
+        -- Reconcile the "KART owns the combat log" flag with reality.
         -- as well as on login, and LoggingCombat() SURVIVES a reload while it never survives a
         -- logout — so only clear the flag when nothing is actually logging. Clearing it
         -- unconditionally would orphan a log KART started before a mid-raid /reload, leaving it
@@ -266,19 +200,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Re-apply every statically-built UI text with the now-selected language.
         KART.UI:ApplyLocaleRefreshers()
 
-        -- Outstanding BoP trade obligations from the previous session. After the locale refresh
-        -- because the restored reminder windows render localized text.
-        if KART.LC and KART.LC.Trade and KART.LC.Trade.RestorePersistedTrades then
-            KART.LC.Trade.RestorePersistedTrades()
-        end
-
-        -- The items still on the table when this client last stopped (B81). After the trades for the
-        -- same reason: both restore loot-flow state, and the trade obligations are the older, longer
-        -- lived half.
-        if KART.LC and KART.LC.RestoreSessionSnapshot then
-            KART.LC.RestoreSessionSnapshot()
-        end
-
         KART.SyncSettingsToUI()
 
         AddonCompartmentFrame:RegisterAddon({
@@ -299,16 +220,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UpdateStyles()
 
     elseif event == "ADDON_LOADED" then
-        -- Some OTHER addon finished loading, which is a moment a nickname source can appear without
-        -- the roster moving (B126). KART resolves council and lootmaster entries through NSRT's
-        -- nickname API, and that global does not exist until NSRT has set itself up -- so a client
-        -- that loaded first held plain text where everybody else held keys, and stayed that way: the
-        -- retry pass is driven by GROUP_ROSTER_UPDATE and by nothing else. It was reported as "the
-        -- council member could only be resolved after opening and closing NSRT once", and what
-        -- actually healed it was whatever roster event happened to come next.
-        if KART.LC and KART.LC.RetryPendingResolutionsThrottled then
-            KART.LC.RetryPendingResolutionsThrottled()
-        end
         if arg1 == "RCLootCouncil" and KART.RC then KART.RC.Enable() end
 
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
@@ -317,51 +228,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
 
     elseif event == "GUILD_ROSTER_UPDATE" then
-        -- Only what is on screen: the ranks are display-only, and a hidden panel redraws itself when
-        -- it comes back anyway (B124).
-        if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-            KART.LC.Council.RefreshCouncilRowsThrottled()
-        end
-
-    elseif event == "START_LOOT_ROLL" then
-        if KART.LC then KART.LC.OnStartLootRoll(arg1) end
-
-    elseif event == "LOOT_HISTORY_UPDATE_DROP" then
-        if KART.LC and KART.LC.HandleLootHistoryDrop then KART.LC.HandleLootHistoryDrop(arg1, arg2) end
-
-    elseif event == "TRADE_SHOW" then
-        if KART.LC then KART.LC.Trade.OnTradeShow() end
-
-    elseif event == "TRADE_CLOSED" then
-        if KART.LC then KART.LC.Trade.OnTradeClosed() end
-
-    elseif event == "TRADE_ACCEPT_UPDATE" then
-        if KART.LC then KART.LC.Trade.OnTradeAcceptUpdate() end
-
-    elseif event == "PLAYER_LOGOUT" then
-        -- A boss's items wait half a second to be announced together (LC.pendingDrop), and a reload
-        -- landing inside that window would take the whole batch with it -- the lootmaster has already
-        -- force-won them, so nobody in the raid would see a card for a boss that just died (B134).
-        -- Sent before the snapshot for no ordering reason; it is simply the outbound half, and
-        -- ChatThrottleLib sends inline whenever there is bandwidth, which at this moment there
-        -- usually is.
-        if KART.LC and KART.LC.FlushPendingDrop then KART.LC.FlushPendingDrop() end
-        -- The last thing that runs before SavedVariables are written, and it fires for a
-        -- /reload, a logout and a quit alike -- so one write site keeps the items on the table
-        -- across every ordinary interruption (B81).
-        if KART.LC and KART.LC.SaveSessionSnapshot then KART.LC.SaveSessionSnapshot() end
-    elseif event == "UI_INFO_MESSAGE" then
-        if KART.LC then KART.LC.Trade.OnTradeInfoMessage(arg1) end
+        -- Reserved for future guild-roster-driven UI refresh.
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         -- Before anything reads a unit token: the tokens have just been renumbered, so what this
         -- client last knew about raid7 is about somebody else now (see KART.UnitLeads).
         KART.ForgetUnitStanding()
-        if KART.LC then KART.LC.CheckRaidJoin() end
-        if KART.LC and KART.LC.UpdateRoleStatusLabel then KART.LC.UpdateRoleStatusLabel() end
-        if KART.LC and KART.LC.RefreshRaidWideFields then KART.LC.RefreshRaidWideFields() end
-        if KART.LC and KART.LC.RetryPendingResolutionsThrottled then KART.LC.RetryPendingResolutionsThrottled() end
-        if KART.LC and KART.LC.RetryPendingConfigThrottled then KART.LC.RetryPendingConfigThrottled() end
         KART.UpdateRaidleadBarVisibility()
 
         -- Announce whenever the CHANNEL changes, not once per group. The old one-shot latch meant a
@@ -515,26 +387,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
                 if IsInGuild() then
                     KASC:AnnounceHello("GUILD")
                 end
-                -- Same moment, second reason (B126): an optional dependency that loads on demand is
-                -- ready by now, so anything still stuck on plain config text can be placed. Cheap and
-                -- silent when there is nothing pending.
-                if KART.LC and KART.LC.RetryPendingResolutions then
-                    KART.LC.RetryPendingResolutions()
-                end
             end)
         end
         if KART.AutoLog then KART.AutoLog.Evaluate() end
-        -- Loot Council session recovery, which until now hung on GROUP_ROSTER_UPDATE alone. That
-        -- event fires when the roster changes; a reload, a disconnect or zoning into the instance
-        -- does not change the roster, and a full raid mid-boss does not change either. So the one
-        -- client that just lost every scrap of session state never asked for it back.
-        --
-        -- This event, by contrast, always fires on a reload and on every zone change — the exact
-        -- moments state goes missing. LC.CheckRaidJoin is idempotent (its own latches see to that)
-        -- and cheap when there is nothing to do (backlog B31).
-        if KART.LC then KART.LC.CheckRaidJoin() end
-        -- Retry now that every addon has loaded — a LibDurability provider that loads after KART
-        -- (e.g. MRT) is nil at BuffChecker parse time. Idempotent (see KART.RegisterLibDurability).
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
     elseif event == "PLAYER_CONTROL_LOST" then
         KART.OnControlLost()
@@ -557,17 +412,6 @@ KASC:OnPeer(function(shortName, _, peers, solicited)
 
     KART.PlayerVersions = KART.PlayerVersions or {}
     KART.PlayerVersions[shortName] = kart.version
-    KART.PlayerLCEnabled = KART.PlayerLCEnabled or {}
-    KART.PlayerLCEnabled[shortName] = kart.caps.LC or false
-
-    -- Throttled: a raid join answers one request with one reply per raider, all at once.
-    if KART.LC and KART.LC.councilPanel and KART.LC.councilPanel:IsShown() then
-        KART.LC.Council.RefreshCouncilRowsThrottled()
-    end
-
-    -- Here rather than on the roster event: a version arrives asynchronously, well after the join
-    -- that asked for it, so GROUP_ROSTER_UPDATE is too early to know anything (B62). Latched inside.
-    if KART.LC and KART.LC.WarnOutdatedRaiders then KART.LC.WarnOutdatedRaiders() end
 
     if not KART.UpdateWarned and kart.version ~= KART.Version then
         -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
@@ -643,14 +487,6 @@ function KART.UpdateStyles()
         KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
     end
 
-    -- Ein Font-Wechsel kann Labels anders umbrechen lassen (mehr/weniger Zeilen) — Boxen mit
-    -- text-abhängiger Höhenberechnung müssen danach neu positioniert werden.
-    if KART.LC and KART.LC.RelayoutRaidBox then KART.LC.RelayoutRaidBox() end
-    -- Scale and strata for the Loot Council windows, which follow their own settings rather than
-    -- the addon-wide ones (B22) and so are not covered by KART.UI:ApplyStyle above.
-    if KART.LC and KART.LC.ApplyWindowChrome then KART.LC.ApplyWindowChrome() end
-
-    -- Farbvorschauen im Settings-Menü aktualisieren
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end
 
     -- Minimap Icon Farbe anpassen
@@ -659,16 +495,6 @@ function KART.UpdateStyles()
         local iconButton = dbIcon:GetMinimapButton("KeineAhnungRaidTools")
         if iconButton and iconButton.icon then
             iconButton.icon:SetVertexColor(r, g, b)
-        end
-    end
-
-    if KART.LH and KART.LH.historyWindow then
-        local w = KART.LH.historyWindow
-        -- Artwork background: only the ground texture fades with bgAlpha, content stays solid.
-        if w.bg then w.bg:SetAlpha(math.max(20, KART_Settings.bgAlpha or 85) / 100) end
-        if w.title then
-            w.title:SetFont(fontPath, titleSize, "OUTLINE")
-            w.title:SetTextColor(1, 1, 1)
         end
     end
 
@@ -704,10 +530,6 @@ function KART.UpdateStyles()
         end
     end
 
-    if KART.LC and KART.LC.ApplyFontSize then KART.LC.ApplyFontSize() end
-
-    -- Font changes can re-flow the Loot Council raid box (RelayoutRaidBox above), which
-    -- changes the active tab's content height — keep the scroll range in sync.
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 
     -- Buff-Check names are truncated to fit their column by MEASURING them in the current font
@@ -845,36 +667,12 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         KART.VersionCheckActive = true
         C_Timer.After(5, function() KART.VersionCheckActive = false end)
         KASC:RequestHello(channel)
-    elseif cmd == "add" or cmd:match("^add%s") then
-        local itemsText = rawMsg:match("^%S+%s+(.+)$") or ""
-        if KART.LC then KART.LC.StartManualRoll(itemsText) end
-    elseif cmd == "lc" then
-        if KART.LC and KART.LC.ReopenTrackedWindow then KART.LC.ReopenTrackedWindow() end
-    elseif cmd == "trade" then
-        if KART.LC and KART.LC.ReopenTradeReminder then KART.LC.ReopenTradeReminder() end
-    elseif cmd == "owed" then
-        -- Winner-side counterpart to /kart trade. Both reminder windows' "x" only hides them, and
-        -- nothing re-opens a closed one except winning another item (removals deliberately don't —
-        -- see Trade.RefreshOwedReminderIfShown), so this is the only way back to the list.
-        if KART.LC and KART.LC.ReopenOwedReminder then KART.LC.ReopenOwedReminder() end
-    elseif cmd == "showall" then
-        -- Reveals every currently active roll in the vote-list window, whichever of the two personal
-        -- settings hid it: KART_Settings.lcVotedItemDisplay == "hide" (already voted on) or
-        -- lcHideIrrelevant (answered automatically because this class cannot use it) — see
-        -- Vote.GetVisibleRolls. No-op if nothing is currently tracked, same as /kart lc / /kart trade.
-        if KART.LC and KART.LC.Vote then
-            KART.LC.showAllOverride = true
-            KART.LC.Vote.RefreshVoteListRows()
-        end
     elseif cmd == "ench" or cmd == "ench raid" then
         -- Maintenance tool, not a player feature: prints the enchant ids the client actually reports
         -- so GOOD_ENCHANTS (Utils.lua) and the oil's bestSpells (BuffChecker.lua) can be refilled
         -- from real data each tier instead of from memory. "raid" polls the whole group, since most
         -- slots accept several enchants and one character's dump can't show which.
         if cmd == "ench raid" then KART.StartEnchantScan() else KART.PrintEnchantDump() end
-    elseif cmd == "status" then
-        if KART.LC and KART.LC.PrintStatus then KART.LC.PrintStatus() end
-        if KART.LH and KART.LH.PrintStatus then KART.LH.PrintStatus() end
     elseif cmd == "ptr" then
         -- Maintenance tool, like /kart ench above and deliberately absent from /kart help: it prints
         -- what the CLIENT does, for whoever is porting the addon to a new game version.
@@ -883,13 +681,7 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
         print("  /kart version (v) - " .. KART.L.HELP_VERSION)
-        print("  /kart lc - " .. KART.L.HELP_LC)
-        print("  /kart add <item link> - " .. KART.L.HELP_ADD)
-        print("  /kart trade - " .. KART.L.HELP_TRADE)
-        print("  /kart owed - " .. KART.L.HELP_OWED)
         print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
-        print("  /kart showall - " .. KART.L.HELP_SHOWALL)
-        print("  /kart status - " .. KART.L.HELP_STATUS)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern

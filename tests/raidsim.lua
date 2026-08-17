@@ -23,21 +23,11 @@ local CLIENT_FILES = {
     "Locales/enUS.lua",
     "Locales/deDE.lua",
     "Utils.lua",
-    "LootHistory.lua",
-    "LootCouncil.lua",
-    "LootCouncilTokenData.lua",
-    "LootCouncilOfficerNotes.lua",
-    "LootCouncilRelevance.lua",
-    "LootCouncilVote.lua",
-    "LootCouncilTrade.lua",
-    "LootCouncilPanel.lua",
-    -- Loads after the panel, exactly as the .toc orders it: the panel is what asks it for a
-    -- gain%, so a client without it would never exercise that call at all.
-    "Droptimizer.lua",
+    "GroupLogic.lua",
     "BuffChecker.lua",
-    -- Defines LC.BuildSettingsPanel and the raid-wide field logic around it. Loading it does
-    -- nothing on its own; a test that wants real widgets calls the builder.
-    "LootCouncilSettings.lua",
+    "Invite.lua",
+    "AutoLog.lua",
+    "RCCompanion.lua",
 }
 
 local LIB_FILES = {
@@ -115,8 +105,7 @@ RaidSim.active = nil
 -- diverging from the game it is simulating, in a way that let a test pass for a reason the game
 -- would never supply. Whoever adds the next SavedVariable to the .toc must add it here too.
 local SAVED_VARIABLES = {
-    "KART_Settings", "KART_LootHistory", "KART_LootHistoryClearedAt", "KART_LootHistoryEpoch",
-    "KART_LCTrades", "KART_LCOfficerNotes", "KART_Profiles", "KART_PlayerCache", "KART_LCSession",
+    "KART_Settings", "KART_Profiles", "KART_PlayerCache",
 }
 
 -- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
@@ -153,17 +142,7 @@ local function Boot(client, saved)
     -- ADDON_LOADED in the game; the harness does not load Core.lua, so they are created here.
     saved = saved or {}
     client.env.KART_Settings       = saved.KART_Settings or {}
-    client.env.KART_LootHistory    = saved.KART_LootHistory or {}
-    client.env.KART_LootHistoryClearedAt = saved.KART_LootHistoryClearedAt
-    -- Scalar, may legitimately be nil (a client that has never loaded LH.PurgeIfNoEpoch), same
-    -- treatment as KART_LootHistoryClearedAt above -- see the SAVED_VARIABLES comment for why this
-    -- has to travel across RaidSim.Reload at all.
-    client.env.KART_LootHistoryEpoch = saved.KART_LootHistoryEpoch
-    client.env.KART_LCTrades       = saved.KART_LCTrades or { pending = {}, owed = {} }
-    client.env.KART_LCSession      = saved.KART_LCSession or {}
-    client.env.KART_LCOfficerNotes = saved.KART_LCOfficerNotes or {}
     client.env.KART_Profiles       = saved.KART_Profiles or {}
-    client.env.KART_WoWUtilsCache  = {}
     -- Blizzard's dialog registry is a global table, and every client registers its own handlers
     -- into it under the same names. Shared, the last client to load would own every confirm
     -- dialog in the raid -- accepting a reassign would run somebody else's assignment.
@@ -175,7 +154,7 @@ local function Boot(client, saved)
     -- its rolls before 3.1.0.
     if m.nsrt == false then client.env.NSAPI = false end
 
-    client.KART = { LC = {} }
+    client.KART = {}
     client.env.KART = client.KART
 
     -- Everything this client is about to create belongs to it, LIBRARIES INCLUDED, so
@@ -270,36 +249,7 @@ local function Boot(client, saved)
     -- Defaults, the way Core.lua's ADDON_LOADED applies them -- including localising the vote
     -- buttons BEFORE the merge, which is what makes a German and an English client start from
     -- different words when no raid config has reached them.
-    client.KART.Defaults.lcButtonLabels = client.KART.L.LC_DEFAULT_BUTTONS
     client.KAUtil.MergeDefaults(client.env.KART_Settings, client.KART.Defaults)
-    client.env.KART_Settings.lcModuleEnabled = true
-
-    -- Outstanding trade obligations from before the reload. Core.lua restores these on ADDON_LOADED,
-    -- and leaving it out meant RaidSim.Reload modelled a reload WITHOUT the one step that brings
-    -- loot-flow state back -- so anything about who still owes whom an item across a relog was being
-    -- measured against a client that had deliberately forgotten.
-    -- Under RaidSim.As, not a bare RaidSim.active: ADDON_LOADED runs as a player who has a unit
-    -- token, and anything these two schedule captures the executing context for its whole life. With
-    -- only the client set and no unit, a timer armed during the restore asked UnitGUID("player")
-    -- forever after and got nil -- a client that could never resolve itself, which is not what
-    -- logging in looks like.
-    -- The two pcalls are the HARNESS's own containment so one broken client cannot abort a whole
-    -- suite run -- they are NOT what the game does, and no test may reason from them. Core.lua calls
-    -- both of these unguarded from ADDON_LOADED, so a throw in either one there takes the rest of that
-    -- handler with it: the other restore, KART.SyncSettingsToUI, the compartment registration. A guard
-    -- inside these functions therefore matters more than "it would fail silently", not less.
-    RaidSim.As(client, function()
-        if client.KART.LC.Trade and client.KART.LC.Trade.RestorePersistedTrades then
-            pcall(client.KART.LC.Trade.RestorePersistedTrades)
-        end
-
-        -- The items that were still on the table, in the same order Core.lua restores them: trades
-        -- first, then the tracked rolls (B81). Leaving this out modelled a reload that deliberately
-        -- forgets the distribution it was in the middle of.
-        if client.KART.LC.RestoreSessionSnapshot then
-            pcall(client.KART.LC.RestoreSessionSnapshot)
-        end
-    end)
 
     RaidSim.active = nil
     KARTTEST.frameOwner = nil
@@ -368,12 +318,6 @@ end
 -- what makes it obvious when an assertion is looking at pre-reload state.
 function RaidSim.Reload(sim, name)
     local old = sim.byName[name]
-    -- PLAYER_LOGOUT, which the game raises before SavedVariables are written -- for a /reload
-    -- as much as for a logout. Without it a test would be measuring a client that crashed,
-    -- not one that reloaded (B81).
-    if old.KART.LC.SaveSessionSnapshot then
-        RaidSim.As(old, function() pcall(old.KART.LC.SaveSessionSnapshot) end)
-    end
     local saved = {}
     for _, key in ipairs(SAVED_VARIABLES) do saved[key] = old.env[key] end
 
@@ -402,22 +346,13 @@ end
 -- that reloads and then leaves the client sitting there is modelling a client that never announced
 -- itself, which cannot happen, and it will blame the addon for the silence.
 function RaidSim.EnterWorld(sim, name)
-    local client = sim.byName[name]
-    if not client then return nil end
-    RaidSim.As(client, function() client.KART.LC.CheckRaidJoin() end)
-    return client
+    return sim.byName[name]
 end
 
--- GROUP_ROSTER_UPDATE, as Core.lua routes it: every client in the group runs its own handler, in no
--- particular order. Everything Loot Council recovery hangs off is in here -- the state request, the
--- config re-broadcast, the raid-exit confirmation -- so this is the single event a test uses to say
--- "the roster changed and the addon noticed".
 function RaidSim.RosterUpdate(sim)
     for _, c in ipairs(sim.clients) do
         RaidSim.As(c, function()
-            c.KART.LC.CheckRaidJoin()
-            if c.KART.LC.RetryPendingResolutionsThrottled then c.KART.LC.RetryPendingResolutionsThrottled() end
-            if c.KART.LC.RetryPendingConfigThrottled then c.KART.LC.RetryPendingConfigThrottled() end
+            if c.KART.RC then c.KART.RC.OnRosterUpdate() end
         end)
     end
 end
