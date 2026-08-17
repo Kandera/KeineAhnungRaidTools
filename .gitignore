@@ -1,3 +1,6 @@
+# Isolated git worktrees for 4.0+ feature branches (see using-git-worktrees).
+.worktrees/
+
 # VSCode Ordner
 .vscode/
 
