@@ -9,7 +9,7 @@ local mlMissingWarned = {}
 local awardRegistered = false
 local votingFrameHooked = false
 local awardWrapped = false
-local menuBuilding = false
+local suppressAward = false
 
 function RC.DisplayName(unitOrName)
     if UnitExists(unitOrName) then
@@ -17,44 +17,77 @@ function RC.DisplayName(unitOrName)
         if original then return original end
         return Ambiguate(UnitName(unitOrName) or unitOrName, "short")
     end
+    local key = Identity.ResolvePlayer(unitOrName)
+    local unit = Identity.FindUnitForKey(key)
+    if unit then
+        local _, original = Identity.GetNickname(unit)
+        if original then return original end
+    end
     return Ambiguate(unitOrName, "short")
 end
 
 local function WrapAward(addon)
-    if awardWrapped then return end
+    if awardWrapped then return true end
     local ml = _G.RCLootCouncilML
-    if not ml or type(ml.Award) ~= "function" then return end
+    if not ml or type(ml.Award) ~= "function" then return false end
     local originalAward = ml.Award
     ml.Award = function(self, session, winnerName, responseID)
-        if menuBuilding or not addon.isMasterLooter then
-            RC.RequestAward(session, winnerName, responseID)
-            return
+        if suppressAward then return end
+        if addon.isMasterLooter then
+            return originalAward(self, session, winnerName, responseID)
         end
-        return originalAward(self, session, winnerName, responseID)
+        RC.RequestAward(session, winnerName, responseID)
     end
     awardWrapped = true
+    return true
+end
+
+local function HookSetCellName(vf)
+    if type(vf.SetCellName) ~= "function" then return end
+    local originalSetCellName = vf.SetCellName
+    vf.SetCellName = function(self, frame, data, _, realrow)
+        pcall(originalSetCellName, self, frame, data, _, realrow)
+        if frame and frame.text and data and data[realrow] and data[realrow].name then
+            pcall(frame.text.SetText, frame.text, RC.DisplayName(data[realrow].name))
+        end
+    end
+    if vf.scrollCols then
+        for _, col in ipairs(vf.scrollCols) do
+            if col.colName == "name" then
+                col.DoCellUpdate = vf.SetCellName
+            end
+        end
+    end
 end
 
 function RC.HookVotingFrame()
     if votingFrameHooked then return end
     local addon = RC.GetAddon()
     if not addon then return end
-    WrapAward(addon)
+    if not WrapAward(addon) then return end
     local ok, vf = pcall(function() return addon:GetActiveModule("votingframe") end)
     if not ok or not vf or type(vf.RightClickMenu) ~= "function" then return end
+    local menuFrame = _G.RCLootCouncil_VotingFrame_RightclickMenu
+    if not menuFrame then return end
     local originalRightClickMenu = vf.RightClickMenu
-    vf.RightClickMenu = function(self, ...)
+    local function wrappedRightClickMenu(self, ...)
         if not addon.isMasterLooter and not addon.isCouncil then
             return originalRightClickMenu(self, ...)
         end
         local wasML = addon.isMasterLooter
         if not wasML then addon.isMasterLooter = true end
-        menuBuilding = true
+        suppressAward = true
         local callOk, err = pcall(originalRightClickMenu, self, ...)
-        menuBuilding = false
+        suppressAward = false
         addon.isMasterLooter = wasML
         if not callOk then error(err) end
     end
+    vf.RightClickMenu = wrappedRightClickMenu
+    menuFrame.initialize = wrappedRightClickMenu
+    if type(_G.MSA_DropDownMenu_Initialize) == "function" then
+        pcall(_G.MSA_DropDownMenu_Initialize, menuFrame, vf.RightClickMenu, "MENU")
+    end
+    HookSetCellName(vf)
     votingFrameHooked = true
 end
 
