@@ -42,3 +42,37 @@ T.deep_eq(RCLootCouncil.db.profile.council, { "keep-me" }, "non-lead does not wr
 T.eq(KARTTEST.rcCouncilSent, 0, "non-lead does not SendCouncil")
 
 KARTTEST.activeUnit = prevActive
+
+-- Semicolon-separated council field (LC shape) ------------------------------------------
+T.deep_eq(RC.SplitCouncilField("Bramor;Merrit;Corvin"),
+    { "Bramor", "Merrit", "Corvin" }, "SplitCouncilField splits semicolon-separated names")
+KARTTEST.SetNSAPI(false)
+KARTTEST.SetRaid({
+    { name = "Lead", guid = "Player-1-AAAA", leader = true },
+    { name = "Bramor", guid = "Player-1-BBBB" },
+    { name = "Merrit", guid = "Player-1-CCCC" },
+    { name = "Corvin", guid = "Player-1-DDDD" },
+})
+KARTTEST.activeUnit = "raid1"
+KART_Settings.rcCouncilMembers = "Bramor;Merrit;Corvin"
+RCLootCouncil.db.profile.council = {}
+KARTTEST.rcCouncilSent = 0
+RC.PushCouncilToRC()
+T.deep_eq(RCLootCouncil.db.profile.council,
+    { "Player-1-BBBB", "Player-1-CCCC", "Player-1-DDDD" },
+    "semicolon council list resolves live raid names into GUIDs")
+
+-- lcCouncilMembers -> rcCouncilMembers one-shot migration --------------------------------
+local KAUtil = LibStub("KAUtil-1.0")
+KARTTEST.RemoveRC()
+_G.KART_Settings = { lcCouncilMembers = "Bramor;Merrit;Corvin" }
+KAUtil.MergeDefaults(KART_Settings, { rcCouncilMembers = "", rcCouncilMigrated = false })
+RC.Enable()
+T.eq(KART_Settings.rcCouncilMembers, "Bramor;Merrit;Corvin",
+    "MergeDefaults empty rc is backfilled from lc once")
+T.eq(KART_Settings.rcCouncilMigrated, true, "migration sets rcCouncilMigrated")
+KART_Settings.rcCouncilMembers = ""
+RC.Enable()
+T.eq(KART_Settings.rcCouncilMembers, "", "second Enable does not restore lc into cleared rc")
+KARTTEST.InstallRC()
+
