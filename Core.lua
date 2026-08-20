@@ -63,6 +63,7 @@ function KART.SyncSettingsToUI()
     if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
     if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
     if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
+    if KART.CbAutoHideCombat then settingsMap[KART.CbAutoHideCombat] = "autoHideRaidleadBarCombat" end
     if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end

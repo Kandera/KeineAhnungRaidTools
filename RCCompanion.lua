@@ -255,6 +255,26 @@ function RC.PushCouncilToRC()
     CallMLMethod(ml, "SendCouncil")
 end
 
+function RC.ForcePushCouncil()
+    local L = KART.L or {}
+    if not RC.IsRCLoaded() then
+        print(L.RC_SYNC_NOT_LOADED
+            or "|cffff0000KART:|r RCLootCouncil is not loaded — cannot sync the council.")
+        return false
+    end
+    if not UnitIsGroupLeader("player") then
+        print(L.RC_SYNC_NOT_LEAD
+            or "|cffff0000KART:|r Only the raid leader can sync the council to RCLootCouncil.")
+        return false
+    end
+    local tokens = RC.SplitCouncilField(KART_Settings.rcCouncilMembers or "")
+    local guids = RC.ResolvedCouncilGUIDs()
+    RC.PushCouncilToRC()
+    print(string.format(L.RC_SYNC_COUNCIL_DONE or "|cff00ff00KART:|r Council synced: %d of %d names.",
+        #guids, #tokens))
+    return true
+end
+
 function RC.OnRosterUpdate()
     RC.PushCouncilToRC()
     if RC.IsRCLoaded() and not votingFrameHooked then
@@ -313,11 +333,19 @@ function RC.BuildSettingsCard()
     RC.CouncilMembersEditBox = KART.UI:CreateStyledEditBox(card, "KART_RCCouncilMembers")
     local eb = RC.CouncilMembersEditBox
     eb:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -105)
-    eb:SetSize(CONTENT_WIDTH, 28)
+    eb:SetSize(CONTENT_WIDTH - 150, 28)
     eb:SetMaxLetters(255)
     eb:SetScript("OnTextChanged", function(self)
         KART_Settings.rcCouncilMembers = self:GetText()
         RC.PushCouncilToRC()
+    end)
+
+    RC.BtnSyncCouncil = KART.UI:CreateModernButton(card,
+        L.RC_BTN_SYNC_COUNCIL or "Sync to RC", L.RC_DESC_SYNC_COUNCIL)
+    RC.BtnSyncCouncil:SetPoint("LEFT", eb, "RIGHT", 8, 0)
+    RC.BtnSyncCouncil:SetSize(142, 28)
+    RC.BtnSyncCouncil:SetScript("OnClick", function()
+        RC.ForcePushCouncil()
     end)
 
     RC.UpdateStatusLabel()

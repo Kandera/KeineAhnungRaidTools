@@ -110,11 +110,20 @@ returns structured tables elsewhere. Dump it on the PTR before writing any of th
 Two of the four sites are in shipped libraries (`KAGS-1.0`, `KASC-1.0`), so the fix carries a library
 version bump.
 
-## P3 — SOLVED 2026-08-06 — `C_UnitAuras.GetAuraDataByIndex` errors while auras are secret
+## P3 — FIXED 2026-08-19 — `C_UnitAuras.GetAuraDataByIndex` errors while auras are secret
 
-**Measured on 12.1.0 with two people in a group, `/kart ptr`: another group member's
-`aura.name` and `aura.spellId` are both usable.** Not secret, no error on comparison. The buff
-checker reads exactly this for every group member, so the module works on 12.1 as shipped.
+**Reopened by a live Lua error** (party unit, `BuffChecker.lua` index scan):
+`GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'KeineAhnungRaidTools'`.
+The 2026-08-06 measurement was out of combat; the call is `AllowedWhenUntainted` and errors in
+combat / encounter / M+ / PvP. `IsAuraSafe`'s pcall never ran — the error is on the call itself.
+
+**Fix applied (crash, not the 12.1 freeze):** pcall the index scan; if it is refused, query known
+spell IDs via `C_UnitAuras.GetUnitAuraBySpellID` (`AllowedWhenTainted`). Name-only flasks have no
+spell list, so that column can go empty during combat until IDs are added. The window no longer aborts.
+
+**Earlier measurement (still true out of combat):** on 12.1.0 with two people in a group, `/kart ptr`,
+another group member's `aura.name` and `aura.spellId` are both usable. Not secret, no error on
+comparison — that only covers the field-comparison half of P3, not the index call in combat.
 
 Note for anyone chasing #27 (buff food showing as missing): this is NOT that. The two looked alike
 and they are unrelated -- #27 needs its own diagnosis.

@@ -79,6 +79,42 @@ do
     T.truthy(not KART.RaidleadBar:IsShown(), "and takes effect the moment combat ends")
 end
 
+do
+    -- Combat auto-hide is a state driver, not a Lua Hide: the marker buttons are secure, so the
+    -- early-return above cannot tuck the bar away mid-pull. The driver hides it without that call.
+    S.showRaidleadBar, S.autoHideRaidleadBar, S.autoHideRaidleadBarCombat = true, false, true
+    KARTTEST.inCombat = false
+    As(KART.UpdateRaidleadBarVisibility)
+    T.truthy(KART.RaidleadBar:IsShown(), "combat auto-hide leaves the bar up between pulls")
+    T.truthy((KARTTEST.visibilityDrivers[KART.RaidleadBar] or ""):find("[combat]hide", 1, true),
+        "by handing visibility to a [combat]hide driver")
+
+    KARTTEST.inCombat = true
+    KARTTEST.ApplyVisibilityDrivers()
+    T.truthy(not KART.RaidleadBar:IsShown(), "and the driver takes the bar away for the pull")
+
+    KARTTEST.inCombat = false
+    KARTTEST.ApplyVisibilityDrivers()
+    T.truthy(KART.RaidleadBar:IsShown(), "then brings it back when combat ends")
+    S.autoHideRaidleadBarCombat = false
+    As(KART.UpdateRaidleadBarVisibility)
+end
+
+do
+    -- The bar and the windowed map both sit on HIGH; SetToplevel would raise the bar over the map.
+    -- Opening the map drops the bar one stratum so the map stays readable; closing it restores.
+    me.env.WorldMapFrame = CreateFrame("Frame")
+    me.env.WorldMapFrame:Hide()
+    S.showRaidleadBar = true
+    As(KART.UpdateRaidleadBarVisibility)
+    local rest = KART.RaidleadBar:GetFrameStrata()
+    me.env.WorldMapFrame:Show()
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "LOW", "the bar sits under the world map while it is open")
+    me.env.WorldMapFrame:Hide()
+    T.eq(KART.RaidleadBar:GetFrameStrata(), rest, "and returns to its own stratum when the map closes")
+    me.env.WorldMapFrame = nil
+end
+
 -- Override bindings, which outlive the bar ----------------------------------------------------------
 do
     S.showRaidleadBar = true
@@ -136,4 +172,28 @@ do
     T.truthy(macroBranch and macroBranch:find("AnyUp", 1, true)
              and macroBranch:find("AnyDown", 1, true),
         "and registers BOTH transitions, so the CVar cannot decide whether the bar works")
+end
+
+-- Right-click on a raid-target button clears the mark on the current target; left-click still
+-- places. Same source-check shape as above. Production change that fails this: the raid-target
+-- loop going back to a bare "/tm N".
+do
+    local src = assert(io.open("RaidleadBar.lua", "r")):read("*a")
+    local tmLoop = src:match("%-%- Zeile 1: Raid Target Marker.-for i = 1, 8 do(.-)\nend")
+    T.truthy(tmLoop, "the raid-target row is still built in one loop")
+    T.truthy(tmLoop and tmLoop:find("/tm [btn:1]", 1, true)
+             and tmLoop:find("/tm [btn:2] 0", 1, true),
+        "left-click places that raid target and right-click clears the target's mark")
+end
+
+-- Right-click on a world-marker button clears THAT marker; left-click still places it.
+-- Same source-check shape as above: the harness has no secure-button gate to drive.
+-- Production change that fails this: the world-marker loop going back to a bare "/wm N".
+do
+    local src = assert(io.open("RaidleadBar.lua", "r")):read("*a")
+    local wmLoop = src:match("%-%- Zeile 2: World Marker.-for i = 1, 8 do(.-)\nend")
+    T.truthy(wmLoop, "the world-marker row is still built in one loop")
+    T.truthy(wmLoop and wmLoop:find("/wm [btn:1]", 1, true)
+             and wmLoop:find("/cwm [btn:2]", 1, true),
+        "left-click places that world marker and right-click clears it")
 end

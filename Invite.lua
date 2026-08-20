@@ -28,10 +28,13 @@ function WU.ParseImport(rawText)
     if not rawText or KAUtil.TrimString(rawText) == "" then return 0 end
 
     local parsedCount = 0
-    -- intentional: the invitelist capture [^;]+ is correct for the real WoWUtils export — each
-    -- invitelist is terminated by a trailing ";" ("...Name-Realm;"), so [^;]+ stops there and never
-    -- bleeds into the next boss block; %s+ absorbs the blank line before "invitelist:". Verified
-    -- against a real multi-boss export, not changed (review 2026-07-24).
+    -- Capture: [^;]+ is correct for the real WoWUtils export — each invitelist is terminated by a
+    -- trailing ";" ("...Name-Realm;"), so the match stops there and never bleeds into the next boss
+    -- block; %s+ absorbs the blank line before "invitelist:". Verified against a real multi-boss
+    -- export (review 2026-07-24). Split: the live list is comma-separated with no spaces
+    -- ("Name-Realm,Name-Realm,..."), so splitting on %S+ made the whole line one player and every
+    -- boss showed "(1)". Commas first, so a realm with a space stays one name; whitespace only
+    -- when there is no comma, for older space-separated pastes.
     for encounterID, difficulty, bossName, playerStr in rawText:gmatch(
             "EncounterID:(%d+);Difficulty:([^;]+);Name:([^\n\r]+)%s+invitelist:([^;]+)") do
 
@@ -41,8 +44,15 @@ function WU.ParseImport(rawText)
         encounterID = tonumber(encounterID)
 
         local players = {}
-        for p in playerStr:gmatch("%S+") do
-            table.insert(players, p)
+        if playerStr:find(",", 1, true) then
+            for p in playerStr:gmatch("[^,]+") do
+                p = KAUtil.TrimString(p)
+                if p ~= "" then table.insert(players, p) end
+            end
+        else
+            for p in playerStr:gmatch("%S+") do
+                table.insert(players, p)
+            end
         end
 
         if #players > 0 then

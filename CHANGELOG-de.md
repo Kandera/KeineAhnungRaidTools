@@ -8,6 +8,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-08-20
+### Hinzugefügt
+- **Rechtsklick auf einen Welt- oder Targetmarker in der Raidlead-Leiste löscht diesen Marker.**
+- **Die Raidlead-Leiste liegt unter der Weltkarte** und kann im Kampf automatisch ausgeblendet werden.
+- **An RC senden** schreibt die Council-Nickname-Liste auf Knopfdruck nach RCLootCouncil.
+
+### Behoben
+- **Der WoWUtils-Import behält jetzt alle Namen eines Bosses**, nicht nur den ersten.
+- **Der Buff-Checker wirft im Kampf keinen Lua-Fehler mehr**, wenn WoW Aura-Daten vor Addons verbirgt.
+
 ## [4.0.0] - 2026-08-17
 ### Geändert
 - **Loot Council ist jetzt RCLootCouncil.** KART füllt die Council-Liste aus Northern-Sky-Nicknames und lässt Council-Mitglieder zuweisen, während der Raidlead handelt.
@@ -769,7 +779,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...HEAD
+[4.0.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2

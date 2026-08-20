@@ -105,6 +105,13 @@ _G.C_UnitAuras = {
         if filter and filter ~= "HELPFUL" then return nil end
         return (KARTTEST.auras[unit] or {})[index]
     end,
+    -- 12.1 AllowedWhenTainted replacement for the index scan while auras are secret.
+    GetUnitAuraBySpellID = function(unit, spellID)
+        for _, aura in ipairs(KARTTEST.auras[unit] or {}) do
+            if aura.spellId == spellID then return aura end
+        end
+        return nil
+    end,
 }
 
 -- Blizzard's ready-check state, which it clears again the moment the check resolves -- the addon
@@ -1087,6 +1094,45 @@ function _G.CheckInteractDistance(unit, _) return KARTTEST.inRange[unit] == true
 -- meant none of those branches had ever run.
 KARTTEST.inCombat = false
 function _G.InCombatLockdown() return KARTTEST.inCombat end
+
+-- Secure visibility drivers. The raidlead bar uses RegisterStateDriver so it can hide in combat
+-- without calling Show/Hide on SecureActionButtonTemplate children. The real client re-evaluates
+-- the macro whenever combat/group state changes; here a test flips the switches and calls
+-- KARTTEST.ApplyVisibilityDrivers to stand in for that.
+KARTTEST.visibilityDrivers = {}
+local function evalVisibilityMacro(macro)
+    for part in string.gmatch(macro or "", "[^;]+") do
+        part = part:match("^%s*(.-)%s*$")
+        local cond, action = part:match("^%[(.-)%](.+)$")
+        if not cond then
+            return part == "show"
+        end
+        local match
+        if cond == "combat" then
+            match = KARTTEST.inCombat
+        elseif cond == "group" then
+            match = IsInGroup()
+        else
+            match = false
+        end
+        if match then return action == "show" end
+    end
+    return true
+end
+function KARTTEST.ApplyVisibilityDrivers()
+    for frame, macro in pairs(KARTTEST.visibilityDrivers) do
+        if evalVisibilityMacro(macro) then frame:Show() else frame:Hide() end
+    end
+end
+function _G.RegisterStateDriver(frame, state, macro)
+    if state == "visibility" then
+        KARTTEST.visibilityDrivers[frame] = macro
+        KARTTEST.ApplyVisibilityDrivers()
+    end
+end
+function _G.UnregisterStateDriver(frame, state)
+    if state == "visibility" then KARTTEST.visibilityDrivers[frame] = nil end
+end
 
 -- Override bindings outrank the player's own keybinds for the whole session, so which frame owns
 -- them and whether they were given back is the only interesting thing about them.

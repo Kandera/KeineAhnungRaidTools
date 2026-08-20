@@ -232,3 +232,30 @@ RCLootCouncil.GetActiveModule = prevGetActiveModule
 _G.RCLootCouncil_VotingFrame_RightclickMenu = nil
 KARTTEST.RestoreRoster(nickSnap)
 
+-- Force-push: the hatch when roster/edit did not land a council on RC ----------------------
+KARTTEST.SetNSAPI(true)
+KARTTEST.SetRaid({
+    { name = "Lead", guid = "Player-1-AAAA", nickname = "Lead", leader = true },
+    { name = "Bob",  guid = "Player-1-BBBB", nickname = "Bobby" },
+})
+KARTTEST.activeUnit = "raid1"
+KART_Settings.rcCouncilMembers = "Bobby; Ghost"
+RCLootCouncil.db.profile.council = {}
+KARTTEST.rcCouncilSent = 0
+T.eq(RC.ForcePushCouncil(), true, "lead force-push reports success")
+T.deep_eq(RCLootCouncil.db.profile.council, { "Player-1-BBBB" },
+    "force-push writes live-alt GUIDs into RC")
+T.eq(KARTTEST.rcCouncilSent, 1, "and SendCouncil runs")
+
+KARTTEST.rcCouncilSent = 0
+RCLootCouncil.db.profile.council = { "keep-me" }
+KARTTEST.activeUnit = "raid2"
+T.eq(RC.ForcePushCouncil(), false, "non-lead force-push refuses")
+T.deep_eq(RCLootCouncil.db.profile.council, { "keep-me" }, "non-lead force-push does not write RC")
+T.eq(KARTTEST.rcCouncilSent, 0, "non-lead force-push does not SendCouncil")
+
+KARTTEST.activeUnit = "raid1"
+KARTTEST.RemoveRC()
+T.eq(RC.ForcePushCouncil(), false, "force-push without RC refuses")
+KARTTEST.InstallRC()
+

@@ -293,6 +293,37 @@ do
 end
 
 do
+    -- 12.1: GetAuraDataByIndex Lua-errors while auras are secret and the addon is tainted
+    -- (combat / encounter / M+ / PvP). That used to abort the whole row loop. The render must
+    -- survive, and known spell IDs must still be found via GetUnitAuraBySpellID.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.auras = {
+        [alric.unit] = { { name = "Arkane Intelligenz", spellId = 1459 } },
+    }
+    local realIndex = C_UnitAuras.GetAuraDataByIndex
+    C_UnitAuras.GetAuraDataByIndex = function()
+        error("Auras cannot be accessed when secret while tainted by 'KeineAhnungRaidTools'")
+    end
+    local ok, missing = pcall(Render, lm)
+    C_UnitAuras.GetAuraDataByIndex = realIndex
+    T.truthy(ok, "a secret index scan does not take the whole render down")
+    T.truthy(ok and missing and not HasName(missing.int, "Alric"),
+        "and the buff is still found by spell id")
+end
+
+do
+    -- Same refusal, but without the spell-id API (older client / missing stub). Still no error.
+    local _, lm = F.NewRaid()
+    local realIndex, realById = C_UnitAuras.GetAuraDataByIndex, C_UnitAuras.GetUnitAuraBySpellID
+    C_UnitAuras.GetAuraDataByIndex = function() error("secret") end
+    C_UnitAuras.GetUnitAuraBySpellID = nil
+    local ok = pcall(Render, lm)
+    C_UnitAuras.GetAuraDataByIndex, C_UnitAuras.GetUnitAuraBySpellID = realIndex, realById
+    T.truthy(ok, "a refused index scan with no spell-id API still does not error")
+end
+
+do
     -- The name-match path, which is the only one carrying a localisation trap: Skyfury is matched
     -- by the German AND the English name, because a raid runs both clients and the buff is read off
     -- whatever the VIEWER's client calls it.

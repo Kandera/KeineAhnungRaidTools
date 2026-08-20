@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-08-20
+### Added
+- **Right-click a world or target marker on the raidlead bar to clear that marker.**
+- **The raidlead bar sits under the world map**, and can auto-hide in combat.
+- **Sync to RC** pushes the council nickname list into RCLootCouncil on demand.
+
+### Fixed
+- **WoWUtils import keeps every name on a boss**, not just the first.
+- **The buff checker no longer errors in combat** when WoW hides aura data from addons.
+
 ## [4.0.0] - 2026-08-17
 ### Changed
 - **Loot council is now RCLootCouncil.** KART fills the council list from Northern Sky nicknames and lets council members assign while the raid leader trades.
@@ -769,7 +779,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...HEAD
+[4.0.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.1...v1.9.2

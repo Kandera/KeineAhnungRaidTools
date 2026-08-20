@@ -717,12 +717,103 @@ end
 -- would ever match again. Removing the comparison because it looks pointless takes away the only thing
 -- that throws, after which a secret aura reaches the match loop below.
 --
--- What this does NOT cover is stated in P3 and measured there: 12.1 moves the error onto the index call
--- itself (`C_UnitAuras.GetAuraDataByIndex`), before there is anything to guard. That was measured on
--- 12.1.0 with two people -- another group member's name and spellId are both usable, no error -- so P3
--- is closed and this loop works as shipped. It is closed on a measurement, not on a guarantee.
+-- What this does NOT cover is the index CALL itself. GetAuraDataByIndex is AllowedWhenUntainted and
+-- Lua-errors while auras are secret (combat / encounter / M+ / PvP) if the addon is tainted. The
+-- out-of-combat P3 measurement missed that; a live error on party units is what reopened it. The scan
+-- below pcalls the index API and falls back to GetUnitAuraBySpellID (AllowedWhenTainted).
 local function IsAuraSafe(aura)
     return aura.spellId == 0 and type(aura.name) == "string"
+end
+
+local HELPFUL_AURAS = "HELPFUL"
+
+local function IndexAuraScanBlocked()
+    local secrets = _G.C_Secrets
+    return secrets and secrets.ShouldAurasBeSecret and secrets.ShouldAurasBeSecret() == true
+end
+
+-- Second return is true when the client refused the index API (secret + tainted). nil aura with
+-- false means "no aura at this index", the normal end of the scan.
+local function ReadHelpfulAuraByIndex(unit, index)
+    local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, HELPFUL_AURAS)
+    if not ok then return nil, true end
+    return aura, false
+end
+
+local function ReadAuraBySpellID(unit, spellID)
+    local fn = C_UnitAuras.GetUnitAuraBySpellID
+    if not fn then return nil end
+    local ok, aura = pcall(fn, unit, spellID)
+    if ok then return aura end
+    return nil
+end
+
+local function ApplyHelpfulAura(aura, buffDataCount, timeNow)
+    local comparable = pcall(IsAuraSafe, aura)
+    if not (comparable and aura.name) then return end
+
+    for k = 1, buffDataCount do
+        local buff = KART.BuffData[k]
+        local match = false
+        if buff.spells and type(aura.spellId) == "number" then
+            for _, sid in ipairs(buff.spells) do
+                if aura.spellId == sid then match = true end
+            end
+        end
+        if buff.nameMatch then
+            -- nameMatch may be a single string or a DE+EN list (spell-name fallback for
+            -- when spellId detection misses) — match any of them.
+            if type(buff.nameMatch) == "table" then
+                for _, nm in ipairs(buff.nameMatch) do
+                    if aura.name:find(nm, 1, true) then match = true break end
+                end
+            elseif aura.name:find(buff.nameMatch, 1, true) then
+                match = true
+            end
+        end
+        if buff.isFood and not match and (aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true)) then match = true end
+        if buff.isFlask and (aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true) or aura.name:find("Flask", 1, true)) then match = true end
+        if buff.isRune and (aura.name:find("Augment", 1, true) or aura.name:find("Verstärkungsrune", 1, true)) then match = true end
+        -- buff.isOil is deliberately absent from this loop. An oil is a temporary WEAPON
+        -- enchant and never shows up as an aura at all, so the only thing this pass could
+        -- ever do for it was match by name — and "oil"/"öl" as a bare substring also hits
+        -- "Coil", "Turmoil", "Wölfe", "Höllen…". That fallback wrote "wrong", and
+        -- MergeBuffState only lets "best" override "wrong", so one such aura pinned the
+        -- column red with no way back: a shaman with a legitimate imbue rates 3 (-> true,
+        -- blocked) and a raider without KART rates "unknown" (also blocked). Both
+        -- authoritative paths already exist in the weapon-enchant pass below
+        -- (GetWeaponEnchantInfo for us, KART.OilCache for everyone else), so this only
+        -- ever produced false alarms. Do not re-add a name fallback here.
+
+        if match then
+            -- Everything this loop can still match is a plain present/absent aura, so the
+            -- only distinction left is whether it's about to run out. (There used to be a
+            -- "best"/"wrong" state here too — that was the oil, which is rated by
+            -- enchantID in the weapon pass below and no longer reaches this loop at all.)
+            local expiring = false
+            if aura.expirationTime and aura.expirationTime > 0 then
+                local remaining = aura.expirationTime - timeNow
+                expiring = remaining > 0 and remaining < 300
+            end
+
+            MergeBuffState(buff.id, expiring and "expiring" or true)
+        end
+    end
+end
+
+local function ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
+    for k = 1, buffDataCount do
+        local buff = KART.BuffData[k]
+        if buff.spells then
+            for _, sid in ipairs(buff.spells) do
+                local aura = ReadAuraBySpellID(unit, sid)
+                if aura then
+                    ApplyHelpfulAura(aura, buffDataCount, timeNow)
+                    break
+                end
+            end
+        end
+    end
 end
 
 function KART.UpdateBuffCheck(isPreview)
@@ -903,67 +994,24 @@ function KART.UpdateBuffCheck(isPreview)
 
         wipe(KART.BuffStatesCache) -- emptied per player, not per raid
 
-        -- Walking this unit's helpful auras by index. Whether an INDEX call is legal at all while auras
-        -- are secret is what docs/BACKLOG-12.1.md's P3 is about; it was measured on 12.1.0 with two
-        -- people and this loop works as shipped, which is why it is still an index scan.
-        for j = 1, 100 do
-            local aura = C_UnitAuras.GetAuraDataByIndex(unit, j, "HELPFUL")
-            if not aura then break end
-
-            -- Whether this aura's fields can be COMPARED at all. A private aura's are secret: reading
-            -- one is fine, comparing one raises -- so the probe does a comparison and pcall catches it.
-            -- Only pcall's `ok` is read; see IsAuraSafe for why its return value deliberately is not.
-            local comparable = pcall(IsAuraSafe, aura)
-
-            if comparable and aura.name then
-                for k = 1, buffDataCount do
-                    local buff = KART.BuffData[k]
-                    local match = false
-                    if buff.spells and type(aura.spellId) == "number" then
-                        for _, sid in ipairs(buff.spells) do
-                            if aura.spellId == sid then match = true end
-                        end
-                    end
-                    if buff.nameMatch then
-                        -- nameMatch may be a single string or a DE+EN list (spell-name fallback for
-                        -- when spellId detection misses) — match any of them.
-                        if type(buff.nameMatch) == "table" then
-                            for _, nm in ipairs(buff.nameMatch) do
-                                if aura.name:find(nm, 1, true) then match = true break end
-                            end
-                        elseif aura.name:find(buff.nameMatch, 1, true) then
-                            match = true
-                        end
-                    end
-                    if buff.isFood and not match and (aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true)) then match = true end
-                    if buff.isFlask and (aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true) or aura.name:find("Flask", 1, true)) then match = true end
-                    if buff.isRune and (aura.name:find("Augment", 1, true) or aura.name:find("Verstärkungsrune", 1, true)) then match = true end
-                    -- buff.isOil is deliberately absent from this loop. An oil is a temporary WEAPON
-                    -- enchant and never shows up as an aura at all, so the only thing this pass could
-                    -- ever do for it was match by name — and "oil"/"öl" as a bare substring also hits
-                    -- "Coil", "Turmoil", "Wölfe", "Höllen…". That fallback wrote "wrong", and
-                    -- MergeBuffState only lets "best" override "wrong", so one such aura pinned the
-                    -- column red with no way back: a shaman with a legitimate imbue rates 3 (-> true,
-                    -- blocked) and a raider without KART rates "unknown" (also blocked). Both
-                    -- authoritative paths already exist in the weapon-enchant pass below
-                    -- (GetWeaponEnchantInfo for us, KART.OilCache for everyone else), so this only
-                    -- ever produced false alarms. Do not re-add a name fallback here.
-
-                    if match then
-                        -- Everything this loop can still match is a plain present/absent aura, so the
-                        -- only distinction left is whether it's about to run out. (There used to be a
-                        -- "best"/"wrong" state here too — that was the oil, which is rated by
-                        -- enchantID in the weapon pass below and no longer reaches this loop at all.)
-                        local expiring = false
-                        if aura.expirationTime and aura.expirationTime > 0 then
-                            local remaining = aura.expirationTime - timeNow
-                            expiring = remaining > 0 and remaining < 300
-                        end
-
-                        MergeBuffState(buff.id, expiring and "expiring" or true)
-                    end
+        -- Index scan is the full path (name fallbacks for flask/food/rune). It Lua-errors while
+        -- auras are secret and the addon is tainted; pcall that, then query known spell IDs instead.
+        -- GetUnitAuraBySpellID is AllowedWhenTainted. Name-only flasks have no spell list, so that
+        -- column can go empty during combat until spell IDs are added — still no error.
+        local indexScanFailed = IndexAuraScanBlocked()
+        if not indexScanFailed then
+            for j = 1, 100 do
+                local aura, blocked = ReadHelpfulAuraByIndex(unit, j)
+                if blocked then
+                    indexScanFailed = true
+                    break
                 end
+                if not aura then break end
+                ApplyHelpfulAura(aura, buffDataCount, timeNow)
             end
+        end
+        if indexScanFailed then
+            ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
         end
 
         -- 2. Nach der Aura-Schleife prüfen wir auf Waffenverzauberungen (für das Öl)

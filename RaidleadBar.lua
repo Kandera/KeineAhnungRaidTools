@@ -149,24 +149,77 @@ rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
 KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
 
+-- The windowed world map's canvas is MEDIUM+toplevel (MapCanvasFrameTemplate); this bar is too, so
+-- HIGH/MEDIUM would still raise over the map. Drop to LOW while the map is open. Hide() on the
+-- secure marker buttons is combat-locked; SetFrameStrata is not.
+local function YieldToWorldMap()
+    local map = WorldMapFrame
+    if map and map.IsShown and map:IsShown() then
+        rlBar:SetFrameStrata("LOW")
+    end
+end
+
+local function RestoreBarStrata()
+    if KART.UI and KART.UI.CurrentStrata then
+        rlBar:SetFrameStrata(KART.UI:CurrentStrata(false))
+    end
+end
+
+local mapHooked
+local function HookWorldMap()
+    local map = WorldMapFrame
+    if mapHooked or not map or not map.HookScript then return end
+    mapHooked = true
+    map:HookScript("OnShow", YieldToWorldMap)
+    map:HookScript("OnHide", RestoreBarStrata)
+    YieldToWorldMap()
+end
+
+-- ApplyFrameStrata would put the bar back on HIGH while the map is still open (slider, style).
+local applyStrata = KART.UI.ApplyFrameStrata
+function KART.UI.ApplyFrameStrata(self, ...)
+    applyStrata(self, ...)
+    YieldToWorldMap()
+end
+
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()
+    HookWorldMap()
     if InCombatLockdown() then return end -- Blockiert UI-Änderungen während des Kampfes
 
-    if KART_Settings and KART_Settings.showRaidleadBar then -- KART_Settings ist eine SavedVariable und daher global zugänglich
-        if KART_Settings.autoHideRaidleadBar and not IsInGroup() then
-            rlBar:Hide()
+    if not (KART_Settings and KART_Settings.showRaidleadBar) then
+        UnregisterStateDriver(rlBar, "visibility")
+        rlBar:Hide()
+        KART.ApplyKeybinds()
+        YieldToWorldMap()
+        return
+    end
+
+    rlBar:ClearAllPoints()
+    rlBar:SetPoint(KART_Settings.rlBarPoint or "TOP", UIParent, KART_Settings.rlBarRelativePoint or "TOP", KART_Settings.rlBarX or 0, KART_Settings.rlBarY or -50)
+
+    -- Combat hide cannot be a Lua Hide(): the marker buttons are SecureActionButtonTemplate.
+    -- RegisterStateDriver is set out of combat and the client then hides the bar on pull.
+    local hideCombat = KART_Settings.autoHideRaidleadBarCombat
+    local hideSolo = KART_Settings.autoHideRaidleadBar
+    if hideCombat then
+        if hideSolo then
+            RegisterStateDriver(rlBar, "visibility", "[combat]hide;[group]show;hide")
         else
-            rlBar:ClearAllPoints()
-            rlBar:SetPoint(KART_Settings.rlBarPoint or "TOP", UIParent, KART_Settings.rlBarRelativePoint or "TOP", KART_Settings.rlBarX or 0, KART_Settings.rlBarY or -50)
-            rlBar:Show()
+            RegisterStateDriver(rlBar, "visibility", "[combat]hide;show")
         end
     else
-        rlBar:Hide()
+        UnregisterStateDriver(rlBar, "visibility")
+        if hideSolo and not IsInGroup() then
+            rlBar:Hide()
+        else
+            rlBar:Show()
+        end
     end
     -- Keep the override bindings in step with visibility: ApplyKeybinds sets them when the bar is
     -- shown and clears them when it isn't, so a hidden bar never leaves a key hijacked.
     KART.ApplyKeybinds()
+    YieldToWorldMap()
 end
 
 -- Applies every stored keybind as an override click-binding on its target button. Override
@@ -203,16 +256,17 @@ function KART.ApplyKeybinds()
 end
 
 -- 5. Buttons initialisieren
--- Zeile 1: Raid Target Marker
+-- Zeile 1: Raid Target Marker. Left-click places; right-click clears the target's mark.
 for i = 1, 8 do
-    local macro = ("/target [@target,noexists] player\n/tm %d"):format(i)
+    local macro = ("/target [@target,noexists,btn:1] player\n/tm [btn:1] %d\n/tm [btn:2] 0"):format(i)
     CreateBarButton(rlBar, 5 + (i-1)*24, -5, 22, 22, nil, "Interface\\TargetingFrame\\UI-RaidTargetingIcons", iconCoords[i], nil, macro)
 end
 
--- Zeile 2: World Marker
+-- Zeile 2: World Marker. Left-click places; right-click clears that same marker.
 for i = 1, 8 do
     local wmID = tmToWmMap[i]
-    local b = CreateBarButton(rlBar, 5 + (i-1)*24, -29, 22, 22, nil, nil, nil, nil, "/wm " .. wmID)
+    local macro = ("/wm [btn:1] %d\n/cwm [btn:2] %d"):format(wmID, wmID)
+    local b = CreateBarButton(rlBar, 5 + (i-1)*24, -29, 22, 22, nil, nil, nil, nil, macro)
     local color = markerColors[i]
     b.marker = b:CreateTexture(nil, "OVERLAY")
     b.marker:SetColorTexture(color[1], color[2], color[3], 0.9)

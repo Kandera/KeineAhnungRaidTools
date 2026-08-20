@@ -227,6 +227,7 @@ KART.Defaults = {
     showRaidleadBar = false,
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
+    autoHideRaidleadBarCombat = false,
     pullTimerDuration = 10,
     rcReasonDialog = true,
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway

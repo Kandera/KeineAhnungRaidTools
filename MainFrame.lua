@@ -224,7 +224,7 @@ KART.CreateTabTitle(2, L.LABEL_RAIDLEAD_TOOLS)
 -- checkboxes/slider floating directly on the tab background.
 local rlCard = KART.UI:CreateCard(KART.RaidleadPanel)
 rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -12)
-rlCard:SetSize(500, 210)
+rlCard:SetSize(500, 240)
 
 -- Checkbox zur Aktivierung
 KART.CbActivate = KART.UI:CreateSettingsCheckbox(rlCard, {
@@ -253,11 +253,20 @@ KART.CbAutoHide = KART.UI:CreateSettingsCheckbox(rlCard, {
     tooltip = L.DESC_RL_AUTOHIDE,
 })
 
+KART.CbAutoHideCombat = KART.UI:CreateSettingsCheckbox(rlCard, {
+    name = "KART_RaidleadBarCombatHideCheck", label = L.SET_RL_AUTOHIDE_COMBAT,
+    store = SettingsStore, key = "autoHideRaidleadBarCombat", y = -110,
+    onChanged = function()
+        KART.UpdateRaidleadBarVisibility()
+    end,
+    tooltip = L.DESC_RL_AUTOHIDE_COMBAT,
+})
+
 -- Ready-check reason prompt. Sits on this tab because the ready check itself is a Raidlead Bar
 -- button; the dialog it controls lives in Core.lua (KART.ShowReadyCheckReasonDialog).
 KART.CbRcReasonDialog = KART.UI:CreateSettingsCheckbox(rlCard, {
     name = "KART_RcReasonDialogCheck", label = L.SET_RL_RC_REASON,
-    store = SettingsStore, key = "rcReasonDialog", y = -110,
+    store = SettingsStore, key = "rcReasonDialog", y = -140,
     tooltip = L.DESC_RL_RC_REASON,
 })
 
@@ -265,7 +274,7 @@ KART.CbRcReasonDialog = KART.UI:CreateSettingsCheckbox(rlCard, {
 -- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.UI:CreateSettingsSlider(rlCard, {
     name = "KART_PullTimerSlider", label = L.SET_PULL_TIMER,
-    min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -160,
+    min = 5, max = 30, store = SettingsStore, key = "pullTimerDuration", y = -190,
     tooltip = L.DESC_PULL_TIMER,
 })
 
