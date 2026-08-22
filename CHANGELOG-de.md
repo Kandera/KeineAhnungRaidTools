@@ -15,6 +15,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Geändert
 - **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
+- **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.

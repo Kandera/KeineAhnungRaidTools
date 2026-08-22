@@ -1009,7 +1009,10 @@ end
 -- the slider itself.
 function nsProto.CreateSettingsSlider(ns, parent, opts)
     local s = CreateFrame("Slider", opts.name, parent, "BackdropTemplate")
-    s:SetSize(180, 4) -- thin track instead of the old 14px-tall bar
+    -- Track is only the slider's own width so the thumb does not travel under the number box.
+    -- The box hangs to the right; do not clip it to the 4px-tall track.
+    s:SetSize(140, 4)
+    if s.SetClipsChildren then s:SetClipsChildren(false) end
     s:SetPoint("TOPLEFT", 20, opts.y - 16) -- 16px space reserved for the label above
     s:SetOrientation("HORIZONTAL")
     s:SetMinMaxValues(opts.min, opts.max)
@@ -1030,20 +1033,25 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     s.title:SetText(opts.label)
     ns:RegisterLabel(s.title)
 
-    -- An EditBox rather than a FontString, so the number can be TYPED instead of only dragged
-    -- (GitHub issue #6). Styled to look exactly like the label it replaces: no backdrop, no border,
-    -- same font -- it reads as text until clicked. Sits above the track, so it never intercepts a
-    -- drag on the slider itself.
-    --
-    -- opts.valueIsText is for the sliders that display a NAME rather than their raw number (the
-    -- window-layer ones, which show "HIGH" for 4). Typing into those is meaningless, so they keep
-    -- the old read-only behaviour; SetText from the caller's own hook still works either way.
-    s.valueText = CreateFrame("EditBox", nil, s)
-    s.valueText:SetPoint("BOTTOMRIGHT", s, "TOPRIGHT", 0, 4)
-    s.valueText:SetSize(60, 16)
+    -- Boxed EditBox to the right of the track so the number can be typed (GitHub issue #6)
+    -- without sitting on the label row. opts.valueIsText sliders show a NAME (e.g. "HIGH")
+    -- and stay read-only; SetText from the caller's hook still works.
+    local boxW = opts.valueIsText and 88 or 44
+    s.valueText = CreateFrame("EditBox", nil, s, "BackdropTemplate")
+    s.valueText:SetPoint("LEFT", s, "RIGHT", 8, 0)
+    s.valueText:SetSize(boxW, 20)
     s.valueText:SetFontObject("GameFontHighlightSmall")
-    s.valueText:SetJustifyH("RIGHT")
+    s.valueText:SetJustifyH("CENTER")
     s.valueText:SetAutoFocus(false)
+    s.valueText:SetTextInsets(4, 4, 0, 0)
+    ns:SetPixelBackdrop(s.valueText, {
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    s.valueText:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
+    s.valueText:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    ns:RegisterEditBox(s.valueText)
 
     if opts.valueIsText then
         s.valueText:EnableMouse(false)
@@ -1067,6 +1075,13 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
         s.valueText:SetScript("OnEscapePressed", function(self)
             self:SetText(math.floor(s:GetValue()))
             self:ClearFocus()
+        end)
+        s.valueText:HookScript("OnEditFocusGained", function(self)
+            local r, g, b = ns:AccentColor()
+            self:SetBackdropBorderColor(r, g, b, 1)
+        end)
+        s.valueText:HookScript("OnEditFocusLost", function(self)
+            self:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
         end)
     end
 

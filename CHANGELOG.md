@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Auto-invite keywords are labeled as whispers.** Guild chat stays the extra checkbox.
+- **Settings sliders have a number box** to the right of the track.
 
 ### Fixed
 - **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.
