@@ -8,6 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Modul-Chips und Bearbeiten-Modus in der Sidebar** zum Platzieren von Modul-Fenstern in der Stadt ohne gespeicherte Sperren zu ändern.
+- **Changelog-Panel im Spiel** und Footer-Links für CurseForge, Wago und GitHub.
 - **Look-Einstellungen für die Raidlead-Leiste** für Skalierung, Button-Größe und Deckkraft; die Leiste im Spiel ist die Vorschau.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
@@ -16,6 +18,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Geändert
 - **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
+- **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.

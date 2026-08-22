@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.
+- **In-game changelog panel** and footer links for CurseForge, Wago and GitHub.
 - **Raidlead bar look settings** for scale, button size and bar opacity; the live bar is the preview.
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Auto-invite keywords are labeled as whispers.** Guild chat stays the extra checkbox.
+- **Settings sliders have a number box** to the right of the track.
 
 ### Fixed
 - **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.

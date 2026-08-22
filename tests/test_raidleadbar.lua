@@ -19,6 +19,8 @@ RaidSim.As(me, function()
     chunk("KeineAhnungRaidTools", KART)
 end)
 T.truthy(KART.RaidleadBar, "the raidlead bar builds")
+KART.editModeActive = false
+function KART.IsEditModeActive() return KART.editModeActive == true end
 
 local function As(fn) return RaidSim.As(me, fn) end
 local S = me.env.KART_Settings
@@ -211,6 +213,20 @@ do
     T.truthy(wmLoop and wmLoop:find("/wm [btn:1]", 1, true)
              and wmLoop:find("/cwm [btn:2]", 1, true),
         "left-click places that world marker and right-click clears it")
+end
+
+do
+    S.showRaidleadBar = true
+    S.lockRaidleadBar = true
+    KART.editModeActive = false
+    local moved = false
+    KART.RaidleadBar.StartMoving = function() moved = true end
+    As(function() KART.RaidleadBar:GetScript("OnDragStart")(KART.RaidleadBar) end)
+    T.truthy(not moved, "a locked bar does not move without edit mode")
+
+    KART.editModeActive = true
+    As(function() KART.RaidleadBar:GetScript("OnDragStart")(KART.RaidleadBar) end)
+    T.truthy(moved, "edit mode allows dragging a locked bar")
 end
 
 -- Layout from button size and stride -----------------------------------------------------------

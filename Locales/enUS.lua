@@ -7,6 +7,18 @@ KART.L_enUS = {
     TAB_SETTINGS = "Settings",
     TAB_COTANK = "Co-Tank",
 
+    LABEL_SYSTEM = "SYSTEM",
+    LABEL_CHANGELOG = "Changelog",
+    BTN_CHANGELOG = "Changelog",
+    DESC_CHANGELOG = "Recent changes in this addon.",
+    BTN_EDIT_MODE_ON = "Edit Mode: On",
+    BTN_EDIT_MODE_OFF = "Edit Mode: Off",
+    DESC_EDIT_MODE = "Unlock module frames for dragging in town without changing their saved lock settings.",
+    LINK_CURSEFORGE = "CurseForge",
+    LINK_WAGO = "Wago",
+    LINK_GITHUB = "GitHub",
+    LINK_COPIED = "Link copied to clipboard.",
+
     -- Labels
     LABEL_INVITE_KEYWORDS = "Keywords for auto-invite (whisper; separate with semicolon):",
     LABEL_PROMOTE_NAMES = "Player names for auto-promote (semicolon-separated; Nickname Support):",

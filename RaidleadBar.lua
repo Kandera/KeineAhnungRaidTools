@@ -172,7 +172,7 @@ rlBar:RegisterForDrag("LeftButton")
 if rlBar.SetToplevel then rlBar:SetToplevel(true) end
 
 rlBar:SetScript("OnDragStart", function(self)
-    if not KART_Settings.lockRaidleadBar then self:StartMoving() end
+    if not KART_Settings.lockRaidleadBar or KART.IsEditModeActive() then self:StartMoving() end
 end) -- KART_Settings ist eine SavedVariable und daher global zugänglich
 rlBar:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
