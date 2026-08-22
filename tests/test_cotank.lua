@@ -127,6 +127,21 @@ do
     T.eq(snap.name, "Other", "live snapshot takes the co-tank name")
     T.eq(snap.health, 40000, "and their health")
     T.eq(snap.absorb, 2000, "and absorb")
+    T.eq(snap.healAbsorb, 500, "and heal absorb")
+end
+
+do
+    local other = { name = "Other", realm = KARTTEST.realm, guid = "Player-1-BBBB",
+                    role = "TANK", class = "PALADIN", classFile = "PALADIN" }
+    KARTTEST.SetRaid({
+        { name = "Me", realm = KARTTEST.realm, guid = "Player-1-AAAA", role = "TANK", class = "WARRIOR", classFile = "WARRIOR" },
+        other,
+    })
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.rangeSecret["raid2"] = true
+    local snap = KART.CT.FillLiveSnapshot("raid2", KART.CT.BlankSnapshot({}))
+    T.eq(snap.inRange, true, "unreadable range counts as in range")
+    KARTTEST.rangeSecret["raid2"] = nil
 end
 
 do

@@ -265,9 +265,9 @@ KARTTEST.rangeSecret = {}
 KARTTEST.range = {}
 function _G.UnitInRange(unit)
     if KARTTEST.rangeSecret[unit] then
-        if _G.issecretvalue then
-            return KARTTEST.secretValue or (function() local u = newproxy and newproxy(false) or {} return u end)()
-        end
+        local secret = {}
+        KARTTEST.secretValues[secret] = true
+        return secret
     end
     if KARTTEST.range[unit] == nil then return true end
     return KARTTEST.range[unit]

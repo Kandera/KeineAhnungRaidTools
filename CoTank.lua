@@ -49,6 +49,7 @@ function CT.BlankSnapshot(snap)
     snap.health = 0
     snap.healthMax = 0
     snap.absorb = 0
+    snap.healAbsorb = 0
     snap.dead = false
     snap.offline = false
     snap.inRange = true
@@ -69,6 +70,7 @@ function CT.FillLiveSnapshot(unit, snap)
     snap.health = UnitHealth(unit)
     snap.healthMax = UnitHealthMax(unit)
     snap.absorb = UnitGetTotalAbsorbs(unit)
+    snap.healAbsorb = UnitGetTotalHealAbsorbs(unit)
     snap.dead = UnitIsDeadOrGhost(unit) and true or false
     snap.offline = not UnitIsConnected(unit)
     snap.inRange = CT.SafeTruthy(UnitInRange(unit), true)
