@@ -45,6 +45,7 @@ function KART.ShowTab(tabIndex)
     -- defined further down in this file, after the scroll frame exists).
     KART.CurrentTab = tabIndex
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    if KART.UpdateCtFlyoutVisibility then KART.UpdateCtFlyoutVisibility() end
     if KART.CT and KART.CT.OnSettingsTab then
         local open = tabIndex == 6 and KART.MainFrame and KART.MainFrame:IsShown()
         KART.CT.OnSettingsTab(open and true or false)
@@ -81,7 +82,12 @@ KART.UI:AddShowFade(mainFrame)
 KART.RegisterEscapeFrame(mainFrame)
 KART.MainFrame = mainFrame
 mainFrame:HookScript("OnHide", function()
+    if KART.UpdateCtFlyoutVisibility then KART.UpdateCtFlyoutVisibility() end
     if KART.CT and KART.CT.OnSettingsTab then KART.CT.OnSettingsTab(false) end
+end)
+mainFrame:HookScript("OnShow", function()
+    if KART.UpdateCtFlyoutAnchor then KART.UpdateCtFlyoutAnchor() end
+    if KART.UpdateCtFlyoutVisibility then KART.UpdateCtFlyoutVisibility() end
 end)
 
 -- clickArea covers the opaque artwork region (shadow margin excluded).
@@ -211,7 +217,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
-    [6] = 3380, -- Co-Tank: preview + module + row + look + text + fade + auras + taunt
+    [6] = 1320, -- Co-Tank: preview + module + size + taunt (Look/Text/Auras live in the flyout)
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -873,6 +879,7 @@ local function CtEnable()
         and KART.CT and KART.CT.HostPreview then
         KART.CT.HostPreview()
     end
+    if KART.UpdateCtFlyoutVisibility then KART.UpdateCtFlyoutVisibility() end
 end
 local function CtLayoutChanged()
     if KART.CT and KART.CT.ApplyLayout then KART.CT.ApplyLayout() end
@@ -970,7 +977,7 @@ KART.CbCtOnlyInstance.text:SetJustifyH("LEFT")
 
 local ctRowCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctRowCard:SetPoint("TOPLEFT", ctModCard, "BOTTOMLEFT", 0, -20)
-ctRowCard:SetSize(500, 230)
+ctRowCard:SetSize(500, 130)
 
 KART.SldCtWidth = KART.UI:CreateSettingsSlider(ctRowCard, {
     name = "KART_CtWidthSlider", label = L.SET_CT_WIDTH,
@@ -990,39 +997,6 @@ KART.SldCtScale = KART.UI:CreateSettingsSlider(ctRowCard, {
         CtLayoutChanged()
     end,
 })
-KART.SldCtRangeFade = KART.UI:CreateSettingsSlider(ctRowCard, {
-    name = "KART_CtRangeFadeSlider", label = L.SET_CT_RANGE_FADE,
-    min = 10, max = 100, store = CtStore, key = "rangeAlpha", y = -140,
-    onChanged = function()
-        CtStore().rangeAlpha = KART.SldCtRangeFade:GetValue() / 100
-        CtLayoutChanged()
-    end,
-})
-KART.SldCtNameMax = KART.UI:CreateSettingsSlider(ctRowCard, {
-    name = "KART_CtNameMaxSlider", label = L.SET_CT_NAME_MAX,
-    min = 4, max = 24, store = CtStore, key = "nameMaxLength", y = -180,
-    onChanged = CtRefresh,
-})
-
-KART.CbCtAbsorb = KART.UI:CreateSettingsCheckbox(ctRowCard, {
-    name = "KART_CtAbsorb", label = L.SET_CT_ABSORB,
-    store = CtStore, key = "absorbShow", y = -20,
-    onChanged = CtRefresh,
-})
-KART.CbCtAbsorb:ClearAllPoints()
-KART.CbCtAbsorb:SetPoint("TOPLEFT", ctRowCard, "TOPLEFT", 260, -20)
-KART.CbCtAbsorb.text:SetWidth(192)
-KART.CbCtAbsorb.text:SetJustifyH("LEFT")
-
-KART.CbCtHealAbsorb = KART.UI:CreateSettingsCheckbox(ctRowCard, {
-    name = "KART_CtHealAbsorb", label = L.SET_CT_HEAL_ABSORB,
-    store = CtStore, key = "healAbsorbShow", y = -50,
-    onChanged = CtRefresh,
-})
-KART.CbCtHealAbsorb:ClearAllPoints()
-KART.CbCtHealAbsorb:SetPoint("TOPLEFT", ctRowCard, "TOPLEFT", 260, -50)
-KART.CbCtHealAbsorb.text:SetWidth(192)
-KART.CbCtHealAbsorb.text:SetJustifyH("LEFT")
 
 local CT_HEALTH_COLOR_L = {
     class = function() return L.CT_HEALTH_COLOR_CLASS end,
@@ -1081,36 +1055,101 @@ local function RefreshCtBuffGrowthBtn()
     RefreshCtStripEnumBtn(KART.BtnCtBuffGrowth, L.SET_CT_AURA_GROWTH, CtBuffs, "growth", CT_GROWTH_L, "left")
 end
 
-KART.BtnCtHealthColor = KART.UI:CreateModernButton(ctRowCard, L.SET_CT_HEALTH_COLOR, L.DESC_CT_HEALTH_COLOR)
-KART.BtnCtHealthColor:SetPoint("TOPLEFT", ctRowCard, "TOPLEFT", 260, -90)
-KART.BtnCtHealthColor:SetSize(220, 22)
-KART.BtnCtHealthColor:SetScript("OnClick", function(self)
-    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
-        rootDescription:CreateTitle(L.SET_CT_HEALTH_COLOR)
-        for _, opt in ipairs({ "class", "custom", "health" }) do
-            rootDescription:CreateButton(CT_HEALTH_COLOR_L[opt](), function()
-                CtStore().healthColor = opt
-                RefreshCtHealthColorBtn()
-                CtRefresh()
-            end)
-        end
-    end)
-end)
+-- Co-Tank settings flyout (Look / Text / Auras), parented to UIParent beside the main window.
+local ctFlyout = CreateFrame("Frame", "KART_CtFlyout", UIParent, "BackdropTemplate")
+ctFlyout:SetSize(540, 639)
+KART.UI:SetPixelBackdrop(ctFlyout, {
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    edgeSize = 1,
+})
+ctFlyout:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
+ctFlyout:SetBackdropBorderColor(0, 0, 0, 1)
+KART.UI:RegisterStrataFrame(ctFlyout)
+ctFlyout:SetClampedToScreen(true)
+ctFlyout:Hide()
+KART.CtFlyout = ctFlyout
 
-KART.BtnCtHealthText = KART.UI:CreateModernButton(ctRowCard, L.SET_CT_HEALTH_TEXT, L.DESC_CT_HEALTH_TEXT)
-KART.BtnCtHealthText:SetPoint("TOPLEFT", KART.BtnCtHealthColor, "BOTTOMLEFT", 0, -10)
-KART.BtnCtHealthText:SetSize(220, 22)
-KART.BtnCtHealthText:SetScript("OnClick", function(self)
-    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
-        rootDescription:CreateTitle(L.SET_CT_HEALTH_TEXT)
-        for _, opt in ipairs({ "percent", "current", "both", "deficit" }) do
-            rootDescription:CreateButton(CT_HEALTH_TEXT_L[opt](), function()
-                CtStore().healthText = opt
-                RefreshCtHealthTextBtn()
-                CtRefresh()
-            end)
+function KART.UpdateCtFlyoutAnchor()
+    if not KART.CtFlyout or not KART.MainFrame then return end
+    KART.CtFlyout:ClearAllPoints()
+    KART.CtFlyout:SetPoint("TOPLEFT", KART.MainFrame, "TOPRIGHT", 8, -64)
+end
+
+function KART.UpdateCtFlyoutVisibility()
+    if not KART.CtFlyout then return end
+    local show = KART.CurrentTab == 6
+        and KART.MainFrame and KART.MainFrame:IsShown()
+        and KART_Settings and KART_Settings.ctModuleEnabled
+    if show then
+        KART.UpdateCtFlyoutAnchor()
+        KART.CtFlyout:Show()
+    else
+        KART.CtFlyout:Hide()
+    end
+end
+
+local ctFlyTabBar = CreateFrame("Frame", nil, ctFlyout)
+ctFlyTabBar:SetPoint("TOPLEFT", ctFlyout, "TOPLEFT", 12, -10)
+ctFlyTabBar:SetPoint("TOPRIGHT", ctFlyout, "TOPRIGHT", -12, -10)
+ctFlyTabBar:SetHeight(28)
+
+local ctFlyScroll = CreateFrame("ScrollFrame", "KART_CtFlyoutScroll", ctFlyout, "UIPanelScrollFrameTemplate")
+ctFlyScroll:SetPoint("TOPLEFT", ctFlyout, "TOPLEFT", 12, -44)
+ctFlyScroll:SetPoint("BOTTOMRIGHT", ctFlyout, "BOTTOMRIGHT", -12, 12)
+local ctFlyChild = CreateFrame("Frame", nil, ctFlyScroll)
+ctFlyScroll:SetScrollChild(ctFlyChild)
+KART.UI:StripScrollbarTextures(ctFlyScroll)
+
+local ctFlyLook = CreateFrame("Frame", nil, ctFlyChild)
+local ctFlyText = CreateFrame("Frame", nil, ctFlyChild)
+local ctFlyAuras = CreateFrame("Frame", nil, ctFlyChild)
+ctFlyLook:SetAllPoints()
+ctFlyText:SetAllPoints()
+ctFlyAuras:SetAllPoints()
+ctFlyText:Hide()
+ctFlyAuras:Hide()
+KART.CtFlyoutPanels = { ctFlyLook, ctFlyText, ctFlyAuras }
+
+local CT_FLYOUT_HEIGHTS = { 770, 490, 760 }
+local function UpdateCtFlyoutScrollRange(tabIndex)
+    local h = CT_FLYOUT_HEIGHTS[tabIndex] or 750
+    ctFlyChild:SetSize(516, math.max(h, ctFlyScroll:GetHeight()))
+    local maxScroll = math.max(0, ctFlyChild:GetHeight() - ctFlyScroll:GetHeight())
+    if ctFlyScroll:GetVerticalScroll() > maxScroll then
+        ctFlyScroll:SetVerticalScroll(maxScroll)
+    end
+end
+
+function KART.ShowCtFlyoutTab(tabIndex)
+    for i, panel in ipairs(KART.CtFlyoutPanels) do
+        panel:SetShown(i == tabIndex)
+    end
+    if KART.CtFlyoutTabButtons then
+        for i, btn in ipairs(KART.CtFlyoutTabButtons) do
+            local active = i == tabIndex
+            btn.text:SetTextColor(active and 1 or 0.75, active and 1 or 0.75, active and 1 or 0.75)
         end
-    end)
+    end
+    UpdateCtFlyoutScrollRange(tabIndex)
+end
+
+KART.CtFlyoutTabButtons = {}
+local function AddCtFlyoutTab(index, label, xOff)
+    local btn = KART.UI:CreateModernButton(ctFlyTabBar, label)
+    btn:SetSize(160, 24)
+    btn:SetPoint("TOPLEFT", ctFlyTabBar, "TOPLEFT", xOff, 0)
+    btn:SetScript("OnClick", function() KART.ShowCtFlyoutTab(index) end)
+    KART.CtFlyoutTabButtons[index] = btn
+    return btn
+end
+AddCtFlyoutTab(1, L.TAB_CT_LOOK, 0)
+AddCtFlyoutTab(2, L.TAB_CT_TEXT, 168)
+AddCtFlyoutTab(3, L.TAB_CT_AURAS, 336)
+KART.ShowCtFlyoutTab(1)
+
+clickArea:HookScript("OnDragStop", function()
+    if KART.UpdateCtFlyoutAnchor then KART.UpdateCtFlyoutAnchor() end
 end)
 
 local CT_FILL_L = {
@@ -1148,8 +1187,8 @@ local function RefreshCtTextureBtn()
     KART.BtnCtHealthTexture.text:SetText(L.SET_CT_HEALTH_TEXTURE .. ": " .. CtTextureLabel())
 end
 
-local ctLookCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctLookCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
+local ctLookCard = KART.UI:CreateCard(ctFlyLook)
+ctLookCard:SetPoint("TOPLEFT", ctFlyLook, "TOPLEFT", 12, -12)
 ctLookCard:SetSize(500, 500)
 
 KART.BtnCtHealthFill = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_FILL, L.DESC_CT_HEALTH_FILL)
@@ -1249,6 +1288,22 @@ KART.BtnCtHealthLow:SetScript("OnClick", function()
     CtPickColor(CtStore().healthLow, CtLayoutChanged)
 end)
 
+KART.BtnCtHealthColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_COLOR, L.DESC_CT_HEALTH_COLOR)
+KART.BtnCtHealthColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -174)
+KART.BtnCtHealthColor:SetSize(220, 22)
+KART.BtnCtHealthColor:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_HEALTH_COLOR)
+        for _, opt in ipairs({ "class", "custom", "health" }) do
+            rootDescription:CreateButton(CT_HEALTH_COLOR_L[opt](), function()
+                CtStore().healthColor = opt
+                RefreshCtHealthColorBtn()
+                CtRefresh()
+            end)
+        end
+    end)
+end)
+
 KART.SldCtBgAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
     name = "KART_CtBgAlphaSlider", label = L.SET_CT_BG_ALPHA,
     min = 10, max = 100, store = CtStore, key = "bgAlpha", y = -210,
@@ -1272,54 +1327,69 @@ KART.BtnCtBorderColor:SetScript("OnClick", function()
     CtPickColor(CtStore().borderColor, CtLayoutChanged)
 end)
 
+KART.CbCtAbsorb = KART.UI:CreateSettingsCheckbox(ctLookCard, {
+    name = "KART_CtAbsorb", label = L.SET_CT_ABSORB,
+    store = CtStore, key = "absorbShow", y = -292,
+    onChanged = CtRefresh,
+})
+KART.CbCtHealAbsorb = KART.UI:CreateSettingsCheckbox(ctLookCard, {
+    name = "KART_CtHealAbsorb", label = L.SET_CT_HEAL_ABSORB,
+    store = CtStore, key = "healAbsorbShow", y = -292,
+    onChanged = CtRefresh,
+})
+KART.CbCtHealAbsorb:ClearAllPoints()
+KART.CbCtHealAbsorb:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -292)
+KART.CbCtHealAbsorb.text:SetWidth(192)
+KART.CbCtHealAbsorb.text:SetJustifyH("LEFT")
+
 KART.BtnCtAbsorbColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_ABSORB_COLOR)
-KART.BtnCtAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -292)
+KART.BtnCtAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -324)
 KART.BtnCtAbsorbColor:SetSize(220, 22)
 KART.BtnCtAbsorbColor:SetScript("OnClick", function()
     CtPickColor(CtStore().absorbColor, CtLayoutChanged)
 end)
 KART.SldCtAbsorbAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
     name = "KART_CtAbsorbAlphaSlider", label = L.SET_CT_ABSORB_ALPHA,
-    min = 10, max = 100, store = CtStore, key = "absorbAlpha", y = -292,
+    min = 10, max = 100, store = CtStore, key = "absorbAlpha", y = -324,
     onChanged = function()
         CtStore().absorbAlpha = KART.SldCtAbsorbAlpha:GetValue() / 100
         CtLayoutChanged()
     end,
 })
 KART.SldCtAbsorbAlpha:ClearAllPoints()
-KART.SldCtAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -308)
+KART.SldCtAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -340)
 
 KART.BtnCtHealAbsorbColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEAL_ABSORB_COLOR)
-KART.BtnCtHealAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -350)
+KART.BtnCtHealAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -382)
 KART.BtnCtHealAbsorbColor:SetSize(220, 22)
 KART.BtnCtHealAbsorbColor:SetScript("OnClick", function()
     CtPickColor(CtStore().healAbsorbColor, CtLayoutChanged)
 end)
 KART.SldCtHealAbsorbAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
     name = "KART_CtHealAbsorbAlphaSlider", label = L.SET_CT_HEAL_ABSORB_ALPHA,
-    min = 10, max = 100, store = CtStore, key = "healAbsorbAlpha", y = -350,
+    min = 10, max = 100, store = CtStore, key = "healAbsorbAlpha", y = -382,
     onChanged = function()
         CtStore().healAbsorbAlpha = KART.SldCtHealAbsorbAlpha:GetValue() / 100
         CtLayoutChanged()
     end,
 })
 KART.SldCtHealAbsorbAlpha:ClearAllPoints()
-KART.SldCtHealAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -366)
+KART.SldCtHealAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -398)
 
 KART.CbCtGradient = KART.UI:CreateSettingsCheckbox(ctLookCard, {
     name = "KART_CtGradient", label = L.SET_CT_GRADIENT, tooltip = L.DESC_CT_GRADIENT,
-    store = CtStore, key = "gradient", y = -398,
+    store = CtStore, key = "gradient", y = -430,
     onChanged = CtLayoutChanged,
 })
 
 KART.BtnCtGradientFrom = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_GRADIENT_FROM)
-KART.BtnCtGradientFrom:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -430)
+KART.BtnCtGradientFrom:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -462)
 KART.BtnCtGradientFrom:SetSize(220, 22)
 KART.BtnCtGradientFrom:SetScript("OnClick", function()
     CtPickColor(CtStore().gradientFrom, CtLayoutChanged)
 end)
 KART.BtnCtGradientTo = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_GRADIENT_TO)
-KART.BtnCtGradientTo:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -430)
+KART.BtnCtGradientTo:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -462)
 KART.BtnCtGradientTo:SetSize(220, 22)
 KART.BtnCtGradientTo:SetScript("OnClick", function()
     CtPickColor(CtStore().gradientTo, CtLayoutChanged)
@@ -1422,21 +1492,56 @@ local function CtBuildTextBlock(card, y0, title, storeFn, prefix)
     }
 end
 
-local ctTextCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctTextCard:SetPoint("TOPLEFT", ctLookCard, "BOTTOMLEFT", 0, -20)
-ctTextCard:SetSize(500, 430)
-KART.CtNameTextWidgets = CtBuildTextBlock(ctTextCard, -14, L.LABEL_CT_NAME_TEXT, CtNameStyle, "Name")
-KART.CtHealthTextWidgets = CtBuildTextBlock(ctTextCard, -220, L.LABEL_CT_HEALTH_TEXT, CtHealthStyle, "Hp")
-
-local ctFadeCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctFadeCard:SetPoint("TOPLEFT", ctTextCard, "BOTTOMLEFT", 0, -20)
+local ctFadeCard = KART.UI:CreateCard(ctFlyLook)
+ctFadeCard:SetPoint("TOPLEFT", ctLookCard, "BOTTOMLEFT", 0, -20)
 ctFadeCard:SetSize(500, 250)
+
+local ctTextCard = KART.UI:CreateCard(ctFlyText)
+ctTextCard:SetPoint("TOPLEFT", ctFlyText, "TOPLEFT", 12, -12)
+ctTextCard:SetSize(500, 490)
+
+KART.BtnCtHealthText = KART.UI:CreateModernButton(ctTextCard, L.SET_CT_HEALTH_TEXT, L.DESC_CT_HEALTH_TEXT)
+KART.BtnCtHealthText:SetPoint("TOPLEFT", ctTextCard, "TOPLEFT", 20, -20)
+KART.BtnCtHealthText:SetSize(220, 22)
+KART.BtnCtHealthText:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_HEALTH_TEXT)
+        for _, opt in ipairs({ "percent", "current", "both", "deficit" }) do
+            rootDescription:CreateButton(CT_HEALTH_TEXT_L[opt](), function()
+                CtStore().healthText = opt
+                RefreshCtHealthTextBtn()
+                CtRefresh()
+            end)
+        end
+    end)
+end)
+
+KART.SldCtNameMax = KART.UI:CreateSettingsSlider(ctTextCard, {
+    name = "KART_CtNameMaxSlider", label = L.SET_CT_NAME_MAX,
+    min = 4, max = 24, store = CtStore, key = "nameMaxLength", y = -20,
+    onChanged = CtRefresh,
+})
+KART.SldCtNameMax:ClearAllPoints()
+KART.SldCtNameMax:SetPoint("TOPLEFT", ctTextCard, "TOPLEFT", 260, -36)
+
+KART.CtNameTextWidgets = CtBuildTextBlock(ctTextCard, -70, L.LABEL_CT_NAME_TEXT, CtNameStyle, "Name")
+KART.CtHealthTextWidgets = CtBuildTextBlock(ctTextCard, -276, L.LABEL_CT_HEALTH_TEXT, CtHealthStyle, "Hp")
 
 KART.CbCtRangeFadeOn = KART.UI:CreateSettingsCheckbox(ctFadeCard, {
     name = "KART_CtRangeFadeOn", label = L.SET_CT_RANGE_FADE_ON,
     store = CtStore, key = "rangeFade", y = -20,
     onChanged = CtRefresh,
 })
+KART.SldCtRangeFade = KART.UI:CreateSettingsSlider(ctFadeCard, {
+    name = "KART_CtRangeFadeSlider", label = L.SET_CT_RANGE_FADE,
+    min = 10, max = 100, store = CtStore, key = "rangeAlpha", y = -20,
+    onChanged = function()
+        CtStore().rangeAlpha = KART.SldCtRangeFade:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtRangeFade:ClearAllPoints()
+KART.SldCtRangeFade:SetPoint("TOPLEFT", ctFadeCard, "TOPLEFT", 260, -36)
 KART.SldCtDeadFade = KART.UI:CreateSettingsSlider(ctFadeCard, {
     name = "KART_CtDeadFadeSlider", label = L.SET_CT_DEAD_FADE,
     min = 10, max = 100, store = CtStore, key = "deadFade", y = -60,
@@ -1476,8 +1581,8 @@ KART.BtnCtTargetBorderColor:SetScript("OnClick", function()
     CtPickColor(tb.color, CtLayoutChanged)
 end)
 
-local ctAuraCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctAuraCard:SetPoint("TOPLEFT", ctFadeCard, "BOTTOMLEFT", 0, -20)
+local ctAuraCard = KART.UI:CreateCard(ctFlyAuras)
+ctAuraCard:SetPoint("TOPLEFT", ctFlyAuras, "TOPLEFT", 12, -12)
 ctAuraCard:SetSize(500, 760)
 
 local ctDebuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1709,7 +1814,7 @@ local function CtTauntChanged()
 end
 
 local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctTauntCard:SetPoint("TOPLEFT", ctAuraCard, "BOTTOMLEFT", 0, -20)
+ctTauntCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
 ctTauntCard:SetSize(500, 320)
 
 local ctTauntTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -2047,6 +2152,11 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
     KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
     if KART.TabTitles[6] then KART.TabTitles[6]:SetText(L.LABEL_COTANK_SETTINGS) end
+    if KART.CtFlyoutTabButtons then
+        KART.CtFlyoutTabButtons[1].text:SetText(L.TAB_CT_LOOK)
+        KART.CtFlyoutTabButtons[2].text:SetText(L.TAB_CT_TEXT)
+        KART.CtFlyoutTabButtons[3].text:SetText(L.TAB_CT_AURAS)
+    end
     -- TabTitles[5] belongs to Invite.lua and is refreshed there.
 
     -- Raidlead tab

@@ -6,6 +6,9 @@ KART.L_enUS = {
     TAB_BUFFCHECK = "Buff-Checker",
     TAB_SETTINGS = "Settings",
     TAB_COTANK = "Co-Tank",
+    TAB_CT_LOOK = "Look",
+    TAB_CT_TEXT = "Text",
+    TAB_CT_AURAS = "Auras",
 
     -- Labels
     LABEL_INVITE_KEYWORDS = "Keywords for auto-invite (whisper; separate with semicolon):",

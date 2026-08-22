@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
 - **Co-Tank bar texture and optional gradient** on the Look card, with LibSharedMedia when installed.
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.

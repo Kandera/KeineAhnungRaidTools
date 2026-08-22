@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Co-Tank Look-, Text- und Auren-Einstellungen** öffnen sich in einem Begleitfenster neben dem Hauptfenster.
 - **Co-Tank-Balkentextur und optionaler Verlauf** auf der Look-Karte, mit LibSharedMedia wenn installiert.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
