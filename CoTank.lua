@@ -290,7 +290,7 @@ local function StripCfg(kind)
     if not cfg then return def end
     local out = {}
     for k, v in pairs(def) do
-        out[k] = cfg[k] ~= nil and cfg[k] or v
+        if cfg[k] ~= nil then out[k] = cfg[k] else out[k] = v end
     end
     for k, v in pairs(cfg) do
         if out[k] == nil then out[k] = v end
@@ -426,13 +426,13 @@ local function BuildLiveStrip(row, key, cfg, filter)
     strip:Show()
 
     if not strip._auraGroupAdded then
-        pcall(function()
+        local added = pcall(function()
             strip:AddAuraGroup("main", filter, {
                 maxFrameCount = cfg.max,
                 layout = AuraGroupLayout(cfg),
             })
         end)
-        strip._auraGroupAdded = true
+        if added then strip._auraGroupAdded = true end
     end
 
     pcall(function()

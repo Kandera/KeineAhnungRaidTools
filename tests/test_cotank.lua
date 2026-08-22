@@ -291,6 +291,24 @@ do
         ctModuleEnabled = true,
         ct = {
             testMode = true,
+            debuffs = { show = false, max = 3, size = 20, spacing = 2,
+                        anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
+            buffs   = { show = true, max = 2, size = 16, spacing = 1,
+                        anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4 },
+        },
+    }
+    KART.CT.EnsureRow()
+    KART.CT.BuildStrips(KART.CT.row)
+    T.truthy(KART.CT.row.debuffs, "hidden debuff strip still exists")
+    T.eq(KART.CT.row.debuffs:IsShown(), false, "show false hides debuff strip")
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            testMode = true,
             width = 220, height = 36,
             debuffs = { show = true, max = 2, size = 18, spacing = 1,
                         anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
