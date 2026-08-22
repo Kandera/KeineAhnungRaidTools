@@ -79,6 +79,33 @@ do
     T.eq(store.amount, 42, "slider: a plain table store still works")
 end
 
+-- The number sits in a boxed EditBox to the right of the track, not above it as a label.
+do
+    local s = ns:CreateSettingsSlider(UIParent, {
+        store = { amount = 0 },
+        key = "amount",
+        min = 0, max = 100, y = 0,
+    })
+    local point, rel, relPoint = s.valueText:GetPoint(1)
+    T.eq(point, "LEFT", "slider value box anchors from the left")
+    T.eq(rel, s, "to the slider track")
+    T.eq(relPoint, "RIGHT", "on the track's right edge")
+    T.eq(s:GetWidth(), 140, "the track is the slider width, not the box")
+    T.eq(s.valueText:GetWidth(), 44, "the number box is a compact field")
+    T.eq(s.valueText:GetHeight(), 20, "and tall enough to type into")
+end
+
+do
+    local s = ns:CreateSettingsSlider(UIParent, {
+        store = { amount = 0 },
+        key = "amount",
+        min = 0, max = 100, y = 0,
+        valueIsText = true,
+    })
+    T.eq(s.valueText:GetWidth(), 88, "named-value sliders get a wider box")
+    T.eq(s.valueText:IsMouseEnabled(), false, "and stay read-only")
+end
+
 -- RegisterStaticPopup: the popup outranks the windows while it is ours ------------------------
 -- Blizzard's popup frames sit at a fixed DIALOG stratum, so a consumer whose windows are set to
 -- DIALOG or above buried its own confirm dialog behind the window that raised it (B8). The
@@ -290,3 +317,19 @@ do
 end
 
 KARTTEST.uiScale = 768 / 1080 -- leave the scale as found, for whatever file runs next
+
+-- CreateTabButton: optional module ON/OFF chip on the right ------------------------------------
+do
+    local b = ns:CreateTabButton(UIParent, "Raidlead", { moduleChip = true })
+    T.truthy(b.chip, "module tab gets a chip")
+    T.eq(b.chip:GetText(), "OFF", "chip starts off")
+    b:SetModuleChipOn(true)
+    T.eq(b.chip:GetText(), "ON", "chip shows on")
+    b:SetModuleChipOn(false)
+    T.eq(b.chip:GetText(), "OFF", "chip shows off again")
+end
+
+do
+    local plain = ns:CreateTabButton(UIParent, "Settings")
+    T.is_nil(plain.chip, "non-module tabs have no chip")
+end

@@ -99,6 +99,9 @@ function KART.SyncSettingsToUI()
     if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
     if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
     if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
+    if KART.SldRlBarScale then settingsMap[KART.SldRlBarScale] = "rlBarScale" end
+    if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
+    if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
 
     for widget, key in pairs(settingsMap) do
         -- Every entry above was inserted behind its own existence guard, so widget is always set.
@@ -133,6 +136,7 @@ function KART.SyncSettingsToUI()
     end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
+    if KART.RefreshModuleChips then KART.RefreshModuleChips() end
 
     KART.UpdateMinimapButton()
     -- Applies the keybinds too (its tail call), since whether they may be bound at all depends on

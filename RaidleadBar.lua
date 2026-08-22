@@ -32,6 +32,50 @@ local markerColors = {
 }
 
 -- 2. Lokale Hilfsfunktion für die Bar-Buttons
+local rlRaidTargetButtons = {}
+local rlWorldMarkerButtons = {}
+local rlClearWmBtn, rlReadyBtn, rlBuffBtn
+
+local function IconInset(buttonSize)
+    return math.max(1, math.floor(2 * buttonSize / 22 + 0.5))
+end
+
+local function RepositionIcon(btn, buttonSize)
+    if not btn.icon then return end
+    local inset = IconInset(buttonSize)
+    btn.icon:ClearAllPoints()
+    btn.icon:SetPoint("TOPLEFT", inset, -inset)
+    btn.icon:SetPoint("BOTTOMRIGHT", -inset, inset)
+end
+
+function KART.RaidleadBarLayoutMetrics(buttonSize)
+    buttonSize = tonumber(buttonSize) or 22
+    local margin = 5
+    local stride = buttonSize + 2
+    local row1Y = -margin
+    local row2Y = -(margin + buttonSize + 2)
+    local clearWmX = margin + 8 * stride
+    local colGap = math.floor(6 * buttonSize / 22 + 0.5)
+    local readyX = clearWmX + buttonSize + colGap
+    local buffX = readyX + buttonSize + 2
+    local rightMargin = math.floor(4 * buttonSize / 22 + 0.5)
+    return {
+        buttonSize = buttonSize,
+        stride = stride,
+        margin = margin,
+        row1Y = row1Y,
+        row2Y = row2Y,
+        markerX = function(i) return margin + (i - 1) * stride end,
+        clearWmX = clearWmX,
+        readyX = readyX,
+        buffX = buffX,
+        pullX = readyX,
+        barWidth = buffX + buttonSize + rightMargin,
+        barHeight = margin + buttonSize + 2 + buttonSize + margin,
+        markerDotSize = math.max(8, math.floor(12 * buttonSize / 22 + 0.5)),
+    }
+end
+
 local function CreateBarButton(parent, x, y, width, height, func, texture, texCoords, text, macrotext, tooltipText, name)
     local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate, BackdropTemplate")
     b:SetSize(width or 22, height or 22)
@@ -112,7 +156,7 @@ end
 
 -- 3. Frame Erstellung (Raidlead Bar)
 local rlBar = CreateFrame("Frame", "KART_RaidleadBar", UIParent, "BackdropTemplate")
-rlBar:SetSize(275, 56)
+KART.RaidleadBar = rlBar
 rlBar:SetPoint("TOP", UIParent, "TOP", 0, -50)
 -- Start hidden and let KART.UpdateRaidleadBarVisibility decide. A frame is shown by default, and
 -- that function early-returns while in combat — so a /reload mid-pull (common) would otherwise
@@ -125,11 +169,10 @@ rlBar:SetMovable(true)
 rlBar:SetClampedToScreen(true)
 rlBar:EnableMouse(true)
 rlBar:RegisterForDrag("LeftButton")
-KART.RaidleadBar = rlBar
 if rlBar.SetToplevel then rlBar:SetToplevel(true) end
 
 rlBar:SetScript("OnDragStart", function(self)
-    if not KART_Settings.lockRaidleadBar then self:StartMoving() end
+    if not KART_Settings.lockRaidleadBar or KART.IsEditModeActive() then self:StartMoving() end
 end) -- KART_Settings ist eine SavedVariable und daher global zugänglich
 rlBar:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
@@ -145,9 +188,44 @@ KART.UI:SetPixelBackdrop(rlBar, {
     edgeFile = "Interface\\Buttons\\WHITE8X8",
     edgeSize = 1,
 })
-rlBar:SetBackdropColor(0, 0, 0, 0.8)
-rlBar:SetBackdropBorderColor(0, 0, 0, 1)
 KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
+
+function KART.ApplyRaidleadBarLook()
+    if InCombatLockdown() then return end
+    local s = KART_Settings or {}
+    local metrics = KART.RaidleadBarLayoutMetrics(s.rlBarButtonSize or 22)
+    local size = metrics.buttonSize
+
+    rlBar:SetSize(metrics.barWidth, metrics.barHeight)
+    rlBar:SetScale((s.rlBarScale or 100) / 100)
+    rlBar:SetAlpha(math.max(0.2, (s.rlBarAlpha or 100) / 100))
+    rlBar:SetBackdropColor(0, 0, 0, math.max(0.1, (s.rlBarBgAlpha or 80) / 100))
+    rlBar:SetBackdropBorderColor(0, 0, 0, 1)
+
+    for i, btn in ipairs(rlRaidTargetButtons) do
+        btn:SetSize(size, size)
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", rlBar, "TOPLEFT", metrics.markerX(i), metrics.row1Y)
+        RepositionIcon(btn, size)
+    end
+    for i, btn in ipairs(rlWorldMarkerButtons) do
+        btn:SetSize(size, size)
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", rlBar, "TOPLEFT", metrics.markerX(i), metrics.row2Y)
+        if btn.marker then btn.marker:SetSize(metrics.markerDotSize, metrics.markerDotSize) end
+    end
+    local function place(btn, x, y)
+        if not btn then return end
+        btn:SetSize(size, size)
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", rlBar, "TOPLEFT", x, y)
+        RepositionIcon(btn, size)
+    end
+    place(rlClearWmBtn, metrics.clearWmX, metrics.row2Y)
+    place(rlReadyBtn, metrics.readyX, metrics.row1Y)
+    place(rlBuffBtn, metrics.buffX, metrics.row1Y)
+    place(KART.PullBtn, metrics.pullX, metrics.row2Y)
+end
 
 -- Own stratum, not the window-layer slider. Sharing RegisterStrataFrame made the toolbar follow
 -- every KART window, which is how it sat on the map. Map canvas is MEDIUM+toplevel, so HIGH/MEDIUM
@@ -190,6 +268,8 @@ function KART.UpdateRaidleadBarVisibility()
         KART.ApplyRaidleadBarStrata()
         return
     end
+
+    KART.ApplyRaidleadBarLook()
 
     rlBar:ClearAllPoints()
     rlBar:SetPoint(KART_Settings.rlBarPoint or "TOP", UIParent, KART_Settings.rlBarRelativePoint or "TOP", KART_Settings.rlBarX or 0, KART_Settings.rlBarY or -50)
@@ -252,22 +332,24 @@ function KART.ApplyKeybinds()
 end
 
 -- 5. Buttons initialisieren
+local initMetrics = KART.RaidleadBarLayoutMetrics(22)
 -- Zeile 1: Raid Target Marker. Left-click places; right-click clears the target's mark.
 for i = 1, 8 do
     local macro = ("/target [@target,noexists,btn:1] player\n/tm [btn:1] %d\n/tm [btn:2] 0"):format(i)
-    CreateBarButton(rlBar, 5 + (i-1)*24, -5, 22, 22, nil, "Interface\\TargetingFrame\\UI-RaidTargetingIcons", iconCoords[i], nil, macro)
+    rlRaidTargetButtons[i] = CreateBarButton(rlBar, initMetrics.markerX(i), initMetrics.row1Y, 22, 22, nil, "Interface\\TargetingFrame\\UI-RaidTargetingIcons", iconCoords[i], nil, macro)
 end
 
 -- Zeile 2: World Marker. Left-click places; right-click clears that same marker.
 for i = 1, 8 do
     local wmID = tmToWmMap[i]
     local macro = ("/wm [btn:1] %d\n/cwm [btn:2] %d"):format(wmID, wmID)
-    local b = CreateBarButton(rlBar, 5 + (i-1)*24, -29, 22, 22, nil, nil, nil, nil, macro)
+    local b = CreateBarButton(rlBar, initMetrics.markerX(i), initMetrics.row2Y, 22, 22, nil, nil, nil, nil, macro)
     local color = markerColors[i]
     b.marker = b:CreateTexture(nil, "OVERLAY")
     b.marker:SetColorTexture(color[1], color[2], color[3], 0.9)
-    b.marker:SetSize(12, 12)
+    b.marker:SetSize(initMetrics.markerDotSize, initMetrics.markerDotSize)
     b.marker:SetPoint("CENTER")
+    rlWorldMarkerButtons[i] = b
 end
 
 -- Clear each world marker by number: "/cwm all" only works on English clients
@@ -275,11 +357,11 @@ end
 -- ClearRaidMarker() is protected, so it must stay a secure macro.
 local clearWmMacro = {}
 for i = 1, 8 do clearWmMacro[i] = "/cwm " .. i end
-CreateBarButton(rlBar, 5 + 8*24, -29, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, table.concat(clearWmMacro, "\n"), L.RL_CLEAR_WM, "KART_RL_ClearWorldMarkersBtn")
-CreateBarButton(rlBar, 225, -5, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK, "KART_RL_ReadyCheckBtn")
+rlClearWmBtn = CreateBarButton(rlBar, initMetrics.clearWmX, initMetrics.row2Y, 22, 22, nil, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", nil, nil, table.concat(clearWmMacro, "\n"), L.RL_CLEAR_WM, "KART_RL_ClearWorldMarkersBtn")
+rlReadyBtn = CreateBarButton(rlBar, initMetrics.readyX, initMetrics.row1Y, 22, 22, nil, "Interface\\RAIDFRAME\\ReadyCheck-Ready", nil, nil, "/readycheck", L.RL_READYCHECK, "KART_RL_ReadyCheckBtn")
 
 -- Buff-Checker Toggle Button
-CreateBarButton(rlBar, 249, -5, 22, 22, function()
+rlBuffBtn = CreateBarButton(rlBar, initMetrics.buffX, initMetrics.row1Y, 22, 22, function()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
         KART.BuffCheckFrame:Hide()
     else
@@ -292,13 +374,15 @@ end, 135932, nil, nil, nil, L.RL_BUFFCHECK, "KART_RL_BuffCheckToggleBtn") -- Ico
 -- native Blizzard countdown (which those addons display too). Reading the duration
 -- at click time also removes the need to rewrite a macrotext attribute on settings
 -- changes (which was blocked during combat lockdown). Right-click cancels.
-KART.PullBtn = CreateBarButton(rlBar, 225, -29, 22, 22, function(_, button)
+KART.PullBtn = CreateBarButton(rlBar, initMetrics.pullX, initMetrics.row2Y, 22, 22, function(_, button)
     if button == "RightButton" then
         C_PartyInfo.DoCountdown(0)
     else
         C_PartyInfo.DoCountdown(KART_Settings and KART_Settings.pullTimerDuration or 10)
     end
 end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER, "KART_RL_PullTimerBtn")
+
+KART.ApplyRaidleadBarLook()
 
 -- Bar buttons are created at file load with the pre-locale (English) tooltip strings;
 -- re-point them at the selected language once it's known.

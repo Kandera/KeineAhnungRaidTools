@@ -103,6 +103,38 @@ mainFrame.versionText = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisa
 mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 12)
 mainFrame.versionText:SetText("v" .. (KART.Version or ""))
 
+-- Footer links sit above the version string; WoW cannot open a browser, so click copies the URL.
+KART.FooterLinks = {}
+do
+    local linkDefs = {
+        { localeKey = "LINK_CURSEFORGE", url = "https://www.curseforge.com/wow/addons/keine-ahnung-raid-tools" },
+        { localeKey = "LINK_WAGO", url = "https://addons.wago.io/addons/qn53zokb" },
+        { localeKey = "LINK_GITHUB", url = "https://github.com/Kandera/KeineAhnungRaidTools" },
+    }
+    local prev
+    for i, def in ipairs(linkDefs) do
+        local btn = CreateFrame("Button", nil, clickArea)
+        btn:SetHeight(12)
+        btn.url = def.url
+        btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        btn.text:SetPoint("LEFT", btn, "LEFT", 0, 0)
+        btn.text:SetText(L[def.localeKey])
+        btn.text:SetTextColor(0.55, 0.55, 0.55)
+        KART.UI:RegisterLabel(btn.text)
+        btn:SetWidth(btn.text:GetStringWidth() + 2)
+        btn:SetScript("OnClick", function(self) KART.CopyLink(self.url) end)
+        btn:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 1, 1) end)
+        btn:SetScript("OnLeave", function(self) self.text:SetTextColor(0.55, 0.55, 0.55) end)
+        if prev then
+            btn:SetPoint("LEFT", prev, "RIGHT", 6, 0)
+        else
+            btn:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 28)
+        end
+        prev = btn
+        KART.FooterLinks[i] = btn
+    end
+end
+
 -- Per-tab header titles live OUTSIDE the scroll frame, fixed in the artwork's header zone
 -- (between the window top and the baked divider line at ~-48 from clickArea top). The scroll
 -- viewport starts below that line, so scrolled content can never slide up over the header.
@@ -124,11 +156,31 @@ KART.BtnPromote = KART.UI:CreateTabButton(clickArea, L.TAB_PROMOTE)
 KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 12, -75)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
-KART.BtnRaidlead = KART.UI:CreateTabButton(clickArea, L.TAB_RAIDLEAD)
-KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
+-- Edit Mode is session-only (not SavedVariables): while on, module frames ignore their lock
+-- settings for dragging and use town-unlock visibility so they can be placed.
+KART.BtnEditMode = KART.UI:CreateModernButton(clickArea, L.BTN_EDIT_MODE_OFF, L.DESC_EDIT_MODE)
+KART.BtnEditMode:SetSize(176, 22)
+KART.BtnEditMode:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
+KART.BtnEditMode:SetScript("OnClick", function()
+    KART.SetEditModeActive(not KART.IsEditModeActive())
+end)
+function KART.RefreshEditModeToggle()
+    if not KART.BtnEditMode then return end
+    local on = KART.IsEditModeActive()
+    KART.BtnEditMode.text:SetText(on and L.BTN_EDIT_MODE_ON or L.BTN_EDIT_MODE_OFF)
+    if on then
+        local r, g, b = KART.UI:AccentColor()
+        KART.BtnEditMode:SetBackdropColor(r, g, b, 0.35)
+    else
+        KART.BtnEditMode:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    end
+end
+
+KART.BtnRaidlead = KART.UI:CreateTabButton(clickArea, L.TAB_RAIDLEAD, { moduleChip = true })
+KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnEditMode, "BOTTOMLEFT", 0, -5)
 KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
-KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK)
+KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK, { moduleChip = true })
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
@@ -139,13 +191,36 @@ KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(5) end)
 -- The Settings tab must always be the last entry in the sidebar. When adding a new tab
 -- button, anchor it above this one (i.e. insert it between the previous last tab and
 -- Settings, and re-anchor Settings to the new button).
-KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK)
+KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK, { moduleChip = true })
 KART.BtnCoTank:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnCoTank:SetScript("OnClick", function() KART.ShowTab(6) end)
 
+KART.SidebarSystemHeader = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+KART.SidebarSystemHeader:SetPoint("TOPLEFT", KART.BtnCoTank, "BOTTOMLEFT", 2, -10)
+KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM)
+KART.UI:RegisterLabel(KART.SidebarSystemHeader)
+
 KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS)
-KART.BtnSettings:SetPoint("TOPLEFT", KART.BtnCoTank, "BOTTOMLEFT", 0, -5)
+KART.BtnSettings:SetPoint("TOPLEFT", KART.SidebarSystemHeader, "BOTTOMLEFT", -2, -4)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
+
+KART.BtnChangelog = KART.UI:CreateModernButton(clickArea, L.BTN_CHANGELOG, L.DESC_CHANGELOG)
+KART.BtnChangelog:SetSize(176, 22)
+KART.BtnChangelog:SetPoint("TOPLEFT", KART.BtnSettings, "BOTTOMLEFT", 0, -5)
+KART.BtnChangelog:SetScript("OnClick", function() KART.ShowChangelogPopup() end)
+
+KART.ModuleChipKeys = {
+    [KART.BtnRaidlead] = "showRaidleadBar",
+    [KART.BtnBuffCheck] = "bcModuleEnabled",
+    [KART.BtnCoTank] = "ctModuleEnabled",
+}
+function KART.RefreshModuleChips()
+    local s = KART_Settings
+    if not s or not KART.ModuleChipKeys then return end
+    for btn, key in pairs(KART.ModuleChipKeys) do
+        if btn.SetModuleChipOn then btn:SetModuleChipOn(s[key] == true) end
+    end
+end
 
 -- 4. Content area (ScrollFrame), right of the baked sidebar divider (200px).
 -- The viewport starts at -52, just below the artwork's baked divider line (~-48), so
@@ -250,6 +325,7 @@ KART.CbActivate = KART.UI:CreateSettingsCheckbox(rlCard, {
     store = SettingsStore, key = "showRaidleadBar", y = -20,
     onChanged = function()
         KART.UpdateRaidleadBarVisibility() -- Funktion aus RaidleadBar.lua
+        KART.RefreshModuleChips()
     end,
     tooltip = L.DESC_RL_ACTIVATE,
 })
@@ -320,9 +396,40 @@ KART.CbRlBarYieldMap = KART.UI:CreateSettingsCheckbox(rlCard, {
     tooltip = L.DESC_RL_YIELD_MAP,
 })
 
+local rlLookCard = KART.UI:CreateCard(KART.RaidleadPanel)
+rlLookCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
+rlLookCard:SetSize(500, 130)
+
+KART.SldRlBarScale = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarScaleSlider", label = L.SET_RL_SCALE,
+    min = 50, max = 150, store = SettingsStore, key = "rlBarScale", y = -20,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_SCALE,
+})
+
+KART.SldRlBarButtonSize = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarButtonSizeSlider", label = L.SET_RL_BUTTON_SIZE,
+    min = 16, max = 32, store = SettingsStore, key = "rlBarButtonSize", y = -60,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_BUTTON_SIZE,
+})
+
+KART.SldRlBarAlpha = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarAlphaSlider", label = L.SET_RL_ALPHA,
+    min = 20, max = 100, store = SettingsStore, key = "rlBarAlpha", y = -100,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_ALPHA,
+})
+
 -- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
 local kbCard = KART.UI:CreateCard(KART.RaidleadPanel)
-kbCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
+kbCard:SetPoint("TOPLEFT", rlLookCard, "BOTTOMLEFT", 0, -16)
 kbCard:SetSize(500, 168)
 
 local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -460,6 +567,7 @@ KART.CbBcModuleEnabled = KART.UI:CreateSettingsCheckbox(bcCard, {
     name = "KART_BcModuleEnabled", label = L.SET_BC_MODULE_ENABLED,
     store = SettingsStore, key = "bcModuleEnabled", y = -20,
     tooltip = L.DESC_BC_MODULE_ENABLED,
+    onChanged = function() KART.RefreshModuleChips() end,
 })
 KART.CbBcModuleEnabled.text:SetWidth(190)
 KART.CbBcModuleEnabled.text:SetJustifyH("LEFT")
@@ -909,6 +1017,7 @@ local function CtEnable()
         and KART.CT and KART.CT.HostPreview then
         KART.CT.HostPreview()
     end
+    KART.RefreshModuleChips()
 end
 local function CtLayoutChanged()
     if KART.CT and KART.CT.ApplyLayout then KART.CT.ApplyLayout() end
@@ -2003,6 +2112,86 @@ function KART.JumpToSearchResult(entry)
     KART.HideSearchPopout()
 end
 
+-- In-game changelog panel: short summary from KART.InGameChangelog (Utils.lua). Full history is CHANGELOG.md.
+function KART.ShowChangelogPopup()
+    if not KART.changelogPopup then
+        local f = CreateFrame("Frame", "KART_ChangelogPopup", UIParent, "BackdropTemplate")
+        f:SetSize(420, 360)
+        f:SetPoint("CENTER")
+        KART.UI:RegisterStrataFrame(f, true)
+        KART.UI:ApplyPopupArtwork(f)
+        KART.UI:SetPixelBackdrop(f, {
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        f:SetBackdropColor(0.03, 0.05, 0.08, 0.95)
+        f:SetBackdropBorderColor(0, 0, 0, 1)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetClampedToScreen(true)
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        KART.RegisterEscapeFrame(f)
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        f.title:SetPoint("TOP", 0, -16)
+        f.title:SetText(L.LABEL_CHANGELOG)
+
+        local closeBtn = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
+        closeBtn:SetPoint("TOPRIGHT", -8, -8)
+
+        local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -44)
+        scrollFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -28, 16)
+        KART.UI:StripScrollbarTextures(scrollFrame)
+
+        f.scrollChild = CreateFrame("Frame", nil, scrollFrame)
+        f.scrollChild:SetWidth(360)
+        scrollFrame:SetScrollChild(f.scrollChild)
+        f.scrollFrame = scrollFrame
+        KART.changelogPopup = f
+    end
+
+    local f = KART.changelogPopup
+    f.title:SetText(L.LABEL_CHANGELOG)
+
+    if f.scrollChild then
+        f.scrollChild:Hide()
+        f.scrollChild:SetParent(nil)
+    end
+    local child = CreateFrame("Frame", nil, f.scrollFrame)
+    child:SetWidth(360)
+    f.scrollFrame:SetScrollChild(child)
+    f.scrollChild = child
+
+    local y = -4
+    for _, block in ipairs(KART.InGameChangelog or {}) do
+        local header = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, y)
+        header:SetWidth(360)
+        header:SetJustifyH("LEFT")
+        header:SetText(block.version)
+        KART.UI:RegisterLabel(header)
+        y = y - header:GetStringHeight() - 6
+        for _, line in ipairs(block.entries or {}) do
+            local body = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            body:SetPoint("TOPLEFT", child, "TOPLEFT", 8, y)
+            body:SetWidth(352)
+            body:SetJustifyH("LEFT")
+            body:SetWordWrap(true)
+            body:SetText(line)
+            KART.UI:RegisterLabel(body)
+            y = y - body:GetStringHeight() - 4
+        end
+        y = y - 8
+    end
+    child:SetHeight(math.abs(y) + 8)
+    f.scrollFrame:SetVerticalScroll(0)
+    f:Show()
+end
+
 -- Re-applies every static text in this file from KART.L once the saved language is known
 -- (see KART.UI:RegisterLocaleRefresher in Utils.lua). Dynamic texts (BtnFont/BtnLang/BtnProfile
 -- labels, keybind button captions, strata slider value) are handled by KART.SyncSettingsToUI.
@@ -2016,6 +2205,19 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnCoTank.text:SetText(L.TAB_COTANK)
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
+    if KART.SidebarSystemHeader then KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM) end
+    if KART.BtnChangelog then
+        KART.BtnChangelog.text:SetText(L.BTN_CHANGELOG)
+        KART.BtnChangelog.tooltipText = L.DESC_CHANGELOG
+    end
+    if KART.BtnEditMode then KART.RefreshEditModeToggle() end
+    if KART.FooterLinks then
+        local keys = { "LINK_CURSEFORGE", "LINK_WAGO", "LINK_GITHUB" }
+        for i, btn in ipairs(KART.FooterLinks) do
+            if keys[i] then btn.text:SetText(L[keys[i]]) end
+        end
+    end
+    KART.RefreshModuleChips()
     KART.TabTitles[1]:SetText(L.TAB_PROMOTE)
     KART.TabTitles[2]:SetText(L.LABEL_RAIDLEAD_TOOLS)
     KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
@@ -2035,6 +2237,18 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.SldRlBarStrata.title:SetText(L.SET_RL_STRATA) KART.SldRlBarStrata.tooltipText = L.DESC_RL_STRATA
     KART.CbRlBarYieldMap.text:SetText(L.SET_RL_YIELD_MAP)
     KART.CbRlBarYieldMap.tooltipText = L.DESC_RL_YIELD_MAP
+    if KART.SldRlBarScale then
+        KART.SldRlBarScale.title:SetText(L.SET_RL_SCALE)
+        KART.SldRlBarScale.tooltipText = L.DESC_RL_SCALE
+    end
+    if KART.SldRlBarButtonSize then
+        KART.SldRlBarButtonSize.title:SetText(L.SET_RL_BUTTON_SIZE)
+        KART.SldRlBarButtonSize.tooltipText = L.DESC_RL_BUTTON_SIZE
+    end
+    if KART.SldRlBarAlpha then
+        KART.SldRlBarAlpha.title:SetText(L.SET_RL_ALPHA)
+        KART.SldRlBarAlpha.tooltipText = L.DESC_RL_ALPHA
+    end
     kbTitle:SetText(L.LABEL_RL_KEYBINDS)
     local kbKeyByAction = {
         readyCheck = "KB_READYCHECK", clearWorldMarkers = "KB_CLEARWM",

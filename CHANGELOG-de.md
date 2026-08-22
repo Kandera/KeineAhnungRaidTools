@@ -10,6 +10,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Invite-Kanal-Chips** für Flüstern, Battle.net, Gilde und Offizierschat.
 - **Auto-Antwort per Flüstern**, wenn ein Stichwort passte, aber die Einladung nicht rausging.
+- **Modul-Chips und Bearbeiten-Modus in der Sidebar** zum Platzieren von Modul-Fenstern in der Stadt ohne gespeicherte Sperren zu ändern.
+- **Changelog-Panel im Spiel** und Footer-Links für CurseForge, Wago und GitHub.
+- **Look-Einstellungen für die Raidlead-Leiste** für Skalierung, Button-Größe und Deckkraft; die Leiste im Spiel ist die Vorschau.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
 - **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt; Look, Text, Auren und Fade sind einstellbar.
@@ -17,6 +20,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Geändert
 - **Auto-Invite-Begriffe gelten für alle Kanäle.** Gilde und Offizier sind eigene Chips.
+- **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
