@@ -178,10 +178,10 @@ function CT.Enable()
                 CT.Refresh()
             end
         end)
-        for _, event in ipairs(CT_EVENTS) do
-            f:RegisterEvent(event)
-        end
         CT.events = f
+    end
+    for _, event in ipairs(CT_EVENTS) do
+        CT.events:RegisterEvent(event)
     end
     CT.Refresh()
 end

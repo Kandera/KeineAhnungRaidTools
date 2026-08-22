@@ -201,3 +201,23 @@ do
     T.eq(KART.CT.row.shown, false, "disable hides the row")
     T.is_nil(KART.CT.pendingUnit, "disable clears pending unit")
 end
+
+local function CountCtEvents(frame)
+    local n = 0
+    for _, reg in ipairs(KARTTEST.eventFrames) do
+        if reg.frame == frame then n = n + 1 end
+    end
+    return n
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    RaidTwoTanks()
+    KART.CT.Enable()
+    T.eq(CountCtEvents(KART.CT.events), 5, "first enable registers five events")
+    KART.CT.Disable()
+    T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters all events")
+    KART.CT.Enable()
+    T.eq(CountCtEvents(KART.CT.events), 5, "second enable re-registers five events")
+end
