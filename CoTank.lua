@@ -106,6 +106,86 @@ function CT.OnRegenEnabled()
     end
 end
 
+-- ===== Event wiring -----------------------------------------------------------------------
+local CT_EVENTS = {
+    "GROUP_ROSTER_UPDATE",
+    "PLAYER_ENTERING_WORLD",
+    "PLAYER_REGEN_ENABLED",
+    "PLAYER_ROLES_ASSIGNED",
+    "PLAYER_TARGET_CHANGED",
+}
+
+function CT.OnRoster()
+    CT.Refresh()
+end
+
+function CT.OnInstance()
+    CT.Refresh()
+end
+
+function CT.EnsureRow()
+    if CT.row then return CT.row end
+    CT.row = {
+        shown = false,
+        Hide = function(self) self.shown = false end,
+        Show = function(self) self.shown = true end,
+        SetAttribute = function() end,
+        SetAlpha = function() end,
+    }
+    return CT.row
+end
+
+function CT.Refresh()
+    if not CT.ShouldShow() then
+        if CT.row then
+            CT.row:Hide()
+        end
+        return
+    end
+    local row = CT.EnsureRow()
+    CT.ApplySecureUnit(row, CT.PickCoTank() or nil)
+    row:Show()
+end
+
+function CT.Disable()
+    if CT.events then
+        for _, event in ipairs(CT_EVENTS) do
+            CT.events:UnregisterEvent(event)
+        end
+    end
+    if CT.row then
+        CT.row:Hide()
+    end
+    CT.pendingUnit = nil
+end
+
+function CT.Enable()
+    if KART_Settings.ctModuleEnabled ~= true then
+        CT.Disable()
+        return
+    end
+    if not CT.events then
+        local f = CreateFrame("Frame")
+        f:SetScript("OnEvent", function(_, event)
+            if event == "PLAYER_REGEN_ENABLED" then
+                CT.OnRegenEnabled()
+                CT.Refresh()
+            elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
+                CT.OnRoster()
+            elseif event == "PLAYER_ENTERING_WORLD" then
+                CT.OnInstance()
+            elseif event == "PLAYER_TARGET_CHANGED" then
+                CT.Refresh()
+            end
+        end)
+        for _, event in ipairs(CT_EVENTS) do
+            f:RegisterEvent(event)
+        end
+        CT.events = f
+    end
+    CT.Refresh()
+end
+
 -- ===== Row fade ---------------------------------------------------------------------------
 function CT.RowAlpha(snap, ct)
     if snap.dead or snap.offline then

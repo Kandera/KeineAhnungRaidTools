@@ -10,6 +10,7 @@ do
         "PickCoTank", "ShouldShow", "BlankSnapshot", "FillLiveSnapshot",
         "FillTestSnapshot", "RowAlpha", "SafeTruthy",
         "ApplySecureUnit", "OnRegenEnabled",
+        "Enable", "Disable", "Refresh", "EnsureRow", "OnRoster", "OnInstance",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
@@ -171,4 +172,32 @@ do
     KART.CT.OnRegenEnabled()
     T.eq(calls[1][1], "unit", "after combat the unit attribute is set")
     T.eq(calls[1][2], "raid2", "to the pending token")
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    env.KART_Settings.ctModuleEnabled = false
+    KART.CT.Enable()
+    T.is_nil(KART.CT.events, "disabled module creates no event frame")
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    RaidTwoTanks()
+    KART.CT.Enable()
+    T.truthy(KART.CT.events, "enabled module creates an event frame")
+    T.truthy(KART.CT.row and KART.CT.row.shown, "refresh shows the row when visible")
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    RaidTwoTanks()
+    KART.CT.Enable()
+    KART.CT.pendingUnit = "raid2"
+    KART.CT.Disable()
+    T.eq(KART.CT.row.shown, false, "disable hides the row")
+    T.is_nil(KART.CT.pendingUnit, "disable clears pending unit")
 end
