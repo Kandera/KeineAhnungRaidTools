@@ -244,6 +244,18 @@ KART.L_enUS = {
     SET_CT_AURA_MAX = "Max Icons",
     SET_CT_AURA_SIZE = "Icon Size",
     SET_CT_AURA_SPACING = "Icon Spacing",
+    SET_CT_AURA_ANCHOR = "Strip Anchor",
+    DESC_CT_AURA_ANCHOR = "Which corner of the row the strip grows from.",
+    SET_CT_AURA_GROWTH = "Strip Growth",
+    DESC_CT_AURA_GROWTH = "Direction the strip expands when icons are added.",
+    CT_ANCHOR_TOPLEFT = "Top Left",
+    CT_ANCHOR_TOPRIGHT = "Top Right",
+    CT_ANCHOR_BOTTOMLEFT = "Bottom Left",
+    CT_ANCHOR_BOTTOMRIGHT = "Bottom Right",
+    CT_GROWTH_RIGHT = "Right",
+    CT_GROWTH_LEFT = "Left",
+    CT_GROWTH_UP = "Up",
+    CT_GROWTH_DOWN = "Down",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",

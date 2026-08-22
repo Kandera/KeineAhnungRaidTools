@@ -244,6 +244,18 @@ KART.L_deDE = {
     SET_CT_AURA_MAX = "Max. Symbole",
     SET_CT_AURA_SIZE = "Symbolgröße",
     SET_CT_AURA_SPACING = "Symbolabstand",
+    SET_CT_AURA_ANCHOR = "Leisten-Anker",
+    DESC_CT_AURA_ANCHOR = "Ecke der Zeile, von der die Leiste wächst.",
+    SET_CT_AURA_GROWTH = "Leisten-Richtung",
+    DESC_CT_AURA_GROWTH = "Richtung, in die die Leiste bei neuen Symbolen wächst.",
+    CT_ANCHOR_TOPLEFT = "Oben links",
+    CT_ANCHOR_TOPRIGHT = "Oben rechts",
+    CT_ANCHOR_BOTTOMLEFT = "Unten links",
+    CT_ANCHOR_BOTTOMRIGHT = "Unten rechts",
+    CT_GROWTH_RIGHT = "Rechts",
+    CT_GROWTH_LEFT = "Links",
+    CT_GROWTH_UP = "Oben",
+    CT_GROWTH_DOWN = "Unten",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",

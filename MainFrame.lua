@@ -204,7 +204,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
-    [6] = 850, -- Co-Tank: module card + row card + auras card
+    [6] = 910, -- Co-Tank: module card + row card + auras card (incl. anchor/growth menus)
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -873,7 +873,7 @@ ctModCard:SetSize(500, 120)
 
 KART.CbCtModuleEnabled = KART.UI:CreateSettingsCheckbox(ctModCard, {
     name = "KART_CtModuleEnabled", label = L.SET_CT_MODULE_ENABLED,
-    store = SettingsStore, key = "ctModuleEnabled", y = -20,
+    store = function() return KART_Settings end, key = "ctModuleEnabled", y = -20,
     tooltip = L.DESC_CT_MODULE_ENABLED,
     onChanged = CtEnable,
 })
@@ -964,15 +964,50 @@ local CT_HEALTH_TEXT_L = {
     current = function() return L.CT_HEALTH_TEXT_CURRENT end,
     both = function() return L.CT_HEALTH_TEXT_BOTH end,
 }
+local CT_ANCHOR_L = {
+    TOPLEFT = function() return L.CT_ANCHOR_TOPLEFT end,
+    TOPRIGHT = function() return L.CT_ANCHOR_TOPRIGHT end,
+    BOTTOMLEFT = function() return L.CT_ANCHOR_BOTTOMLEFT end,
+    BOTTOMRIGHT = function() return L.CT_ANCHOR_BOTTOMRIGHT end,
+}
+local CT_GROWTH_L = {
+    right = function() return L.CT_GROWTH_RIGHT end,
+    left = function() return L.CT_GROWTH_LEFT end,
+    up = function() return L.CT_GROWTH_UP end,
+    down = function() return L.CT_GROWTH_DOWN end,
+}
+local CT_ANCHOR_OPTS = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
+local CT_GROWTH_OPTS = { "right", "left", "up", "down" }
+
 local function RefreshCtHealthColorBtn()
+    if not KART_Settings then return end
     local mode = CtStore().healthColor or "class"
     local labelFn = CT_HEALTH_COLOR_L[mode]
     KART.BtnCtHealthColor.text:SetText(L.SET_CT_HEALTH_COLOR .. ": " .. (labelFn and labelFn() or mode))
 end
 local function RefreshCtHealthTextBtn()
+    if not KART_Settings then return end
     local mode = CtStore().healthText or "both"
     local labelFn = CT_HEALTH_TEXT_L[mode]
     KART.BtnCtHealthText.text:SetText(L.SET_CT_HEALTH_TEXT .. ": " .. (labelFn and labelFn() or mode))
+end
+local function RefreshCtStripEnumBtn(btn, title, storeFn, key, labelMap, default)
+    if not KART_Settings then return end
+    local mode = storeFn()[key] or default
+    local labelFn = labelMap[mode]
+    btn.text:SetText(title .. ": " .. (labelFn and labelFn() or mode))
+end
+local function RefreshCtDebuffAnchorBtn()
+    RefreshCtStripEnumBtn(KART.BtnCtDebuffAnchor, L.SET_CT_AURA_ANCHOR, CtDebuffs, "anchor", CT_ANCHOR_L, "TOPLEFT")
+end
+local function RefreshCtDebuffGrowthBtn()
+    RefreshCtStripEnumBtn(KART.BtnCtDebuffGrowth, L.SET_CT_AURA_GROWTH, CtDebuffs, "growth", CT_GROWTH_L, "right")
+end
+local function RefreshCtBuffAnchorBtn()
+    RefreshCtStripEnumBtn(KART.BtnCtBuffAnchor, L.SET_CT_AURA_ANCHOR, CtBuffs, "anchor", CT_ANCHOR_L, "BOTTOMRIGHT")
+end
+local function RefreshCtBuffGrowthBtn()
+    RefreshCtStripEnumBtn(KART.BtnCtBuffGrowth, L.SET_CT_AURA_GROWTH, CtBuffs, "growth", CT_GROWTH_L, "left")
 end
 
 KART.BtnCtHealthColor = KART.UI:CreateModernButton(ctRowCard, L.SET_CT_HEALTH_COLOR, L.DESC_CT_HEALTH_COLOR)
@@ -990,7 +1025,6 @@ KART.BtnCtHealthColor:SetScript("OnClick", function(self)
         end
     end)
 end)
-RefreshCtHealthColorBtn()
 
 KART.BtnCtHealthText = KART.UI:CreateModernButton(ctRowCard, L.SET_CT_HEALTH_TEXT, L.DESC_CT_HEALTH_TEXT)
 KART.BtnCtHealthText:SetPoint("TOPLEFT", KART.BtnCtHealthColor, "BOTTOMLEFT", 0, -10)
@@ -1007,11 +1041,10 @@ KART.BtnCtHealthText:SetScript("OnClick", function(self)
         end
     end)
 end)
-RefreshCtHealthTextBtn()
 
 local ctAuraCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctAuraCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
-ctAuraCard:SetSize(500, 320)
+ctAuraCard:SetSize(500, 380)
 
 local ctDebuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctDebuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -14)
@@ -1044,36 +1077,100 @@ KART.SldCtDebuffSpacing = KART.UI:CreateSettingsSlider(ctAuraCard, {
 KART.SldCtDebuffSpacing:ClearAllPoints()
 KART.SldCtDebuffSpacing:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -96)
 
+KART.BtnCtDebuffAnchor = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
+KART.BtnCtDebuffAnchor:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -120)
+KART.BtnCtDebuffAnchor:SetSize(220, 22)
+KART.BtnCtDebuffAnchor:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_AURA_ANCHOR)
+        for _, opt in ipairs(CT_ANCHOR_OPTS) do
+            rootDescription:CreateButton(CT_ANCHOR_L[opt](), function()
+                CtDebuffs().anchor = opt
+                RefreshCtDebuffAnchorBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
+
+KART.BtnCtDebuffGrowth = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
+KART.BtnCtDebuffGrowth:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -120)
+KART.BtnCtDebuffGrowth:SetSize(220, 22)
+KART.BtnCtDebuffGrowth:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_AURA_GROWTH)
+        for _, opt in ipairs(CT_GROWTH_OPTS) do
+            rootDescription:CreateButton(CT_GROWTH_L[opt](), function()
+                CtDebuffs().growth = opt
+                RefreshCtDebuffGrowthBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
+
 local ctBuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-ctBuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -134)
+ctBuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -164)
 ctBuffTitle:SetText(L.LABEL_CT_BUFFS)
 KART.UI:RegisterLabel(ctBuffTitle)
 
 KART.CbCtBuffShow = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
     name = "KART_CtBuffShow", label = L.SET_CT_AURA_SHOW,
-    store = CtBuffs, key = "show", y = -160,
+    store = CtBuffs, key = "show", y = -190,
     onChanged = CtRefresh,
 })
 KART.SldCtBuffMax = KART.UI:CreateSettingsSlider(ctAuraCard, {
     name = "KART_CtBuffMaxSlider", label = L.SET_CT_AURA_MAX,
-    min = 1, max = 16, store = CtBuffs, key = "max", y = -160,
+    min = 1, max = 16, store = CtBuffs, key = "max", y = -190,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtBuffMax:ClearAllPoints()
-KART.SldCtBuffMax:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -176)
+KART.SldCtBuffMax:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -206)
 
 KART.SldCtBuffSize = KART.UI:CreateSettingsSlider(ctAuraCard, {
     name = "KART_CtBuffSizeSlider", label = L.SET_CT_AURA_SIZE,
-    min = 12, max = 40, store = CtBuffs, key = "size", y = -200,
+    min = 12, max = 40, store = CtBuffs, key = "size", y = -230,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtBuffSpacing = KART.UI:CreateSettingsSlider(ctAuraCard, {
     name = "KART_CtBuffSpacingSlider", label = L.SET_CT_AURA_SPACING,
-    min = 0, max = 8, store = CtBuffs, key = "spacing", y = -200,
+    min = 0, max = 8, store = CtBuffs, key = "spacing", y = -230,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtBuffSpacing:ClearAllPoints()
-KART.SldCtBuffSpacing:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -216)
+KART.SldCtBuffSpacing:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -246)
+
+KART.BtnCtBuffAnchor = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
+KART.BtnCtBuffAnchor:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -270)
+KART.BtnCtBuffAnchor:SetSize(220, 22)
+KART.BtnCtBuffAnchor:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_AURA_ANCHOR)
+        for _, opt in ipairs(CT_ANCHOR_OPTS) do
+            rootDescription:CreateButton(CT_ANCHOR_L[opt](), function()
+                CtBuffs().anchor = opt
+                RefreshCtBuffAnchorBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
+
+KART.BtnCtBuffGrowth = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
+KART.BtnCtBuffGrowth:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -270)
+KART.BtnCtBuffGrowth:SetSize(220, 22)
+KART.BtnCtBuffGrowth:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_AURA_GROWTH)
+        for _, opt in ipairs(CT_GROWTH_OPTS) do
+            rootDescription:CreateButton(CT_GROWTH_L[opt](), function()
+                CtBuffs().growth = opt
+                RefreshCtBuffGrowthBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
 
 -- 9. Close button: invisible hit area over the X baked into the artwork.
 -- HIGHLIGHT-layer texture shows automatically on hover, no scripts needed.
@@ -1307,10 +1404,18 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.SldCtDebuffMax.title:SetText(L.SET_CT_AURA_MAX)
     KART.SldCtDebuffSize.title:SetText(L.SET_CT_AURA_SIZE)
     KART.SldCtDebuffSpacing.title:SetText(L.SET_CT_AURA_SPACING)
+    KART.BtnCtDebuffAnchor.tooltipText = L.DESC_CT_AURA_ANCHOR
+    KART.BtnCtDebuffGrowth.tooltipText = L.DESC_CT_AURA_GROWTH
+    RefreshCtDebuffAnchorBtn()
+    RefreshCtDebuffGrowthBtn()
     KART.CbCtBuffShow.text:SetText(L.SET_CT_AURA_SHOW)
     KART.SldCtBuffMax.title:SetText(L.SET_CT_AURA_MAX)
     KART.SldCtBuffSize.title:SetText(L.SET_CT_AURA_SIZE)
     KART.SldCtBuffSpacing.title:SetText(L.SET_CT_AURA_SPACING)
+    KART.BtnCtBuffAnchor.tooltipText = L.DESC_CT_AURA_ANCHOR
+    KART.BtnCtBuffGrowth.tooltipText = L.DESC_CT_AURA_GROWTH
+    RefreshCtBuffAnchorBtn()
+    RefreshCtBuffGrowthBtn()
 
     -- Automation tab
     promLabel:SetText(L.LABEL_PROMOTE_NAMES)
