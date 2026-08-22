@@ -16,6 +16,12 @@ local KAUtil = LibStub("KAUtil-1.0")
 local env = setmetatable({}, { __index = _G })
 env.KART_Settings = { inviteKeywords = "inv;invite", autoConvertToRaid = false }
 
+env.KART_L = {
+    INVITE_REPLY_NOT_LEADER = "not leader",
+    INVITE_REPLY_FULL = "full",
+    INVITE_REPLY_COMBAT = "combat",
+}
+
 local invited = {}
 local converted = false
 local confirmed = {}
@@ -32,6 +38,7 @@ do
     setfenv(chunk, env)
     chunk("KeineAhnungRaidTools", KART)
 end
+KART.L = env.KART_L
 
 -- Solo, so the "not IsInGroup()" half of the permission check is the live one. Set explicitly
 -- rather than assumed: whatever roster a previous test file installed is still there, and with one
@@ -197,6 +204,119 @@ do
     env.KART_Settings.autoConvertToRaid = false
     KARTTEST.solo = prevSolo2
     KARTTEST.RestoreRoster(prevRoster)
+end
+
+-- Auto-reply: keyword matched but no invite went out -------------------------------------------
+local function LastWhisper()
+    for i = #KARTTEST.chat, 1, -1 do
+        local line = KARTTEST.chat[i]
+        if line.channel == "WHISPER" then return line end
+    end
+end
+
+do
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevSolo2 = KARTTEST.solo
+    KARTTEST.solo = {}
+    KARTTEST.SetParty({
+        { name = "Corvin", realm = "TarrenMill", leader = true },
+        { name = "Merrit", realm = "TarrenMill" },
+    })
+    KARTTEST.activeUnit = "player"
+    KART.inviteAutoReplyAt = {}
+
+    KARTTEST.ClearChat()
+    Invite("inv", "Kandera-TarrenMill")
+    local reply = LastWhisper()
+    T.truthy(reply, "a keyword from a non-leader gets an auto-reply whisper")
+    T.eq(reply.target, "Kandera-TarrenMill", "and it goes to the sender")
+    T.eq(reply.msg, "not leader", "explaining the player is not the leader")
+    T.eq(#invited, 0, "and nobody is invited")
+
+    KARTTEST.solo = prevSolo2
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
+do
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevSolo2 = KARTTEST.solo
+    KARTTEST.solo = {}
+    env.KART_Settings.autoConvertToRaid = false
+    KARTTEST.SetParty({
+        { name = "Merrit", realm = "TarrenMill" },
+        { name = "Corvin", realm = "TarrenMill" },
+        { name = "Alric", realm = "TarrenMill" },
+        { name = "Sinja", realm = "TarrenMill" },
+        { name = "Bramor", realm = "TarrenMill", leader = true },
+    })
+    KARTTEST.activeUnit = "player"
+    KART.inviteAutoReplyAt = {}
+
+    KARTTEST.ClearChat()
+    Invite("inv", "Kandera-TarrenMill")
+    local reply = LastWhisper()
+    T.truthy(reply, "a 6th keyword with convert off gets an auto-reply")
+    T.eq(reply.msg, "full", "because the group is full and convert is off")
+    T.eq(#invited, 0, "and InviteUnit is not used")
+    T.eq(#confirmed, 0, "nor ConfirmInviteUnit")
+
+    KARTTEST.solo = prevSolo2
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
+do
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevCombat = KARTTEST.inCombat
+    KARTTEST.inCombat = true
+    KARTTEST.activeUnit = "player"
+    KART.inviteAutoReplyAt = {}
+
+    KARTTEST.ClearChat()
+    Invite("inv", "Kandera-TarrenMill")
+    local reply = LastWhisper()
+    T.truthy(reply, "a keyword whisper in combat gets an auto-reply")
+    T.eq(reply.msg, "combat", "because invites are blocked in combat")
+    T.eq(#invited, 0, "and nobody is invited")
+
+    KARTTEST.inCombat = prevCombat
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
+do
+    KART.inviteAutoReplyAt = {}
+    KARTTEST.ClearChat()
+    Invite("inv", "Kandera-TarrenMill")
+    T.eq(#KARTTEST.chat, 0, "a successful solo invite sends no auto-reply")
+end
+
+do
+    KART.inviteAutoReplyAt = {}
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevSolo2 = KARTTEST.solo
+    KARTTEST.solo = {}
+    KARTTEST.SetParty({
+        { name = "Corvin", realm = "TarrenMill", leader = true },
+        { name = "Merrit", realm = "TarrenMill" },
+    })
+    KARTTEST.activeUnit = "player"
+
+    KARTTEST.ClearChat()
+    Invite("inv", "Kandera-TarrenMill")
+    Invite("inv", "Kandera-TarrenMill")
+    T.eq(#KARTTEST.chat, 1, "auto-reply debounces repeated requests from the same name")
+
+    KARTTEST.solo = prevSolo2
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
+do
+    local secret = "inv"
+    KARTTEST.secretValues[secret] = true
+    KARTTEST.ClearChat()
+    local ok = Invite(secret, "Fremd-TarrenMill")
+    KARTTEST.secretValues[secret] = nil
+    T.truthy(ok, "a secret keyword is handled without error")
+    T.eq(#KARTTEST.chat, 0, "and gets no auto-reply either")
 end
 
 -- Leave the harness as found, for whatever file runs next.

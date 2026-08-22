@@ -10,13 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
 - **Co-Tank bar texture and optional gradient** on the Look card, with LibSharedMedia when installed.
+- **Invite channel chips** for whisper, Battle.net, guild and officer chat.
+- **Auto-reply whispers** when a keyword matched but the invite could not go out.
+- **Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.
+- **In-game changelog panel** and footer links for CurseForge, Wago and GitHub.
+- **Raidlead bar look settings** for scale, button size and bar opacity; the live bar is the preview.
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
 - **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it. Test mode and the Co-Tank tab preview it in town; the row has the full look, text, aura and fade settings.
 - **Say when you taunt**, and an on-screen button that asks the other tank to take it. Both off until you turn them on.
 
 ### Changed
-- **Auto-invite keywords are labeled as whispers.** Guild chat stays the extra checkbox.
+- **Auto-invite keywords are labeled for all channels.** Guild and officer are separate chips.
+- **Settings sliders have a number box** to the right of the track.
 
 ### Fixed
 - **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.

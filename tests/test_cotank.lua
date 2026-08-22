@@ -2,6 +2,8 @@ local env = setmetatable({}, { __index = _G })
 env.KART_Settings = {}
 local KART = { L = {} }
 env.KART = KART
+KART.editModeActive = false
+function KART.IsEditModeActive() return KART.editModeActive == true end
 do
     local chunk = assert(loadstring(assert(io.open("CoTank.lua", "r")):read("*a"), "@CoTank.lua"))
     setfenv(chunk, env)
@@ -795,6 +797,39 @@ do
     T.truthy(utils:find("schemaVersion = 1", 1, true), "schemaVersion stays 1")
     T.truthy(utils:find("healthTexture = ", 1, true), "ct defaults include healthTexture")
     T.truthy(utils:find("gradient = false", 1, true), "ct defaults include gradient off")
+end
+
+do
+    RaidTwoTanks()
+    KARTTEST.instance.instanceType = "none"
+    env.KART_Settings.ct.locked = true
+    KART.editModeActive = false
+    T.eq(KART.CT.ShouldShow(), false, "locked hides in town without edit mode")
+    KART.editModeActive = true
+    T.eq(KART.CT.ShouldShow(), true, "edit mode shows in town while locked")
+end
+
+do
+    RaidTwoTanks()
+    env.KART_Settings.ct.locked = true
+    KART.editModeActive = true
+    KART.CT.EnsureRow()
+    local moved = false
+    KART.CT.row.StartMoving = function() moved = true end
+    KART.CT.row:GetScript("OnDragStart")(KART.CT.row)
+    T.truthy(moved, "edit mode allows dragging a locked co-tank row")
+end
+
+do
+    TauntReady({ button = true, locked = true, announce = false, channels = { WHISPER = true } })
+    KARTTEST.instance.instanceType = "none"
+    KART.editModeActive = true
+    T.eq(KART.CT.ShouldShowAskButton(), true, "edit mode shows the ask button in town while locked")
+    local btn = KART.CT.EnsureAskButton()
+    local moved = false
+    btn.StartMoving = function() moved = true end
+    btn:GetScript("OnDragStart")(btn)
+    T.truthy(moved, "edit mode allows dragging a locked ask button")
 end
 
 do
