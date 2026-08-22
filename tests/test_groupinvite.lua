@@ -18,9 +18,11 @@ env.KART_Settings = { inviteKeywords = "inv;invite", autoConvertToRaid = false }
 
 local invited = {}
 local converted = false
+local confirmed = {}
 env.C_PartyInfo = {
     InviteUnit = function(name) invited[#invited + 1] = name end,
     ConvertToRaid = function() converted = true end,
+    ConfirmInviteUnit = function(name) confirmed[#confirmed + 1] = name end,
 }
 
 local KART = {}
@@ -45,6 +47,7 @@ T.truthy(KART.InviteKeywordsTable["inv"], "the keyword table is built from the s
 local function Invite(msg, sender)
     invited = {}
     converted = false
+    confirmed = {}
     local ok, err = pcall(KART.HandleChatInvite, msg, sender, "CHAT_MSG_WHISPER")
     return ok, invited, err
 end
@@ -160,9 +163,11 @@ end
 
 -- Auto-Raid conversion, the whole point of GroupLogic's part of the setting now (2026-08-12) -------
 -- Before, the party converted the instant it hit 5 members (a Core.lua roster-event check, since
--- removed); this branch was practically dead. Now it is the only place autoConvertToRaid acts on an
--- actual chat invite, so it needs its own group of 5 rather than the solo setup above -- which means
--- overriding KARTTEST.solo for the duration, same as the file-level override at the top exists for.
+-- removed); this branch is the only place autoConvertToRaid acts on a chat invite. InviteUnit on a
+-- full party raises CONVERT_TO_RAID instead of inviting, so the 6th seat must go through
+-- ConfirmInviteUnit. The group of 5 is installed here rather than inherited from the solo setup
+-- above -- which means overriding KARTTEST.solo for the duration, same as the file-level override
+-- at the top exists for.
 do
     local prevRoster = KARTTEST.SnapshotRoster()
     local prevSolo2 = KARTTEST.solo
@@ -178,12 +183,15 @@ do
 
     local ok, got = Invite("inv", "Kandera-TarrenMill")
     T.truthy(ok, "a keyword whisper that would be a 6th member is handled without error")
-    T.truthy(converted, "and converts the full party to a raid")
-    T.eq(got[1], "Kandera-TarrenMill", "and still invites the whisperer")
+    T.eq(confirmed[1], "Kandera-TarrenMill",
+        "and ConfirmInviteUnit skips the CONVERT_TO_RAID popup InviteUnit would raise on a full party")
+    T.eq(#got, 0, "InviteUnit is not used for that 6th seat")
+    T.truthy(not converted, "ConvertToRaid is not the path; the confirm-invite converts as part of inviting")
 
     local ok2, got2 = Invite("inv", "Alric-TarrenMill")
     T.truthy(ok2, "a keyword whisper from an existing member is handled without error")
-    T.truthy(not converted, "and does not convert -- that member already has a seat (FIX 1)")
+    T.eq(#confirmed, 0, "and does not confirm-invite -- that member already has a seat (FIX 1)")
+    T.truthy(not converted, "and does not ConvertToRaid either")
     T.eq(got2[1], "Alric-TarrenMill", "though the sender is still invited like any other match")
 
     env.KART_Settings.autoConvertToRaid = false

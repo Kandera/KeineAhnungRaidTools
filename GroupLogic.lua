@@ -74,14 +74,20 @@ function KART.HandleChatInvite(msg, sender, event, ...)
         end
 
         if target then
-            if KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player") and IsInGroup() and not IsInRaid()
-               and GetNumGroupMembers() >= 5 and not InCombatLockdown()
-               -- A whisper from someone already in the group needs no seat -- converting for them
-               -- would turn a full 5-man party into a raid for nothing.
-               and not KAUtil.IsFullNameInGroup(target) then
-                C_PartyInfo.ConvertToRaid()
+            -- InviteUnit on a full 5-man does not invite: it asks the player to convert
+            -- (CONVERT_TO_RAID / "your group is full"). ConvertToRaid() first does not skip that
+            -- confirm, and the group is still a party until the server answers. ConfirmInviteUnit
+            -- is the skip: it converts and invites in one shot, which is what autoConvertToRaid
+            -- already opted into.
+            local convert = KART_Settings.autoConvertToRaid and UnitIsGroupLeader("player")
+                and IsInGroup() and not IsInRaid()
+                and GetNumGroupMembers() >= 5 and not InCombatLockdown()
+                and not KAUtil.IsFullNameInGroup(target)
+            if convert then
+                C_PartyInfo.ConfirmInviteUnit(target)
+            else
+                C_PartyInfo.InviteUnit(target)
             end
-            C_PartyInfo.InviteUnit(target)
         end
     end
 end
