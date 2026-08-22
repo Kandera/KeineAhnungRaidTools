@@ -396,9 +396,40 @@ KART.CbRlBarYieldMap = KART.UI:CreateSettingsCheckbox(rlCard, {
     tooltip = L.DESC_RL_YIELD_MAP,
 })
 
+local rlLookCard = KART.UI:CreateCard(KART.RaidleadPanel)
+rlLookCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
+rlLookCard:SetSize(500, 130)
+
+KART.SldRlBarScale = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarScaleSlider", label = L.SET_RL_SCALE,
+    min = 50, max = 150, store = SettingsStore, key = "rlBarScale", y = -20,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_SCALE,
+})
+
+KART.SldRlBarButtonSize = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarButtonSizeSlider", label = L.SET_RL_BUTTON_SIZE,
+    min = 16, max = 32, store = SettingsStore, key = "rlBarButtonSize", y = -60,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_BUTTON_SIZE,
+})
+
+KART.SldRlBarAlpha = KART.UI:CreateSettingsSlider(rlLookCard, {
+    name = "KART_RlBarAlphaSlider", label = L.SET_RL_ALPHA,
+    min = 20, max = 100, store = SettingsStore, key = "rlBarAlpha", y = -100,
+    onChanged = function()
+        if KART.ApplyRaidleadBarLook then KART.ApplyRaidleadBarLook() end
+    end,
+    tooltip = L.DESC_RL_ALPHA,
+})
+
 -- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
 local kbCard = KART.UI:CreateCard(KART.RaidleadPanel)
-kbCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
+kbCard:SetPoint("TOPLEFT", rlLookCard, "BOTTOMLEFT", 0, -16)
 kbCard:SetSize(500, 168)
 
 local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -2170,6 +2201,18 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.SldRlBarStrata.title:SetText(L.SET_RL_STRATA) KART.SldRlBarStrata.tooltipText = L.DESC_RL_STRATA
     KART.CbRlBarYieldMap.text:SetText(L.SET_RL_YIELD_MAP)
     KART.CbRlBarYieldMap.tooltipText = L.DESC_RL_YIELD_MAP
+    if KART.SldRlBarScale then
+        KART.SldRlBarScale.title:SetText(L.SET_RL_SCALE)
+        KART.SldRlBarScale.tooltipText = L.DESC_RL_SCALE
+    end
+    if KART.SldRlBarButtonSize then
+        KART.SldRlBarButtonSize.title:SetText(L.SET_RL_BUTTON_SIZE)
+        KART.SldRlBarButtonSize.tooltipText = L.DESC_RL_BUTTON_SIZE
+    end
+    if KART.SldRlBarAlpha then
+        KART.SldRlBarAlpha.title:SetText(L.SET_RL_ALPHA)
+        KART.SldRlBarAlpha.tooltipText = L.DESC_RL_ALPHA
+    end
     kbTitle:SetText(L.LABEL_RL_KEYBINDS)
     local kbKeyByAction = {
         readyCheck = "KB_READYCHECK", clearWorldMarkers = "KB_CLEARWM",

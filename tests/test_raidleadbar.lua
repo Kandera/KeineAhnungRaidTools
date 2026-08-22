@@ -228,3 +228,33 @@ do
     As(function() KART.RaidleadBar:GetScript("OnDragStart")(KART.RaidleadBar) end)
     T.truthy(moved, "edit mode allows dragging a locked bar")
 end
+
+-- Layout from button size and stride -----------------------------------------------------------
+do
+    local m22 = KART.RaidleadBarLayoutMetrics(22)
+    T.eq(m22.buttonSize, 22, "default button size")
+    T.eq(m22.stride, 24, "stride is button size plus two pixels")
+    T.eq(m22.barWidth, 275, "default bar width")
+    T.eq(m22.barHeight, 56, "default bar height")
+    T.eq(m22.markerX(1), 5, "first marker sits on the left margin")
+    T.eq(m22.markerX(8), 5 + 7 * 24, "eighth marker follows the stride")
+    T.eq(m22.readyX, 225, "ready check sits after the clear-world-markers gap")
+    T.eq(m22.buffX, 249, "buff toggle follows ready check")
+
+    local m30 = KART.RaidleadBarLayoutMetrics(30)
+    T.eq(m30.stride, 32, "a larger button grows the stride")
+    T.truthy(m30.barWidth > m22.barWidth, "and the bar grows with it")
+    T.truthy(m30.barHeight > m22.barHeight, "on both axes")
+end
+
+do
+    S.showRaidleadBar = true
+    S.rlBarButtonSize, S.rlBarScale, S.rlBarAlpha = 28, 120, 60
+    As(KART.ApplyRaidleadBarLook)
+    T.eq(KART.RaidleadBar:GetWidth(), KART.RaidleadBarLayoutMetrics(28).barWidth, "look apply resizes the bar")
+    T.eq(KART.RaidleadBar:GetHeight(), KART.RaidleadBarLayoutMetrics(28).barHeight, "to the computed height")
+    T.eq(KART.RaidleadBar:GetScale(), 1.2, "scale comes from settings")
+    T.eq(KART.RaidleadBar:GetAlpha(), 0.6, "opacity comes from settings")
+    S.rlBarButtonSize, S.rlBarScale, S.rlBarAlpha = 22, 100, 100
+    As(KART.ApplyRaidleadBarLook)
+end
