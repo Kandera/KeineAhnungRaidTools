@@ -107,6 +107,7 @@ function CT.OnRegenEnabled()
     if CT.pendingUnit and CT.row then
         CT.ApplySecureUnit(CT.row, CT.pendingUnit)
     end
+    CT.Refresh()
 end
 
 -- ===== Row chrome -------------------------------------------------------------------------
@@ -268,6 +269,10 @@ function CT.EnsureRow()
         s.ct.y = yOfs
     end)
 
+    row:SetScript("OnEvent", function(_, event, eventUnit)
+        CT.OnUnitEvent(event, eventUnit)
+    end)
+
     CT.row = row
     return row
 end
@@ -300,23 +305,19 @@ end
 
 function CT.AuraEngineAvailable()
     if AURA_ENGINE_AVAILABLE ~= nil then return AURA_ENGINE_AVAILABLE end
+    if C_AddOns and C_AddOns.LoadAddOn then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
+    end
     local templates = { "CustomAuraContainerTemplate", "AuraContainerTemplate" }
     for _, template in ipairs(templates) do
-        local ok, frame = pcall(CreateFrame, "Frame", nil, UIParent, template)
-        if ok and frame and type(frame.AddAuraGroup) == "function" then
-            local live = false
-            pcall(function()
-                frame:AddAuraGroup("_kart_probe", "HELPFUL", { maxFrameCount = 1 })
-                if frame.HasAuraGroup and frame:HasAuraGroup("_kart_probe") == true then
-                    live = true
-                end
-            end)
-            frame:Hide()
-            if live then
-                AURA_ENGINE_AVAILABLE = true
-                AURA_CONTAINER_TEMPLATE = template
-                return true
-            end
+        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, UIParent, template)
+        local live = ok and frame and frame.GetObjectType
+            and frame:GetObjectType() == "AuraContainer"
+        if frame and frame.Hide then frame:Hide() end
+        if live then
+            AURA_ENGINE_AVAILABLE = true
+            AURA_CONTAINER_TEMPLATE = template
+            return true
         end
     end
     AURA_ENGINE_AVAILABLE = false
@@ -408,7 +409,7 @@ local function BuildLiveStrip(row, key, cfg, filter)
     local strip = row[key]
     if not strip or not strip.isAuraEngine then
         if strip then strip:Hide() end
-        local ok, frame = pcall(CreateFrame, "Frame", nil, row, AURA_CONTAINER_TEMPLATE)
+        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, row, AURA_CONTAINER_TEMPLATE)
         if not ok or not frame then return end
         strip = frame
         strip.isAuraEngine = true
@@ -466,6 +467,7 @@ end
 
 -- ===== Layout -----------------------------------------------------------------------------
 function CT.ApplyLayout()
+    if InCombatLockdown() then return end
     local row = CT.row
     if not row then return end
     local ct = CtSettings()
@@ -489,9 +491,7 @@ function CT.ApplyLayout()
         if ct.healAbsorbShow ~= false then row.healAbsorbBar:Show() else row.healAbsorbBar:Hide() end
     end
 
-    if not InCombatLockdown() then
-        CT.BuildStrips(row)
-    end
+    CT.BuildStrips(row)
 end
 
 -- ===== Paint ------------------------------------------------------------------------------
@@ -539,6 +539,54 @@ function CT.Paint(snap)
     row:SetAlpha(CT.RowAlpha(snap, ct))
 end
 
+-- ===== Live unit events ---------------------------------------------------------------
+local ROW_UNIT_EVENTS = {
+    "UNIT_HEALTH",
+    "UNIT_MAXHEALTH",
+    "UNIT_ABSORB_AMOUNT_CHANGED",
+    "UNIT_HEAL_ABSORB_AMOUNT_CHANGED",
+    "UNIT_CONNECTION",
+}
+
+function CT.EventUnitMatchesWatched(eventUnit)
+    if not CT.watchedUnit or not eventUnit then return false end
+    if UnitIsUnit(eventUnit, CT.watchedUnit) then return true end
+    if UnitIsUnit(eventUnit, "player") and UnitIsUnit(CT.watchedUnit, "player") then
+        return true
+    end
+    return false
+end
+
+function CT.SyncRowUnitEvents(row, unit)
+    if not row then return end
+    if CT.watchedUnit and CT.watchedUnit ~= unit then
+        for _, event in ipairs(ROW_UNIT_EVENTS) do
+            row:UnregisterEvent(event)
+        end
+    end
+    CT.watchedUnit = unit
+    if not unit then return end
+    for _, event in ipairs(ROW_UNIT_EVENTS) do
+        row:UnregisterEvent(event)
+        if row.RegisterUnitEvent then
+            row:RegisterUnitEvent(event, unit)
+        end
+    end
+end
+
+function CT.OnUnitEvent(event, eventUnit)
+    if not CT.ShouldShow() then return end
+    if eventUnit and not CT.EventUnitMatchesWatched(eventUnit) then return end
+    CT.snap = CT.snap or {}
+    local ct = KART_Settings and KART_Settings.ct
+    if ct and ct.testMode then
+        CT.FillTestSnapshot(CT.snap)
+    else
+        CT.FillLiveSnapshot(CT.watchedUnit or CT.PickCoTank() or "player", CT.snap)
+    end
+    CT.Paint(CT.snap)
+end
+
 -- ===== Event wiring -----------------------------------------------------------------------
 local CT_EVENTS = {
     "GROUP_ROSTER_UPDATE",
@@ -563,18 +611,28 @@ function CT.Refresh()
         end
         return
     end
+    if InCombatLockdown() and not CT.row then
+        return
+    end
     local row = CT.EnsureRow()
-    CT.ApplyLayout()
+    local ct = KART_Settings and KART_Settings.ct
+    local unit = (ct and ct.testMode) and nil or CT.PickCoTank()
+
+    if not InCombatLockdown() then
+        CT.ApplyLayout()
+    end
+
+    CT.SyncRowUnitEvents(row, unit)
+
     CT.snap = CT.snap or {}
     CT.BlankSnapshot(CT.snap)
-    local ct = KART_Settings and KART_Settings.ct
     if ct and ct.testMode then
         CT.FillTestSnapshot(CT.snap)
     else
-        CT.FillLiveSnapshot(CT.PickCoTank() or "player", CT.snap)
+        CT.FillLiveSnapshot(unit or "player", CT.snap)
     end
     CT.Paint(CT.snap)
-    CT.ApplySecureUnit(row, CT.PickCoTank() or nil)
+    CT.ApplySecureUnit(row, unit)
     row:Show()
 end
 
@@ -585,8 +643,12 @@ function CT.Disable()
         end
     end
     if CT.row then
+        for _, event in ipairs(ROW_UNIT_EVENTS) do
+            CT.row:UnregisterEvent(event)
+        end
         CT.row:Hide()
     end
+    CT.watchedUnit = nil
     CT.pendingUnit = nil
 end
 
@@ -643,7 +705,6 @@ function CT.Enable()
         f:SetScript("OnEvent", function(_, event)
             if event == "PLAYER_REGEN_ENABLED" then
                 CT.OnRegenEnabled()
-                CT.Refresh()
             elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
                 CT.OnRoster()
             elseif event == "PLAYER_ENTERING_WORLD" then

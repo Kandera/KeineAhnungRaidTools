@@ -12,6 +12,7 @@ do
         "ApplySecureUnit", "OnRegenEnabled",
         "Enable", "Disable", "Refresh", "EnsureRow", "ApplyLayout", "Paint",
         "OnRoster", "OnInstance", "AuraEngineAvailable", "BuildStrips",
+        "OnUnitEvent", "SyncRowUnitEvents",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
@@ -326,4 +327,46 @@ end
 do
     local core = assert(io.open("Core.lua", "r")):read("*a")
     T.truthy(core:find("KART.CT.SyncWidgets", 1, true), "Core.lua calls CT.SyncWidgets")
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    local other = { name = "Other", realm = KARTTEST.realm, guid = "Player-1-BBBB",
+                    role = "TANK", class = "PALADIN", classFile = "PALADIN",
+                    health = 40000, healthMax = 50000 }
+    KARTTEST.SetRaid({
+        { name = "Me", realm = KARTTEST.realm, guid = "Player-1-AAAA", role = "TANK", class = "WARRIOR", classFile = "WARRIOR" },
+        other,
+    })
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.instance = { name = "Somewhere", instanceType = "party", difficultyID = 1, difficultyName = "Normal" }
+    env.KART_Settings = { ctModuleEnabled = true, ct = { testMode = false } }
+    KART.CT.Enable()
+    T.eq(KART.CT.snap.health, 40000, "refresh seeds live health")
+    other.health = 12000
+    KART.CT.OnUnitEvent("UNIT_HEALTH", "raid2")
+    T.eq(KART.CT.snap.health, 12000, "unit health event repaints live health")
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            width = 220, height = 36, scale = 1, locked = true, testMode = true,
+            nameMaxLength = 12, healthText = "both", healthColor = "class",
+            healthAlpha = 1, trackAlpha = 0.4, rangeAlpha = 0.4,
+            absorbShow = true, healAbsorbShow = true,
+        },
+    }
+    KARTTEST.inCombat = false
+    KART.CT.EnsureRow()
+    KART.CT.ApplyLayout()
+    T.eq(KART.CT.row:GetWidth(), 220, "layout width before combat")
+    KARTTEST.inCombat = true
+    env.KART_Settings.ct.width = 300
+    KART.CT.ApplyLayout()
+    T.eq(KART.CT.row:GetWidth(), 220, "combat blocks ApplyLayout resize")
+    KARTTEST.inCombat = false
 end
