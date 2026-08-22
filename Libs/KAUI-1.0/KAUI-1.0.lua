@@ -549,7 +549,8 @@ end
 -- factory's opaque backdrop and border would cover the artwork.
 -- Defined dot-style with an explicit `ns` receiver for the same reason as CreateModernButton
 -- above: several closures below are conventionally named `self` for the button/frame itself.
-function nsProto.CreateTabButton(ns, parent, text)
+function nsProto.CreateTabButton(ns, parent, text, opts)
+    opts = opts or {}
     local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
     b:SetSize(176, 28)
     b:SetBackdrop({ bgFile = "Interface\\ChatFrame\\ChatFrameBackground" })
@@ -559,6 +560,21 @@ function nsProto.CreateTabButton(ns, parent, text)
     b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
     b.text:SetText(text)
     ns:RegisterButtonText(b.text)
+
+    if opts.moduleChip then
+        b.chip = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        b.chip:SetPoint("RIGHT", b, "RIGHT", -8, 0)
+        function b:SetModuleChipOn(on)
+            self.chip:SetText(on and "ON" or "OFF")
+            if on then
+                local r, g, bl = ns:AccentColor()
+                self.chip:SetTextColor(r, g, bl)
+            else
+                self.chip:SetTextColor(0.45, 0.45, 0.45)
+            end
+        end
+        b:SetModuleChipOn(false)
+    end
 
     local accentBar = b:CreateTexture(nil, "OVERLAY")
     accentBar:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)

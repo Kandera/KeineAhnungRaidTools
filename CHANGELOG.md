@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
+- **Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.
+- **In-game changelog panel** and footer links for CurseForge, Wago and GitHub.
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
 - **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it. Test mode and the Co-Tank tab preview it in town; the row has the full look, text, aura and fade settings.
 - **Say when you taunt**, and an on-screen button that asks the other tank to take it. Both off until you turn them on.

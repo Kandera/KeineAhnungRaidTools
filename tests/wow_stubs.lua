@@ -882,6 +882,11 @@ _G.Enum.SendAddonMessageResult = {
 -- AceComm's lost-data warning writes here. Its call sites are commented out upstream, so this only
 -- has to exist.
 _G.DEFAULT_CHAT_FRAME = { AddMessage = function() end }
+KARTTEST.clipboard = nil
+function _G.CopyToClipboard(text)
+    KARTTEST.clipboard = text
+    return true
+end
 
 -- Items -------------------------------------------------------------------------------
 KARTTEST.inventory = {}   -- [slot] = itemLink
