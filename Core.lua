@@ -10,6 +10,7 @@ local frame = CreateFrame("Frame")
 
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("CHAT_MSG_GUILD")
+frame:RegisterEvent("CHAT_MSG_OFFICER")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -79,7 +80,9 @@ function KART.SyncSettingsToUI()
     if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
     if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
     if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
-    if KART.CbInviteViaGuildChat then settingsMap[KART.CbInviteViaGuildChat] = "inviteViaGuildChat" end
+    if KART.InviteChannelChips then
+        for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
+    end
     if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
     if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
     if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
@@ -96,6 +99,9 @@ function KART.SyncSettingsToUI()
     if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
     if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
     if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
+    if KART.SldRlBarScale then settingsMap[KART.SldRlBarScale] = "rlBarScale" end
+    if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
+    if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
 
     for widget, key in pairs(settingsMap) do
         -- Every entry above was inserted behind its own existence guard, so widget is always set.
@@ -130,6 +136,7 @@ function KART.SyncSettingsToUI()
     end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
+    if KART.RefreshModuleChips then KART.RefreshModuleChips() end
 
     KART.UpdateMinimapButton()
     -- Applies the keybinds too (its tail call), since whether they may be bound at all depends on
@@ -182,7 +189,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- let the live settings mutate KART.Defaults itself, which then made "Reset Defaults" a
         -- no-op for those keys within the same session — and merges sub-keys added by a later
         -- addon version into a settings blob saved before they existed.
+        local hadInviteChannels = KART_Settings.inviteChannels ~= nil
         KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
+        if not hadInviteChannels then
+            KART_Settings.inviteChannels.GUILD = KART_Settings.inviteViaGuildChat or false
+        end
 
         if KART.RC then KART.RC.Enable() end
 
@@ -223,8 +234,14 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
     elseif event == "ADDON_LOADED" then
         if arg1 == "RCLootCouncil" and KART.RC then KART.RC.Enable() end
 
-    elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
-        if event ~= "CHAT_MSG_GUILD" or KART_Settings.inviteViaGuildChat then
+    elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_OFFICER"
+        or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
+        local channels = KART_Settings.inviteChannels or {}
+        local enabled = (event == "CHAT_MSG_WHISPER" and channels.WHISPER)
+            or (event == "CHAT_MSG_BN_WHISPER" and channels.BN)
+            or (event == "CHAT_MSG_GUILD" and channels.GUILD)
+            or (event == "CHAT_MSG_OFFICER" and channels.OFFICER)
+        if enabled then
             KART.HandleChatInvite(arg1, arg2, event, ...)
         end
 

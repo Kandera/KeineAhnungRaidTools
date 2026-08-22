@@ -17,6 +17,55 @@ KART.UI.popupArtworkPath = "Interface\\AddOns\\KeineAhnungRaidTools\\media\\back
 KART.L = KART.L or {}
 
 -- =====================================================================
+--  Sidebar chrome: Edit Mode (session) and in-game changelog
+-- =====================================================================
+KART.editModeActive = false
+
+function KART.IsEditModeActive()
+    return KART.editModeActive == true
+end
+
+function KART.SetEditModeActive(active)
+    active = active and true or false
+    if KART.editModeActive == active then return end
+    KART.editModeActive = active
+    if KART.RefreshEditModeToggle then KART.RefreshEditModeToggle() end
+    if KART.UpdateRaidleadBarVisibility then KART.UpdateRaidleadBarVisibility() end
+    if KART.CT and KART.CT.Refresh then KART.CT.Refresh() end
+end
+
+function KART.CopyLink(url)
+    if CopyToClipboard then CopyToClipboard(url) end
+    if DEFAULT_CHAT_FRAME and KART.L and KART.L.LINK_COPIED then
+        DEFAULT_CHAT_FRAME:AddMessage(KART.L.LINK_COPIED, 1, 1, 0)
+    end
+end
+
+-- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
+KART.InGameChangelog = {
+    {
+        version = "Unreleased",
+        entries = {
+            "**Sidebar shows module ON/OFF chips and an Edit Mode row.**",
+            "**Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.",
+            "**Raidlead bar layer** is its own slider, with a switch to sit under the world map.",
+            "**Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it.",
+            "**Say when you taunt**, and an on-screen button that asks the other tank to take it.",
+        },
+    },
+    {
+        version = "4.0.1",
+        entries = {
+            "**Right-click a world or target marker on the raidlead bar to clear that marker.**",
+            "**The raidlead bar sits under the world map**, and can auto-hide in combat.",
+            "**Sync to RC** pushes the council nickname list into RCLootCouncil on demand.",
+            "**WoWUtils import keeps every name on a boss**, not just the first.",
+            "**The buff checker no longer errors in combat** when WoW hides aura data from addons.",
+        },
+    },
+}
+
+-- =====================================================================
 --  Escape-closable windows, and surviving a stun
 -- =====================================================================
 -- Every window in this addon that Escape should close is registered in Blizzard's UISpecialFrames.
@@ -223,6 +272,7 @@ end
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",
     inviteViaGuildChat = false,
+    inviteChannels = { WHISPER = true, BN = true, GUILD = false, OFFICER = false },
     promoteNames = "",
     showRaidleadBar = false,
     lockRaidleadBar = false,
@@ -230,6 +280,10 @@ KART.Defaults = {
     autoHideRaidleadBarCombat = false,
     rlBarFrameStrata = 4, -- index into KART.StrataLevels; own slider, not frameStrata
     rlBarYieldToMap = true, -- drop the bar under WorldMapFrame while the map is open
+    rlBarScale = 100, -- whole-bar scale in percent
+    rlBarButtonSize = 22,
+    rlBarAlpha = 100, -- whole-bar opacity in percent
+    rlBarBgAlpha = 80, -- bar backdrop opacity in percent (buttons keep their own backdrop)
     pullTimerDuration = 10,
     rcReasonDialog = true,
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway

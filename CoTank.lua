@@ -45,6 +45,9 @@ function CT.ShouldShow()
     if not s or s.ctModuleEnabled ~= true then return false end
     local _, instanceType = IsInInstance()
     if instanceType == "arena" or instanceType == "pvp" then return false end
+    if KART.IsEditModeActive and KART.IsEditModeActive() and not INSTANCE_OK[instanceType] then
+        return true
+    end
     local ct = s.ct
     if ct and ct.testMode then return true end
     if ct and ct.locked == false and not INSTANCE_OK[instanceType] then
@@ -471,7 +474,8 @@ function CT.EnsureRow()
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", function(self)
         local ct = CtSettings()
-        if ct and not ct.locked and not InCombatLockdown() then
+        local editMode = KART.IsEditModeActive and KART.IsEditModeActive()
+        if ct and (not ct.locked or editMode) and not InCombatLockdown() then
             self:StartMoving()
         end
     end)
@@ -1521,6 +1525,9 @@ function CT.ShouldShowAskButton()
     if not t or t.button ~= true then return false end
     local _, instanceType = IsInInstance()
     if instanceType == "arena" or instanceType == "pvp" then return false end
+    if KART.IsEditModeActive and KART.IsEditModeActive() and not INSTANCE_OK[instanceType] then
+        return true
+    end
     if t.locked == false and not INSTANCE_OK[instanceType] then return true end
     if s.ct and s.ct.testMode then return true end
     if t.buttonOnlyInGroup ~= false and not IsInGroup() then return false end
@@ -1550,7 +1557,8 @@ function CT.EnsureAskButton()
     end)
     btn:SetScript("OnDragStart", function(self)
         local t = TauntCfg()
-        if t and t.locked == false and not InCombatLockdown() then
+        local editMode = KART.IsEditModeActive and KART.IsEditModeActive()
+        if t and (t.locked == false or editMode) and not InCombatLockdown() then
             self:StartMoving()
         end
     end)
