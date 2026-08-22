@@ -317,3 +317,19 @@ do
 end
 
 KARTTEST.uiScale = 768 / 1080 -- leave the scale as found, for whatever file runs next
+
+-- CreateTabButton: optional module ON/OFF chip on the right ------------------------------------
+do
+    local b = ns:CreateTabButton(UIParent, "Raidlead", { moduleChip = true })
+    T.truthy(b.chip, "module tab gets a chip")
+    T.eq(b.chip:GetText(), "OFF", "chip starts off")
+    b:SetModuleChipOn(true)
+    T.eq(b.chip:GetText(), "ON", "chip shows on")
+    b:SetModuleChipOn(false)
+    T.eq(b.chip:GetText(), "OFF", "chip shows off again")
+end
+
+do
+    local plain = ns:CreateTabButton(UIParent, "Settings")
+    T.is_nil(plain.chip, "non-module tabs have no chip")
+end

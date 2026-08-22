@@ -7,6 +7,18 @@ KART.L_deDE = {
     TAB_SETTINGS = "Einstellungen",
     TAB_COTANK = "Co-Tank",
 
+    LABEL_SYSTEM = "SYSTEM",
+    LABEL_CHANGELOG = "Changelog",
+    BTN_CHANGELOG = "Changelog",
+    DESC_CHANGELOG = "Neuigkeiten in diesem Addon.",
+    BTN_EDIT_MODE_ON = "Bearbeiten: An",
+    BTN_EDIT_MODE_OFF = "Bearbeiten: Aus",
+    DESC_EDIT_MODE = "Modul-Fenster in der Stadt zum Verschieben freigeben, ohne die gespeicherten Sperren zu ändern.",
+    LINK_CURSEFORGE = "CurseForge",
+    LINK_WAGO = "Wago",
+    LINK_GITHUB = "GitHub",
+    LINK_COPIED = "Link in die Zwischenablage kopiert.",
+
     -- Labels
     LABEL_INVITE_KEYWORDS = "Begriffe für Auto-Invite (Flüstern; mit Semikolon trennen):",
     LABEL_PROMOTE_NAMES = "Spielernamen für Auto-Promote (Semikolon-getrennt; Nickname Support):",

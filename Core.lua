@@ -130,6 +130,7 @@ function KART.SyncSettingsToUI()
     end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
+    if KART.RefreshModuleChips then KART.RefreshModuleChips() end
 
     KART.UpdateMinimapButton()
     -- Applies the keybinds too (its tail call), since whether they may be bound at all depends on

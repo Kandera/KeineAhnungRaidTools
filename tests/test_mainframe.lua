@@ -151,6 +151,21 @@ do
         "and the button says which font is in use")
 end
 
+-- Module chips -------------------------------------------------------------------------------------
+do
+    As(function()
+        me.env.KART_Settings.showRaidleadBar = true
+        me.env.KART_Settings.bcModuleEnabled = false
+        me.env.KART_Settings.ctModuleEnabled = true
+        KART.RefreshModuleChips()
+    end)
+    T.eq(KART.BtnRaidlead.chip:GetText(), "ON", "raidlead chip reflects showRaidleadBar")
+    T.eq(KART.BtnBuffCheck.chip:GetText(), "OFF", "buff check chip reflects bcModuleEnabled")
+    T.eq(KART.BtnCoTank.chip:GetText(), "ON", "co-tank chip reflects ctModuleEnabled")
+    T.is_nil(KART.BtnPromote.chip, "automation tab has no chip")
+    T.is_nil(KART.BtnSettings.chip, "settings tab has no chip")
+end
+
 -- Keybinds -----------------------------------------------------------------------------------------
 -- Recording a key is a small dialog with one rule in it that is not obvious: the key is TAKEN from
 -- whoever held it. KART.ApplyKeybinds sets one override per action in list order, so two actions
