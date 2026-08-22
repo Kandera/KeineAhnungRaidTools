@@ -46,11 +46,16 @@ KART.InGameChangelog = {
     {
         version = "Unreleased",
         entries = {
-            "**Sidebar shows module ON/OFF chips and an Edit Mode row.**",
-            "**Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.",
-            "**Raidlead bar layer** is its own slider, with a switch to sit under the world map.",
             "**Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it.",
+            "**Co-Tank Look, Text and Auras** open in a companion panel beside the main window.",
             "**Say when you taunt**, and an on-screen button that asks the other tank to take it.",
+            "**Invite channel chips** for whisper, Battle.net, guild and officer chat.",
+            "**Auto-reply whispers** when a keyword matched but the invite could not go out.",
+            "**Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.",
+            "**Raidlead bar look settings** for scale, button size and opacity.",
+            "**Raidlead bar layer** is its own slider, with a switch to sit under the world map.",
+            "**Settings sliders have a number box** to the right of the track.",
+            "**Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.",
         },
     },
     {
