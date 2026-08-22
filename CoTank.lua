@@ -2,7 +2,7 @@ local addonName, KART = ...
 KART.CT = KART.CT or {}
 local CT = KART.CT
 
--- ===== Visibility -------------------------------------------------------------------------
+-- ===== Instance filter --------------------------------------------------------------------
 local INSTANCE_OK = { party = true, raid = true }
 
 -- ===== Group iteration --------------------------------------------------------------------
