@@ -4,6 +4,9 @@
 # VSCode Ordner
 .vscode/
 
+# Cursor Agent Skills bleiben lokal. Rules unter .cursor/rules/ gehoeren ins Repo.
+.cursor/skills/
+
 # Claude Code Ordner: settings.json, settings.local.json und worktrees/ sind lokal.
 # agents/ und hooks/ sind dagegen Projektwerkzeug und gehoeren ins Repo. Deshalb
 # .claude/* statt .claude/ -- eine Negation kann eine Datei nicht zurueckholen,
