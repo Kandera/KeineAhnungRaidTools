@@ -8,6 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Invite-Kanal-Chips** für Flüstern, Battle.net, Gilde und Offizierschat.
+- **Auto-Antwort per Flüstern**, wenn ein Stichwort passte, aber die Einladung nicht rausging.
 - **Modul-Chips und Bearbeiten-Modus in der Sidebar** zum Platzieren von Modul-Fenstern in der Stadt ohne gespeicherte Sperren zu ändern.
 - **Changelog-Panel im Spiel** und Footer-Links für CurseForge, Wago und GitHub.
 - **Look-Einstellungen für die Raidlead-Leiste** für Skalierung, Button-Größe und Deckkraft; die Leiste im Spiel ist die Vorschau.
@@ -17,7 +19,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Sagen, wenn du tauntest**, plus ein Button der den anderen Tank zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
 
 ### Geändert
-- **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
+- **Auto-Invite-Begriffe gelten für alle Kanäle.** Gilde und Offizier sind eigene Chips.
 - **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 
 ### Behoben

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Invite channel chips** for whisper, Battle.net, guild and officer chat.
+- **Auto-reply whispers** when a keyword matched but the invite could not go out.
 - **Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.
 - **In-game changelog panel** and footer links for CurseForge, Wago and GitHub.
 - **Raidlead bar look settings** for scale, button size and bar opacity; the live bar is the preview.
@@ -17,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Say when you taunt**, and an on-screen button that asks the other tank to take it. Both off until you turn them on.
 
 ### Changed
-- **Auto-invite keywords are labeled as whispers.** Guild chat stays the extra checkbox.
+- **Auto-invite keywords are labeled for all channels.** Guild and officer are separate chips.
 - **Settings sliders have a number box** to the right of the track.
 
 ### Fixed

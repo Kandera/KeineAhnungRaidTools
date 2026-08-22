@@ -618,7 +618,7 @@ KART.CreateTabTitle(1, L.TAB_PROMOTE)
 
 local autoCard = KART.UI:CreateCard(KART.PromotePanel)
 autoCard:SetPoint("TOPLEFT", KART.PromotePanel, "TOPLEFT", 20, -12)
-autoCard:SetSize(500, 195)
+autoCard:SetSize(500, 220)
 
 local promLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 promLabel:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 20, -15)
@@ -646,22 +646,58 @@ KART.InviteEditBox:SetScript("OnTextChanged", function(self)
     KART.UpdateCache()
 end)
 
+local function InviteChannels()
+    KART_Settings.inviteChannels = KART_Settings.inviteChannels or {}
+    return KART_Settings.inviteChannels
+end
+
+local chanLabel = autoCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+chanLabel:SetPoint("TOPLEFT", KART.InviteEditBox, "BOTTOMLEFT", 0, -14)
+chanLabel:SetText(L.SET_INVITE_CHANNELS)
+KART.UI:RegisterLabel(chanLabel)
+
+local function CreateInviteChannelChip(parent, label, key, xOff)
+    local btn = KART.UI:CreateModernButton(parent, label)
+    btn:SetSize(108, 22)
+    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", xOff, -130)
+    btn.tooltipText = L["DESC_INVITE_CHANNEL_" .. key]
+    local function refresh()
+        local on = InviteChannels()[key]
+        if on then
+            local r, g, b = KART.UI:AccentColor()
+            btn:SetBackdropColor(KAUI.Darken(r, g, b, 0.35), KAUI.Darken(r, g, b, 0.35),
+                KAUI.Darken(r, g, b, 0.35), 1)
+            btn.text:SetTextColor(1, 1, 1)
+        else
+            btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+            btn.text:SetTextColor(0.75, 0.75, 0.75)
+        end
+    end
+    btn:SetScript("OnClick", function()
+        local ch = InviteChannels()
+        ch[key] = not ch[key]
+        if key == "GUILD" then KART_Settings.inviteViaGuildChat = ch[key] end
+        refresh()
+    end)
+    btn.Refresh = refresh
+    refresh()
+    return btn
+end
+
+KART.InviteChannelChips = {
+    CreateInviteChannelChip(autoCard, L.SET_INVITE_CHANNEL_WHISPER, "WHISPER", 20),
+    CreateInviteChannelChip(autoCard, L.SET_INVITE_CHANNEL_BN, "BN", 134),
+    CreateInviteChannelChip(autoCard, L.SET_INVITE_CHANNEL_GUILD, "GUILD", 248),
+    CreateInviteChannelChip(autoCard, L.SET_INVITE_CHANNEL_OFFICER, "OFFICER", 362),
+}
+
 KART.CbAutoRaid = KART.UI:CreateSettingsCheckbox(autoCard, {
     name = "KART_AutoRaidCheck", label = L.SET_AUTO_RAID,
-    store = SettingsStore, key = "autoConvertToRaid", y = -160,
+    store = SettingsStore, key = "autoConvertToRaid", y = -168,
     tooltip = L.DESC_AUTO_RAID,
 })
-KART.CbAutoRaid.text:SetWidth(190)
+KART.CbAutoRaid.text:SetWidth(430)
 KART.CbAutoRaid.text:SetJustifyH("LEFT")
-KART.CbInviteViaGuildChat = KART.UI:CreateSettingsCheckbox(autoCard, {
-    name = "KART_InviteViaGuildChatCheck", label = L.SET_INVITE_VIA_GUILD_CHAT,
-    store = SettingsStore, key = "inviteViaGuildChat", y = -160,
-    tooltip = L.DESC_INVITE_VIA_GUILD_CHAT,
-})
-KART.CbInviteViaGuildChat:ClearAllPoints()
-KART.CbInviteViaGuildChat:SetPoint("TOPLEFT", autoCard, "TOPLEFT", 260, -160)
-KART.CbInviteViaGuildChat.text:SetWidth(192)
-KART.CbInviteViaGuildChat.text:SetJustifyH("LEFT")
 
 -- Auto Combat Log card: content filters for AutoLog.lua. Widget callbacks re-evaluate
 -- immediately so toggling a filter while already inside an instance takes effect without
@@ -2377,9 +2413,22 @@ KART.UI:RegisterLocaleRefresher(function()
     -- Automation tab
     promLabel:SetText(L.LABEL_PROMOTE_NAMES)
     invLabel:SetText(L.LABEL_INVITE_KEYWORDS)
+    chanLabel:SetText(L.SET_INVITE_CHANNELS)
+    if KART.InviteChannelChips then
+        local chipLabels = {
+            WHISPER = L.SET_INVITE_CHANNEL_WHISPER,
+            BN = L.SET_INVITE_CHANNEL_BN,
+            GUILD = L.SET_INVITE_CHANNEL_GUILD,
+            OFFICER = L.SET_INVITE_CHANNEL_OFFICER,
+        }
+        local chipKeys = { "WHISPER", "BN", "GUILD", "OFFICER" }
+        for i, chip in ipairs(KART.InviteChannelChips) do
+            local key = chipKeys[i]
+            chip.text:SetText(chipLabels[key])
+            chip.tooltipText = L["DESC_INVITE_CHANNEL_" .. key]
+        end
+    end
     KART.CbAutoRaid.text:SetText(L.SET_AUTO_RAID)                 KART.CbAutoRaid.tooltipText = L.DESC_AUTO_RAID
-    KART.CbInviteViaGuildChat.text:SetText(L.SET_INVITE_VIA_GUILD_CHAT)
-    KART.CbInviteViaGuildChat.tooltipText = L.DESC_INVITE_VIA_GUILD_CHAT
     alTitle:SetText(L.LABEL_AUTOLOG)
     KART.CbAlEnabled.text:SetText(L.SET_AL_ENABLED)               KART.CbAlEnabled.tooltipText = L.DESC_AL_ENABLED
     KART.CbAlRaidLFR.text:SetText(L.SET_AL_RAID_LFR)
