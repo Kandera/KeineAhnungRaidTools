@@ -41,3 +41,59 @@ function CT.ShouldShow()
     if not INSTANCE_OK[instanceType] then return false end
     return CT.PickCoTank() ~= nil
 end
+
+-- ===== Snapshot ---------------------------------------------------------------------------
+function CT.BlankSnapshot(snap)
+    snap.name = nil
+    snap.classFile = nil
+    snap.health = 0
+    snap.healthMax = 0
+    snap.absorb = 0
+    snap.dead = false
+    snap.offline = false
+    snap.inRange = true
+    return snap
+end
+
+function CT.SafeTruthy(value, fallback)
+    if _G.issecretvalue and issecretvalue(value) then
+        return fallback
+    end
+    return value and true or false
+end
+
+function CT.FillLiveSnapshot(unit, snap)
+    snap.name = UnitName(unit)
+    local _, classFile = UnitClass(unit)
+    snap.classFile = classFile
+    snap.health = UnitHealth(unit)
+    snap.healthMax = UnitHealthMax(unit)
+    snap.absorb = UnitGetTotalAbsorbs(unit)
+    snap.dead = UnitIsDeadOrGhost(unit) and true or false
+    snap.offline = not UnitIsConnected(unit)
+    snap.inRange = CT.SafeTruthy(UnitInRange(unit), true)
+    return snap
+end
+
+function CT.FillTestSnapshot(snap)
+    CT.BlankSnapshot(snap)
+    snap.name = "Testtank"
+    snap.classFile = "DEATHKNIGHT"
+    snap.healthMax = 50000
+    snap.health = 40000
+    snap.absorb = 3000
+    snap.inRange = true
+    snap.dead = false
+    return snap
+end
+
+-- ===== Row fade ---------------------------------------------------------------------------
+function CT.RowAlpha(snap, ct)
+    if snap.dead or snap.offline then
+        return 0.35
+    end
+    if not snap.inRange then
+        return (ct and ct.rangeAlpha) or 0.4
+    end
+    return 1
+end

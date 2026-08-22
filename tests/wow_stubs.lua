@@ -261,6 +261,17 @@ function _G.UnitIsDeadOrGhost(unit)
     local m = resolve(unit)
     return m and m.dead == true
 end
+KARTTEST.rangeSecret = {}
+KARTTEST.range = {}
+function _G.UnitInRange(unit)
+    if KARTTEST.rangeSecret[unit] then
+        if _G.issecretvalue then
+            return KARTTEST.secretValue or (function() local u = newproxy and newproxy(false) or {} return u end)()
+        end
+    end
+    if KARTTEST.range[unit] == nil then return true end
+    return KARTTEST.range[unit]
+end
 function _G.UnitIsUnit(a, b)
     local ma, mb = resolve(a), resolve(b)
     return ma ~= nil and ma == mb

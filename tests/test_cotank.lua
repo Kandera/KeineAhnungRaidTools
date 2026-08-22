@@ -6,7 +6,10 @@ do
     local chunk = assert(loadstring(assert(io.open("CoTank.lua", "r")):read("*a"), "@CoTank.lua"))
     setfenv(chunk, env)
     chunk("KeineAhnungRaidTools", KART)
-    for _, name in ipairs({ "PickCoTank", "ShouldShow" }) do
+    for _, name in ipairs({
+        "PickCoTank", "ShouldShow", "BlankSnapshot", "FillLiveSnapshot",
+        "FillTestSnapshot", "RowAlpha", "SafeTruthy",
+    }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
 end
@@ -104,4 +107,38 @@ do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("ctModuleEnabled = false", 1, true), "default module off")
     T.truthy(utils:find("schemaVersion = 1", 1, true), "ct blob has schemaVersion")
+end
+
+do
+    local snap = KART.CT.BlankSnapshot({})
+    T.eq(snap.inRange, true, "blank snapshot starts in range")
+end
+
+do
+    local other = { name = "Other", realm = KARTTEST.realm, guid = "Player-1-BBBB",
+                    role = "TANK", class = "PALADIN", classFile = "PALADIN",
+                    health = 40000, healthMax = 50000, absorb = 2000, healAbsorb = 500 }
+    KARTTEST.SetRaid({
+        { name = "Me", realm = KARTTEST.realm, guid = "Player-1-AAAA", role = "TANK", class = "WARRIOR", classFile = "WARRIOR" },
+        other,
+    })
+    KARTTEST.activeUnit = "raid1"
+    local snap = KART.CT.FillLiveSnapshot("raid2", KART.CT.BlankSnapshot({}))
+    T.eq(snap.name, "Other", "live snapshot takes the co-tank name")
+    T.eq(snap.health, 40000, "and their health")
+    T.eq(snap.absorb, 2000, "and absorb")
+end
+
+do
+    local snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    T.truthy(snap.name and snap.healthMax, "test snapshot invents a tank")
+    T.eq(snap.dead, false, "who is alive")
+end
+
+do
+    local ct = { rangeAlpha = 0.4 }
+    local snap = { dead = false, offline = false, inRange = false }
+    T.eq(KART.CT.RowAlpha(snap, ct), 0.4, "out of range uses rangeAlpha")
+    snap.dead = true
+    T.eq(KART.CT.RowAlpha(snap, ct), 0.35, "dead is darker than range fade")
 end
