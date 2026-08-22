@@ -322,3 +322,8 @@ do
     T.truthy(KART.CT.row.debuffs, "apply layout builds debuff strip OOC")
     T.truthy(KART.CT.row.buffs, "apply layout builds buff strip OOC")
 end
+
+do
+    local core = assert(io.open("Core.lua", "r")):read("*a")
+    T.truthy(core:find("KART.CT.SyncWidgets", 1, true), "Core.lua calls CT.SyncWidgets")
+end

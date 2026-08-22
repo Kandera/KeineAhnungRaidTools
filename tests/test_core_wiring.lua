@@ -71,6 +71,12 @@ Wired("KART.RequestMissingHellosThrottled()", "the missing handshakes are asked 
 Wired("KART.RC.OnRosterUpdate()", "RC council is pushed on roster change")
 
 Wired("KART.RC.Enable()", "RC companion Enable is wired from Core.lua")
+Wired("KART.RC.OnOwedOutOfCombat()", "owed reminder reappears after combat")
+Wired("KART.RC.OpenOwedWindow()", "/kart owed opens the winner reminder")
+
+T.truthy(toc:find("CoTank%.lua"), "toc lists CoTank.lua")
+
+Wired("KART.CT.Enable()", "co-tank module starts from settings sync or ADDON_LOADED")
 
 
 
@@ -81,6 +87,10 @@ do
     T.truthy(branch and branch:find("KART.RC.OnRosterUpdate()", 1, true),
 
         "the roster branch calls RC.OnRosterUpdate")
+
+    T.truthy(branch and branch:find("KART.CT.OnRoster", 1, true),
+
+        "the roster branch calls CT.OnRoster")
 
 end
 

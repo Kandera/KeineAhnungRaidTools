@@ -873,7 +873,7 @@ ctModCard:SetSize(500, 120)
 
 KART.CbCtModuleEnabled = KART.UI:CreateSettingsCheckbox(ctModCard, {
     name = "KART_CtModuleEnabled", label = L.SET_CT_MODULE_ENABLED,
-    store = function() return KART_Settings end, key = "ctModuleEnabled", y = -20,
+    store = SettingsStore, key = "ctModuleEnabled", y = -20,
     tooltip = L.DESC_CT_MODULE_ENABLED,
     onChanged = CtEnable,
 })

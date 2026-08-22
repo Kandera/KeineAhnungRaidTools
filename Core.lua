@@ -13,6 +13,7 @@ frame:RegisterEvent("CHAT_MSG_GUILD")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_BN_WHISPER")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+frame:RegisterEvent("PLAYER_ROLES_ASSIGNED")
 frame:RegisterEvent("READY_CHECK")
 frame:RegisterEvent("READY_CHECK_CONFIRM")
 frame:RegisterEvent("READY_CHECK_FINISHED")
@@ -67,9 +68,11 @@ function KART.SyncSettingsToUI()
     if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
+    if KART.CbCtModuleEnabled then settingsMap[KART.CbCtModuleEnabled] = "ctModuleEnabled" end
     if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
     if KART.RC and KART.RC.CouncilMembersEditBox then settingsMap[KART.RC.CouncilMembersEditBox] = "rcCouncilMembers" end
     if KART.RC and KART.RC.CbShowNickNames then settingsMap[KART.RC.CbShowNickNames] = "rcShowNickNames" end
+    if KART.RC and KART.RC.CbShowOwedReminder then settingsMap[KART.RC.CbShowOwedReminder] = "rcShowOwedReminder" end
     if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
     if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
     if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
@@ -91,6 +94,8 @@ function KART.SyncSettingsToUI()
     if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
     if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
     if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
+    if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
+    if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
 
     for widget, key in pairs(settingsMap) do
         -- Every entry above was inserted behind its own existence guard, so widget is always set.
@@ -106,6 +111,7 @@ function KART.SyncSettingsToUI()
     -- SyncSettingsToUI also runs on every profile switch, so this has to REPLACE the list rather
     -- than add to it — see WU.SyncBossesToSavedText.
     if KART.WU and KART.WU.SyncBossesToSavedText then KART.WU.SyncBossesToSavedText() end
+    if KART.CT and KART.CT.SyncWidgets then KART.CT.SyncWidgets() end
 
     if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
 
@@ -141,6 +147,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART_Settings = KART_Settings or {}
         KART_Profiles = KART_Profiles or {}
         KART_PlayerCache = KART_PlayerCache or {}
+        KART_RCOwed = KART_RCOwed or {}
         KASC:AttachCache(KART_PlayerCache)
         KASC:Init("KART")
         -- Prune identity-cache entries not seen for 90+ days so the SavedVariable doesn't
@@ -194,6 +201,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.UI:ApplyLocaleRefreshers()
 
         KART.SyncSettingsToUI()
+        if KART.CT then KART.CT.Enable() end
 
         AddonCompartmentFrame:RegisterAddon({
             text = "Keine Ahnung Raid Tools",
@@ -273,6 +281,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if IsInRaid() or not IsInGroup() then KART.pendingBulkRaidConvert = false end
         KART.HandleAutoPromoteThrottled()
         if KART.RC then KART.RC.OnRosterUpdate() end
+        if KART.CT then KART.CT.OnRoster() end
+        
+    elseif event == "PLAYER_ROLES_ASSIGNED" then
+        if KART.CT then KART.CT.OnRoster() end
         
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})
@@ -368,6 +380,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- Also re-applies keybinds via its tail call, which covers the case where a login/reload
         -- during combat had to defer them (KART.keybindsPending, see KART.ApplyKeybinds).
         KART.UpdateRaidleadBarVisibility()
+        if KART.RC and KART.RC.OnOwedOutOfCombat then KART.RC.OnOwedOutOfCombat() end
+        if KART.CT then KART.CT.OnRegenEnabled() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- arg1 = isInitialLogin, arg2 = isReloadingUi. Only announce our version to the guild on an
         -- actual login/reload — this event also fires on every loading screen (zone/instance change),
@@ -382,6 +396,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.AutoLog then KART.AutoLog.Evaluate() end
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
         if KART.RC then KART.RC.HookVotingFrame() end
+        if KART.CT then KART.CT.OnInstance() end
     elseif event == "PLAYER_CONTROL_LOST" then
         KART.OnControlLost()
     elseif event == "CHALLENGE_MODE_START" then
@@ -668,11 +683,14 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         -- Maintenance tool, like /kart ench above and deliberately absent from /kart help: it prints
         -- what the CLIENT does, for whoever is porting the addon to a new game version.
         KART.PrintClientProbe()
+    elseif cmd == "owed" then
+        if KART.RC and KART.RC.OpenOwedWindow then KART.RC.OpenOwedWindow() end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
         print("  /kart version (v) - " .. KART.L.HELP_VERSION)
         print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
+        print("  /kart owed - " .. KART.L.HELP_OWED)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern

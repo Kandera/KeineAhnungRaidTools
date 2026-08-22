@@ -590,6 +590,49 @@ function CT.Disable()
     CT.pendingUnit = nil
 end
 
+function CT.SyncWidgets()
+    local ct = KART_Settings and KART_Settings.ct
+    if not ct then
+        CT.Enable()
+        return
+    end
+
+    local function setSlider(widget, value)
+        if widget and widget.SetValue and value ~= nil then widget:SetValue(value) end
+    end
+    local function setChecked(widget, value)
+        if widget and widget.SetChecked then widget:SetChecked(value) end
+    end
+
+    setChecked(KART.CbCtTestMode, ct.testMode)
+    setChecked(KART.CbCtLock, ct.locked)
+    setSlider(KART.SldCtWidth, ct.width)
+    setSlider(KART.SldCtHeight, ct.height)
+    setSlider(KART.SldCtScale, (ct.scale or 1) * 100)
+    setSlider(KART.SldCtRangeFade, (ct.rangeAlpha or 0.4) * 100)
+    setSlider(KART.SldCtNameMax, ct.nameMaxLength)
+    setChecked(KART.CbCtAbsorb, ct.absorbShow)
+    setChecked(KART.CbCtHealAbsorb, ct.healAbsorbShow)
+
+    local debuffs = ct.debuffs
+    if debuffs then
+        setChecked(KART.CbCtDebuffShow, debuffs.show)
+        setSlider(KART.SldCtDebuffMax, debuffs.max)
+        setSlider(KART.SldCtDebuffSize, debuffs.size)
+        setSlider(KART.SldCtDebuffSpacing, debuffs.spacing)
+    end
+
+    local buffs = ct.buffs
+    if buffs then
+        setChecked(KART.CbCtBuffShow, buffs.show)
+        setSlider(KART.SldCtBuffMax, buffs.max)
+        setSlider(KART.SldCtBuffSize, buffs.size)
+        setSlider(KART.SldCtBuffSpacing, buffs.spacing)
+    end
+
+    CT.Enable()
+end
+
 function CT.Enable()
     if KART_Settings.ctModuleEnabled ~= true then
         CT.Disable()
