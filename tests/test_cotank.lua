@@ -11,7 +11,7 @@ do
         "FillTestSnapshot", "RowAlpha", "SafeTruthy",
         "ApplySecureUnit", "OnRegenEnabled",
         "Enable", "Disable", "Refresh", "EnsureRow", "ApplyLayout", "Paint",
-        "OnRoster", "OnInstance",
+        "OnRoster", "OnInstance", "AuraEngineAvailable", "BuildStrips",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
@@ -257,4 +257,50 @@ do
     T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters all events")
     KART.CT.Enable()
     T.eq(CountCtEvents(KART.CT.events), 5, "second enable re-registers five events")
+end
+
+do
+    T.eq(KART.CT.AuraEngineAvailable(), false, "aura engine unavailable in harness")
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            testMode = true,
+            debuffs = { show = true, max = 3, size = 20, spacing = 2,
+                        anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
+            buffs   = { show = true, max = 2, size = 16, spacing = 1,
+                        anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4 },
+        },
+    }
+    KART.CT.EnsureRow()
+    KART.CT.BuildStrips(KART.CT.row)
+    T.truthy(KART.CT.row.debuffs, "debuff strip exists")
+    T.truthy(KART.CT.row.buffs, "buff strip exists")
+    T.truthy(KART.CT.row.debuffs.dummyIcons and KART.CT.row.debuffs.dummyIcons[1],
+        "dummy debuff icons when max >= 1")
+    T.truthy(KART.CT.row.buffs.dummyIcons and KART.CT.row.buffs.dummyIcons[1],
+        "dummy buff icons when max >= 1")
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            testMode = true,
+            width = 220, height = 36,
+            debuffs = { show = true, max = 2, size = 18, spacing = 1,
+                        anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
+            buffs   = { show = true, max = 2, size = 18, spacing = 1,
+                        anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4 },
+        },
+    }
+    KARTTEST.inCombat = false
+    KART.CT.EnsureRow()
+    KART.CT.ApplyLayout()
+    T.truthy(KART.CT.row.debuffs, "apply layout builds debuff strip OOC")
+    T.truthy(KART.CT.row.buffs, "apply layout builds buff strip OOC")
 end

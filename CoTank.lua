@@ -272,6 +272,198 @@ function CT.EnsureRow()
     return row
 end
 
+-- ===== Aura strips -------------------------------------------------------------------------
+local STRIP_DEFAULTS = {
+    debuffs = { show = true, max = 8, size = 22, spacing = 1,
+                anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
+    buffs   = { show = true, max = 6, size = 18, spacing = 1,
+                anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4 },
+}
+
+local AURA_ENGINE_AVAILABLE
+local AURA_CONTAINER_TEMPLATE
+
+local function StripCfg(kind)
+    local ct = CtSettings() or {}
+    local cfg = ct[kind]
+    local def = STRIP_DEFAULTS[kind]
+    if not cfg then return def end
+    local out = {}
+    for k, v in pairs(def) do
+        out[k] = cfg[k] ~= nil and cfg[k] or v
+    end
+    for k, v in pairs(cfg) do
+        if out[k] == nil then out[k] = v end
+    end
+    return out
+end
+
+function CT.AuraEngineAvailable()
+    if AURA_ENGINE_AVAILABLE ~= nil then return AURA_ENGINE_AVAILABLE end
+    local templates = { "CustomAuraContainerTemplate", "AuraContainerTemplate" }
+    for _, template in ipairs(templates) do
+        local ok, frame = pcall(CreateFrame, "Frame", nil, UIParent, template)
+        if ok and frame and type(frame.AddAuraGroup) == "function" then
+            local live = false
+            pcall(function()
+                frame:AddAuraGroup("_kart_probe", "HELPFUL", { maxFrameCount = 1 })
+                if frame.HasAuraGroup and frame:HasAuraGroup("_kart_probe") == true then
+                    live = true
+                end
+            end)
+            frame:Hide()
+            if live then
+                AURA_ENGINE_AVAILABLE = true
+                AURA_CONTAINER_TEMPLATE = template
+                return true
+            end
+        end
+    end
+    AURA_ENGINE_AVAILABLE = false
+    return false
+end
+
+local function UseDummyStrips()
+    local ct = CtSettings()
+    if ct and ct.testMode then return true end
+    return not CT.AuraEngineAvailable()
+end
+
+local function GrowthOffset(growth, index, size, spacing)
+    local step = size + spacing
+    local offset = (index - 1) * step
+    if growth == "left" then return -offset, 0 end
+    if growth == "up" then return 0, offset end
+    if growth == "down" then return 0, -offset end
+    return offset, 0
+end
+
+local function AuraGroupLayout(cfg)
+    local layout = {
+        anchorPoint = cfg.anchor,
+        iconWidth = cfg.size,
+        iconHeight = cfg.size,
+        spacing = cfg.spacing,
+    }
+    if cfg.growth == "left" then
+        layout.horizontalDirection = "RightToLeft"
+    elseif cfg.growth == "up" then
+        layout.verticalDirection = "Up"
+    elseif cfg.growth == "down" then
+        layout.verticalDirection = "Down"
+    else
+        layout.horizontalDirection = "LeftToRight"
+    end
+    return layout
+end
+
+local function PlaceStrip(strip, row, cfg)
+    strip:ClearAllPoints()
+    strip:SetPoint(cfg.anchor, row, cfg.anchor, cfg.x, cfg.y)
+end
+
+local function BuildDummyStrip(row, key, cfg, r, g, b)
+    local strip = row[key]
+    if not strip or strip.isAuraEngine then
+        if strip then strip:Hide() end
+        strip = CreateFrame("Frame", nil, row)
+        row[key] = strip
+    end
+    strip.isAuraEngine = nil
+    strip.dummyIcons = strip.dummyIcons or {}
+
+    if cfg.show == false then
+        strip:Hide()
+        return strip
+    end
+
+    PlaceStrip(strip, row, cfg)
+    strip:Show()
+
+    local max = cfg.max or 0
+    if max < 0 then max = 0 end
+    for i = 1, max do
+        local icon = strip.dummyIcons[i]
+        if not icon then
+            icon = CreateFrame("Frame", nil, strip)
+            local tex = icon:CreateTexture(nil, "ARTWORK")
+            tex:SetAllPoints()
+            icon.tex = tex
+            strip.dummyIcons[i] = icon
+        end
+        icon:SetSize(cfg.size, cfg.size)
+        local ox, oy = GrowthOffset(cfg.growth, i, cfg.size, cfg.spacing)
+        icon:ClearAllPoints()
+        icon:SetPoint(cfg.anchor, strip, cfg.anchor, ox, oy)
+        icon.tex:SetColorTexture(r, g, b, 0.85)
+        icon:Show()
+    end
+    for i = max + 1, #strip.dummyIcons do
+        strip.dummyIcons[i]:Hide()
+    end
+    return strip
+end
+
+local function BuildLiveStrip(row, key, cfg, filter)
+    local strip = row[key]
+    if not strip or not strip.isAuraEngine then
+        if strip then strip:Hide() end
+        local ok, frame = pcall(CreateFrame, "Frame", nil, row, AURA_CONTAINER_TEMPLATE)
+        if not ok or not frame then return end
+        strip = frame
+        strip.isAuraEngine = true
+        row[key] = strip
+    end
+
+    if cfg.show == false then
+        strip:Hide()
+        if strip.SetEnabled then pcall(strip.SetEnabled, strip, false) end
+        return strip
+    end
+
+    PlaceStrip(strip, row, cfg)
+    if strip.SetEnabled then pcall(strip.SetEnabled, strip, true) end
+    strip:Show()
+
+    if not strip._auraGroupAdded then
+        pcall(function()
+            strip:AddAuraGroup("main", filter, {
+                maxFrameCount = cfg.max,
+                layout = AuraGroupLayout(cfg),
+            })
+        end)
+        strip._auraGroupAdded = true
+    end
+
+    pcall(function()
+        if strip.SetAuraGroupMaxFrameCount then
+            strip:SetAuraGroupMaxFrameCount("main", cfg.max)
+        end
+        if strip.SetAuraGroupLayout then
+            strip:SetAuraGroupLayout("main", AuraGroupLayout(cfg))
+        end
+    end)
+
+    local unit = CT.PickCoTank()
+    if unit and strip.SetUnit then
+        pcall(function() strip:SetUnit(unit) end)
+    end
+    return strip
+end
+
+function CT.BuildStrips(row)
+    if not row then return end
+    local debuffCfg = StripCfg("debuffs")
+    local buffCfg = StripCfg("buffs")
+    if UseDummyStrips() then
+        BuildDummyStrip(row, "debuffs", debuffCfg, 0.85, 0.25, 0.25)
+        BuildDummyStrip(row, "buffs", buffCfg, 0.25, 0.75, 0.35)
+    else
+        BuildLiveStrip(row, "debuffs", debuffCfg, "HARMFUL")
+        BuildLiveStrip(row, "buffs", buffCfg, "HELPFUL")
+    end
+end
+
 -- ===== Layout -----------------------------------------------------------------------------
 function CT.ApplyLayout()
     local row = CT.row
@@ -295,6 +487,10 @@ function CT.ApplyLayout()
     end
     if row.healAbsorbBar then
         if ct.healAbsorbShow ~= false then row.healAbsorbBar:Show() else row.healAbsorbBar:Hide() end
+    end
+
+    if not InCombatLockdown() then
+        CT.BuildStrips(row)
     end
 end
 
