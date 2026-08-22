@@ -251,6 +251,10 @@ KART.Defaults = {
         healthMid  = { r = 0.9, g = 0.8, b = 0.2 },
         healthLow  = { r = 0.8, g = 0.2, b = 0.2 },
         healthFill = "right", -- "right" | "left" | "up" | "down"
+        healthTexture = "Interface\\TargetingFrame\\UI-StatusBar",
+        gradient = false,
+        gradientFrom = { r = 0.2, g = 0.8, b = 0.2 },
+        gradientTo = { r = 0.8, g = 0.2, b = 0.2 },
         healthAlpha = 1, trackAlpha = 0.4,
         bgColor = { r = 0.06, g = 0.07, b = 0.08 },
         bgAlpha = 0.92,

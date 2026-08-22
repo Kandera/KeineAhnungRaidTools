@@ -1135,9 +1135,22 @@ local function RefreshCtFillBtn()
     KART.BtnCtHealthFill.text:SetText(L.SET_CT_HEALTH_FILL .. ": " .. (labelFn and labelFn() or mode))
 end
 
+local function CtTextureLabel(key)
+    key = key or CtStore().healthTexture
+    if not key then return L.CT_TEXTURE_SMOOTH end
+    if key:find("WHITE8X8", 1, true) then return L.CT_TEXTURE_FLAT end
+    if key:find("UI%-StatusBar", 1, true) then return L.CT_TEXTURE_SMOOTH end
+    return key:match("[^\\]+$") or key
+end
+
+local function RefreshCtTextureBtn()
+    if not KART_Settings or not KART.BtnCtHealthTexture then return end
+    KART.BtnCtHealthTexture.text:SetText(L.SET_CT_HEALTH_TEXTURE .. ": " .. CtTextureLabel())
+end
+
 local ctLookCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctLookCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
-ctLookCard:SetSize(500, 420)
+ctLookCard:SetSize(500, 500)
 
 KART.BtnCtHealthFill = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_FILL, L.DESC_CT_HEALTH_FILL)
 KART.BtnCtHealthFill:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -20)
@@ -1149,6 +1162,36 @@ KART.BtnCtHealthFill:SetScript("OnClick", function(self)
             rootDescription:CreateButton(CT_FILL_L[opt](), function()
                 CtStore().healthFill = opt
                 RefreshCtFillBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
+
+KART.BtnCtHealthTexture = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_TEXTURE, L.DESC_CT_HEALTH_TEXTURE)
+KART.BtnCtHealthTexture:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -20)
+KART.BtnCtHealthTexture:SetSize(220, 22)
+KART.BtnCtHealthTexture:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_HEALTH_TEXTURE)
+        if LSM then
+            local textures = LSM:List("statusbar")
+            for _, name in ipairs(textures) do
+                rootDescription:CreateButton(name, function()
+                    CtStore().healthTexture = name
+                    RefreshCtTextureBtn()
+                    CtLayoutChanged()
+                end)
+            end
+        else
+            rootDescription:CreateButton(L.CT_TEXTURE_SMOOTH, function()
+                CtStore().healthTexture = "Interface\\TargetingFrame\\UI-StatusBar"
+                RefreshCtTextureBtn()
+                CtLayoutChanged()
+            end)
+            rootDescription:CreateButton(L.CT_TEXTURE_FLAT, function()
+                CtStore().healthTexture = "Interface\\Buttons\\WHITE8X8"
+                RefreshCtTextureBtn()
                 CtLayoutChanged()
             end)
         end
@@ -1262,6 +1305,25 @@ KART.SldCtHealAbsorbAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
 })
 KART.SldCtHealAbsorbAlpha:ClearAllPoints()
 KART.SldCtHealAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -366)
+
+KART.CbCtGradient = KART.UI:CreateSettingsCheckbox(ctLookCard, {
+    name = "KART_CtGradient", label = L.SET_CT_GRADIENT, tooltip = L.DESC_CT_GRADIENT,
+    store = CtStore, key = "gradient", y = -398,
+    onChanged = CtLayoutChanged,
+})
+
+KART.BtnCtGradientFrom = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_GRADIENT_FROM)
+KART.BtnCtGradientFrom:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -430)
+KART.BtnCtGradientFrom:SetSize(220, 22)
+KART.BtnCtGradientFrom:SetScript("OnClick", function()
+    CtPickColor(CtStore().gradientFrom, CtLayoutChanged)
+end)
+KART.BtnCtGradientTo = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_GRADIENT_TO)
+KART.BtnCtGradientTo:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -430)
+KART.BtnCtGradientTo:SetSize(220, 22)
+KART.BtnCtGradientTo:SetScript("OnClick", function()
+    CtPickColor(CtStore().gradientTo, CtLayoutChanged)
+end)
 
 local function CtBuildTextBlock(card, y0, title, storeFn, prefix)
     local titleFS = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -2045,6 +2107,7 @@ KART.UI:RegisterLocaleRefresher(function()
     RefreshCtHealthColorBtn()
     RefreshCtHealthTextBtn()
     if RefreshCtFillBtn then RefreshCtFillBtn() end
+    if RefreshCtTextureBtn then RefreshCtTextureBtn() end
     if KART.SldCtHealthAlpha then KART.SldCtHealthAlpha.title:SetText(L.SET_CT_HEALTH_ALPHA) end
     if KART.SldCtTrackAlpha then KART.SldCtTrackAlpha.title:SetText(L.SET_CT_TRACK_ALPHA) end
     if KART.SldCtBgAlpha then KART.SldCtBgAlpha.title:SetText(L.SET_CT_BG_ALPHA) end
@@ -2060,6 +2123,16 @@ KART.UI:RegisterLocaleRefresher(function()
     if KART.BtnCtAbsorbColor then KART.BtnCtAbsorbColor.text:SetText(L.SET_CT_ABSORB_COLOR) end
     if KART.BtnCtHealAbsorbColor then KART.BtnCtHealAbsorbColor.text:SetText(L.SET_CT_HEAL_ABSORB_COLOR) end
     if KART.BtnCtHealthFill then KART.BtnCtHealthFill.tooltipText = L.DESC_CT_HEALTH_FILL end
+    if KART.BtnCtHealthTexture then
+        KART.BtnCtHealthTexture.tooltipText = L.DESC_CT_HEALTH_TEXTURE
+        RefreshCtTextureBtn()
+    end
+    if KART.CbCtGradient then
+        KART.CbCtGradient.text:SetText(L.SET_CT_GRADIENT)
+        KART.CbCtGradient.tooltipText = L.DESC_CT_GRADIENT
+    end
+    if KART.BtnCtGradientFrom then KART.BtnCtGradientFrom.text:SetText(L.SET_CT_GRADIENT_FROM) end
+    if KART.BtnCtGradientTo then KART.BtnCtGradientTo.text:SetText(L.SET_CT_GRADIENT_TO) end
     if KART.CbCtRangeFadeOn then KART.CbCtRangeFadeOn.text:SetText(L.SET_CT_RANGE_FADE_ON) end
     if KART.SldCtDeadFade then KART.SldCtDeadFade.title:SetText(L.SET_CT_DEAD_FADE) end
     if KART.SldCtOfflineFade then KART.SldCtOfflineFade.title:SetText(L.SET_CT_OFFLINE_FADE) end

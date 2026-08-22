@@ -793,10 +793,23 @@ do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("taunt = {", 1, true), "ct defaults include a taunt blob")
     T.truthy(utils:find("schemaVersion = 1", 1, true), "schemaVersion stays 1")
+    T.truthy(utils:find("healthTexture = ", 1, true), "ct defaults include healthTexture")
+    T.truthy(utils:find("gradient = false", 1, true), "ct defaults include gradient off")
 end
 
 do
-    local utils = assert(io.open("Utils.lua", "r")):read("*a")
-    T.truthy(utils:find("taunt = {", 1, true), "ct defaults include a taunt blob")
-    T.truthy(utils:find("schemaVersion = 1", 1, true), "schemaVersion stays 1")
+    local KAUtil = LibStub("KAUtil-1.0")
+    local env = setmetatable({}, { __index = _G })
+    env.KART = { L = {} }
+    local chunk = assert(loadstring(assert(io.open("Utils.lua", "r")):read("*a"), "@Utils.lua"))
+    setfenv(chunk, env)
+    chunk("KeineAhnungRaidTools", env.KART)
+    local old = { ct = { width = 200, locked = true } }
+    KAUtil.MergeDefaults(old, env.KART.Defaults)
+    T.eq(old.ct.schemaVersion, 1, "MergeDefaults keeps ct.schemaVersion at 1")
+    T.eq(old.ct.width, 200, "MergeDefaults preserves existing ct.width")
+    T.truthy(old.ct.healthTexture, "MergeDefaults fills healthTexture on old profiles")
+    T.eq(old.ct.gradient, false, "MergeDefaults fills gradient default")
+    T.truthy(old.ct.gradientFrom and old.ct.gradientFrom.r, "MergeDefaults fills gradientFrom")
+    T.truthy(old.ct.gradientTo and old.ct.gradientTo.r, "MergeDefaults fills gradientTo")
 end
