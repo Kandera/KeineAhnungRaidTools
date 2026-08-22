@@ -171,8 +171,10 @@ do
     KARTTEST.inCombat = false
     KART.CT.row = frame
     KART.CT.OnRegenEnabled()
-    T.eq(calls[1][1], "unit", "after combat the unit attribute is set")
-    T.eq(calls[1][2], "raid2", "to the pending token")
+    T.eq(calls[1][1], "type1", "after combat type1 is set")
+    T.eq(calls[1][2], "target", "to target")
+    T.eq(calls[2][1], "unit", "after combat the unit attribute is set")
+    T.eq(calls[2][2], "raid2", "to the pending token")
 end
 
 do

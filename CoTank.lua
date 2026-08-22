@@ -101,6 +101,9 @@ function CT.ApplySecureUnit(frame, unit)
 end
 
 function CT.OnRegenEnabled()
+    if CT.row and not InCombatLockdown() then
+        CT.row:SetAttribute("type1", "target")
+    end
     if CT.pendingUnit and CT.row then
         CT.ApplySecureUnit(CT.row, CT.pendingUnit)
     end
@@ -180,6 +183,12 @@ local function HealthBarColor(snap, ct)
     return Lerp(low.r, mid.r, t), Lerp(low.g, mid.g, t), Lerp(low.b, mid.b, t)
 end
 
+local function InitStatusBarFill(bar)
+    local tex = bar:CreateTexture(nil, "ARTWORK")
+    tex:SetColorTexture(1, 1, 1, 1)
+    bar:SetStatusBarTexture(tex)
+end
+
 local function AddRowBorder(row)
     local function edge(p1, p2, w, h)
         local tex = row:CreateTexture(nil, "BORDER")
@@ -217,22 +226,25 @@ function CT.EnsureRow()
     health:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
     local healthBg = health:CreateTexture(nil, "BACKGROUND")
     healthBg:SetAllPoints()
+    InitStatusBarFill(health)
     row.health = health
     row.healthBg = healthBg
 
     local absorbBar = CreateFrame("StatusBar", nil, row)
     absorbBar:SetAllPoints(health)
+    InitStatusBarFill(absorbBar)
     row.absorbBar = absorbBar
 
     local healAbsorbBar = CreateFrame("StatusBar", nil, row)
     healAbsorbBar:SetAllPoints(health)
+    InitStatusBarFill(healAbsorbBar)
     row.healAbsorbBar = healAbsorbBar
 
-    local nameText = row:CreateFontString(nil, "OVERLAY")
+    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameText:SetPoint("LEFT", row, "LEFT", 6, 0)
     row.nameText = nameText
 
-    local healthText = row:CreateFontString(nil, "OVERLAY")
+    local healthText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     healthText:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.healthText = healthText
 
