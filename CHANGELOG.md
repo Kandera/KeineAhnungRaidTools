@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
 - **Co-Tank bar texture and optional gradient** on the Look card, with LibSharedMedia when installed.
 - **Invite channel chips** for whisper, Battle.net, guild and officer chat.
 - **Auto-reply whispers** when a keyword matched but the invite could not go out.

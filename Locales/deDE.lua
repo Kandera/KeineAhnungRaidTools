@@ -6,6 +6,9 @@ KART.L_deDE = {
     TAB_BUFFCHECK = "Buff-Checker",
     TAB_SETTINGS = "Einstellungen",
     TAB_COTANK = "Co-Tank",
+    TAB_CT_LOOK = "Look",
+    TAB_CT_TEXT = "Text",
+    TAB_CT_AURAS = "Auras",
 
     LABEL_SYSTEM = "SYSTEM",
     LABEL_CHANGELOG = "Changelog",

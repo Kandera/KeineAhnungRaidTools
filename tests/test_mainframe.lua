@@ -71,6 +71,20 @@ do
     T.eq(visible, 1, "exactly one tab's panel is shown")
 end
 
+-- Co-Tank settings flyout --------------------------------------------------------------------------
+do
+    T.eq(KART.CtFlyout:GetParent(), _G.UIParent, "the flyout is parented to UIParent, not the row")
+    me.env.KART_Settings.ctModuleEnabled = true
+    As(function()
+        KART.MainFrame:Show()
+        KART.ShowTab(6)
+    end)
+    T.truthy(KART.CtFlyout:IsShown(), "opening Co-Tank with the module on shows the flyout")
+    As(function() KART.ShowTab(4) end)
+    T.eq(KART.CtFlyout:IsShown(), false, "switching away from Co-Tank hides the flyout")
+    me.env.KART_Settings.ctModuleEnabled = false
+end
+
 -- The settings search ------------------------------------------------------------------------------
 do
     local index = As(KART.BuildSearchIndex)
