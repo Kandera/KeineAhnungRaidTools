@@ -76,7 +76,8 @@ Wired("KART.RC.OpenOwedWindow()", "/kart owed opens the winner reminder")
 
 T.truthy(toc:find("CoTank%.lua"), "toc lists CoTank.lua")
 
-Wired("KART.CT.Enable()", "co-tank module starts from settings sync or ADDON_LOADED")
+Wired('frame:RegisterEvent("CHAT_MSG_OFFICER")', "CHAT_MSG_OFFICER is registered for invite keywords")
+Wired("channels.OFFICER", "officer chat is gated by inviteChannels")
 
 
 

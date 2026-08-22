@@ -223,6 +223,7 @@ end
 KART.Defaults = {
     inviteKeywords = "inv;+;invite",
     inviteViaGuildChat = false,
+    inviteChannels = { WHISPER = true, BN = true, GUILD = false, OFFICER = false },
     promoteNames = "",
     showRaidleadBar = false,
     lockRaidleadBar = false,

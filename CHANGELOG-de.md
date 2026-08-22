@@ -8,13 +8,15 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Invite-Kanal-Chips** für Flüstern, Battle.net, Gilde und Offizierschat.
+- **Auto-Antwort per Flüstern**, wenn ein Stichwort passte, aber die Einladung nicht rausging.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
 - **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt; Look, Text, Auren und Fade sind einstellbar.
 - **Sagen, wenn du tauntest**, plus ein Button der den anderen Tank zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
 
 ### Geändert
-- **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
+- **Auto-Invite-Begriffe gelten für alle Kanäle.** Gilde und Offizier sind eigene Chips.
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
