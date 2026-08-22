@@ -57,10 +57,15 @@ do
     T.truthy(KART.WoWUtilsPanel and KART.WoWUtilsPanel:IsShown(), "and shows the WoWUtils panel")
     T.eq(KART.PromotePanel:IsShown(), false, "not stacked on Automation")
 
+    As(function() KART.ShowTab(6) end)
+    T.eq(KART.CurrentTab, 6, "the Co-Tank tab is ShowTab index 6")
+    T.truthy(KART.CoTankPanel and KART.CoTankPanel:IsShown(), "and shows the Co-Tank panel")
+    T.eq(KART.SettingsPanel:IsShown(), false, "Settings is not shown on the Co-Tank tab")
+
     -- Exactly one content panel visible at a time. Two showing at once is the shape of every
     -- "settings are drawn over the loot council tab" report.
     local visible = 0
-    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel }) do
+    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel, KART.CoTankPanel }) do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")
