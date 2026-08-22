@@ -14,6 +14,8 @@ KART's companion role:
    KART resolves them through Northern Sky and pushes the matching GUIDs into RC's council list.
 2. **Council members** click Award in RC's voting frame; KART relays that click to the raid
    leader's client, which calls RC's `Award()` while the leader trades.
+3. **Winners** see a KART owed reminder (personal toggle, default on) so they can walk to the
+   lead and trade. RC's TradeUI remains the lead's list.
 
 There is no separate lootmaster field in KART 4.0. The lead holds the items and the TradeUI.
 

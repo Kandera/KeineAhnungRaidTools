@@ -15,6 +15,12 @@ function KARTTEST.InstallRC()
         masterLooter = "Lead-TarrenMill",
         player = { name = "Lead-TarrenMill" },
         GetML = function() return "Lead-TarrenMill" end,
+        GetLootTable = function()
+            return KARTTEST.rcLootTable or {}
+        end,
+        TradeUI = {
+            OnAwardReceived = function() end,
+        },
     }
     _G.RCLootCouncilML = {
         UpdateGroupCouncil = function()

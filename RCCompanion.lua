@@ -308,7 +308,7 @@ function RC.BuildSettingsCard()
     else
         card:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -400)
     end
-    card:SetSize(500, 175)
+    card:SetSize(500, 210)
     RC.SettingsCard = card
 
     RC.StatusLabel = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -323,8 +323,18 @@ function RC.BuildSettingsCard()
         tooltip = L.RC_DESC_SHOW_NICKNAMES,
     })
 
+    RC.CbShowOwedReminder = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_RCShowOwedReminder",
+        label = L.RC_SET_OWED_REMINDER or "Show a trade reminder when I win an item",
+        store = SettingsStore, key = "rcShowOwedReminder", y = -70,
+        tooltip = L.RC_DESC_OWED_REMINDER,
+        onChanged = function()
+            if RC.RefreshOwedDisplay then RC.RefreshOwedDisplay() end
+        end,
+    })
+
     local lblCouncil = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    lblCouncil:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -85)
+    lblCouncil:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -110)
     lblCouncil:SetWidth(CONTENT_WIDTH)
     lblCouncil:SetJustifyH("LEFT")
     lblCouncil:SetText(L.RC_SET_COUNCIL or "Council members (semicolon-separated):")
@@ -332,7 +342,7 @@ function RC.BuildSettingsCard()
 
     RC.CouncilMembersEditBox = KART.UI:CreateStyledEditBox(card, "KART_RCCouncilMembers")
     local eb = RC.CouncilMembersEditBox
-    eb:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -105)
+    eb:SetPoint("TOPLEFT", card, "TOPLEFT", 20, -130)
     eb:SetSize(CONTENT_WIDTH - 150, 28)
     eb:SetMaxLetters(255)
     eb:SetScript("OnTextChanged", function(self)
@@ -370,6 +380,7 @@ function RC.Enable()
     end
     RC.BuildSettingsCard()
     RC.UpdateStatusLabel()
+    if type(RC.EnableOwed) == "function" then RC.EnableOwed() end
     if not RC.IsRCLoaded() then
         if not RC.warnedMissing then
             RC.warnedMissing = true

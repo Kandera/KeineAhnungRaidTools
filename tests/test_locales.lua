@@ -67,6 +67,7 @@ local SOURCES = {
     "Core.lua", "MainFrame.lua", "Utils.lua", "Profiles.lua", "AutoLog.lua",
     "BuffChecker.lua", "GroupLogic.lua", "Invite.lua", "RaidleadBar.lua",
     "RCCompanion.lua",
+    "RCOwed.lua",
 }
 
 local function Slurp(path)

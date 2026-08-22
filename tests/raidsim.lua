@@ -28,6 +28,7 @@ local CLIENT_FILES = {
     "Invite.lua",
     "AutoLog.lua",
     "RCCompanion.lua",
+    "RCOwed.lua",
 }
 
 local LIB_FILES = {
@@ -94,7 +95,7 @@ RaidSim.active = nil
 -- diverging from the game it is simulating, in a way that let a test pass for a reason the game
 -- would never supply. Whoever adds the next SavedVariable to the .toc must add it here too.
 local SAVED_VARIABLES = {
-    "KART_Settings", "KART_Profiles", "KART_PlayerCache",
+    "KART_Settings", "KART_Profiles", "KART_PlayerCache", "KART_RCOwed",
 }
 
 -- The member table is copied, not referenced: it is what the roster stubs answer from, so a test
@@ -211,6 +212,7 @@ local function Boot(client, saved)
     -- behaviour was being tested in a world where the cache did not exist.
     client.KASC:Init("KART")
     client.env.KART_PlayerCache = saved.KART_PlayerCache or {}
+    client.env.KART_RCOwed = saved.KART_RCOwed or {}
     client.KASC:AttachCache(client.env.KART_PlayerCache)
 
     RaidSim.active = client

@@ -41,7 +41,7 @@ files["MainFrame.lua"] = { ignore = { "431" } }
 
 globals = {
     -- SavedVariables
-    "KART_Settings", "KART_Profiles", "KART_PlayerCache",
+    "KART_Settings", "KART_Profiles", "KART_PlayerCache", "KART_RCOwed",
     -- Named frames created by the addon and reached through _G
     "KART_GearScanTooltip",
     -- Addon-owned slash command registration
@@ -80,7 +80,8 @@ read_globals = {
     -- Items / trade
     "GetInventoryItemLink", "GetAverageItemLevel", "GetWeaponEnchantInfo",
     "CheckInteractDistance", "InitiateTrade", "GetTradePlayerItemLink", "GetTradeTargetItemLink", "ClickTradeButton",
-    "LE_GAME_ERR_TRADE_COMPLETE",
+    "LE_GAME_ERR_TRADE_COMPLETE", "MAX_TRADE_ITEMS",
+    "GameFontNormal",
     -- Loot rolls
     "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot",
     -- Chat / time / misc
