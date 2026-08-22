@@ -1,6 +1,9 @@
 local addonName, KART = ...
 KART.CT = KART.CT or {}
 local CT = KART.CT
+local LSM = LibStub("LibSharedMedia-3.0", true)
+
+local DEFAULT_HEALTH_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
 
 -- ===== Instance filter --------------------------------------------------------------------
 local INSTANCE_OK = { party = true, raid = true }
@@ -163,6 +166,10 @@ local CT_LAYOUT_DEFAULTS = {
     healthMid  = { r = 0.9, g = 0.8, b = 0.2 },
     healthLow  = { r = 0.8, g = 0.2, b = 0.2 },
     healthFill = "right",
+    healthTexture = DEFAULT_HEALTH_TEXTURE,
+    gradient = false,
+    gradientFrom = { r = 0.2, g = 0.8, b = 0.2 },
+    gradientTo = { r = 0.8, g = 0.2, b = 0.2 },
     healthAlpha = 1, trackAlpha = 0.4,
     bgColor = { r = 0.06, g = 0.07, b = 0.08 },
     bgAlpha = 0.92,
@@ -277,10 +284,58 @@ local function HealthBarColor(snap, ct)
     return Lerp(low.r, mid.r, t), Lerp(low.g, mid.g, t), Lerp(low.b, mid.b, t)
 end
 
+local function EnsureFillTex(bar)
+    if not bar.kartFillTex then
+        bar.kartFillTex = bar:CreateTexture(nil, "ARTWORK")
+        bar:SetStatusBarTexture(bar.kartFillTex)
+    end
+    return bar.kartFillTex
+end
+
 local function InitStatusBarFill(bar)
-    local tex = bar:CreateTexture(nil, "ARTWORK")
+    local tex = EnsureFillTex(bar)
     tex:SetColorTexture(1, 1, 1, 1)
-    bar:SetStatusBarTexture(tex)
+end
+
+local function ResolveHealthTexturePath(ct)
+    local key = (ct and ct.healthTexture) or CT_LAYOUT_DEFAULTS.healthTexture
+    if type(key) == "string" and (key:find("\\") or key:find("/")) then
+        return key
+    end
+    if LSM then
+        local fetched = LSM:Fetch("statusbar", key)
+        if fetched then return fetched end
+    end
+    return DEFAULT_HEALTH_TEXTURE
+end
+
+local function ApplyBarFillTexture(bar, ct, allowGradient)
+    if not bar then return end
+    local tex = EnsureFillTex(bar)
+    local path = ResolveHealthTexturePath(ct)
+    bar.kartGradientActive = false
+    if allowGradient and ct.gradient and tex.SetGradient then
+        tex:SetTexture("Interface\\Buttons\\WHITE8X8")
+        local from = ct.gradientFrom or CT_LAYOUT_DEFAULTS.gradientFrom
+        local to = ct.gradientTo or CT_LAYOUT_DEFAULTS.gradientTo
+        local fr, fg, fb = ColorRGB(from)
+        local tr, tg, tb = ColorRGB(to)
+        local fill = ct.healthFill or CtOrDefault("healthFill")
+        local orient = (fill == "up" or fill == "down") and "VERTICAL" or "HORIZONTAL"
+        local ok = pcall(tex.SetGradient, tex, orient, CreateColor(fr, fg, fb, 1), CreateColor(tr, tg, tb, 1))
+        bar.kartGradientActive = ok and true or false
+        if not ok then
+            tex:SetTexture(path)
+        end
+    else
+        tex:SetTexture(path)
+    end
+end
+
+local function ApplyBarTextures(row, ct)
+    ct = ct or CtSettings() or {}
+    ApplyBarFillTexture(row.health, ct, true)
+    ApplyBarFillTexture(row.absorbBar, ct, false)
 end
 
 local function AddEdgeSet(row, key, layer, texParent)
@@ -787,6 +842,7 @@ local function LayoutRow(row, preview)
         if ct.healAbsorbShow == false then row.healAbsorbFill:Hide() end
     end
 
+    ApplyBarTextures(row, ct)
     CT.BuildStrips(row, preview and true or nil)
 end
 
@@ -867,7 +923,11 @@ function CT.Paint(snap, row)
         row.health:SetValue(health)
         local r, g, b = HealthBarColor(snap, ct)
         local fillAlpha = ct.healthAlpha or CtOrDefault("healthAlpha")
-        row.health:SetStatusBarColor(r, g, b, fillAlpha)
+        if row.health.kartGradientActive then
+            row.health:SetStatusBarColor(1, 1, 1, fillAlpha)
+        else
+            row.health:SetStatusBarColor(r, g, b, fillAlpha)
+        end
         if row.healthBg then
             local trackAlpha = ct.trackAlpha or CtOrDefault("trackAlpha")
             row.healthBg:SetColorTexture(0, 0, 0, trackAlpha)
@@ -1146,6 +1206,7 @@ function CT.SyncWidgets()
     setChecked(KART.CbCtHealAbsorb, ct.healAbsorbShow)
     setSlider(KART.SldCtHealthAlpha, (ct.healthAlpha or 1) * 100)
     setSlider(KART.SldCtTrackAlpha, (ct.trackAlpha or 0.4) * 100)
+    setChecked(KART.CbCtGradient, ct.gradient == true)
     setSlider(KART.SldCtBgAlpha, (ct.bgAlpha or 0.92) * 100)
     setSlider(KART.SldCtBorderSize, ct.borderSize)
     setSlider(KART.SldCtAbsorbAlpha, (ct.absorbAlpha or 0.7) * 100)

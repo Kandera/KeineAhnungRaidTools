@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Co-Tank bar texture and optional gradient** on the Look card, with LibSharedMedia when installed.
 - **Invite channel chips** for whisper, Battle.net, guild and officer chat.
 - **Auto-reply whispers** when a keyword matched but the invite could not go out.
 - **Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.

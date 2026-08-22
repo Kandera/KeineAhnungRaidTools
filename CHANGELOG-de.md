@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Co-Tank-Balkentextur und optionaler Verlauf** auf der Look-Karte, mit LibSharedMedia wenn installiert.
 - **Invite-Kanal-Chips** für Flüstern, Battle.net, Gilde und Offizierschat.
 - **Auto-Antwort per Flüstern**, wenn ein Stichwort passte, aber die Einladung nicht rausging.
 - **Modul-Chips und Bearbeiten-Modus in der Sidebar** zum Platzieren von Modul-Fenstern in der Stadt ohne gespeicherte Sperren zu ändern.
