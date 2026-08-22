@@ -89,6 +89,23 @@ function CT.FillTestSnapshot(snap)
     return snap
 end
 
+-- ===== Secure unit attribute -----------------------------------------------------------
+function CT.ApplySecureUnit(frame, unit)
+    if InCombatLockdown() then
+        CT.pendingUnit = unit
+        return "deferred"
+    end
+    CT.pendingUnit = nil
+    frame:SetAttribute("unit", unit)
+    return "applied"
+end
+
+function CT.OnRegenEnabled()
+    if CT.pendingUnit and CT.row then
+        CT.ApplySecureUnit(CT.row, CT.pendingUnit)
+    end
+end
+
 -- ===== Row fade ---------------------------------------------------------------------------
 function CT.RowAlpha(snap, ct)
     if snap.dead or snap.offline then

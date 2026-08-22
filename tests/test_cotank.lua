@@ -9,6 +9,7 @@ do
     for _, name in ipairs({
         "PickCoTank", "ShouldShow", "BlankSnapshot", "FillLiveSnapshot",
         "FillTestSnapshot", "RowAlpha", "SafeTruthy",
+        "ApplySecureUnit", "OnRegenEnabled",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
@@ -156,4 +157,18 @@ do
     T.eq(KART.CT.RowAlpha(snap, ct), 0.4, "out of range uses rangeAlpha")
     snap.dead = true
     T.eq(KART.CT.RowAlpha(snap, ct), 0.35, "dead is darker than range fade")
+end
+
+do
+    local calls = {}
+    local frame = { SetAttribute = function(_, k, v) calls[#calls + 1] = { k, v } end }
+    KARTTEST.inCombat = true
+    T.eq(KART.CT.ApplySecureUnit(frame, "raid2"), "deferred", "combat defers SetAttribute")
+    T.eq(#calls, 0, "and does not write")
+    T.eq(KART.CT.pendingUnit, "raid2", "pending remembers the unit")
+    KARTTEST.inCombat = false
+    KART.CT.row = frame
+    KART.CT.OnRegenEnabled()
+    T.eq(calls[1][1], "unit", "after combat the unit attribute is set")
+    T.eq(calls[1][2], "raid2", "to the pending token")
 end
