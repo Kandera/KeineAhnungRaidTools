@@ -219,6 +219,10 @@ function _G.C_PartyInfo.InviteUnit(target)
     KARTTEST.invited[#KARTTEST.invited + 1] = target
 end
 function _G.C_PartyInfo.ConvertToRaid() KARTTEST.convertedToRaid = true end
+function _G.C_PartyInfo.ConfirmInviteUnit(target)
+    KARTTEST.confirmedInvites = KARTTEST.confirmedInvites or {}
+    KARTTEST.confirmedInvites[#KARTTEST.confirmedInvites + 1] = target
+end
 function KARTTEST.ClearInvites()
     KARTTEST.invited, KARTTEST.uninvited = {}, {}
     KARTTEST.convertedToRaid = false
@@ -228,6 +232,34 @@ function _G.UnitClass(unit)
     local m = resolve(unit)
     if not m then return nil end
     return m.class or "WARRIOR", m.classFile or m.class or "WARRIOR"
+end
+function _G.UnitGroupRolesAssigned(unit)
+    local m = resolve(unit)
+    return (m and m.role) or "NONE"
+end
+function _G.IsInInstance()
+    local t = (KARTTEST.instance and KARTTEST.instance.instanceType) or "none"
+    return t ~= "none" and t ~= nil, t
+end
+function _G.UnitHealth(unit)
+    local m = resolve(unit)
+    return (m and m.health) or 0
+end
+function _G.UnitHealthMax(unit)
+    local m = resolve(unit)
+    return (m and m.healthMax) or 0
+end
+function _G.UnitGetTotalAbsorbs(unit)
+    local m = resolve(unit)
+    return (m and m.absorb) or 0
+end
+function _G.UnitGetTotalHealAbsorbs(unit)
+    local m = resolve(unit)
+    return (m and m.healAbsorb) or 0
+end
+function _G.UnitIsDeadOrGhost(unit)
+    local m = resolve(unit)
+    return m and m.dead == true
 end
 function _G.UnitIsUnit(a, b)
     local ma, mb = resolve(a), resolve(b)
@@ -346,6 +378,11 @@ end
 function _G.IsInRaid() if isSolo() then return false end return isRaid end
 function _G.IsInGroup() if isSolo() then return false end return count > 0 end
 function _G.GetNumGroupMembers() if isSolo() then return 0 end return count end
+function _G.GetNumSubgroupMembers()
+    if isSolo() then return 0 end
+    if isRaid then return 0 end
+    return math.max(0, count - 1)
+end
 function _G.Ambiguate(name, mode)
     if mode == "none" then return name end
     return (name:match("^([^%-]+)")) or name
@@ -1089,6 +1126,11 @@ function _G.ClearInspectPlayer() end
 -- lootmaster who is reachable right now could not be asserted at all.
 KARTTEST.inRange = {}
 function _G.CheckInteractDistance(unit, _) return KARTTEST.inRange[unit] == true end
+KARTTEST.initiatedTrades = {}
+function _G.InitiateTrade(unit)
+    KARTTEST.initiatedTrades[#KARTTEST.initiatedTrades + 1] = unit
+end
+_G.MAX_TRADE_ITEMS = _G.MAX_TRADE_ITEMS or 7
 -- Combat lockdown is a switch a test flips, not a constant. Half this addon has a branch for it
 -- -- the raidlead bar refuses to change frames, keybinds defer themselves -- and a hard false
 -- meant none of those branches had ever run.

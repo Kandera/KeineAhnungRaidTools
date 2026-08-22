@@ -228,10 +228,37 @@ KART.Defaults = {
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
     autoHideRaidleadBarCombat = false,
+    rlBarFrameStrata = 4, -- index into KART.StrataLevels; own slider, not frameStrata
+    rlBarYieldToMap = true, -- drop the bar under WorldMapFrame while the map is open
     pullTimerDuration = 10,
     rcReasonDialog = true,
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
+    ctModuleEnabled = false,
+    ct = {
+        schemaVersion = 1,
+        -- position
+        point = "CENTER", relativePoint = "CENTER", x = 0, y = 200,
+        locked = true,
+        testMode = false,
+        -- row
+        width = 220, height = 36, scale = 1,
+        healthColor = "class", -- "class" | "custom" | "health"
+        healthCustom = { r = 0.2, g = 0.8, b = 0.2 },
+        healthHigh = { r = 0.2, g = 0.8, b = 0.2 },
+        healthMid  = { r = 0.9, g = 0.8, b = 0.2 },
+        healthLow  = { r = 0.8, g = 0.2, b = 0.2 },
+        healthAlpha = 1, trackAlpha = 0.4,
+        absorbShow = true, healAbsorbShow = true,
+        nameMaxLength = 12,
+        healthText = "both", -- "percent" | "current" | "both"
+        rangeAlpha = 0.4,
+        -- strips: show, max, size, spacing, anchor, growth, x, y
+        debuffs = { show = true, max = 8, size = 22, spacing = 1,
+                    anchor = "TOPLEFT", growth = "right", x = 0, y = 4 },
+        buffs   = { show = true, max = 6, size = 18, spacing = 1,
+                    anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4 },
+    },
     showBuffCheck = false,
     buffCheckAlpha = 90,
     bcCombatDelay = 2,
@@ -251,6 +278,7 @@ KART.Defaults = {
     rcCouncilMembers = "",
     rcCouncilMigrated = false,
     rcShowNickNames = true,
+    rcShowOwedReminder = true,
     wuImportText = "",
     frameStrata = 4, -- index into KART.StrataLevels (4 = HIGH)
     autoLogEnabled = false,
@@ -339,7 +367,8 @@ end
 
 -- Ordered list of WoW frame strata a KART window may sit on, kept here (rather than only inside
 -- KAUI-1.0's own copy) purely so the settings-tab strata slider (MainFrame.lua) has a name list
--- and count to build its range and value display from. The strata registries and the apply/
+-- and count to build its range and value display from. The raidlead bar has its own
+-- `rlBarFrameStrata` slider and is not in these registries. The strata registries and the apply/
 -- register logic itself live in KAUI-1.0 now; see KART.UI:RegisterStrataFrame et al.
 KART.StrataLevels = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
 
