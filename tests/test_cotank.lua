@@ -14,7 +14,7 @@ do
         "Enable", "Disable", "Refresh", "EnsureRow", "ApplyLayout", "Paint",
         "OnRoster", "OnInstance", "AuraEngineAvailable", "BuildStrips",
         "OnUnitEvent", "SyncRowUnitEvents", "ReadInRange",
-        "HostPreview", "ReleasePreview",
+        "HostPreview", "ReleasePreview", "EnsurePreviewRow", "RefreshPreview",
         "IsTaunt", "PlayerSpecId", "FormatTauntMessage", "ShouldAnnounce",
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
@@ -109,8 +109,8 @@ do
     RaidTwoTanks()
     KARTTEST.instance.instanceType = "none"
     KART.CT.hosted = true
-    T.eq(KART.CT.ShouldShow(), true, "settings preview shows in town")
-    T.eq(KART.CT.Invented(), true, "and uses invented data")
+    T.eq(KART.CT.ShouldShow(), false, "opening the Co-Tank tab does not force the world row")
+    T.eq(KART.CT.Invented(), false, "and does not invent the world snapshot")
     KART.CT.hosted = nil
 end
 
@@ -351,6 +351,11 @@ do
         "dummy debuff icons when max >= 1")
     T.truthy(KART.CT.row.buffs.dummyIcons and KART.CT.row.buffs.dummyIcons[1],
         "dummy buff icons when max >= 1")
+    T.eq(KART.CT.row.debuffs:GetParent(), KART.CT.row.overlay,
+        "dummy strips sit on the overlay so they are not under the bar")
+    T.eq(KART.CT.row.debuffs.dummyIcons[1]:IsShown(), true, "dummy debuff icon is shown")
+    T.eq(KART.CT.row.debuffs.dummyIcons[1]:GetWidth(), 20, "dummy debuff icon keeps its size")
+    T.truthy(KART.CT.row.debuffs:GetWidth() >= 20, "dummy strip is wide enough to draw an icon")
 end
 
 do
@@ -695,6 +700,7 @@ end
 do
     KART.CT.events = nil
     KART.CT.row = nil
+    KART.CT.previewRow = nil
     KART.CT.hosted = nil
     KART.CT.pendingHost = nil
     KART.CT.pendingRelease = nil
@@ -703,35 +709,54 @@ do
     T.eq(KART.CT.snap.name, "Other", "live row shows the co-tank")
     KARTTEST.inCombat = true
     KART.CT.HostPreview()
-    T.eq(KART.CT.hosted, nil, "combat does not mark the world row as hosted")
-    T.eq(KART.CT.pendingHost, true, "and remembers to host after combat")
-    T.eq(KART.CT.Invented(), false, "so Invented stays off")
+    T.eq(KART.CT.hosted, true, "settings preview may host in combat")
+    T.eq(KART.CT.Invented(), false, "but the world row stays live")
     T.eq(KART.CT.snap.name, "Other", "and the live name is not replaced with Testtank")
     KARTTEST.inCombat = false
-    KART.CT.OnRegenEnabled()
-    T.eq(KART.CT.hosted, true, "regen hosts the preview")
     KART.CT.ReleasePreview()
     KART.CT.hosted = nil
 end
 
 do
     KART.CT.row = nil
+    KART.CT.previewRow = nil
     KART.CT.hosted = nil
     KART.CT.pendingHost = nil
     KART.CT.pendingRelease = nil
     RaidTwoTanks()
+    env.KART_Settings.ct.testMode = true
+    KARTTEST.instance.instanceType = "none"
     local slot = CreateFrame("Frame", "KARTTEST_CtSlot", UIParent)
     KART.CtPreviewSlot = slot
+    KART.CT.Enable()
     KART.CT.HostPreview()
-    T.eq(KART.CT.row:GetParent(), slot, "preview reparents into the slot")
+    T.eq(KART.CT.row:GetParent(), UIParent, "test mode keeps the world row on UIParent")
+    T.eq(KART.CT.row:IsShown(), true, "and still shows it while the Co-Tank tab is open")
+    T.eq(KART.CT.previewRow:GetParent(), slot, "the tab preview is a separate row")
+    T.eq(KART.CT.previewRow:IsShown(), true, "and the preview is shown")
+    T.truthy(KART.CT.previewRow.debuffs and KART.CT.previewRow.debuffs.dummyIcons
+        and KART.CT.previewRow.debuffs.dummyIcons[1], "preview shows dummy debuffs")
+    T.truthy(KART.CT.previewRow.buffs and KART.CT.previewRow.buffs.dummyIcons
+        and KART.CT.previewRow.buffs.dummyIcons[1], "preview shows dummy buffs")
+    T.truthy(KART.CT.row.debuffs and KART.CT.row.debuffs.dummyIcons
+        and KART.CT.row.debuffs.dummyIcons[1], "test mode shows dummy debuffs on the world row")
     KARTTEST.inCombat = true
     env.KART_Settings.ctModuleEnabled = false
     KART.CT.Disable()
-    T.eq(KART.CT.row:GetParent(), slot, "combat disable leaves the parent")
+    T.eq(KART.CT.row:GetParent(), UIParent, "combat disable leaves the world row on UIParent")
     KARTTEST.inCombat = false
     KART.CT.OnRegenEnabled()
-    T.eq(KART.CT.row:GetParent(), UIParent, "regen puts the row back on UIParent")
+    T.eq(KART.CT.row:GetParent(), UIParent, "regen keeps the world row on UIParent")
     KART.CtPreviewSlot = nil
+end
+
+do
+    KART.CT.row = nil
+    KART.CT.EnsureRow()
+    local nameParent = KART.CT.row.nameText and KART.CT.row.nameText:GetParent()
+    T.truthy(nameParent and nameParent ~= KART.CT.row, "name text is not parented to the row")
+    T.truthy(nameParent:GetFrameLevel() > KART.CT.row.health:GetFrameLevel(),
+        "name overlay sits above the health bar")
 end
 
 do
@@ -742,7 +767,7 @@ do
     KARTTEST.inCombat = true
     KART.CT.ReleasePreview()
     KART.CT.HostPreview()
-    T.eq(KART.CT.pendingHost, true, "open after close in combat wants host")
+    T.eq(KART.CT.hosted, true, "open after close in combat still hosts the preview")
     T.eq(KART.CT.pendingRelease, nil, "and does not keep a stale release")
     KARTTEST.inCombat = false
     KART.CT.hosted = nil

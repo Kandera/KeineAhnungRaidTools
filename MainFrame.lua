@@ -211,7 +211,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
-    [6] = 3320, -- Co-Tank: preview + module + row + look + text + fade + auras + taunt
+    [6] = 3380, -- Co-Tank: preview + module + row + look + text + fade + auras + taunt
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -901,14 +901,17 @@ KART.CreateTabTitle(6, L.LABEL_COTANK_SETTINGS)
 
 local ctPreviewCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctPreviewCard:SetPoint("TOPLEFT", KART.CoTankPanel, "TOPLEFT", 20, -12)
-ctPreviewCard:SetSize(500, 180)
+ctPreviewCard:SetSize(500, 240)
 local ctPreviewTitle = ctPreviewCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctPreviewTitle:SetPoint("TOPLEFT", ctPreviewCard, "TOPLEFT", 16, -12)
 ctPreviewTitle:SetText(L.LABEL_CT_PREVIEW)
 KART.UI:RegisterLabel(ctPreviewTitle)
 KART.CtPreviewSlot = CreateFrame("Frame", nil, ctPreviewCard)
 KART.CtPreviewSlot:SetPoint("TOPLEFT", ctPreviewCard, "TOPLEFT", 16, -36)
-KART.CtPreviewSlot:SetPoint("BOTTOMRIGHT", ctPreviewCard, "BOTTOMRIGHT", -16, 36)
+KART.CtPreviewSlot:SetPoint("BOTTOMRIGHT", ctPreviewCard, "BOTTOMRIGHT", -16, 44)
+if KART.CtPreviewSlot.SetClipsChildren then
+    KART.CtPreviewSlot:SetClipsChildren(false)
+end
 KART.CtAuraEngineNote = ctPreviewCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 KART.CtAuraEngineNote:SetPoint("BOTTOMLEFT", ctPreviewCard, "BOTTOMLEFT", 16, 10)
 KART.CtAuraEngineNote:SetPoint("BOTTOMRIGHT", ctPreviewCard, "BOTTOMRIGHT", -16, 10)

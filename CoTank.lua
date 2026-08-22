@@ -33,7 +33,6 @@ end
 
 -- ===== Visibility -------------------------------------------------------------------------
 function CT.Invented()
-    if CT.hosted then return true end
     local ct = KART_Settings and KART_Settings.ct
     return ct and ct.testMode and true or false
 end
@@ -41,7 +40,6 @@ end
 function CT.ShouldShow()
     local s = KART_Settings
     if not s or s.ctModuleEnabled ~= true then return false end
-    if CT.hosted then return true end
     local _, instanceType = IsInInstance()
     if instanceType == "arena" or instanceType == "pvp" then return false end
     local ct = s.ct
@@ -282,10 +280,11 @@ local function InitStatusBarFill(bar)
     bar:SetStatusBarTexture(tex)
 end
 
-local function AddEdgeSet(row, key, layer)
+local function AddEdgeSet(row, key, layer, texParent)
     local edges = {}
+    texParent = texParent or row
     local function edge(p1, p2, w, h)
-        local tex = row:CreateTexture(nil, layer)
+        local tex = texParent:CreateTexture(nil, layer)
         tex:SetColorTexture(0, 0, 0, 1)
         tex:SetPoint(p1, row, p1, 0, 0)
         tex:SetPoint(p2, row, p2, 0, 0)
@@ -350,15 +349,8 @@ local function ApplyLabel(fs, row, style, defaults, snap)
     fs:SetPoint(anchor, row, anchor, style.x or defaults.x or 0, style.y or defaults.y or 0)
 end
 
-function CT.EnsureRow()
-    if CT.row and CT.row.GetWidth then return CT.row end
-    CT.row = nil
-
-    local row = CreateFrame("Button", "KART_CoTankFrame", UIParent, "SecureUnitButtonTemplate")
-    row:RegisterForClicks("LeftButtonUp")
-    if not InCombatLockdown() then
-        row:SetAttribute("type1", "target")
-    end
+local function BuildRowChrome(row)
+    if row.SetClipsChildren then row:SetClipsChildren(false) end
 
     local bg = row:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
@@ -366,7 +358,6 @@ function CT.EnsureRow()
     row.bg = bg
 
     AddEdgeSet(row, "borderEdges", "BORDER")
-    AddEdgeSet(row, "targetEdges", "OVERLAY")
 
     local absorbBar = CreateFrame("StatusBar", nil, row)
     absorbBar:SetPoint("TOPLEFT", row, "TOPLEFT", 1, -1)
@@ -389,28 +380,48 @@ function CT.EnsureRow()
     healFill:Hide()
     row.healAbsorbFill = healFill
 
+    local overlay = CreateFrame("Frame", nil, row)
+    overlay:SetAllPoints()
+    if overlay.SetFrameLevel then
+        overlay:SetFrameLevel((health:GetFrameLevel() or 1) + 5)
+    end
+    if overlay.SetClipsChildren then overlay:SetClipsChildren(false) end
+    row.overlay = overlay
+
+    AddEdgeSet(row, "targetEdges", "OVERLAY", overlay)
+
     if row.SetClampedToScreen then row:SetClampedToScreen(true) end
 
-    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local nameText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameText:SetPoint("LEFT", row, "LEFT", 6, 0)
     row.nameText = nameText
 
-    local healthText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local healthText = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     healthText:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.healthText = healthText
+end
+
+function CT.EnsureRow()
+    if CT.row and CT.row.GetWidth then return CT.row end
+    CT.row = nil
+
+    local row = CreateFrame("Button", "KART_CoTankFrame", UIParent, "SecureUnitButtonTemplate")
+    row:RegisterForClicks("LeftButtonUp")
+    if not InCombatLockdown() then
+        row:SetAttribute("type1", "target")
+    end
+    BuildRowChrome(row)
 
     row:SetMovable(true)
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", function(self)
         local ct = CtSettings()
-        if CT.hosted then return end
         if ct and not ct.locked and not InCombatLockdown() then
             self:StartMoving()
         end
     end)
     row:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        if CT.hosted then return end
         local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
         local s = KART_Settings
         if not s then return end
@@ -426,6 +437,16 @@ function CT.EnsureRow()
     end)
 
     CT.row = row
+    return row
+end
+
+function CT.EnsurePreviewRow()
+    if CT.previewRow and CT.previewRow.GetWidth then return CT.previewRow end
+    local slot = KART.CtPreviewSlot
+    local row = CreateFrame("Frame", "KART_CoTankPreview", slot or UIParent)
+    if row.EnableMouse then row:EnableMouse(false) end
+    BuildRowChrome(row)
+    CT.previewRow = row
     return row
 end
 
@@ -528,32 +549,67 @@ local function PlaceStrip(strip, row, cfg)
     strip:SetPoint(cfg.anchor, row, cfg.anchor, cfg.x, cfg.y)
 end
 
+local function StripHost(row)
+    return row.overlay or row
+end
+
+local function StripPixelSize(cfg)
+    local max = cfg.max or 0
+    if max < 1 then return 0, 0 end
+    local size = cfg.size or 18
+    local spacing = cfg.spacing or 0
+    local perRow = cfg.perRow or max
+    if perRow < 1 then perRow = 1 end
+    local growth = cfg.growth or "right"
+    local cols, rows
+    if growth == "up" or growth == "down" then
+        rows = math.min(max, perRow)
+        cols = math.ceil(max / perRow)
+    else
+        cols = math.min(max, perRow)
+        rows = math.ceil(max / perRow)
+    end
+    local w = cols * size + math.max(0, cols - 1) * spacing
+    local h = rows * size + math.max(0, rows - 1) * spacing
+    return w, h
+end
+
 local function BuildDummyStrip(row, key, cfg, r, g, b)
+    local host = StripHost(row)
     local strip = row[key]
-    if not strip or strip.isAuraEngine then
+    if not strip or strip.isAuraEngine or (strip.GetParent and strip:GetParent() ~= host) then
         if strip then strip:Hide() end
-        strip = CreateFrame("Frame", nil, row)
+        strip = CreateFrame("Frame", nil, host)
         row[key] = strip
     end
     strip.isAuraEngine = nil
     strip.dummyIcons = strip.dummyIcons or {}
+    if host.SetClipsChildren then host:SetClipsChildren(false) end
+    if strip.SetClipsChildren then strip:SetClipsChildren(false) end
 
     if cfg.show == false then
         strip:Hide()
         return strip
     end
 
+    local w, h = StripPixelSize(cfg)
+    strip:SetSize(w, h)
     PlaceStrip(strip, row, cfg)
     strip:Show()
 
     local max = cfg.max or 0
     if max < 0 then max = 0 end
+    local borderSize = cfg.borderSize or 1
+    if borderSize < 0 then borderSize = 0 end
+    local br, bgc, bb = ColorRGB(cfg.borderColor, { r = 0, g = 0, b = 0 })
     for i = 1, max do
         local icon = strip.dummyIcons[i]
         if not icon then
             icon = CreateFrame("Frame", nil, strip)
+            local border = icon:CreateTexture(nil, "BACKGROUND")
+            border:SetAllPoints()
+            icon.border = border
             local tex = icon:CreateTexture(nil, "ARTWORK")
-            tex:SetAllPoints()
             icon.tex = tex
             strip.dummyIcons[i] = icon
         end
@@ -561,16 +617,11 @@ local function BuildDummyStrip(row, key, cfg, r, g, b)
         local ox, oy = GrowthOffset(cfg, i)
         icon:ClearAllPoints()
         icon:SetPoint(cfg.anchor, strip, cfg.anchor, ox, oy)
-        icon.tex:SetColorTexture(r, g, b, 0.85)
-
-        local borderSize = cfg.borderSize or 1
-        local br, bgc, bb = ColorRGB(cfg.borderColor, { r = 0, g = 0, b = 0 })
-        if not icon.border then
-            icon.border = icon:CreateTexture(nil, "OVERLAY")
-            icon.border:SetPoint("TOPLEFT", icon, "TOPLEFT", 0, 0)
-            icon.border:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 0, 0)
-        end
         icon.border:SetColorTexture(br, bgc, bb, borderSize > 0 and 1 or 0)
+        icon.tex:ClearAllPoints()
+        icon.tex:SetPoint("TOPLEFT", icon, "TOPLEFT", borderSize, -borderSize)
+        icon.tex:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -borderSize, borderSize)
+        icon.tex:SetColorTexture(r, g, b, 0.85)
 
         if not icon.cd then
             icon.cd = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -609,10 +660,11 @@ local function BuildDummyStrip(row, key, cfg, r, g, b)
 end
 
 local function BuildLiveStrip(row, key, cfg, filter)
+    local host = StripHost(row)
     local strip = row[key]
-    if not strip or not strip.isAuraEngine then
+    if not strip or not strip.isAuraEngine or (strip.GetParent and strip:GetParent() ~= host) then
         if strip then strip:Hide() end
-        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, row)
+        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, host)
         if not ok or not frame then return end
         strip = frame
         strip.isAuraEngine = true
@@ -655,11 +707,12 @@ local function BuildLiveStrip(row, key, cfg, filter)
     return strip
 end
 
-function CT.BuildStrips(row)
+function CT.BuildStrips(row, dummy)
     if not row then return end
+    if dummy == nil then dummy = UseDummyStrips() end
     local debuffCfg = StripCfg("debuffs")
     local buffCfg = StripCfg("buffs")
-    if UseDummyStrips() then
+    if dummy then
         BuildDummyStrip(row, "debuffs", debuffCfg, 0.85, 0.25, 0.25)
         BuildDummyStrip(row, "buffs", buffCfg, 0.25, 0.75, 0.35)
     elseif CT.AuraEngineAvailable() then
@@ -692,17 +745,14 @@ function CT.SyncStripUnits(row, unit)
 end
 
 -- ===== Layout -----------------------------------------------------------------------------
-function CT.ApplyLayout()
-    if InCombatLockdown() then return end
-    local row = CT.row
-    if not row then return end
+local function LayoutRow(row, preview)
     local ct = CtSettings()
     if not ct then return end
 
     row:SetSize(ct.width or CtOrDefault("width"), ct.height or CtOrDefault("height"))
     row:SetScale(ct.scale or CtOrDefault("scale"))
     row:ClearAllPoints()
-    if CT.hosted and KART.CtPreviewSlot then
+    if preview and KART.CtPreviewSlot then
         row:SetPoint("CENTER", KART.CtPreviewSlot, "CENTER", 0, 0)
     else
         row:SetPoint(
@@ -733,7 +783,16 @@ function CT.ApplyLayout()
         if ct.healAbsorbShow == false then row.healAbsorbFill:Hide() end
     end
 
-    CT.BuildStrips(row)
+    CT.BuildStrips(row, preview and true or nil)
+end
+
+function CT.ApplyLayout()
+    if CT.row and not InCombatLockdown() then
+        LayoutRow(CT.row, false)
+    end
+    if CT.previewRow and CT.hosted then
+        LayoutRow(CT.previewRow, true)
+    end
 end
 
 -- ===== Paint ------------------------------------------------------------------------------
@@ -791,8 +850,8 @@ local function PlaceHealAbsorb(row, start, shown, max, fill)
     tex:Show()
 end
 
-function CT.Paint(snap)
-    local row = CT.row
+function CT.Paint(snap, row)
+    row = row or CT.row
     if not row or not snap then return end
     local ct = CtSettings() or {}
 
@@ -936,10 +995,12 @@ function CT.Refresh()
             end
         end
         CT.RefreshAskButton()
+        CT.RefreshPreview()
         return
     end
     CT.pendingHide = nil
     if combat and not CT.row then
+        CT.RefreshPreview()
         return
     end
     local row = CT.EnsureRow()
@@ -970,6 +1031,21 @@ function CT.Refresh()
         row:Show()
     end
     CT.RefreshAskButton()
+    CT.RefreshPreview()
+end
+
+function CT.RefreshPreview()
+    if not CT.hosted then return end
+    if not KART_Settings or KART_Settings.ctModuleEnabled ~= true then
+        if CT.previewRow then CT.previewRow:Hide() end
+        return
+    end
+    local row = CT.EnsurePreviewRow()
+    LayoutRow(row, true)
+    local snap = CT.BlankSnapshot({})
+    CT.FillTestSnapshot(snap)
+    CT.Paint(snap, row)
+    row:Show()
 end
 
 function CT.HostPreview()
@@ -978,37 +1054,17 @@ function CT.HostPreview()
         return
     end
     CT.pendingRelease = nil
-    if InCombatLockdown() then
-        CT.pendingHost = true
-        CT.Refresh()
-        return
-    end
     CT.pendingHost = nil
-    CT.pendingUnparent = nil
-    local slot = KART.CtPreviewSlot
-    local row = CT.EnsureRow()
     CT.hosted = true
-    if slot then
-        row:SetParent(slot)
-        row:ClearAllPoints()
-        row:SetPoint("CENTER", slot, "CENTER", 0, 0)
-    end
     CT.Refresh()
 end
 
 function CT.ReleasePreview()
     CT.pendingHost = nil
-    if not CT.hosted and not CT.pendingRelease then
-        return
-    end
-    if InCombatLockdown() then
-        CT.pendingRelease = true
-        return
-    end
     CT.pendingRelease = nil
     CT.hosted = nil
-    if CT.row then
-        CT.row:SetParent(UIParent)
+    if CT.previewRow then
+        CT.previewRow:Hide()
     end
     CT.Refresh()
 end
@@ -1051,6 +1107,9 @@ function CT.Disable()
     end
     CT.watchedUnit = nil
     CT.pendingUnit = nil
+    if CT.previewRow then
+        CT.previewRow:Hide()
+    end
     if CT.askBtn then
         CT.askBtn:Hide()
     end
@@ -1403,7 +1462,6 @@ function CT.ShouldShowAskButton()
     if instanceType == "arena" or instanceType == "pvp" then return false end
     if t.locked == false and not INSTANCE_OK[instanceType] then return true end
     if s.ct and s.ct.testMode then return true end
-    if CT.hosted then return true end
     if t.buttonOnlyInGroup ~= false and not IsInGroup() then return false end
     if t.buttonOnlyInRaid == true and not IsInRaid() then return false end
     return CT.PickCoTank() ~= nil

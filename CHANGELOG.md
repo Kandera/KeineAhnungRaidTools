@@ -18,8 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.
-- **Co-Tank preview waits until combat ends** to move the row; dummy auras stay in test mode, and shields sit on the end of the health bar.
 - **Unlocking the Co-Tank row no longer shows it in arenas or battlegrounds.**
+- **Co-Tank test mode stays on the screen** while the Co-Tank tab is open; the preview shows dummy buffs and debuffs.
+- **Co-Tank name and health text sit on the bar**, not under it.
+- **Co-Tank shields sit on the end of the health bar.**
+- **Co-Tank test buffs and debuffs sit on top of the bar.**
 
 ## [4.0.1] - 2026-08-20
 ### Added

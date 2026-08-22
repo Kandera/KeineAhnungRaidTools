@@ -18,8 +18,11 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
-- **Die Co-Tank-Vorschau wartet das Kampfende ab**, bevor sie die Zeile verschiebt; Dummy-Auren bleiben im Testmodus, Schilde sitzen am Ende des Balkens.
 - **Entsperren zeigt die Co-Tank-Zeile nicht mehr in Arena oder Schlachtfeld.**
+- **Der Co-Tank-Testmodus bleibt auf dem Bildschirm**, während der Co-Tank-Tab offen ist; die Vorschau zeigt Dummy-Buffs und -Debuffs.
+- **Name und Lebenstext sitzen auf dem Co-Tank-Balken**, nicht darunter.
+- **Co-Tank-Schilde sitzen am Ende des Lebensbalkens.**
+- **Co-Tank-Testbuffs und -debuffs sitzen auf dem Balken.**
 
 ## [4.0.1] - 2026-08-20
 ### Hinzugefügt
