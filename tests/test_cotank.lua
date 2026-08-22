@@ -10,7 +10,8 @@ do
         "PickCoTank", "ShouldShow", "BlankSnapshot", "FillLiveSnapshot",
         "FillTestSnapshot", "RowAlpha", "SafeTruthy",
         "ApplySecureUnit", "OnRegenEnabled",
-        "Enable", "Disable", "Refresh", "EnsureRow", "OnRoster", "OnInstance",
+        "Enable", "Disable", "Refresh", "EnsureRow", "ApplyLayout", "Paint",
+        "OnRoster", "OnInstance",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
     end
@@ -188,7 +189,7 @@ do
     RaidTwoTanks()
     KART.CT.Enable()
     T.truthy(KART.CT.events, "enabled module creates an event frame")
-    T.truthy(KART.CT.row and KART.CT.row.shown, "refresh shows the row when visible")
+    T.truthy(KART.CT.row and KART.CT.row:IsShown(), "refresh shows the row when visible")
 end
 
 do
@@ -198,7 +199,7 @@ do
     KART.CT.Enable()
     KART.CT.pendingUnit = "raid2"
     KART.CT.Disable()
-    T.eq(KART.CT.row.shown, false, "disable hides the row")
+    T.eq(KART.CT.row:IsShown(), false, "disable hides the row")
     T.is_nil(KART.CT.pendingUnit, "disable clears pending unit")
 end
 
@@ -208,6 +209,40 @@ local function CountCtEvents(frame)
         if reg.frame == frame then n = n + 1 end
     end
     return n
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            width = 220, height = 36, scale = 1, locked = true, testMode = true,
+            nameMaxLength = 12, healthText = "both", healthColor = "class",
+            healthAlpha = 1, trackAlpha = 0.4, rangeAlpha = 0.4,
+            absorbShow = true, healAbsorbShow = true,
+        },
+    }
+    KART.CT.EnsureRow()
+    KART.CT.ApplyLayout()
+    T.eq(KART.CT.row:GetWidth(), 220, "layout uses ct.width")
+end
+
+do
+    KART.CT.row = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            width = 220, height = 36, scale = 1, locked = true, testMode = true,
+            nameMaxLength = 12, healthText = "both", healthColor = "class",
+            healthAlpha = 1, trackAlpha = 0.4, rangeAlpha = 0.4,
+            absorbShow = true, healAbsorbShow = true,
+        },
+    }
+    local row = KART.CT.EnsureRow()
+    local snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    KART.CT.Paint(snap)
+    T.eq(row.nameText:GetText(), "Testtank", "paint sets truncated name")
+    T.truthy(row.healthText:GetText():find("%%"), "paint health text includes percent when both")
 end
 
 do
