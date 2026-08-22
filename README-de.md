@@ -34,22 +34,28 @@ Ein detailliertes Fenster zur Überprüfung der Raid-Vorbereitung:
 *   **Ready-Check Integration:** Öffnet sich automatisch bei einer Bereitschaftsabfrage.
 *   **Modul-Schalter:** Der Buff-Checker lässt sich komplett deaktivieren, um CPU zu sparen, wenn man ihn nicht braucht. Der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bleibt davon unberührt aktiv, damit der Raidleiter trotzdem korrekte Daten über diesen Spieler sieht.
 
-### 5. RCLootCouncil-Begleiter
+### 5. Co-Tank-Fenster
+*   Im Co-Tank-Tab einschalten (standardmäßig aus).
+*   Erscheint nur, wenn du als Tank in einem Dungeon oder Raid bist (Testmodus auf dem Tab für die Darstellung in der Stadt).
+*   Linksklick auf die Zeile zielt den anderen Tank an.
+
+### 6. RCLootCouncil-Begleiter
 KART 4.0 bringt keinen eingebauten Loot Council mehr mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. **WowUtils** (Addon + Bridge) malt Sim-Spalten ins RC-Abstimmungsfenster.
 
-KART ergänzt zwei Hooks:
+KART ergänzt drei Hooks:
 
 *   **Council per Nickname:** Auf dem Settings-Tab trägt der Raidleiter Council-Mitglieder als [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools)-Nicknames (oder Charakternamen) ein. KART schreibt nur die GUIDs von Mitgliedern, deren aktueller Alt im Raid steht, bei Roster-Änderungen in RCs Council-Liste.
 *   **Award-Weiterleitung:** Council-Mitglieder klicken Award im RC-Abstimmungsfenster; KART flüstert dem Raidlead zu, dessen Client RCs `Award()` aufruft, während der Lead weiter handelt.
+*   **Trade-Erinnerung für Gewinner:** Wenn du ein Item gewinnst, listet ein kleines Fenster, was dir noch zusteht, damit du zum Raidlead laufen und den Handel öffnen kannst. Der Lead nutzt weiter die Trade-UI von RCLootCouncil. Persönlicher Schalter auf dem Settings-Tab (standardmäßig an); `/kart owed` öffnet die Liste erneut.
 
-Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KART. Alle anderen brauchen RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
+In dieser Gilde ist KART raidpflichtig. Alle anderen brauchen weiterhin RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
 
-### 6. WoWUtils-Roster per Paste
+### 7. WoWUtils-Roster per Paste
 *   Raid-Zusammenstellungen lassen sich auf dem **WoWUtils**-Tab per Copy-Paste aus WoWUtils importieren (Boss-für-Boss-Format mit Encounter, Difficulty und Invite-Liste).
 *   Pro Boss eine Zeile mit **Einladen**- und **Entfernen**-Buttons zum schnellen Umbau der Zusammensetzung.
 *   Mehrere Imports werden nach Encounter + Difficulty zusammengeführt; **Zurücksetzen** leert die gespeicherte Liste.
 
-### 7. Anpassung (Settings)
+### 8. Anpassung (Settings)
 *   Vollständig anpassbares Interface (Farben, Transparenz, Schriftarten).
 *   Standardkonforme Steuerung: Fenster und Textfelder lassen sich mit ESC schließen oder abwählen.
 *   Deutsch und Englisch.
@@ -70,6 +76,7 @@ Wer Award klicken soll, und der Raidlead, der die Klicks empfängt, brauchen KAR
 | :--- | :--- |
 | `/kart` | Hauptfenster öffnen oder schließen. |
 | `/kart version` (`/kart v`) | KART-Version von Gilden-/Raid-/Gruppenmitgliedern abfragen. |
+| `/kart owed` | Liste der dir noch zustehenden Items erneut öffnen. |
 | `/kart ench [raid]` | **Wartungswerkzeug.** Enchant-IDs für Tabellenpflege ausgeben. |
 | `/kart help` (`/kart h`) | Diese Befehlsliste. |
 

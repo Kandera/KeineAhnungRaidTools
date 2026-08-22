@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
+- **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
+- **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it.
+
+### Changed
+- **Auto-invite keywords are labeled as whispers.** Guild chat stays the extra checkbox.
+
+### Fixed
+- **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.
 
 ## [4.0.1] - 2026-08-20
 ### Added

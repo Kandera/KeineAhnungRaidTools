@@ -7,6 +7,16 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Hinzugefügt
+- **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
+- **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
+- **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest.
+
+### Geändert
+- **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
+
+### Behoben
+- **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
 
 ## [4.0.1] - 2026-08-20
 ### Hinzugefügt
