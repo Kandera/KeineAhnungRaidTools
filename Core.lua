@@ -103,6 +103,7 @@ function KART.SyncSettingsToUI()
         elseif widget.SetValue then widget:SetValue(KART_Settings[key])
         elseif widget.SetText then widget:SetText(KART_Settings[key]) end
     end
+    if KART.CT and KART.CT.SyncWidgets then KART.CT.SyncWidgets() end
     -- Refresh styles AFTER the widgets have their values, so toggle-switch visuals (which only
     -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
     -- switch, which has no separate UpdateStyles of its own the way ADDON_LOADED does.
@@ -111,7 +112,6 @@ function KART.SyncSettingsToUI()
     -- SyncSettingsToUI also runs on every profile switch, so this has to REPLACE the list rather
     -- than add to it — see WU.SyncBossesToSavedText.
     if KART.WU and KART.WU.SyncBossesToSavedText then KART.WU.SyncBossesToSavedText() end
-    if KART.CT and KART.CT.SyncWidgets then KART.CT.SyncWidgets() end
 
     if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
 
