@@ -101,18 +101,33 @@ do
 end
 
 do
-    -- The bar and the windowed map both sit on HIGH; SetToplevel would raise the bar over the map.
-    -- Opening the map drops the bar one stratum so the map stays readable; closing it restores.
+    -- Own slider, not the window-layer setting. The bar used to share RegisterStrataFrame with
+    -- every KART window, so turning the general slider also lifted the toolbar over the map.
+    S.showRaidleadBar = true
+    S.rlBarFrameStrata = 5 -- DIALOG
+    S.frameStrata = 4      -- HIGH, the windows' default
+    As(KART.UpdateRaidleadBarVisibility)
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "the bar follows its own stratum slider")
+    As(function() KART.UI:ApplyFrameStrata() end)
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "and the window-layer setting does not drag it along")
+
     me.env.WorldMapFrame = CreateFrame("Frame")
     me.env.WorldMapFrame:Hide()
-    S.showRaidleadBar = true
+    S.rlBarYieldToMap = true
     As(KART.UpdateRaidleadBarVisibility)
-    local rest = KART.RaidleadBar:GetFrameStrata()
     me.env.WorldMapFrame:Show()
     T.eq(KART.RaidleadBar:GetFrameStrata(), "LOW", "the bar sits under the world map while it is open")
     me.env.WorldMapFrame:Hide()
-    T.eq(KART.RaidleadBar:GetFrameStrata(), rest, "and returns to its own stratum when the map closes")
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "and returns to the bar's own slider, not the window layer")
+
+    S.rlBarYieldToMap = false
+    As(KART.UpdateRaidleadBarVisibility)
+    me.env.WorldMapFrame:Show()
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "turning the map switch off keeps the bar's own layer")
+    me.env.WorldMapFrame:Hide()
     me.env.WorldMapFrame = nil
+    S.rlBarYieldToMap = true
+    S.rlBarFrameStrata = 4
 end
 
 -- Override bindings, which outlive the bar ----------------------------------------------------------

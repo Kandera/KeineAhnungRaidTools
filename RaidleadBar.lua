@@ -126,7 +126,7 @@ rlBar:SetClampedToScreen(true)
 rlBar:EnableMouse(true)
 rlBar:RegisterForDrag("LeftButton")
 KART.RaidleadBar = rlBar
-KART.UI:RegisterStrataFrame(rlBar)
+if rlBar.SetToplevel then rlBar:SetToplevel(true) end
 
 rlBar:SetScript("OnDragStart", function(self)
     if not KART_Settings.lockRaidleadBar then self:StartMoving() end
@@ -149,20 +149,21 @@ rlBar:SetBackdropColor(0, 0, 0, 0.8)
 rlBar:SetBackdropBorderColor(0, 0, 0, 1)
 KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
 
--- The windowed world map's canvas is MEDIUM+toplevel (MapCanvasFrameTemplate); this bar is too, so
--- HIGH/MEDIUM would still raise over the map. Drop to LOW while the map is open. Hide() on the
--- secure marker buttons is combat-locked; SetFrameStrata is not.
-local function YieldToWorldMap()
+-- Own stratum, not the window-layer slider. Sharing RegisterStrataFrame made the toolbar follow
+-- every KART window, which is how it sat on the map. Map canvas is MEDIUM+toplevel, so HIGH/MEDIUM
+-- still covers it: with rlBarYieldToMap, drop to LOW while the map is open. Hide() on the secure
+-- marker buttons is combat-locked; SetFrameStrata is not.
+function KART.ApplyRaidleadBarStrata()
     local map = WorldMapFrame
-    if map and map.IsShown and map:IsShown() then
+    local yield = KART_Settings and KART_Settings.rlBarYieldToMap
+    if yield and map and map.IsShown and map:IsShown() then
         rlBar:SetFrameStrata("LOW")
+        return
     end
-end
-
-local function RestoreBarStrata()
-    if KART.UI and KART.UI.CurrentStrata then
-        rlBar:SetFrameStrata(KART.UI:CurrentStrata(false))
-    end
+    local levels = KART.StrataLevels
+    local idx = KART_Settings and KART_Settings.rlBarFrameStrata or 4
+    if type(idx) ~= "number" or not levels or idx < 1 or idx > #levels then idx = 4 end
+    rlBar:SetFrameStrata(levels[idx])
 end
 
 local mapHooked
@@ -170,17 +171,12 @@ local function HookWorldMap()
     local map = WorldMapFrame
     if mapHooked or not map or not map.HookScript then return end
     mapHooked = true
-    map:HookScript("OnShow", YieldToWorldMap)
-    map:HookScript("OnHide", RestoreBarStrata)
-    YieldToWorldMap()
+    map:HookScript("OnShow", KART.ApplyRaidleadBarStrata)
+    map:HookScript("OnHide", KART.ApplyRaidleadBarStrata)
+    KART.ApplyRaidleadBarStrata()
 end
 
--- ApplyFrameStrata would put the bar back on HIGH while the map is still open (slider, style).
-local applyStrata = KART.UI.ApplyFrameStrata
-function KART.UI.ApplyFrameStrata(self, ...)
-    applyStrata(self, ...)
-    YieldToWorldMap()
-end
+KART.ApplyRaidleadBarStrata()
 
 -- 4. Sichtbarkeits-Funktion (im KART Table für Core.lua)
 function KART.UpdateRaidleadBarVisibility()
@@ -191,7 +187,7 @@ function KART.UpdateRaidleadBarVisibility()
         UnregisterStateDriver(rlBar, "visibility")
         rlBar:Hide()
         KART.ApplyKeybinds()
-        YieldToWorldMap()
+        KART.ApplyRaidleadBarStrata()
         return
     end
 
@@ -219,7 +215,7 @@ function KART.UpdateRaidleadBarVisibility()
     -- Keep the override bindings in step with visibility: ApplyKeybinds sets them when the bar is
     -- shown and clears them when it isn't, so a hidden bar never leaves a key hijacked.
     KART.ApplyKeybinds()
-    YieldToWorldMap()
+    KART.ApplyRaidleadBarStrata()
 end
 
 -- Applies every stored keybind as an override click-binding on its target button. Override
