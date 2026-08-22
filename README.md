@@ -35,9 +35,10 @@ A detailed window for checking raid readiness:
 *   **Module Toggle:** The Buff Checker can be fully disabled to save CPU when not needed. The background KART sync (oil/ilvl/gear answers for others) stays active regardless, so the raid lead still sees correct data about this player.
 
 ### 5. Co-Tank frame
-*   Enable it on the Co-Tank tab (off by default).
-*   Shows only while you are a tank in a dungeon or raid (test mode on that tab for town layout).
+*   Enable it on the Co-Tank tab (off by default). The tab shows a live preview of the row so you can set it up in town.
+*   Test mode keeps the invented row after you close the window. Live: tank role, optional group/instance filters (dungeons and raids on by default). Unlock the row to place it without a group.
 *   Left-click the row to target the other tank.
+*   Optional: announce your own taunt so the other tank hears it, and an on-screen button (or action-bar macro) that asks them to take the mob. Both off until you turn them on.
 
 ### 6. RCLootCouncil companion
 KART 4.0 no longer ships a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. **WowUtils** (addon + Bridge) paints sim columns on RC's voting frame.

@@ -71,9 +71,11 @@ local isSolo
 -- "npc" is the trade partner during TRADE_SHOW (see LC.Trade.OnTradeShow). Point it at a roster
 -- row so a test can trade with a real raid member rather than a name string.
 KARTTEST.tradePartnerUnit = nil
+KARTTEST.target = nil
 local function resolve(unit)
     if unit == "player" and KARTTEST.activeUnit then unit = KARTTEST.activeUnit end
     if unit == "npc" then unit = KARTTEST.tradePartnerUnit end
+    if unit == "target" then return KARTTEST.target end
     return roster[unit]
 end
 
@@ -263,14 +265,22 @@ function _G.UnitIsDeadOrGhost(unit)
 end
 KARTTEST.rangeSecret = {}
 KARTTEST.range = {}
+KARTTEST.rangeChecked = {}
 function _G.UnitInRange(unit)
     if KARTTEST.rangeSecret[unit] then
         local secret = {}
         KARTTEST.secretValues[secret] = true
-        return secret
+        return secret, secret
     end
-    if KARTTEST.range[unit] == nil then return true end
-    return KARTTEST.range[unit]
+    local inRange = true
+    if KARTTEST.range[unit] ~= nil then
+        inRange = KARTTEST.range[unit]
+    end
+    local checked = true
+    if KARTTEST.rangeChecked[unit] ~= nil then
+        checked = KARTTEST.rangeChecked[unit]
+    end
+    return inRange, checked
 end
 function _G.UnitIsUnit(a, b)
     local ma, mb = resolve(a), resolve(b)
@@ -537,6 +547,9 @@ function _G.CreateFrame(_, name, parent, _)
             if reg.frame == f and reg.event == event then table.remove(KARTTEST.eventFrames, i) end
         end
         return f
+    end
+    function f:RegisterUnitEvent(event, _)
+        return f:RegisterEvent(event)
     end
 
     local checked = false
@@ -1260,6 +1273,73 @@ KARTTEST.keystoneLevel = 0
 _G.C_ChallengeMode = {
     GetActiveKeystoneInfo = function() return KARTTEST.keystoneLevel end,
 }
+
+-- Spell lookup the Co-Tank taunt path uses. Names and textures are per-id tables a test fills;
+-- missing ids return nil, which is what C_Spell does for an unknown spell.
+KARTTEST.spellNames = {
+    [355] = "Taunt",
+    [56222] = "Dark Command",
+    [49576] = "Death Grip",
+    [62124] = "Hand of Reckoning",
+    [115546] = "Provoke",
+    [6795] = "Growl",
+    [185245] = "Torment",
+}
+KARTTEST.spellTextures = {
+    [355] = 132270,
+    [56222] = 136088,
+    [49576] = 237532,
+    [62124] = 135984,
+    [115546] = 620830,
+    [6795] = 132270,
+    [185245] = 1344647,
+}
+_G.C_Spell = {
+    GetSpellName = function(id) return KARTTEST.spellNames[id] end,
+    GetSpellTexture = function(id) return KARTTEST.spellTextures[id] end,
+}
+
+-- Midnight spec APIs. GetSpecialization returns a 1-based index; GetSpecializationInfo's first
+-- return is specId (71 Arms, 250 Blood, …).
+KARTTEST.specIndex = 1
+KARTTEST.specId = 71
+_G.C_SpecializationInfo = {
+    GetSpecialization = function() return KARTTEST.specIndex end,
+    GetSpecializationInfo = function()
+        return KARTTEST.specId, "Spec", "", 0, "TANK"
+    end,
+}
+
+-- Macros: recorded, and they throw in combat the way the protected API does.
+KARTTEST.macros = {}
+KARTTEST.macroCalls = {}
+function _G.GetMacroIndexByName(name)
+    for i, m in ipairs(KARTTEST.macros) do
+        if m.name == name then return i end
+    end
+    return 0
+end
+function _G.CreateMacro(name, icon, body, perCharacter)
+    KARTTEST.macroCalls[#KARTTEST.macroCalls + 1] = { op = "create", name = name, icon = icon, body = body }
+    if InCombatLockdown() then error("Cannot create macros while in combat") end
+    KARTTEST.macros[#KARTTEST.macros + 1] =
+        { name = name, icon = icon, body = body, perCharacter = perCharacter }
+    return #KARTTEST.macros
+end
+function _G.EditMacro(index, name, icon, body)
+    KARTTEST.macroCalls[#KARTTEST.macroCalls + 1] = { op = "edit", index = index, name = name, icon = icon, body = body }
+    if InCombatLockdown() then error("Cannot edit macros while in combat") end
+    local m = KARTTEST.macros[index]
+    if not m then return end
+    if name then m.name = name end
+    if icon then m.icon = icon end
+    if body then m.body = body end
+    return index
+end
+function KARTTEST.ClearMacros()
+    KARTTEST.macros = {}
+    KARTTEST.macroCalls = {}
+end
 -- Loot history stamps every entry with the difficulty it was won on, and the catch-up sync resolves
 -- a received difficulty ID back to its name.
 function _G.GetDifficultyInfo(id)
@@ -1281,10 +1361,10 @@ end
 -- test can assert about the message that was never sent, which is what a silent failure looks like
 -- from the inside.
 KARTTEST.chat = {}
-function _G.SendChatMessage(msg, channel)
+function _G.SendChatMessage(msg, channel, _, target)
     msg = tostring(msg or "")
     KARTTEST.chat[#KARTTEST.chat + 1] =
-        { msg = msg, channel = channel, refused = #msg > 255, by = KARTTEST.activeUnit }
+        { msg = msg, channel = channel, target = target, refused = #msg > 255, by = KARTTEST.activeUnit }
 end
 function KARTTEST.ClearChat() KARTTEST.chat = {} end
 function _G.IsInGuild() return false end

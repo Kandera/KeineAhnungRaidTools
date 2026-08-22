@@ -45,6 +45,10 @@ function KART.ShowTab(tabIndex)
     -- defined further down in this file, after the scroll frame exists).
     KART.CurrentTab = tabIndex
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    if KART.CT and KART.CT.OnSettingsTab then
+        local open = tabIndex == 6 and KART.MainFrame and KART.MainFrame:IsShown()
+        KART.CT.OnSettingsTab(open and true or false)
+    end
 end
 
 -- 2. Main window (PNG artwork, EllesmereUI-style)
@@ -76,6 +80,9 @@ KART.UI:AddShowFade(mainFrame)
 -- Allows closing the whole KART window with the ESC key
 KART.RegisterEscapeFrame(mainFrame)
 KART.MainFrame = mainFrame
+mainFrame:HookScript("OnHide", function()
+    if KART.CT and KART.CT.OnSettingsTab then KART.CT.OnSettingsTab(false) end
+end)
 
 -- clickArea covers the opaque artwork region (shadow margin excluded).
 -- Every interactive child anchors to it; it also blocks clicks from
@@ -204,7 +211,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [2] = 398, -- Raidlead: bar-settings card (180) + keybinds card (168) + gaps
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 555, -- Settings: two half cards + color card + profiles card
-    [6] = 910, -- Co-Tank: module card + row card + auras card (incl. anchor/growth menus)
+    [6] = 3320, -- Co-Tank: preview + module + row + look + text + fade + auras + taunt
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -853,23 +860,65 @@ end)
 local function CtStore() KART_Settings.ct = KART_Settings.ct or {}; return KART_Settings.ct end
 local function CtDebuffs() local ct = CtStore(); ct.debuffs = ct.debuffs or {}; return ct.debuffs end
 local function CtBuffs() local ct = CtStore(); ct.buffs = ct.buffs or {}; return ct.buffs end
+local function CtNameStyle() local ct = CtStore(); ct.nameStyle = ct.nameStyle or {}; return ct.nameStyle end
+local function CtHealthStyle() local ct = CtStore(); ct.healthStyle = ct.healthStyle or {}; return ct.healthStyle end
+local function CtTargetBorder() local ct = CtStore(); ct.targetBorder = ct.targetBorder or {}; return ct.targetBorder end
 
 local function CtRefresh()
     if KART.CT and KART.CT.Refresh then KART.CT.Refresh() end
 end
 local function CtEnable()
     if KART.CT and KART.CT.Enable then KART.CT.Enable() end
+    if KART.CurrentTab == 6 and KART.MainFrame and KART.MainFrame:IsShown()
+        and KART.CT and KART.CT.HostPreview then
+        KART.CT.HostPreview()
+    end
 end
 local function CtLayoutChanged()
     if KART.CT and KART.CT.ApplyLayout then KART.CT.ApplyLayout() end
     CtRefresh()
 end
 
+local function CtPickColor(tbl, after)
+    if not tbl then return end
+    local store = {
+        r = math.floor(((tbl.r or 1) * 100) + 0.5),
+        g = math.floor(((tbl.g or 1) * 100) + 0.5),
+        b = math.floor(((tbl.b or 1) * 100) + 0.5),
+    }
+    KART.UI:OpenColorPicker({
+        store = store, rKey = "r", gKey = "g", bKey = "b",
+        onApply = function()
+            tbl.r = store.r / 100
+            tbl.g = store.g / 100
+            tbl.b = store.b / 100
+            if after then after() end
+        end,
+    })
+end
+
 KART.CreateTabTitle(6, L.LABEL_COTANK_SETTINGS)
 
+local ctPreviewCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctPreviewCard:SetPoint("TOPLEFT", KART.CoTankPanel, "TOPLEFT", 20, -12)
+ctPreviewCard:SetSize(500, 180)
+local ctPreviewTitle = ctPreviewCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctPreviewTitle:SetPoint("TOPLEFT", ctPreviewCard, "TOPLEFT", 16, -12)
+ctPreviewTitle:SetText(L.LABEL_CT_PREVIEW)
+KART.UI:RegisterLabel(ctPreviewTitle)
+KART.CtPreviewSlot = CreateFrame("Frame", nil, ctPreviewCard)
+KART.CtPreviewSlot:SetPoint("TOPLEFT", ctPreviewCard, "TOPLEFT", 16, -36)
+KART.CtPreviewSlot:SetPoint("BOTTOMRIGHT", ctPreviewCard, "BOTTOMRIGHT", -16, 36)
+KART.CtAuraEngineNote = ctPreviewCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+KART.CtAuraEngineNote:SetPoint("BOTTOMLEFT", ctPreviewCard, "BOTTOMLEFT", 16, 10)
+KART.CtAuraEngineNote:SetPoint("BOTTOMRIGHT", ctPreviewCard, "BOTTOMRIGHT", -16, 10)
+KART.CtAuraEngineNote:SetJustifyH("LEFT")
+KART.CtAuraEngineNote:SetText(L.SET_CT_AURA_ENGINE)
+KART.UI:RegisterLabel(KART.CtAuraEngineNote)
+
 local ctModCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctModCard:SetPoint("TOPLEFT", KART.CoTankPanel, "TOPLEFT", 20, -12)
-ctModCard:SetSize(500, 120)
+ctModCard:SetPoint("TOPLEFT", ctPreviewCard, "BOTTOMLEFT", 0, -20)
+ctModCard:SetSize(500, 180)
 
 KART.CbCtModuleEnabled = KART.UI:CreateSettingsCheckbox(ctModCard, {
     name = "KART_CtModuleEnabled", label = L.SET_CT_MODULE_ENABLED,
@@ -897,6 +946,24 @@ KART.CbCtLock = KART.UI:CreateSettingsCheckbox(ctModCard, {
 })
 KART.CbCtLock.text:SetWidth(190)
 KART.CbCtLock.text:SetJustifyH("LEFT")
+
+KART.CbCtOnlyGroup = KART.UI:CreateSettingsCheckbox(ctModCard, {
+    name = "KART_CtOnlyGroup", label = L.SET_CT_ONLY_GROUP,
+    store = CtStore, key = "onlyInGroup", y = -110,
+    tooltip = L.DESC_CT_ONLY_GROUP,
+    onChanged = CtRefresh,
+})
+KART.CbCtOnlyGroup.text:SetWidth(190)
+KART.CbCtOnlyGroup.text:SetJustifyH("LEFT")
+
+KART.CbCtOnlyInstance = KART.UI:CreateSettingsCheckbox(ctModCard, {
+    name = "KART_CtOnlyInstance", label = L.SET_CT_ONLY_INSTANCE,
+    store = CtStore, key = "onlyInInstance", y = -140,
+    tooltip = L.DESC_CT_ONLY_INSTANCE,
+    onChanged = CtRefresh,
+})
+KART.CbCtOnlyInstance.text:SetWidth(220)
+KART.CbCtOnlyInstance.text:SetJustifyH("LEFT")
 
 local ctRowCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctRowCard:SetPoint("TOPLEFT", ctModCard, "BOTTOMLEFT", 0, -20)
@@ -963,6 +1030,7 @@ local CT_HEALTH_TEXT_L = {
     percent = function() return L.CT_HEALTH_TEXT_PERCENT end,
     current = function() return L.CT_HEALTH_TEXT_CURRENT end,
     both = function() return L.CT_HEALTH_TEXT_BOTH end,
+    deficit = function() return L.CT_HEALTH_TEXT_DEFICIT end,
 }
 local CT_ANCHOR_L = {
     TOPLEFT = function() return L.CT_ANCHOR_TOPLEFT end,
@@ -1032,7 +1100,7 @@ KART.BtnCtHealthText:SetSize(220, 22)
 KART.BtnCtHealthText:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
         rootDescription:CreateTitle(L.SET_CT_HEALTH_TEXT)
-        for _, opt in ipairs({ "percent", "current", "both" }) do
+        for _, opt in ipairs({ "percent", "current", "both", "deficit" }) do
             rootDescription:CreateButton(CT_HEALTH_TEXT_L[opt](), function()
                 CtStore().healthText = opt
                 RefreshCtHealthTextBtn()
@@ -1042,9 +1110,310 @@ KART.BtnCtHealthText:SetScript("OnClick", function(self)
     end)
 end)
 
+local CT_FILL_L = {
+    right = function() return L.CT_FILL_RIGHT end,
+    left = function() return L.CT_FILL_LEFT end,
+    up = function() return L.CT_FILL_UP end,
+    down = function() return L.CT_FILL_DOWN end,
+}
+local CT_FILL_OPTS = { "right", "left", "up", "down" }
+local CT_OUTLINE_L = {
+    NONE = function() return L.CT_OUTLINE_NONE end,
+    OUTLINE = function() return L.CT_OUTLINE_OUTLINE end,
+    THICKOUTLINE = function() return L.CT_OUTLINE_THICK end,
+}
+local CT_OUTLINE_OPTS = { "NONE", "OUTLINE", "THICKOUTLINE" }
+local CT_TEXT_ANCHOR_OPTS = { "LEFT", "RIGHT", "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER" }
+
+local function RefreshCtFillBtn()
+    if not KART_Settings then return end
+    local mode = CtStore().healthFill or "right"
+    local labelFn = CT_FILL_L[mode]
+    KART.BtnCtHealthFill.text:SetText(L.SET_CT_HEALTH_FILL .. ": " .. (labelFn and labelFn() or mode))
+end
+
+local ctLookCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctLookCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
+ctLookCard:SetSize(500, 420)
+
+KART.BtnCtHealthFill = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_FILL, L.DESC_CT_HEALTH_FILL)
+KART.BtnCtHealthFill:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -20)
+KART.BtnCtHealthFill:SetSize(220, 22)
+KART.BtnCtHealthFill:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_HEALTH_FILL)
+        for _, opt in ipairs(CT_FILL_OPTS) do
+            rootDescription:CreateButton(CT_FILL_L[opt](), function()
+                CtStore().healthFill = opt
+                RefreshCtFillBtn()
+                CtLayoutChanged()
+            end)
+        end
+    end)
+end)
+
+KART.SldCtHealthAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtHealthAlphaSlider", label = L.SET_CT_HEALTH_ALPHA,
+    min = 10, max = 100, store = CtStore, key = "healthAlpha", y = -60,
+    onChanged = function()
+        CtStore().healthAlpha = KART.SldCtHealthAlpha:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtTrackAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtTrackAlphaSlider", label = L.SET_CT_TRACK_ALPHA,
+    min = 0, max = 100, store = CtStore, key = "trackAlpha", y = -60,
+    onChanged = function()
+        CtStore().trackAlpha = KART.SldCtTrackAlpha:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtTrackAlpha:ClearAllPoints()
+KART.SldCtTrackAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -76)
+
+KART.BtnCtCustomColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_CUSTOM_COLOR)
+KART.BtnCtCustomColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -110)
+KART.BtnCtCustomColor:SetSize(220, 22)
+KART.BtnCtCustomColor:SetScript("OnClick", function()
+    CtPickColor(CtStore().healthCustom, CtLayoutChanged)
+end)
+KART.BtnCtBgColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_BG_COLOR)
+KART.BtnCtBgColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -110)
+KART.BtnCtBgColor:SetSize(220, 22)
+KART.BtnCtBgColor:SetScript("OnClick", function()
+    CtPickColor(CtStore().bgColor, CtLayoutChanged)
+end)
+
+KART.BtnCtHealthHigh = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_HIGH)
+KART.BtnCtHealthHigh:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -142)
+KART.BtnCtHealthHigh:SetSize(220, 22)
+KART.BtnCtHealthHigh:SetScript("OnClick", function()
+    CtPickColor(CtStore().healthHigh, CtLayoutChanged)
+end)
+KART.BtnCtHealthMid = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_MID)
+KART.BtnCtHealthMid:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -142)
+KART.BtnCtHealthMid:SetSize(220, 22)
+KART.BtnCtHealthMid:SetScript("OnClick", function()
+    CtPickColor(CtStore().healthMid, CtLayoutChanged)
+end)
+KART.BtnCtHealthLow = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEALTH_LOW)
+KART.BtnCtHealthLow:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -174)
+KART.BtnCtHealthLow:SetSize(220, 22)
+KART.BtnCtHealthLow:SetScript("OnClick", function()
+    CtPickColor(CtStore().healthLow, CtLayoutChanged)
+end)
+
+KART.SldCtBgAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtBgAlphaSlider", label = L.SET_CT_BG_ALPHA,
+    min = 10, max = 100, store = CtStore, key = "bgAlpha", y = -210,
+    onChanged = function()
+        CtStore().bgAlpha = KART.SldCtBgAlpha:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtBorderSize = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtBorderSizeSlider", label = L.SET_CT_BORDER_SIZE,
+    min = 0, max = 4, store = CtStore, key = "borderSize", y = -210,
+    onChanged = CtLayoutChanged,
+})
+KART.SldCtBorderSize:ClearAllPoints()
+KART.SldCtBorderSize:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -226)
+
+KART.BtnCtBorderColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_BORDER_COLOR)
+KART.BtnCtBorderColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -260)
+KART.BtnCtBorderColor:SetSize(220, 22)
+KART.BtnCtBorderColor:SetScript("OnClick", function()
+    CtPickColor(CtStore().borderColor, CtLayoutChanged)
+end)
+
+KART.BtnCtAbsorbColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_ABSORB_COLOR)
+KART.BtnCtAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -292)
+KART.BtnCtAbsorbColor:SetSize(220, 22)
+KART.BtnCtAbsorbColor:SetScript("OnClick", function()
+    CtPickColor(CtStore().absorbColor, CtLayoutChanged)
+end)
+KART.SldCtAbsorbAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtAbsorbAlphaSlider", label = L.SET_CT_ABSORB_ALPHA,
+    min = 10, max = 100, store = CtStore, key = "absorbAlpha", y = -292,
+    onChanged = function()
+        CtStore().absorbAlpha = KART.SldCtAbsorbAlpha:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtAbsorbAlpha:ClearAllPoints()
+KART.SldCtAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -308)
+
+KART.BtnCtHealAbsorbColor = KART.UI:CreateModernButton(ctLookCard, L.SET_CT_HEAL_ABSORB_COLOR)
+KART.BtnCtHealAbsorbColor:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 20, -350)
+KART.BtnCtHealAbsorbColor:SetSize(220, 22)
+KART.BtnCtHealAbsorbColor:SetScript("OnClick", function()
+    CtPickColor(CtStore().healAbsorbColor, CtLayoutChanged)
+end)
+KART.SldCtHealAbsorbAlpha = KART.UI:CreateSettingsSlider(ctLookCard, {
+    name = "KART_CtHealAbsorbAlphaSlider", label = L.SET_CT_HEAL_ABSORB_ALPHA,
+    min = 10, max = 100, store = CtStore, key = "healAbsorbAlpha", y = -350,
+    onChanged = function()
+        CtStore().healAbsorbAlpha = KART.SldCtHealAbsorbAlpha:GetValue() / 100
+        CtLayoutChanged()
+    end,
+})
+KART.SldCtHealAbsorbAlpha:ClearAllPoints()
+KART.SldCtHealAbsorbAlpha:SetPoint("TOPLEFT", ctLookCard, "TOPLEFT", 260, -366)
+
+local function CtBuildTextBlock(card, y0, title, storeFn, prefix)
+    local titleFS = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    titleFS:SetPoint("TOPLEFT", card, "TOPLEFT", 20, y0)
+    titleFS:SetText(title)
+    KART.UI:RegisterLabel(titleFS)
+
+    local show = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_Ct" .. prefix .. "Show", label = L.SET_CT_TEXT_SHOW,
+        store = storeFn, key = "show", y = y0 - 24,
+        onChanged = CtLayoutChanged,
+    })
+    local size = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "Size", label = L.SET_CT_TEXT_SIZE,
+        min = 0, max = 32, store = storeFn, key = "size", y = y0 - 24,
+        onChanged = CtLayoutChanged,
+    })
+    size:ClearAllPoints()
+    size:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 40)
+
+    local colorBtn = KART.UI:CreateModernButton(card, L.SET_CT_TEXT_COLOR)
+    colorBtn:SetPoint("TOPLEFT", card, "TOPLEFT", 20, y0 - 80)
+    colorBtn:SetSize(220, 22)
+    colorBtn:SetScript("OnClick", function()
+        local st = storeFn()
+        st.color = st.color or { r = 1, g = 1, b = 1 }
+        CtPickColor(st.color, CtLayoutChanged)
+    end)
+    local classCb = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_Ct" .. prefix .. "Class", label = L.SET_CT_TEXT_CLASS,
+        store = storeFn, key = "classColor", y = y0 - 80,
+        onChanged = CtLayoutChanged,
+    })
+    classCb:ClearAllPoints()
+    classCb:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 80)
+
+    local outlineBtn = KART.UI:CreateModernButton(card, L.SET_CT_TEXT_OUTLINE)
+    outlineBtn:SetPoint("TOPLEFT", card, "TOPLEFT", 20, y0 - 112)
+    outlineBtn:SetSize(220, 22)
+    local function refreshOutline()
+        local mode = storeFn().outline or "OUTLINE"
+        local labelFn = CT_OUTLINE_L[mode]
+        outlineBtn.text:SetText(L.SET_CT_TEXT_OUTLINE .. ": " .. (labelFn and labelFn() or mode))
+    end
+    outlineBtn:SetScript("OnClick", function(self)
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+            rootDescription:CreateTitle(L.SET_CT_TEXT_OUTLINE)
+            for _, opt in ipairs(CT_OUTLINE_OPTS) do
+                rootDescription:CreateButton(CT_OUTLINE_L[opt](), function()
+                    storeFn().outline = opt
+                    refreshOutline()
+                    CtLayoutChanged()
+                end)
+            end
+        end)
+    end)
+
+    local anchorBtn = KART.UI:CreateModernButton(card, L.SET_CT_TEXT_ANCHOR)
+    anchorBtn:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 112)
+    anchorBtn:SetSize(220, 22)
+    local function refreshAnchor()
+        local mode = storeFn().anchor or "LEFT"
+        anchorBtn.text:SetText(L.SET_CT_TEXT_ANCHOR .. ": " .. mode)
+    end
+    anchorBtn:SetScript("OnClick", function(self)
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+            rootDescription:CreateTitle(L.SET_CT_TEXT_ANCHOR)
+            for _, opt in ipairs(CT_TEXT_ANCHOR_OPTS) do
+                rootDescription:CreateButton(opt, function()
+                    storeFn().anchor = opt
+                    refreshAnchor()
+                    CtLayoutChanged()
+                end)
+            end
+        end)
+    end)
+
+    local nudgeX = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "NudgeX", label = L.SET_CT_TEXT_NUDGE_X,
+        min = -40, max = 40, store = storeFn, key = "x", y = y0 - 150,
+        onChanged = CtLayoutChanged,
+    })
+    local nudgeY = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "NudgeY", label = L.SET_CT_TEXT_NUDGE_Y,
+        min = -40, max = 40, store = storeFn, key = "y", y = y0 - 150,
+        onChanged = CtLayoutChanged,
+    })
+    nudgeY:ClearAllPoints()
+    nudgeY:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 166)
+
+    return {
+        show = show, size = size, colorBtn = colorBtn, classCb = classCb,
+        outlineBtn = outlineBtn, refreshOutline = refreshOutline,
+        anchorBtn = anchorBtn, refreshAnchor = refreshAnchor,
+        nudgeX = nudgeX, nudgeY = nudgeY, titleFS = titleFS,
+    }
+end
+
+local ctTextCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctTextCard:SetPoint("TOPLEFT", ctLookCard, "BOTTOMLEFT", 0, -20)
+ctTextCard:SetSize(500, 430)
+KART.CtNameTextWidgets = CtBuildTextBlock(ctTextCard, -14, L.LABEL_CT_NAME_TEXT, CtNameStyle, "Name")
+KART.CtHealthTextWidgets = CtBuildTextBlock(ctTextCard, -220, L.LABEL_CT_HEALTH_TEXT, CtHealthStyle, "Hp")
+
+local ctFadeCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctFadeCard:SetPoint("TOPLEFT", ctTextCard, "BOTTOMLEFT", 0, -20)
+ctFadeCard:SetSize(500, 250)
+
+KART.CbCtRangeFadeOn = KART.UI:CreateSettingsCheckbox(ctFadeCard, {
+    name = "KART_CtRangeFadeOn", label = L.SET_CT_RANGE_FADE_ON,
+    store = CtStore, key = "rangeFade", y = -20,
+    onChanged = CtRefresh,
+})
+KART.SldCtDeadFade = KART.UI:CreateSettingsSlider(ctFadeCard, {
+    name = "KART_CtDeadFadeSlider", label = L.SET_CT_DEAD_FADE,
+    min = 10, max = 100, store = CtStore, key = "deadFade", y = -60,
+    onChanged = function()
+        CtStore().deadFade = KART.SldCtDeadFade:GetValue() / 100
+        CtRefresh()
+    end,
+})
+KART.SldCtOfflineFade = KART.UI:CreateSettingsSlider(ctFadeCard, {
+    name = "KART_CtOfflineFadeSlider", label = L.SET_CT_OFFLINE_FADE,
+    min = 10, max = 100, store = CtStore, key = "offlineFade", y = -60,
+    onChanged = function()
+        CtStore().offlineFade = KART.SldCtOfflineFade:GetValue() / 100
+        CtRefresh()
+    end,
+})
+KART.SldCtOfflineFade:ClearAllPoints()
+KART.SldCtOfflineFade:SetPoint("TOPLEFT", ctFadeCard, "TOPLEFT", 260, -76)
+
+KART.CbCtTargetBorder = KART.UI:CreateSettingsCheckbox(ctFadeCard, {
+    name = "KART_CtTargetBorder", label = L.SET_CT_TARGET_BORDER,
+    store = CtTargetBorder, key = "show", y = -110,
+    tooltip = L.DESC_CT_TARGET_BORDER,
+    onChanged = CtRefresh,
+})
+KART.SldCtTargetBorderSize = KART.UI:CreateSettingsSlider(ctFadeCard, {
+    name = "KART_CtTargetBorderSize", label = L.SET_CT_TARGET_BORDER_SIZE,
+    min = 1, max = 6, store = CtTargetBorder, key = "size", y = -150,
+    onChanged = CtLayoutChanged,
+})
+KART.BtnCtTargetBorderColor = KART.UI:CreateModernButton(ctFadeCard, L.SET_CT_TARGET_BORDER_COLOR)
+KART.BtnCtTargetBorderColor:SetPoint("TOPLEFT", ctFadeCard, "TOPLEFT", 260, -166)
+KART.BtnCtTargetBorderColor:SetSize(220, 22)
+KART.BtnCtTargetBorderColor:SetScript("OnClick", function()
+    local tb = CtTargetBorder()
+    tb.color = tb.color or { r = 1, g = 0.85, b = 0.2 }
+    CtPickColor(tb.color, CtLayoutChanged)
+end)
+
 local ctAuraCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctAuraCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
-ctAuraCard:SetSize(500, 380)
+ctAuraCard:SetPoint("TOPLEFT", ctFadeCard, "BOTTOMLEFT", 0, -20)
+ctAuraCard:SetSize(500, 760)
 
 local ctDebuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctDebuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -14)
@@ -1170,6 +1539,270 @@ KART.BtnCtBuffGrowth:SetScript("OnClick", function(self)
             end)
         end
     end)
+end)
+
+local function CtAddStripExtras(card, storeFn, prefix, y0)
+    local perRow = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "PerRow", label = L.SET_CT_AURA_PER_ROW,
+        min = 1, max = 20, store = storeFn, key = "perRow", y = y0,
+        onChanged = CtLayoutChanged,
+    })
+    local border = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "Border", label = L.SET_CT_AURA_BORDER,
+        min = 0, max = 4, store = storeFn, key = "borderSize", y = y0,
+        onChanged = CtLayoutChanged,
+    })
+    border:ClearAllPoints()
+    border:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 16)
+
+    local nudgeX = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "NudgeX", label = L.SET_CT_AURA_NUDGE_X,
+        min = -60, max = 60, store = storeFn, key = "x", y = y0 - 40,
+        onChanged = CtLayoutChanged,
+    })
+    local nudgeY = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "NudgeY", label = L.SET_CT_AURA_NUDGE_Y,
+        min = -60, max = 60, store = storeFn, key = "y", y = y0 - 40,
+        onChanged = CtLayoutChanged,
+    })
+    nudgeY:ClearAllPoints()
+    nudgeY:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 56)
+
+    local borderColor = KART.UI:CreateModernButton(card, L.SET_CT_AURA_BORDER_COLOR)
+    borderColor:SetPoint("TOPLEFT", card, "TOPLEFT", 20, y0 - 90)
+    borderColor:SetSize(220, 22)
+    borderColor:SetScript("OnClick", function()
+        local st = storeFn()
+        st.borderColor = st.borderColor or { r = 0, g = 0, b = 0 }
+        CtPickColor(st.borderColor, CtLayoutChanged)
+    end)
+
+    local swipe = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_Ct" .. prefix .. "Swipe", label = L.SET_CT_AURA_SWIPE,
+        store = storeFn, key = "swipe", y = y0 - 90,
+        onChanged = CtLayoutChanged,
+    })
+    swipe:ClearAllPoints()
+    swipe:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 90)
+
+    local countdown = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_Ct" .. prefix .. "Countdown", label = L.SET_CT_AURA_COUNTDOWN,
+        store = storeFn, key = "countdown", y = y0 - 120,
+        onChanged = CtLayoutChanged,
+    })
+    local cdSize = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "CdSize", label = L.SET_CT_AURA_COUNTDOWN_SIZE,
+        min = 0, max = 24, store = storeFn, key = "countdownSize", y = y0 - 120,
+        onChanged = CtLayoutChanged,
+    })
+    cdSize:ClearAllPoints()
+    cdSize:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 136)
+
+    local stacks = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_Ct" .. prefix .. "Stacks", label = L.SET_CT_AURA_STACKS,
+        store = storeFn, key = "stacks", y = y0 - 160,
+        onChanged = CtLayoutChanged,
+    })
+    local stSize = KART.UI:CreateSettingsSlider(card, {
+        name = "KART_Ct" .. prefix .. "StSize", label = L.SET_CT_AURA_STACKS_SIZE,
+        min = 0, max = 24, store = storeFn, key = "stacksSize", y = y0 - 160,
+        onChanged = CtLayoutChanged,
+    })
+    stSize:ClearAllPoints()
+    stSize:SetPoint("TOPLEFT", card, "TOPLEFT", 260, y0 - 176)
+
+    return {
+        perRow = perRow, border = border, nudgeX = nudgeX, nudgeY = nudgeY,
+        borderColor = borderColor, swipe = swipe, countdown = countdown,
+        cdSize = cdSize, stacks = stacks, stSize = stSize,
+    }
+end
+
+KART.CtDebuffExtra = CtAddStripExtras(ctAuraCard, CtDebuffs, "DebuffEx", -310)
+KART.CtBuffExtra = CtAddStripExtras(ctAuraCard, CtBuffs, "BuffEx", -510)
+
+local ctAuraChromeNote = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+ctAuraChromeNote:SetPoint("BOTTOMLEFT", ctAuraCard, "BOTTOMLEFT", 20, 12)
+ctAuraChromeNote:SetPoint("BOTTOMRIGHT", ctAuraCard, "BOTTOMRIGHT", -20, 12)
+ctAuraChromeNote:SetJustifyH("LEFT")
+ctAuraChromeNote:SetWordWrap(true)
+ctAuraChromeNote:SetText(L.SET_CT_AURA_DUMMY_CHROME)
+KART.UI:RegisterLabel(ctAuraChromeNote)
+
+local function CtTaunt()
+    local ct = CtStore()
+    ct.taunt = ct.taunt or {}
+    return ct.taunt
+end
+local function CtTauntChannels()
+    local t = CtTaunt()
+    t.channels = t.channels or {}
+    return t.channels
+end
+local function CtTauntChanged()
+    if KART.CT and KART.CT.RefreshAskButton then KART.CT.RefreshAskButton() end
+end
+
+local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctTauntCard:SetPoint("TOPLEFT", ctAuraCard, "BOTTOMLEFT", 0, -20)
+ctTauntCard:SetSize(500, 320)
+
+local ctTauntTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctTauntTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -14)
+ctTauntTitle:SetText(L.LABEL_CT_TAUNT)
+KART.UI:RegisterLabel(ctTauntTitle)
+
+KART.CbCtTauntAnnounce = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntAnnounce", label = L.SET_CT_TAUNT_ANNOUNCE,
+    store = CtTaunt, key = "announce", y = -36,
+    tooltip = L.DESC_CT_TAUNT_ANNOUNCE,
+})
+KART.CbCtTauntAnnounce.text:SetWidth(430)
+KART.CbCtTauntAnnounce.text:SetJustifyH("LEFT")
+
+KART.CbCtTauntOnlyGroup = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntOnlyGroup", label = L.SET_CT_TAUNT_ONLY_GROUP,
+    store = CtTaunt, key = "onlyInGroup", y = -66,
+    tooltip = L.DESC_CT_TAUNT_ONLY_GROUP,
+})
+KART.CbCtTauntOnlyInstance = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntOnlyInstance", label = L.SET_CT_TAUNT_ONLY_INSTANCE,
+    store = CtTaunt, key = "onlyInInstance", y = -66,
+    tooltip = L.DESC_CT_TAUNT_ONLY_INSTANCE,
+})
+KART.CbCtTauntOnlyInstance:ClearAllPoints()
+KART.CbCtTauntOnlyInstance:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -66)
+KART.CbCtTauntOnlyInstance.text:SetWidth(192)
+KART.CbCtTauntOnlyInstance.text:SetJustifyH("LEFT")
+
+local ctTauntChanTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+ctTauntChanTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -100)
+ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS)
+KART.UI:RegisterLabel(ctTauntChanTitle)
+
+KART.CbCtTauntWhisper = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntWhisper", label = L.SET_CT_TAUNT_WHISPER,
+    store = CtTauntChannels, key = "WHISPER", y = -116,
+})
+KART.CbCtTauntGroup = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntGroup", label = L.SET_CT_TAUNT_GROUP,
+    store = CtTauntChannels, key = "GROUP", y = -116,
+})
+KART.CbCtTauntGroup:ClearAllPoints()
+KART.CbCtTauntGroup:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -116)
+KART.CbCtTauntGroup.text:SetWidth(192)
+KART.CbCtTauntGroup.text:SetJustifyH("LEFT")
+
+KART.CbCtTauntRW = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntRW", label = L.SET_CT_TAUNT_RW,
+    store = CtTauntChannels, key = "RAID_WARNING", y = -146,
+})
+KART.CbCtTauntSay = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntSay", label = L.SET_CT_TAUNT_SAY,
+    store = CtTauntChannels, key = "SAY", y = -146,
+})
+KART.CbCtTauntSay:ClearAllPoints()
+KART.CbCtTauntSay:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -146)
+
+KART.CbCtTauntYell = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntYell", label = L.SET_CT_TAUNT_YELL,
+    store = CtTauntChannels, key = "YELL", y = -176,
+})
+
+local ctTauntMsgLabel = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+ctTauntMsgLabel:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -210)
+ctTauntMsgLabel:SetText(L.SET_CT_TAUNT_MESSAGE)
+KART.UI:RegisterLabel(ctTauntMsgLabel)
+
+KART.EbCtTauntMessage = KART.UI:CreateStyledEditBox(ctTauntCard, "KART_CtTauntMessage")
+KART.EbCtTauntMessage:SetSize(460, 28)
+KART.EbCtTauntMessage:SetPoint("TOPLEFT", ctTauntMsgLabel, "BOTTOMLEFT", 0, -6)
+KART.EbCtTauntMessage:SetMaxLetters(200)
+KART.EbCtTauntMessage:SetScript("OnTextChanged", function(self)
+    CtTaunt().message = self:GetText()
+end)
+
+local ctTauntPlace = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+ctTauntPlace:SetPoint("TOPLEFT", KART.EbCtTauntMessage, "BOTTOMLEFT", 0, -6)
+ctTauntPlace:SetWidth(460)
+ctTauntPlace:SetJustifyH("LEFT")
+ctTauntPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS)
+KART.UI:RegisterLabel(ctTauntPlace)
+
+local ctAskCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctAskCard:SetPoint("TOPLEFT", ctTauntCard, "BOTTOMLEFT", 0, -20)
+ctAskCard:SetSize(500, 340)
+
+local ctAskTitle = ctAskCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctAskTitle:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -14)
+ctAskTitle:SetText(L.LABEL_CT_TAUNT_ASK)
+KART.UI:RegisterLabel(ctAskTitle)
+
+KART.CbCtTauntButton = KART.UI:CreateSettingsCheckbox(ctAskCard, {
+    name = "KART_CtTauntButton", label = L.SET_CT_TAUNT_BUTTON,
+    store = CtTaunt, key = "button", y = -36,
+    tooltip = L.DESC_CT_TAUNT_BUTTON,
+    onChanged = CtTauntChanged,
+})
+KART.CbCtTauntButton.text:SetWidth(430)
+KART.CbCtTauntButton.text:SetJustifyH("LEFT")
+
+KART.CbCtTauntBtnLock = KART.UI:CreateSettingsCheckbox(ctAskCard, {
+    name = "KART_CtTauntBtnLock", label = L.SET_CT_TAUNT_BTN_LOCK,
+    store = CtTaunt, key = "locked", y = -66,
+    tooltip = L.DESC_CT_TAUNT_BTN_LOCK,
+})
+KART.CbCtTauntBtnGroup = KART.UI:CreateSettingsCheckbox(ctAskCard, {
+    name = "KART_CtTauntBtnGroup", label = L.SET_CT_TAUNT_BTN_GROUP,
+    store = CtTaunt, key = "buttonOnlyInGroup", y = -96,
+    onChanged = CtTauntChanged,
+})
+KART.CbCtTauntBtnRaid = KART.UI:CreateSettingsCheckbox(ctAskCard, {
+    name = "KART_CtTauntBtnRaid", label = L.SET_CT_TAUNT_BTN_RAID,
+    store = CtTaunt, key = "buttonOnlyInRaid", y = -96,
+    tooltip = L.DESC_CT_TAUNT_BTN_RAID,
+    onChanged = CtTauntChanged,
+})
+KART.CbCtTauntBtnRaid:ClearAllPoints()
+KART.CbCtTauntBtnRaid:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 260, -96)
+KART.CbCtTauntBtnRaid.text:SetWidth(192)
+KART.CbCtTauntBtnRaid.text:SetJustifyH("LEFT")
+
+KART.SldCtTauntSize = KART.UI:CreateSettingsSlider(ctAskCard, {
+    name = "KART_CtTauntSizeSlider", label = L.SET_CT_TAUNT_SIZE,
+    min = 20, max = 80, store = CtTaunt, key = "size", y = -136,
+    onChanged = CtTauntChanged,
+})
+
+local ctAskMsgLabel = ctAskCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+ctAskMsgLabel:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -186)
+ctAskMsgLabel:SetText(L.SET_CT_TAUNT_ASK)
+KART.UI:RegisterLabel(ctAskMsgLabel)
+
+KART.EbCtTauntAsk = KART.UI:CreateStyledEditBox(ctAskCard, "KART_CtTauntAsk")
+KART.EbCtTauntAsk:SetSize(460, 28)
+KART.EbCtTauntAsk:SetPoint("TOPLEFT", ctAskMsgLabel, "BOTTOMLEFT", 0, -6)
+KART.EbCtTauntAsk:SetMaxLetters(200)
+KART.EbCtTauntAsk:SetScript("OnTextChanged", function(self)
+    CtTaunt().ask = self:GetText()
+end)
+
+local ctAskPlace = ctAskCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+ctAskPlace:SetPoint("TOPLEFT", KART.EbCtTauntAsk, "BOTTOMLEFT", 0, -6)
+ctAskPlace:SetWidth(460)
+ctAskPlace:SetJustifyH("LEFT")
+ctAskPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS)
+KART.UI:RegisterLabel(ctAskPlace)
+
+KART.BtnCtTauntMacro = KART.UI:CreateModernButton(ctAskCard, L.BTN_CT_TAUNT_MACRO, L.DESC_CT_TAUNT_MACRO)
+KART.BtnCtTauntMacro:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -280)
+KART.BtnCtTauntMacro:SetSize(280, 24)
+KART.BtnCtTauntMacro:SetScript("OnClick", function()
+    if not KART.CT or not KART.CT.CreateAskMacro then return end
+    local result = KART.CT.CreateAskMacro()
+    if result == "combat" and UIErrorsFrame then
+        UIErrorsFrame:AddMessage(L.ERR_CT_TAUNT_MACRO_COMBAT, 1, 0.1, 0.1, 1, 3)
+    end
 end)
 
 -- 9. Close button: invisible hit area over the X baked into the artwork.
@@ -1387,6 +2020,16 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.CbCtModuleEnabled.text:SetText(L.SET_CT_MODULE_ENABLED)  KART.CbCtModuleEnabled.tooltipText = L.DESC_CT_MODULE_ENABLED
     KART.CbCtTestMode.text:SetText(L.SET_CT_TESTMODE)             KART.CbCtTestMode.tooltipText = L.DESC_CT_TESTMODE
     KART.CbCtLock.text:SetText(L.SET_CT_LOCK)                     KART.CbCtLock.tooltipText = L.DESC_CT_LOCK
+    if KART.CbCtOnlyGroup then
+        KART.CbCtOnlyGroup.text:SetText(L.SET_CT_ONLY_GROUP)
+        KART.CbCtOnlyGroup.tooltipText = L.DESC_CT_ONLY_GROUP
+    end
+    if KART.CbCtOnlyInstance then
+        KART.CbCtOnlyInstance.text:SetText(L.SET_CT_ONLY_INSTANCE)
+        KART.CbCtOnlyInstance.tooltipText = L.DESC_CT_ONLY_INSTANCE
+    end
+    if ctPreviewTitle then ctPreviewTitle:SetText(L.LABEL_CT_PREVIEW) end
+    if KART.CtAuraEngineNote then KART.CtAuraEngineNote:SetText(L.SET_CT_AURA_ENGINE) end
     KART.SldCtWidth.title:SetText(L.SET_CT_WIDTH)
     KART.SldCtHeight.title:SetText(L.SET_CT_HEIGHT)
     KART.SldCtScale.title:SetText(L.SET_CT_SCALE)
@@ -1398,6 +2041,61 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnCtHealthText.tooltipText = L.DESC_CT_HEALTH_TEXT
     RefreshCtHealthColorBtn()
     RefreshCtHealthTextBtn()
+    if RefreshCtFillBtn then RefreshCtFillBtn() end
+    if KART.SldCtHealthAlpha then KART.SldCtHealthAlpha.title:SetText(L.SET_CT_HEALTH_ALPHA) end
+    if KART.SldCtTrackAlpha then KART.SldCtTrackAlpha.title:SetText(L.SET_CT_TRACK_ALPHA) end
+    if KART.SldCtBgAlpha then KART.SldCtBgAlpha.title:SetText(L.SET_CT_BG_ALPHA) end
+    if KART.SldCtBorderSize then KART.SldCtBorderSize.title:SetText(L.SET_CT_BORDER_SIZE) end
+    if KART.SldCtAbsorbAlpha then KART.SldCtAbsorbAlpha.title:SetText(L.SET_CT_ABSORB_ALPHA) end
+    if KART.SldCtHealAbsorbAlpha then KART.SldCtHealAbsorbAlpha.title:SetText(L.SET_CT_HEAL_ABSORB_ALPHA) end
+    if KART.BtnCtCustomColor then KART.BtnCtCustomColor.text:SetText(L.SET_CT_CUSTOM_COLOR) end
+    if KART.BtnCtBgColor then KART.BtnCtBgColor.text:SetText(L.SET_CT_BG_COLOR) end
+    if KART.BtnCtHealthHigh then KART.BtnCtHealthHigh.text:SetText(L.SET_CT_HEALTH_HIGH) end
+    if KART.BtnCtHealthMid then KART.BtnCtHealthMid.text:SetText(L.SET_CT_HEALTH_MID) end
+    if KART.BtnCtHealthLow then KART.BtnCtHealthLow.text:SetText(L.SET_CT_HEALTH_LOW) end
+    if KART.BtnCtBorderColor then KART.BtnCtBorderColor.text:SetText(L.SET_CT_BORDER_COLOR) end
+    if KART.BtnCtAbsorbColor then KART.BtnCtAbsorbColor.text:SetText(L.SET_CT_ABSORB_COLOR) end
+    if KART.BtnCtHealAbsorbColor then KART.BtnCtHealAbsorbColor.text:SetText(L.SET_CT_HEAL_ABSORB_COLOR) end
+    if KART.BtnCtHealthFill then KART.BtnCtHealthFill.tooltipText = L.DESC_CT_HEALTH_FILL end
+    if KART.CbCtRangeFadeOn then KART.CbCtRangeFadeOn.text:SetText(L.SET_CT_RANGE_FADE_ON) end
+    if KART.SldCtDeadFade then KART.SldCtDeadFade.title:SetText(L.SET_CT_DEAD_FADE) end
+    if KART.SldCtOfflineFade then KART.SldCtOfflineFade.title:SetText(L.SET_CT_OFFLINE_FADE) end
+    if KART.CbCtTargetBorder then
+        KART.CbCtTargetBorder.text:SetText(L.SET_CT_TARGET_BORDER)
+        KART.CbCtTargetBorder.tooltipText = L.DESC_CT_TARGET_BORDER
+    end
+    if KART.SldCtTargetBorderSize then KART.SldCtTargetBorderSize.title:SetText(L.SET_CT_TARGET_BORDER_SIZE) end
+    if KART.BtnCtTargetBorderColor then KART.BtnCtTargetBorderColor.text:SetText(L.SET_CT_TARGET_BORDER_COLOR) end
+    local function relabelText(w, title)
+        if not w then return end
+        if w.titleFS then w.titleFS:SetText(title) end
+        if w.show then w.show.text:SetText(L.SET_CT_TEXT_SHOW) end
+        if w.size then w.size.title:SetText(L.SET_CT_TEXT_SIZE) end
+        if w.colorBtn then w.colorBtn.text:SetText(L.SET_CT_TEXT_COLOR) end
+        if w.classCb then w.classCb.text:SetText(L.SET_CT_TEXT_CLASS) end
+        if w.nudgeX then w.nudgeX.title:SetText(L.SET_CT_TEXT_NUDGE_X) end
+        if w.nudgeY then w.nudgeY.title:SetText(L.SET_CT_TEXT_NUDGE_Y) end
+        if w.refreshOutline then w.refreshOutline() end
+        if w.refreshAnchor then w.refreshAnchor() end
+    end
+    relabelText(KART.CtNameTextWidgets, L.LABEL_CT_NAME_TEXT)
+    relabelText(KART.CtHealthTextWidgets, L.LABEL_CT_HEALTH_TEXT)
+    local function relabelStripExtra(extra)
+        if not extra then return end
+        extra.perRow.title:SetText(L.SET_CT_AURA_PER_ROW)
+        extra.border.title:SetText(L.SET_CT_AURA_BORDER)
+        extra.nudgeX.title:SetText(L.SET_CT_AURA_NUDGE_X)
+        extra.nudgeY.title:SetText(L.SET_CT_AURA_NUDGE_Y)
+        extra.borderColor.text:SetText(L.SET_CT_AURA_BORDER_COLOR)
+        extra.swipe.text:SetText(L.SET_CT_AURA_SWIPE)
+        extra.countdown.text:SetText(L.SET_CT_AURA_COUNTDOWN)
+        extra.cdSize.title:SetText(L.SET_CT_AURA_COUNTDOWN_SIZE)
+        extra.stacks.text:SetText(L.SET_CT_AURA_STACKS)
+        extra.stSize.title:SetText(L.SET_CT_AURA_STACKS_SIZE)
+    end
+    relabelStripExtra(KART.CtDebuffExtra)
+    relabelStripExtra(KART.CtBuffExtra)
+    if ctAuraChromeNote then ctAuraChromeNote:SetText(L.SET_CT_AURA_DUMMY_CHROME) end
     ctDebuffTitle:SetText(L.LABEL_CT_DEBUFFS)
     ctBuffTitle:SetText(L.LABEL_CT_BUFFS)
     KART.CbCtDebuffShow.text:SetText(L.SET_CT_AURA_SHOW)
@@ -1416,6 +2114,48 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnCtBuffGrowth.tooltipText = L.DESC_CT_AURA_GROWTH
     RefreshCtBuffAnchorBtn()
     RefreshCtBuffGrowthBtn()
+    if ctTauntTitle then ctTauntTitle:SetText(L.LABEL_CT_TAUNT) end
+    if ctTauntChanTitle then ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS) end
+    if ctTauntMsgLabel then ctTauntMsgLabel:SetText(L.SET_CT_TAUNT_MESSAGE) end
+    if ctTauntPlace then ctTauntPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS) end
+    if ctAskTitle then ctAskTitle:SetText(L.LABEL_CT_TAUNT_ASK) end
+    if ctAskMsgLabel then ctAskMsgLabel:SetText(L.SET_CT_TAUNT_ASK) end
+    if ctAskPlace then ctAskPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS) end
+    if KART.CbCtTauntAnnounce then
+        KART.CbCtTauntAnnounce.text:SetText(L.SET_CT_TAUNT_ANNOUNCE)
+        KART.CbCtTauntAnnounce.tooltipText = L.DESC_CT_TAUNT_ANNOUNCE
+    end
+    if KART.CbCtTauntOnlyGroup then
+        KART.CbCtTauntOnlyGroup.text:SetText(L.SET_CT_TAUNT_ONLY_GROUP)
+        KART.CbCtTauntOnlyGroup.tooltipText = L.DESC_CT_TAUNT_ONLY_GROUP
+    end
+    if KART.CbCtTauntOnlyInstance then
+        KART.CbCtTauntOnlyInstance.text:SetText(L.SET_CT_TAUNT_ONLY_INSTANCE)
+        KART.CbCtTauntOnlyInstance.tooltipText = L.DESC_CT_TAUNT_ONLY_INSTANCE
+    end
+    if KART.CbCtTauntWhisper then KART.CbCtTauntWhisper.text:SetText(L.SET_CT_TAUNT_WHISPER) end
+    if KART.CbCtTauntGroup then KART.CbCtTauntGroup.text:SetText(L.SET_CT_TAUNT_GROUP) end
+    if KART.CbCtTauntRW then KART.CbCtTauntRW.text:SetText(L.SET_CT_TAUNT_RW) end
+    if KART.CbCtTauntSay then KART.CbCtTauntSay.text:SetText(L.SET_CT_TAUNT_SAY) end
+    if KART.CbCtTauntYell then KART.CbCtTauntYell.text:SetText(L.SET_CT_TAUNT_YELL) end
+    if KART.CbCtTauntButton then
+        KART.CbCtTauntButton.text:SetText(L.SET_CT_TAUNT_BUTTON)
+        KART.CbCtTauntButton.tooltipText = L.DESC_CT_TAUNT_BUTTON
+    end
+    if KART.CbCtTauntBtnLock then
+        KART.CbCtTauntBtnLock.text:SetText(L.SET_CT_TAUNT_BTN_LOCK)
+        KART.CbCtTauntBtnLock.tooltipText = L.DESC_CT_TAUNT_BTN_LOCK
+    end
+    if KART.CbCtTauntBtnGroup then KART.CbCtTauntBtnGroup.text:SetText(L.SET_CT_TAUNT_BTN_GROUP) end
+    if KART.CbCtTauntBtnRaid then
+        KART.CbCtTauntBtnRaid.text:SetText(L.SET_CT_TAUNT_BTN_RAID)
+        KART.CbCtTauntBtnRaid.tooltipText = L.DESC_CT_TAUNT_BTN_RAID
+    end
+    if KART.SldCtTauntSize then KART.SldCtTauntSize.title:SetText(L.SET_CT_TAUNT_SIZE) end
+    if KART.BtnCtTauntMacro then
+        KART.BtnCtTauntMacro.text:SetText(L.BTN_CT_TAUNT_MACRO)
+        KART.BtnCtTauntMacro.tooltipText = L.DESC_CT_TAUNT_MACRO
+    end
 
     -- Automation tab
     promLabel:SetText(L.LABEL_PROMOTE_NAMES)

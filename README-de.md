@@ -35,9 +35,10 @@ Ein detailliertes Fenster zur Überprüfung der Raid-Vorbereitung:
 *   **Modul-Schalter:** Der Buff-Checker lässt sich komplett deaktivieren, um CPU zu sparen, wenn man ihn nicht braucht. Der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bleibt davon unberührt aktiv, damit der Raidleiter trotzdem korrekte Daten über diesen Spieler sieht.
 
 ### 5. Co-Tank-Fenster
-*   Im Co-Tank-Tab einschalten (standardmäßig aus).
-*   Erscheint nur, wenn du als Tank in einem Dungeon oder Raid bist (Testmodus auf dem Tab für die Darstellung in der Stadt).
+*   Im Co-Tank-Tab einschalten (standardmäßig aus). Der Tab zeigt eine Vorschau der Zeile, damit du sie in der Stadt einstellen kannst.
+*   Testmodus lässt die erfundene Zeile nach dem Schließen stehen. Live: Tank-Rolle, optional nur Gruppe / nur Instanz (Dungeon und Raid standardmäßig an). Entsperren zum Platzieren ohne Gruppe.
 *   Linksklick auf die Zeile zielt den anderen Tank an.
+*   Optional: eigenen Taunt ansagen, damit der andere Tank es hört, plus ein Button (oder Aktionsleisten-Makro) der ihn zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
 
 ### 6. RCLootCouncil-Begleiter
 KART 4.0 bringt keinen eingebauten Loot Council mehr mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. **WowUtils** (Addon + Bridge) malt Sim-Spalten ins RC-Abstimmungsfenster.

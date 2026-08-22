@@ -10,13 +10,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
-- **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest.
+- **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt; Look, Text, Auren und Fade sind einstellbar.
+- **Sagen, wenn du tauntest**, plus ein Button der den anderen Tank zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
 
 ### Geändert
 - **Auto-Invite-Begriffe sind als Flüstern beschriftet.** Gildenchat bleibt die Extra-Option.
 
 ### Behoben
 - **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
+- **Die Co-Tank-Vorschau wartet das Kampfende ab**, bevor sie die Zeile verschiebt; Dummy-Auren bleiben im Testmodus, Schilde sitzen am Ende des Balkens.
+- **Entsperren zeigt die Co-Tank-Zeile nicht mehr in Arena oder Schlachtfeld.**
 
 ## [4.0.1] - 2026-08-20
 ### Hinzugefügt
