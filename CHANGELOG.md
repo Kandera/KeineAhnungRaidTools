@@ -23,13 +23,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Auto-invite keywords are labeled for all channels.** Guild and officer are separate chips.
 - **Settings sliders have a number box** to the right of the track.
+- **Automation and WoWUtils have ON chips** like the other modules.
+- **Edit Mode and Changelog sit above the footer links.**
+- **Co-Tank width and height sit side by side.**
+- **Invite channel chips show on and off clearly.**
+- **Co-Tank scale fits in its card.**
+- **The in-game changelog is easier to scan.**
+- **Edit Mode dims the world** with a Done banner so every enabled module can be placed in town.
+- **Settings and Raidlead tabs fill their cards** instead of leaving the right side empty.
+- **Co-Tank Auras keep buff and debuff settings under their own headings.**
+- **Focused text fields show a full accent border.**
+- **Window scale also applies to the Co-Tank settings flyout.**
+- **GitHub and store links open a box you can copy from.**
 
 ### Fixed
-- **Auto convert to raid invites the 6th player** instead of showing Blizzard's full-group popup.
+- **The in-game changelog opens without an error** and uses the same window art as the buff checker.
+- **Settings and Co-Tank tabs show their controls again.** The invite-channel chips no longer abort the window while it is loading.
+- **Invite channel chips sit under their label**, not on top of it.
 - **Unlocking the Co-Tank row no longer shows it in arenas or battlegrounds.**
 - **Co-Tank test mode stays on the screen** while the Co-Tank tab is open; the preview shows dummy buffs and debuffs.
 - **Co-Tank name and health text sit on the bar**, not under it.
-- **Co-Tank shields sit on the end of the health bar.**
+- **Co-Tank gradient fill stays on the bar** instead of painting a solid white strip.
 - **Co-Tank test buffs and debuffs sit on top of the bar.**
 
 ## [4.0.1] - 2026-08-20

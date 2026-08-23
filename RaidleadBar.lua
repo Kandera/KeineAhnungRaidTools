@@ -188,6 +188,9 @@ KART.UI:SetPixelBackdrop(rlBar, {
     edgeFile = "Interface\\Buttons\\WHITE8X8",
     edgeSize = 1,
 })
+if KART.RegisterEditModeFrame then
+    KART.RegisterEditModeFrame(rlBar, "EDIT_MODE_LABEL_RAIDLEAD")
+end
 KART.UI:ApplyRoundedMask(rlBar, KAUI.CORNER_RADIUS_LG)
 
 function KART.ApplyRaidleadBarLook()
@@ -232,6 +235,10 @@ end
 -- still covers it: with rlBarYieldToMap, drop to LOW while the map is open. Hide() on the secure
 -- marker buttons is combat-locked; SetFrameStrata is not.
 function KART.ApplyRaidleadBarStrata()
+    if KART.IsEditModeActive and KART.IsEditModeActive() then
+        rlBar:SetFrameStrata("FULLSCREEN")
+        return
+    end
     local map = WorldMapFrame
     local yield = KART_Settings and KART_Settings.rlBarYieldToMap
     if yield and map and map.IsShown and map:IsShown() then
@@ -273,6 +280,15 @@ function KART.UpdateRaidleadBarVisibility()
 
     rlBar:ClearAllPoints()
     rlBar:SetPoint(KART_Settings.rlBarPoint or "TOP", UIParent, KART_Settings.rlBarRelativePoint or "TOP", KART_Settings.rlBarX or 0, KART_Settings.rlBarY or -50)
+
+    if KART.IsEditModeActive() then
+        UnregisterStateDriver(rlBar, "visibility")
+        rlBar:Show()
+        KART.ApplyKeybinds()
+        KART.ApplyRaidleadBarStrata()
+        if KART.RefreshEditModeChrome then KART.RefreshEditModeChrome() end
+        return
+    end
 
     -- Combat hide cannot be a Lua Hide(): the marker buttons are SecureActionButtonTemplate.
     -- RegisterStateDriver is set out of combat and the client then hides the bar on pull.

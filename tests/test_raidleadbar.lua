@@ -46,6 +46,13 @@ do
     KARTTEST.solo = { [me.unit] = true }
     As(KART.UpdateRaidleadBarVisibility)
     T.truthy(not KART.RaidleadBar:IsShown(), "and takes it away once alone")
+
+    KART.editModeActive = true
+    As(KART.UpdateRaidleadBarVisibility)
+    T.truthy(KART.RaidleadBar:IsShown(), "edit mode shows the bar even while solo auto-hide is on")
+    KART.editModeActive = false
+    As(KART.UpdateRaidleadBarVisibility)
+    T.truthy(not KART.RaidleadBar:IsShown(), "leaving edit mode restores solo auto-hide")
     KARTTEST.solo = {}
     S.autoHideRaidleadBar = false
 end

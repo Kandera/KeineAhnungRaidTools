@@ -102,6 +102,7 @@ do
         min = 0, max = 100, y = 0,
         valueIsText = true,
     })
+    T.eq(s:GetWidth(), 110, "named-value track shrinks so the name box fits a half card")
     T.eq(s.valueText:GetWidth(), 88, "named-value sliders get a wider box")
     T.eq(s.valueText:IsMouseEnabled(), false, "and stay read-only")
 end
@@ -332,4 +333,41 @@ end
 do
     local plain = ns:CreateTabButton(UIParent, "Settings")
     T.is_nil(plain.chip, "non-module tabs have no chip")
+end
+
+-- Unnamed ScrollFrame: GetName() is nil. The helper must not concatenate that (changelog popup).
+do
+    local sf = CreateFrame("ScrollFrame", nil, UIParent)
+    sf.ScrollBar = CreateFrame("Slider", "KAUITestUnnamedScrollBar", sf)
+    local ok, err = pcall(function() ns:StripScrollbarTextures(sf) end)
+    T.truthy(ok, "StripScrollbarTextures survives an unnamed scroll frame: " .. tostring(err))
+end
+
+-- Late-created thumbs (changelog popup) must pick up the current accent, not stay white.
+do
+    ns:ApplyStyle({ font = "Fonts\\FRIZQT__.TTF", accent = { 0.2, 0.6, 1.0 } })
+    local tex = UIParent:CreateTexture()
+    ns:RegisterAccentTexture(tex, 0.6)
+    local r, g, b, a = tex:GetColorTexture()
+    T.eq(r, 0.2, "RegisterAccentTexture paints the current accent immediately")
+    T.eq(g, 0.6, "green channel matches")
+    T.eq(b, 1.0, "blue channel matches")
+    T.eq(a, 0.6, "and keeps the requested alpha")
+end
+
+-- EditBox backdrops clip their bottom edge; the factory keeps the border on a sibling chrome frame.
+do
+    ns:ApplyStyle({ font = "Fonts\\FRIZQT__.TTF", menuSize = 12, contentSize = 11, accent = { 0.2, 0.6, 1 } })
+    local eb = ns:CreateStyledEditBox(UIParent, "KAUITestStyledEB")
+    T.truthy(eb.kartChrome, "styled edit box paints its border on a chrome frame")
+    eb:SetSize(100, 28)
+    T.eq(eb:GetWidth(), 100, "SetSize still sizes the edit box itself")
+    eb:GetScript("OnEditFocusGained")(eb)
+    local r, g, b = eb.kartChrome:GetBackdropBorderColor()
+    T.eq(r, 0.2, "focus colors the chrome, not a clipped EditBox backdrop")
+    T.eq(g, 0.6, "green channel matches")
+    T.eq(b, 1, "blue channel matches")
+    eb:GetScript("OnEditFocusLost")(eb)
+    local r2 = select(1, eb.kartChrome:GetBackdropBorderColor())
+    T.eq(r2, 0.15, "lost focus restores the resting border")
 end

@@ -810,6 +810,21 @@ do
 end
 
 do
+    env.KART_Settings.ctModuleEnabled = true
+    env.KART_Settings.ct.testMode = false
+    env.KART_Settings.ct.locked = true
+    KARTTEST.instance.instanceType = "none"
+    KARTTEST.solo = { player = true }
+    KARTTEST.activeUnit = "player"
+    KART.editModeActive = true
+    T.eq(KART.CT.ShouldShow(), true, "edit mode shows the row with nobody else around")
+    KART.CT.Refresh()
+    T.eq(KART.CT.snap.name, "Testtank", "and paints the dummy co-tank so the row is placeable")
+    KART.editModeActive = false
+    KARTTEST.solo = {}
+end
+
+do
     RaidTwoTanks()
     env.KART_Settings.ct.locked = true
     KART.editModeActive = true
@@ -830,6 +845,33 @@ do
     btn.StartMoving = function() moved = true end
     btn:GetScript("OnDragStart")(btn)
     T.truthy(moved, "edit mode allows dragging a locked ask button")
+end
+
+do
+    RaidTwoTanks()
+    env.KART_Settings.ct.gradient = true
+    env.KART_Settings.ct.gradientFrom = { r = 0.2, g = 0.8, b = 0.2 }
+    env.KART_Settings.ct.gradientTo = { r = 0.8, g = 0.2, b = 0.2 }
+    env.KART_Settings.ct.testMode = true
+    KART.CT.hosted = true
+    local row = KART.CT.EnsurePreviewRow()
+    KART.CT.ApplyLayout()
+    local bar = row.health
+    T.truthy(bar and bar.kartFillTex, "preview health bar has a fill texture")
+    local grads, barColors = 0, 0
+    bar.kartFillTex.SetGradient = function()
+        grads = grads + 1
+        return true
+    end
+    bar.SetStatusBarColor = function()
+        barColors = barColors + 1
+    end
+    local snap = KART.CT.BlankSnapshot({})
+    KART.CT.FillTestSnapshot(snap)
+    KART.CT.Paint(snap, row)
+    T.truthy(grads > 0, "Paint re-applies the gradient so a solid fill cannot wipe it")
+    T.eq(barColors, 0, "and does not SetStatusBarColor over the gradient")
+    KART.CT.hosted = nil
 end
 
 do

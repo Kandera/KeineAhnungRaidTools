@@ -319,5 +319,12 @@ do
     T.eq(#KARTTEST.chat, 0, "and gets no auto-reply either")
 end
 
+do
+    env.KART_Settings.autoModuleEnabled = false
+    local _, got = Invite("inv", "Alric-TarrenMill")
+    env.KART_Settings.autoModuleEnabled = nil
+    T.eq(#got, 0, "a disabled automation module invites nobody")
+end
+
 -- Leave the harness as found, for whatever file runs next.
 KARTTEST.activeUnit, KARTTEST.solo = prevActive, prevSolo

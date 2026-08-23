@@ -23,13 +23,29 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Geändert
 - **Auto-Invite-Begriffe gelten für alle Kanäle.** Gilde und Offizier sind eigene Chips.
 - **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
+- **Automation und WoWUtils haben ON-Chips** wie die anderen Module.
+- **Bearbeiten-Modus und Changelog sitzen über den Footer-Links.**
+- **Co-Tank-Breite und -Höhe sitzen nebeneinander.**
+- **Das Co-Tank-Begleitfenster lässt sich verschieben.**
+- **Invite-Kanal-Chips zeigen An und Aus deutlich.**
+- **Die Co-Tank-Skalierung passt in ihre Karte.**
+- **Das Changelog im Spiel ist leichter zu überfliegen.**
+- **Bearbeiten-Modus dunkelt die Welt ab** mit einem Fertig-Banner, damit jedes eingeschaltete Modul in der Stadt platziert werden kann.
+- **Settings- und Raidlead-Tabs füllen ihre Karten**, statt die rechte Seite leer zu lassen.
+- **Co-Tank-Auren halten Buff- und Debuff-Einstellungen unter eigenen Überschriften.**
+- **Fokussierte Textfelder zeigen einen vollständigen Akzent-Rahmen.**
+- **Die Fensterskalierung gilt auch für das Co-Tank-Einstellungsfenster.**
+- **GitHub- und Store-Links öffnen eine Box zum Kopieren.**
 
 ### Behoben
-- **Automatisch in Raid umwandeln lädt den 6. Spieler ein**, statt Blizzards „Gruppe voll“-Fenster zu zeigen.
+- **Das Changelog im Spiel öffnet sich ohne Fehler** und nutzt dieselbe Fenster-Grafik wie der Buff-Checker.
+- **Settings- und Co-Tank-Tabs zeigen ihre Einstellungen wieder.** Die Invite-Kanal-Chips brechen das Fenster beim Laden nicht mehr ab.
+- **Invite-Kanal-Chips sitzen unter ihrer Beschriftung**, nicht darüber.
 - **Entsperren zeigt die Co-Tank-Zeile nicht mehr in Arena oder Schlachtfeld.**
 - **Der Co-Tank-Testmodus bleibt auf dem Bildschirm**, während der Co-Tank-Tab offen ist; die Vorschau zeigt Dummy-Buffs und -Debuffs.
 - **Name und Lebenstext sitzen auf dem Co-Tank-Balken**, nicht darunter.
 - **Co-Tank-Schilde sitzen am Ende des Lebensbalkens.**
+- **Der Co-Tank-Verlauf bleibt auf dem Balken**, statt als weiße Fläche zu enden.
 - **Co-Tank-Testbuffs und -debuffs sitzen auf dem Balken.**
 
 ## [4.0.1] - 2026-08-20

@@ -1,6 +1,6 @@
 -- Sidebar chrome helpers in Utils.lua: session Edit Mode and link copy.
 local env = setmetatable({}, { __index = _G })
-local KART = { L = { LINK_COPIED = "Link copied." } }
+local KART = { L = { LINK_COPY_TITLE = "Copy this link (Ctrl+C)", BTN_CLOSE = "Close" } }
 env.KART = KART
 
 local chunk = assert(loadstring(assert(io.open("Utils.lua", "r")):read("*a"), "@Utils.lua"))
@@ -11,17 +11,40 @@ do
     T.truthy(not KART.IsEditModeActive(), "edit mode starts off each session")
     KART.SetEditModeActive(true)
     T.truthy(KART.IsEditModeActive(), "edit mode can be turned on")
+    T.truthy(KART.EditModeDim and KART.EditModeDim:IsShown(), "turning on shows the dim overlay")
+    T.truthy(KART.EditModeBanner and KART.EditModeBanner:IsShown(), "and the done banner")
+    T.truthy(KART.BtnEditModeDone, "the banner has a Done button")
     KART.SetEditModeActive(true)
     T.truthy(KART.IsEditModeActive(), "turning on twice is a no-op")
+    KART.BtnEditModeDone:GetScript("OnClick")(KART.BtnEditModeDone)
+    T.truthy(not KART.IsEditModeActive(), "Done leaves edit mode")
+    T.truthy(not KART.EditModeDim:IsShown(), "and hides the overlay")
+end
+
+do
+    KARTTEST.inCombat = true
+    KART.SetEditModeActive(true)
+    T.truthy(not KART.IsEditModeActive(), "combat refuses to enter edit mode")
+    KARTTEST.inCombat = false
+    KART.SetEditModeActive(true)
+    KARTTEST.inCombat = true
     KART.SetEditModeActive(false)
-    T.truthy(not KART.IsEditModeActive(), "edit mode can be turned off again")
+    T.truthy(not KART.IsEditModeActive(), "combat still allows leaving")
+    KARTTEST.inCombat = false
 end
 
 do
     KARTTEST.clipboard = nil
     _G.CopyToClipboard = function(text) KARTTEST.clipboard = text end
+    KART.L.LINK_COPY_TITLE = "Copy this link (Ctrl+C)"
+    KART.L.BTN_CLOSE = "Close"
     KART.CopyLink("https://example.test/kart")
-    T.eq(KARTTEST.clipboard, "https://example.test/kart", "CopyLink uses CopyToClipboard")
+    T.eq(KARTTEST.clipboard, nil, "CopyLink does not call protected CopyToClipboard")
+    T.truthy(KART.UI.inputDialog and KART.UI.inputDialog:IsShown(),
+        "CopyLink opens a dialog with the URL")
+    T.eq(KART.UI.inputDialog.editBox:GetText(), "https://example.test/kart",
+        "and the box holds the link")
+    KART.UI.inputDialog:Hide()
 end
 
 do

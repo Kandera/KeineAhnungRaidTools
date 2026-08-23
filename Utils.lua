@@ -20,24 +20,178 @@ KART.L = KART.L or {}
 --  Sidebar chrome: Edit Mode (session) and in-game changelog
 -- =====================================================================
 KART.editModeActive = false
+KART.editModeFrames = {}
 
 function KART.IsEditModeActive()
     return KART.editModeActive == true
 end
 
+function KART.RegisterEditModeFrame(frame, labelKey)
+    if not frame then return end
+    KART.editModeFrames = KART.editModeFrames or {}
+    for _, entry in ipairs(KART.editModeFrames) do
+        if entry.frame == frame then
+            entry.labelKey = labelKey or entry.labelKey
+            return
+        end
+    end
+    KART.editModeFrames[#KART.editModeFrames + 1] = { frame = frame, labelKey = labelKey }
+end
+
+local function Locale(key, fallback)
+    local L = KART.L
+    return (L and L[key]) or fallback
+end
+
+local function EnsureEditModeOverlay()
+    if KART.EditModeDim then return end
+    local dim = CreateFrame("Frame", "KART_EditModeDim", UIParent)
+    dim:SetAllPoints(UIParent)
+    dim:SetFrameStrata("FULLSCREEN")
+    dim:SetFrameLevel(1)
+    dim:EnableMouse(true)
+    local tex = dim:CreateTexture(nil, "BACKGROUND")
+    tex:SetAllPoints()
+    tex:SetColorTexture(0, 0, 0, 0.45)
+    dim:Hide()
+    KART.EditModeDim = dim
+
+    local banner = CreateFrame("Frame", "KART_EditModeBanner", UIParent, "BackdropTemplate")
+    banner:SetSize(460, 44)
+    banner:SetPoint("TOP", UIParent, "TOP", 0, -20)
+    banner:SetFrameStrata("FULLSCREEN")
+    banner:SetFrameLevel(100)
+    banner:EnableMouse(true)
+    if KART.UI and KART.UI.SetPixelBackdrop then
+        KART.UI:SetPixelBackdrop(banner, {
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        banner:SetBackdropColor(0.06, 0.07, 0.08, 0.96)
+        banner:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    end
+    banner.title = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    banner.title:SetPoint("LEFT", 16, 0)
+    banner.title:SetText(Locale("EDIT_MODE_BANNER", "Edit Mode — drag frames"))
+    local done = KART.UI and KART.UI.CreateModernButton
+        and KART.UI:CreateModernButton(banner, Locale("BTN_EDIT_MODE_DONE", "Done"))
+    if done then
+        done:SetSize(80, 24)
+        done:SetPoint("RIGHT", banner, "RIGHT", -12, 0)
+        done:SetScript("OnClick", function() KART.SetEditModeActive(false) end)
+        KART.BtnEditModeDone = done
+    end
+    banner:Hide()
+    KART.EditModeBanner = banner
+    if KART.RegisterEscapeFrame then KART.RegisterEscapeFrame(banner) end
+    banner:HookScript("OnHide", function()
+        if KART.editModeActive then KART.SetEditModeActive(false) end
+    end)
+end
+
+local function PaintEditOutline(frame, labelKey, shown)
+    if not frame then return end
+    local outline = frame.kartEditOutline
+    if not shown then
+        if outline then outline:Hide() end
+        if frame.kartEditStrata then
+            frame:SetFrameStrata(frame.kartEditStrata)
+            if frame.kartEditLevel then frame:SetFrameLevel(frame.kartEditLevel) end
+            frame.kartEditStrata, frame.kartEditLevel = nil, nil
+        end
+        return
+    end
+    if not outline then
+        outline = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+        outline:SetAllPoints(frame)
+        if KART.UI and KART.UI.SetPixelBackdrop then
+            KART.UI:SetPixelBackdrop(outline, {
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                edgeSize = 1,
+            })
+            outline:SetBackdropColor(0, 0, 0, 0)
+        end
+        outline.label = outline:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        outline.label:SetPoint("BOTTOMLEFT", outline, "TOPLEFT", 0, 3)
+        frame.kartEditOutline = outline
+    end
+    local r, g, b = 0.3, 0.7, 1
+    if KART.UI and KART.UI.AccentColor then r, g, b = KART.UI:AccentColor() end
+    if outline.SetBackdropBorderColor then outline:SetBackdropBorderColor(r, g, b, 1) end
+    if outline.label then
+        outline.label:SetText(Locale(labelKey, labelKey or ""))
+        outline.label:SetTextColor(r, g, b)
+    end
+    if not frame.kartEditStrata then
+        frame.kartEditStrata = frame.GetFrameStrata and frame:GetFrameStrata() or "MEDIUM"
+        frame.kartEditLevel = frame.GetFrameLevel and frame:GetFrameLevel() or 1
+    end
+    frame:SetFrameStrata("FULLSCREEN")
+    if frame.SetFrameLevel then frame:SetFrameLevel(40) end
+    outline:Show()
+end
+
+function KART.RefreshEditModeChrome()
+    local on = KART.IsEditModeActive()
+    for _, entry in ipairs(KART.editModeFrames or {}) do
+        local frame = entry.frame
+        local visible = on and frame and frame.IsShown and frame:IsShown()
+        PaintEditOutline(frame, entry.labelKey, visible)
+    end
+end
+
 function KART.SetEditModeActive(active)
     active = active and true or false
+    if active and InCombatLockdown() then
+        if DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00KART:|r " .. Locale("EDIT_MODE_COMBAT", "Edit Mode cannot start in combat."))
+        end
+        return
+    end
     if KART.editModeActive == active then return end
     KART.editModeActive = active
+    EnsureEditModeOverlay()
+    if KART.EditModeBanner and KART.EditModeBanner.title then
+        KART.EditModeBanner.title:SetText(Locale("EDIT_MODE_BANNER", "Edit Mode — drag frames"))
+    end
+    if KART.BtnEditModeDone and KART.BtnEditModeDone.text then
+        KART.BtnEditModeDone.text:SetText(Locale("BTN_EDIT_MODE_DONE", "Done"))
+    end
+    if active then
+        KART.EditModeDim:Show()
+        KART.EditModeBanner:Show()
+    else
+        KART.EditModeBanner:Hide()
+        KART.EditModeDim:Hide()
+    end
     if KART.RefreshEditModeToggle then KART.RefreshEditModeToggle() end
     if KART.UpdateRaidleadBarVisibility then KART.UpdateRaidleadBarVisibility() end
     if KART.CT and KART.CT.Refresh then KART.CT.Refresh() end
+    if KART.SyncBuffCheckForEditMode then KART.SyncBuffCheckForEditMode() end
+    KART.RefreshEditModeChrome()
 end
 
 function KART.CopyLink(url)
-    if CopyToClipboard then CopyToClipboard(url) end
-    if DEFAULT_CHAT_FRAME and KART.L and KART.L.LINK_COPIED then
-        DEFAULT_CHAT_FRAME:AddMessage(KART.L.LINK_COPIED, 1, 1, 0)
+    if not url or url == "" then return end
+    local L = KART.L or {}
+    -- CopyToClipboard is a protected Blizzard call (ADDON_ACTION_FORBIDDEN). Show the URL
+    -- in an edit box so the player can copy it with Ctrl+C, which the client allows.
+    if KART.UI and KART.UI.ShowInputDialog then
+        KART.UI:ShowInputDialog({
+            title = L.LINK_COPY_TITLE or "Copy this link (Ctrl+C)",
+            initialText = url,
+            maxLetters = 256,
+            allowEmpty = true,
+            hideCancel = true,
+            okLabel = L.BTN_CLOSE or CLOSE,
+            onAccept = function() end,
+        })
+        return
+    end
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00KART:|r " .. url, 1, 1, 0)
     end
 end
 
@@ -52,9 +206,12 @@ KART.InGameChangelog = {
             "**Invite channel chips** for whisper, Battle.net, guild and officer chat.",
             "**Auto-reply whispers** when a keyword matched but the invite could not go out.",
             "**Sidebar module chips and Edit Mode** for placing module frames in town without changing saved locks.",
+            "**Edit Mode dims the world** with a Done banner so every enabled module can be placed in town.",
             "**Raidlead bar look settings** for scale, button size and opacity.",
             "**Raidlead bar layer** is its own slider, with a switch to sit under the world map.",
             "**Settings sliders have a number box** to the right of the track.",
+            "**Automation and WoWUtils have ON chips** like the other modules.",
+            "**The Co-Tank companion window can be dragged.**",
             "**Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.",
         },
     },
@@ -280,6 +437,8 @@ KART.Defaults = {
     inviteChannels = { WHISPER = true, BN = true, GUILD = false, OFFICER = false },
     promoteNames = "",
     showRaidleadBar = false,
+    autoModuleEnabled = true,
+    wuModuleEnabled = true,
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
     autoHideRaidleadBarCombat = false,
@@ -384,7 +543,7 @@ KART.Defaults = {
     menuFontSize = 11,
     contentFontSize = 12,
     bgAlpha = 85,
-    uiScale = 100, -- whole-window scale in percent (PNG-artwork window is not freely resizable)
+    uiScale = 110, -- whole-window scale in percent (PNG-artwork window is not freely resizable)
     fontName = "Friz Quadrata",
     accentR = 0, accentG = 60, accentB = 100,
     bgR = 10, bgG = 10, bgB = 10,

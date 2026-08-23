@@ -69,6 +69,8 @@ function KART.SyncSettingsToUI()
     if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
     if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
     if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
+    if KART.CbAutoModule then settingsMap[KART.CbAutoModule] = "autoModuleEnabled" end
+    if KART.CbWuModule then settingsMap[KART.CbWuModule] = "wuModuleEnabled" end
     if KART.CbCtModuleEnabled then settingsMap[KART.CbCtModuleEnabled] = "ctModuleEnabled" end
     if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
     if KART.RC and KART.RC.CouncilMembersEditBox then settingsMap[KART.RC.CouncilMembersEditBox] = "rcCouncilMembers" end
@@ -376,6 +378,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
             KART.UpdateBuffCheckThrottled()
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
+        if KART.SetEditModeActive then KART.SetEditModeActive(false) end
         if KART.RCDialog then KART.RCDialog:Hide() end
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then
             local delay = KART_Settings.bcCombatDelay or 2
@@ -507,7 +510,11 @@ function KART.UpdateStyles()
     -- slider under the cursor, which feeds back into new values and makes the thumb jump. The
     -- slider's OnMouseUp hook (MainFrame.lua) re-runs UpdateStyles to apply the final value.
     if not (KART.SldUiScale and KART.SldUiScale.isDragging) then
-        KART.MainFrame:SetScale((KART_Settings.uiScale or 100) / 100)
+        local scale = (KART_Settings.uiScale or 100) / 100
+        KART.MainFrame:SetScale(scale)
+        -- The flyout is parented to UIParent, not the main window, so it does not inherit that
+        -- scale. Without this it stays native-size next to a scaled window.
+        if KART.CtFlyout then KART.CtFlyout:SetScale(scale) end
     end
 
     if KART.ColorPreview then KART.ColorPreview:SetColorTexture(r, g, b, 1) end

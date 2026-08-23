@@ -146,6 +146,10 @@ end
 -- =====================================================================
 
 function WU.InviteBoss(idx)
+    if KART_Settings.wuModuleEnabled == false then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MODULE_DISABLED_MSG)
+        return
+    end
     local boss = WU.bosses[idx]
     if not boss then return end
     -- "Not in a group at all" is not a lack of permission, it is the ordinary starting point: open
@@ -281,6 +285,10 @@ end
 -- The count is in the question, because "remove everyone not on this roster" reads very differently
 -- when the answer is two people and when it is eighteen.
 function WU.RemoveForBoss(idx)
+    if KART_Settings.wuModuleEnabled == false then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MODULE_DISABLED_MSG)
+        return
+    end
     local boss = WU.bosses[idx]
     if not boss then return end
     -- Leader OR assistant may uninvite in-game, so gate the same way WU.InviteBoss does rather than
@@ -455,8 +463,22 @@ function WU.BuildPanel(parent)
 
     KART.CreateTabTitle(5, L.WU_TITLE)
 
+    local wuEnableCard = KART.UI:CreateCard(parent)
+    wuEnableCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
+    wuEnableCard:SetSize(500, 50)
+    KART.CbWuModule = KART.UI:CreateSettingsCheckbox(wuEnableCard, {
+        name = "KART_WuModuleEnabled", label = L.SET_WU_MODULE_ENABLED,
+        store = SettingsStore, key = "wuModuleEnabled", y = -20,
+        tooltip = L.DESC_WU_MODULE_ENABLED,
+        onChanged = function()
+            if KART.RefreshModuleChips then KART.RefreshModuleChips() end
+        end,
+    })
+    KART.CbWuModule.text:SetWidth(430)
+    KART.CbWuModule.text:SetJustifyH("LEFT")
+
     local importCard = KART.UI:CreateCard(parent)
-    importCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
+    importCard:SetPoint("TOPLEFT", wuEnableCard, "BOTTOMLEFT", 0, -12)
     importCard:SetSize(500, 190)
 
     local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -621,6 +643,10 @@ function WU.BuildPanel(parent)
         local Lx = KART.L
         if KART.TabTitles and KART.TabTitles[5] then
             KART.TabTitles[5]:SetText(Lx.WU_TITLE)
+        end
+        if KART.CbWuModule then
+            KART.CbWuModule.text:SetText(Lx.SET_WU_MODULE_ENABLED)
+            KART.CbWuModule.tooltipText = Lx.DESC_WU_MODULE_ENABLED
         end
         pasteLabel:SetText(Lx.WU_LABEL_PASTE)
         WU.BtnImport.text:SetText(Lx.WU_BTN_IMPORT)

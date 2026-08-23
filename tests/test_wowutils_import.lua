@@ -60,3 +60,14 @@ do
     T.eq(#WU.bosses[1].players, 3, "and still splits on whitespace when there are no commas")
     T.eq(WU.bosses[1].players[2], "Bravo-Thrall", "middle name is its own player")
 end
+
+-- The module chip disables invite/remove. Import is deliberately left alone.
+do
+    KART.L.WU_MODULE_DISABLED_MSG = "disabled"
+    WU.bosses = { { name = "Nymrissa", players = { "Alric-TarrenMill" } } }
+    KARTTEST.ClearInvites()
+    env.KART_Settings.wuModuleEnabled = false
+    WU.InviteBoss(1)
+    T.eq(#KARTTEST.invited, 0, "a disabled wowutils module invites nobody")
+    env.KART_Settings.wuModuleEnabled = nil
+end

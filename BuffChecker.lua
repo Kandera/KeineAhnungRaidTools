@@ -514,7 +514,25 @@ function KART.CreateBuffCheckFrame()
 
     f:Hide()
     KART.BuffCheckFrame = f
+    if KART.RegisterEditModeFrame then
+        KART.RegisterEditModeFrame(f, "EDIT_MODE_LABEL_BUFFCHECK")
+    end
     KART.UpdateStyles()
+end
+
+function KART.SyncBuffCheckForEditMode()
+    local s = KART_Settings
+    if KART.IsEditModeActive and KART.IsEditModeActive() and s and s.bcModuleEnabled then
+        if not KART.BuffCheckFrame then KART.CreateBuffCheckFrame() end
+        if KART.BuffCheckFrame and not KART.BuffCheckFrame:IsShown() then
+            KART.editModeOpenedBuffCheck = true
+            KART.BuffCheckFrame:Show()
+        end
+    elseif KART.editModeOpenedBuffCheck then
+        KART.editModeOpenedBuffCheck = nil
+        if KART.BuffCheckFrame then KART.BuffCheckFrame:Hide() end
+    end
+    if KART.RefreshEditModeChrome then KART.RefreshEditModeChrome() end
 end
 
 -- Master switch for the whole Buff-Checker window/UI (saves CPU for raiders who don't need it).

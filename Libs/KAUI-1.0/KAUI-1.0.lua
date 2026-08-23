@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 5
+local MAJOR, MINOR = "KAUI-1.0", 8
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -71,12 +71,32 @@ nsProto.RegisterAccentLine      = appender("accentLines")
 nsProto.RegisterTabButton       = appender("tabButtons")
 nsProto.RegisterToggleCheckbox  = appender("toggleCheckboxes")
 
+-- Section titles that must stay larger than content labels. RegisterLabel would shrink them to
+-- contentSize on every ApplyStyle; headings follow menuSize plus a fixed step instead.
+local HEADING_EXTRA = 8
+function nsProto:RegisterHeading(fs)
+    if not fs then return fs end
+    self.headings = self.headings or {}
+    self.headings[#self.headings + 1] = fs
+    if self.lastFont then
+        fs:SetFont(self.lastFont, (self.lastMenuSize or 11) + HEADING_EXTRA, "")
+        if fs.SetTextColor then fs:SetTextColor(1, 1, 1) end
+    end
+    return fs
+end
+
 -- Accent textures carry their own alpha, so they are stored as { texture, alpha } pairs.
 -- Replaces five hand-written lines in the consumer's UpdateStyles, one per scroll thumb, each
 -- of which had to be remembered when a new scrollbar was added.
 function nsProto:RegisterAccentTexture(tex, alpha)
     if not tex then return tex end
-    self.accentTextures[#self.accentTextures + 1] = { tex, alpha or 0.6 }
+    alpha = alpha or 0.6
+    self.accentTextures[#self.accentTextures + 1] = { tex, alpha }
+    -- Same "style on register" contract as RegisterLabel: a popup built after the first
+    -- ApplyStyle (changelog, lazily created windows) would otherwise keep a white WHITE8X8
+    -- thumb until the next settings restyle.
+    local r, g, b = self:AccentColor()
+    tex:SetColorTexture(r, g, b, alpha)
     return tex
 end
 
@@ -631,10 +651,23 @@ end
 -- Strips Blizzard's default scrollbar/button textures from a scroll frame, so it can be skinned
 -- (or left invisible) instead -- shared by every scrollbar in the addon instead of duplicating
 -- this per call site.
+-- UIPanelScrollFrameTemplate names the bar `$parentScrollBar`. An unnamed ScrollFrame makes
+-- GetName() nil; concatenating that errors. Midnight also exposes the bar as parentKey ScrollBar.
+-- Parent keys are used only when they are actually frames: the test harness answers unknown
+-- Uppercase keys with a function stub, which is not a widget.
+local function WidgetChild(owner, parentKey, globalSuffix)
+    local child = owner[parentKey]
+    local t = type(child)
+    if t == "table" or t == "userdata" then return child end
+    local n = owner.GetName and owner:GetName()
+    return n and _G[n .. globalSuffix] or nil
+end
+
 function nsProto:StripScrollbarTextures(scrollFrame)
-    local sb = _G[scrollFrame:GetName().."ScrollBar"]
+    local sb = WidgetChild(scrollFrame, "ScrollBar", "ScrollBar")
     if not sb then return nil end
-    local up, down = _G[sb:GetName().."ScrollUpButton"], _G[sb:GetName().."ScrollDownButton"]
+    local up = WidgetChild(sb, "ScrollUpButton", "ScrollUpButton")
+    local down = WidgetChild(sb, "ScrollDownButton", "ScrollDownButton")
     for _, btn in ipairs({up, down}) do
         if btn then
             btn:Hide() btn:SetSize(1, 1)
@@ -647,6 +680,15 @@ function nsProto:StripScrollbarTextures(scrollFrame)
     for i = 1, sb:GetNumRegions() do
         local region = select(i, sb:GetRegions())
         if region and region:IsObjectType("Texture") then region:SetTexture(nil) end
+    end
+    if sb.SetBackdropColor then sb:SetBackdropColor(0, 0, 0, 0) end
+    if sb.SetBackdropBorderColor then sb:SetBackdropBorderColor(0, 0, 0, 0) end
+    -- 12.x scrollbars keep the track on Background / Track / NineSlice. Those keys are
+    -- frames in the client and functions in the harness catch-all — only Hide a real frame.
+    for _, key in ipairs({ "Background", "Track", "NineSlice" }) do
+        local layer = sb[key]
+        local lt = type(layer)
+        if (lt == "table" or lt == "userdata") and layer.Hide then layer:Hide() end
     end
     local thumb = sb:GetThumbTexture()
     if thumb then thumb:SetTexture("Interface\\Buttons\\WHITE8X8") end
@@ -778,26 +820,45 @@ end
 -- Defined dot-style with an explicit `ns` receiver for the same reason as CreateModernButton
 -- above: the focus-color callback below is conventionally named `self` for the edit box itself.
 function nsProto.CreateStyledEditBox(ns, parent, name)
-    local eb = CreateFrame("EditBox", name, parent, "BackdropTemplate")
+    -- Border lives on a sibling chrome Frame. Retail EditBoxes clip a BackdropTemplate along
+    -- the bottom edge, so the focus colour cannot sit on the EditBox itself. Callers still
+    -- SetSize/SetPoint the returned EditBox (Lua cannot replace those C methods in game);
+    -- chrome follows via SetAllPoints so it stays aligned with the label above.
+    local eb = CreateFrame("EditBox", name, parent)
     eb:SetAutoFocus(false)
-    ns:SetPixelBackdrop(eb, {
+    eb:SetTextInsets(10, 10, 0, 0)
+    if eb.SetTextColor then eb:SetTextColor(1, 1, 1) end
+    if eb.SetFontObject then eb:SetFontObject("GameFontHighlight") end
+
+    local chrome = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    chrome:SetAllPoints(eb)
+    chrome:EnableMouse(false)
+    ns:SetPixelBackdrop(chrome, {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    eb:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
-    eb:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    eb:SetTextInsets(10, 10, 0, 0)
+    chrome:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
+    chrome:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    if chrome.SetFrameLevel and eb.GetFrameLevel and eb.SetFrameLevel then
+        local lvl = eb:GetFrameLevel() or 1
+        chrome:SetFrameLevel(lvl)
+        eb:SetFrameLevel(lvl + 1)
+    end
+    eb.kartChrome = chrome
+
     eb:HookScript("OnSizeChanged", function()
-        ns:ApplyRoundedMask(eb, KAUI.CORNER_RADIUS_LG)
+        ns:ApplyRoundedMask(chrome, KAUI.CORNER_RADIUS_LG)
     end)
+    eb:HookScript("OnShow", function() chrome:Show() end)
+    eb:HookScript("OnHide", function() chrome:Hide() end)
     eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     eb:SetScript("OnEditFocusGained", function(self)
         local r, g, b = ns:AccentColor()
-        self:SetBackdropBorderColor(r, g, b, 1)
+        chrome:SetBackdropBorderColor(r, g, b, 1)
     end)
     eb:SetScript("OnEditFocusLost", function(self)
-        self:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+        chrome:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
     end)
     ns:RegisterEditBox(eb)
     return eb
@@ -882,6 +943,16 @@ function nsProto.ShowInputDialog(ns, opts)
     f.btnCancel.text:SetText(opts.cancelLabel or CANCEL)
     f.editBox:SetMaxLetters(opts.maxLetters or 64)
     f.editBox:SetText(opts.initialText or "")
+    if opts.hideCancel then
+        f.btnCancel:Hide()
+        f.btnOK:ClearAllPoints()
+        f.btnOK:SetPoint("BOTTOM", f, "BOTTOM", 0, 12)
+    else
+        f.btnCancel:Show()
+        f.btnOK:ClearAllPoints()
+        f.btnOK:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 15, 12)
+        f.btnCancel:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -15, 12)
+    end
     f:Show()
     f.editBox:SetFocus()
     if (opts.initialText or "") ~= "" then f.editBox:HighlightText() end
@@ -1027,7 +1098,7 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     local s = CreateFrame("Slider", opts.name, parent, "BackdropTemplate")
     -- Track is only the slider's own width so the thumb does not travel under the number box.
     -- The box hangs to the right; do not clip it to the 4px-tall track.
-    s:SetSize(140, 4)
+    s:SetSize(opts.valueIsText and 110 or 140, 4)
     if s.SetClipsChildren then s:SetClipsChildren(false) end
     s:SetPoint("TOPLEFT", 20, opts.y - 16) -- 16px space reserved for the label above
     s:SetOrientation("HORIZONTAL")
@@ -1226,8 +1297,15 @@ function nsProto:ApplyStyle(spec)
     self.lastFont, self.lastMenuSize, self.lastContentSize = font, menuSize, contentSize
 
     for _, fs in ipairs(self.buttonTexts) do fs:SetFont(font, menuSize, "") end
-    for _, eb in ipairs(self.editBoxes) do eb:SetFont(font, contentSize, "") end
+    for _, eb in ipairs(self.editBoxes) do
+        eb:SetFont(font, contentSize, "")
+        if eb.SetTextColor then eb:SetTextColor(1, 1, 1) end
+    end
     for _, fs in ipairs(self.labels) do fs:SetFont(font, contentSize, "") end
+    for _, fs in ipairs(self.headings or {}) do
+        fs:SetFont(font, menuSize + HEADING_EXTRA, "")
+        if fs.SetTextColor then fs:SetTextColor(1, 1, 1) end
+    end
     for _, fs in ipairs(self.closeButtonTexts) do fs:SetFont(font, CLOSE_BUTTON_GLYPH_SIZE, "OUTLINE") end
 
     for _, tex in ipairs(self.sliderThumbs) do tex:SetColorTexture(r, g, b, 1) end

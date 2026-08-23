@@ -61,6 +61,9 @@ end
 
 -- Logik für Keyword-Einladungen
 function KART.HandleChatInvite(msg, sender, event, ...)
+    -- Explicit false only: a missing key (older SavedVariables, isolated tests) keeps the
+    -- historic default-on behaviour. MergeDefaults fills the key on a live login.
+    if KART_Settings.autoModuleEnabled == false then return end
     if type(msg) ~= "string" then return end
     -- A message the client will not let us read cannot be checked against the invite keyword, so
     -- there is nothing to decide here. The type check above does NOT cover this: a secret string
@@ -143,6 +146,7 @@ end
 
 -- Logik für Auto-Promote
 function KART.HandleAutoPromote()
+    if KART_Settings.autoModuleEnabled == false then return end
     if not UnitIsGroupLeader("player") or not IsInGroup() then return end -- IsInRaid implies IsInGroup
     for unit in KAUtil.EachGroupUnit() do
         local name, realm = UnitName(unit)

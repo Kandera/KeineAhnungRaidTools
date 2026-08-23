@@ -309,22 +309,29 @@ local function ResolveHealthTexturePath(ct)
     return DEFAULT_HEALTH_TEXTURE
 end
 
+local function ApplyHealthGradient(bar, ct, fillAlpha)
+    local tex = bar and bar.kartFillTex
+    if not tex or not tex.SetGradient or not CreateColor then return false end
+    local from = (ct and ct.gradientFrom) or CT_LAYOUT_DEFAULTS.gradientFrom
+    local to = (ct and ct.gradientTo) or CT_LAYOUT_DEFAULTS.gradientTo
+    local fr, fg, fb = ColorRGB(from)
+    local tr, tg, tb = ColorRGB(to)
+    local a = fillAlpha
+    if a == nil then a = (ct and ct.healthAlpha) or CtOrDefault("healthAlpha") or 1 end
+    local fill = (ct and ct.healthFill) or CtOrDefault("healthFill")
+    local orient = (fill == "up" or fill == "down") and "VERTICAL" or "HORIZONTAL"
+    return pcall(tex.SetGradient, tex, orient, CreateColor(fr, fg, fb, a), CreateColor(tr, tg, tb, a))
+end
+
 local function ApplyBarFillTexture(bar, ct, allowGradient)
     if not bar then return end
     local tex = EnsureFillTex(bar)
     local path = ResolveHealthTexturePath(ct)
     bar.kartGradientActive = false
-    if allowGradient and ct.gradient and tex.SetGradient then
+    if allowGradient and ct and ct.gradient then
         tex:SetTexture("Interface\\Buttons\\WHITE8X8")
-        local from = ct.gradientFrom or CT_LAYOUT_DEFAULTS.gradientFrom
-        local to = ct.gradientTo or CT_LAYOUT_DEFAULTS.gradientTo
-        local fr, fg, fb = ColorRGB(from)
-        local tr, tg, tb = ColorRGB(to)
-        local fill = ct.healthFill or CtOrDefault("healthFill")
-        local orient = (fill == "up" or fill == "down") and "VERTICAL" or "HORIZONTAL"
-        local ok = pcall(tex.SetGradient, tex, orient, CreateColor(fr, fg, fb, 1), CreateColor(tr, tg, tb, 1))
-        bar.kartGradientActive = ok and true or false
-        if not ok then
+        bar.kartGradientActive = ApplyHealthGradient(bar, ct) and true or false
+        if not bar.kartGradientActive then
             tex:SetTexture(path)
         end
     else
@@ -496,6 +503,9 @@ function CT.EnsureRow()
     end)
 
     CT.row = row
+    if KART.RegisterEditModeFrame then
+        KART.RegisterEditModeFrame(row, "EDIT_MODE_LABEL_COTANK")
+    end
     return row
 end
 
@@ -923,9 +933,12 @@ function CT.Paint(snap, row)
         row.health:SetValue(health)
         local r, g, b = HealthBarColor(snap, ct)
         local fillAlpha = ct.healthAlpha or CtOrDefault("healthAlpha")
-        if row.health.kartGradientActive then
-            row.health:SetStatusBarColor(1, 1, 1, fillAlpha)
+        -- SetStatusBarColor writes vertex colour and wipes SetGradient. Re-apply the gradient
+        -- every paint instead of colouring the bar white (which is what a wiped gradient looks like).
+        if ct.gradient and ApplyHealthGradient(row.health, ct, fillAlpha) then
+            row.health.kartGradientActive = true
         else
+            row.health.kartGradientActive = false
             row.health:SetStatusBarColor(r, g, b, fillAlpha)
         end
         if row.healthBg then
@@ -1080,7 +1093,7 @@ function CT.Refresh()
 
     CT.snap = CT.snap or {}
     CT.BlankSnapshot(CT.snap)
-    if invented then
+    if invented or (not unit and KART.IsEditModeActive and KART.IsEditModeActive()) then
         CT.FillTestSnapshot(CT.snap)
     elseif unit then
         CT.FillLiveSnapshot(unit, CT.snap)
@@ -1096,6 +1109,9 @@ function CT.Refresh()
     end
     CT.RefreshAskButton()
     CT.RefreshPreview()
+    if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
+        KART.RefreshEditModeChrome()
+    end
 end
 
 function CT.RefreshPreview()
@@ -1575,6 +1591,9 @@ function CT.EnsureAskButton()
         s.ct.taunt.y = yOfs
     end)
     CT.askBtn = btn
+    if KART.RegisterEditModeFrame then
+        KART.RegisterEditModeFrame(btn, "EDIT_MODE_LABEL_TAUNT")
+    end
     return btn
 end
 

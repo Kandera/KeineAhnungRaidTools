@@ -201,6 +201,15 @@ do
     T.eq(#out, 0, "a nickname nobody carries promotes nobody")
 end
 
+do
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    PromoteList("Wuusch")
+    env.KART_Settings.autoModuleEnabled = false
+    local out = Run()
+    env.KART_Settings.autoModuleEnabled = nil
+    T.eq(#out, 0, "a disabled automation module promotes nobody")
+end
+
 -- Leave the shared roster the way this file found it: KARTTEST.activeUnit is global across every
 -- test file, and a stray "raidN" here would make the next file's "player" somebody else entirely.
 KARTTEST.activeUnit = nil

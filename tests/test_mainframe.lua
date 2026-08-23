@@ -71,6 +71,21 @@ do
     T.eq(visible, 1, "exactly one tab's panel is shown")
 end
 
+-- Settings / Raidlead card packing: accent+profiles share a parent, look sliders sit on the
+-- same card as the raidlead toggles. Two sparse full-width cards were the wasted middle.
+do
+    T.eq(KART.BtnProfile:GetParent(), KART.BtnAccentColor:GetParent(),
+        "profile actions share the accent card")
+    T.eq(KART.BtnReset:GetParent(), KART.BtnAccentColor:GetParent(),
+        "reset sits on the same card as accent")
+    T.eq(KART.SldRlBarScale:GetParent(), KART.CbActivate:GetParent(),
+        "raidlead look sliders sit beside the toggles, not on a second empty card")
+    local _, _, _, _, yDebuffNudge = KART.CtDebuffExtra.nudgeX:GetPoint()
+    local _, _, _, _, yBuffShow = KART.CbCtBuffShow:GetPoint()
+    T.truthy(yDebuffNudge > yBuffShow,
+        "debuff extras sit above the buff strip, not under its heading")
+end
+
 -- Co-Tank settings flyout --------------------------------------------------------------------------
 do
     T.eq(KART.CtFlyout:GetParent(), _G.UIParent, "the flyout is parented to UIParent, not the row")
@@ -171,13 +186,50 @@ do
         me.env.KART_Settings.showRaidleadBar = true
         me.env.KART_Settings.bcModuleEnabled = false
         me.env.KART_Settings.ctModuleEnabled = true
+        me.env.KART_Settings.autoModuleEnabled = true
+        me.env.KART_Settings.wuModuleEnabled = false
         KART.RefreshModuleChips()
     end)
     T.eq(KART.BtnRaidlead.chip:GetText(), "ON", "raidlead chip reflects showRaidleadBar")
     T.eq(KART.BtnBuffCheck.chip:GetText(), "OFF", "buff check chip reflects bcModuleEnabled")
     T.eq(KART.BtnCoTank.chip:GetText(), "ON", "co-tank chip reflects ctModuleEnabled")
-    T.is_nil(KART.BtnPromote.chip, "automation tab has no chip")
+    T.eq(KART.BtnPromote.chip:GetText(), "ON", "automation chip reflects autoModuleEnabled")
+    T.eq(KART.BtnWoWUtils.chip:GetText(), "OFF", "wowutils chip reflects wuModuleEnabled")
     T.is_nil(KART.BtnSettings.chip, "settings tab has no chip")
+end
+
+-- Invite channel chips are built at MainFrame file load, before Core.lua's ADDON_LOADED
+-- creates KART_Settings. Refresh must no-op then, the same way KAUI ResolveStore defers.
+do
+    local saved = me.env.KART_Settings
+    me.env.KART_Settings = nil
+    local ok, err = pcall(function()
+        for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
+    end)
+    me.env.KART_Settings = saved
+    T.truthy(ok, "invite chips refresh before ADDON_LOADED: " .. tostring(err))
+    T.truthy(#KART.InviteChannelChips == 4, "four invite channel chips exist")
+end
+
+do
+    -- On vs off has to survive the mouse leaving: CreateModernButton's default OnLeave paints
+    -- resting gray, which made every chip look off.
+    As(function()
+        me.env.KART_Settings.inviteChannels = {
+            WHISPER = true, BN = false, GUILD = false, OFFICER = false,
+        }
+        for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
+    end)
+    local onChip, offChip = KART.InviteChannelChips[1], KART.InviteChannelChips[2]
+    local onR, onG, onB = onChip:GetBackdropBorderColor()
+    local offR, offG, offB = offChip:GetBackdropBorderColor()
+    T.truthy(onR ~= offR or onG ~= offG or onB ~= offB,
+        "an on invite chip uses a different border than an off chip")
+    As(function() onChip:GetScript("OnLeave")(onChip) end)
+    local stayR, stayG, stayB = onChip:GetBackdropBorderColor()
+    T.eq(stayR, onR, "leaving an on chip keeps the on border")
+    T.eq(stayG, onG, "leaving an on chip keeps the on border")
+    T.eq(stayB, onB, "leaving an on chip keeps the on border")
 end
 
 -- Keybinds -----------------------------------------------------------------------------------------
