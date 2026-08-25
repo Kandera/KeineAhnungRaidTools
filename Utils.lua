@@ -454,7 +454,7 @@ KART.Defaults = {
     bcModuleEnabled = false,
     ctModuleEnabled = false,
     ct = {
-        schemaVersion = 1,
+        schemaVersion = 3,
         -- position
         point = "CENTER", relativePoint = "CENTER", x = 0, y = 200,
         locked = true,
@@ -504,16 +504,18 @@ KART.Defaults = {
             color = { r = 1, g = 0.85, b = 0.2 },
         },
         -- strips: show, max, size, spacing, perRow, anchor, growth, x, y, chrome
-        debuffs = { show = true, max = 8, size = 22, spacing = 1, perRow = 8,
+        debuffs = { show = true, max = 8, size = 28, spacing = 6, perRow = 8,
                     anchor = "TOPLEFT", growth = "right", x = 0, y = 4,
                     borderSize = 1, borderColor = { r = 0, g = 0, b = 0 },
                     swipe = true, countdown = true, countdownSize = 0,
-                    stacks = true, stacksSize = 0 },
+                    stacks = true, stacksSize = 0,
+                    hideLongDuration = false, hideFatigue = true },
         buffs   = { show = true, max = 6, size = 18, spacing = 1, perRow = 6,
                     anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4,
                     borderSize = 1, borderColor = { r = 0, g = 0, b = 0 },
                     swipe = true, countdown = true, countdownSize = 0,
-                    stacks = true, stacksSize = 0 },
+                    stacks = true, stacksSize = 0,
+                    hideLongDuration = true },
         taunt = {
             announce = false,
             channels = {

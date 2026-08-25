@@ -319,3 +319,29 @@ do
     T.truthy(not KART.Defaults.minimap.hide, "so editing them afterwards cannot reach the defaults")
     T.truthy(me.env.KART_Settings.minimap ~= minimapTable, "and the old table is genuinely replaced")
 end
+
+-- Tonight strip: three glance fields on the main window, no extra tab.
+do
+    T.truthy(KART.StatusStrip, "the main window has a status strip")
+    T.truthy(KART.StatusStrip.raidValue and KART.StatusStrip.flaskValue and KART.StatusStrip.rcValue,
+        "with raid, flask/food and RC cells")
+    As(function() KART.RefreshStatusStrip() end)
+    T.eq(KART.StatusStrip.raidValue:GetText(), "—",
+        "no WoWUtils boss list is a dash, not 0/0")
+end
+
+do
+    As(function()
+        KART.WU.bosses = {}
+        KART.WU.ParseImport(
+            "EncounterID:1;Difficulty:Mythic;Name:Test\n"
+            .. "invitelist:Bramor-TarrenMill,Alric-TarrenMill,Ghost-SomeRealm;\n")
+        local present, total = KART.WU.GroupPresenceForBoss(1)
+        T.eq(total, 3, "the boss list is the denominator")
+        T.eq(present, 2, "Bramor and Alric are already in the raid")
+        KART.RefreshStatusStrip()
+        T.eq(KART.StatusStrip.raidValue:GetText(), "2/3", "the strip shows present/total")
+        KART.WU.ResetBosses()
+    end)
+end
+

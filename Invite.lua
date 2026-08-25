@@ -98,6 +98,38 @@ function WU.ParseImport(rawText)
     return parsedCount
 end
 
+-- Commits a successful paste into KART_Settings.wuImportText. The edit box is a staging
+-- area and must not overwrite this on every keystroke: a second paste would otherwise
+-- erase the first export from SavedVariables, and a /reload would rebuild only the last
+-- one. Sequential imports (Normal then Heroic, or a split roster) append here so login
+-- and profile switch can reconstruct the stacked list.
+local function CommitImportedText(text)
+    local prev = WU.committedImportText
+    if not prev or prev == "" then
+        WU.committedImportText = text
+    elseif prev ~= text then
+        WU.committedImportText = prev .. "\n" .. text
+    end
+    if KART_Settings then KART_Settings.wuImportText = WU.committedImportText end
+end
+
+-- Import-button body, without the panel. ParseImport is additive; this function must not
+-- wipe WU.bosses. Returns count, status where status is "ok", "same", "empty", or "error".
+function WU.ImportPastedText(text)
+    if not text or KAUtil.TrimString(text) == "" then return 0, "empty" end
+    if text == WU.lastImportedText then
+        return #WU.bosses, "same"
+    end
+    local count = WU.ParseImport(text)
+    if count > 0 then
+        CommitImportedText(text)
+        if WU.RefreshBossList then WU.RefreshBossList() end
+        if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
+        return count, "ok"
+    end
+    return 0, "error"
+end
+
 -- Makes the in-memory boss list match KART_Settings.wuImportText exactly. Called from
 -- KART.SyncSettingsToUI, which runs both at login and on every profile switch — so it must REPLACE
 -- the list, not extend it: WU.ParseImport is deliberately additive (several exports can be stacked
@@ -112,6 +144,7 @@ end
 function WU.SyncBossesToSavedText()
     if not WU.ImportEditBox then return end
     local text = KART_Settings.wuImportText or ""
+    WU.committedImportText = text
     if text == WU.lastImportedText then return end -- already exactly this list
 
     WU.bosses = {}
@@ -133,17 +166,70 @@ end
 function WU.ResetBosses()
     WU.bosses = {}
     WU.lastImportedText = nil -- cleared list: allow re-importing the same text again
+    WU.committedImportText = nil
     -- Also drop the saved import text, otherwise the login/profile-switch auto-parse in
     -- KART.SyncSettingsToUI re-creates the whole list from it and the reset silently undoes itself
     -- on the next /reload (lastImportedText is a runtime field and never survives a session).
     KART_Settings.wuImportText = ""
+    WU.activeBossIdx = nil
     if WU.ImportEditBox then WU.ImportEditBox:SetText("") end
     WU.RefreshBossList()
+    if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
 end
 
 -- =====================================================================
 --  Actions
 -- =====================================================================
+
+-- Names currently in the group, keyed both as Name and Name-Realm, CaseFolded. Shared by invite
+-- skip-logic and the tonight strip's 12/20 count so those two cannot disagree about who is here.
+local function GroupNameSet()
+    local alreadyIn = {}
+    do
+        -- Seed with ourselves unconditionally: EachGroupUnit yields nothing while solo, so a bulk
+        -- invite started alone would otherwise try to invite the player themselves.
+        local myName, myRealm = UnitName("player")
+        if myName then
+            alreadyIn[KAUtil.CaseFold(myName)] = true
+            if myRealm and myRealm ~= "" then alreadyIn[KAUtil.CaseFold(myName.."-"..myRealm)] = true end
+            local normalized = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
+            if normalized and normalized ~= "" then
+                alreadyIn[KAUtil.CaseFold(myName.."-"..normalized)] = true
+            end
+        end
+    end
+    for unit in KAUtil.EachGroupUnit() do
+        local name, realm = UnitName(unit)
+        if name then
+            local full = (realm and realm ~= "") and (name.."-"..realm) or name
+            alreadyIn[KAUtil.CaseFold(full)] = true
+            alreadyIn[KAUtil.CaseFold(name)] = true
+        end
+    end
+    return alreadyIn
+end
+
+function WU.ActiveBossIndex()
+    if WU.activeBossIdx and WU.bosses[WU.activeBossIdx] then return WU.activeBossIdx end
+    if WU.bosses[1] then return 1 end
+    return nil
+end
+
+-- How many of this boss's pasted names are already in the group. Denominator is the list
+-- length, not GetNumGroupMembers: extras in the raid who are not on the list do not inflate 12/20.
+function WU.GroupPresenceForBoss(idx)
+    local boss = WU.bosses[idx]
+    if not boss then return 0, 0 end
+    local alreadyIn = GroupNameSet()
+    local present = 0
+    for _, player in ipairs(boss.players) do
+        local short = player:match("([^%-]+)") or player
+        if alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)] then
+            present = present + 1
+        end
+    end
+    return present, #boss.players
+end
 
 function WU.InviteBoss(idx)
     if KART_Settings.wuModuleEnabled == false then
@@ -152,6 +238,7 @@ function WU.InviteBoss(idx)
     end
     local boss = WU.bosses[idx]
     if not boss then return end
+    WU.activeBossIdx = idx
     -- "Not in a group at all" is not a lack of permission, it is the ordinary starting point: open
     -- the tab before the evening, click the first boss, and the invites go out. HasGroupPermissions
     -- answers false while ungrouped -- correctly, there is no group to lead -- so gating on it alone
@@ -169,33 +256,10 @@ function WU.InviteBoss(idx)
         return
     end
 
-    -- Build a lookup of players already in the group (with and without realm).
-    local alreadyIn = {}
-    -- Seed with ourselves unconditionally: EachGroupUnit yields nothing while solo, so a bulk invite
-    -- started alone (the case the deferred raid conversion below exists for) would otherwise try to
-    -- invite the player themselves — a red "You can't invite yourself" error, and an invited count
-    -- one too high.
-    do
-        local myName, myRealm = UnitName("player")
-        if myName then
-            alreadyIn[KAUtil.CaseFold(myName)] = true
-            if myRealm and myRealm ~= "" then alreadyIn[KAUtil.CaseFold(myName.."-"..myRealm)] = true end
-            local normalized = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
-            if normalized and normalized ~= "" then
-                alreadyIn[KAUtil.CaseFold(myName.."-"..normalized)] = true
-            end
-        end
-    end
-    for unit in KAUtil.EachGroupUnit() do
-        local name, realm = UnitName(unit)
-        if name then
-            local full = (realm and realm ~= "") and (name.."-"..realm) or name
-            -- CaseFold (not :lower()) so DE-realm umlaut names fold consistently with the boss list
-            -- below — :lower() is ASCII-only and leaves Ö/Ä/Ü untouched (see Utils.lua CaseFold).
-            alreadyIn[KAUtil.CaseFold(full)] = true
-            alreadyIn[KAUtil.CaseFold(name)] = true
-        end
-    end
+    -- Same lookup Invite and the tonight strip share, including the solo self-seed: EachGroupUnit
+    -- yields nothing while solo, so without it a bulk invite started alone would try to invite the
+    -- player themselves.
+    local alreadyIn = GroupNameSet()
 
     -- Count who we'd actually invite (not already present) so we can decide up front whether the
     -- roster needs to be a raid. A party caps at 5, so without converting, invites past slot 5
@@ -520,9 +584,10 @@ function WU.BuildPanel(parent)
     WU.ImportEditBox:SetMultiLine(true)
     WU.ImportEditBox:SetAutoFocus(false)
     WU.ImportEditBox:SetFontObject("GameFontHighlightSmall")
-    WU.ImportEditBox:SetScript("OnTextChanged", function(self)
-        if KART_Settings then KART_Settings.wuImportText = self:GetText() end
-    end)
+    -- Staging only. wuImportText is committed on a successful Import (see
+    -- WU.ImportPastedText); writing it here erased stacked exports the moment the
+    -- next paste replaced the box.
+    WU.ImportEditBox:SetScript("OnTextChanged", function() end)
     WU.ImportEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     WU.ImportEditBox:SetScript("OnEditFocusGained", function()
         local r, g, b = KART.UI:AccentColor()
@@ -558,31 +623,13 @@ function WU.BuildPanel(parent)
     WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
     WU.BtnImport:SetScript("OnClick", function()
         local text = WU.ImportEditBox:GetText()
-        if KAUtil.TrimString(text) ~= "" and text == WU.lastImportedText then
-            -- Identical to what's already loaded (e.g. auto-parsed from the saved text at login) —
-            -- re-parsing would duplicate every boss. Report it as already loaded instead.
+        local _, status = WU.ImportPastedText(text)
+        if status == "same" or status == "ok" then
             WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, #WU.bosses))
             WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
+        elseif status == "empty" then
             return
-        end
-        -- Replace, don't append. Only the edit box's text is persisted (wuImportText), so the list
-        -- has to be reconstructible from it alone — an appended second import would silently shrink
-        -- back to just the last export on the next /reload or profile switch, and re-clicking Import
-        -- on a box holding both exports would duplicate the first one as "Boss A"/"Boss B".
-        -- Stacking several exports still works the intended way: paste them all into the box, which
-        -- parses every EncounterID block it contains.
-        local previous = WU.bosses
-        WU.bosses = {}
-        local count = WU.ParseImport(text)
-        if count > 0 then
-            WU.RefreshBossList()
-            WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, count))
-            WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
         else
-            -- Nothing parsed — hand the previous list straight back instead of leaving the user with
-            -- an empty one. (Rebuilding from wuImportText wouldn't work: the edit box's OnTextChanged
-            -- has already overwritten it with the text that just failed to parse.)
-            WU.bosses = previous
             WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR)
             WU.statusLabel:SetTextColor(0.9, 0.3, 0.3)
         end

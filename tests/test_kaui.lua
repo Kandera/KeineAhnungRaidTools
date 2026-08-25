@@ -371,3 +371,76 @@ do
     local r2 = select(1, eb.kartChrome:GetBackdropBorderColor())
     T.eq(r2, 0.15, "lost focus restores the resting border")
 end
+
+-- ON/OFF pill contrast: the track uses full accent when checked, a visible gray when not.
+do
+    ns:ApplyStyle({ font = "Fonts\\FRIZQT__.TTF", menuSize = 12, contentSize = 11, accent = { 0.1, 0.5, 0.9 } })
+    local cb = ns:CreateSettingsCheckbox(UIParent, {
+        store = { on = false },
+        key = "on",
+        y = 0,
+        label = "On",
+    })
+    cb:SetChecked(false)
+    local r, g, b, a = cb:GetBackdropColor()
+    T.eq(r, 0.22, "off track is a visible gray, not black")
+    T.eq(a, 0.95, "off track is nearly opaque")
+    cb:SetChecked(true)
+    r, g, b, a = cb:GetBackdropColor()
+    T.eq(r, 0.1, "on track uses the accent red")
+    T.eq(g, 0.5, "on track uses the accent green")
+    T.eq(b, 0.9, "on track uses the accent blue")
+    T.eq(a, 0.95, "on track is nearly opaque")
+end
+
+-- ApplyPopupChrome: one title / accent line / close for every popup ---------------------------
+-- Changelog, the owed reminder, the Co-Tank flyout and the buff checker each built these
+-- three pieces by hand, at different offsets. The factory owns the offsets; callers pass a
+-- title and an optional onClose.
+do
+    local ok = pcall(function() ns:ApplyPopupChrome(CreateFrame("Frame", nil, UIParent), {}) end)
+    T.eq(ok, false, "ApplyPopupChrome refuses a missing title")
+end
+
+do
+    local f = CreateFrame("Frame", nil, UIParent)
+    ns:ApplyPopupChrome(f, { title = "Changelog" })
+    T.eq(f.title:GetText(), "Changelog", "chrome writes the title")
+    local p, _, _, x, y = f.title:GetPoint(1)
+    T.eq(p, "TOPLEFT", "title sits top-left, not mixed per window")
+    T.eq(x, 16, "title x is the shared chrome constant")
+    T.eq(y, -12, "title y is the shared chrome constant")
+    T.truthy(f.headerLine, "chrome draws the accent line")
+    T.truthy(f.closeBtn, "chrome adds a close button")
+    local cp, _, _, cx, cy = f.closeBtn:GetPoint(1)
+    T.eq(cp, "TOPRIGHT", "close sits top-right")
+    T.eq(cx, -8, "close x is the shared chrome constant")
+    T.eq(cy, -8, "close y is the shared chrome constant")
+end
+
+do
+    local f = CreateFrame("Frame", nil, UIParent)
+    ns:ApplyPopupChrome(f, { title = "A" })
+    local title, line, close = f.title, f.headerLine, f.closeBtn
+    ns:ApplyPopupChrome(f, { title = "B" })
+    T.eq(f.title, title, "a second call reuses the title")
+    T.eq(f.headerLine, line, "and the line")
+    T.eq(f.closeBtn, close, "and the close button")
+    T.eq(f.title:GetText(), "B", "and updates the title text")
+end
+
+do
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:Show()
+    ns:ApplyPopupChrome(f, { title = "X" })
+    f.closeBtn:GetScript("OnClick")(f.closeBtn)
+    T.eq(f:IsShown(), false, "close hides the frame when onClose is omitted")
+end
+
+do
+    local closed = false
+    local f = CreateFrame("Frame", nil, UIParent)
+    ns:ApplyPopupChrome(f, { title = "X", onClose = function() closed = true end })
+    f.closeBtn:GetScript("OnClick")(f.closeBtn)
+    T.eq(closed, true, "close runs the caller-supplied onClose")
+end

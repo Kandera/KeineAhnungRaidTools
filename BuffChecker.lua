@@ -19,10 +19,11 @@ KART.BuffData = {
     { id = "shout",  labelKey = "BC_LABEL_SHOUT",  col = 5, icon = 132333,  class = "WARRIOR", spells = {6673}, report = "buff", reportLabelKey = "BC_REPORT_SHOUT" },
     { id = "bronze", labelKey = "BC_LABEL_BRONZE", col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabelKey = "BC_REPORT_BRONZE" },
     { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelszorn"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
-    { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD" },
-    { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK" },
+    { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD", whisper = true },
+    { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK", whisper = true },
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
-    { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
+    -- whisper without report: Shift-click Report pokes the player; raid chat stays flask/food only.
+    { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true, whisper = true },
     { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
     -- All three lists hold enchantIDs, not spell ids: the weapon slot is read from
     -- GetWeaponEnchantInfo. Every id was taken from the game's own SpellItemEnchantment table
@@ -107,7 +108,13 @@ KART.UI:RegisterLocaleRefresher(function()
     ResolveBuffDataLabels()
     BuildSlotNames()
     -- Window is built lazily (after the refreshers ran), so headers/buttons pick the fresh
-    -- labels up at creation; nothing else to re-apply here.
+    -- labels up at creation. If it already exists, keep the report tooltip and the all-ok
+    -- banner on the current language.
+    local f = KART.BuffCheckFrame
+    if f then
+        if f.reportBtn then f.reportBtn.tooltipText = L.TIP_REPORT end
+        if f.okBanner then f.okBanner:SetText(L.BC_ALL_CONSUMABLES_OK) end
+    end
 end)
 
 -- Integration von LibDurability (wird durch BigWigs/MRT bereitgestellt). LibDurability is
@@ -228,11 +235,7 @@ function KART.CreateBuffCheckFrame()
     KART.UI:ApplyPopupArtwork(f)
     KART.UI:RegisterStrataFrame(f)
     KART.UI:AddShowFade(f)
-
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    f.title:SetPoint("TOPLEFT", 16, -12)
-    f.title:SetText(L.BC_TITLE)
-    KART.UI:CreateHeaderLine(f, -30)
+    KART.UI:ApplyPopupChrome(f, { title = L.BC_TITLE })
 
     -- Header Labels
     local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
@@ -390,10 +393,6 @@ function KART.CreateBuffCheckFrame()
         f.rows[i] = row
     end
 
-    local close = KART.UI:CreateHeaderIconButton(f, "×", function() f:Hide() end)
-    close:SetPoint("TOPRIGHT", -5, -2)
-    f.closeBtn = close
-
     -- Debounced, and matching the responders' own answer cooldown in KASC. One click asks the whole
     -- raid three questions and every KART client answers all three: 60 outbound messages in a 20-man
     -- raid. A few impatient clicks used to overrun Blizzard's chat rate limiter, which drops the
@@ -440,10 +439,24 @@ function KART.CreateBuffCheckFrame()
         end
     end)
 
-    f.reportBtn = KART.UI:CreateModernButton(f, L.BTN_REPORT)
+    f.reportBtn = KART.UI:CreateModernButton(f, L.BTN_REPORT, L.TIP_REPORT)
     f.reportBtn:SetPoint("BOTTOM", 45, 10)
     f.reportBtn:SetSize(80, 22)
-    f.reportBtn:SetScript("OnClick", function() KART.ReportMissingBuffs() end)
+    f.reportBtn:SetScript("OnClick", function()
+        if IsShiftKeyDown() then
+            KART.WhisperMissingConsumables()
+        else
+            KART.ReportMissingBuffs()
+        end
+    end)
+
+    f.okBanner = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.okBanner:SetPoint("BOTTOMLEFT", 170, 14)
+    f.okBanner:SetPoint("BOTTOMRIGHT", -40, 14)
+    f.okBanner:SetJustifyH("LEFT")
+    f.okBanner:SetText(L.BC_ALL_CONSUMABLES_OK)
+    KART.UI:RegisterLabel(f.okBanner)
+    f.okBanner:Hide()
 
     -- Invisible hit area over the resize corner baked into the artwork (bottom right);
     -- HIGHLIGHT-layer texture shows automatically on hover.
@@ -654,6 +667,62 @@ local function SplitNameLines(prefix, names)
     return lines
 end
 
+function KART.ConsumablesComplete()
+    local missing = KART.MissingBuffs
+    if not missing then return true end
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.whisper then
+            local list = missing[buff.id]
+            if list and #list > 0 then return false end
+        end
+    end
+    return true
+end
+
+local function RefreshOkBanner(isPreview)
+    local f = KART.BuffCheckFrame
+    if not f or not f.okBanner then return end
+    if isPreview or not IsInGroup() or not KART.ConsumablesComplete() then
+        f.okBanner:Hide()
+    else
+        f.okBanner:SetText(L.BC_ALL_CONSUMABLES_OK)
+        f.okBanner:Show()
+    end
+end
+
+-- One whisper per raider, flask/food/rune only. Class buffs stay on the raid Report click.
+-- Names are snapshotted now for the same reason ReportMissingBuffs snapshots: MissingBuffs is
+-- wiped on the next render, which can land before a staggered C_Timer.After fires.
+function KART.WhisperMissingConsumables()
+    if not IsInGroup() or not KART.MissingBuffs then return end
+    local me = Ambiguate(UnitName("player") or "", "short")
+    local byPlayer, order = {}, {}
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.whisper then
+            local list = KART.MissingBuffs[buff.id]
+            if list then
+                for _, name in ipairs(list) do
+                    local short = Ambiguate(name, "short")
+                    if short ~= me then
+                        if not byPlayer[short] then
+                            byPlayer[short] = {}
+                            order[#order + 1] = short
+                        end
+                        byPlayer[short][#byPlayer[short] + 1] = buff.reportLabel or buff.label
+                    end
+                end
+            end
+        end
+    end
+    local delay = 0
+    for _, name in ipairs(order) do
+        local msg = string.format(L.BC_WHISPER_MISSING, table.concat(byPlayer[name], ", "))
+        local target = name
+        C_Timer.After(delay, function() SendChatMessage(msg, "WHISPER", nil, target) end)
+        delay = delay + 0.5
+    end
+end
+
 function KART.ReportMissingBuffs()
     if not IsInGroup() or not KART.MissingBuffs then return end
     -- Reviewed 2026-07-25, intentional: RAID/PARTY only, never INSTANCE_CHAT. /Report targets the
@@ -834,6 +903,53 @@ local function ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
     end
 end
 
+-- People in the group missing flask or food. Independent of the Buff Check window: the main
+-- window's tonight strip has to answer this without opening that frame. One person missing both
+-- still counts as one.
+function KART.CountMissingFlaskFood()
+    local foodSpells = {}
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.isFood and buff.spells then foodSpells = buff.spells end
+    end
+    local missing = 0
+    for unit in KAUtil.EachGroupUnit() do
+        local hasFlask, hasFood = false, false
+        local blocked = IndexAuraScanBlocked()
+        if not blocked then
+            for j = 1, 100 do
+                local aura, refused = ReadHelpfulAuraByIndex(unit, j)
+                if refused then
+                    blocked = true
+                    break
+                end
+                if not aura then break end
+                local comparable = pcall(IsAuraSafe, aura)
+                if comparable and aura.name then
+                    if aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true)
+                        or aura.name:find("Flask", 1, true) then
+                        hasFlask = true
+                    end
+                    if aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true) then
+                        hasFood = true
+                    end
+                    if type(aura.spellId) == "number" then
+                        for _, sid in ipairs(foodSpells) do
+                            if aura.spellId == sid then hasFood = true end
+                        end
+                    end
+                end
+            end
+        end
+        if blocked then
+            for _, sid in ipairs(foodSpells) do
+                if ReadAuraBySpellID(unit, sid) then hasFood = true break end
+            end
+        end
+        if not hasFlask or not hasFood then missing = missing + 1 end
+    end
+    return missing
+end
+
 function KART.UpdateBuffCheck(isPreview)
     if not KART.BuffCheckFrame then return end
     -- Remember which mode the window is currently rendering. The throttled refresh (fired by roster
@@ -848,7 +964,7 @@ function KART.UpdateBuffCheck(isPreview)
     wipe(KART.ClassCache)
     
     for _, buff in ipairs(KART.BuffData) do
-        if buff.report then
+        if buff.report or buff.whisper then
             KART.MissingBuffs[buff.id] = KART.MissingBuffs[buff.id] or {}
             wipe(KART.MissingBuffs[buff.id])
         end
@@ -956,6 +1072,7 @@ function KART.UpdateBuffCheck(isPreview)
             row:Show()
         end
         KART.BuffCheckFrame.scrollContent:SetHeight(5 * 26)
+        RefreshOkBanner(true)
         return
     end
 
@@ -1173,10 +1290,10 @@ function KART.UpdateBuffCheck(isPreview)
             
             -- Advanced-panel checks (oil, enchants, gems — page = "advanced") are never chat-reported:
             -- that panel is a separate, opt-in view and its data must stay out of the raid /Report.
-            -- Only default-panel buff/item checks feed KART.MissingBuffs. Enforced by buff.report
-            -- (those advanced items carry no report field) plus an explicit page guard as a backstop.
+            -- Default-panel report and whisper checks feed KART.MissingBuffs. Enforced by those
+            -- fields (advanced items carry neither) plus an explicit page guard as a backstop.
             local isMissing = not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong")
-            if isMissing and buff.report and buff.page ~= "advanced" then
+            if isMissing and (buff.report or buff.whisper) and buff.page ~= "advanced" then
                 if not buff.class or KART.ClassCache[buff.class] then
                     table.insert(KART.MissingBuffs[buff.id], nameStr)
                 end
@@ -1191,6 +1308,8 @@ function KART.UpdateBuffCheck(isPreview)
         row:Show()
     end
     KART.BuffCheckFrame.scrollContent:SetHeight(math.min(iterMax, 40) * 26) -- render loop caps rows at 40 (Epic BGs)
+    RefreshOkBanner(false)
+    if KART.RefreshStatusStripThrottled then KART.RefreshStatusStripThrottled() end
 end
 
 -- =====================================================================

@@ -146,3 +146,14 @@ do
     KART.LoadProfile("never saved")
     T.eq(env.KART_Settings.lcVoteSeconds, 45, "and so is one that does not exist")
 end
+
+do
+    local saw
+    KART.CT = { MigrateProfile = function(ct) saw = ct end }
+    Settings({ language = "auto", ct = { schemaVersion = 1, debuffs = { spacing = 1 } } })
+    KART.SaveProfile("cotank")
+    Settings({ language = "auto", lcVoteSeconds = 1 })
+    KART.LoadProfile("cotank")
+    T.eq(saw, env.KART_Settings.ct, "LoadProfile migrates the co-tank blob")
+    KART.CT = nil
+end

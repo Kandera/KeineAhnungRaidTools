@@ -102,16 +102,10 @@ local function EnsureOwedFrame()
         KART.UI:ApplyRoundedMask(f, (KAUI and KAUI.CORNER_RADIUS_LG) or 6)
     end
 
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("TOPLEFT", 12, -10)
-    f.title:SetText(L.RC_OWED_TITLE or "You are owed")
-    KART.UI:RegisterLabel(f.title)
-
-    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", 2, 2)
-    close:SetScript("OnClick", function()
-        RC.DismissOwed()
-    end)
+    KART.UI:ApplyPopupChrome(f, {
+        title = L.RC_OWED_TITLE or "You are owed",
+        onClose = function() RC.DismissOwed() end,
+    })
 
     f:SetScript("OnHide", function()
         if hidingInternally then return end
@@ -136,7 +130,7 @@ local function EnsureOwedRow(parent, i)
     if row then return row end
     row = CreateFrame("Button", nil, parent)
     row:SetSize(296, 22)
-    row:SetPoint("TOPLEFT", 12, -28 - (i - 1) * 24)
+    row:SetPoint("TOPLEFT", 12, -36 - (i - 1) * 24)
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.text:SetPoint("LEFT", 0, 0)
     row.text:SetPoint("RIGHT", 0, 0)
@@ -171,7 +165,7 @@ function RC.RefreshOwedDisplay()
         if owedRows[i] then owedRows[i]:Hide() end
     end
     local rows = #store.items
-    f:SetHeight(math.max(80, 40 + rows * 24))
+    f:SetHeight(math.max(80, 48 + rows * 24))
     if f.title then
         f.title:SetText(L.RC_OWED_TITLE or "You are owed")
     end

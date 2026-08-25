@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 8
+local MAJOR, MINOR = "KAUI-1.0", 10
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -380,6 +380,41 @@ function nsProto:CreateHeaderIconButton(parent, glyph, onClick)
     return btn
 end
 
+-- Shared popup chrome: title, accent header line, close. Changelog, the owed reminder,
+-- the Co-Tank flyout and the buff checker used to place these at four different offsets.
+-- Callers pass the title and an optional onClose; the offsets live here. A second call on
+-- the same frame reuses the widgets and updates the title (and onClose, if given).
+local CHROME_TITLE_X, CHROME_TITLE_Y = 16, -12
+local CHROME_LINE_Y = -30
+local CHROME_CLOSE_X, CHROME_CLOSE_Y = -8, -8
+
+function nsProto:ApplyPopupChrome(frame, opts)
+    assert(frame, "ApplyPopupChrome: frame required")
+    opts = opts or {}
+    local title = opts.title
+    assert(type(title) == "string" and title ~= "", "ApplyPopupChrome: title required")
+
+    if not frame.title then
+        frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        frame.title:SetPoint("TOPLEFT", CHROME_TITLE_X, CHROME_TITLE_Y)
+        self:RegisterLabel(frame.title)
+    end
+    frame.title:SetText(title)
+
+    if not frame.headerLine then
+        self:CreateHeaderLine(frame, CHROME_LINE_Y)
+    end
+
+    if not frame.closeBtn then
+        local onClose = opts.onClose or function() frame:Hide() end
+        frame.closeBtn = self:CreateHeaderIconButton(frame, "×", onClose)
+        frame.closeBtn:SetPoint("TOPRIGHT", CHROME_CLOSE_X, CHROME_CLOSE_Y)
+    elseif opts.onClose then
+        frame.closeBtn:SetScript("OnClick", opts.onClose)
+    end
+    return frame
+end
+
 -- Small-radius default for ApplyRoundedMask below, and the size floor under which rounding is
 -- skipped entirely. CORNER_RADIUS_MIN_SIZE is used only inside ApplyRoundedMask and stays a
 -- private library local. CORNER_RADIUS_SM and CORNER_RADIUS_LG are exported (KAUI.CORNER_RADIUS_*)
@@ -515,6 +550,44 @@ function nsProto.CreateModernButton(ns, parent, text, tooltipText)
         GameTooltip:Hide()
     end)
     return b
+end
+
+-- Grow a modern button so its label is not clipped by the rounded mask.
+function nsProto:FitButtonToLabel(btn, pad)
+    if not btn or not btn.text or not btn.text.GetStringWidth then return end
+    pad = pad or 24
+    local extra = btn.swatch and 20 or 0
+    local need = (btn.text:GetStringWidth() or 0) + pad + extra
+    local w, h = btn:GetSize()
+    if need > (w or 0) then
+        btn:SetSize(need, h)
+    end
+    if btn.text.SetWordWrap then btn.text:SetWordWrap(false) end
+end
+
+-- A 12px chip on the left of a colour button so the picked colour is visible without opening the picker.
+function nsProto:AttachColorSwatch(btn)
+    if not btn then return end
+    if btn.swatch then return btn.swatch end
+    local swatch = btn:CreateTexture(nil, "OVERLAY")
+    swatch:SetSize(12, 12)
+    swatch:SetPoint("LEFT", 6, 0)
+    if swatch.SetColorTexture then swatch:SetColorTexture(1, 1, 1, 1) end
+    btn.swatch = swatch
+    if btn.text then
+        btn.text:ClearAllPoints()
+        btn.text:SetPoint("LEFT", swatch, "RIGHT", 6, 0)
+        btn.text:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
+        if btn.text.SetJustifyH then btn.text:SetJustifyH("LEFT") end
+        if btn.text.SetWordWrap then btn.text:SetWordWrap(false) end
+    end
+    return swatch
+end
+
+function nsProto:PaintColorSwatch(btn, color)
+    if not btn or not btn.swatch or not color then return end
+    local r, g, b = color.r or 1, color.g or 1, color.b or 1
+    if btn.swatch.SetColorTexture then btn.swatch:SetColorTexture(r, g, b, 1) end
 end
 
 -- Registers a StaticPopup with this namespace's shared modal defaults (no timeout, usable while
@@ -1035,15 +1108,16 @@ function nsProto.CreateSettingsCheckbox(ns, parent, opts)
             dot:SetPoint("LEFT", self, "LEFT", 2, 0)
         end
         local r, g, bl = ns:AccentColor()
+        -- The knub is always light so it reads on both the dark off-track and the accent on-track.
+        -- ApplyStyle paints RegisterCheckVisual textures in accent; this runs after that and wins.
+        if dot.SetColorTexture then dot:SetColorTexture(1, 1, 1, 1) end
         if checked then
-            -- Explicit alpha (matching the unchecked branch's 0.5) rather than relying on Darken's
-            -- 3 return values expanding into SetBackdropColor's 4-arg call: that would leave alpha
-            -- unset, and every other SetBackdropColor call site in this file passes alpha
-            -- explicitly, so an implicit default here would be an inconsistent one-off.
-            local dr, dg, db = KAUI.Darken(r, g, bl, 0.35)
-            self:SetBackdropColor(dr, dg, db, 0.5)
+            -- Full accent at high alpha: Darken+0.5 on a dark card made ON/OFF nearly identical.
+            self:SetBackdropColor(r, g, bl, 0.95)
+            self:SetBackdropBorderColor(r, g, bl, 1)
         else
-            self:SetBackdropColor(0, 0, 0, 0.5)
+            self:SetBackdropColor(0.22, 0.22, 0.22, 0.95)
+            self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
         end
     end
 
@@ -1052,6 +1126,12 @@ function nsProto.CreateSettingsCheckbox(ns, parent, opts)
         refreshVisual(self)
         if opts.onChanged then opts.onChanged() end
     end)
+    -- Profile load calls SetChecked, which does not fire OnClick. Keep the knub in sync.
+    local rawSetChecked = cb.SetChecked
+    function cb:SetChecked(value)
+        rawSetChecked(self, value)
+        refreshVisual(self)
+    end
     -- Initial state (e.g. when the panel is first built, before any user click) still needs the
     -- dot in the correct position — CheckButton's own SetChecked (called elsewhere when settings
     -- load) doesn't fire OnClick, so hook OnShow as a catch-all.

@@ -167,7 +167,7 @@ end
 do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("ctModuleEnabled = false", 1, true), "default module off")
-    T.truthy(utils:find("schemaVersion = 1", 1, true), "ct blob has schemaVersion")
+    T.truthy(utils:find("schemaVersion = 3", 1, true), "ct blob has schemaVersion")
 end
 
 do
@@ -332,6 +332,40 @@ end
 do
     T.eq(KART.CT.AuraEngineAvailable(), false, "aura engine unavailable in harness")
 end
+
+do
+    local f = KART.CT.CandidateFilters("debuffs", {})
+    T.eq(f.maxDuration, nil, "long-duration hide is off until opted in")
+    T.eq(f.isFromPlayerOrPlayerPet, false, "debuff strip hides player-applied auras")
+    T.truthy(f.excludeSpellIDs and f.excludeSpellIDs[57724], "Sated is excluded by default")
+    f = KART.CT.CandidateFilters("debuffs", { hideLongDuration = true })
+    T.eq(f.maxDuration, 300, "opt-in hides debuffs longer than 5 minutes")
+    f = KART.CT.CandidateFilters("debuffs", { hideFatigue = false })
+    T.eq(f.excludeSpellIDs, nil, "opt-out keeps Sated")
+    f = KART.CT.CandidateFilters("buffs", {})
+    T.eq(f.maxDuration, 300, "buff strip hides food and flask by default")
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[871],
+        "buff strip allows Shield Wall")
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[33206],
+        "buff strip allows Pain Suppression")
+    T.eq(f.includeSpellIDs and f.includeSpellIDs[192081], nil,
+        "buff strip hides Ironfur")
+    T.eq(f.includeSpellIDs and f.includeSpellIDs[774], nil,
+        "buff strip hides Rejuvenation")
+    f = KART.CT.CandidateFilters("buffs", { hideLongDuration = false })
+    T.eq(f.maxDuration, nil, "buff strip can show long buffs when opted out")
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[871],
+        "buff allowlist stays on when long buffs are shown")
+end
+
+do
+    local layout = KART.CT.AuraGroupLayout({ size = 22, spacing = 3, perRow = 8, growth = "right" })
+    T.eq(layout.elementWidth, 22, "live layout uses elementWidth")
+    T.eq(layout.elementHeight, 22, "live layout uses elementHeight")
+    T.eq(layout.elementSpacing, 3, "live layout uses elementSpacing")
+    T.eq(layout.iconWidth, nil, "old iconWidth key is gone")
+end
+
 
 do
     KART.CT.row = nil
@@ -794,7 +828,7 @@ end
 do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("taunt = {", 1, true), "ct defaults include a taunt blob")
-    T.truthy(utils:find("schemaVersion = 1", 1, true), "schemaVersion stays 1")
+    T.truthy(utils:find("schemaVersion = 3", 1, true), "schemaVersion is 3")
     T.truthy(utils:find("healthTexture = ", 1, true), "ct defaults include healthTexture")
     T.truthy(utils:find("gradient = false", 1, true), "ct defaults include gradient off")
 end
@@ -845,6 +879,32 @@ do
     btn.StartMoving = function() moved = true end
     btn:GetScript("OnDragStart")(btn)
     T.truthy(moved, "edit mode allows dragging a locked ask button")
+    KART.L.BTN_CT_TAKE_IT = "Take it"
+    KART.CT.RefreshAskButton()
+    T.eq(btn.text and btn.text:GetText(), "Take it", "ask button caption is the take-it locale")
+    T.eq(btn.icon and btn.icon:IsShown(), false, "taunt icon is not shown")
+    T.truthy(btn:GetWidth() > btn:GetHeight(), "label makes the button wider than a square")
+    KART.UI = { lastFont = "Interface\\Fonts\\Custom.ttf", lastContentSize = 14 }
+    local seen
+    btn.text.SetFont = function(_, path, size) seen = path .. ":" .. tostring(size) end
+    KART.CT.RefreshAskButton()
+    T.eq(seen, "Interface\\Fonts\\Custom.ttf:14", "ask button uses KAUI content font before measuring width")
+    KART.UI = nil
+end
+
+do
+    RaidTwoTanks()
+    env.KART_Settings.ct.testMode = true
+    KART.UI = { lastFont = "Interface\\Fonts\\Custom.ttf" }
+    KART.CT.row = nil
+    local row = KART.CT.EnsureRow()
+    local seen
+    row.nameText.SetFont = function(_, path) seen = path end
+    local snap = KART.CT.BlankSnapshot({})
+    KART.CT.FillTestSnapshot(snap)
+    KART.CT.Paint(snap, row)
+    T.eq(seen, "Interface\\Fonts\\Custom.ttf", "name uses KAUI content font when set")
+    KART.UI = nil
 end
 
 do
@@ -883,10 +943,41 @@ do
     chunk("KeineAhnungRaidTools", env.KART)
     local old = { ct = { width = 200, locked = true } }
     KAUtil.MergeDefaults(old, env.KART.Defaults)
-    T.eq(old.ct.schemaVersion, 1, "MergeDefaults keeps ct.schemaVersion at 1")
+    T.eq(old.ct.schemaVersion, 3, "MergeDefaults fills ct.schemaVersion from defaults")
     T.eq(old.ct.width, 200, "MergeDefaults preserves existing ct.width")
     T.truthy(old.ct.healthTexture, "MergeDefaults fills healthTexture on old profiles")
     T.eq(old.ct.gradient, false, "MergeDefaults fills gradient default")
     T.truthy(old.ct.gradientFrom and old.ct.gradientFrom.r, "MergeDefaults fills gradientFrom")
     T.truthy(old.ct.gradientTo and old.ct.gradientTo.r, "MergeDefaults fills gradientTo")
+    T.eq(old.ct.buffs.hideLongDuration, true, "MergeDefaults fills buff long-duration hide on old profiles")
+    T.eq(old.ct.debuffs.size, 28, "MergeDefaults fills the larger debuff size on old profiles without a strip blob")
+end
+
+do
+    local core = assert(io.open("Core.lua", "r")):read("*a")
+    T.truthy(core:find("RefreshAskButton", 1, true), "UpdateStyles resizes the take-it button after a font change")
+end
+
+do
+    local factory = { schemaVersion = 1, debuffs = { size = 22, spacing = 1 } }
+    KART.CT.MigrateProfile(factory)
+    T.eq(factory.schemaVersion, 3, "v1 profile schema moves to 3")
+    T.eq(factory.debuffs.size, 28, "factory 22px debuffs become 28px")
+    T.eq(factory.debuffs.spacing, 6, "factory 1px gap becomes 6px")
+    local custom = { schemaVersion = 1, debuffs = { size = 30, spacing = 2 } }
+    KART.CT.MigrateProfile(custom)
+    T.eq(custom.debuffs.size, 30, "a custom debuff size is left alone")
+    T.eq(custom.debuffs.spacing, 2, "a custom gap is left alone")
+    T.eq(custom.schemaVersion, 3, "custom v1 still marks schema 3")
+    KART.CT.MigrateProfile(custom)
+    T.eq(custom.debuffs.size, 30, "a second migrate does not touch v3")
+    T.eq(custom.debuffs.spacing, 2, "and does not rewrite a custom gap")
+    local v2 = { schemaVersion = 2, debuffs = { size = 28, spacing = 4 } }
+    KART.CT.MigrateProfile(v2)
+    T.eq(v2.schemaVersion, 3, "v2 factory schema moves to 3")
+    T.eq(v2.debuffs.spacing, 6, "factory 4px gap becomes 6px")
+    local keep = { schemaVersion = 2, debuffs = { size = 28, spacing = 5 } }
+    KART.CT.MigrateProfile(keep)
+    T.eq(keep.debuffs.spacing, 5, "a custom v2 gap is left alone")
+    T.eq(keep.schemaVersion, 3, "custom v2 still marks schema 3")
 end

@@ -193,6 +193,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- addon version into a settings blob saved before they existed.
         local hadInviteChannels = KART_Settings.inviteChannels ~= nil
         KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
+        if KART.CT and KART.CT.MigrateProfile then
+            KART.CT.MigrateProfile(KART_Settings.ct)
+        end
         if not hadInviteChannels then
             KART_Settings.inviteChannels.GUILD = KART_Settings.inviteViaGuildChat or false
         end
@@ -286,6 +289,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         KART.PruneDepartedPeers()
         -- Performance: Update BuffCheck nur wenn Fenster offen
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+        if KART.RefreshStatusStripThrottled then KART.RefreshStatusStripThrottled() end
 
         -- The autoConvertToRaid setting itself does NOT trigger here: converting the instant a
         -- party reaches 5 members catches groups that never wanted a 6th. The setting instead
@@ -569,6 +573,10 @@ function KART.UpdateStyles()
     if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() and KART.UpdateBuffCheckThrottled then
         KART.UpdateBuffCheckThrottled()
     end
+
+    -- Take-it width is measured in the live font; ApplyStyle restyles the label but does not
+    -- re-fit the button.
+    if KART.CT and KART.CT.RefreshAskButton then KART.CT.RefreshAskButton() end
 
     -- Border widths are derived from each frame's effective scale (B23), and both size sliders
     -- have been applied by now -- the addon-wide one above, the Loot Council one in

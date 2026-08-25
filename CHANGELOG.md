@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Tonight strip on the main window** shows who is in from the WoWUtils list, who is missing flask or food, and whether RC is loaded.
+- **Shift-click Report whispers flask, food and rune**, and the buff checker says so when nobody is missing them.
 - **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it. Test mode and the Co-Tank tab preview it in town.
 - **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
 - **Co-Tank bar texture and optional gradient**, with LibSharedMedia when installed.
@@ -21,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 
 ### Changed
-- **Auto-invite keywords are labeled for all channels.** Guild and officer are separate chips.
+- **Changelog, the owed reminder, the Co-Tank flyout and the buff checker share one title bar.**
+- **Co-Tank uses the same type and a labeled take-it button**, with a wider factory aura gap.
 - **Settings sliders have a number box** to the right of the track.
 - **Automation and WoWUtils have ON chips** like the other modules.
 - **Edit Mode and Changelog sit above the footer links.**
@@ -35,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Focused text fields show a full accent border.**
 - **Window scale also applies to the Co-Tank settings flyout.**
 - **GitHub and store links open a box you can copy from.**
+- **Settings toggles show on and off more clearly.**
+- **Co-Tank Look labels fit their row** instead of clipping "Show Heal Absorbs".
+- **Gradient start and end show a colour chip.**
+- **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
 - **The in-game changelog opens without an error** and uses the same window art as the buff checker.
@@ -45,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank name and health text sit on the bar**, not under it.
 - **Co-Tank gradient fill stays on the bar** instead of painting a solid white strip.
 - **Co-Tank test buffs and debuffs sit on top of the bar.**
+- **Co-Tank buffs and debuffs show on the live bar** in a dungeon or raid, not only as dummy icons in test mode.
+- **Co-Tank buffs grow from the right edge of the bar.**
+- **Co-Tank buff strip hides food, flasks, and other buffs longer than 5 minutes.**
+- **Co-Tank buffs show tank defensives and healer externals**, not Ironfur or small hots.
+- **Co-Tank debuff strip hides player-applied auras** such as Well-Honed Instincts.
+- **WoWUtils import stacks a second paste** with the first, including other difficulties and split rosters.
+- **Co-Tank debuffs are larger and sit farther apart.**
 
 ## [4.0.1] - 2026-08-20
 ### Added

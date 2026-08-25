@@ -385,7 +385,13 @@ local function ApplyBarFill(bar, fill)
     end
 end
 
-local FONT_PATH = "Fonts\\FRIZQT__.TTF"
+local function ContentFontPath()
+    local ui = KART.UI
+    if ui and type(ui.lastFont) == "string" and ui.lastFont ~= "" then
+        return ui.lastFont
+    end
+    return "Fonts\\FRIZQT__.TTF"
+end
 
 local function ApplyLabel(fs, row, style, defaults, snap)
     if not fs then return end
@@ -399,7 +405,7 @@ local function ApplyLabel(fs, row, style, defaults, snap)
     if size <= 0 then size = 12 end
     local outline = style.outline or "OUTLINE"
     if outline == "NONE" then outline = "" end
-    if fs.SetFont then fs:SetFont(FONT_PATH, size, outline) end
+    if fs.SetFont then fs:SetFont(ContentFontPath(), size, outline) end
     local r, g, b
     if style.classColor and snap and snap.classFile then
         local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[snap.classFile]
@@ -521,17 +527,159 @@ end
 
 -- ===== Aura strips -------------------------------------------------------------------------
 local STRIP_DEFAULTS = {
-    debuffs = { show = true, max = 8, size = 22, spacing = 1, perRow = 8,
+    debuffs = { show = true, max = 8, size = 28, spacing = 6, perRow = 8,
                 anchor = "TOPLEFT", growth = "right", x = 0, y = 4,
                 borderSize = 1, borderColor = { r = 0, g = 0, b = 0 },
                 swipe = true, countdown = true, countdownSize = 0,
-                stacks = true, stacksSize = 0 },
+                stacks = true, stacksSize = 0,
+                hideLongDuration = false, hideFatigue = true },
     buffs   = { show = true, max = 6, size = 18, spacing = 1, perRow = 6,
                 anchor = "BOTTOMRIGHT", growth = "left", x = 0, y = -4,
                 borderSize = 1, borderColor = { r = 0, g = 0, b = 0 },
                 swipe = true, countdown = true, countdownSize = 0,
-                stacks = true, stacksSize = 0 },
+                stacks = true, stacksSize = 0,
+                hideLongDuration = true },
 }
+
+-- v1 shipped 22px / 1px gap. Factory profiles still on those numbers move to 28 / 4
+-- at schema 2, then the factory 4px gap becomes 6px at schema 3. A custom size or
+-- gap is left alone.
+function CT.MigrateProfile(ct)
+    if type(ct) ~= "table" then return end
+    local v = tonumber(ct.schemaVersion) or 1
+    if v < 2 then
+        local d = ct.debuffs
+        if type(d) == "table" then
+            if d.size == 22 then d.size = 28 end
+            if d.spacing == 1 then d.spacing = 4 end
+        end
+        ct.schemaVersion = 2
+        v = 2
+    end
+    if v < 3 then
+        local d = ct.debuffs
+        if type(d) == "table" and d.spacing == 4 then d.spacing = 6 end
+        ct.schemaVersion = 3
+    end
+end
+
+-- Bloodlust/Heroism downs and the Time Warp / Drums equivalents. Spell IDs are game facts,
+-- not copied from another addon. Used when hideFatigue is on.
+CT.FATIGUE_SPELL_IDS = {
+    [57723] = true, -- Exhaustion (Heroism)
+    [390435] = true, -- Exhaustion
+    [57724] = true, -- Sated (Bloodlust)
+    [80354] = true, -- Temporal Displacement (Time Warp)
+    [95809] = true, -- Insanity (Drums)
+    [264689] = true, -- Fatigued
+    [160455] = true, -- Fatigued
+}
+
+-- Tank personal defensives and healer externals that land on the co-tank.
+-- Per-patch maintenance, same class as GOOD_ENCHANTS: a new ID is drift, not a
+-- code defect. Intentionally omitted: short armor stacks (Ironfur, Shield Block,
+-- Demon Spikes, Bone Shield, Shuffle), self-hots (Rejuvenation, Enveloping Mist),
+-- and absorbs that fire every few seconds (Power Word: Shield, Earth Shield).
+CT.BUFF_SPELL_IDS = {
+    -- Warrior
+    [871]    = true, -- Shield Wall
+    [12975]  = true, -- Last Stand
+    [97463]  = true, -- Rallying Cry
+    [23920]  = true, -- Spell Reflection
+    [190456] = true, -- Ignore Pain
+    [107574] = true, -- Avatar
+    -- Paladin
+    [31850]  = true, -- Ardent Defender
+    [86659]  = true, -- Guardian of Ancient Kings
+    [642]    = true, -- Divine Shield
+    [498]    = true, -- Divine Protection
+    [389539] = true, -- Sentinel
+    [387174] = true, -- Eye of Tyr
+    [204018] = true, -- Blessing of Spellwarding
+    [1022]   = true, -- Blessing of Protection
+    [6940]   = true, -- Blessing of Sacrifice
+    [31821]  = true, -- Aura Mastery
+    [148039] = true, -- Barrier of Faith
+    -- Death Knight
+    [48792]  = true, -- Icebound Fortitude
+    [55233]  = true, -- Vampiric Blood
+    [48707]  = true, -- Anti-Magic Shell
+    [81256]  = true, -- Dancing Rune Weapon
+    [219809] = true, -- Tombstone
+    [49039]  = true, -- Lichborne
+    [194679] = true, -- Rune Tap
+    [145629] = true, -- Anti-Magic Zone
+    [114556] = true, -- Purgatory
+    [194844] = true, -- Bonestorm
+    -- Demon Hunter
+    [187827] = true, -- Metamorphosis
+    [209426] = true, -- Darkness
+    [209261] = true, -- Last Resort
+    [263648] = true, -- Soul Barrier
+    -- Monk
+    [120954] = true, -- Fortifying Brew
+    [243435] = true, -- Fortifying Brew
+    [122278] = true, -- Dampen Harm
+    [122783] = true, -- Diffuse Magic
+    [322507] = true, -- Celestial Brew
+    [132578] = true, -- Invoke Niuzao
+    [115176] = true, -- Zen Meditation
+    [116849] = true, -- Life Cocoon
+    -- Druid
+    [22812]  = true, -- Barkskin
+    [61336]  = true, -- Survival Instincts
+    [22842]  = true, -- Frenzied Regeneration
+    [102558] = true, -- Incarnation: Guardian of Ursoc
+    [200851] = true, -- Rage of the Sleeper
+    [204066] = true, -- Lunar Beam
+    [50334]  = true, -- Berserk
+    [102342] = true, -- Ironbark
+    [102351] = true, -- Cenarion Ward
+    [102352] = true, -- Cenarion Ward (HoT)
+    -- Priest
+    [33206]  = true, -- Pain Suppression
+    [47788]  = true, -- Guardian Spirit
+    [81782]  = true, -- Power Word: Barrier
+    [108968] = true, -- Void Shift
+    -- Shaman
+    [98007]  = true, -- Spirit Link Totem
+    [325174] = true, -- Spirit Link Totem
+    [201633] = true, -- Earthen Wall Totem
+    [207498] = true, -- Ancestral Protection Totem
+    [207495] = true, -- Ancestral Protection
+    -- Evoker
+    [357170] = true, -- Time Dilation
+    [370537] = true, -- Stasis
+    [370562] = true, -- Stasis
+    [374227] = true, -- Zephyr
+    [370888] = true, -- Twin Guardian
+}
+
+-- AuraContainer candidateFilters for a strip. Debuffs can hide 5-minute+ auras and BL downs.
+function CT.CandidateFilters(kind, cfg)
+    local filters = {}
+    if not cfg then return filters end
+    -- maxDuration is the aura's base duration. Food, flask, Well Fed and raid
+    -- buffs are ~1h; tank defensives are seconds. HELPFUL|PLAYER is the wrong
+    -- cut: it would drop the co-tank's own Shield Wall.
+    if kind == "debuffs" then
+        -- NPC/boss auras only. Player-applied HARMFUL includes the Guardian
+        -- Well-Honed Instincts ICD (90s cheat-death lockout), not raid debuffs.
+        filters.isFromPlayerOrPlayerPet = false
+        if cfg.hideLongDuration then
+            filters.maxDuration = 300
+        end
+        if cfg.hideFatigue ~= false then
+            filters.excludeSpellIDs = CT.FATIGUE_SPELL_IDS
+        end
+    elseif kind == "buffs" then
+        filters.includeSpellIDs = CT.BUFF_SPELL_IDS
+        if cfg.hideLongDuration ~= false then
+            filters.maxDuration = 300
+        end
+    end
+    return filters
+end
 
 local AURA_ENGINE_AVAILABLE
 
@@ -550,16 +698,44 @@ local function StripCfg(kind)
     return out
 end
 
+local AURA_ADDON = "Blizzard_AuraContainer"
+local AURA_TEMPLATE = "CustomAuraContainerTemplate"
+
+-- BuffFrame's AuraContainerTemplate OnLoad is forbidden to addons. The Midnight
+-- AuraContainer widget is legal with CustomAuraContainerTemplate after the
+-- Blizzard_AuraContainer addon is loaded — that is the same path nameplates
+-- and other addons use. A bare CreateFrame("AuraContainer") has no groups
+-- and paints nothing.
+local function EnsureAuraAddon()
+    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(AURA_ADDON) then
+        return true
+    end
+    if C_AddOns and C_AddOns.LoadAddOn then
+        local loaded = C_AddOns.LoadAddOn(AURA_ADDON)
+        return loaded and true or false
+    end
+    return false
+end
+
+local function AuraEngineFrame(frame)
+    if not frame or not frame.AddAuraGroup then return false end
+    if frame.GetObjectType then
+        local ok, ty = pcall(frame.GetObjectType, frame)
+        if ok and ty == "AuraContainer" then return true end
+    end
+    -- Templated widgets on some builds report as Frame; the addon load is the other proof.
+    -- The harness answers every method via __index, so AddAuraGroup alone is not enough.
+    return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(AURA_ADDON) and true or false
+end
+
 function CT.AuraEngineAvailable()
-    if AURA_ENGINE_AVAILABLE ~= nil then return AURA_ENGINE_AVAILABLE end
-    -- Do not instantiate Blizzard XML templates: their OnLoad is forbidden to addons
-    -- (BuffFrameTemplates.xml). The widget type itself is legal without a template.
-    local ok, frame = pcall(CreateFrame, "AuraContainer", nil, UIParent)
-    local live = ok and frame and frame.GetObjectType
-        and frame:GetObjectType() == "AuraContainer"
+    if AURA_ENGINE_AVAILABLE == true then return true end
+    EnsureAuraAddon()
+    local ok, frame = pcall(CreateFrame, "AuraContainer", nil, UIParent, AURA_TEMPLATE)
+    local live = ok and AuraEngineFrame(frame)
     if frame and frame.Hide then pcall(frame.Hide, frame) end
-    AURA_ENGINE_AVAILABLE = live and true or false
-    return AURA_ENGINE_AVAILABLE
+    if live then AURA_ENGINE_AVAILABLE = true end
+    return live and true or false
 end
 
 function CT.RefreshAuraEngineNote()
@@ -594,23 +770,74 @@ local function GrowthOffset(cfg, index)
 end
 
 local function AuraGroupLayout(cfg)
-    local layout = {
-        anchorPoint = cfg.anchor,
-        iconWidth = cfg.size,
-        iconHeight = cfg.size,
-        spacing = cfg.spacing,
-        wrapAfter = cfg.perRow,
+    local size = cfg.size or 18
+    local spacing = cfg.spacing or 0
+    return {
+        elementWidth = size,
+        elementHeight = size,
+        elementSpacing = spacing,
+        lineSpacing = spacing,
     }
-    if cfg.growth == "left" then
-        layout.horizontalDirection = "RightToLeft"
-    elseif cfg.growth == "up" then
-        layout.verticalDirection = "Up"
-    elseif cfg.growth == "down" then
-        layout.verticalDirection = "Down"
-    else
-        layout.horizontalDirection = "LeftToRight"
+end
+CT.AuraGroupLayout = AuraGroupLayout
+
+local function TryFrameCall(frame, names, ...)
+    if not frame then return false end
+    for i = 1, #names do
+        local fn = frame[names[i]]
+        if fn then
+            local ok = pcall(fn, frame, ...)
+            if ok then return true end
+        end
     end
-    return layout
+    return false
+end
+
+local function FlowDirectionToken(name)
+    local au = _G.AnchorUtil
+    local dirs = au and au.FlowDirection
+    if not dirs then return name end
+    if name == "LEFT" then return dirs.Left or name end
+    if name == "RIGHT" then return dirs.Right or name end
+    if name == "UP" then return dirs.Up or name end
+    if name == "DOWN" then return dirs.Down or name end
+    return name
+end
+
+-- Origin is the strip's own anchor (buffs: BOTTOMRIGHT). Growth left must
+-- start there; a TOPLEFT/RIGHT default packs the icons LTR inside a
+-- right-placed box, which reads as "growing the wrong way".
+local function ApplyStripFlow(strip, cfg)
+    local growth = cfg.growth or "right"
+    local point = cfg.anchor or "TOPLEFT"
+    local dirH, dirV, vertical = "RIGHT", "DOWN", false
+    if growth == "left" then
+        dirH, dirV = "LEFT", "DOWN"
+    elseif growth == "up" then
+        dirH, dirV, vertical = "RIGHT", "UP", true
+    elseif growth == "down" then
+        dirH, dirV, vertical = "RIGHT", "DOWN", true
+    end
+    local au = _G.AnchorUtil
+    if au and au.FlowLayoutAxis and strip.SetFlowLayoutAxis then
+        pcall(strip.SetFlowLayoutAxis, strip,
+            vertical and au.FlowLayoutAxis.Vertical or au.FlowLayoutAxis.Horizontal)
+    end
+    TryFrameCall(strip, { "SetFlowLayoutAnchorPoint", "SetAuraLayoutAnchorPoint" }, point)
+    local enumH, enumV = FlowDirectionToken(dirH), FlowDirectionToken(dirV)
+    local growthNames = { "SetFlowLayoutGrowthDirection", "SetAuraLayoutGrowthDirection" }
+    if not TryFrameCall(strip, growthNames, enumH, enumV) then
+        TryFrameCall(strip, growthNames, dirH, dirV)
+    end
+    local perRow = cfg.perRow or cfg.max or 8
+    if perRow < 1 then perRow = 1 end
+    local size = cfg.size or 18
+    local spacing = cfg.spacing or 0
+    local line = perRow * size + math.max(0, perRow - 1) * spacing
+    TryFrameCall(strip, {
+        "SetFlowLayoutMaximumLineSize", "SetFlowLayoutMaximumLineSize",
+        "SetAuraLayoutRowWidth",
+    }, line)
 end
 
 local function PlaceStrip(strip, row, cfg)
@@ -699,7 +926,7 @@ local function BuildDummyStrip(row, key, cfg, r, g, b)
         if cfg.countdown ~= false then
             local cdSize = cfg.countdownSize or 0
             if cdSize <= 0 then cdSize = math.max(8, math.floor((cfg.size or 18) * 0.45)) end
-            if icon.cd.SetFont then icon.cd:SetFont(FONT_PATH, cdSize, "OUTLINE") end
+            if icon.cd.SetFont then icon.cd:SetFont(ContentFontPath(), cdSize, "OUTLINE") end
             icon.cd:SetText("12")
             icon.cd:Show()
         else
@@ -713,7 +940,7 @@ local function BuildDummyStrip(row, key, cfg, r, g, b)
         if cfg.stacks ~= false then
             local stSize = cfg.stacksSize or 0
             if stSize <= 0 then stSize = math.max(8, math.floor((cfg.size or 18) * 0.4)) end
-            if icon.stack.SetFont then icon.stack:SetFont(FONT_PATH, stSize, "OUTLINE") end
+            if icon.stack.SetFont then icon.stack:SetFont(ContentFontPath(), stSize, "OUTLINE") end
             icon.stack:SetText("3")
             icon.stack:Show()
         else
@@ -728,17 +955,80 @@ local function BuildDummyStrip(row, key, cfg, r, g, b)
     return strip
 end
 
+-- CustomAuraButtonTemplate ships no Icon region. The engine only paints after
+-- initializeFrame registers a texture with SetIcon (and fonts a duration
+-- FontString before SetDurationText). Skipping that callback is why a live
+-- strip can exist, take a unit, and still show nothing.
+local function SkinAuraButton(button, cfg)
+    if not button then return end
+    pcall(button.EnableMouse, button, false)
+
+    local size = cfg.size or 18
+    -- Flow layout uses elementWidth for spacing but does not size the button.
+    button:SetSize(size, size)
+    local borderSize = cfg.borderSize or 1
+    if borderSize < 0 then borderSize = 0 end
+
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    if borderSize > 0 then
+        local br, bg, bb = ColorRGB(cfg.borderColor, { r = 0, g = 0, b = 0 })
+        local edge = button:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints(button)
+        edge:SetColorTexture(br, bg, bb, 1)
+        icon:SetPoint("TOPLEFT", button, "TOPLEFT", borderSize, -borderSize)
+        icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -borderSize, borderSize)
+    else
+        icon:SetAllPoints(button)
+    end
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    if button.SetIcon then pcall(button.SetIcon, button, icon) end
+
+    if cfg.swipe ~= false and button.SetDurationCooldown then
+        local cd = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+        cd:SetAllPoints(button)
+        if cd.SetDrawEdge then cd:SetDrawEdge(false) end
+        if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(true) end
+        pcall(button.SetDurationCooldown, button, cd)
+    end
+
+    if cfg.countdown ~= false and button.SetDurationText then
+        local fs = button:CreateFontString(nil, "OVERLAY")
+        local cdSize = cfg.countdownSize or 0
+        if cdSize <= 0 then cdSize = math.max(8, math.floor(size * 0.45)) end
+        if fs.SetFont then fs:SetFont(ContentFontPath(), cdSize, "OUTLINE") end
+        fs:SetPoint("CENTER", button, "CENTER", 0, 0)
+        pcall(button.SetDurationText, button, fs, {})
+    end
+
+    if cfg.stacks ~= false and button.SetApplicationCount then
+        local fs = button:CreateFontString(nil, "OVERLAY")
+        local stSize = cfg.stacksSize or 0
+        if stSize <= 0 then stSize = math.max(8, math.floor(size * 0.4)) end
+        if fs.SetFont then fs:SetFont(ContentFontPath(), stSize, "OUTLINE") end
+        fs:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        pcall(button.SetApplicationCount, button, fs, { minCount = 2 })
+    end
+end
+
 local function BuildLiveStrip(row, key, cfg, filter)
     local host = StripHost(row)
     local strip = row[key]
-    if not strip or not strip.isAuraEngine or (strip.GetParent and strip:GetParent() ~= host) then
+    if not strip or not strip.isAuraEngine or not strip._auraTemplate
+        or not strip.AddAuraGroup
+        or (strip.GetParent and strip:GetParent() ~= host) then
         if strip then strip:Hide() end
-        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, host)
-        if not ok or not frame then return end
+        EnsureAuraAddon()
+        local ok, frame = pcall(CreateFrame, "AuraContainer", nil, host, AURA_TEMPLATE)
+        if not ok or not AuraEngineFrame(frame) then return end
         strip = frame
         strip.isAuraEngine = true
+        strip._auraTemplate = true
         row[key] = strip
+        pcall(strip.EnableMouse, strip, false)
     end
+
+    if host.SetClipsChildren then host:SetClipsChildren(false) end
+    if strip.SetClipsChildren then strip:SetClipsChildren(false) end
 
     if cfg.show == false then
         strip:Hide()
@@ -746,15 +1036,33 @@ local function BuildLiveStrip(row, key, cfg, filter)
         return strip
     end
 
+    local w, h = StripPixelSize(cfg)
+    strip:SetSize(w, h)
     PlaceStrip(strip, row, cfg)
+    pcall(ApplyStripFlow, strip, cfg)
     if strip.SetEnabled then pcall(strip.SetEnabled, strip, true) end
     strip:Show()
 
+    local filters = CT.CandidateFilters(key, cfg)
+
     if not strip._auraGroupAdded then
+        local sortMethod, sortDirection
+        local methods, dirs = _G.AuraContainerSortMethod, _G.AuraContainerSortDirection
+        if type(methods) == "table" then
+            sortMethod = methods.Default or methods.AuraInstanceIDOnly or methods.ExpirationOnly
+        end
+        if type(dirs) == "table" then
+            sortDirection = dirs.Normal
+        end
         local added = pcall(function()
             strip:AddAuraGroup("main", filter, {
                 maxFrameCount = cfg.max,
+                sortMethod = sortMethod,
+                sortDirection = sortDirection,
                 layout = AuraGroupLayout(cfg),
+                initializeFrame = function(button)
+                    pcall(SkinAuraButton, button, cfg)
+                end,
             })
         end)
         if added then strip._auraGroupAdded = true end
@@ -767,12 +1075,17 @@ local function BuildLiveStrip(row, key, cfg, filter)
         if strip.SetAuraGroupLayout then
             strip:SetAuraGroupLayout("main", AuraGroupLayout(cfg))
         end
+        if strip.SetAuraGroupCandidateFilters then
+            strip:SetAuraGroupCandidateFilters("main", filters)
+        end
     end)
 
+    -- Groups must exist before SetUnit: otherwise UNIT_AURA is never registered.
     local unit = CT.PickCoTank()
     if unit and strip.SetUnit then
         pcall(function() strip:SetUnit(unit) end)
     end
+    if strip.UpdateAllAuras then pcall(strip.UpdateAllAuras, strip) end
     return strip
 end
 
@@ -1085,6 +1398,7 @@ function CT.Refresh()
     local unit = invented and nil or CT.PickCoTank()
 
     if not combat then
+        row:Show()
         CT.ApplyLayout()
     end
     CT.SyncStripUnits(row, unit)
@@ -1268,6 +1582,8 @@ function CT.SyncWidgets()
     local debuffs = ct.debuffs
     if debuffs then
         setChecked(KART.CbCtDebuffShow, debuffs.show)
+        setChecked(KART.CbCtHideLongDuration, debuffs.hideLongDuration == true)
+        setChecked(KART.CbCtHideFatigue, debuffs.hideFatigue ~= false)
         setSlider(KART.SldCtDebuffMax, debuffs.max)
         setSlider(KART.SldCtDebuffSize, debuffs.size)
         setSlider(KART.SldCtDebuffSpacing, debuffs.spacing)
@@ -1276,6 +1592,7 @@ function CT.SyncWidgets()
     local buffs = ct.buffs
     if buffs then
         setChecked(KART.CbCtBuffShow, buffs.show)
+        setChecked(KART.CbCtHideLongBuffs, buffs.hideLongDuration ~= false)
         setSlider(KART.SldCtBuffMax, buffs.max)
         setSlider(KART.SldCtBuffSize, buffs.size)
         setSlider(KART.SldCtBuffSpacing, buffs.spacing)
@@ -1305,6 +1622,7 @@ function CT.SyncWidgets()
         end
     end
 
+    if KART.RefreshCtGradientSwatches then KART.RefreshCtGradientSwatches() end
     CT.Enable()
 end
 
@@ -1551,49 +1869,87 @@ function CT.ShouldShowAskButton()
     return CT.PickCoTank() ~= nil
 end
 
-function CT.EnsureAskButton()
-    if CT.askBtn and CT.askBtn.GetWidth then return CT.askBtn end
-    CT.askBtn = nil
-    local btn = CreateFrame("Button", "KART_CoTankAskButton", UIParent)
-    btn:EnableMouse(true)
-    btn:SetMovable(true)
-    btn:RegisterForDrag("LeftButton")
-    btn:RegisterForClicks("LeftButtonUp")
-    if btn.SetClampedToScreen then btn:SetClampedToScreen(true) end
-    local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.06, 0.07, 0.08, 0.92)
-    btn.bg = bg
-    local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-    icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
-    btn.icon = icon
-    btn:SetScript("OnClick", function()
-        CT.Ask()
-    end)
-    btn:SetScript("OnDragStart", function(self)
-        local t = TauntCfg()
-        local editMode = KART.IsEditModeActive and KART.IsEditModeActive()
-        if t and (t.locked == false or editMode) and not InCombatLockdown() then
-            self:StartMoving()
-        end
-    end)
-    btn:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-        local s = KART_Settings
-        if not s then return end
-        s.ct = s.ct or {}
-        s.ct.taunt = s.ct.taunt or {}
-        s.ct.taunt.point = point
-        s.ct.taunt.relativePoint = relativePoint
-        s.ct.taunt.x = xOfs
-        s.ct.taunt.y = yOfs
-    end)
-    CT.askBtn = btn
-    if KART.RegisterEditModeFrame then
-        KART.RegisterEditModeFrame(btn, "EDIT_MODE_LABEL_TAUNT")
+local function AskButtonLabel()
+    local L = KART.L
+    if L and type(L.BTN_CT_TAKE_IT) == "string" and L.BTN_CT_TAKE_IT ~= "" then
+        return L.BTN_CT_TAKE_IT
     end
+    return "Take it"
+end
+
+local function StyleAskButton(btn)
+    if not btn or btn.text then return end
+    if btn.icon then btn.icon:Hide() end
+    if btn.bg then btn.bg:Hide() end
+    if btn.SetBackdrop then
+        btn:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+        local r, g, b = 0.79, 0.64, 0.15
+        local ui = KART.UI
+        if ui and ui.AccentColor then
+            r, g, b = ui:AccentColor()
+        end
+        btn:SetBackdropBorderColor(r, g, b, 1)
+    end
+    local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("CENTER")
+    btn.text = text
+    local ui = KART.UI
+    if ui and ui.RegisterButtonText then
+        ui:RegisterButtonText(text)
+    end
+end
+
+function CT.EnsureAskButton()
+    local btn = CT.askBtn
+    if not (btn and btn.GetWidth) then
+        CT.askBtn = nil
+        btn = CreateFrame("Button", "KART_CoTankAskButton", UIParent, "BackdropTemplate")
+        btn:EnableMouse(true)
+        btn:SetMovable(true)
+        btn:RegisterForDrag("LeftButton")
+        btn:RegisterForClicks("LeftButtonUp")
+        if btn.SetClampedToScreen then btn:SetClampedToScreen(true) end
+        local bg = btn:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.06, 0.07, 0.08, 0.92)
+        btn.bg = bg
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        btn.icon = icon
+        btn:SetScript("OnClick", function()
+            CT.Ask()
+        end)
+        btn:SetScript("OnDragStart", function(self)
+            local t = TauntCfg()
+            local editMode = KART.IsEditModeActive and KART.IsEditModeActive()
+            if t and (t.locked == false or editMode) and not InCombatLockdown() then
+                self:StartMoving()
+            end
+        end)
+        btn:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
+            local s = KART_Settings
+            if not s then return end
+            s.ct = s.ct or {}
+            s.ct.taunt = s.ct.taunt or {}
+            s.ct.taunt.point = point
+            s.ct.taunt.relativePoint = relativePoint
+            s.ct.taunt.x = xOfs
+            s.ct.taunt.y = yOfs
+        end)
+        CT.askBtn = btn
+        if KART.RegisterEditModeFrame then
+            KART.RegisterEditModeFrame(btn, "EDIT_MODE_LABEL_TAUNT")
+        end
+    end
+    StyleAskButton(btn)
     return btn
 end
 
@@ -1605,10 +1961,18 @@ function CT.RefreshAskButton()
     local btn = CT.EnsureAskButton()
     local t = TauntCfg() or {}
     local size = t.size or ASK_BUTTON_DEFAULTS.size
-    btn:SetSize(size, size)
-    if btn.icon and btn.icon.SetTexture then
-        btn.icon:SetTexture(CT.TauntIcon())
+    if btn.text then
+        local ui = KART.UI
+        local fontSize = (ui and ui.lastContentSize) or 12
+        if btn.text.SetFont then btn.text:SetFont(ContentFontPath(), fontSize, "") end
+        btn.text:SetText(AskButtonLabel())
     end
+    if btn.icon then btn.icon:Hide() end
+    local width = size
+    if btn.text and btn.text.GetStringWidth then
+        width = math.max(size, (btn.text:GetStringWidth() or 0) + 16)
+    end
+    btn:SetSize(width, size)
     btn:ClearAllPoints()
     btn:SetPoint(
         t.point or ASK_BUTTON_DEFAULTS.point,

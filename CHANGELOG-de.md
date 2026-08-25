@@ -8,6 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Heute-Leiste im Hauptfenster** zeigt wer vom WoWUtils-Roster da ist, wem Flask oder Essen fehlt, und ob RC geladen ist.
+- **Umschalt-Klick auf Posten flüstert Fläschchen, Essen und Rune**, und der Buff-Checker sagt Bescheid wenn niemandem etwas fehlt.
 - **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt.
 - **Co-Tank Look-, Text- und Auren-Einstellungen** öffnen sich in einem Begleitfenster neben dem Hauptfenster.
 - **Co-Tank-Balkentextur und optionaler Verlauf**, mit LibSharedMedia wenn installiert.
@@ -21,7 +23,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 
 ### Geändert
-- **Auto-Invite-Begriffe gelten für alle Kanäle.** Gilde und Offizier sind eigene Chips.
+- **Changelog, die Owed-Erinnerung, das Co-Tank-Flyout und der Buff-Checker teilen sich eine Titelleiste.**
+- **Co-Tank nutzt die gleiche Schrift und einen beschrifteten Übernehmen-Button**, mit größerem Standard-Aura-Abstand.
 - **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 - **Automation und WoWUtils haben ON-Chips** wie die anderen Module.
 - **Bearbeiten-Modus und Changelog sitzen über den Footer-Links.**
@@ -36,6 +39,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Fokussierte Textfelder zeigen einen vollständigen Akzent-Rahmen.**
 - **Die Fensterskalierung gilt auch für das Co-Tank-Einstellungsfenster.**
 - **GitHub- und Store-Links öffnen eine Box zum Kopieren.**
+- **Einstellungs-Schalter zeigen An und Aus deutlicher.**
+- **Co-Tank-Look-Beschriftungen passen in die Zeile** statt „Heilabsorbs anzeigen“ abzuschneiden.
+- **Verlauf-Start und -Ende zeigen ein Farbfeld.**
+- **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
 - **Das Changelog im Spiel öffnet sich ohne Fehler** und nutzt dieselbe Fenster-Grafik wie der Buff-Checker.
@@ -47,6 +54,13 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Schilde sitzen am Ende des Lebensbalkens.**
 - **Der Co-Tank-Verlauf bleibt auf dem Balken**, statt als weiße Fläche zu enden.
 - **Co-Tank-Testbuffs und -debuffs sitzen auf dem Balken.**
+- **Co-Tank-Buffs und -Debuffs erscheinen am Balken im Dungeon oder Raid**, nicht nur als Dummy-Icons im Testmodus.
+- **Co-Tank-Buffs wachsen vom rechten Rand des Balkens.**
+- **Die Co-Tank-Buff-Leiste blendet Essen, Fläschchen und andere Buffs länger als 5 Minuten aus.**
+- **Die Co-Tank-Buffs zeigen Tank-Defensives und Heiler-Externals**, nicht Ironfur oder kleine Hots.
+- **Die Co-Tank-Debuff-Leiste blendet Spieler-Auren aus**, etwa Well-Honed Instincts.
+- **Ein zweiter WoWUtils-Import hängt an den ersten an**, inklusive anderer Difficulties und Split-Roster.
+- **Co-Tank-Debuffs sind größer und stehen weiter auseinander.**
 
 ## [4.0.1] - 2026-08-20
 ### Hinzugefügt

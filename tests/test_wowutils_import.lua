@@ -71,3 +71,77 @@ do
     T.eq(#KARTTEST.invited, 0, "a disabled wowutils module invites nobody")
     env.KART_Settings.wuModuleEnabled = nil
 end
+
+-- Sequential imports merge. The Import button used to wipe WU.bosses first, so a second
+-- paste replaced Normal with Heroic instead of stacking, and a split roster for the same
+-- boss+difficulty never became "Boss A"/"Boss B".
+local function Block(encounterID, difficulty, name, players)
+    return ("EncounterID:%s;Difficulty:%s;Name:%s\ninvitelist:%s;\n"):format(
+        encounterID, difficulty, name, players)
+end
+
+local function FreshImportState()
+    WU.bosses = {}
+    WU.lastImportedText = nil
+    WU.committedImportText = nil
+    env.KART_Settings.wuImportText = ""
+end
+
+do
+    FreshImportState()
+    local n, status = WU.ImportPastedText(Block(3379, "Normal", "Nymrissa", "Alpha-Blackmoore"))
+    T.eq(status, "ok", "first paste imports")
+    T.eq(n, 1, "first paste adds one boss")
+    n, status = WU.ImportPastedText(Block(3379, "Heroic", "Nymrissa", "Alpha-Blackmoore"))
+    T.eq(status, "ok", "second difficulty imports")
+    T.eq(#WU.bosses, 2, "Normal stays when Heroic is imported next")
+    T.eq(WU.bosses[1].difficulty, "Normal", "first row is still Normal")
+    T.eq(WU.bosses[2].difficulty, "Heroic", "Heroic is appended")
+    T.truthy((env.KART_Settings.wuImportText or ""):find("Normal", 1, true),
+        "saved paste still contains the Normal export")
+    T.truthy((env.KART_Settings.wuImportText or ""):find("Heroic", 1, true),
+        "saved paste also contains the Heroic export")
+end
+
+do
+    FreshImportState()
+    WU.ImportPastedText(Block(3379, "Mythic", "Nymrissa", "TeamA-Blackmoore"))
+    WU.ImportPastedText(Block(3379, "Mythic", "Nymrissa", "TeamB-Blackmoore"))
+    T.eq(#WU.bosses, 2, "a second roster for the same boss+difficulty is kept")
+    T.eq(WU.bosses[1].name, "Nymrissa A", "first split is labeled A")
+    T.eq(WU.bosses[2].name, "Nymrissa B", "second split is labeled B")
+end
+
+do
+    FreshImportState()
+    local text = Block(1, "Heroic", "Old Format", "Alpha-Blackmoore")
+    WU.ImportPastedText(text)
+    local n, status = WU.ImportPastedText(text)
+    T.eq(status, "same", "identical paste is not imported again")
+    T.eq(#WU.bosses, 1, "identical paste does not duplicate the boss")
+    T.eq(n, 1, "same-paste reports the bosses already loaded")
+end
+
+do
+    FreshImportState()
+    WU.ImportPastedText(Block(3379, "Mythic", "Nymrissa", "Alpha-Blackmoore"))
+    local n, status = WU.ImportPastedText("this is not a wowutils export")
+    T.eq(status, "error", "garbage paste is a parse error")
+    T.eq(n, 0, "garbage paste adds nobody")
+    T.eq(#WU.bosses, 1, "garbage paste leaves the previous list")
+end
+
+do
+    -- OnTextChanged used to write the box into wuImportText on every keystroke, so a second
+    -- paste erased the first export from SavedVariables before Import ran.
+    FreshImportState()
+    local normal = Block(3379, "Normal", "Nymrissa", "Alpha-Blackmoore")
+    local heroic = Block(3379, "Heroic", "Nymrissa", "Bravo-Thrall")
+    WU.ImportPastedText(normal)
+    env.KART_Settings.wuImportText = heroic
+    WU.ImportPastedText(heroic)
+    T.eq(#WU.bosses, 2, "staging overwrite of wuImportText does not drop the first list")
+    T.truthy((env.KART_Settings.wuImportText or ""):find("Normal", 1, true)
+        and (env.KART_Settings.wuImportText or ""):find("Heroic", 1, true),
+        "committed saved text holds both exports after a staging overwrite")
+end

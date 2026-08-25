@@ -30,6 +30,9 @@ function KART.LoadProfile(name)
         KART_Settings[k] = v
     end
     KAUtil.MergeDefaults(KART_Settings, KART.Defaults)
+    if KART.CT and KART.CT.MigrateProfile then
+        KART.CT.MigrateProfile(KART_Settings.ct)
+    end
     if minimapTbl then
         local loaded = KART_Settings.minimap
         wipe(minimapTbl)
