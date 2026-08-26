@@ -995,6 +995,12 @@ _G.C_Item = {
         local it = itemOf(v)
         return it and ("Interface\\Icons\\" .. it.name) or nil
     end,
+    -- Bag counts for the Healthstone column. Driven by KARTTEST.itemCounts so a test can
+    -- give the player a stone without building a bag inventory. Extra arguments (bank,
+    -- charges) are ignored: the Buff Checker only asks "any charges at all".
+    GetItemCount = function(itemID)
+        return (KARTTEST.itemCounts and KARTTEST.itemCounts[itemID]) or 0
+    end,
     -- The item's stat block, keyed by the ITEM_MOD_* tokens the live API uses. Answers nil for an
     -- item the fixture gave no stats, which is the same "not loaded yet" the real one returns before
     -- the server has sent the item -- and the relevance rule treats it the same way: no opinion.

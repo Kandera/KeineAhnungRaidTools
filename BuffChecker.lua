@@ -25,7 +25,12 @@ KART.BuffData = {
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
     -- whisper without report: Shift-click Report pokes the player; raid chat stays flask/food only.
     { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true, whisper = true },
-    { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 12, isRepair = true },
+    -- Item/aura IDs are the swap point after a live raid measurement. Healthstone is a bag
+    -- item, not an aura: 5512 is the stone, 224464 the demonic one Northern Sky also counts.
+    -- Soulstone is aura 20707 on the target, not warlock passive 231811.
+    { id = "hs",     labelKey = "BC_LABEL_HS",     col = 12, icon = 538745,  isHealthstone = true, items = {5512, 224464}, class = "WARLOCK" },
+    { id = "ss",     labelKey = "BC_LABEL_SS",     col = 13, icon = 136210,  spells = {20707}, class = "WARLOCK" },
+    { id = "repair", labelKey = "BC_LABEL_REPAIR", col = 14, isRepair = true },
     -- All three lists hold enchantIDs, not spell ids: the weapon slot is read from
     -- GetWeaponEnchantInfo. Every id was taken from the game's own SpellItemEnchantment table
     -- (wago.tools DB2 export) and 8052 is confirmed against a live client. Temporary weapon enchants
@@ -78,6 +83,23 @@ local function ResolveBuffDataLabels()
     end
 end
 ResolveBuffDataLabels()
+
+-- Bag count for our own Healthstone column. Reads BuffData.items so a live-raid ID swap
+-- is one table, not a second copy in the comm responder.
+function KART.CountOwnHealthstones()
+    local fn = C_Item and C_Item.GetItemCount
+    if not fn then return 0 end
+    local n = 0
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.isHealthstone and buff.items then
+            for _, id in ipairs(buff.items) do
+                local ok, c = pcall(fn, id, false, true)
+                if ok and type(c) == "number" then n = n + c end
+            end
+        end
+    end
+    return n
+end
 
 local function BuildSlotNames()
     KART.SlotNames = {
@@ -162,14 +184,20 @@ function KART.PruneDepartedPeers()
         local n = UnitName(unit)
         if n then present[n] = true end
     end
-    for _, cache in ipairs({ KART.OilCache, KART.ILvlCache, KART.GearCache,
-                             KART.DurabilityCache, KART.EnchantScan }) do
-        if type(cache) == "table" then
-            for name in pairs(cache) do
-                if not present[name] then cache[name] = nil end
-            end
+    -- Not ipairs: a nil cache (nobody has answered that question yet) would stop the walk
+    -- and leave a later cache unpruned.
+    local function prune(cache)
+        if type(cache) ~= "table" then return end
+        for name in pairs(cache) do
+            if not present[name] then cache[name] = nil end
         end
     end
+    prune(KART.OilCache)
+    prune(KART.ILvlCache)
+    prune(KART.GearCache)
+    prune(KART.DurabilityCache)
+    prune(KART.EnchantScan)
+    prune(KART.HSCache)
 end
 
 -- ReadyCheck status -> its Blizzard ready-check icon; an unlisted/nil status hides the icon. Shared
@@ -208,7 +236,12 @@ end
 function KART.CreateBuffCheckFrame()
     if KART.BuffCheckFrame then return end
     local f = CreateFrame("Frame", "KART_BuffCheckFrame", UIParent, "BackdropTemplate")
-    f:SetSize(KART_Settings.bcWidth or 710, KART_Settings.bcHeight or 450)
+    -- Two extra columns (HS/SS) need a wider default than the old 710. A saved narrower
+    -- width would clip repair; bump it on create, once.
+    local BC_BASE_WIDTH, BC_CONTENT_WIDTH = 790, 740
+    local w = KART_Settings.bcWidth or BC_BASE_WIDTH
+    if w < BC_BASE_WIDTH then w = BC_BASE_WIDTH end
+    f:SetSize(w, KART_Settings.bcHeight or 450)
     f:SetPoint(KART_Settings.bcPoint or "CENTER", UIParent, KART_Settings.bcRelativePoint or "CENTER", KART_Settings.bcX or 200, KART_Settings.bcY or 0)
     f:SetMovable(true)
     -- This window stores its position as point/relativePoint/offset (not the TOPLEFT-from-
@@ -221,7 +254,7 @@ function KART.CreateBuffCheckFrame()
     -- Max height is capped to the screen: taller than that and SetClampedToScreen pins the window
     -- against the top edge with its bottom — including the resize grip and the mode/refresh/report
     -- buttons — off screen and unreachable.
-    f:SetResizeBounds(710, 250, 1200, math.max(600, math.floor(UIParent:GetHeight())))
+    f:SetResizeBounds(BC_BASE_WIDTH, 250, 1200, math.max(600, math.floor(UIParent:GetHeight())))
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", function(self) if not IsShiftKeyDown() then self:StartMoving() end end)
@@ -239,7 +272,7 @@ function KART.CreateBuffCheckFrame()
     KART.UI:ApplyPopupChrome(f, { title = L.BC_TITLE })
 
     -- Header Labels
-    local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
+    local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590, 635, 680}
     f.headerStrings = {}
     
     -- Rows live in the scroll child (inset 10px from the window). Ready/name headers
@@ -286,7 +319,7 @@ function KART.CreateBuffCheckFrame()
     KART.UI:RegisterAccentTexture(buffScrollThumb, 0.6)
 
     local content = CreateFrame("Frame", nil, sf)
-    content:SetSize(660, 1)
+    content:SetSize(BC_CONTENT_WIDTH, 1)
     sf:SetScrollChild(content)
     f.scrollContent = content
 
@@ -294,7 +327,7 @@ function KART.CreateBuffCheckFrame()
     f.rows = {}
     for i = 1, 40 do
         local row = CreateFrame("Frame", nil, content)
-        row:SetSize(660, 26)
+        row:SetSize(BC_CONTENT_WIDTH, 26)
         row:SetPoint("TOPLEFT", 0, -(i-1)*26)
 
         -- Subtle alternating background so a dense 40-row player grid is easier to scan
@@ -399,7 +432,7 @@ function KART.CreateBuffCheckFrame()
     end
 
     -- Debounced, and matching the responders' own answer cooldown in KASC. One click asks the whole
-    -- raid three questions and every KART client answers all three: 60 outbound messages in a 20-man
+    -- raid four questions and every KART client answers all four: 80 outbound messages in a 20-man
     -- raid. A few impatient clicks used to overrun Blizzard's chat rate limiter, which drops the
     -- overflow silently and without retry -- so clicking again to make the missing data appear was
     -- precisely what stopped it from appearing (B16).
@@ -412,6 +445,7 @@ function KART.CreateBuffCheckFrame()
         KASC:Send("REQ_OIL")
         KASC:Send("REQ_ILVL")
         KASC:Send("REQ_GEAR")
+        KASC:Send("REQ_HS")
     end
 
     local modeBtn = KART.UI:CreateModernButton(f, L.BTN_MODE_ADVANCED)
@@ -491,11 +525,11 @@ function KART.CreateBuffCheckFrame()
     -- background artwork's inset offsets, and SetScript would replace that whole handler chain. This
     -- is the only resizable KART window, i.e. the only one where that rescale actually matters.
     f:HookScript("OnSizeChanged", function(self, width, height)
-        local extra = width - 710
+        local extra = width - BC_BASE_WIDTH
         if extra < 0 then extra = 0 end
         
         if self.scrollContent then
-            self.scrollContent:SetWidth(660 + extra)
+            self.scrollContent:SetWidth(BC_CONTENT_WIDTH + extra)
         end
         
         if self.headerStrings then
@@ -512,7 +546,7 @@ function KART.CreateBuffCheckFrame()
         for i = 1, 40 do
             local row = self.rows[i]
             if row then
-                row:SetWidth(660 + extra)
+                row:SetWidth(BC_CONTENT_WIDTH + extra)
                 if row.name then row.name:SetWidth(82 + extra) end
                 if row.ilvlText then
                     row.ilvlText:ClearAllPoints()
@@ -980,6 +1014,18 @@ local function FillPlayerBuffStates(unit, shortName, buffDataCount, timeNow)
             end
             if stateToSet then MergeBuffState(buff.id, stateToSet) end
         end
+        if buff.isHealthstone then
+            if UnitIsUnit(unit, "player") then
+                if KART.CountOwnHealthstones() > 0 then MergeBuffState(buff.id, true) end
+            else
+                local cached = shortName and KART.HSCache and KART.HSCache[shortName]
+                if cached == nil then
+                    MergeBuffState(buff.id, "unknown")
+                elseif cached then
+                    MergeBuffState(buff.id, true)
+                end
+            end
+        end
     end
 
     local playerMissingEnchants, playerMissingGems
@@ -1383,4 +1429,22 @@ KASC:RegisterMessage("GEAR", { payload = true, group = true }, function(payload,
         KART.GearCache[ctx.shortName] = { enchants = e, gems = g }
         if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
     end
+end)
+
+-- Healthstone is a bag item. Peers answer HS:1 / HS:0; anything else is dropped.
+KASC:RegisterMessage("HS", { payload = true, group = true }, function(payload, ctx)
+    if payload ~= "0" and payload ~= "1" then return end
+    KART.HSCache = KART.HSCache or {}
+    KART.HSCache[ctx.shortName] = payload == "1"
+    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+end)
+
+local lastHsAnswer = -5
+KASC:RegisterMessage("REQ_HS", { group = true }, function()
+    local now = GetTime()
+    if now - lastHsAnswer < 5 then return end
+    lastHsAnswer = now
+    if not IsInGroup() then return end
+    local n = KART.CountOwnHealthstones and KART.CountOwnHealthstones() or 0
+    KASC:Send("HS:" .. ((n > 0) and "1" or "0"))
 end)

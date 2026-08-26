@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Buff Check shows Healthstone and Soulstone.**
 - **A toggle hides Blizzard's raid manager** while the Raidlead bar is on. Northern Sky stays.
 - **The empty slot under Buff Check** opens Role Poll, Convert and Restrict Pings.
 - **Shift-click Report whispers flask, food and rune**, and the buff checker says so when nobody is missing them.

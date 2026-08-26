@@ -639,7 +639,7 @@ end
 do
     local _, lm = F.NewRaid()
     KARTTEST.auras = {}
-    local REPAIR = 11
+    local REPAIR = 13
     local function ColorAt(percent)
         lm.KART.DurabilityCache = { Bramor = percent }
         Render(lm)
@@ -777,7 +777,7 @@ do
 
     -- Read off the player's own row rather than KART.BuffStatesCache: that table is wiped before
     -- every player and holds the LAST one rendered, which is never us.
-    local OIL = 12
+    local OIL = 14
     local function OilColor()
         Render(lm)
         local r, g, b = lm.KART.BuffCheckFrame.rows[1].indicators[OIL]:GetVertexColor()
@@ -984,6 +984,120 @@ do
     RaidSim.As(lm, function() missing = lm.KART.MissingBuffs end)
     T.eq(lm.KART.BuffCheckFrame, nil, "the strip count uses the scan, not the window")
     T.truthy(HasName(missing.food, "Alric"), "and the same scan lists that player as missing food")
+end
+
+-- ==========================================================================
+--  Healthstone / Soulstone — IDs live on BuffData so a live raid can swap them
+-- ==========================================================================
+-- Healthstone is a bag item (5512, plus 224464 demonic). Soulstone is aura 20707 on the
+-- target, not warlock passive 231811. Neither is raid-chat reported.
+
+local function PlayerState(client, shortName, id)
+    for _, p in ipairs(client.KART.BuffRosterSnapshot.players) do
+        if p.shortName == shortName then return p.states[id] end
+    end
+end
+
+local function BuffById(client, id)
+    for _, d in ipairs(client.KART.BuffData) do
+        if d.id == id then return d end
+    end
+end
+
+do
+    local _, lm = F.NewRaid()
+    local hs, ss = BuffById(lm, "hs"), BuffById(lm, "ss")
+    T.truthy(hs and hs.isHealthstone and hs.items, "healthstone is a BuffData row with an item list")
+    T.eq(hs and hs.items and hs.items[1], 5512, "first healthstone item id is the one to swap after a live measurement")
+    T.eq(hs and hs.items and hs.items[2], 224464, "demonic healthstone sits in the same list")
+    T.truthy(ss and ss.spells, "soulstone is a BuffData row with a spell list")
+    T.eq(ss and ss.spells and ss.spells[1], 20707, "first soulstone aura id is the one to swap after a live measurement")
+    T.eq(hs.class, "WARLOCK", "both columns stay quiet when no warlock is in the raid")
+    T.eq(ss.class, "WARLOCK", "including soulstone")
+    T.is_nil(hs.report, "healthstone is not raid-chat reported")
+    T.is_nil(ss.report, "soulstone is not raid-chat reported")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local sinja = sim.byName.Sinja
+    KARTTEST.auras = {
+        [sinja.unit] = { { name = "Soulstone", spellId = 20707 } },
+    }
+    Scan(lm)
+    T.eq(PlayerState(lm, "Sinja", "ss"), true, "aura 20707 on a raider is a soulstone")
+    T.truthy(not PlayerState(lm, "Alric", "ss"), "and its absence on everyone else still is")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.itemCounts = { [5512] = 1 }
+    Scan(lm)
+    T.eq(PlayerState(lm, "Bramor", "hs"), true, "a healthstone in our bags is present on our row")
+    T.eq(PlayerState(lm, "Alric", "hs"), "unknown", "without a peer answer, their bag is unknown")
+    KARTTEST.itemCounts = {}
+end
+
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.itemCounts = { [224464] = 3 }
+    Scan(lm)
+    T.eq(PlayerState(lm, "Bramor", "hs"), true, "the demonic healthstone counts as having a stone")
+    KARTTEST.itemCounts = {}
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    Say(alric, "HS:1")
+    T.eq(lm.KART.HSCache and lm.KART.HSCache["Alric"], true, "a peer HS:1 is cached")
+    Scan(lm)
+    T.eq(PlayerState(lm, "Alric", "hs"), true, "and paints as present")
+
+    Say(alric, "HS:0")
+    Scan(lm)
+    T.truthy(not PlayerState(lm, "Alric", "hs"), "HS:0 paints as missing, not unknown")
+
+    local good = lm.KART.HSCache["Alric"]
+    Say(alric, "HS:yes")
+    T.eq(lm.KART.HSCache["Alric"], good, "a malformed HS reply leaves the last good answer")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    Say(alric, "HS:1")
+    RaidSim.Leave(sim, "Alric")
+    RaidSim.As(lm, function() lm.KART.PruneDepartedPeers() end)
+    T.is_nil(lm.KART.HSCache["Alric"], "a departed raider's healthstone answer is dropped")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.itemCounts = { [5512] = 2 }
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.As(lm, function()
+        lm.KASC.Dispatch("REQ_HS", "RAID", "Alric-TarrenMill")
+    end)
+    KARTTEST.AdvanceTime(0)
+    local saw
+    for _, e in ipairs(sim.log) do
+        if e.msg == "HS:1" then saw = true end
+    end
+    T.eq(saw, true, "REQ_HS answers 1 when we have a healthstone")
+
+    KARTTEST.itemCounts = {}
+    sim.log = {}
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.As(lm, function()
+        lm.KASC.Dispatch("REQ_HS", "RAID", "Alric-TarrenMill")
+    end)
+    KARTTEST.AdvanceTime(0)
+    saw = false
+    for _, e in ipairs(sim.log) do
+        if e.msg == "HS:0" then saw = true end
+    end
+    T.eq(saw, true, "and 0 when we do not")
 end
 
 

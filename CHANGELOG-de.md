@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Buff-Check zeigt Gesundheitsstein und Seelenstein.**
 - **Ein Schalter blendet Blizzards Raid-Manager aus**, solange die Raidlead-Leiste an ist. Northern Sky bleibt.
 - **Der freie Slot unter Buff Check** öffnet Rollenabfrage, Umwandeln und Ping-Einschränkung.
 - **Umschalt-Klick auf Posten flüstert Fläschchen, Essen und Rune**, und der Buff-Checker sagt Bescheid wenn niemandem etwas fehlt.
