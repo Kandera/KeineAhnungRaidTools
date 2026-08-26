@@ -187,11 +187,19 @@ end
 -- ==========================================================================
 --  The render, and the missing-buff list it produces
 -- ==========================================================================
--- KART.MissingBuffs is what /Report sends, and it is filled by the render pass -- which had never
--- run: C_UnitAuras and GetReadyCheckStatus were both absent from the harness, and the aura loop is
--- the first thing UpdateBuffCheck does per player.
+-- KART.MissingBuffs is what /Report sends. The scan fills it without a window; paint only
+-- needs the frame for "this indicator is red".
 
--- Builds the window for `client` and renders it. UpdateStyles and CreateTabTitle live in files the
+local function Scan(client)
+    local missing
+    RaidSim.As(client, function()
+        client.KART.ScanBuffRoster()
+        missing = client.KART.MissingBuffs or {}
+    end)
+    return missing
+end
+
+-- Builds the window for `client` and paints it. UpdateStyles and CreateTabTitle live in files the
 -- harness does not load (Core.lua, MainFrame.lua) and only restyle what is already built.
 local function Render(client)
     RaidSim.As(client, function()
@@ -225,7 +233,8 @@ do
         [alric.unit] = { { name = "Fläschchen der launischen Winde", spellId = 431972 } },
         [sinja.unit] = { { name = "Phial of Tepid Versatility", spellId = 431972 } },
     }
-    local missing = Render(lm)
+    local missing = Scan(lm)
+    T.eq(lm.KART.BuffCheckFrame, nil, "the scan does not build the Buff Check window")
     T.truthy(not HasName(missing.flask, "Alric"), "a raider carrying a Fläschchen is not reported")
     T.truthy(not HasName(missing.flask, "Sinja"), "nor one carrying a Phial")
     T.truthy(HasName(missing.flask, "Bramor"), "and one carrying neither is")
@@ -239,7 +248,7 @@ do
     KARTTEST.auras = {
         [alric.unit] = { { name = "Flask of Power", spellId = 1, expirationTime = GetTime() + 60 } },
     }
-    local missing = Render(lm)
+    local missing = Scan(lm)
     T.truthy(not HasName(missing.flask, "Alric"),
         "a flask about to run out still counts as having one")
 end
@@ -252,7 +261,7 @@ do
     -- not the test.
     local _, lm = F.NewRaid()
     KARTTEST.auras = {}
-    local missing = Render(lm)
+    local missing = Scan(lm)
     T.eq(Names(missing.shout), "",
         "with no warrior in the group nobody is reported as missing Battle Shout")
     T.truthy(#(missing.int or {}) > 0,
@@ -267,7 +276,7 @@ do
     KARTTEST.auras = {
         [alric.unit] = { { name = "Arkane Intelligenz", spellId = 1459 } },
     }
-    local missing = Render(lm)
+    local missing = Scan(lm)
     T.truthy(not HasName(missing.int, "Alric"), "the buff is recognised by its spell id")
     T.truthy(HasName(missing.int, "Bramor"), "and its absence still is")
 end
@@ -286,8 +295,8 @@ do
     KARTTEST.auras = {
         [alric.unit] = { secret, { name = "Flask of Power", spellId = 2 } },
     }
-    local ok = pcall(Render, lm)
-    T.truthy(ok, "a private aura does not take the whole render down")
+    local ok = pcall(Scan, lm)
+    T.truthy(ok, "a private aura does not take the whole scan down")
     T.truthy(not HasName(lm.KART.MissingBuffs.flask, "Alric"),
         "and the aura after it is still read")
 end
@@ -305,9 +314,9 @@ do
     C_UnitAuras.GetAuraDataByIndex = function()
         error("Auras cannot be accessed when secret while tainted by 'KeineAhnungRaidTools'")
     end
-    local ok, missing = pcall(Render, lm)
+    local ok, missing = pcall(Scan, lm)
     C_UnitAuras.GetAuraDataByIndex = realIndex
-    T.truthy(ok, "a secret index scan does not take the whole render down")
+    T.truthy(ok, "a secret index scan does not take the whole scan down")
     T.truthy(ok and missing and not HasName(missing.int, "Alric"),
         "and the buff is still found by spell id")
 end
@@ -318,7 +327,7 @@ do
     local realIndex, realById = C_UnitAuras.GetAuraDataByIndex, C_UnitAuras.GetUnitAuraBySpellID
     C_UnitAuras.GetAuraDataByIndex = function() error("secret") end
     C_UnitAuras.GetUnitAuraBySpellID = nil
-    local ok = pcall(Render, lm)
+    local ok = pcall(Scan, lm)
     C_UnitAuras.GetAuraDataByIndex, C_UnitAuras.GetUnitAuraBySpellID = realIndex, realById
     T.truthy(ok, "a refused index scan with no spell-id API still does not error")
 end
@@ -971,6 +980,10 @@ do
     local n
     RaidSim.As(lm, function() n = lm.KART.CountMissingFlaskFood() end)
     T.eq(n, 1, "a player missing only food still counts as one")
+    local missing
+    RaidSim.As(lm, function() missing = lm.KART.MissingBuffs end)
+    T.eq(lm.KART.BuffCheckFrame, nil, "the strip count uses the scan, not the window")
+    T.truthy(HasName(missing.food, "Alric"), "and the same scan lists that player as missing food")
 end
 
 

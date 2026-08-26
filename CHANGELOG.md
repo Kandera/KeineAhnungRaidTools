@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **The tonight strip flask/food count matches the Buff Check window.**
 - **Leaving Edit Mode in combat no longer errors** on the raidlead bar or Co-Tank row.
 - **Opening the world map no longer errors** on the raidlead bar.
 - **The in-game changelog opens without an error** and uses the same window art as the buff checker.

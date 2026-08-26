@@ -23,3 +23,7 @@ _Avoid_: test mode (that's a separate invent-snapshot switch), dummy row
 **Settings sync**:
 After load and profile switch, the file that built a settings widget paints it from `KART_Settings`. Core only fans out.
 _Avoid_: one Core map of every widget key
+
+**Buff scan**:
+`ScanBuffRoster` reads auras into a roster snapshot and `MissingBuffs`. The Buff Check window paints that snapshot; the tonight strip counts flask/food from it. Preview rows do not scan.
+_Avoid_: a second flask/food loop for the strip

@@ -221,6 +221,7 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
+            "**The tonight strip flask/food count matches the Buff Check window.**",
             "**Leaving Edit Mode in combat no longer errors** on the raidlead bar or Co-Tank row.",
             "**Opening the world map no longer errors** on the raidlead bar.",
             "**Shift-click Report whispers** flask, food and rune to whoever is missing them.",

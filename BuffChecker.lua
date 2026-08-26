@@ -12,7 +12,7 @@ KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 -- flask (no Phiole branch, past Dragonflight) and the bronze fallback ("Bronze"). Do not re-flag
 -- these. Two are no longer among them: vantus matches on spellID now (name kept as a fallback for
 -- future rune versions), and the oil is matched by enchantID only — it has no name detection at all
--- any more, deliberately (see the aura loop in KART.UpdateBuffCheck).
+-- any more, deliberately (see FillPlayerBuffStates in KART.ScanBuffRoster).
 KART.BuffData = {
     { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
     { id = "sta",    labelKey = "BC_LABEL_STA",    col = 3, icon = 135987,  class = "PRIEST",  spells = {21562}, report = "buff", reportLabelKey = "BC_REPORT_STA" },
@@ -908,51 +908,205 @@ local function ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
     end
 end
 
+-- Aura, oil and gear into BuffStatesCache for one unit. Caller wipes the cache first.
+local function FillPlayerBuffStates(unit, shortName, buffDataCount, timeNow)
+    local indexScanFailed = IndexAuraScanBlocked()
+    if not indexScanFailed then
+        for j = 1, 100 do
+            local aura, blocked = ReadHelpfulAuraByIndex(unit, j)
+            if blocked then
+                indexScanFailed = true
+                break
+            end
+            if not aura then break end
+            ApplyHelpfulAura(aura, buffDataCount, timeNow)
+        end
+    end
+    if indexScanFailed then
+        ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
+    end
+
+    for k = 1, buffDataCount do
+        local buff = KART.BuffData[k]
+        if buff.isOil then
+            local rank, isExpiring, rated, hasData = nil, false, false, true
+
+            local function inList(list, id)
+                if not list then return false end
+                for _, v in ipairs(list) do
+                    if v == id then return true end
+                end
+                return false
+            end
+
+            local function rate(enchantID, expTime)
+                rated = true
+                local r = 1
+                if enchantID and enchantID > 0 then
+                    if inList(buff.bestSpells, enchantID) then r = 4
+                    elseif inList(buff.offRankSpells, enchantID) then r = 2
+                    else r = 3 end
+                end
+                if r == 4 and expTime and expTime > 0 and expTime < 300000 then
+                    isExpiring = true
+                end
+                if not rank or r < rank then rank = r end
+            end
+
+            if UnitIsUnit(unit, "player") then
+                local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
+                if KAGS.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
+                if KAGS.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
+            else
+                local o = KART.OilCache and shortName and KART.OilCache[shortName]
+                hasData = o ~= nil
+                if o then
+                    if o.mh ~= "n" then rate(o.mh, 300000) end
+                    if o.oh ~= "n" then rate(o.oh, 300000) end
+                end
+            end
+
+            local stateToSet
+            if not hasData then
+                stateToSet = "unknown"
+            elseif not rated then
+                stateToSet = true
+            elseif rank == 4 then
+                stateToSet = isExpiring and "expiring" or "best"
+            elseif rank == 3 then
+                stateToSet = true
+            elseif rank == 2 then
+                stateToSet = "wrong"
+            end
+            if stateToSet then MergeBuffState(buff.id, stateToSet) end
+        end
+    end
+
+    local playerMissingEnchants, playerMissingGems
+    for k = 1, buffDataCount do
+        local buff = KART.BuffData[k]
+        if buff.isGearCheck then
+            if UnitIsUnit(unit, "player") then
+                if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KAGS.CountMissingGear() end
+                KART.BuffStatesCache[buff.id] = (buff.isGearCheck == "enchants") and playerMissingEnchants or playerMissingGems
+            else
+                if KART.GearCache and shortName and KART.GearCache[shortName] then
+                    KART.BuffStatesCache[buff.id] = KART.GearCache[shortName][buff.isGearCheck]
+                else
+                    KART.BuffStatesCache[buff.id] = "unknown"
+                end
+            end
+        end
+    end
+end
+
+local function GroupUnitAt(i, num, isRaid)
+    if num == 0 then return "player" end
+    if isRaid then return "raid" .. i end
+    return (i == num) and "player" or ("party" .. i)
+end
+
+-- Roster snapshot: per-player buff states and MissingBuffs. No frames. Paint and the
+-- tonight strip both read this so flask/food cannot disagree. Preview rows do not scan.
+function KART.ScanBuffRoster()
+    KART.MissingBuffs = KART.MissingBuffs or {}
+    KART.ClassCache = KART.ClassCache or {}
+    wipe(KART.ClassCache)
+
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.report or buff.whisper then
+            KART.MissingBuffs[buff.id] = KART.MissingBuffs[buff.id] or {}
+            wipe(KART.MissingBuffs[buff.id])
+        end
+    end
+
+    local num = GetNumGroupMembers()
+    local isRaid = IsInRaid()
+    local buffDataCount = #KART.BuffData
+    local timeNow = GetTime()
+    local iterMax = (num == 0) and 1 or num
+    local players = {}
+
+    for i = 1, iterMax do
+        local unit = GroupUnitAt(i, num, isRaid)
+        local _, class = UnitClass(unit)
+        if class then KART.ClassCache[class] = true end
+    end
+
+    KART.BuffStatesCache = KART.BuffStatesCache or {}
+
+    for i = 1, iterMax do
+        if i > 40 then break end
+        local unit = GroupUnitAt(i, num, isRaid)
+        local nameStr = UnitName(unit) or UNKNOWN ---@diagnostic disable-line: undefined-global
+        local shortName = nameStr:match("([^%-]+)")
+        local _, class = UnitClass(unit)
+
+        wipe(KART.BuffStatesCache)
+        FillPlayerBuffStates(unit, shortName, buffDataCount, timeNow)
+
+        for _, buff in ipairs(KART.BuffData) do
+            local has = KART.BuffStatesCache[buff.id]
+            if buff.isRepair then has = (shortName and KART.DurabilityCache[shortName]) or 100 end
+            local isMissing = not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong")
+            if isMissing and (buff.report or buff.whisper) and buff.page ~= "advanced" then
+                if not buff.class or KART.ClassCache[buff.class] then
+                    table.insert(KART.MissingBuffs[buff.id], nameStr)
+                end
+            end
+        end
+
+        local states = {}
+        for id, st in pairs(KART.BuffStatesCache) do states[id] = st end
+
+        local rcStatus = GetReadyCheckStatus(unit)
+            or (KART.ReadyCheckStatus and shortName and KART.ReadyCheckStatus[shortName])
+        local reason = shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName]
+        local ilvl, ilvlKnown
+        if UnitIsUnit(unit, "player") then
+            ilvl = select(2, GetAverageItemLevel())
+            ilvlKnown = true
+        else
+            ilvl = shortName and KART.ILvlCache and KART.ILvlCache[shortName]
+            ilvlKnown = ilvl ~= nil
+        end
+
+        players[#players + 1] = {
+            unit = unit,
+            name = nameStr,
+            shortName = shortName,
+            class = class,
+            connected = UnitIsConnected(unit),
+            rcStatus = rcStatus,
+            reason = reason,
+            ilvl = ilvl,
+            ilvlKnown = ilvlKnown,
+            repair = (shortName and KART.DurabilityCache[shortName]) or 100,
+            states = states,
+        }
+    end
+
+    local snap = { players = players }
+    KART.BuffRosterSnapshot = snap
+    return snap
+end
+
 -- People in the group missing flask or food. Independent of the Buff Check window: the main
 -- window's tonight strip has to answer this without opening that frame. One person missing both
--- still counts as one.
+-- still counts as one. Uses the same scan as the window so the number cannot disagree.
 function KART.CountMissingFlaskFood()
-    local foodSpells = {}
-    for _, buff in ipairs(KART.BuffData) do
-        if buff.isFood and buff.spells then foodSpells = buff.spells end
-    end
-    local missing = 0
-    for unit in KAUtil.EachGroupUnit() do
-        local hasFlask, hasFood = false, false
-        local blocked = IndexAuraScanBlocked()
-        if not blocked then
-            for j = 1, 100 do
-                local aura, refused = ReadHelpfulAuraByIndex(unit, j)
-                if refused then
-                    blocked = true
-                    break
-                end
-                if not aura then break end
-                local comparable = pcall(IsAuraSafe, aura)
-                if comparable and aura.name then
-                    if aura.name:find("Fläschchen", 1, true) or aura.name:find("Phial", 1, true)
-                        or aura.name:find("Flask", 1, true) then
-                        hasFlask = true
-                    end
-                    if aura.name:find("gesättigt", 1, true) or aura.name:find("Well Fed", 1, true) then
-                        hasFood = true
-                    end
-                    if type(aura.spellId) == "number" then
-                        for _, sid in ipairs(foodSpells) do
-                            if aura.spellId == sid then hasFood = true end
-                        end
-                    end
-                end
+    if not IsInGroup() then return 0 end
+    KART.ScanBuffRoster()
+    local seen, n = {}, 0
+    for _, id in ipairs({ "flask", "food" }) do
+        for _, name in ipairs(KART.MissingBuffs[id] or {}) do
+            if not seen[name] then
+                seen[name] = true
+                n = n + 1
             end
         end
-        if blocked then
-            for _, sid in ipairs(foodSpells) do
-                if ReadAuraBySpellID(unit, sid) then hasFood = true break end
-            end
-        end
-        if not hasFlask or not hasFood then missing = missing + 1 end
     end
-    return missing
+    return n
 end
 
 function KART.UpdateBuffCheck(isPreview)
@@ -1081,26 +1235,12 @@ function KART.UpdateBuffCheck(isPreview)
         return
     end
 
-    local num = GetNumGroupMembers() -- always a number (0 when ungrouped)
-    local isRaid = IsInRaid()
-    local buffDataCount = #KART.BuffData
-    local timeNow = GetTime()
-    
-    local iterMax = (num == 0) and 1 or num -- Erlaubt das Anzeigen des Buff-Checks, auch wenn man solo ist
+    local snap = KART.ScanBuffRoster()
+    local rows = KART.BuffCheckFrame.rows
 
-    for i = 1, iterMax do
-        local unit = (num == 0) and "player" or (isRaid and ("raid"..i) or (i == num and "player" or "party"..i))
-        local _, class = UnitClass(unit)
-        if class then KART.ClassCache[class] = true end
-    end
-    
-    KART.BuffStatesCache = KART.BuffStatesCache or {}
-
-    for i = 1, iterMax do
-        if i > 40 then break end -- Sicherheitscheck: Verhindert Absturz in Epic BGs (> 40 Spieler)
-        local unit = (num == 0) and "player" or (isRaid and ("raid"..i) or (i == num and "player" or "party"..i))
-        
-        local row = KART.BuffCheckFrame.rows[i]
+    for i, player in ipairs(snap.players) do
+        local row = rows[i]
+        if not row then break end
         if row.stripeBg then
             if i % 2 == 0 then
                 local lr, lg, lb = KART.UI:GetRowStripeColor()
@@ -1110,157 +1250,20 @@ function KART.UpdateBuffCheck(isPreview)
                 row.stripeBg:Hide()
             end
         end
-        -- roster churn can briefly yield nil; UNKNOWN is Blizzard's own localized "Unknown" string
-        local nameStr = UnitName(unit) or UNKNOWN ---@diagnostic disable-line: undefined-global
-        -- Hoisted: the ready-check status below needs it too, and both must key the same way.
-        local shortName = nameStr:match("([^%-]+)")
-        local _, class = UnitClass(unit)
 
-        -- Offline Check
         if KART_Settings.grayOffline then
-            local isConnected = UnitIsConnected(unit)
-            row:SetAlpha(isConnected and 1.0 or 0.4)
+            row:SetAlpha(player.connected and 1.0 or 0.4)
         else
             row:SetAlpha(1.0)
         end
-        
-        -- ReadyCheck Status. Blizzard clears its own status once the check resolves, which wipes the
-        -- whole column exactly when it becomes useful for chasing people up -- so fall back to
-        -- KART's own snapshot (KART.ReadyCheckStatus, filled in Core.lua and wiped on every new
-        -- check). Blizzard stays authoritative while a check is live.
-        local rcStatus = GetReadyCheckStatus(unit)
-            or (KART.ReadyCheckStatus and shortName and KART.ReadyCheckStatus[shortName])
-        KART.SetReadyCheckIcon(row.rcIcon, rcStatus)
 
-        wipe(KART.BuffStatesCache) -- emptied per player, not per raid
-
-        -- Index scan is the full path (name fallbacks for flask/food/rune). It Lua-errors while
-        -- auras are secret and the addon is tainted; pcall that, then query known spell IDs instead.
-        -- GetUnitAuraBySpellID is AllowedWhenTainted. Name-only flasks have no spell list, so that
-        -- column can go empty during combat until spell IDs are added — still no error.
-        local indexScanFailed = IndexAuraScanBlocked()
-        if not indexScanFailed then
-            for j = 1, 100 do
-                local aura, blocked = ReadHelpfulAuraByIndex(unit, j)
-                if blocked then
-                    indexScanFailed = true
-                    break
-                end
-                if not aura then break end
-                ApplyHelpfulAura(aura, buffDataCount, timeNow)
-            end
-        end
-        if indexScanFailed then
-            ScanHelpfulAurasBySpellID(unit, buffDataCount, timeNow)
-        end
-
-        -- 2. Nach der Aura-Schleife prüfen wir auf Waffenverzauberungen (für das Öl)
-        for k = 1, buffDataCount do
-            local buff = KART.BuffData[k]
-            -- No "unless the aura loop already found something better" guard: that loop no longer
-            -- matches the oil at all (see the comment where its name fallback used to be), so this
-            -- pass is the only writer of the oil state and always runs.
-            if buff.isOil then
-                -- Every hand holding a weapon is rated and the worst result wins, so a dual wielder
-                -- with oil on one weapon only still counts as missing it. Which hands take part is
-                -- decided by the equipped items (KAGS.SlotNeedsOil), not by spec: an Arms warrior's
-                -- empty off-hand and a tank's shield drop out, a Fury warrior gets both hands rated.
-                -- Ranks: 1 = weapon is bare, 2 = a KNOWN off-rank consumable, 3 = something we can't
-                -- judge, 4 = a current-quality consumable.
-                --
-                -- 2 and 3 are deliberately different. Rank 2 needs positive evidence that the id is
-                -- the wrong thing (a Tier1 craft, see offRankSpells); merely not recognising an id
-                -- rates 3 and is never reported. That asymmetry is the whole lesson from the first
-                -- version of this check, which treated unknown as wrong and accused a raid full of
-                -- correctly enchanted players.
-                local rank, isExpiring, rated, hasData = nil, false, false, true
-
-                local function inList(list, id)
-                    if not list then return false end
-                    for _, v in ipairs(list) do
-                        if v == id then return true end
-                    end
-                    return false
-                end
-
-                local function rate(enchantID, expTime)
-                    rated = true
-                    local r = 1
-                    if enchantID and enchantID > 0 then
-                        if inList(buff.bestSpells, enchantID) then r = 4
-                        elseif inList(buff.offRankSpells, enchantID) then r = 2
-                        else r = 3 end -- includes neutralSpells: a shaman imbue is nothing to fix
-                    end
-                    -- Only a current-rank oil can run out on us; a class mechanic like Sacred Weapon is
-                    -- short-lived by design and must not blink as "expiring".
-                    if r == 4 and expTime and expTime > 0 and expTime < 300000 then -- 300.000 ms = 5 Min
-                        isExpiring = true
-                    end
-                    if not rank or r < rank then rank = r end
-                end
-
-                if UnitIsUnit(unit, "player") then
-                    local hasMH, mhExp, _, mhID, hasOH, ohExp, _, ohID = GetWeaponEnchantInfo()
-                    if KAGS.SlotNeedsOil(16) then rate(hasMH and mhID or 0, mhExp) end
-                    if KAGS.SlotNeedsOil(17) then rate(hasOH and ohID or 0, ohExp) end
-                else
-                    -- KART Addon Sync auslesen (für Spieler, die KART installiert haben). "n" is that
-                    -- player's own verdict that the hand takes no oil at all.
-                    local o = KART.OilCache and shortName and KART.OilCache[shortName]
-                    hasData = o ~= nil
-                    if o then
-                        if o.mh ~= "n" then rate(o.mh, 300000) end
-                        if o.oh ~= "n" then rate(o.oh, 300000) end
-                    end
-                end
-
-                local stateToSet
-                if not hasData then
-                    stateToSet = "unknown" -- Addon fehlt, grau anzeigen
-                elseif not rated then
-                    stateToSet = true -- no hand takes an oil, so there is nothing to ask for
-                elseif rank == 4 then
-                    stateToSet = isExpiring and "expiring" or "best"
-                elseif rank == 3 then
-                    stateToSet = true
-                elseif rank == 2 then
-                    stateToSet = "wrong"
-                end
-                -- rank 1 sets nothing: a bare weapon leaves the column in its "missing" look.
-                if stateToSet then MergeBuffState(buff.id, stateToSet) end
-            end
-        end
-        
-        local playerMissingEnchants, playerMissingGems
-        for k = 1, buffDataCount do
-            local buff = KART.BuffData[k]
-            if buff.isGearCheck then
-                if UnitIsUnit(unit, "player") then
-                    if not playerMissingEnchants then playerMissingEnchants, playerMissingGems = KAGS.CountMissingGear() end
-                    KART.BuffStatesCache[buff.id] = (buff.isGearCheck == "enchants") and playerMissingEnchants or playerMissingGems
-                else
-                    if KART.GearCache and shortName and KART.GearCache[shortName] then
-                        KART.BuffStatesCache[buff.id] = KART.GearCache[shortName][buff.isGearCheck]
-                    else
-                        KART.BuffStatesCache[buff.id] = "unknown"
-                    end
-                end
-            end
-        end
-
-        -- Row Update
-        SetTruncatedName(row.name, nameStr, row.name:GetWidth())
-        local c = RAID_CLASS_COLORS[class] or {r=1, g=1, b=1}
+        KART.SetReadyCheckIcon(row.rcIcon, player.rcStatus)
+        SetTruncatedName(row.name, player.name, row.name:GetWidth())
+        local c = RAID_CLASS_COLORS[player.class] or { r = 1, g = 1, b = 1 }
         row.name:SetTextColor(c.r, c.g, c.b)
 
-        -- Deliberately NOT gated on rcStatus. A ready check resolves the moment everyone has
-        -- answered, which in a small group is the same moment the decliner is still picking a
-        -- reason -- so RC_REASON routinely arrives after GetReadyCheckStatus has already cleared,
-        -- and the reason never rendered at all. KART.ReadyCheckReasons is wiped on every
-        -- READY_CHECK (Core.lua), so an entry here always belongs to the most recent check.
-        local reason = shortName and KART.ReadyCheckReasons and KART.ReadyCheckReasons[shortName]
-        if reason then
-            row.reasonIcon.reasonText = reason
+        if player.reason then
+            row.reasonIcon.reasonText = player.reason
             row.reasonIcon:Show()
             row.reasonHitbox:Show()
         else
@@ -1268,20 +1271,13 @@ function KART.UpdateBuffCheck(isPreview)
             row.reasonHitbox:Hide()
         end
 
-        if UnitIsUnit(unit, "player") then
-            row.ilvlText:SetText(string.format("%.1f", select(2, GetAverageItemLevel())))
+        if player.ilvlKnown then
+            row.ilvlText:SetText(string.format("%.1f", player.ilvl))
             row.ilvlText:SetTextColor(1, 1, 1)
         else
-            local ilvl = shortName and KART.ILvlCache and KART.ILvlCache[shortName]
-            if ilvl then
-                row.ilvlText:SetText(string.format("%.1f", ilvl))
-                row.ilvlText:SetTextColor(1, 1, 1)
-            else
-                row.ilvlText:SetText("?")
-                row.ilvlText:SetTextColor(0.5, 0.5, 0.5)
-            end
+            row.ilvlText:SetText("?")
+            row.ilvlText:SetTextColor(0.5, 0.5, 0.5)
         end
-
         if KART.BuffCheckMode == "advanced" then
             row.ilvlText:Show()
         else
@@ -1289,21 +1285,9 @@ function KART.UpdateBuffCheck(isPreview)
         end
 
         for j, buff in ipairs(KART.BuffData) do
-            local has = KART.BuffStatesCache[buff.id]
-            if buff.isRepair then has = KART.DurabilityCache[shortName] or 100 end
+            local has = player.states[buff.id]
+            if buff.isRepair then has = player.repair end
             setInd(row, j, has, buff, KART.ClassCache)
-            
-            -- Advanced-panel checks (oil, enchants, gems — page = "advanced") are never chat-reported:
-            -- that panel is a separate, opt-in view and its data must stay out of the raid /Report.
-            -- Default-panel report and whisper checks feed KART.MissingBuffs. Enforced by those
-            -- fields (advanced items carry neither) plus an explicit page guard as a backstop.
-            local isMissing = not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong")
-            if isMissing and (buff.report or buff.whisper) and buff.page ~= "advanced" then
-                if not buff.class or KART.ClassCache[buff.class] then
-                    table.insert(KART.MissingBuffs[buff.id], nameStr)
-                end
-            end
-            
             if KART.BuffCheckMode == "advanced" then
                 if buff.page == "advanced" then row.indicators[j]:Show() else row.indicators[j]:Hide() end
             else
@@ -1312,7 +1296,8 @@ function KART.UpdateBuffCheck(isPreview)
         end
         row:Show()
     end
-    KART.BuffCheckFrame.scrollContent:SetHeight(math.min(iterMax, 40) * 26) -- render loop caps rows at 40 (Epic BGs)
+    KART.BuffCheckFrame.scrollContent:SetHeight(math.min(#snap.players, 40) * 26)
+    
     RefreshOkBanner(false)
     if KART.RefreshStatusStripThrottled then KART.RefreshStatusStripThrottled() end
 end
