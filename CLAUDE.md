@@ -1,61 +1,48 @@
 # Project Conventions
 
-## Language: English by default
+User-facing copy, Lua 5.1, SavedVariables shape: `CODING_STANDARDS.md`.
 
-This project is maintained in **English**. Unless explicitly noted otherwise below, everything happens in English:
+## Domain
 
-- **Commit messages** (subject and body).
-- **Code comments** in all `.lua` files.
-- **Pull request titles/descriptions, issue text, release notes.**
-- **Primary documentation:** `README.md` and `CHANGELOG.md` are the English, primary versions.
+- **Manifest:** `docs/MANIFEST.md` — companion must not hinder, abort, or break RCLootCouncil's loot flow. "gegen das Manifest getestet" before calling a change done. The suite is the floor.
+- **Ownership:** `docs/OWNERSHIP.md` — who owns settings vs who hands out loot. Touch that document first.
+- **Settled:** `docs/REVIEW-DECISIONS.md` and `docs/BACKLOG.md` headings (`FIXED` / `NO DEFECT`) before raising a concern.
+- Grill / glossary layout: `docs/agents/domain.md`.
 
-### Explicit exceptions (intentionally German)
+## Navigation
 
-- **`Locales/deDE.lua`:** The actual localized string *values* stay German — that's the whole point of the file. Comments inside it should still be English.
-- **`README-de.md` / `CHANGELOG-de.md`:** Maintained as German mirrors of the English primaries. Always update the English file first, then mirror the change into the `-de` file in the same turn.
+- **Banners:** `grep -n '^-- =====' -A1 <file>`. Never read a large file whole. `LootCouncil.lua` (~6.8k, 27 banners) first.
+- **Comm:** `Libs/KASC-1.0` (`KASC:Send`) over AceComm-3.0. There is no `KARTSync.lua`.
+- **SavedVariables names:** the `.toc`. Shape rules in `CODING_STANDARDS.md`.
 
-When updating `CHANGELOG.md`/`README.md` for a user-facing change, update `CHANGELOG-de.md`/`README-de.md` alongside it — see the more detailed doc-update workflow in project memory (`feedback_changelog_readme`).
+## API sources
 
-## Changelog style: one line per entry
+- **ketho.wow-api** (12.0.1, client 12.1): `C:\Users\max\.vscode\extensions\ketho.wow-api-0.22.3\Annotations`. Addon targets Midnight (12.x). Ground API claims here or in FrameXML; do not assert from memory.
+- **FrameXML mirror:** `E:\Projects\.refs\wow-ui-source` (sibling of this repo). Not auto-loaded. Secondary to ketho and the `gh api repos/Gethe/wow-ui-source` fetches in `docs/BACKLOG-12.1.md`; the mirror may lag the target patch.
 
-Each changelog entry is **one line, at most two lines for big changes**. Bold lead + short effect clause — often the bold lead alone is the whole entry (e.g. "**Settings tab moved to the bottom of the sidebar.**"). Never include: technical causes, "was X, now Y" explanations, design rationale, implementation details, examples. The commit message and code carry those — the changelog is for players skimming what changed.
+## Live client
 
-## The Manifest
+- **Crash / OOM / client dump:** `E:\World of Warcraft\_retail_\Errors\` first, then `_retail_\Logs\`.
+- **Neighbour addons** (Northern Sky, WowUtils, RCLootCouncil): `E:\World of Warcraft\_retail_\Interface\AddOns\`.
 
-`docs/MANIFEST.md` is the 10/10 in-game bar: the companion must not hinder, abort, or break
-RCLootCouncil's loot flow. Refer to it by that name -- "gegen das Manifest getestet" -- and
-check a change against it before calling the change done. The automated suite is the floor,
-not the standard: it cannot see a cursor, a Blizzard roll window or a real reload.
+## Raid chrome
 
-`docs/OWNERSHIP.md` is the settled rule for who owns the settings and who hands out the loot. A
-change that touches ownership is a change to that document first.
+Three UIs. Do not mix them up.
 
-## Before proposing a change
+- **KART raidlead bar** — small 2-row bar (marks, world markers, ready check, buff, pull, tools). `RaidleadBar.lua`.
+- **CompactRaidFrameManager** — Blizzard raid control. Optional hide: `hideBlizzardRaidManager` while the KART bar is shown. Default off.
+- **Northern Sky** — large vertical NS panel. Unique NS content. Do not hide NS from KART; NS has its own QoL toggle under `/ns`.
 
-`docs/REVIEW-DECISIONS.md` records findings we deliberately did not change, and the
-`docs/BACKLOG.md` headings carry their own verdict (`FIXED` / `NO DEFECT`). Check both before
-raising a concern. Re-opening a settled decision costs a round of explanation that these
-documents exist to prevent.
+## Agent skills
 
-## Lua and WoW
+### Issue tracker
 
-- **Never read a large file whole.** `grep -n '^-- =====' -A1 <file>` prints its section banners
-  with current line numbers; read only the range you need. `LootCouncil.lua` (~6.8k lines) has 27
-  and is always worth grepping first; the other files carry the same banner style but fewer of
-  them. A new section of a few hundred lines gets a banner in that style.
-- **API facts come from the ketho.wow-api annotations** (12.0.1, client 12.1). The addon targets
-  Midnight (12.x). Never assert API behaviour from memory.
-- **A local mirror of Blizzard's FrameXML source sits at `E:\Projects\.refs\wow-ui-source`**
-  (one level above this repo, sibling of `KeineAhnungRaidTools`). Not wired into any tool
-  config — nothing loads it automatically. Pull it in as a secondary source when tracing FrameXML
-  behaviour or patch diffs, alongside the ketho annotations and the `gh api repos/Gethe/wow-ui-source`
-  fetches in `docs/BACKLOG-12.1.md` — don't rely on it alone, it may lag the target patch.
-- **WoW runs Lua 5.1 on LuaJIT.** No `goto`, `unpack` not `table.unpack`, no integer division.
-- **The comm layer is `Libs/KASC-1.0` (`KASC:Send`)**, over AceComm-3.0 since 2026-08-03. There
-  is no `KARTSync.lua`.
-- **SavedVariables have no central migration.** Each structure guards its own shape --
-  `Droptimizer.lua` checks a `schemaVersion`, `OfficerNotes.MigrateOfficerNoteKey` renames a key.
-  A shape change without such a guard corrupts existing users on their next login. The
-  authoritative list of variables is the `.toc`.
-- **Enchant, spell and item ID tables are per-patch maintenance, not defects.** `GOOD_ENCHANTS`
-  in `Utils.lua` is the documented case, see `REVIEW-DECISIONS.md`.
+GitHub Issues on Kandera/KeineAhnungRaidTools. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical roles, matching label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. See `docs/agents/domain.md`.

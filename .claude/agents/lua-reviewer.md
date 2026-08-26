@@ -50,6 +50,12 @@ These are the classes `luacheck` structurally cannot see:
   while `InCombatLockdown()`. Blizzard's protected API fails from insecure paths — sometimes
   silently. Check that in-combat early-returns have a matching reconcile on
   `PLAYER_REGEN_ENABLED`.
+  **Blizzard panel hooks:** `HookScript("OnShow")` / `OnHide` on a frame Blizzard shows via
+  `ShowUIPanel` (WorldMap, character sheet, …) runs *inside* that call stack.
+  `SetFrameStrata`, `Hide`, `Show`, `SetParent` on a frame with `SecureActionButtonTemplate`
+  children is `ADDON_ACTION_BLOCKED` from that path even out of combat. Legal pattern: return
+  when `InCombatLockdown()`, otherwise `C_Timer.After(0, …)` (Regen still reconciles). A
+  comment that "SetFrameStrata is not combat-locked" is not evidence.
 - **Frame lifecycle.** WoW frames cannot be destroyed, only hidden or pooled. A `CreateFrame`
   reached per roster entry, per row, or per roll leaks for the whole session. Raiders relog
   and port out constantly, so roster rebuilds are frequent.
@@ -75,10 +81,12 @@ These are the classes `luacheck` structurally cannot see:
 
 ## Step 5 — hard bans
 
-- **No claim about the WoW API without evidence from the ketho.wow-api annotations.**
-  Annotations are 12.0.1, client 12.1, the addon targets Midnight (12.x). If you cannot
-  ground an API claim, do not make it — say the behaviour is unverified and stop there.
-  A confident wrong API claim is the worst output this agent can produce.
+- **No claim about the WoW API without evidence from the ketho.wow-api annotations**
+  at `C:\Users\max\.vscode\extensions\ketho.wow-api-0.22.3\Annotations`, or from the
+  FrameXML mirror at `E:\Projects\.refs\wow-ui-source`. Annotations are 12.0.1, client
+  12.1, the addon targets Midnight (12.x). If you cannot ground an API claim, do not
+  make it — say the behaviour is unverified and stop there. A confident wrong API claim
+  is the worst output this agent can produce.
 - **No fixes.** Findings only. You do not edit.
 - **No settings toggle as a proposal.** REVIEW-DECISIONS.md forbids it for `GOOD_ENCHANTS`
   and the reasoning generalises: a toggle is how a real decision gets avoided.
