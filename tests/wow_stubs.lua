@@ -996,9 +996,11 @@ _G.C_Item = {
         return it and ("Interface\\Icons\\" .. it.name) or nil
     end,
     -- Bag counts for the Healthstone column. Driven by KARTTEST.itemCounts so a test can
-    -- give the player a stone without building a bag inventory. Extra arguments (bank,
-    -- charges) are ignored: the Buff Checker only asks "any charges at all".
-    GetItemCount = function(itemID)
+    -- give the player a stone without building a bag inventory. includeUses (charges) is
+    -- a different question: a live dump of GetItemCount(5512) was 1, while charges can
+    -- be 0 on the same item. Presence must not pass includeUses.
+    GetItemCount = function(itemID, includeBank, includeUses)
+        if includeUses then return 0 end
         return (KARTTEST.itemCounts and KARTTEST.itemCounts[itemID]) or 0
     end,
     -- The item's stat block, keyed by the ITEM_MOD_* tokens the live API uses. Answers nil for an

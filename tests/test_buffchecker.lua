@@ -1053,6 +1053,22 @@ do
 end
 
 do
+    -- "unknown" is a non-empty string, which is truthy: SetDesaturated(not has) would leave
+    -- a full-color stone, so every raider without KART looked like they had one.
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    KARTTEST.itemCounts = { [5512] = 1 }
+    Render(lm)
+    local HS = 11
+    local alricInd = lm.KART.BuffCheckFrame.rows[4].indicators[HS]
+    T.eq(alricInd:IsDesaturated(), true,
+        "an unanswered healthstone is desaturated, not a full-color stone")
+    local ownInd = lm.KART.BuffCheckFrame.rows[1].indicators[HS]
+    T.eq(ownInd:IsDesaturated(), false, "our own stone stays a full-color stone")
+    KARTTEST.itemCounts = {}
+end
+
+do
     local sim, lm = F.NewRaid()
     KARTTEST.itemCounts = { [224464] = 3 }
     Scan(lm)

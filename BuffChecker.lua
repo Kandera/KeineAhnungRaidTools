@@ -91,6 +91,8 @@ ResolveBuffDataLabels()
 
 -- Bag count for our own Healthstone column. Reads BuffData.items so a live-raid ID swap
 -- is one table, not a second copy in the comm responder.
+-- Presence, not charges: a live dump of GetItemCount(5512) was 1, while includeUses
+-- (the third argument) can be 0 on that same item.
 function KART.CountOwnHealthstones()
     local fn = C_Item and C_Item.GetItemCount
     if not fn then return 0 end
@@ -98,7 +100,7 @@ function KART.CountOwnHealthstones()
     for _, buff in ipairs(KART.BuffData) do
         if buff.isHealthstone and buff.items then
             for _, id in ipairs(buff.items) do
-                local ok, c = pcall(fn, id, false, true)
+                local ok, c = pcall(fn, id)
                 if ok and type(c) == "number" then n = n + c end
             end
         end
@@ -660,7 +662,9 @@ local function setInd(row, idx, has, buffData, classes)
         return
     end
 
-    ind:SetDesaturated(not has)
+    -- "unknown" is a non-empty string, which is truthy — without the extra clause a
+    -- raider who has not answered looks like they have the buff (full-color icon).
+    ind:SetDesaturated(not has or has == "unknown")
     if has == "expiring" then
         ind:SetAlpha(1.0)
         ind:SetVertexColor(1, 0.8, 0)

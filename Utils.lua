@@ -223,6 +223,8 @@ KART.InGameChangelog = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Buff Check shows Healthstone and Soulstone.**",
             "**Flasks are found by this season's spell ids.**",
+            "**Healthstone reads the stone in your bags.**",
+            "**A healthstone you have not heard about is grey.**",
             "**Empty WoWUtils and RC cards say what to do.**",
             "**Co-Tank no longer creates leftover frames** when live aura strips are unavailable.",
             "**The tonight strip flask/food count matches the Buff Check window.**",
