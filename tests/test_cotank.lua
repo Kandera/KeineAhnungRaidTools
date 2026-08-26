@@ -442,6 +442,13 @@ end
 do
     local core = assert(io.open("Core.lua", "r")):read("*a")
     T.truthy(core:find("KART.CT.SyncWidgets", 1, true), "Core.lua calls CT.SyncWidgets")
+    local mf = assert(io.open("MainFrame.lua", "r")):read("*a")
+    for _, name in ipairs({ "ApplyLayout", "HostPreview", "SetPreviewState", "Paint", "EnsureRow" }) do
+        T.eq(mf:find("KART.CT." .. name, 1, true), nil,
+            "MainFrame.lua does not call CT." .. name)
+    end
+    T.eq(core:find("KART.CT.OnRoster", 1, true), nil, "Core.lua calls Refresh, not OnRoster")
+    T.eq(core:find("KART.CT.ApplyLayout", 1, true), nil, "Core.lua does not call CT.ApplyLayout")
 end
 
 do

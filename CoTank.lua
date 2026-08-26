@@ -1502,6 +1502,7 @@ function CT.OnSettingsTab(open)
     else
         CT.ReleasePreview()
     end
+    if CT.UpdateFlyoutVisibility then CT.UpdateFlyoutVisibility() end
 end
 
 function CT.Disable()

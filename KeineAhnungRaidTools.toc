@@ -25,6 +25,7 @@ Locales\deDE.lua
 Utils.lua
 MainFrame.lua
 CoTank.lua
+CoTankSettings.lua
 GroupLogic.lua
 RaidleadBar.lua
 Profiles.lua

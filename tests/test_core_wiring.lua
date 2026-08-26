@@ -75,6 +75,7 @@ Wired("KART.RC.OnOwedOutOfCombat()", "owed reminder reappears after combat")
 Wired("KART.RC.OpenOwedWindow()", "/kart owed opens the winner reminder")
 
 T.truthy(toc:find("CoTank%.lua"), "toc lists CoTank.lua")
+T.truthy(toc:find("CoTankSettings%.lua"), "toc lists CoTankSettings.lua")
 
 Wired('frame:RegisterEvent("CHAT_MSG_OFFICER")', "CHAT_MSG_OFFICER is registered for invite keywords")
 Wired("channels.OFFICER", "officer chat is gated by inviteChannels")
@@ -89,9 +90,9 @@ do
 
         "the roster branch calls RC.OnRosterUpdate")
 
-    T.truthy(branch and branch:find("KART.CT.OnRoster", 1, true),
+    T.truthy(branch and branch:find("KART.CT.Refresh", 1, true),
 
-        "the roster branch calls CT.OnRoster")
+        "the roster branch calls CT.Refresh")
 
 end
 

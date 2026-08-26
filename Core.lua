@@ -306,10 +306,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if IsInRaid() or not IsInGroup() then KART.pendingBulkRaidConvert = false end
         KART.HandleAutoPromoteThrottled()
         if KART.RC then KART.RC.OnRosterUpdate() end
-        if KART.CT then KART.CT.OnRoster() end
+        if KART.CT then KART.CT.Refresh() end
         
     elseif event == "PLAYER_ROLES_ASSIGNED" then
-        if KART.CT then KART.CT.OnRoster() end
+        if KART.CT then KART.CT.Refresh() end
         
     elseif event == "READY_CHECK" then
         KART.ReadyCheckReasons = wipe(KART.ReadyCheckReasons or {})
@@ -422,7 +422,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.AutoLog then KART.AutoLog.Evaluate() end
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
         if KART.RC then KART.RC.HookVotingFrame() end
-        if KART.CT then KART.CT.OnInstance() end
+        if KART.CT then KART.CT.Refresh() end
     elseif event == "PLAYER_CONTROL_LOST" then
         KART.OnControlLost()
     elseif event == "CHALLENGE_MODE_START" then

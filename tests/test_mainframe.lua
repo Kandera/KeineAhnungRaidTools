@@ -17,7 +17,7 @@ local KART = me.KART
 -- what those two controls do IS the call into them.
 RaidSim.As(me, function()
     me.KART.CreateTabTitle = me.KART.CreateTabTitle or function() end
-    for _, path in ipairs({ "MainFrame.lua", "Profiles.lua", "RaidleadBar.lua" }) do
+    for _, path in ipairs({ "MainFrame.lua", "CoTank.lua", "CoTankSettings.lua", "Profiles.lua", "RaidleadBar.lua" }) do
         local chunk = assert(loadstring(assert(io.open(path, "r")):read("*a"), "@" .. path))
         setfenv(chunk, me.env)
         chunk("KeineAhnungRaidTools", KART)
