@@ -338,6 +338,15 @@ end
 
 do
     T.eq(KART.CT.AuraEngineAvailable(), false, "aura engine unavailable in harness")
+    local creates = 0
+    local orig = rawget(env, "CreateFrame") or CreateFrame
+    env.CreateFrame = function(...)
+        creates = creates + 1
+        return orig(...)
+    end
+    T.eq(KART.CT.AuraEngineAvailable(), false, "still unavailable on a second look")
+    T.eq(creates, 0, "and does not CreateFrame when the aura addon is missing")
+    env.CreateFrame = orig
 end
 
 do

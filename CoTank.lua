@@ -760,13 +760,15 @@ local function AuraEngineFrame(frame)
 end
 
 function CT.AuraEngineAvailable()
-    if AURA_ENGINE_AVAILABLE == true then return true end
-    EnsureAuraAddon()
+    if AURA_ENGINE_AVAILABLE ~= nil then return AURA_ENGINE_AVAILABLE end
+    -- No template without the addon. Do not CreateFrame here: WoW cannot destroy frames, and
+    -- Refresh calls this often. Leave uncached so a later LoadAddOn can still succeed.
+    if not EnsureAuraAddon() then return false end
     local ok, frame = pcall(CreateFrame, "AuraContainer", nil, UIParent, AURA_TEMPLATE)
     local live = ok and AuraEngineFrame(frame)
     if frame and frame.Hide then pcall(frame.Hide, frame) end
-    if live then AURA_ENGINE_AVAILABLE = true end
-    return live and true or false
+    AURA_ENGINE_AVAILABLE = live and true or false
+    return AURA_ENGINE_AVAILABLE
 end
 
 function CT.RefreshAuraEngineNote()

@@ -71,6 +71,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Co-Tank erzeugt keine übrigbleibenden Frames mehr**, wenn Live-Auren nicht da sind.
 - **Die Flask/Food-Zahl auf der Heute-Leiste stimmt mit dem Buff-Check-Fenster überein.**
 - **Edit-Modus im Kampf verlassen wirft keinen Fehler mehr** an Raidlead-Leiste oder Co-Tank-Zeile.
 - **Die Weltkarte wirft keinen Fehler mehr** an der Raidlead-Leiste.
