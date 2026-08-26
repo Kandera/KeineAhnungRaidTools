@@ -2,8 +2,8 @@
 --
 -- A widget created with `store = SettingsStore, key = "..."` writes its value on click, but nothing
 -- pushes the saved value BACK into it: the widget is built at file-load time, before KART_Settings
--- exists, and starts unchecked/at zero. KART.SyncSettingsToUI (Core.lua) is the one place that
--- closes that loop, via a settingsMap entry per widget.
+-- exists, and starts unchecked/at zero. The file that builds the widget owns a settingsMap entry
+-- (`settingsMap[<widget>] = "<key>"`). Core.lua only fans out to those SyncWidgets helpers.
 --
 -- Forget one entry and the failure is quiet and misleading rather than loud: the setting itself
 -- persists and keeps taking effect, while its checkbox renders "off" after every /reload, so the
@@ -47,10 +47,16 @@ end
 -- nothing. 3.2.0 shipped 40; the number only ever grows.
 T.truthy(declaredCount >= 25, "found the settings widgets (" .. declaredCount .. " >= 25)")
 
+T.truthy(core:find("KART.SyncMainFrameWidgets()", 1, true), "Core fans out to MainFrame widgets")
+T.truthy(core:find("KART.RC.SyncWidgets()", 1, true), "Core fans out to RC widgets")
+T.truthy(core:find("KART.WU.SyncWidgets()", 1, true), "Core fans out to WoWUtils widgets")
+T.truthy(core:find("KART.CT.SyncWidgets()", 1, true), "Core fans out to Co-Tank widgets")
+T.eq(core:find("settingsMap[", 1, true), nil, "Core.lua does not keep the widget map")
+
 for key, path in pairs(declared) do
-    -- SyncSettingsToUI's entries all read `settingsMap[<widget>] = "<key>"`, so the quoted key is
-    -- the thing to look for. Plain find, not a pattern -- keys are identifiers, but the search
-    -- string carries quotes.
-    T.truthy(core:find('= "' .. key .. '"', 1, true),
-        "KART.SyncSettingsToUI re-applies " .. key .. " (declared in " .. path .. ")")
+    local text = assert(slurp((path:gsub("\\", "/"))), path .. " is readable")
+    -- Apply lines are `if <widget> then settingsMap[<widget>] = "<key>" end`.
+    -- `key = "<key>"` on the constructor and `[chip] = "<key>"` on the sidebar map must not count.
+    T.truthy(text:find('] = "' .. key .. '" end', 1, true),
+        path .. " re-applies " .. key)
 end

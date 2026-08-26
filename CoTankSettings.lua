@@ -1551,3 +1551,9 @@ KART.UI:RegisterLocaleRefresher(function()
         KART.CtFlyoutTabButtons[3].text:SetText(L.TAB_CT_AURAS)
     end
 end)
+
+function CT.SyncRootWidgets()
+    local settingsMap = {}
+    if KART.CbCtModuleEnabled then settingsMap[KART.CbCtModuleEnabled] = "ctModuleEnabled" end
+    KART.ApplySettingsMap(settingsMap)
+end

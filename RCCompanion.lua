@@ -361,6 +361,14 @@ function RC.BuildSettingsCard()
     RC.UpdateStatusLabel()
 end
 
+function RC.SyncWidgets()
+    local settingsMap = {}
+    if RC.CouncilMembersEditBox then settingsMap[RC.CouncilMembersEditBox] = "rcCouncilMembers" end
+    if RC.CbShowNickNames then settingsMap[RC.CbShowNickNames] = "rcShowNickNames" end
+    if RC.CbShowOwedReminder then settingsMap[RC.CbShowOwedReminder] = "rcShowOwedReminder" end
+    KART.ApplySettingsMap(settingsMap)
+end
+
 function RC.Enable()
     if not KART_Settings.rcCouncilMigrated then
         local rc = KART_Settings.rcCouncilMembers

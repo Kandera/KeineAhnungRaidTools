@@ -1544,6 +1544,7 @@ function CT.Disable()
 end
 
 function CT.SyncWidgets()
+    if CT.SyncRootWidgets then CT.SyncRootWidgets() end
     local ct = KART_Settings and KART_Settings.ct
     if not ct then
         CT.Enable()

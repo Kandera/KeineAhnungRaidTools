@@ -1544,9 +1544,68 @@ function KART.ShowChangelogPopup()
     f:Show()
 end
 
+-- Re-applies widgets in this file from KART_Settings after load and profile switch.
+-- Core.lua fans out here; a missing settingsMap line leaves the checkbox showing off.
+function KART.SyncMainFrameWidgets()
+    local settingsMap = {}
+    if KART.InviteEditBox then settingsMap[KART.InviteEditBox] = "inviteKeywords" end
+    if KART.PromoteEditBox then settingsMap[KART.PromoteEditBox] = "promoteNames" end
+    if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
+    if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
+    if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
+    if KART.CbAutoHideCombat then settingsMap[KART.CbAutoHideCombat] = "autoHideRaidleadBarCombat" end
+    if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
+    if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
+    if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
+    if KART.CbAutoModule then settingsMap[KART.CbAutoModule] = "autoModuleEnabled" end
+    if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
+    if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
+    if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
+    if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
+    if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
+    if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
+    if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
+    if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
+    if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
+    if KART.CbAlRaidHeroic then settingsMap[KART.CbAlRaidHeroic] = "autoLogRaidHeroic" end
+    if KART.CbAlRaidMythic then settingsMap[KART.CbAlRaidMythic] = "autoLogRaidMythic" end
+    if KART.CbAlMythicPlus then settingsMap[KART.CbAlMythicPlus] = "autoLogMythicPlus" end
+    if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
+    if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
+    if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
+    if KART.SldUiScale then settingsMap[KART.SldUiScale] = "uiScale" end
+    if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
+    if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
+    if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
+    if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
+    if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
+    if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
+    if KART.CbHideBlizzardRaidManager then settingsMap[KART.CbHideBlizzardRaidManager] = "hideBlizzardRaidManager" end
+    if KART.SldRlBarScale then settingsMap[KART.SldRlBarScale] = "rlBarScale" end
+    if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
+    if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
+    KART.ApplySettingsMap(settingsMap)
+
+    if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
+
+    if KART.BtnLang then
+        local langText = KART.L.LANG_AUTO
+        if KART_Settings.language == "enUS" then langText = KART.L.LANG_EN
+        elseif KART_Settings.language == "deDE" then langText = KART.L.LANG_DE end
+        KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
+    end
+
+    if KART.KeybindButtons then
+        for key, btn in pairs(KART.KeybindButtons) do
+            local bound = KART_Settings.keybinds and KART_Settings.keybinds[key]
+            btn.text:SetText(bound and bound ~= "" and bound or KART.L.KB_NOT_BOUND)
+        end
+    end
+end
+
 -- Re-applies every static text in this file from KART.L once the saved language is known
 -- (see KART.UI:RegisterLocaleRefresher in Utils.lua). Dynamic texts (BtnFont/BtnLang/BtnProfile
--- labels, keybind button captions, strata slider value) are handled by KART.SyncSettingsToUI.
+-- labels, keybind button captions, strata slider value) are handled by KART.SyncMainFrameWidgets.
 KART.UI:RegisterLocaleRefresher(function()
     local L = KART.L
 

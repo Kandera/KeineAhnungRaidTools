@@ -16,6 +16,18 @@ KART.UI.popupArtworkPath = "Interface\\AddOns\\KeineAhnungRaidTools\\media\\back
 -- right after the locale values are copied into KART.L.
 KART.L = KART.L or {}
 
+-- Paints widgets from KART_Settings. Each owner builds a settingsMap of
+-- `settingsMap[<widget>] = "<key>"`; Core fans out after load and profile switch.
+function KART.ApplySettingsMap(settingsMap)
+    local settings = KART_Settings
+    if not settings or not settingsMap then return end
+    for widget, key in pairs(settingsMap) do
+        if widget.SetChecked then widget:SetChecked(settings[key])
+        elseif widget.SetValue then widget:SetValue(settings[key])
+        elseif widget.SetText then widget:SetText(settings[key]) end
+    end
+end
+
 -- =====================================================================
 --  Sidebar chrome: Edit Mode (session) and in-game changelog
 -- =====================================================================

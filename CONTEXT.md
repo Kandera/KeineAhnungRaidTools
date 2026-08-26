@@ -19,3 +19,7 @@ _Avoid_: live row, unit frame
 **Hosted preview**:
 The Co-Tank row parented into the Co-Tank settings tab, for look/aura tweaks in town. Opening the tab does not force the world row.
 _Avoid_: test mode (that's a separate invent-snapshot switch), dummy row
+
+**Settings sync**:
+After load and profile switch, the file that built a settings widget paints it from `KART_Settings`. Core only fans out.
+_Avoid_: one Core map of every widget key

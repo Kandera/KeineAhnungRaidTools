@@ -700,6 +700,13 @@ function WU.BuildPanel(parent)
     end)
 end
 
+function WU.SyncWidgets()
+    local settingsMap = {}
+    if KART.CbWuModule then settingsMap[KART.CbWuModule] = "wuModuleEnabled" end
+    if WU.ImportEditBox then settingsMap[WU.ImportEditBox] = "wuImportText" end
+    KART.ApplySettingsMap(settingsMap)
+end
+
 -- Invite.lua loads after MainFrame.lua, so the panel already exists here.
 if KART.WoWUtilsPanel then
     WU.BuildPanel(KART.WoWUtilsPanel)

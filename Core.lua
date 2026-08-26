@@ -58,59 +58,11 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
 function KART.SyncSettingsToUI()
     KART.UpdateCache()
 
-    -- Sammel-Initialisierung der UI Elemente
-    local settingsMap = {}
-    if KART.InviteEditBox then settingsMap[KART.InviteEditBox] = "inviteKeywords" end
-    if KART.PromoteEditBox then settingsMap[KART.PromoteEditBox] = "promoteNames" end
-    if KART.CbActivate then settingsMap[KART.CbActivate] = "showRaidleadBar" end
-    if KART.CbLock then settingsMap[KART.CbLock] = "lockRaidleadBar" end
-    if KART.CbAutoHide then settingsMap[KART.CbAutoHide] = "autoHideRaidleadBar" end
-    if KART.CbAutoHideCombat then settingsMap[KART.CbAutoHideCombat] = "autoHideRaidleadBarCombat" end
-    if KART.CbRcReasonDialog then settingsMap[KART.CbRcReasonDialog] = "rcReasonDialog" end
-    if KART.PullSlider then settingsMap[KART.PullSlider] = "pullTimerDuration" end
-    if KART.CbBcModuleEnabled then settingsMap[KART.CbBcModuleEnabled] = "bcModuleEnabled" end
-    if KART.CbAutoModule then settingsMap[KART.CbAutoModule] = "autoModuleEnabled" end
-    if KART.CbWuModule then settingsMap[KART.CbWuModule] = "wuModuleEnabled" end
-    if KART.CbCtModuleEnabled then settingsMap[KART.CbCtModuleEnabled] = "ctModuleEnabled" end
-    if KART.CbShowBuffCheck then settingsMap[KART.CbShowBuffCheck] = "showBuffCheck" end
-    if KART.RC and KART.RC.CouncilMembersEditBox then settingsMap[KART.RC.CouncilMembersEditBox] = "rcCouncilMembers" end
-    if KART.RC and KART.RC.CbShowNickNames then settingsMap[KART.RC.CbShowNickNames] = "rcShowNickNames" end
-    if KART.RC and KART.RC.CbShowOwedReminder then settingsMap[KART.RC.CbShowOwedReminder] = "rcShowOwedReminder" end
-    if KART.WU and KART.WU.ImportEditBox then settingsMap[KART.WU.ImportEditBox] = "wuImportText" end
-    if KART.SldBuffCheckAlpha then settingsMap[KART.SldBuffCheckAlpha] = "buffCheckAlpha" end
-    if KART.SldCombatDelay then settingsMap[KART.SldCombatDelay] = "bcCombatDelay" end
-    if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
-    if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
-    if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
-    -- Invite chips paint from AccentColor; that is still the library default until
-    -- UpdateStyles below, so Refresh runs after ApplyStyle, not here.
-    if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
-    if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
-    if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
-    if KART.CbAlRaidHeroic then settingsMap[KART.CbAlRaidHeroic] = "autoLogRaidHeroic" end
-    if KART.CbAlRaidMythic then settingsMap[KART.CbAlRaidMythic] = "autoLogRaidMythic" end
-    if KART.CbAlMythicPlus then settingsMap[KART.CbAlMythicPlus] = "autoLogMythicPlus" end
-    if KART.SldAlMinKey then settingsMap[KART.SldAlMinKey] = "autoLogMinKey" end
-    if KART.CbAlDungeons then settingsMap[KART.CbAlDungeons] = "autoLogDungeons" end
-    if KART.CbAlDelves then settingsMap[KART.CbAlDelves] = "autoLogDelves" end
-    if KART.SldUiScale then settingsMap[KART.SldUiScale] = "uiScale" end
-    if KART.SldMenuSize then settingsMap[KART.SldMenuSize] = "menuFontSize" end
-    if KART.SldContentSize then settingsMap[KART.SldContentSize] = "contentFontSize" end
-    if KART.SldBgAlpha then settingsMap[KART.SldBgAlpha] = "bgAlpha" end
-    if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
-    if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
-    if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
-    if KART.CbHideBlizzardRaidManager then settingsMap[KART.CbHideBlizzardRaidManager] = "hideBlizzardRaidManager" end
-    if KART.SldRlBarScale then settingsMap[KART.SldRlBarScale] = "rlBarScale" end
-    if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
-    if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
-
-    for widget, key in pairs(settingsMap) do
-        -- Every entry above was inserted behind its own existence guard, so widget is always set.
-        if widget.SetChecked then widget:SetChecked(KART_Settings[key])
-        elseif widget.SetValue then widget:SetValue(KART_Settings[key])
-        elseif widget.SetText then widget:SetText(KART_Settings[key]) end
-    end
+    -- Each file that builds a settings widget paints it. Invite chips wait until UpdateStyles
+    -- below: they read AccentColor, which is still the library default until then.
+    if KART.SyncMainFrameWidgets then KART.SyncMainFrameWidgets() end
+    if KART.RC and KART.RC.SyncWidgets then KART.RC.SyncWidgets() end
+    if KART.WU and KART.WU.SyncWidgets then KART.WU.SyncWidgets() end
     if KART.CT and KART.CT.SyncWidgets then KART.CT.SyncWidgets() end
     -- Refresh styles AFTER the widgets have their values, so toggle-switch visuals (which only
     -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
@@ -120,22 +72,6 @@ function KART.SyncSettingsToUI()
     -- SyncSettingsToUI also runs on every profile switch, so this has to REPLACE the list rather
     -- than add to it — see WU.SyncBossesToSavedText.
     if KART.WU and KART.WU.SyncBossesToSavedText then KART.WU.SyncBossesToSavedText() end
-
-    if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
-
-    if KART.BtnLang then
-        local langText = KART.L.LANG_AUTO
-        if KART_Settings.language == "enUS" then langText = KART.L.LANG_EN
-        elseif KART_Settings.language == "deDE" then langText = KART.L.LANG_DE end
-        KART.BtnLang.text:SetText(KART.L.BTN_LANGUAGE_PREFIX .. langText)
-    end
-
-    if KART.KeybindButtons then
-        for key, btn in pairs(KART.KeybindButtons) do
-            local bound = KART_Settings.keybinds and KART_Settings.keybinds[key]
-            btn.text:SetText(bound and bound ~= "" and bound or KART.L.KB_NOT_BOUND)
-        end
-    end
 
     if KART.RefreshProfileButton then KART.RefreshProfileButton() end
     if KART.RefreshModuleChips then KART.RefreshModuleChips() end
