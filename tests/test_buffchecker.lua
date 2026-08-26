@@ -224,9 +224,9 @@ local function HasName(list, name)
 end
 
 do
-    -- A flask is matched by NAME, not by spell id -- there is one per stat every tier and the list
-    -- would go stale every patch. The three spellings the addon accepts are the two locales plus the
-    -- older "Flask".
+    -- A flask is matched by this season's spell ids, with a name fallback — there is one
+    -- buff per stat, and a new flask whose id is not in the list yet still has to count.
+    -- The three spellings the fallback accepts are the two locales plus the older "Flask".
     local sim, lm = F.NewRaid()
     local alric, sinja = sim.byName.Alric, sim.byName.Sinja
     KARTTEST.auras = {
@@ -238,6 +238,20 @@ do
     T.truthy(not HasName(missing.flask, "Alric"), "a raider carrying a Fläschchen is not reported")
     T.truthy(not HasName(missing.flask, "Sinja"), "nor one carrying a Phial")
     T.truthy(HasName(missing.flask, "Bramor"), "and one carrying neither is")
+end
+
+do
+    -- Season spell ids (same source as the Healthstone item list: Northern Sky's ready-check
+    -- consumables on this client). The name fallback above still covers a flask whose id is
+    -- not in the list yet; a known id must match even when the aura name is secret or renamed.
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    KARTTEST.auras = {
+        [alric.unit] = { { name = "Private", spellId = 1235111 } },
+    }
+    local missing = Scan(lm)
+    T.truthy(not HasName(missing.flask, "Alric"),
+        "a flask matched by this season's spell id is not reported missing")
 end
 
 do

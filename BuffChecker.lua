@@ -8,10 +8,10 @@ local L = KART.L
 KART.DurabilityCache = {} -- Cache für Reparaturstatus (Haltbarkeit in %)
 
 -- Zentrale Buff-Konfiguration für einfachere Wartung.
--- Reviewed 2026-07 (see docs/REVIEW-DECISIONS.md): the name-only detections kept on purpose —
--- flask (no Phiole branch, past Dragonflight) and the bronze fallback ("Bronze"). Do not re-flag
--- these. Two are no longer among them: vantus matches on spellID now (name kept as a fallback for
--- future rune versions), and the oil is matched by enchantID only — it has no name detection at all
+-- Reviewed 2026-07 (see docs/REVIEW-DECISIONS.md): name fallbacks kept on purpose —
+-- flask (no Phiole branch, past Dragonflight; season spell ids are primary) and the bronze
+-- fallback ("Bronze"). Do not re-flag these. Vantus matches on spellID with a name fallback
+-- for future rune versions. Oil is matched by enchantID only — it has no name detection at all
 -- any more, deliberately (see FillPlayerBuffStates in KART.ScanBuffRoster).
 KART.BuffData = {
     { id = "int",    labelKey = "BC_LABEL_INT",    col = 2, icon = 135932,  class = "MAGE",    spells = {1459, 264760}, report = "buff", reportLabelKey = "BC_REPORT_INT" },
@@ -21,7 +21,12 @@ KART.BuffData = {
     { id = "bronze", labelKey = "BC_LABEL_BRONZE", col = 6, icon = 4622448, class = "EVOKER",  spells = {364343, 381732}, nameMatch = "Bronze", report = "buff", reportLabelKey = "BC_REPORT_BRONZE" },
     { id = "sky",    labelKey = "BC_LABEL_SKY",    col = 7, icon = 4630367, class = "SHAMAN",  spells = {462854}, nameMatch = {"Skyfury", "Himmelszorn"}, report = "buff", reportLabelKey = "BC_REPORT_SKY" },
     { id = "food",   labelKey = "BC_LABEL_FOOD",   col = 8, icon = 134062,  spells = {1232585, 1233713}, isFood = true, report = "item", reportLabelKey = "BC_REPORT_FOOD", whisper = true },
-    { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true, report = "item", reportLabelKey = "BC_REPORT_FLASK", whisper = true },
+    { id = "flask",  labelKey = "BC_LABEL_FLASK",  col = 9, icon = 7548903, isFlask = true,
+      -- Midnight flask buffs. Same four types Northern Sky's ready-check box uses on this
+      -- client (crit/mastery/haste/vers); fleeting and personal share the buff. Name
+      -- fallback (Fläschchen/Phial/Flask) stays for an id that is not in the list yet.
+      spells = {1235111, 1235108, 1235110, 1235057},
+      report = "item", reportLabelKey = "BC_REPORT_FLASK", whisper = true },
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
     -- whisper without report: Shift-click Report pokes the player; raid chat stays flask/food only.
     { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true, whisper = true },

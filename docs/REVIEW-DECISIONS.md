@@ -9,7 +9,8 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
 
 - **Flask detection has no German "Phiole" term** (BuffChecker.lua, `flask` entry).
   Phiole is a Dragonflight-era name; we are past Dragonflight, so the missing term is moot.
-  Flask detection stays name-based ("Fläschchen"/"Flask") without a Phiole branch.
+  Flask detection is this season's spell ids first, with a name fallback
+  ("Fläschchen"/"Phial"/"Flask") and still no Phiole branch.
 
 - **Oil name fallback marks any oil as "best"** (BuffChecker.lua `isOil` handling).
   Resolved 2026-07-25: only the current rank's enchantIDs count as "best" — the three Midnight oils

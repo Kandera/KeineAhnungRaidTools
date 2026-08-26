@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 
 ### Changed
+- **Flasks are found by this season's spell ids.**
 - **Empty WoWUtils and RC cards say what to do.**
 - **RC on the tonight strip reads ON and OFF.**
 - **Slider thumbs glow as a circle**, not a square.
