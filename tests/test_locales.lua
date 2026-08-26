@@ -49,6 +49,17 @@ do
     table.sort(mismatched)
     T.eq(table.concat(mismatched, ", "), "",
         "both languages use the same format placeholders in the same order")
+
+    -- 4.1 empty cards: an action, not a dead status. The WoWUtils paste area and the RC
+    -- companion both used to say "nothing here"; they now tell you the next click.
+    T.eq(en.WU_STATUS_EMPTY, "Paste a roster.",
+        "empty WoWUtils tells you to paste a roster")
+    T.eq(de.WU_STATUS_EMPTY, "Roster einfügen.",
+        "German empty WoWUtils tells you to paste a roster")
+    T.eq(en.RC_STATUS_MISSING, "Install RCLootCouncil.",
+        "missing RC tells you to install it")
+    T.eq(de.RC_STATUS_MISSING, "RCLootCouncil installieren.",
+        "German missing RC tells you to install it")
 end
 
 -- ===================================================================================

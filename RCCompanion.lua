@@ -290,7 +290,7 @@ function RC.UpdateStatusLabel()
         lbl:SetText(L.RC_STATUS_DETECTED or "RCLootCouncil detected")
         lbl:SetTextColor(0.2, 0.8, 0.2)
     else
-        lbl:SetText(L.RC_STATUS_MISSING or "RCLootCouncil not loaded")
+        lbl:SetText(L.RC_STATUS_MISSING or "Install RCLootCouncil.")
         lbl:SetTextColor(0.8, 0.5, 0.2)
     end
 end

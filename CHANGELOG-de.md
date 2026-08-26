@@ -24,6 +24,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 
 ### Geändert
+- **Leere WoWUtils- und RC-Karten sagen, was zu tun ist.**
 - **RC auf der Heute-Leiste steht AN und AUS.**
 - **Regler-Knöpfe leuchten rund**, nicht eckig.
 - **Settings-Regler lassen sich leichter mit der Maus greifen.**
