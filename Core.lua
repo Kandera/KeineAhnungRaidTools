@@ -401,10 +401,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         KART.bcHideGen = (KART.bcHideGen or 0) + 1 -- cancel any pending combat-hide from above
-        -- Aktualisiert ausstehende UI- und Makro-Änderungen (z.B. Pull-Timer),
-        -- die während des Kampfes sicherheitshalber blockiert wurden.
-        -- Also re-applies keybinds via its tail call, which covers the case where a login/reload
-        -- during combat had to defer them (KART.keybindsPending, see KART.ApplyKeybinds).
+        -- Restore edit-mode strata skipped during combat (PaintEditOutline), then the bar
+        -- reapplies yield-to-map. Also re-applies keybinds via its tail call, which covers
+        -- the case where a login/reload during combat had to defer them (KART.keybindsPending,
+        -- see KART.ApplyKeybinds).
+        if KART.RefreshEditModeChrome then KART.RefreshEditModeChrome() end
         KART.UpdateRaidleadBarVisibility()
         if KART.RC and KART.RC.OnOwedOutOfCombat then KART.RC.OnOwedOutOfCombat() end
         if KART.CT then KART.CT.OnRegenEnabled() end

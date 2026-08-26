@@ -34,6 +34,30 @@ do
 end
 
 do
+    local f = CreateFrame("Frame")
+    f:Show()
+    local strataCalls = 0
+    local origSet = f.SetFrameStrata
+    function f:SetFrameStrata(value)
+        strataCalls = strataCalls + 1
+        return origSet(self, value)
+    end
+    KART.RegisterEditModeFrame(f, "TEST")
+    KART.SetEditModeActive(true)
+    T.eq(f:GetFrameStrata(), "FULLSCREEN", "edit mode raises registered frames")
+    local nAtRaise = strataCalls
+    KARTTEST.inCombat = true
+    KART.SetEditModeActive(false)
+    T.eq(strataCalls, nAtRaise, "leaving in combat does not SetFrameStrata")
+    T.eq(f:GetFrameStrata(), "FULLSCREEN", "raised strata stays until regen")
+    T.truthy(f.kartEditStrata, "saved strata is kept for regen")
+    KARTTEST.inCombat = false
+    KART.RefreshEditModeChrome()
+    T.eq(f:GetFrameStrata(), "MEDIUM", "regen restores the saved strata")
+    T.eq(f.kartEditStrata, nil, "and clears the pending restore")
+end
+
+do
     KARTTEST.clipboard = nil
     _G.CopyToClipboard = function(text) KARTTEST.clipboard = text end
     KART.L.LINK_COPY_TITLE = "Copy this link (Ctrl+C)"

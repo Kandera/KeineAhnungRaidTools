@@ -124,6 +124,7 @@ Wired("KART.CtFlyout:SetScale", "and to the Co-Tank flyout")
 Wired('elseif event == "PLAYER_REGEN_DISABLED" then', "PLAYER_REGEN_DISABLED is routed")
 
 Wired("KART.SetEditModeActive(false)", "combat leaves edit mode")
+Wired("KART.RefreshEditModeChrome()", "regen restores edit-mode chrome")
 
 
 

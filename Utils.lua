@@ -90,12 +90,17 @@ local function EnsureEditModeOverlay()
     end)
 end
 
+-- SetFrameStrata / SetFrameLevel on the raidlead bar (SecureActionButtonTemplate children)
+-- and Co-Tank row (SecureUnitButtonTemplate) is protected. Combat skip; keep kartEditStrata
+-- so PLAYER_REGEN_ENABLED can restore via RefreshEditModeChrome.
 local function PaintEditOutline(frame, labelKey, shown)
     if not frame then return end
+    local locked = InCombatLockdown()
     local outline = frame.kartEditOutline
     if not shown then
         if outline then outline:Hide() end
         if frame.kartEditStrata then
+            if locked then return end
             frame:SetFrameStrata(frame.kartEditStrata)
             if frame.kartEditLevel then frame:SetFrameLevel(frame.kartEditLevel) end
             frame.kartEditStrata, frame.kartEditLevel = nil, nil
@@ -128,8 +133,10 @@ local function PaintEditOutline(frame, labelKey, shown)
         frame.kartEditStrata = frame.GetFrameStrata and frame:GetFrameStrata() or "MEDIUM"
         frame.kartEditLevel = frame.GetFrameLevel and frame:GetFrameLevel() or 1
     end
-    frame:SetFrameStrata("FULLSCREEN")
-    if frame.SetFrameLevel then frame:SetFrameLevel(40) end
+    if not locked then
+        frame:SetFrameStrata("FULLSCREEN")
+        if frame.SetFrameLevel then frame:SetFrameLevel(40) end
+    end
     outline:Show()
 end
 
@@ -167,10 +174,11 @@ function KART.SetEditModeActive(active)
         KART.EditModeDim:Hide()
     end
     if KART.RefreshEditModeToggle then KART.RefreshEditModeToggle() end
+    -- Chrome first so a leave restores saved strata, then the bar reapplies yield-to-map.
+    KART.RefreshEditModeChrome()
     if KART.UpdateRaidleadBarVisibility then KART.UpdateRaidleadBarVisibility() end
     if KART.CT and KART.CT.Refresh then KART.CT.Refresh() end
     if KART.SyncBuffCheckForEditMode then KART.SyncBuffCheckForEditMode() end
-    KART.RefreshEditModeChrome()
 end
 
 function KART.CopyLink(url)
@@ -201,6 +209,7 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
+            "**Leaving Edit Mode in combat no longer errors** on the raidlead bar or Co-Tank row.",
             "**Opening the world map no longer errors** on the raidlead bar.",
             "**Shift-click Report whispers** flask, food and rune to whoever is missing them.",
             "**Sidebar tabs have icons**, and the store links use their real marks.",
