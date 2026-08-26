@@ -17,6 +17,7 @@ do
         "OnRoster", "OnInstance", "AuraEngineAvailable", "BuildStrips",
         "OnUnitEvent", "SyncRowUnitEvents", "ReadInRange",
         "HostPreview", "ReleasePreview", "EnsurePreviewRow", "RefreshPreview",
+        "SetPreviewState",
         "IsTaunt", "PlayerSpecId", "FormatTauntMessage", "ShouldAnnounce",
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
@@ -36,7 +37,7 @@ local function RaidTwoTanks()
         ctModuleEnabled = true,
         ct = { testMode = false },
     }
-    KARTTEST.instance = { name = "Somewhere", instanceType = "party", difficultyID = 1, difficultyName = "Normal" }
+    KARTTEST.instance = { name = "Somewhere", instanceType = "raid", difficultyID = 14, difficultyName = "Normal" }
 end
 
 do
@@ -46,13 +47,19 @@ end
 
 do
     RaidTwoTanks()
-    T.eq(KART.CT.ShouldShow(), true, "tank in a dungeon with a co-tank shows")
+    T.eq(KART.CT.ShouldShow(), true, "tank in a raid with a co-tank shows")
 end
 
 do
     RaidTwoTanks()
     env.KART_Settings.ctModuleEnabled = false
-    T.eq(KART.CT.ShouldShow(), false, "module off hides even in a dungeon")
+    T.eq(KART.CT.ShouldShow(), false, "module off hides even in a raid")
+end
+
+do
+    RaidTwoTanks()
+    KARTTEST.instance.instanceType = "party"
+    T.eq(KART.CT.ShouldShow(), false, "a dungeon hides the co-tank row")
 end
 
 do
@@ -167,7 +174,7 @@ end
 do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("ctModuleEnabled = false", 1, true), "default module off")
-    T.truthy(utils:find("schemaVersion = 3", 1, true), "ct blob has schemaVersion")
+    T.truthy(utils:find("schemaVersion = 4", 1, true), "ct blob has schemaVersion")
 end
 
 do
@@ -448,7 +455,7 @@ do
         other,
     })
     KARTTEST.activeUnit = "raid1"
-    KARTTEST.instance = { name = "Somewhere", instanceType = "party", difficultyID = 1, difficultyName = "Normal" }
+    KARTTEST.instance = { name = "Somewhere", instanceType = "raid", difficultyID = 14, difficultyName = "Normal" }
     env.KART_Settings = { ctModuleEnabled = true, ct = { testMode = false } }
     KART.CT.Enable()
     T.eq(KART.CT.snap.health, 40000, "refresh seeds live health")
@@ -607,6 +614,43 @@ do
     KARTTEST.instance.instanceType = "none"
     KART.CT.OnTauntCast(355)
     T.eq(#KARTTEST.chat, 0, "open world does not announce when instance filter is on")
+end
+
+do
+    TauntReady({ announce = true, channels = { WHISPER = true },
+        message = "Taunt: %t", onlyInGroup = true,
+        onlyInDungeon = true, onlyInRaid = false })
+    KARTTEST.instance.instanceType = "party"
+    KART.CT.OnTauntCast(355)
+    T.eq(#KARTTEST.chat, 1, "dungeon-only announces in a 5-man")
+    KARTTEST.ClearChat()
+    KART.CT.lastTauntAt = nil
+    KARTTEST.instance.instanceType = "raid"
+    KART.CT.OnTauntCast(355)
+    T.eq(#KARTTEST.chat, 0, "and stays quiet in a raid")
+end
+
+do
+    TauntReady({ announce = true, channels = { WHISPER = true },
+        message = "Taunt: %t", onlyInGroup = true,
+        onlyInDungeon = false, onlyInRaid = true })
+    KARTTEST.instance.instanceType = "raid"
+    KART.CT.OnTauntCast(355)
+    T.eq(#KARTTEST.chat, 1, "raid-only announces in a raid")
+    KARTTEST.ClearChat()
+    KART.CT.lastTauntAt = nil
+    KARTTEST.instance.instanceType = "party"
+    KART.CT.OnTauntCast(355)
+    T.eq(#KARTTEST.chat, 0, "and stays quiet in a 5-man")
+end
+
+do
+    TauntReady({ announce = true, channels = { WHISPER = true },
+        message = "Taunt: %t", onlyInGroup = true,
+        onlyInDungeon = false, onlyInRaid = false })
+    KARTTEST.instance.instanceType = "none"
+    KART.CT.OnTauntCast(355)
+    T.eq(#KARTTEST.chat, 1, "both instance filters off announce in the open world")
 end
 
 do
@@ -828,7 +872,7 @@ end
 do
     local utils = assert(io.open("Utils.lua", "r")):read("*a")
     T.truthy(utils:find("taunt = {", 1, true), "ct defaults include a taunt blob")
-    T.truthy(utils:find("schemaVersion = 3", 1, true), "schemaVersion is 3")
+    T.truthy(utils:find("schemaVersion = 4", 1, true), "schemaVersion is 4")
     T.truthy(utils:find("healthTexture = ", 1, true), "ct defaults include healthTexture")
     T.truthy(utils:find("gradient = false", 1, true), "ct defaults include gradient off")
 end
@@ -943,7 +987,7 @@ do
     chunk("KeineAhnungRaidTools", env.KART)
     local old = { ct = { width = 200, locked = true } }
     KAUtil.MergeDefaults(old, env.KART.Defaults)
-    T.eq(old.ct.schemaVersion, 3, "MergeDefaults fills ct.schemaVersion from defaults")
+    T.eq(old.ct.schemaVersion, 4, "MergeDefaults fills ct.schemaVersion from defaults")
     T.eq(old.ct.width, 200, "MergeDefaults preserves existing ct.width")
     T.truthy(old.ct.healthTexture, "MergeDefaults fills healthTexture on old profiles")
     T.eq(old.ct.gradient, false, "MergeDefaults fills gradient default")
@@ -951,6 +995,12 @@ do
     T.truthy(old.ct.gradientTo and old.ct.gradientTo.r, "MergeDefaults fills gradientTo")
     T.eq(old.ct.buffs.hideLongDuration, true, "MergeDefaults fills buff long-duration hide on old profiles")
     T.eq(old.ct.debuffs.size, 28, "MergeDefaults fills the larger debuff size on old profiles without a strip blob")
+    local world = { ct = { schemaVersion = 3, taunt = { onlyInInstance = false } } }
+    KAUtil.MergeDefaults(world, env.KART.Defaults)
+    T.eq(world.ct.taunt.onlyInDungeon, true, "MergeDefaults fills dungeon on before migrate")
+    KART.CT.MigrateProfile(world.ct)
+    T.eq(world.ct.taunt.onlyInDungeon, false, "v3 world-announce still wins after MergeDefaults")
+    T.eq(world.ct.taunt.onlyInRaid, false, "and raid stays off")
 end
 
 do
@@ -961,23 +1011,129 @@ end
 do
     local factory = { schemaVersion = 1, debuffs = { size = 22, spacing = 1 } }
     KART.CT.MigrateProfile(factory)
-    T.eq(factory.schemaVersion, 3, "v1 profile schema moves to 3")
+    T.eq(factory.schemaVersion, 4, "v1 profile schema moves to 4")
     T.eq(factory.debuffs.size, 28, "factory 22px debuffs become 28px")
     T.eq(factory.debuffs.spacing, 6, "factory 1px gap becomes 6px")
     local custom = { schemaVersion = 1, debuffs = { size = 30, spacing = 2 } }
     KART.CT.MigrateProfile(custom)
     T.eq(custom.debuffs.size, 30, "a custom debuff size is left alone")
     T.eq(custom.debuffs.spacing, 2, "a custom gap is left alone")
-    T.eq(custom.schemaVersion, 3, "custom v1 still marks schema 3")
+    T.eq(custom.schemaVersion, 4, "custom v1 still marks schema 4")
     KART.CT.MigrateProfile(custom)
-    T.eq(custom.debuffs.size, 30, "a second migrate does not touch v3")
+    T.eq(custom.debuffs.size, 30, "a second migrate does not touch v4")
     T.eq(custom.debuffs.spacing, 2, "and does not rewrite a custom gap")
     local v2 = { schemaVersion = 2, debuffs = { size = 28, spacing = 4 } }
     KART.CT.MigrateProfile(v2)
-    T.eq(v2.schemaVersion, 3, "v2 factory schema moves to 3")
+    T.eq(v2.schemaVersion, 4, "v2 factory schema moves to 4")
     T.eq(v2.debuffs.spacing, 6, "factory 4px gap becomes 6px")
     local keep = { schemaVersion = 2, debuffs = { size = 28, spacing = 5 } }
     KART.CT.MigrateProfile(keep)
     T.eq(keep.debuffs.spacing, 5, "a custom v2 gap is left alone")
-    T.eq(keep.schemaVersion, 3, "custom v2 still marks schema 3")
+    T.eq(keep.schemaVersion, 4, "custom v2 still marks schema 4")
+    local world = { schemaVersion = 3, taunt = { onlyInInstance = false } }
+    KART.CT.MigrateProfile(world)
+    T.eq(world.schemaVersion, 4, "v3 taunt schema moves to 4")
+    T.eq(world.taunt.onlyInDungeon, false, "world-announce splits to dungeon off")
+    T.eq(world.taunt.onlyInRaid, false, "and raid off")
+    local inst = { schemaVersion = 3, taunt = { onlyInInstance = true } }
+    KART.CT.MigrateProfile(inst)
+    T.eq(inst.taunt.onlyInDungeon, true, "instance-announce splits to dungeon on")
+    T.eq(inst.taunt.onlyInRaid, true, "and raid on")
+    local split = { schemaVersion = 4, taunt = { onlyInDungeon = true, onlyInRaid = false } }
+    KART.CT.MigrateProfile(split)
+    T.eq(split.taunt.onlyInRaid, false, "a v4 dungeon/raid split is left alone")
+end
+
+local function TargetEdgeShown(row)
+    local e = row and row.targetEdges and row.targetEdges[1]
+    return e and e.tex and e.tex:IsShown() and true or false
+end
+
+do
+    KART.CT.previewState = nil
+    local snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    T.eq(snap.inRange, true, "test snapshot starts in range")
+    T.eq(snap.dead, false, "and alive")
+    T.eq(snap.offline, false, "and online")
+    KART.CT.previewState = "oor"
+    snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    T.eq(snap.inRange, false, "oor preview leaves range")
+    T.eq(snap.dead, false, "without killing the tank")
+    KART.CT.previewState = "dead"
+    snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    T.eq(snap.dead, true, "dead preview kills the tank")
+    T.eq(snap.health, 0, "and zeros health")
+    KART.CT.previewState = "offline"
+    snap = KART.CT.FillTestSnapshot(KART.CT.BlankSnapshot({}))
+    T.eq(snap.offline, true, "offline preview marks them offline")
+    KART.CT.previewState = nil
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    KART.CT.previewRow = nil
+    KART.CT.hosted = nil
+    KART.CT.previewState = nil
+    local other = { name = "Other", realm = KARTTEST.realm, guid = "Player-1-BBBB",
+                    role = "TANK", class = "PALADIN", classFile = "PALADIN",
+                    health = 40000, healthMax = 50000 }
+    KARTTEST.SetRaid({
+        { name = "Me", realm = KARTTEST.realm, guid = "Player-1-AAAA", role = "TANK",
+          class = "WARRIOR", classFile = "WARRIOR" },
+        other,
+    })
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.instance = { name = "Somewhere", instanceType = "raid", difficultyID = 14, difficultyName = "Normal" }
+    KARTTEST.target = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            testMode = false,
+            targetBorder = { show = true, size = 2, color = { r = 1, g = 0.85, b = 0.2 } },
+        },
+    }
+    KART.CT.Enable()
+    T.eq(TargetEdgeShown(KART.CT.row), false, "live row hides the target border off-target")
+    KARTTEST.target = other
+    KART.CT.Refresh()
+    T.eq(TargetEdgeShown(KART.CT.row), true, "and shows it when the co-tank is targeted")
+    KARTTEST.target = nil
+    KART.CT.Refresh()
+    T.eq(TargetEdgeShown(KART.CT.row), false, "and hides it again when the target drops")
+end
+
+do
+    KART.CT.row = nil
+    KART.CT.previewRow = nil
+    KART.CT.hosted = true
+    KART.CT.previewState = nil
+    env.KART_Settings = {
+        ctModuleEnabled = true,
+        ct = {
+            testMode = false,
+            rangeFade = true, rangeAlpha = 0.4, deadFade = 0.35, offlineFade = 0.35,
+            targetBorder = { show = true, size = 2, color = { r = 1, g = 0.85, b = 0.2 } },
+        },
+    }
+    local slot = CreateFrame("Frame", "KARTTEST_CtPreviewBorder", UIParent)
+    KART.CtPreviewSlot = slot
+    local row = KART.CT.EnsurePreviewRow()
+    KART.CT.RefreshPreview()
+    T.eq(TargetEdgeShown(row), true, "settings preview shows the target border without test mode")
+    T.eq(row:GetAlpha(), 1, "and stays full alpha while healthy")
+    env.KART_Settings.ct.targetBorder.show = false
+    KART.CT.RefreshPreview()
+    T.eq(TargetEdgeShown(row), false, "turning the setting off hides it on the preview")
+    env.KART_Settings.ct.targetBorder.show = true
+    KART.CT.SetPreviewState("oor")
+    T.eq(row:GetAlpha(), 0.4, "oor preview uses range fade")
+    T.eq(TargetEdgeShown(row), true, "and still shows the target border")
+    KART.CT.SetPreviewState("dead")
+    T.eq(row:GetAlpha(), 0.35, "dead preview uses dead fade")
+    KART.CT.SetPreviewState("ok")
+    T.eq(row:GetAlpha(), 1, "healthy preview restores full alpha")
+    KART.CT.hosted = nil
+    KART.CtPreviewSlot = nil
+    KART.CT.previewState = nil
 end

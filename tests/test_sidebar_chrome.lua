@@ -51,4 +51,16 @@ do
     T.truthy(type(KART.InGameChangelog) == "table", "in-game changelog table exists")
     T.truthy(#KART.InGameChangelog >= 2, "changelog covers unreleased and a shipped version")
     T.eq(KART.InGameChangelog[1].version, "Unreleased", "first block is unreleased")
+    T.truthy(KART.InGameChangelog[1].entries[1]:find("Tonight strip", 1, true),
+        "in-game unreleased list starts with the current polish")
+    local lead, rest = KART.ParseChangelogLine("**Lead** rest of the line")
+    T.eq(lead, "Lead", "changelog lead is the starred span")
+    T.eq(rest, "rest of the line", "and the note is everything after it")
+    local plain, empty = KART.ParseChangelogLine("plain")
+    T.eq(plain, "plain", "a line without stars is all lead")
+    T.eq(empty, "", "with no note")
+    local _, punct = KART.ParseChangelogLine("**Lead**, and more")
+    T.eq(punct, ", and more", "a comma after the stars stays on the note")
+    T.eq(KART.StrataSliderLabel(4), "HIGH", "strata slider shows HIGH for index 4")
+    T.eq(KART.StrataSliderLabel(7), "FS+D", "and a short label for FULLSCREEN_DIALOG")
 end

@@ -91,8 +91,12 @@ do
     T.eq(rel, s, "to the slider track")
     T.eq(relPoint, "RIGHT", "on the track's right edge")
     T.eq(s:GetWidth(), 140, "the track is the slider width, not the box")
+    T.eq(s:GetHeight(), 4, "the track stays a thin line")
     T.eq(s.valueText:GetWidth(), 44, "the number box is a compact field")
     T.eq(s.valueText:GetHeight(), 20, "and tall enough to type into")
+    local _, _, hitTop, hitBottom = s:GetHitRectInsets()
+    T.eq(hitTop, -10, "hit area extends above the 4px track")
+    T.eq(hitBottom, -10, "and below it, matching the glow")
 end
 
 do
@@ -102,8 +106,8 @@ do
         min = 0, max = 100, y = 0,
         valueIsText = true,
     })
-    T.eq(s:GetWidth(), 110, "named-value track shrinks so the name box fits a half card")
-    T.eq(s.valueText:GetWidth(), 88, "named-value sliders get a wider box")
+    T.eq(s:GetWidth(), 140, "named-value track matches the numeric sliders")
+    T.eq(s.valueText:GetWidth(), 72, "named-value box is wide enough for MEDIUM/DIALOG")
     T.eq(s.valueText:IsMouseEnabled(), false, "and stay read-only")
 end
 
@@ -326,6 +330,11 @@ do
     T.eq(b.chip:GetText(), "OFF", "chip starts off")
     b:SetModuleChipOn(true)
     T.eq(b.chip:GetText(), "ON", "chip shows on")
+    ns:ApplyStyle({ font = "Fonts\\FRIZQT__.TTF", accent = { 1, 0.2, 0.2 } })
+    local cr, cg, cb = b.chip:GetTextColor()
+    T.eq(cr, 1, "an ON chip follows a new accent red")
+    T.eq(cg, 0.2, "green channel matches the accent")
+    T.eq(cb, 0.2, "blue channel matches the accent")
     b:SetModuleChipOn(false)
     T.eq(b.chip:GetText(), "OFF", "chip shows off again")
 end
@@ -333,6 +342,11 @@ end
 do
     local plain = ns:CreateTabButton(UIParent, "Settings")
     T.is_nil(plain.chip, "non-module tabs have no chip")
+end
+
+do
+    local b = ns:CreateTabButton(UIParent, "Automation", { icon = "Interface\\Buttons\\WHITE8X8" })
+    T.truthy(b.icon, "a tab can carry a glyph")
 end
 
 -- Unnamed ScrollFrame: GetName() is nil. The helper must not concatenate that (changelog popup).

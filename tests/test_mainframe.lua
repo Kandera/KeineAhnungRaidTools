@@ -24,6 +24,7 @@ RaidSim.As(me, function()
     end
 end)
 T.truthy(KART.MainFrame and KART.ShowTab, "the main window builds")
+T.eq(#KART.FooterLinks, 3, "footer links survive load (SetFont before SetText)")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
 -- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or
@@ -80,10 +81,14 @@ do
         "reset sits on the same card as accent")
     T.eq(KART.SldRlBarScale:GetParent(), KART.CbActivate:GetParent(),
         "raidlead look sliders sit beside the toggles, not on a second empty card")
-    local _, _, _, _, yDebuffNudge = KART.CtDebuffExtra.nudgeX:GetPoint()
-    local _, _, _, _, yBuffShow = KART.CbCtBuffShow:GetPoint()
-    T.truthy(yDebuffNudge > yBuffShow,
-        "debuff extras sit above the buff strip, not under its heading")
+    local _, _, _, xStrip = KART.StatusStrip:GetPoint(1)
+    T.eq(xStrip, 228, "tonight strip lines up with the settings cards")
+    T.eq(KART.CbCtDebuffShow:GetParent(), KART.CtDebuffCard,
+        "debuff strip settings sit on their own card")
+    T.eq(KART.CbCtBuffShow:GetParent(), KART.CtBuffCard,
+        "buff strip settings sit on a second card")
+    T.truthy(KART.CbCtDebuffShow:GetParent() ~= KART.CbCtBuffShow:GetParent(),
+        "and those cards are not the same frame")
 end
 
 -- Co-Tank settings flyout --------------------------------------------------------------------------
@@ -342,6 +347,28 @@ do
         KART.RefreshStatusStrip()
         T.eq(KART.StatusStrip.raidValue:GetText(), "2/3", "the strip shows present/total")
         KART.WU.ResetBosses()
+    end)
+end
+
+-- Changelog popup: WoW frames cannot be destroyed. Rebuilding the scroll child (and every
+-- FontString/Texture on it) each open leaks for the rest of the session.
+do
+    As(function()
+        local orig = _G.CreateFrame
+        local n = 0
+        _G.CreateFrame = function(...)
+            n = n + 1
+            return orig(...)
+        end
+        KART.ShowChangelogPopup()
+        local afterFirst = n
+        local child = KART.changelogPopup.scrollChild
+        KART.changelogPopup:Hide()
+        KART.ShowChangelogPopup()
+        _G.CreateFrame = orig
+        T.eq(KART.changelogPopup.scrollChild, child,
+            "reopening changelog keeps the same scroll child")
+        T.eq(n, afterFirst, "and creates no further frames, fontstrings or textures")
     end)
 end
 

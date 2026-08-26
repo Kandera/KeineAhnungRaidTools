@@ -2,11 +2,13 @@ local addonName, KART = ...
 KART.CT = KART.CT or {}
 local CT = KART.CT
 local LSM = LibStub("LibSharedMedia-3.0", true)
+local KAUI = LibStub("KAUI-1.0")
 
 local DEFAULT_HEALTH_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
 
 -- ===== Instance filter --------------------------------------------------------------------
-local INSTANCE_OK = { party = true, raid = true }
+-- Raid only: a 5-man does not have a second tank. Arenas and BGs stay off separately.
+local INSTANCE_OK = { raid = true }
 
 -- ===== Group iteration --------------------------------------------------------------------
 local function GroupUnits()
@@ -119,7 +121,24 @@ function CT.FillTestSnapshot(snap)
     snap.absorb = 3000
     snap.inRange = true
     snap.dead = false
+    local state = CT.previewState
+    if state == "oor" then
+        snap.inRange = false
+    elseif state == "dead" then
+        snap.dead = true
+        snap.health = 0
+    elseif state == "offline" then
+        snap.offline = true
+    end
     return snap
+end
+
+function CT.SetPreviewState(state)
+    if state ~= "oor" and state ~= "dead" and state ~= "offline" then
+        state = "ok"
+    end
+    CT.previewState = state
+    CT.Refresh()
 end
 
 -- ===== Secure unit attribute -----------------------------------------------------------
@@ -543,7 +562,9 @@ local STRIP_DEFAULTS = {
 
 -- v1 shipped 22px / 1px gap. Factory profiles still on those numbers move to 28 / 4
 -- at schema 2, then the factory 4px gap becomes 6px at schema 3. A custom size or
--- gap is left alone.
+-- gap is left alone. Schema 4 splits taunt.onlyInInstance into dungeon and raid
+-- toggles; MergeDefaults may already have filled both as true, so v<4 always copies
+-- the saved combined flag rather than trusting the new keys.
 function CT.MigrateProfile(ct)
     if type(ct) ~= "table" then return end
     local v = tonumber(ct.schemaVersion) or 1
@@ -560,6 +581,16 @@ function CT.MigrateProfile(ct)
         local d = ct.debuffs
         if type(d) == "table" and d.spacing == 4 then d.spacing = 6 end
         ct.schemaVersion = 3
+        v = 3
+    end
+    if v < 4 then
+        local t = ct.taunt
+        if type(t) == "table" then
+            local instanceOn = t.onlyInInstance ~= false
+            t.onlyInDungeon = instanceOn
+            t.onlyInRaid = instanceOn
+        end
+        ct.schemaVersion = 4
     end
 end
 
@@ -980,7 +1011,7 @@ local function SkinAuraButton(button, cfg)
     else
         icon:SetAllPoints(button)
     end
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    KAUI.CropSpellIcon(icon)
     if button.SetIcon then pcall(button.SetIcon, button, icon) end
 
     if cfg.swipe ~= false and button.SetDurationCooldown then
@@ -1293,7 +1324,9 @@ function CT.Paint(snap, row)
     end
 
     local tb = Nested(ct, "targetBorder", TARGET_BORDER_DEFAULTS)
-    local targeted = tb.show and (CT.Invented() or (CT.watchedUnit and UnitIsUnit("target", CT.watchedUnit)))
+    -- Preview and test mode cannot target Testtank, so they demo the border whenever it is on.
+    local demo = row == CT.previewRow or CT.Invented()
+    local targeted = tb.show and (demo or (CT.watchedUnit and UnitIsUnit("target", CT.watchedUnit)))
     local tr, tg, tbcol = ColorRGB(tb.color, TARGET_BORDER_DEFAULTS.color)
     StyleEdgeSet(row.targetEdges, tb.size or TARGET_BORDER_DEFAULTS.size, tr, tg, tbcol, targeted and true or false)
 
@@ -1602,7 +1635,12 @@ function CT.SyncWidgets()
     if taunt then
         setChecked(KART.CbCtTauntAnnounce, taunt.announce)
         setChecked(KART.CbCtTauntOnlyGroup, taunt.onlyInGroup ~= false)
-        setChecked(KART.CbCtTauntOnlyInstance, taunt.onlyInInstance ~= false)
+        local dungeonOn = taunt.onlyInDungeon
+        if dungeonOn == nil then dungeonOn = taunt.onlyInInstance ~= false end
+        local raidOn = taunt.onlyInRaid
+        if raidOn == nil then raidOn = taunt.onlyInInstance ~= false end
+        setChecked(KART.CbCtTauntOnlyDungeon, dungeonOn ~= false)
+        setChecked(KART.CbCtTauntOnlyRaid, raidOn ~= false)
         setChecked(KART.CbCtTauntButton, taunt.button)
         setChecked(KART.CbCtTauntBtnLock, taunt.locked ~= false)
         setChecked(KART.CbCtTauntBtnGroup, taunt.buttonOnlyInGroup ~= false)
@@ -1734,6 +1772,16 @@ function CT.FormatTauntMessage(template, vars)
     return out
 end
 
+local function TauntWantsDungeon(t)
+    if t.onlyInDungeon ~= nil then return t.onlyInDungeon ~= false end
+    return t.onlyInInstance ~= false
+end
+
+local function TauntWantsRaid(t)
+    if t.onlyInRaid ~= nil then return t.onlyInRaid ~= false end
+    return t.onlyInInstance ~= false
+end
+
 function CT.ShouldAnnounce()
     local s = KART_Settings
     if not s or s.ctModuleEnabled ~= true then return false end
@@ -1742,7 +1790,11 @@ function CT.ShouldAnnounce()
     if t.onlyInGroup ~= false and not IsInGroup() then return false end
     local _, instanceType = IsInInstance()
     if instanceType == "arena" or instanceType == "pvp" then return false end
-    if t.onlyInInstance ~= false and not INSTANCE_OK[instanceType] then
+    local dungeon = TauntWantsDungeon(t)
+    local raid = TauntWantsRaid(t)
+    if dungeon or raid then
+        if instanceType == "party" then return dungeon end
+        if instanceType == "raid" then return raid end
         return false
     end
     return true

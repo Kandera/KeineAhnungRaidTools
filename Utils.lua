@@ -200,6 +200,12 @@ KART.InGameChangelog = {
     {
         version = "Unreleased",
         entries = {
+            "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
+            "**Opening the world map no longer errors** on the raidlead bar.",
+            "**Shift-click Report whispers** flask, food and rune to whoever is missing them.",
+            "**Sidebar tabs have icons**, and the store links use their real marks.",
+            "**Taunt announce can be dungeons or raids**, each on its own switch.",
+            "**The Co-Tank frame stays off in dungeons.**",
             "**Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it.",
             "**Co-Tank Look, Text and Auras** open in a companion panel beside the main window.",
             "**Say when you taunt**, and an on-screen button that asks the other tank to take it.",
@@ -226,6 +232,16 @@ KART.InGameChangelog = {
         },
     },
 }
+
+-- Split a changelog.md-style line into the short lead and the following note.
+-- Lead is the **...** span; a line with no stars is all lead. The popup draws
+-- those as two FontStrings (WoW cannot mix size in one string).
+function KART.ParseChangelogLine(line)
+    line = tostring(line or "")
+    local lead, rest = line:match("^%*%*(.-)%*%*%s*(.*)$")
+    if not lead then return line, "" end
+    return lead, rest or ""
+end
 
 -- =====================================================================
 --  Escape-closable windows, and surviving a stun
@@ -442,6 +458,7 @@ KART.Defaults = {
     lockRaidleadBar = false,
     autoHideRaidleadBar = false,
     autoHideRaidleadBarCombat = false,
+    hideBlizzardRaidManager = false,
     rlBarFrameStrata = 4, -- index into KART.StrataLevels; own slider, not frameStrata
     rlBarYieldToMap = true, -- drop the bar under WorldMapFrame while the map is open
     rlBarScale = 100, -- whole-bar scale in percent
@@ -454,7 +471,7 @@ KART.Defaults = {
     bcModuleEnabled = false,
     ctModuleEnabled = false,
     ct = {
-        schemaVersion = 3,
+        schemaVersion = 4,
         -- position
         point = "CENTER", relativePoint = "CENTER", x = 0, y = 200,
         locked = true,
@@ -525,7 +542,8 @@ KART.Defaults = {
             message = "Taunt: %t",
             ask = "%n, please taunt!",
             onlyInGroup = true,
-            onlyInInstance = true,
+            onlyInDungeon = true,
+            onlyInRaid = true,
             button = false,
             buttonOnlyInGroup = true,
             buttonOnlyInRaid = false,
@@ -646,6 +664,13 @@ end
 -- `rlBarFrameStrata` slider and is not in these registries. The strata registries and the apply/
 -- register logic itself live in KAUI-1.0 now; see KART.UI:RegisterStrataFrame et al.
 KART.StrataLevels = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG" }
+-- What the layer sliders show. The saved value is still an index into StrataLevels;
+-- Blizzard's long names do not fit the box that keeps the track as wide as the numeric sliders.
+KART.StrataLevelShort = { "BG", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULL", "FS+D" }
+function KART.StrataSliderLabel(index)
+    index = math.floor(tonumber(index) or 0)
+    return KART.StrataLevelShort[index] or KART.StrataLevels[index] or ""
+end
 
 -- Fixed status colors used by the addon's own remaining UI code (BuffChecker gear-check
 -- indicators). Kept as plain data (no frame references) so KART.UpdateStyles() and callers can

@@ -462,27 +462,23 @@ function WU.RefreshBossList()
     for i, boss in ipairs(WU.bosses) do
         local row = panel.rows[i]
         if not row then
-            row = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+            row = CreateFrame("Frame", nil, panel)
             row:SetHeight(ROW_H)
-            KART.UI:SetPixelBackdrop(row, {
-                bgFile   = "Interface\\ChatFrame\\ChatFrameBackground",
-                edgeFile = "Interface\\Buttons\\WHITE8X8",
-                edgeSize = 1,
-            })
 
             row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.nameText:SetPoint("LEFT", 6, 0)
-            row.nameText:SetWidth(140)
+            row.nameText:SetPoint("LEFT", 4, 0)
             row.nameText:SetJustifyH("LEFT")
             KART.UI:RegisterLabel(row.nameText)
 
-            row.btnInvite = KART.UI:CreateModernButton(row, KART.L.WU_BTN_INVITE)
-            row.btnInvite:SetSize(70, 22)
-            row.btnInvite:SetPoint("RIGHT", row, "RIGHT", -76, 0)
-
             row.btnRemove = KART.UI:CreateModernButton(row, KART.L.WU_BTN_REMOVE)
-            row.btnRemove:SetSize(70, 22)
-            row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+            row.btnRemove:SetSize(80, 22)
+            row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
+            row.btnInvite = KART.UI:CreateModernButton(row, KART.L.WU_BTN_INVITE)
+            row.btnInvite:SetSize(80, 22)
+            row.btnInvite:SetPoint("RIGHT", row.btnRemove, "LEFT", -8, 0)
+
+            row.nameText:SetPoint("RIGHT", row.btnInvite, "LEFT", -10, 0)
 
             panel.rows[i] = row
         end
@@ -490,9 +486,6 @@ function WU.RefreshBossList()
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i-1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT",   panel, "RIGHT",   0, 0)
-        local lr, lg, lb = KART.UI:GetRowStripeColor()
-        row:SetBackdropColor(lr, lg, lb, i % 2 == 0 and 0.4 or 0.15)
-        row:SetBackdropBorderColor(0.18, 0.18, 0.18, 1)
 
         row.nameText:SetText(boss.name .. " |cff888888(" .. #boss.players .. ")|r")
 
@@ -514,6 +507,9 @@ function WU.RefreshBossList()
     end
 
     panel:SetHeight(math.max(totalH, 24))
+    if WU.bossListCard then
+        WU.bossListCard:SetHeight(math.max(totalH, 24) + 24)
+    end
     -- Boss list height feeds the WoWUtils tab's scroll range.
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
 end
@@ -653,35 +649,23 @@ function WU.BuildPanel(parent)
     WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
     KART.UI:RegisterLabel(WU.statusLabel)
 
-    local sep = parent:CreateTexture(nil, "ARTWORK")
-    sep:SetColorTexture(0.22, 0.22, 0.22, 1)
-    sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT", importCard, "BOTTOMLEFT", -15, -12)
-    sep:SetPoint("TOPRIGHT", importCard, "BOTTOMRIGHT", 15, -12)
+    local wuBossTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    wuBossTitle:SetPoint("TOPLEFT", importCard, "BOTTOMLEFT", 0, -18)
+    wuBossTitle:SetText(L.WU_LABEL_BOSSES)
+    KART.UI:RegisterLabel(wuBossTitle)
 
-    local hBoss = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hBoss:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 3, -8)
-    hBoss:SetText("|cffaaaaaa" .. L.WU_COL_BOSS .. "|r")
-    KART.UI:RegisterLabel(hBoss)
+    local bossCard = KART.UI:CreateCard(parent)
+    bossCard:SetPoint("TOPLEFT", wuBossTitle, "BOTTOMLEFT", 0, -10)
+    bossCard:SetSize(500, 48)
+    WU.bossListCard = bossCard
 
-    local hInvite = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hInvite:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -95, -8)
-    hInvite:SetText("|cffaaaaaa" .. L.WU_BTN_INVITE .. "|r")
-    KART.UI:RegisterLabel(hInvite)
-
-    local hRemove = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hRemove:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -23, -8)
-    hRemove:SetText("|cffaaaaaa" .. L.WU_BTN_REMOVE .. "|r")
-    KART.UI:RegisterLabel(hRemove)
-
-    WU.bossListFrame = CreateFrame("Frame", nil, parent)
-    WU.bossListFrame:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 0, -24)
-    WU.bossListFrame:SetPoint("RIGHT", parent, "RIGHT", -5, 0)
-    WU.bossListFrame:SetHeight(24)
+    WU.bossListFrame = CreateFrame("Frame", nil, bossCard)
+    WU.bossListFrame:SetPoint("TOPLEFT", bossCard, "TOPLEFT", 16, -12)
+    WU.bossListFrame:SetPoint("BOTTOMRIGHT", bossCard, "BOTTOMRIGHT", -16, 12)
     WU.bossListFrame.rows = {}
 
     WU.bossListFrame.emptyLabel = WU.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 6, -6)
+    WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 4, -2)
     WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY)
     WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
     KART.UI:RegisterLabel(WU.bossListFrame.emptyLabel)
@@ -702,9 +686,17 @@ function WU.BuildPanel(parent)
         -- refreshers run when a saved import auto-parses.
         WU.statusLabel:SetText(Lx.WU_STATUS_EMPTY)
         WU.bossListFrame.emptyLabel:SetText(Lx.WU_STATUS_EMPTY)
-        hBoss:SetText("|cffaaaaaa" .. Lx.WU_COL_BOSS .. "|r")
-        hInvite:SetText("|cffaaaaaa" .. Lx.WU_BTN_INVITE .. "|r")
-        hRemove:SetText("|cffaaaaaa" .. Lx.WU_BTN_REMOVE .. "|r")
+        wuBossTitle:SetText(Lx.WU_LABEL_BOSSES)
+        if WU.bossListFrame.rows then
+            for _, row in ipairs(WU.bossListFrame.rows) do
+                if row.btnInvite and row.btnInvite.text then
+                    row.btnInvite.text:SetText(Lx.WU_BTN_INVITE)
+                end
+                if row.btnRemove and row.btnRemove.text then
+                    row.btnRemove.text:SetText(Lx.WU_BTN_REMOVE)
+                end
+            end
+        end
     end)
 end
 

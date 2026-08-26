@@ -2,7 +2,7 @@
 -- state -- the widget registries that ApplyStyle walks. That state is held per namespace, so
 -- two addons sharing this library each restyle only their own widgets and each fire only
 -- their own locale refreshers.
-local MAJOR, MINOR = "KAUI-1.0", 10
+local MAJOR, MINOR = "KAUI-1.0", 13
 local KAUI = LibStub:NewLibrary(MAJOR, MINOR)
 if not KAUI then return end
 
@@ -426,6 +426,15 @@ local CORNER_RADIUS_MIN_SIZE = 16 -- elements smaller than this (either dimensio
 KAUI.CORNER_RADIUS_SM = 3 -- buttons, checkboxes, slider thumb
 KAUI.CORNER_RADIUS_LG = 6 -- panels, cards, main window
 
+-- Spell/item icon BLPs bake a 64x64 border. Action bars crop it; without the crop a
+-- 20px icon looks thick-edged and softer than the default UI.
+KAUI.SPELL_ICON_INSET = 0.08
+function KAUI.CropSpellIcon(tex)
+    if not tex or not tex.SetTexCoord then return end
+    local i = KAUI.SPELL_ICON_INSET
+    tex:SetTexCoord(i, 1 - i, i, 1 - i)
+end
+
 -- Applies rounded-corner masks to a BackdropTemplate frame's backdrop artwork (and its gradient
 -- overlay, if any -- see CreateGradientOverlay below). Uses four quarter-circle masks (one per
 -- corner) instead of one full-region circle mask, producing proper rounded rectangles. Wrapped
@@ -650,7 +659,15 @@ function nsProto.CreateTabButton(ns, parent, text, opts)
     b:SetBackdropColor(0, 0, 0, 0)
 
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
+    if opts.icon then
+        b.icon = b:CreateTexture(nil, "ARTWORK")
+        b.icon:SetSize(14, 14)
+        b.icon:SetPoint("LEFT", b, "LEFT", 8, 0)
+        b.icon:SetTexture(opts.icon)
+        b.text:SetPoint("LEFT", b.icon, "RIGHT", 6, 0)
+    else
+        b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
+    end
     b.text:SetText(text)
     ns:RegisterButtonText(b.text)
 
@@ -665,6 +682,9 @@ function nsProto.CreateTabButton(ns, parent, text, opts)
             else
                 self.chip:SetTextColor(0.45, 0.45, 0.45)
             end
+        end
+        function b:RefreshModuleChipColor()
+            self:SetModuleChipOn(self.chip:GetText() == "ON")
         end
         b:SetModuleChipOn(false)
     end
@@ -685,18 +705,24 @@ function nsProto.CreateTabButton(ns, parent, text, opts)
         return dr, dg, db, 0.35
     end
 
+    local function paintLabel(r, g, bl)
+        b.text:SetTextColor(r, g, bl)
+        if b.icon and b.icon.SetVertexColor then b.icon:SetVertexColor(r, g, bl) end
+    end
+
     local function restingColor(self)
         if isActive then
             self:SetBackdropColor(activeColor())
         else
             self:SetBackdropColor(0, 0, 0, 0)
         end
-        b.text:SetTextColor(isActive and 1 or 0.75, isActive and 1 or 0.75, isActive and 1 or 0.75)
+        local c = isActive and 1 or 0.75
+        paintLabel(c, c, c)
     end
 
     b:SetScript("OnEnter", function(self)
         if not isActive then self:SetBackdropColor(1, 1, 1, 0.06) end
-        b.text:SetTextColor(1, 1, 1)
+        paintLabel(1, 1, 1)
     end)
     b:SetScript("OnLeave", function(self)
         restingColor(self)
@@ -1178,8 +1204,12 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     local s = CreateFrame("Slider", opts.name, parent, "BackdropTemplate")
     -- Track is only the slider's own width so the thumb does not travel under the number box.
     -- The box hangs to the right; do not clip it to the 4px-tall track.
-    s:SetSize(opts.valueIsText and 110 or 140, 4)
+    s:SetSize(140, 4)
     if s.SetClipsChildren then s:SetClipsChildren(false) end
+    -- The track stays a 4px line; the thumb and glow draw larger. WoW hit-tests the slider
+    -- FRAME, not the thumb texture, so a 4px frame is nearly ungrabbable — you aim at the
+    -- circle and miss. Expand the hit rect to the glow without moving the track or the box.
+    s:SetHitRectInsets(0, 0, -10, -10)
     s:SetPoint("TOPLEFT", 20, opts.y - 16) -- 16px space reserved for the label above
     s:SetOrientation("HORIZONTAL")
     s:SetMinMaxValues(opts.min, opts.max)
@@ -1200,10 +1230,9 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     s.title:SetText(opts.label)
     ns:RegisterLabel(s.title)
 
-    -- Boxed EditBox to the right of the track so the number can be typed (GitHub issue #6)
-    -- without sitting on the label row. opts.valueIsText sliders show a NAME (e.g. "HIGH")
-    -- and stay read-only; SetText from the caller's hook still works.
-    local boxW = opts.valueIsText and 88 or 44
+    -- Named-value sliders keep the 140px track (same as numeric) and a wider box so
+    -- MEDIUM/DIALOG fit on a 242-wide half card (20+140+8+72 = 240).
+    local boxW = opts.valueIsText and 72 or 44
     s.valueText = CreateFrame("EditBox", nil, s, "BackdropTemplate")
     s.valueText:SetPoint("LEFT", s, "RIGHT", 8, 0)
     s.valueText:SetSize(boxW, 20)
@@ -1253,25 +1282,31 @@ function nsProto.CreateSettingsSlider(ns, parent, opts)
     end
 
     -- Soft glow behind the thumb, hidden by default, faded in on hover/drag via alpha rather
-    -- than Show/Hide so it never fights another script over the frame's visibility.
+    -- than Show/Hide so it never fights another script over the frame's visibility. WHITE8X8 is
+    -- a square: without the same circle mask as the thumb, hover paints a box around the knob.
     local glow = s:CreateTexture(nil, "BACKGROUND")
-    glow:SetSize(20, 20)
+    glow:SetSize(24, 24)
     glow:SetTexture("Interface\\Buttons\\WHITE8X8")
     glow:SetAlpha(0)
     ns:RegisterSliderThumb(glow) -- colored alongside the thumb in ApplyStyle
 
     local thumb = s:CreateTexture(nil, "ARTWORK")
-    thumb:SetSize(12, 12)
+    thumb:SetSize(14, 14)
     thumb:SetTexture("Interface\\Buttons\\WHITE8X8")
     s:SetThumbTexture(thumb)
     ns:RegisterSliderThumb(thumb)
-    local thumbMask = s:CreateMaskTexture(nil, "OVERLAY")
-    local maskOk = pcall(function()
-        thumbMask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        thumbMask:SetAllPoints(thumb)
-        thumb:AddMaskTexture(thumbMask)
-    end)
-    if not maskOk then thumbMask:Hide() end
+    local function maskAsCircle(tex)
+        local mask = s:CreateMaskTexture(nil, "OVERLAY")
+        local maskOk = pcall(function()
+            mask:SetTexture("Interface\\Masks\\CircleMaskScalable", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(tex)
+            tex:AddMaskTexture(mask)
+        end)
+        if not maskOk then mask:Hide() end
+        return maskOk
+    end
+    maskAsCircle(thumb)
+    if not maskAsCircle(glow) then glow:SetAlpha(0) end
 
     local function positionGlow()
         glow:ClearAllPoints()
@@ -1397,6 +1432,7 @@ function nsProto:ApplyStyle(spec)
     -- the widget's current checked/active state, so they cannot fold into the loops above.
     for _, btn in ipairs(self.tabButtons) do
         if btn.RefreshActiveColor then btn:RefreshActiveColor() end
+        if btn.RefreshModuleChipColor then btn:RefreshModuleChipColor() end
     end
     for _, cb in ipairs(self.toggleCheckboxes) do
         if cb.RefreshVisual then cb:RefreshVisual() end

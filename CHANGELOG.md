@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- **Tonight strip on the main window** shows who is in from the WoWUtils list, who is missing flask or food, and whether RC is loaded.
+- **A toggle hides Blizzard's raid manager** while the Raidlead bar is on. Northern Sky stays.
+- **The empty slot under Buff Check** opens Role Poll, Convert and Restrict Pings.
 - **Shift-click Report whispers flask, food and rune**, and the buff checker says so when nobody is missing them.
 - **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it. Test mode and the Co-Tank tab preview it in town.
 - **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
@@ -23,6 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 
 ### Changed
+- **RC on the tonight strip reads ON and OFF.**
+- **Slider thumbs glow as a circle**, not a square.
+- **Settings sliders are easier to grab** with the mouse.
+- **Bar layer uses the same slider width** as the other look sliders.
+- **Layer sliders show short stratum names** so MEDIUM and DIALOG fit.
+- **The Co-Tank preview can show out of range, dead and the target border**, without turning Test Mode on.
+- **Section titles sit above their cards**, like Auto Combat Log.
+- **The WoWUtils boss list sits on a card**, with Invite and Remove on each row.
+- **Footer store links stay inside the sidebar.**
+- **The window close X is a live glyph**, not baked into the art.
+- **ON chips follow the accent color.**
+- **Invite channel chips keep their color after login.**
+- **Tonight strip lines up with the settings cards.**
+- **Debuff and buff strips each sit on their own card.**
+- **Buff and raidlead icons crop like action-bar icons.**
+- **The close X has no gray hover box.**
+- **Footer shows a smaller version, store marks, and by Kandera.**
+- **Modules in the sidebar sit under MODULES**, matching SYSTEM.
 - **Changelog, the owed reminder, the Co-Tank flyout and the buff checker share one title bar.**
 - **Co-Tank uses the same type and a labeled take-it button**, with a wider factory aura gap.
 - **Settings sliders have a number box** to the right of the track.
@@ -32,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Invite channel chips show on and off clearly.**
 - **Co-Tank scale fits in its card.**
 - **The in-game changelog is easier to scan.**
+- **In-game changelog names the change in bold**, then a smaller note.
+- **Taunt announce can be dungeons or raids**, each on its own switch.
+- **Raid Buff Check columns line up** under Rdy and Name.
+- **Ask-for-a-Swap group and raid filters sit side by side.**
+- **Taunt channels sit on one chip row**, like the invite channels.
+- **The Co-Tank frame stays off in dungeons.**
+- **Sidebar tabs have icons**, and the store links use their real marks.
 - **Edit Mode dims the world** with a Done banner so every enabled module can be placed in town.
 - **Settings and Raidlead tabs fill their cards** instead of leaving the right side empty.
 - **Co-Tank Auras keep buff and debuff settings under their own headings.**
@@ -44,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **Opening the world map no longer errors** on the raidlead bar.
 - **The in-game changelog opens without an error** and uses the same window art as the buff checker.
 - **Settings and Co-Tank tabs show their controls again.** The invite-channel chips no longer abort the window while it is loading.
 - **Invite channel chips sit under their label**, not on top of it.

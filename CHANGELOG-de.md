@@ -8,7 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
-- **Heute-Leiste im Hauptfenster** zeigt wer vom WoWUtils-Roster da ist, wem Flask oder Essen fehlt, und ob RC geladen ist.
+- **Ein Schalter blendet Blizzards Raid-Manager aus**, solange die Raidlead-Leiste an ist. Northern Sky bleibt.
+- **Der freie Slot unter Buff Check** öffnet Rollenabfrage, Umwandeln und Ping-Einschränkung.
 - **Umschalt-Klick auf Posten flüstert Fläschchen, Essen und Rune**, und der Buff-Checker sagt Bescheid wenn niemandem etwas fehlt.
 - **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt.
 - **Co-Tank Look-, Text- und Auren-Einstellungen** öffnen sich in einem Begleitfenster neben dem Hauptfenster.
@@ -23,6 +24,24 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 
 ### Geändert
+- **RC auf der Heute-Leiste steht AN und AUS.**
+- **Regler-Knöpfe leuchten rund**, nicht eckig.
+- **Settings-Regler lassen sich leichter mit der Maus greifen.**
+- **Bar Layer hat dieselbe Reglerbreite** wie die anderen Look-Regler.
+- **Ebenen-Regler zeigen kurze Stratum-Namen**, damit MEDIUM und DIALOG passen.
+- **Die Co-Tank-Vorschau kann außer Reichweite, tot und den Ziel-Rahmen zeigen**, ohne den Testmodus.
+- **Abschnitts-Überschriften sitzen über ihren Karten**, wie Auto Combat Log.
+- **Die WoWUtils-Boss-Liste sitzt auf einer Karte**, mit Einladen und Entfernen in jeder Zeile.
+- **Footer-Store-Links bleiben in der Sidebar.**
+- **Das Schließen-X im Fenster ist ein Live-Zeichen**, nicht in der Grafik eingebrannt.
+- **ON-Chips folgen der Akzentfarbe.**
+- **Invite-Kanal-Chips behalten ihre Farbe nach dem Login.**
+- **Die Heute-Leiste sitzt auf einer Linie mit den Settings-Karten.**
+- **Debuff- und Buff-Leiste haben jeweils eine eigene Kachel.**
+- **Buff- und Raidlead-Icons sind wie Aktionsleisten-Icons beschnitten.**
+- **Das Schließen-X hat keine graue Hover-Box.**
+- **Footer zeigt eine kleinere Version, Store-Marken und von Kandera.**
+- **Module in der Sidebar sitzen unter MODULES**, analog zu SYSTEM.
 - **Changelog, die Owed-Erinnerung, das Co-Tank-Flyout und der Buff-Checker teilen sich eine Titelleiste.**
 - **Co-Tank nutzt die gleiche Schrift und einen beschrifteten Übernehmen-Button**, mit größerem Standard-Aura-Abstand.
 - **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
@@ -33,6 +52,13 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Invite-Kanal-Chips zeigen An und Aus deutlich.**
 - **Die Co-Tank-Skalierung passt in ihre Karte.**
 - **Das Changelog im Spiel ist leichter zu überfliegen.**
+- **Im Changelog steht der Name fett**, die Erklärung etwas kleiner.
+- **Taunt-Ansage kann Dungeons oder Raids sein**, jeweils ein eigener Schalter.
+- **Raid-Buff-Check-Spalten sitzen unter Rdy und Name.**
+- **Ask-for-a-Swap Gruppe und Raid sitzen nebeneinander.**
+- **Taunt-Kanäle sitzen in einer Chip-Zeile.**
+- **Das Co-Tank-Fenster bleibt in Dungeons aus.**
+- **Sidebar-Tabs haben Icons**, und die Store-Links nutzen ihre echten Zeichen.
 - **Bearbeiten-Modus dunkelt die Welt ab** mit einem Fertig-Banner, damit jedes eingeschaltete Modul in der Stadt platziert werden kann.
 - **Settings- und Raidlead-Tabs füllen ihre Karten**, statt die rechte Seite leer zu lassen.
 - **Co-Tank-Auren halten Buff- und Debuff-Einstellungen unter eigenen Überschriften.**
@@ -45,6 +71,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Die Weltkarte wirft keinen Fehler mehr** an der Raidlead-Leiste.
 - **Das Changelog im Spiel öffnet sich ohne Fehler** und nutzt dieselbe Fenster-Grafik wie der Buff-Checker.
 - **Settings- und Co-Tank-Tabs zeigen ihre Einstellungen wieder.** Die Invite-Kanal-Chips brechen das Fenster beim Laden nicht mehr ab.
 - **Invite-Kanal-Chips sitzen unter ihrer Beschriftung**, nicht darüber.

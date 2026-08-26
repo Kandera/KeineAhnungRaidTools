@@ -1,5 +1,6 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
+local KAUI = LibStub("KAUI-1.0")
 local KAGS = LibStub("KAGS-1.0")
 local KASC = LibStub("KASC-1.0")
 local L = KART.L
@@ -241,9 +242,12 @@ function KART.CreateBuffCheckFrame()
     local offsets = {35, 145, 185, 225, 265, 310, 355, 395, 445, 495, 545, 590}
     f.headerStrings = {}
     
-    -- Neues Label: ReadyCheck (Rdy)
+    -- Rows live in the scroll child (inset 10px from the window). Ready/name headers
+    -- used the window's x and sat left of their columns; buff headers already matched
+    -- because those icons subtract the same 10px.
+    local ROW_INSET = 10
     local hRdy = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hRdy:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -35)
+    hRdy:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_INSET + 12, -35)
     hRdy:SetText("Rdy") -- intentional: short abbreviation kept un-localized by design (review 2026-07-24)
     hRdy:SetTextColor(0.8, 0.8, 0.8)
     f.hRdy = hRdy
@@ -258,7 +262,7 @@ function KART.CreateBuffCheckFrame()
 
     -- Erstes Label: Name
     local hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hName:SetPoint("TOPLEFT", f, "TOPLEFT", offsets[1], -35)
+    hName:SetPoint("TOPLEFT", f, "TOPLEFT", ROW_INSET + offsets[1], -35)
     hName:SetText(L.BC_NAME)
     hName:SetTextColor(0.8, 0.8, 0.8)
     f.hName = hName
@@ -347,6 +351,7 @@ function KART.CreateBuffCheckFrame()
                 tex:SetSize(20, 20)
                 tex:SetPoint("LEFT", offsets[data.col] - 10, 0)
                 tex:SetTexture(data.icon)
+                KAUI.CropSpellIcon(tex)
                 row.indicators[j] = tex
             else
                 local frame = CreateFrame("Frame", nil, row)

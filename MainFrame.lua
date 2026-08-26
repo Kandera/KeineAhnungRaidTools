@@ -10,6 +10,26 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 -- click/drag time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
 local function SettingsStore() return KART_Settings end
 
+-- White-on-transparent PNGs under Media/; tab glyphs tint with the label, brand marks do not.
+local function Media(file)
+    return "Interface\\AddOns\\" .. addonName .. "\\media\\" .. file
+end
+
+local function AttachButtonGlyph(btn, file)
+    if not btn then return end
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(12, 12)
+    icon:SetTexture(Media(file))
+    icon:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.glyph = icon
+    if btn.text then
+        btn.text:ClearAllPoints()
+        btn.text:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+        btn.text:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+        if btn.text.SetJustifyH then btn.text:SetJustifyH("LEFT") end
+    end
+end
+
 -- 1. Tab-Wechsel Logik (wird in KART Tabelle gespeichert)
 function KART.ShowTab(tabIndex)
     local panels = {
@@ -55,7 +75,8 @@ end
 -- 2. Main window (PNG artwork, EllesmereUI-style)
 -- All geometry derives from the measured layout of kart-bg-dark.png:
 -- image 1500x1154, opaque art box x 105-1396 / y 104-1050 (1292x947),
--- sidebar divider at art x 323, close-X center at art (1248, 39).
+-- sidebar divider at art x 323, close-X center at art (1248, 39) -- live glyph,
+-- the baked artwork X was painted out of kart-bg-dark.png.
 -- Art width is fixed at 800 (scale factor 800/1292); the window is not
 -- freely resizable because the baked artwork would distort and the
 -- invisible hit areas (close X, sidebar) would drift off their graphics.
@@ -105,42 +126,72 @@ clickArea:SetScript("OnDragStop", function() mainFrame:StopMovingOrSizing() end)
 mainFrame.clickArea = clickArea
 
 -- Version string, bottom-left of the baked sidebar. Core.lua overwrites
--- the text once KART.Version is known (ADDON_LOADED).
+-- the text once KART.Version is known (ADDON_LOADED). Kept off the label
+-- registry so content font size cannot blow it up next to the store links.
 mainFrame.versionText = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 mainFrame.versionText:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 12)
-mainFrame.versionText:SetText("v" .. (KART.Version or ""))
+mainFrame.versionText:SetTextColor(0.45, 0.45, 0.45)
+function KART.RefreshVersionText()
+    local v = KART.Version or ""
+    local by = (KART.L and KART.L.FOOTER_BY) or "by Kandera"
+    mainFrame.versionText:SetText("v" .. v .. "  ·  " .. by)
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    mainFrame.versionText:SetFont(font, 10, "")
+    if KART.PaintCloseButton then KART.PaintCloseButton() end
+end
+KART.RefreshVersionText()
 
 -- Footer links sit above the version string; WoW cannot open a browser, so click
--- shows the URL in a box the player can copy with Ctrl+C.
+-- shows the URL in a box the player can copy with Ctrl+C. Kept off the label
+-- registry so they follow the version line (10px), not the content-font slider.
 KART.FooterLinks = {}
+local FOOTER_LINK_FONT = 10
+function KART.RefreshFooterLinks()
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    for _, btn in ipairs(KART.FooterLinks) do
+        btn.text:SetFont(font, FOOTER_LINK_FONT, "")
+        btn:SetWidth((btn.text:GetStringWidth() or 36) + 10)
+    end
+end
 do
     local linkDefs = {
-        { localeKey = "LINK_CURSEFORGE", url = "https://www.curseforge.com/wow/addons/keine-ahnung-raid-tools" },
-        { localeKey = "LINK_WAGO", url = "https://addons.wago.io/addons/qn53zokb" },
-        { localeKey = "LINK_GITHUB", url = "https://github.com/Kandera/KeineAhnungRaidTools" },
+        { localeKey = "LINK_CURSEFORGE", url = "https://www.curseforge.com/wow/addons/keine-ahnung-raid-tools", color = { 0.95, 0.45, 0.22 }, icon = Media("logo-curseforge.png") },
+        { localeKey = "LINK_WAGO", url = "https://addons.wago.io/addons/qn53zokb", color = { 0.85, 0.70, 0.25 }, icon = Media("logo-wago.png") },
+        { localeKey = "LINK_GITHUB", url = "https://github.com/Kandera/KeineAhnungRaidTools", color = { 0.72, 0.78, 0.86 }, icon = Media("logo-github.png") },
     }
     local prev
     for i, def in ipairs(linkDefs) do
         local btn = CreateFrame("Button", nil, clickArea)
-        btn:SetHeight(12)
+        btn:SetHeight(14)
         btn.url = def.url
-        btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        btn.text:SetPoint("LEFT", btn, "LEFT", 0, 0)
+        btn.brand = def.color
+        btn.icon = btn:CreateTexture(nil, "ARTWORK")
+        btn.icon:SetSize(8, 8)
+        btn.icon:SetTexture(def.icon)
+        -- Icon and text both anchor to the button, not each other's string height,
+        -- so GitHub (no descenders) does not sit above CurseForge/Wago.
+        btn.icon:SetPoint("LEFT", btn, "LEFT", 0, 0)
+        btn.text = btn:CreateFontString(nil, "OVERLAY")
+        -- SetFont before SetText: a FontString with no inherit object raises
+        -- "Font not set" and aborts the rest of this file (blank main window).
+        btn.text:SetFont(KART.UI.lastFont or "Fonts\\FRIZQT__.TTF", FOOTER_LINK_FONT, "")
+        btn.text:SetPoint("LEFT", btn, "LEFT", 10, 0)
         btn.text:SetText(L[def.localeKey])
-        btn.text:SetTextColor(0.55, 0.55, 0.55)
-        KART.UI:RegisterLabel(btn.text)
-        btn:SetWidth(btn.text:GetStringWidth() + 2)
+        btn.text:SetTextColor(def.color[1], def.color[2], def.color[3])
         btn:SetScript("OnClick", function(self) KART.CopyLink(self.url) end)
         btn:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 1, 1) end)
-        btn:SetScript("OnLeave", function(self) self.text:SetTextColor(0.55, 0.55, 0.55) end)
+        btn:SetScript("OnLeave", function(self)
+            self.text:SetTextColor(self.brand[1], self.brand[2], self.brand[3])
+        end)
         if prev then
             btn:SetPoint("LEFT", prev, "RIGHT", 6, 0)
         else
-            btn:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 18, 28)
+            btn:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 12, 28)
         end
         prev = btn
         KART.FooterLinks[i] = btn
     end
+    KART.RefreshFooterLinks()
 end
 
 -- Per-tab header titles live OUTSIDE the scroll frame, fixed in the artwork's header zone
@@ -160,26 +211,31 @@ end
 
 -- 3. Sidebar menu and tabs
 -- Tabs start below the baked logo/title/underline zone of the artwork.
-KART.BtnPromote = KART.UI:CreateTabButton(clickArea, L.TAB_PROMOTE, { moduleChip = true })
-KART.BtnPromote:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 12, -75)
+KART.SidebarModulesHeader = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+KART.SidebarModulesHeader:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 14, -76)
+KART.SidebarModulesHeader:SetText(L.LABEL_MODULES)
+KART.UI:RegisterLabel(KART.SidebarModulesHeader)
+
+KART.BtnPromote = KART.UI:CreateTabButton(clickArea, L.TAB_PROMOTE, { moduleChip = true, icon = Media("tab-automation.png") })
+KART.BtnPromote:SetPoint("TOPLEFT", KART.SidebarModulesHeader, "BOTTOMLEFT", -2, -4)
 KART.BtnPromote:SetScript("OnClick", function() KART.ShowTab(1) end)
 
-KART.BtnRaidlead = KART.UI:CreateTabButton(clickArea, L.TAB_RAIDLEAD, { moduleChip = true })
+KART.BtnRaidlead = KART.UI:CreateTabButton(clickArea, L.TAB_RAIDLEAD, { moduleChip = true, icon = Media("tab-raidlead.png") })
 KART.BtnRaidlead:SetPoint("TOPLEFT", KART.BtnPromote, "BOTTOMLEFT", 0, -5)
 KART.BtnRaidlead:SetScript("OnClick", function() KART.ShowTab(2) end)
 
-KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK, { moduleChip = true })
+KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK, { moduleChip = true, icon = Media("tab-buffcheck.png") })
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS, { moduleChip = true })
+KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS, { moduleChip = true, icon = Media("tab-wowutils.png") })
 KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(5) end)
 
 -- The Settings tab must always be the last entry in the sidebar. When adding a new tab
 -- button, anchor it above this one (i.e. insert it between the previous last tab and
 -- Settings, and re-anchor Settings to the new button).
-KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK, { moduleChip = true })
+KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK, { moduleChip = true, icon = Media("tab-cotank.png") })
 KART.BtnCoTank:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnCoTank:SetScript("OnClick", function() KART.ShowTab(6) end)
 
@@ -188,7 +244,7 @@ KART.SidebarSystemHeader:SetPoint("TOPLEFT", KART.BtnCoTank, "BOTTOMLEFT", 2, -1
 KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM)
 KART.UI:RegisterLabel(KART.SidebarSystemHeader)
 
-KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS)
+KART.BtnSettings = KART.UI:CreateTabButton(clickArea, L.TAB_SETTINGS, { icon = Media("tab-settings.png") })
 KART.BtnSettings:SetPoint("TOPLEFT", KART.SidebarSystemHeader, "BOTTOMLEFT", -2, -4)
 KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 
@@ -196,11 +252,13 @@ KART.BtnSettings:SetScript("OnClick", function() KART.ShowTab(4) end)
 KART.BtnChangelog = KART.UI:CreateModernButton(clickArea, L.BTN_CHANGELOG, L.DESC_CHANGELOG)
 KART.BtnChangelog:SetSize(176, 22)
 KART.BtnChangelog:SetPoint("BOTTOMLEFT", clickArea, "BOTTOMLEFT", 12, 46)
+AttachButtonGlyph(KART.BtnChangelog, "tab-changelog.png")
 KART.BtnChangelog:SetScript("OnClick", function() KART.ShowChangelogPopup() end)
 
 KART.BtnEditMode = KART.UI:CreateModernButton(clickArea, L.BTN_EDIT_MODE_OFF, L.DESC_EDIT_MODE)
 KART.BtnEditMode:SetSize(176, 22)
 KART.BtnEditMode:SetPoint("BOTTOMLEFT", KART.BtnChangelog, "TOPLEFT", 0, 5)
+AttachButtonGlyph(KART.BtnEditMode, "tab-editmode.png")
 KART.BtnEditMode:SetScript("OnClick", function()
     KART.SetEditModeActive(not KART.IsEditModeActive())
 end)
@@ -237,7 +295,7 @@ end
 -- Tonight strip sits just below the artwork's baked divider (~-48). The viewport starts
 -- under that strip so scrolled content cannot cover the three glance fields.
 local statusStrip = CreateFrame("Frame", nil, clickArea)
-statusStrip:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 208, -52)
+statusStrip:SetPoint("TOPLEFT", clickArea, "TOPLEFT", 228, -52)
 statusStrip:SetPoint("TOPRIGHT", clickArea, "TOPRIGHT", -30, -52)
 statusStrip:SetHeight(36)
 KART.StatusStrip = statusStrip
@@ -294,7 +352,7 @@ function KART.RefreshStatusStrip()
     end
     local rcOn = KART.RC and KART.RC.IsRCLoaded and KART.RC.IsRCLoaded()
     strip.rc.label:SetText(L.STATUS_RC or "RC loaded")
-    strip.rcValue:SetText(rcOn and (L.STATUS_RC_ON or "on") or (L.STATUS_RC_OFF or "off"))
+        strip.rcValue:SetText(rcOn and (L.STATUS_RC_ON or "ON") or (L.STATUS_RC_OFF or "OFF"))
     if rcOn then
         strip.rcValue:SetTextColor(unpack(KART.SUCCESS))
     else
@@ -369,19 +427,19 @@ scrollFrame.scrollBarHideable = true
 -- layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
     [1] = 565, -- Automation: enable card + promote/invite card + AutoLog
-    [2] = 460, -- Raidlead: two-column bar card + keybinds card + gaps
+    [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 580, -- Settings: two half cards + accent/profiles row + RC companion card
-    [6] = 1240, -- Co-Tank: preview + module + size + taunt (Look/Text/Auras live in the flyout)
+    [6] = 1160, -- Co-Tank: preview + module + size + taunt/swap headings
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
     if tab == 5 then
-        -- Enable card + import card + separator/headers above the boss list + bottom padding.
-        local bl = KART.WU and KART.WU.bossListFrame
-        h = 332 + ((bl and bl:GetHeight()) or 24)
+        -- Enable + import cards, Bosses heading, and the boss card (grows with the list).
+        local card = KART.WU and KART.WU.bossListCard
+        h = 280 + ((card and card:GetHeight()) or 48)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -397,7 +455,7 @@ end
 -- Tab titles are fixed header-zone FontStrings (KART.CreateTabTitle), outside the scroll
 -- region; every tab's first card starts uniformly at -12 inside the scroll child, which
 -- itself begins just below the artwork's baked divider line.
-KART.CreateTabTitle(2, L.LABEL_RAIDLEAD_TOOLS)
+KART.CreateTabTitle(2, L.TAB_RAIDLEAD)
 
 -- Card groups all Raidlead Bar settings into one visually distinct panel instead of leaving
 -- checkboxes/slider floating directly on the tab background.
@@ -405,7 +463,7 @@ local rlCard = KART.UI:CreateCard(KART.RaidleadPanel)
 rlCard:SetPoint("TOPLEFT", KART.RaidleadPanel, "TOPLEFT", 20, -12)
 -- Toggles left, look sliders right: the old stacked cards left the right half of a 500-wide
 -- card empty. Same two-column packing as the Buff-Checker card.
-rlCard:SetSize(500, 248)
+rlCard:SetSize(500, 280)
 
 local function PinRlToggle(cb, y)
     cb:ClearAllPoints()
@@ -481,6 +539,19 @@ KART.CbRcReasonDialog = KART.UI:CreateSettingsCheckbox(rlCard, {
 })
 PinRlToggle(KART.CbRcReasonDialog, -175)
 
+KART.CbHideBlizzardRaidManager = KART.UI:CreateSettingsCheckbox(rlCard, {
+    name = "KART_HideBlizzardRaidManagerCheck", label = L.SET_RL_HIDE_BLIZZARD,
+    store = SettingsStore, key = "hideBlizzardRaidManager", y = -210,
+    onChanged = function()
+        if KART.ApplyBlizzardRaidManagerVisibility then
+            KART.ApplyBlizzardRaidManagerVisibility(not (KART.ShouldHideBlizzardRaidManager
+                and KART.ShouldHideBlizzardRaidManager()))
+        end
+    end,
+    tooltip = L.DESC_RL_HIDE_BLIZZARD,
+})
+PinRlToggle(KART.CbHideBlizzardRaidManager, -210)
+
 -- Pull-Timer Slider: the pull button (RaidleadBar.lua) reads pullTimerDuration
 -- at click time, so no macrotext attribute needs updating here anymore.
 KART.PullSlider = KART.UI:CreateSettingsSlider(rlCard, {
@@ -501,7 +572,7 @@ KART.SldRlBarStrata = KART.UI:CreateSettingsSlider(rlCard, {
 })
 PinRlSlider(KART.SldRlBarStrata, -80)
 local function UpdateRlBarStrataSliderText(self)
-    self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+    self.valueText:SetText(KART.StrataSliderLabel(self:GetValue()))
 end
 KART.SldRlBarStrata:HookScript("OnValueChanged", UpdateRlBarStrataSliderText)
 KART.SldRlBarStrata:HookScript("OnShow", UpdateRlBarStrataSliderText)
@@ -536,15 +607,15 @@ KART.SldRlBarAlpha = KART.UI:CreateSettingsSlider(rlCard, {
 })
 PinRlSlider(KART.SldRlBarAlpha, -212)
 
--- Keybind card: one row per bindable Raidlead Bar action (Task list: KART.KeybindActions).
-local kbCard = KART.UI:CreateCard(KART.RaidleadPanel)
-kbCard:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -16)
-kbCard:SetSize(500, 168)
-
-local kbTitle = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-kbTitle:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, -14)
+-- Keybind card: heading sits above the card, same pattern as Auto Combat Log.
+local kbTitle = KART.RaidleadPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+kbTitle:SetPoint("TOPLEFT", rlCard, "BOTTOMLEFT", 0, -18)
 kbTitle:SetText(L.LABEL_RL_KEYBINDS)
 KART.UI:RegisterLabel(kbTitle)
+
+local kbCard = KART.UI:CreateCard(KART.RaidleadPanel)
+kbCard:SetPoint("TOPLEFT", kbTitle, "BOTTOMLEFT", 0, -10)
+kbCard:SetSize(500, 148)
 
 -- [actionKey] = its bind button. Read back by the locale refresher, by KART.SyncSettingsToUI (which
 -- repaints every caption after a profile load) and by StartCapture, which updates the caption of a
@@ -627,7 +698,7 @@ end)
 
 local kbRowLabels = {}
 for i, action in ipairs(KART.KeybindActions) do
-    local yOff = -38 - (i - 1) * 30
+    local yOff = -20 - (i - 1) * 30
 
     local label = kbCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("TOPLEFT", kbCard, "TOPLEFT", 20, yOff)
@@ -874,6 +945,8 @@ KART.CbAlEnabled = KART.UI:CreateSettingsCheckbox(alCard, {
     store = SettingsStore, key = "autoLogEnabled", y = -20,
     onChanged = AutoLogChanged, tooltip = L.DESC_AL_ENABLED,
 })
+KART.CbAlEnabled.text:SetWidth(430)
+KART.CbAlEnabled.text:SetJustifyH("LEFT")
 KART.CbAlRaidLFR = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlRaidLFR", label = L.SET_AL_RAID_LFR,
     store = SettingsStore, key = "autoLogRaidLFR", y = -50,
@@ -976,7 +1049,7 @@ KART.SldFrameStrata = KART.UI:CreateSettingsSlider(ifCard, {
     valueIsText = true, -- shows the stratum NAME, so its value box stays read-only
 })
 local function UpdateStrataSliderText(self)
-    self.valueText:SetText(KART.StrataLevels[math.floor(self:GetValue())] or "")
+    self.valueText:SetText(KART.StrataSliderLabel(self:GetValue()))
 end
 KART.SldFrameStrata:HookScript("OnValueChanged", UpdateStrataSliderText)
 KART.SldFrameStrata:HookScript("OnShow", UpdateStrataSliderText)
@@ -1425,7 +1498,7 @@ ctFlyText:Hide()
 ctFlyAuras:Hide()
 KART.CtFlyoutPanels = { ctFlyLook, ctFlyText, ctFlyAuras }
 
-local CT_FLYOUT_HEIGHTS = { 810, 490, 920 }
+local CT_FLYOUT_HEIGHTS = { 860, 490, 980 }
 local function UpdateCtFlyoutScrollRange(tabIndex)
     local h = CT_FLYOUT_HEIGHTS[tabIndex] or 750
     ctFlyChild:SetSize(516, math.max(h, ctFlyScroll:GetHeight()))
@@ -1817,7 +1890,7 @@ end
 
 local ctFadeCard = KART.UI:CreateCard(ctFlyLook)
 ctFadeCard:SetPoint("TOPLEFT", ctLookCard, "BOTTOMLEFT", 0, -20)
-ctFadeCard:SetSize(500, 250)
+ctFadeCard:SetSize(500, 280)
 
 local ctTextCard = KART.UI:CreateCard(ctFlyText)
 ctTextCard:SetPoint("TOPLEFT", ctFlyText, "TOPLEFT", 12, -12)
@@ -1904,43 +1977,138 @@ KART.BtnCtTargetBorderColor:SetScript("OnClick", function()
     CtPickColor(tb.color, CtLayoutChanged)
 end)
 
-local ctAuraCard = KART.UI:CreateCard(ctFlyAuras)
-ctAuraCard:SetPoint("TOPLEFT", ctFlyAuras, "TOPLEFT", 12, -12)
-ctAuraCard:SetSize(500, 900)
+local ctPreviewAsLabel = ctFadeCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+ctPreviewAsLabel:SetPoint("TOPLEFT", ctFadeCard, "TOPLEFT", 20, -200)
+ctPreviewAsLabel:SetText(L.SET_CT_PREVIEW_AS)
+KART.UI:RegisterLabel(ctPreviewAsLabel)
 
-local ctDebuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-ctDebuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -16)
+local ctPreviewStateHost = CreateFrame("Frame", nil, ctFadeCard)
+ctPreviewStateHost:SetPoint("TOPLEFT", ctPreviewAsLabel, "BOTTOMLEFT", 0, -8)
+ctPreviewStateHost:SetSize(460, 48)
+
+local function PaintCtPreviewStateChip(btn, on)
+    local r, g, b = KART.UI:AccentColor()
+    if on then
+        btn:SetBackdropColor(r, g, b, 0.55)
+        btn:SetBackdropBorderColor(r, g, b, 1)
+        btn.text:SetTextColor(1, 1, 1)
+    else
+        btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+        btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+        btn.text:SetTextColor(0.55, 0.55, 0.55)
+    end
+end
+
+local function CtPreviewStateIs(key)
+    local state = KART.CT and KART.CT.previewState or "ok"
+    if state ~= "oor" and state ~= "dead" and state ~= "offline" then
+        state = "ok"
+    end
+    return state == key
+end
+
+local function RefreshCtPreviewStateChips()
+    if not KART.CtPreviewStateChips then return end
+    for _, chip in ipairs(KART.CtPreviewStateChips) do
+        local on = CtPreviewStateIs(chip.stateKey)
+        chip.chipOn = on
+        PaintCtPreviewStateChip(chip, on)
+    end
+end
+
+local function CreateCtPreviewStateChip(label, key)
+    local btn = KART.UI:CreateModernButton(ctPreviewStateHost, label)
+    btn:SetHeight(22)
+    btn.stateKey = key
+    local function refresh()
+        btn.chipOn = CtPreviewStateIs(key)
+        PaintCtPreviewStateChip(btn, btn.chipOn)
+    end
+    btn:SetScript("OnClick", function()
+        if KART.CT and KART.CT.SetPreviewState then
+            KART.CT.SetPreviewState(key)
+        end
+        RefreshCtPreviewStateChips()
+    end)
+    btn:SetScript("OnEnter", function(self)
+        local r, g, b = KART.UI:AccentColor()
+        if self.chipOn then
+            local lr, lg, lb = KAUI.Lighten(r, g, b, 0.12)
+            self:SetBackdropColor(lr, lg, lb, 0.75)
+        else
+            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
+        end
+    end)
+    btn:SetScript("OnLeave", function() refresh() end)
+    btn.Refresh = refresh
+    refresh()
+    return btn
+end
+
+KART.CtPreviewStateChips = {
+    CreateCtPreviewStateChip(L.SET_CT_PREVIEW_OK, "ok"),
+    CreateCtPreviewStateChip(L.SET_CT_PREVIEW_OOR, "oor"),
+    CreateCtPreviewStateChip(L.SET_CT_PREVIEW_DEAD, "dead"),
+    CreateCtPreviewStateChip(L.SET_CT_PREVIEW_OFFLINE, "offline"),
+}
+
+function KART.LayoutCtPreviewStateChips()
+    local chips = KART.CtPreviewStateChips
+    if not chips then return end
+    local gap, maxW, h = 4, 460, 22
+    local cols = 2
+    local w = math.floor((maxW - gap * (cols - 1)) / cols)
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    for i, chip in ipairs(chips) do
+        local col = (i - 1) % cols
+        local row = math.floor((i - 1) / cols)
+        chip:SetSize(w, h)
+        chip.text:SetFont(font, 9, "")
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", ctPreviewStateHost, "TOPLEFT", col * (w + gap), -row * (h + gap))
+    end
+    ctPreviewStateHost:SetHeight(h * 2 + gap)
+end
+KART.LayoutCtPreviewStateChips()
+
+local ctDebuffTitle = ctFlyAuras:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctDebuffTitle:SetPoint("TOPLEFT", ctFlyAuras, "TOPLEFT", 12, -12)
 ctDebuffTitle:SetText(L.LABEL_CT_DEBUFFS)
 KART.UI:RegisterHeading(ctDebuffTitle)
 
-KART.CbCtDebuffShow = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
+local ctDebuffCard = KART.UI:CreateCard(ctFlyAuras)
+ctDebuffCard:SetPoint("TOPLEFT", ctDebuffTitle, "BOTTOMLEFT", 0, -10)
+ctDebuffCard:SetSize(500, 430)
+KART.CtDebuffCard = ctDebuffCard
+
+KART.CbCtDebuffShow = KART.UI:CreateSettingsCheckbox(ctDebuffCard, {
     name = "KART_CtDebuffShow", label = L.SET_CT_AURA_SHOW,
     store = CtDebuffs, key = "show", y = -48,
     onChanged = CtRefresh,
 })
-KART.SldCtDebuffMax = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtDebuffMax = KART.UI:CreateSettingsSlider(ctDebuffCard, {
     name = "KART_CtDebuffMaxSlider", label = L.SET_CT_AURA_MAX,
     min = 1, max = 16, store = CtDebuffs, key = "max", y = -48,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtDebuffMax:ClearAllPoints()
-KART.SldCtDebuffMax:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -64)
+KART.SldCtDebuffMax:SetPoint("TOPLEFT", ctDebuffCard, "TOPLEFT", 260, -64)
 
-KART.SldCtDebuffSize = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtDebuffSize = KART.UI:CreateSettingsSlider(ctDebuffCard, {
     name = "KART_CtDebuffSizeSlider", label = L.SET_CT_AURA_SIZE,
     min = 12, max = 100, store = CtDebuffs, key = "size", y = -88,
     onChanged = CtLayoutChanged,
 })
-KART.SldCtDebuffSpacing = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtDebuffSpacing = KART.UI:CreateSettingsSlider(ctDebuffCard, {
     name = "KART_CtDebuffSpacingSlider", label = L.SET_CT_AURA_SPACING,
     min = 0, max = 8, store = CtDebuffs, key = "spacing", y = -88,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtDebuffSpacing:ClearAllPoints()
-KART.SldCtDebuffSpacing:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -104)
+KART.SldCtDebuffSpacing:SetPoint("TOPLEFT", ctDebuffCard, "TOPLEFT", 260, -104)
 
-KART.BtnCtDebuffAnchor = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
-KART.BtnCtDebuffAnchor:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -128)
+KART.BtnCtDebuffAnchor = KART.UI:CreateModernButton(ctDebuffCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
+KART.BtnCtDebuffAnchor:SetPoint("TOPLEFT", ctDebuffCard, "TOPLEFT", 20, -128)
 KART.BtnCtDebuffAnchor:SetSize(220, 22)
 KART.BtnCtDebuffAnchor:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -1955,8 +2123,8 @@ KART.BtnCtDebuffAnchor:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.BtnCtDebuffGrowth = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
-KART.BtnCtDebuffGrowth:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -128)
+KART.BtnCtDebuffGrowth = KART.UI:CreateModernButton(ctDebuffCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
+KART.BtnCtDebuffGrowth:SetPoint("TOPLEFT", ctDebuffCard, "TOPLEFT", 260, -128)
 KART.BtnCtDebuffGrowth:SetSize(220, 22)
 KART.BtnCtDebuffGrowth:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -1971,7 +2139,7 @@ KART.BtnCtDebuffGrowth:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.CbCtHideLongDuration = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
+KART.CbCtHideLongDuration = KART.UI:CreateSettingsCheckbox(ctDebuffCard, {
     name = "KART_CtHideLongDuration", label = L.SET_CT_HIDE_LONG_DURATION,
     tooltip = L.DESC_CT_HIDE_LONG_DURATION,
     store = CtDebuffs, key = "hideLongDuration", y = -360,
@@ -1979,7 +2147,7 @@ KART.CbCtHideLongDuration = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
 })
 KART.CbCtHideLongDuration.text:SetWidth(430)
 KART.CbCtHideLongDuration.text:SetJustifyH("LEFT")
-KART.CbCtHideFatigue = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
+KART.CbCtHideFatigue = KART.UI:CreateSettingsCheckbox(ctDebuffCard, {
     name = "KART_CtHideFatigue", label = L.SET_CT_HIDE_FATIGUE,
     tooltip = L.DESC_CT_HIDE_FATIGUE,
     store = CtDebuffs, key = "hideFatigue", y = -388,
@@ -1988,39 +2156,44 @@ KART.CbCtHideFatigue = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
 KART.CbCtHideFatigue.text:SetWidth(430)
 KART.CbCtHideFatigue.text:SetJustifyH("LEFT")
 
-local ctBuffTitle = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-ctBuffTitle:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -434)
+local ctBuffTitle = ctFlyAuras:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctBuffTitle:SetPoint("TOPLEFT", ctDebuffCard, "BOTTOMLEFT", 0, -18)
 ctBuffTitle:SetText(L.LABEL_CT_BUFFS)
 KART.UI:RegisterHeading(ctBuffTitle)
 
-KART.CbCtBuffShow = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
+local ctBuffCard = KART.UI:CreateCard(ctFlyAuras)
+ctBuffCard:SetPoint("TOPLEFT", ctBuffTitle, "BOTTOMLEFT", 0, -10)
+ctBuffCard:SetSize(500, 450)
+KART.CtBuffCard = ctBuffCard
+
+KART.CbCtBuffShow = KART.UI:CreateSettingsCheckbox(ctBuffCard, {
     name = "KART_CtBuffShow", label = L.SET_CT_AURA_SHOW,
-    store = CtBuffs, key = "show", y = -464,
+    store = CtBuffs, key = "show", y = -48,
     onChanged = CtRefresh,
 })
-KART.SldCtBuffMax = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtBuffMax = KART.UI:CreateSettingsSlider(ctBuffCard, {
     name = "KART_CtBuffMaxSlider", label = L.SET_CT_AURA_MAX,
-    min = 1, max = 16, store = CtBuffs, key = "max", y = -464,
+    min = 1, max = 16, store = CtBuffs, key = "max", y = -48,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtBuffMax:ClearAllPoints()
-KART.SldCtBuffMax:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -480)
+KART.SldCtBuffMax:SetPoint("TOPLEFT", ctBuffCard, "TOPLEFT", 260, -64)
 
-KART.SldCtBuffSize = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtBuffSize = KART.UI:CreateSettingsSlider(ctBuffCard, {
     name = "KART_CtBuffSizeSlider", label = L.SET_CT_AURA_SIZE,
-    min = 12, max = 40, store = CtBuffs, key = "size", y = -504,
+    min = 12, max = 40, store = CtBuffs, key = "size", y = -88,
     onChanged = CtLayoutChanged,
 })
-KART.SldCtBuffSpacing = KART.UI:CreateSettingsSlider(ctAuraCard, {
+KART.SldCtBuffSpacing = KART.UI:CreateSettingsSlider(ctBuffCard, {
     name = "KART_CtBuffSpacingSlider", label = L.SET_CT_AURA_SPACING,
-    min = 0, max = 8, store = CtBuffs, key = "spacing", y = -504,
+    min = 0, max = 8, store = CtBuffs, key = "spacing", y = -88,
     onChanged = CtLayoutChanged,
 })
 KART.SldCtBuffSpacing:ClearAllPoints()
-KART.SldCtBuffSpacing:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -520)
+KART.SldCtBuffSpacing:SetPoint("TOPLEFT", ctBuffCard, "TOPLEFT", 260, -104)
 
-KART.BtnCtBuffAnchor = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
-KART.BtnCtBuffAnchor:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 20, -544)
+KART.BtnCtBuffAnchor = KART.UI:CreateModernButton(ctBuffCard, L.SET_CT_AURA_ANCHOR, L.DESC_CT_AURA_ANCHOR)
+KART.BtnCtBuffAnchor:SetPoint("TOPLEFT", ctBuffCard, "TOPLEFT", 20, -128)
 KART.BtnCtBuffAnchor:SetSize(220, 22)
 KART.BtnCtBuffAnchor:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -2035,8 +2208,8 @@ KART.BtnCtBuffAnchor:SetScript("OnClick", function(self)
     end)
 end)
 
-KART.BtnCtBuffGrowth = KART.UI:CreateModernButton(ctAuraCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
-KART.BtnCtBuffGrowth:SetPoint("TOPLEFT", ctAuraCard, "TOPLEFT", 260, -544)
+KART.BtnCtBuffGrowth = KART.UI:CreateModernButton(ctBuffCard, L.SET_CT_AURA_GROWTH, L.DESC_CT_AURA_GROWTH)
+KART.BtnCtBuffGrowth:SetPoint("TOPLEFT", ctBuffCard, "TOPLEFT", 260, -128)
 KART.BtnCtBuffGrowth:SetSize(220, 22)
 KART.BtnCtBuffGrowth:SetScript("OnClick", function(self)
     MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -2128,21 +2301,21 @@ local function CtAddStripExtras(card, storeFn, prefix, y0)
     }
 end
 
-KART.CtDebuffExtra = CtAddStripExtras(ctAuraCard, CtDebuffs, "DebuffEx", -158)
-KART.CtBuffExtra = CtAddStripExtras(ctAuraCard, CtBuffs, "BuffEx", -574)
+KART.CtDebuffExtra = CtAddStripExtras(ctDebuffCard, CtDebuffs, "DebuffEx", -158)
+KART.CtBuffExtra = CtAddStripExtras(ctBuffCard, CtBuffs, "BuffEx", -158)
 
-KART.CbCtHideLongBuffs = KART.UI:CreateSettingsCheckbox(ctAuraCard, {
+KART.CbCtHideLongBuffs = KART.UI:CreateSettingsCheckbox(ctBuffCard, {
     name = "KART_CtHideLongBuffs", label = L.SET_CT_HIDE_LONG_DURATION,
     tooltip = L.DESC_CT_HIDE_LONG_BUFFS,
-    store = CtBuffs, key = "hideLongDuration", y = -784,
+    store = CtBuffs, key = "hideLongDuration", y = -360,
     onChanged = CtLayoutChanged,
 })
 KART.CbCtHideLongBuffs.text:SetWidth(430)
 KART.CbCtHideLongBuffs.text:SetJustifyH("LEFT")
 
-local ctAuraChromeNote = ctAuraCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-ctAuraChromeNote:SetPoint("BOTTOMLEFT", ctAuraCard, "BOTTOMLEFT", 20, 12)
-ctAuraChromeNote:SetPoint("BOTTOMRIGHT", ctAuraCard, "BOTTOMRIGHT", -20, 12)
+local ctAuraChromeNote = ctBuffCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+ctAuraChromeNote:SetPoint("BOTTOMLEFT", ctBuffCard, "BOTTOMLEFT", 20, 12)
+ctAuraChromeNote:SetPoint("BOTTOMRIGHT", ctBuffCard, "BOTTOMRIGHT", -20, 12)
 ctAuraChromeNote:SetJustifyH("LEFT")
 ctAuraChromeNote:SetWordWrap(true)
 ctAuraChromeNote:SetText(L.SET_CT_AURA_DUMMY_CHROME)
@@ -2162,18 +2335,18 @@ local function CtTauntChanged()
     if KART.CT and KART.CT.RefreshAskButton then KART.CT.RefreshAskButton() end
 end
 
-local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctTauntCard:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -20)
-ctTauntCard:SetSize(500, 320)
-
-local ctTauntTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-ctTauntTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -14)
+local ctTauntTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctTauntTitle:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -18)
 ctTauntTitle:SetText(L.LABEL_CT_TAUNT)
 KART.UI:RegisterLabel(ctTauntTitle)
 
+local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctTauntCard:SetPoint("TOPLEFT", ctTauntTitle, "BOTTOMLEFT", 0, -10)
+ctTauntCard:SetSize(500, 252)
+
 KART.CbCtTauntAnnounce = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
     name = "KART_CtTauntAnnounce", label = L.SET_CT_TAUNT_ANNOUNCE,
-    store = CtTaunt, key = "announce", y = -36,
+    store = CtTaunt, key = "announce", y = -32,
     tooltip = L.DESC_CT_TAUNT_ANNOUNCE,
 })
 KART.CbCtTauntAnnounce.text:SetWidth(430)
@@ -2181,55 +2354,124 @@ KART.CbCtTauntAnnounce.text:SetJustifyH("LEFT")
 
 KART.CbCtTauntOnlyGroup = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
     name = "KART_CtTauntOnlyGroup", label = L.SET_CT_TAUNT_ONLY_GROUP,
-    store = CtTaunt, key = "onlyInGroup", y = -66,
+    store = CtTaunt, key = "onlyInGroup", y = -54,
     tooltip = L.DESC_CT_TAUNT_ONLY_GROUP,
 })
-KART.CbCtTauntOnlyInstance = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntOnlyInstance", label = L.SET_CT_TAUNT_ONLY_INSTANCE,
-    store = CtTaunt, key = "onlyInInstance", y = -66,
-    tooltip = L.DESC_CT_TAUNT_ONLY_INSTANCE,
+KART.CbCtTauntOnlyGroup.text:SetWidth(430)
+KART.CbCtTauntOnlyGroup.text:SetJustifyH("LEFT")
+
+KART.CbCtTauntOnlyDungeon = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntOnlyDungeon", label = L.SET_CT_TAUNT_ONLY_DUNGEON,
+    store = CtTaunt, key = "onlyInDungeon", y = -76,
+    tooltip = L.DESC_CT_TAUNT_ONLY_DUNGEON,
 })
-KART.CbCtTauntOnlyInstance:ClearAllPoints()
-KART.CbCtTauntOnlyInstance:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -66)
-KART.CbCtTauntOnlyInstance.text:SetWidth(192)
-KART.CbCtTauntOnlyInstance.text:SetJustifyH("LEFT")
+KART.CbCtTauntOnlyDungeon.text:SetWidth(192)
+KART.CbCtTauntOnlyDungeon.text:SetJustifyH("LEFT")
+
+KART.CbCtTauntOnlyRaid = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtTauntOnlyRaid", label = L.SET_CT_TAUNT_ONLY_RAID,
+    store = CtTaunt, key = "onlyInRaid", y = -76,
+    tooltip = L.DESC_CT_TAUNT_ONLY_RAID,
+})
+KART.CbCtTauntOnlyRaid:ClearAllPoints()
+KART.CbCtTauntOnlyRaid:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -76)
+KART.CbCtTauntOnlyRaid.text:SetWidth(192)
+KART.CbCtTauntOnlyRaid.text:SetJustifyH("LEFT")
 
 local ctTauntChanTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 ctTauntChanTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -100)
 ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS)
 KART.UI:RegisterLabel(ctTauntChanTitle)
 
-KART.CbCtTauntWhisper = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntWhisper", label = L.SET_CT_TAUNT_WHISPER,
-    store = CtTauntChannels, key = "WHISPER", y = -116,
-})
-KART.CbCtTauntGroup = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntGroup", label = L.SET_CT_TAUNT_GROUP,
-    store = CtTauntChannels, key = "GROUP", y = -116,
-})
-KART.CbCtTauntGroup:ClearAllPoints()
-KART.CbCtTauntGroup:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -116)
-KART.CbCtTauntGroup.text:SetWidth(192)
-KART.CbCtTauntGroup.text:SetJustifyH("LEFT")
+-- Packed chip row, same ON/OFF fill as invite channels: five labels in a line
+-- (wrapping if a locale is long) instead of a tight two-column checkbox stack.
+local tauntChipHost = CreateFrame("Frame", nil, ctTauntCard)
+tauntChipHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -118)
+tauntChipHost:SetSize(460, 22)
 
-KART.CbCtTauntRW = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntRW", label = L.SET_CT_TAUNT_RW,
-    store = CtTauntChannels, key = "RAID_WARNING", y = -146,
-})
-KART.CbCtTauntSay = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntSay", label = L.SET_CT_TAUNT_SAY,
-    store = CtTauntChannels, key = "SAY", y = -146,
-})
-KART.CbCtTauntSay:ClearAllPoints()
-KART.CbCtTauntSay:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -146)
+local function PaintTauntChannelChip(btn, on)
+    local r, g, b = KART.UI:AccentColor()
+    if on then
+        btn:SetBackdropColor(r, g, b, 0.55)
+        btn:SetBackdropBorderColor(r, g, b, 1)
+        btn.text:SetTextColor(1, 1, 1)
+    else
+        btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+        btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+        btn.text:SetTextColor(0.55, 0.55, 0.55)
+    end
+end
 
-KART.CbCtTauntYell = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntYell", label = L.SET_CT_TAUNT_YELL,
-    store = CtTauntChannels, key = "YELL", y = -176,
-})
+local function CreateTauntChannelChip(label, key)
+    local btn = KART.UI:CreateModernButton(ctTauntCard, label)
+    btn:SetHeight(22)
+    local function refresh()
+        if not KART_Settings then
+            btn.chipOn = false
+            PaintTauntChannelChip(btn, false)
+            return
+        end
+        local ch = CtTauntChannels()
+        btn.chipOn = ch[key] == true
+        PaintTauntChannelChip(btn, btn.chipOn)
+    end
+    function btn:SetChecked(value)
+        self.chipOn = not not value
+        PaintTauntChannelChip(self, self.chipOn)
+    end
+    function btn:GetChecked()
+        return self.chipOn
+    end
+    btn:SetScript("OnClick", function()
+        if not KART_Settings then return end
+        local ch = CtTauntChannels()
+        ch[key] = not ch[key]
+        refresh()
+    end)
+    btn:SetScript("OnEnter", function(self)
+        local r, g, b = KART.UI:AccentColor()
+        if self.chipOn then
+            local lr, lg, lb = KAUI.Lighten(r, g, b, 0.12)
+            self:SetBackdropColor(lr, lg, lb, 0.75)
+        else
+            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
+        end
+    end)
+    btn:SetScript("OnLeave", function() refresh() end)
+    btn.Refresh = refresh
+    btn.channelKey = key
+    refresh()
+    return btn
+end
+
+KART.CbCtTauntWhisper = CreateTauntChannelChip(L.SET_CT_TAUNT_WHISPER, "WHISPER")
+KART.CbCtTauntGroup = CreateTauntChannelChip(L.SET_CT_TAUNT_GROUP, "GROUP")
+KART.CbCtTauntRW = CreateTauntChannelChip(L.SET_CT_TAUNT_RW, "RAID_WARNING")
+KART.CbCtTauntSay = CreateTauntChannelChip(L.SET_CT_TAUNT_SAY, "SAY")
+KART.CbCtTauntYell = CreateTauntChannelChip(L.SET_CT_TAUNT_YELL, "YELL")
+KART.TauntChannelChips = {
+    KART.CbCtTauntWhisper, KART.CbCtTauntGroup, KART.CbCtTauntRW,
+    KART.CbCtTauntSay, KART.CbCtTauntYell,
+}
+
+function KART.LayoutTauntChannelChips()
+    -- One row of equal chips; wrapping left Yell on its own line and a hole on the right.
+    local n = #KART.TauntChannelChips
+    local gap, maxW, h = 4, 460, 22
+    local w = math.floor((maxW - gap * (n - 1)) / n)
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    for i, chip in ipairs(KART.TauntChannelChips) do
+        chip:SetSize(w, h)
+        chip.text:SetFont(font, 9, "")
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", tauntChipHost, "TOPLEFT", (i - 1) * (w + gap), 0)
+    end
+    tauntChipHost:SetHeight(h)
+end
+KART.LayoutTauntChannelChips()
 
 local ctTauntMsgLabel = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-ctTauntMsgLabel:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -210)
+ctTauntMsgLabel:SetPoint("TOPLEFT", tauntChipHost, "BOTTOMLEFT", 0, -12)
 ctTauntMsgLabel:SetText(L.SET_CT_TAUNT_MESSAGE)
 KART.UI:RegisterLabel(ctTauntMsgLabel)
 
@@ -2248,18 +2490,18 @@ ctTauntPlace:SetJustifyH("LEFT")
 ctTauntPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS)
 KART.UI:RegisterLabel(ctTauntPlace)
 
-local ctAskCard = KART.UI:CreateCard(KART.CoTankPanel)
-ctAskCard:SetPoint("TOPLEFT", ctTauntCard, "BOTTOMLEFT", 0, -20)
-ctAskCard:SetSize(500, 340)
-
-local ctAskTitle = ctAskCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-ctAskTitle:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -14)
+local ctAskTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctAskTitle:SetPoint("TOPLEFT", ctTauntCard, "BOTTOMLEFT", 0, -18)
 ctAskTitle:SetText(L.LABEL_CT_TAUNT_ASK)
 KART.UI:RegisterLabel(ctAskTitle)
 
+local ctAskCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctAskCard:SetPoint("TOPLEFT", ctAskTitle, "BOTTOMLEFT", 0, -10)
+ctAskCard:SetSize(500, 268)
+
 KART.CbCtTauntButton = KART.UI:CreateSettingsCheckbox(ctAskCard, {
     name = "KART_CtTauntButton", label = L.SET_CT_TAUNT_BUTTON,
-    store = CtTaunt, key = "button", y = -36,
+    store = CtTaunt, key = "button", y = -32,
     tooltip = L.DESC_CT_TAUNT_BUTTON,
     onChanged = CtTauntChanged,
 })
@@ -2268,33 +2510,35 @@ KART.CbCtTauntButton.text:SetJustifyH("LEFT")
 
 KART.CbCtTauntBtnLock = KART.UI:CreateSettingsCheckbox(ctAskCard, {
     name = "KART_CtTauntBtnLock", label = L.SET_CT_TAUNT_BTN_LOCK,
-    store = CtTaunt, key = "locked", y = -66,
+    store = CtTaunt, key = "locked", y = -54,
     tooltip = L.DESC_CT_TAUNT_BTN_LOCK,
 })
 KART.CbCtTauntBtnGroup = KART.UI:CreateSettingsCheckbox(ctAskCard, {
     name = "KART_CtTauntBtnGroup", label = L.SET_CT_TAUNT_BTN_GROUP,
-    store = CtTaunt, key = "buttonOnlyInGroup", y = -96,
+    store = CtTaunt, key = "buttonOnlyInGroup", y = -76,
     onChanged = CtTauntChanged,
 })
+KART.CbCtTauntBtnGroup.text:SetWidth(192)
+KART.CbCtTauntBtnGroup.text:SetJustifyH("LEFT")
 KART.CbCtTauntBtnRaid = KART.UI:CreateSettingsCheckbox(ctAskCard, {
     name = "KART_CtTauntBtnRaid", label = L.SET_CT_TAUNT_BTN_RAID,
-    store = CtTaunt, key = "buttonOnlyInRaid", y = -96,
+    store = CtTaunt, key = "buttonOnlyInRaid", y = -76,
     tooltip = L.DESC_CT_TAUNT_BTN_RAID,
     onChanged = CtTauntChanged,
 })
 KART.CbCtTauntBtnRaid:ClearAllPoints()
-KART.CbCtTauntBtnRaid:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 260, -96)
+KART.CbCtTauntBtnRaid:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 260, -76)
 KART.CbCtTauntBtnRaid.text:SetWidth(192)
 KART.CbCtTauntBtnRaid.text:SetJustifyH("LEFT")
 
 KART.SldCtTauntSize = KART.UI:CreateSettingsSlider(ctAskCard, {
     name = "KART_CtTauntSizeSlider", label = L.SET_CT_TAUNT_SIZE,
-    min = 20, max = 80, store = CtTaunt, key = "size", y = -136,
+    min = 20, max = 80, store = CtTaunt, key = "size", y = -108,
     onChanged = CtTauntChanged,
 })
 
 local ctAskMsgLabel = ctAskCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-ctAskMsgLabel:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -186)
+ctAskMsgLabel:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -156)
 ctAskMsgLabel:SetText(L.SET_CT_TAUNT_ASK)
 KART.UI:RegisterLabel(ctAskMsgLabel)
 
@@ -2314,7 +2558,7 @@ ctAskPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS)
 KART.UI:RegisterLabel(ctAskPlace)
 
 KART.BtnCtTauntMacro = KART.UI:CreateModernButton(ctAskCard, L.BTN_CT_TAUNT_MACRO, L.DESC_CT_TAUNT_MACRO)
-KART.BtnCtTauntMacro:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -280)
+KART.BtnCtTauntMacro:SetPoint("TOPLEFT", ctAskCard, "TOPLEFT", 20, -228)
 KART.BtnCtTauntMacro:SetSize(280, 24)
 KART.BtnCtTauntMacro:SetScript("OnClick", function()
     if not KART.CT or not KART.CT.CreateAskMacro then return end
@@ -2324,20 +2568,38 @@ KART.BtnCtTauntMacro:SetScript("OnClick", function()
     end
 end)
 
--- 9. Close button: invisible hit area over the X baked into the artwork.
--- HIGHLIGHT-layer texture shows automatically on hover, no scripts needed.
+-- 9. Close button. The artwork no longer has a baked X; this glyph is the only one.
+-- Not RegisterCloseButtonText: that restyle path forces 18px OUTLINE. Size stays
+-- fixed; color follows the accent picker. Vertically centered with Search.
+local CLOSE_GLYPH_SIZE = 32
 local closeBtn = CreateFrame("Button", nil, clickArea)
-closeBtn:SetSize(36, 36)
-closeBtn:SetPoint("CENTER", clickArea, "TOPRIGHT", -27, -24)
-local closeHover = closeBtn:CreateTexture(nil, "HIGHLIGHT")
-closeHover:SetAllPoints()
-closeHover:SetColorTexture(1, 1, 1, 0.08)
+closeBtn:SetSize(40, 40)
+closeBtn:SetPoint("CENTER", clickArea, "TOPRIGHT", -22, -31)
+closeBtn.text = closeBtn:CreateFontString(nil, "OVERLAY")
+closeBtn.text:SetFont(KART.UI.lastFont or "Fonts\\FRIZQT__.TTF", CLOSE_GLYPH_SIZE, "")
+closeBtn.text:SetPoint("CENTER", 0, 1)
+closeBtn.text:SetText("×")
+function KART.PaintCloseButton()
+    closeBtn.text:SetFont(KART.UI.lastFont or "Fonts\\FRIZQT__.TTF", CLOSE_GLYPH_SIZE, "")
+    if not closeBtn.isHovered then
+        closeBtn.text:SetTextColor(KART.UI:AccentColor())
+    end
+end
+KART.PaintCloseButton()
+closeBtn:SetScript("OnEnter", function(self)
+    self.isHovered = true
+    self.text:SetTextColor(1, 1, 1)
+end)
+closeBtn:SetScript("OnLeave", function(self)
+    self.isHovered = false
+    self.text:SetTextColor(KART.UI:AccentColor())
+end)
 closeBtn:SetScript("OnClick", function() KART.MainFrame:Hide() end)
 mainFrame.closeBtn = closeBtn
 
 -- 10. Settings search: small always-visible button + popout (edit box + up to 8 result rows).
 -- Positioned left of the close button, in the same header row as the active tab's title, well
--- clear of the close button's hit area (closeBtn spans roughly x -45..-9, y -42..-6 from
+-- clear of the close button's hit area (closeBtn is 40×40, centered at -22,-31 from
 -- clickArea's TOPRIGHT) and of the baked logo/title zone above y -22.
 local searchBtn = KART.UI:CreateModernButton(clickArea, L.BTN_SEARCH, L.DESC_SEARCH)
 searchBtn:SetSize(70, 22)
@@ -2484,15 +2746,11 @@ function KART.JumpToSearchResult(entry)
 end
 
 -- In-game changelog panel: short summary from KART.InGameChangelog (Utils.lua). Full history is CHANGELOG.md.
-local function FormatChangelogLine(line)
-    line = tostring(line or ""):gsub("%*%*(.-)%*%*", "|cffffffff%1|r")
-    return "•  " .. line
-end
-
 function KART.ShowChangelogPopup()
+    local bodyW = 528
     if not KART.changelogPopup then
         local f = CreateFrame("Frame", "KART_ChangelogPopup", UIParent, "BackdropTemplate")
-        f:SetSize(460, 400)
+        f:SetSize(580, 540)
         f:SetPoint("CENTER")
         KART.UI:RegisterStrataFrame(f, true)
         KART.UI:ApplyPopupArtwork(f)
@@ -2521,7 +2779,7 @@ function KART.ShowChangelogPopup()
         scrollFrame.scrollBarHideable = true
 
         f.scrollChild = CreateFrame("Frame", nil, scrollFrame)
-        f.scrollChild:SetWidth(392)
+        f.scrollChild:SetWidth(bodyW)
         scrollFrame:SetScrollChild(f.scrollChild)
         f.scrollFrame = scrollFrame
         KART.changelogPopup = f
@@ -2530,40 +2788,103 @@ function KART.ShowChangelogPopup()
     local f = KART.changelogPopup
     f.title:SetText(L.LABEL_CHANGELOG)
 
-    if f.scrollChild then
-        f.scrollChild:Hide()
-        f.scrollChild:SetParent(nil)
+    -- Reuse the scroll child and its regions. WoW cannot destroy frames; a new child (and a
+    -- FontString/Texture per line) on every open leaked for the rest of the session.
+    local child = f.scrollChild
+    child:SetWidth(bodyW)
+    child:Show()
+    child.kartFS = child.kartFS or {}
+    child.kartTex = child.kartTex or {}
+    local fsUsed, texUsed = 0, 0
+    local function NextFS()
+        fsUsed = fsUsed + 1
+        local fs = child.kartFS[fsUsed]
+        if not fs then
+            fs = child:CreateFontString(nil, "OVERLAY")
+            child.kartFS[fsUsed] = fs
+        end
+        fs:Show()
+        return fs
     end
-    local child = CreateFrame("Frame", nil, f.scrollFrame)
-    child:SetWidth(392)
-    f.scrollFrame:SetScrollChild(child)
-    f.scrollChild = child
+    local function NextTex()
+        texUsed = texUsed + 1
+        local tex = child.kartTex[texUsed]
+        if not tex then
+            tex = child:CreateTexture(nil, "ARTWORK")
+            child.kartTex[texUsed] = tex
+        end
+        tex:Show()
+        return tex
+    end
 
     local ar, ag, ab = KART.UI:AccentColor()
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    local headerSize = (KART.UI.lastMenuSize or 11) + 6
+    local contentSize = KART.UI.lastContentSize or 12
+    local leadSize = contentSize + 1
+    local restSize = math.max(9, contentSize - 2)
+    local innerW = bodyW - 8
     local y = -4
     for _, block in ipairs(KART.InGameChangelog or {}) do
-        local header = child:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local header = NextFS()
+        header:SetFont(font, headerSize, "")
         header:SetPoint("TOPLEFT", child, "TOPLEFT", 0, y)
-        header:SetWidth(392)
+        header:SetWidth(bodyW)
         header:SetJustifyH("LEFT")
         header:SetText(block.version)
         header:SetTextColor(ar, ag, ab)
-        KART.UI:RegisterLabel(header)
-        header:SetTextColor(ar, ag, ab)
-        y = y - header:GetStringHeight() - 10
+        y = y - (header:GetStringHeight() or headerSize) - 6
+        local rule = NextTex()
+        rule:SetColorTexture(ar, ag, ab, 0.45)
+        rule:SetHeight(1)
+        rule:SetPoint("TOPLEFT", child, "TOPLEFT", 0, y)
+        rule:SetPoint("TOPRIGHT", child, "TOPRIGHT", 0, y)
+        y = y - 10
         for _, line in ipairs(block.entries or {}) do
-            local body = child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            body:SetPoint("TOPLEFT", child, "TOPLEFT", 4, y)
-            body:SetWidth(384)
-            body:SetJustifyH("LEFT")
-            body:SetWordWrap(true)
-            body:SetText(FormatChangelogLine(line))
-            body:SetTextColor(0.82, 0.82, 0.82)
-            KART.UI:RegisterLabel(body)
-            body:SetTextColor(0.82, 0.82, 0.82)
-            y = y - body:GetStringHeight() - 8
+            local lead, rest = KART.ParseChangelogLine(line)
+            -- One FontString cannot mix sizes. Lead is the short name (white, slightly
+            -- larger, outline for weight); the note is smaller and dimmer beside it.
+            local leadFS = NextFS()
+            leadFS:SetFont(font, leadSize, "OUTLINE")
+            leadFS:SetPoint("TOPLEFT", child, "TOPLEFT", 2, y)
+            leadFS:SetJustifyH("LEFT")
+            leadFS:SetTextColor(1, 1, 1)
+            leadFS:SetText("•  " .. lead)
+            local usedH = leadFS:GetStringHeight() or leadSize
+            if rest == "" then
+                leadFS:SetWidth(innerW)
+                leadFS:SetWordWrap(true)
+                usedH = leadFS:GetStringHeight() or leadSize
+            else
+                leadFS:SetWordWrap(false)
+                local leadW = leadFS:GetStringWidth() or 0
+                local note = NextFS()
+                note:SetFont(font, restSize, "")
+                note:SetJustifyH("LEFT")
+                note:SetWordWrap(true)
+                note:SetTextColor(0.70, 0.70, 0.70)
+                note:SetText(rest)
+                local stacked = leadW > innerW * 0.55
+                local tight = rest:find("^[,.;:]")
+                if stacked then
+                    note:SetPoint("TOPLEFT", child, "TOPLEFT", 16, y - usedH - 2)
+                    note:SetWidth(innerW - 14)
+                else
+                    local gap = tight and 1 or 6
+                    local baseline = math.floor((leadSize - restSize) / 2)
+                    note:SetPoint("TOPLEFT", leadFS, "TOPRIGHT", gap, -baseline)
+                    note:SetWidth(math.max(40, innerW - leadW - gap))
+                end
+                local noteH = note:GetStringHeight() or restSize
+                if stacked then
+                    usedH = usedH + 2 + noteH
+                else
+                    usedH = math.max(usedH, noteH + (math.floor((leadSize - restSize) / 2)))
+                end
+            end
+            y = y - usedH - 8
         end
-        y = y - 12
+        y = y - 14
     end
     child:SetHeight(math.abs(y) + 8)
     f.scrollFrame:SetVerticalScroll(0)
@@ -2583,6 +2904,7 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnCoTank.text:SetText(L.TAB_COTANK)
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
+    if KART.SidebarModulesHeader then KART.SidebarModulesHeader:SetText(L.LABEL_MODULES) end
     if KART.SidebarSystemHeader then KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM) end
     if KART.BtnChangelog then
         KART.BtnChangelog.text:SetText(L.BTN_CHANGELOG)
@@ -2600,11 +2922,13 @@ KART.UI:RegisterLocaleRefresher(function()
         for i, btn in ipairs(KART.FooterLinks) do
             if keys[i] then btn.text:SetText(L[keys[i]]) end
         end
+        if KART.RefreshFooterLinks then KART.RefreshFooterLinks() end
     end
+    if KART.RefreshVersionText then KART.RefreshVersionText() end
     KART.RefreshModuleChips()
     if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
     KART.TabTitles[1]:SetText(L.TAB_PROMOTE)
-    KART.TabTitles[2]:SetText(L.LABEL_RAIDLEAD_TOOLS)
+    KART.TabTitles[2]:SetText(L.TAB_RAIDLEAD)
     KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
     KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
     if KART.TabTitles[6] then KART.TabTitles[6]:SetText(L.LABEL_COTANK_SETTINGS) end
@@ -2623,6 +2947,10 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.CbAutoHideCombat.tooltipText = L.DESC_RL_AUTOHIDE_COMBAT
     KART.CbRcReasonDialog.text:SetText(L.SET_RL_RC_REASON)
     KART.CbRcReasonDialog.tooltipText = L.DESC_RL_RC_REASON
+    if KART.CbHideBlizzardRaidManager then
+        KART.CbHideBlizzardRaidManager.text:SetText(L.SET_RL_HIDE_BLIZZARD)
+        KART.CbHideBlizzardRaidManager.tooltipText = L.DESC_RL_HIDE_BLIZZARD
+    end
     KART.PullSlider.title:SetText(L.SET_PULL_TIMER)   KART.PullSlider.tooltipText = L.DESC_PULL_TIMER
     KART.SldRlBarStrata.title:SetText(L.SET_RL_STRATA) KART.SldRlBarStrata.tooltipText = L.DESC_RL_STRATA
     KART.CbRlBarYieldMap.text:SetText(L.SET_RL_YIELD_MAP)
@@ -2728,6 +3056,21 @@ KART.UI:RegisterLocaleRefresher(function()
     end
     if KART.SldCtTargetBorderSize then KART.SldCtTargetBorderSize.title:SetText(L.SET_CT_TARGET_BORDER_SIZE) end
     if KART.BtnCtTargetBorderColor then KART.BtnCtTargetBorderColor.text:SetText(L.SET_CT_TARGET_BORDER_COLOR) end
+    if ctPreviewAsLabel then ctPreviewAsLabel:SetText(L.SET_CT_PREVIEW_AS) end
+    if KART.CtPreviewStateChips then
+        local labels = {
+            ok = L.SET_CT_PREVIEW_OK,
+            oor = L.SET_CT_PREVIEW_OOR,
+            dead = L.SET_CT_PREVIEW_DEAD,
+            offline = L.SET_CT_PREVIEW_OFFLINE,
+        }
+        for _, chip in ipairs(KART.CtPreviewStateChips) do
+            if chip.text and labels[chip.stateKey] then
+                chip.text:SetText(labels[chip.stateKey])
+            end
+        end
+        if KART.LayoutCtPreviewStateChips then KART.LayoutCtPreviewStateChips() end
+    end
     local function relabelText(w, title)
         if not w then return end
         if w.titleFS then w.titleFS:SetText(title) end
@@ -2799,15 +3142,20 @@ KART.UI:RegisterLocaleRefresher(function()
         KART.CbCtTauntOnlyGroup.text:SetText(L.SET_CT_TAUNT_ONLY_GROUP)
         KART.CbCtTauntOnlyGroup.tooltipText = L.DESC_CT_TAUNT_ONLY_GROUP
     end
-    if KART.CbCtTauntOnlyInstance then
-        KART.CbCtTauntOnlyInstance.text:SetText(L.SET_CT_TAUNT_ONLY_INSTANCE)
-        KART.CbCtTauntOnlyInstance.tooltipText = L.DESC_CT_TAUNT_ONLY_INSTANCE
+    if KART.CbCtTauntOnlyDungeon then
+        KART.CbCtTauntOnlyDungeon.text:SetText(L.SET_CT_TAUNT_ONLY_DUNGEON)
+        KART.CbCtTauntOnlyDungeon.tooltipText = L.DESC_CT_TAUNT_ONLY_DUNGEON
+    end
+    if KART.CbCtTauntOnlyRaid then
+        KART.CbCtTauntOnlyRaid.text:SetText(L.SET_CT_TAUNT_ONLY_RAID)
+        KART.CbCtTauntOnlyRaid.tooltipText = L.DESC_CT_TAUNT_ONLY_RAID
     end
     if KART.CbCtTauntWhisper then KART.CbCtTauntWhisper.text:SetText(L.SET_CT_TAUNT_WHISPER) end
     if KART.CbCtTauntGroup then KART.CbCtTauntGroup.text:SetText(L.SET_CT_TAUNT_GROUP) end
     if KART.CbCtTauntRW then KART.CbCtTauntRW.text:SetText(L.SET_CT_TAUNT_RW) end
     if KART.CbCtTauntSay then KART.CbCtTauntSay.text:SetText(L.SET_CT_TAUNT_SAY) end
     if KART.CbCtTauntYell then KART.CbCtTauntYell.text:SetText(L.SET_CT_TAUNT_YELL) end
+    if KART.LayoutTauntChannelChips then KART.LayoutTauntChannelChips() end
     if KART.CbCtTauntButton then
         KART.CbCtTauntButton.text:SetText(L.SET_CT_TAUNT_BUTTON)
         KART.CbCtTauntButton.tooltipText = L.DESC_CT_TAUNT_BUTTON

@@ -70,6 +70,7 @@ function KART.RaidleadBarLayoutMetrics(buttonSize)
         readyX = readyX,
         buffX = buffX,
         pullX = readyX,
+        toolsX = buffX,
         barWidth = buffX + buttonSize + rightMargin,
         barHeight = margin + buttonSize + 2 + buttonSize + margin,
         markerDotSize = math.max(8, math.floor(12 * buttonSize / 22 + 0.5)),
@@ -95,7 +96,11 @@ local function CreateBarButton(parent, x, y, width, height, func, texture, texCo
         b.icon:SetTexture(texture)
         b.icon:SetPoint("TOPLEFT", 2, -2)
         b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
-        if texCoords then b.icon:SetTexCoord(unpack(texCoords)) end
+        if texCoords then
+            b.icon:SetTexCoord(unpack(texCoords))
+        elseif type(texture) == "number" or (type(texture) == "string" and texture:find("ICONS", 1, true)) then
+            KAUI.CropSpellIcon(b.icon)
+        end
     end
 
     if text then
@@ -228,13 +233,19 @@ function KART.ApplyRaidleadBarLook()
     place(rlReadyBtn, metrics.readyX, metrics.row1Y)
     place(rlBuffBtn, metrics.buffX, metrics.row1Y)
     place(KART.PullBtn, metrics.pullX, metrics.row2Y)
+    place(KART.RlToolsBtn, metrics.toolsX, metrics.row2Y)
 end
 
 -- Own stratum, not the window-layer slider. Sharing RegisterStrataFrame made the toolbar follow
 -- every KART window, which is how it sat on the map. Map canvas is MEDIUM+toplevel, so HIGH/MEDIUM
--- still covers it: with rlBarYieldToMap, drop to LOW while the map is open. Hide() on the secure
--- marker buttons is combat-locked; SetFrameStrata is not.
+-- still covers it: with rlBarYieldToMap, drop to LOW while the map is open.
+--
+-- Hide() on the secure marker buttons is combat-locked. SetFrameStrata is also protected on this
+-- bar (SecureActionButtonTemplate children). A WorldMapFrame OnShow hook runs inside Blizzard's
+-- ShowUIPanel, so calling SetFrameStrata there is ADDON_ACTION_BLOCKED. Combat skips; Core.lua's
+-- PLAYER_REGEN_ENABLED reapplies via UpdateRaidleadBarVisibility.
 function KART.ApplyRaidleadBarStrata()
+    if InCombatLockdown() then return end
     if KART.IsEditModeActive and KART.IsEditModeActive() then
         rlBar:SetFrameStrata("FULLSCREEN")
         return
@@ -251,13 +262,17 @@ function KART.ApplyRaidleadBarStrata()
     rlBar:SetFrameStrata(levels[idx])
 end
 
+local function ScheduleRaidleadBarStrata()
+    C_Timer.After(0, KART.ApplyRaidleadBarStrata)
+end
+
 local mapHooked
 local function HookWorldMap()
     local map = WorldMapFrame
     if mapHooked or not map or not map.HookScript then return end
     mapHooked = true
-    map:HookScript("OnShow", KART.ApplyRaidleadBarStrata)
-    map:HookScript("OnHide", KART.ApplyRaidleadBarStrata)
+    map:HookScript("OnShow", ScheduleRaidleadBarStrata)
+    map:HookScript("OnHide", ScheduleRaidleadBarStrata)
     KART.ApplyRaidleadBarStrata()
 end
 
@@ -273,6 +288,8 @@ function KART.UpdateRaidleadBarVisibility()
         rlBar:Hide()
         KART.ApplyKeybinds()
         KART.ApplyRaidleadBarStrata()
+        if KART.RlToolsPanel then KART.RlToolsPanel:Hide() end
+        KART.ApplyBlizzardRaidManagerVisibility(true)
         return
     end
 
@@ -287,6 +304,7 @@ function KART.UpdateRaidleadBarVisibility()
         KART.ApplyKeybinds()
         KART.ApplyRaidleadBarStrata()
         if KART.RefreshEditModeChrome then KART.RefreshEditModeChrome() end
+        KART.ApplyBlizzardRaidManagerVisibility(not KART.ShouldHideBlizzardRaidManager())
         return
     end
 
@@ -312,6 +330,10 @@ function KART.UpdateRaidleadBarVisibility()
     -- shown and clears them when it isn't, so a hidden bar never leaves a key hijacked.
     KART.ApplyKeybinds()
     KART.ApplyRaidleadBarStrata()
+    if not rlBar:IsShown() and KART.RlToolsPanel then
+        KART.RlToolsPanel:Hide()
+    end
+    KART.ApplyBlizzardRaidManagerVisibility(not KART.ShouldHideBlizzardRaidManager())
 end
 
 -- Applies every stored keybind as an override click-binding on its target button. Override
@@ -398,6 +420,137 @@ KART.PullBtn = CreateBarButton(rlBar, initMetrics.pullX, initMetrics.row2Y, 22, 
     end
 end, "Interface\\ICONS\\Spell_Haste_Duration_01", nil, L.RL_PULL_LABEL, nil, L.RL_PULL_TIMER, "KART_RL_PullTimerBtn")
 
+function KART.ShouldHideBlizzardRaidManager()
+    local s = KART_Settings
+    return s and s.showRaidleadBar == true and s.hideBlizzardRaidManager == true
+end
+
+function KART.ApplyBlizzardRaidManagerVisibility(restore)
+    local mgr = _G.CompactRaidFrameManager
+    if not mgr then return end
+    if InCombatLockdown() then return end
+    if KART.ShouldHideBlizzardRaidManager() then
+        mgr:Hide()
+        return
+    end
+    if restore and _G.CompactRaidFrameManager_UpdateShown and not KART._restoringCRFM then
+        KART._restoringCRFM = true
+        CompactRaidFrameManager_UpdateShown()
+        KART._restoringCRFM = nil
+    end
+end
+
+if type(hooksecurefunc) == "function" and _G.CompactRaidFrameManager_UpdateShown then
+    hooksecurefunc("CompactRaidFrameManager_UpdateShown", function()
+        if KART._restoringCRFM then return end
+        KART.ApplyBlizzardRaidManagerVisibility()
+    end)
+end
+
+local function RestrictPingsLabel()
+    local Lx = KART.L
+    local get = C_PartyInfo and C_PartyInfo.GetRestrictPings
+    local cur = get and get()
+    local enum = _G.Enum and _G.Enum.RestrictPingsTo
+    if enum then
+        if cur == enum.Lead then return Lx.RL_RESTRICT_PINGS_LEAD end
+        if cur == enum.Assist then return Lx.RL_RESTRICT_PINGS_ASSIST end
+        if cur == enum.TankHealer then return Lx.RL_RESTRICT_PINGS_TANKHEAL end
+    end
+    return Lx.RL_RESTRICT_PINGS
+end
+
+local function RefreshToolsPanel()
+    local panel = KART.RlToolsPanel
+    if not panel then return end
+    local Lx = KART.L
+    if KART.RlRolePollBtn and KART.RlRolePollBtn.text then
+        KART.RlRolePollBtn.text:SetText(Lx.RL_ROLE_POLL)
+    end
+    if KART.RlConvertBtn and KART.RlConvertBtn.text then
+        if IsInRaid() then
+            KART.RlConvertBtn.text:SetText(Lx.RL_CONVERT_PARTY)
+        else
+            KART.RlConvertBtn.text:SetText(Lx.RL_CONVERT_RAID)
+        end
+        if KART.UI.FitButtonToLabel then KART.UI:FitButtonToLabel(KART.RlConvertBtn) end
+    end
+    if KART.RlRestrictPingsBtn and KART.RlRestrictPingsBtn.text then
+        KART.RlRestrictPingsBtn.text:SetText(RestrictPingsLabel())
+        if KART.UI.FitButtonToLabel then KART.UI:FitButtonToLabel(KART.RlRestrictPingsBtn) end
+    end
+end
+
+local toolsPanel = CreateFrame("Frame", "KART_RlToolsPanel", UIParent, "BackdropTemplate")
+KART.RlToolsPanel = toolsPanel
+toolsPanel:SetSize(210, 118)
+toolsPanel:SetFrameStrata("DIALOG")
+toolsPanel:EnableMouse(true)
+toolsPanel:Hide()
+KART.UI:SetPixelBackdrop(toolsPanel, {
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    edgeSize = 1,
+})
+toolsPanel:SetBackdropColor(0.06, 0.06, 0.06, 0.95)
+toolsPanel:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+KART.UI:ApplyRoundedMask(toolsPanel, KAUI.CORNER_RADIUS_LG)
+
+local function MakeToolsRow(label, y, onClick)
+    local btn = KART.UI:CreateModernButton(toolsPanel, label)
+    btn:SetPoint("TOPLEFT", toolsPanel, "TOPLEFT", 12, y)
+    btn:SetSize(186, 22)
+    btn:SetScript("OnClick", onClick)
+    return btn
+end
+
+KART.RlRolePollBtn = MakeToolsRow(L.RL_ROLE_POLL, -12, function()
+    if InitiateRolePoll then InitiateRolePoll() end
+end)
+
+KART.RlConvertBtn = MakeToolsRow(L.RL_CONVERT_RAID, -42, function()
+    if not C_PartyInfo then return end
+    if IsInRaid() then
+        if C_PartyInfo.ConvertToParty then C_PartyInfo.ConvertToParty() end
+    else
+        if C_PartyInfo.ConvertToRaid then C_PartyInfo.ConvertToRaid() end
+    end
+    RefreshToolsPanel()
+end)
+
+KART.RlRestrictPingsBtn = MakeToolsRow(L.RL_RESTRICT_PINGS, -72, function(self)
+    if not (MenuUtil and MenuUtil.CreateContextMenu and C_PartyInfo and C_PartyInfo.SetRestrictPings) then
+        return
+    end
+    local enum = _G.Enum and _G.Enum.RestrictPingsTo
+    if not enum then return end
+    MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+        local Lx = KART.L
+        local function selected(v)
+            return C_PartyInfo.GetRestrictPings() == v
+        end
+        local function choose(v)
+            C_PartyInfo.SetRestrictPings(v)
+            RefreshToolsPanel()
+        end
+        rootDescription:CreateRadio(Lx.RL_RESTRICT_PINGS_NONE, selected, choose, enum.None)
+        rootDescription:CreateRadio(Lx.RL_RESTRICT_PINGS_LEAD, selected, choose, enum.Lead)
+        rootDescription:CreateRadio(Lx.RL_RESTRICT_PINGS_ASSIST, selected, choose, enum.Assist)
+        rootDescription:CreateRadio(Lx.RL_RESTRICT_PINGS_TANKHEAL, selected, choose, enum.TankHealer)
+    end)
+end)
+
+KART.RlToolsBtn = CreateBarButton(rlBar, initMetrics.toolsX, initMetrics.row2Y, 22, 22, function()
+    if toolsPanel:IsShown() then
+        toolsPanel:Hide()
+        return
+    end
+    RefreshToolsPanel()
+    toolsPanel:ClearAllPoints()
+    toolsPanel:SetPoint("TOPLEFT", KART.RlToolsBtn, "BOTTOMLEFT", 0, -4)
+    toolsPanel:Show()
+end, "Interface\\Buttons\\UI-OptionsButton", nil, nil, nil, L.RL_TOOLS, "KART_RL_ToolsBtn")
+
 KART.ApplyRaidleadBarLook()
 
 -- Bar buttons are created at file load with the pre-locale (English) tooltip strings;
@@ -408,10 +561,12 @@ KART.UI:RegisterLocaleRefresher(function()
         KART_RL_ReadyCheckBtn        = KART.L.RL_READYCHECK,
         KART_RL_BuffCheckToggleBtn   = KART.L.RL_BUFFCHECK,
         KART_RL_PullTimerBtn         = KART.L.RL_PULL_TIMER,
+        KART_RL_ToolsBtn             = KART.L.RL_TOOLS,
     }
     for btnName, tip in pairs(tips) do
         local btn = _G[btnName]
         if btn then btn.tooltipText = tip end
     end
     if KART.PullBtn and KART.PullBtn.text then KART.PullBtn.text:SetText(KART.L.RL_PULL_LABEL) end
+    RefreshToolsPanel()
 end)

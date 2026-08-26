@@ -82,9 +82,8 @@ function KART.SyncSettingsToUI()
     if KART.CbGrayOffline then settingsMap[KART.CbGrayOffline] = "grayOffline" end
     if KART.CbMinimap then settingsMap[KART.CbMinimap] = "showMinimapIcon" end
     if KART.CbAutoRaid then settingsMap[KART.CbAutoRaid] = "autoConvertToRaid" end
-    if KART.InviteChannelChips then
-        for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
-    end
+    -- Invite chips paint from AccentColor; that is still the library default until
+    -- UpdateStyles below, so Refresh runs after ApplyStyle, not here.
     if KART.CbAlEnabled then settingsMap[KART.CbAlEnabled] = "autoLogEnabled" end
     if KART.CbAlRaidLFR then settingsMap[KART.CbAlRaidLFR] = "autoLogRaidLFR" end
     if KART.CbAlRaidNormal then settingsMap[KART.CbAlRaidNormal] = "autoLogRaidNormal" end
@@ -101,6 +100,7 @@ function KART.SyncSettingsToUI()
     if KART.SldFrameStrata then settingsMap[KART.SldFrameStrata] = "frameStrata" end
     if KART.SldRlBarStrata then settingsMap[KART.SldRlBarStrata] = "rlBarFrameStrata" end
     if KART.CbRlBarYieldMap then settingsMap[KART.CbRlBarYieldMap] = "rlBarYieldToMap" end
+    if KART.CbHideBlizzardRaidManager then settingsMap[KART.CbHideBlizzardRaidManager] = "hideBlizzardRaidManager" end
     if KART.SldRlBarScale then settingsMap[KART.SldRlBarScale] = "rlBarScale" end
     if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
     if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
@@ -229,7 +229,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         })
         
         -- Set the real version (KART.Version only becomes available here)
-        if KART.MainFrame and KART.MainFrame.versionText then
+        if KART.MainFrame and KART.RefreshVersionText then
+            KART.RefreshVersionText()
+        elseif KART.MainFrame and KART.MainFrame.versionText then
             KART.MainFrame.versionText:SetText("v" .. KART.Version)
         end
 
@@ -577,6 +579,19 @@ function KART.UpdateStyles()
     -- Take-it width is measured in the live font; ApplyStyle restyles the label but does not
     -- re-fit the button.
     if KART.CT and KART.CT.RefreshAskButton then KART.CT.RefreshAskButton() end
+    if KART.RefreshModuleChips then KART.RefreshModuleChips() end
+    if KART.InviteChannelChips then
+        for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
+    end
+    if KART.TauntChannelChips then
+        for _, chip in ipairs(KART.TauntChannelChips) do chip:Refresh() end
+        if KART.LayoutTauntChannelChips then KART.LayoutTauntChannelChips() end
+    end
+    if KART.CtPreviewStateChips then
+        for _, chip in ipairs(KART.CtPreviewStateChips) do chip:Refresh() end
+        if KART.LayoutCtPreviewStateChips then KART.LayoutCtPreviewStateChips() end
+    end
+    if KART.RefreshVersionText then KART.RefreshVersionText() end
 
     -- Border widths are derived from each frame's effective scale (B23), and both size sliders
     -- have been applied by now -- the addon-wide one above, the Loot Council one in

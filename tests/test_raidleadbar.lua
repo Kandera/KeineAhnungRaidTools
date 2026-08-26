@@ -125,13 +125,18 @@ do
     S.rlBarYieldToMap = true
     As(KART.UpdateRaidleadBarVisibility)
     me.env.WorldMapFrame:Show()
-    T.eq(KART.RaidleadBar:GetFrameStrata(), "LOW", "the bar sits under the world map while it is open")
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG",
+        "OnShow does not SetFrameStrata on Blizzard's ShowUIPanel stack")
+    KARTTEST.AdvanceTime(0)
+    T.eq(KART.RaidleadBar:GetFrameStrata(), "LOW", "the bar sits under the world map on the next tick")
     me.env.WorldMapFrame:Hide()
+    KARTTEST.AdvanceTime(0)
     T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "and returns to the bar's own slider, not the window layer")
 
     S.rlBarYieldToMap = false
     As(KART.UpdateRaidleadBarVisibility)
     me.env.WorldMapFrame:Show()
+    KARTTEST.AdvanceTime(0)
     T.eq(KART.RaidleadBar:GetFrameStrata(), "DIALOG", "turning the map switch off keeps the bar's own layer")
     me.env.WorldMapFrame:Hide()
     me.env.WorldMapFrame = nil
@@ -264,4 +269,51 @@ do
     T.eq(KART.RaidleadBar:GetAlpha(), 0.6, "opacity comes from settings")
     S.rlBarButtonSize, S.rlBarScale, S.rlBarAlpha = 22, 100, 100
     As(KART.ApplyRaidleadBarLook)
+end
+
+do
+    local m = KART.RaidleadBarLayoutMetrics(22)
+    T.eq(m.toolsX, m.buffX, "the extra tools button sits under the buff checker")
+end
+
+do
+    T.truthy(KART.RlToolsBtn, "the extra tools button is built")
+    T.truthy(KART.RlToolsPanel, "and it has a panel")
+    T.eq(KART.RlToolsPanel:IsShown(), false, "which starts closed")
+    As(function()
+        KARTTEST.Click(KART.RlToolsBtn)
+    end)
+    T.eq(KART.RlToolsPanel:IsShown(), true, "clicking the slot opens the panel")
+    As(function()
+        KARTTEST.Click(KART.RlToolsBtn)
+    end)
+    T.eq(KART.RlToolsPanel:IsShown(), false, "and clicking it again closes it")
+end
+
+do
+    S.showRaidleadBar = true
+    S.hideBlizzardRaidManager = false
+    CompactRaidFrameManager:Show()
+    As(function() KART.ApplyBlizzardRaidManagerVisibility() end)
+    T.eq(CompactRaidFrameManager:IsShown(), true, "blizzard raid manager stays up while the hide switch is off")
+    S.hideBlizzardRaidManager = true
+    As(function() KART.ApplyBlizzardRaidManagerVisibility() end)
+    T.eq(CompactRaidFrameManager:IsShown(), false, "and hides when the switch is on")
+    S.hideBlizzardRaidManager = false
+    As(function() KART.ApplyBlizzardRaidManagerVisibility(true) end)
+    T.eq(CompactRaidFrameManager:IsShown(), true, "turning the switch off restores blizzard's own show logic")
+end
+
+do
+    KARTTEST.rolePolls = 0
+    KARTTEST.convertedToParty = nil
+    As(function()
+        KART.RlToolsPanel:Show()
+        KARTTEST.Click(KART.RlRolePollBtn)
+    end)
+    T.eq(KARTTEST.rolePolls, 1, "role poll button starts a role poll")
+    As(function()
+        KARTTEST.Click(KART.RlConvertBtn)
+    end)
+    T.eq(KARTTEST.convertedToParty, true, "convert button turns a raid into a party")
 end

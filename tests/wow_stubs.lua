@@ -221,6 +221,13 @@ function _G.C_PartyInfo.InviteUnit(target)
     KARTTEST.invited[#KARTTEST.invited + 1] = target
 end
 function _G.C_PartyInfo.ConvertToRaid() KARTTEST.convertedToRaid = true end
+function _G.C_PartyInfo.ConvertToParty() KARTTEST.convertedToParty = true end
+function _G.C_PartyInfo.GetRestrictPings()
+    return KARTTEST.restrictPings or 0
+end
+function _G.C_PartyInfo.SetRestrictPings(value)
+    KARTTEST.restrictPings = value
+end
 function _G.C_PartyInfo.ConfirmInviteUnit(target)
     KARTTEST.confirmedInvites = KARTTEST.confirmedInvites or {}
     KARTTEST.confirmedInvites[#KARTTEST.confirmedInvites + 1] = target
@@ -569,6 +576,16 @@ function _G.CreateFrame(_, name, parent, _)
     function f:GetHeight() return height end
     function f:GetSize() return width, height end
 
+    -- Hit-rect insets are real state: KAUI's settings slider keeps a 4px visual track and
+    -- expands the clickable area around it. A no-op here would let the factory "succeed" in
+    -- tests while the grab-feel fix never actually stuck.
+    local hitL, hitR, hitT, hitB = 0, 0, 0, 0
+    function f:SetHitRectInsets(l, r, t, b)
+        hitL, hitR, hitT, hitB = l or 0, r or 0, t or 0, b or 0
+        return f
+    end
+    function f:GetHitRectInsets() return hitL, hitR, hitT, hitB end
+
     -- Screen position: nil, because this harness has no layout and cannot answer where a widget
     -- sits. nil is the truthful answer rather than a convenient zero -- the game returns it too,
     -- for an unanchored or hidden region, which is why every caller here already guards for it
@@ -810,7 +827,18 @@ end
 --
 -- KARTTEST.restrictions[type] = state. A test sets it and raises the event; nothing is inferred here.
 _G.Enum = _G.Enum or {}
-_G.Enum.AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4 }
+_G.Enum.RestrictPingsTo = { None = 0, Lead = 1, Assist = 2, TankHealer = 3 }
+_G.C_Ping = _G.C_Ping or {}
+function _G.C_Ping.IsPingSystemEnabled() return true end
+function _G.InitiateRolePoll()
+    KARTTEST.rolePolls = (KARTTEST.rolePolls or 0) + 1
+end
+_G.CompactRaidFrameManager = CreateFrame("Frame", "CompactRaidFrameManager", UIParent)
+_G.CompactRaidFrameManager:Hide()
+function _G.CompactRaidFrameManager_UpdateShown()
+    if not _G.CompactRaidFrameManager then return end
+    _G.CompactRaidFrameManager:SetShown(IsInGroup())
+end
 _G.Enum.AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 }
 KARTTEST.restrictions = {}
 _G.C_RestrictedActions = {
@@ -1554,6 +1582,11 @@ local function NewMenuNode()
         function entry.SetEnabled(_, on) entry.disabled = not on end
         table.insert(self.entries, entry)
         return entry
+    end
+    function node:CreateRadio(text, isSelected, setSelected, data)
+        return self:CreateButton(text, function()
+            if setSelected then setSelected(data) end
+        end)
     end
     return node
 end
