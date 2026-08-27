@@ -491,6 +491,10 @@ function KART.UpdateStyles()
     if KART.InviteChannelChips then
         for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
     end
+    if KART.TauntFilterChips then
+        for _, chip in ipairs(KART.TauntFilterChips) do chip:Refresh() end
+        if KART.LayoutTauntFilterChips then KART.LayoutTauntFilterChips() end
+    end
     if KART.TauntChannelChips then
         for _, chip in ipairs(KART.TauntChannelChips) do chip:Refresh() end
         if KART.LayoutTauntChannelChips then KART.LayoutTauntChannelChips() end
@@ -498,6 +502,10 @@ function KART.UpdateStyles()
     if KART.CtPreviewStateChips then
         for _, chip in ipairs(KART.CtPreviewStateChips) do chip:Refresh() end
         if KART.LayoutCtPreviewStateChips then KART.LayoutCtPreviewStateChips() end
+    end
+    if KART.SwapSoundChips then
+        for _, chip in ipairs(KART.SwapSoundChips) do chip:Refresh() end
+        if KART.LayoutSwapSoundChips then KART.LayoutSwapSoundChips() end
     end
     if KART.RefreshVersionText then KART.RefreshVersionText() end
 

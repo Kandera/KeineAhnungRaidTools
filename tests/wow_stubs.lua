@@ -1294,7 +1294,11 @@ KARTTEST.modifiers = {}
 function _G.IsShiftKeyDown() return KARTTEST.modifiers.shift or false end
 function _G.IsControlKeyDown() return KARTTEST.modifiers.ctrl or false end
 function _G.IsAltKeyDown() return KARTTEST.modifiers.alt or false end
-function _G.PlaySound() end
+function _G.PlaySound(id)
+    KARTTEST.sounds = KARTTEST.sounds or {}
+    KARTTEST.sounds[#KARTTEST.sounds + 1] = id
+end
+_G.SOUNDKIT = { RAID_WARNING = 8959, READY_CHECK = 8960 }
 -- instanceType is part of the answer, not decoration: "none" is where the player spends most of
 -- their time, and anything deciding on the difficultyID alone has to say what it expects that ID to
 -- be out there. Defaults to a raid because that is what almost every test here is about.

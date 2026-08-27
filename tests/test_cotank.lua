@@ -21,6 +21,7 @@ do
         "IsTaunt", "PlayerSpecId", "FormatTauntMessage", "ShouldAnnounce",
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
+        "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
         "BarPass", "AbsorbFill", "HealAbsorbSpan", "SyncStripUnits",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
@@ -696,6 +697,104 @@ do
     KARTTEST.activeUnit = "raid1"
     KART.CT.Ask()
     T.eq(#KARTTEST.chat, 0, "Ask is a no-op without a co-tank")
+end
+
+do
+    TauntReady()
+    KARTTEST.sounds = {}
+    KART.CT.ShowSwapLine("Other, please taunt!")
+    T.truthy(KART.CT.swapLine and KART.CT.swapLine:IsShown(), "a swap ping shows a text line")
+    T.eq(KART.CT.swapLine.text:GetText(), "Other, please taunt!", "with the ask text")
+    T.eq(#KARTTEST.sounds, 0, "sound off by default")
+    KARTTEST.AdvanceTime(2.9)
+    T.eq(KART.CT.swapLine:IsShown(), true, "still up before the duration")
+    KARTTEST.AdvanceTime(0.2)
+    T.eq(KART.CT.swapLine:IsShown(), false, "and hides after 3 seconds")
+end
+
+do
+    TauntReady()
+    env.KART_Settings.ct.taunt.swapLine = { duration = 1, sound = "warning" }
+    KARTTEST.sounds = {}
+    KART.CT.ShowSwapLine("now")
+    T.eq(KARTTEST.sounds[1], 8959, "raid-warning sound kit when chosen")
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(KART.CT.swapLine:IsShown(), false, "duration slider is honoured")
+end
+
+do
+    TauntReady()
+    KART.editModeActive = true
+    KART.CT.RefreshSwapLine()
+    T.truthy(KART.CT.swapLine and KART.CT.swapLine:IsShown(), "edit mode shows the line to place it")
+    T.eq(KART.CT.swapLine:IsMouseEnabled(), true, "edit mode enables mouse on the line")
+    T.truthy(KART.CT.swapLine.hit and KART.CT.swapLine.hit:IsShown(),
+        "and a hit region so a frameless line can be dragged")
+    KARTTEST.AdvanceTime(5)
+    T.eq(KART.CT.swapLine:IsShown(), true, "edit mode does not auto-hide")
+    KART.editModeActive = false
+    KART.CT.RefreshSwapLine()
+    T.eq(KART.CT.swapLine:IsShown(), false, "leaving edit mode hides the sample")
+end
+
+do
+    TauntReady()
+    env.KART_Settings.ct.taunt.swapLine = { testMode = true }
+    KART.CT.RefreshSwapLine()
+    T.truthy(KART.CT.swapLine and KART.CT.swapLine:IsShown(), "swap-line test mode shows the line")
+    KARTTEST.AdvanceTime(5)
+    T.eq(KART.CT.swapLine:IsShown(), true, "and does not auto-hide")
+    env.KART_Settings.ct.taunt.swapLine.testMode = false
+    KART.CT.RefreshSwapLine()
+    T.eq(KART.CT.swapLine:IsShown(), false, "turning test mode off hides it")
+end
+
+do
+    TauntReady()
+    env.KART_Settings.ct.taunt.swapLine = { enabled = false, sound = "warning", testMode = true }
+    KARTTEST.sounds = {}
+    KART.CT.ShowSwapLine("now")
+    T.eq(KART.CT.swapLine == nil or not KART.CT.swapLine:IsShown(), true,
+        "a disabled swap line stays hidden")
+    T.eq(#KARTTEST.sounds, 0, "and plays no sound")
+    KART.editModeActive = true
+    KART.CT.RefreshSwapLine()
+    T.eq(KART.CT.swapLine == nil or not KART.CT.swapLine:IsShown(), true,
+        "including in edit mode")
+    KART.editModeActive = false
+end
+
+do
+    TauntReady()
+    KART.CT.ShowSwapLine("|cff00ff00hi|r")
+    T.eq(KART.CT.swapLine.text:GetText(), "||cff00ff00hi||r",
+        "swap-line text does not render UI escape pipes")
+end
+
+do
+    TauntReady()
+    env.KART_Settings.ctModuleEnabled = false
+    KART.CT.Disable()
+    KART.CT.ShowSwapLine("take it")
+    T.truthy(KART.CT.swapLine and KART.CT.swapLine:IsShown(),
+        "CT_ASK still shows with Co-Tank off")
+    T.eq(KART.CT.swapLine.text:GetText(), "take it", "with the ping text")
+end
+
+do
+    TauntReady()
+    local KASC = LibStub("KASC-1.0")
+    local captured = {}
+    local prev = KASC.Send
+    KASC.Send = function(_, msg, ch, tgt, opts)
+        captured[#captured + 1] = { msg = msg, ch = ch, tgt = tgt, prio = opts and opts.prio }
+    end
+    KART.CT.Ask()
+    KASC.Send = prev
+    T.eq(#captured, 1, "Ask also pings the co-tank over addon whisper")
+    T.eq(captured[1].ch, "WHISPER", "on whisper")
+    T.eq(captured[1].prio, "ALERT", "at ALERT so it is not stuck behind bulk")
+    T.eq(captured[1].msg, "CT_ASK:Other, please taunt!", "carrying the filled ask line")
 end
 
 do

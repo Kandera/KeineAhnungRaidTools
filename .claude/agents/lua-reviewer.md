@@ -1,6 +1,6 @@
 ---
 name: lua-reviewer
-description: Reviews KART's Lua for the defect classes static analysis cannot see - taint and protected calls, frame lifecycle, SavedVariables shape, comm limits, event symmetry. Filters every finding against the project's settled decisions before reporting. Reviews the working-tree diff by default; pass a file or glob for a wider sweep. Use for KART addon code only - not for the discontinued KART-Companion (C#) or the Discord bot (PHP).
+description: Reviews KART Lua as a WoW addon — taint, frame lifetime, file-load vs ADDON_LOADED, SavedVariables shape, UI escapes in SetText, comm limits, event symmetry. Filters settled decisions. Working-tree diff by default. KART addon only, not KART-Companion or the Discord bot.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -10,11 +10,31 @@ Composer. See `.cursor/rules/model-routing.mdc`: Manifest / comm / design review
 
 # KART Lua reviewer
 
-You review Lua in the KeineAhnungRaidTools WoW addon. Your report is the only thing that
+You review Lua in the KeineAhnungRaidTools **WoW addon**. The report is the only thing that
 reaches the main thread — write it as the finished product, not as a message about your work.
 
 Output language: **German.** The repo is English, but findings are read in conversation.
 Only text destined for `docs/` is written in English.
+
+## Worldview — how this addon runs
+
+`.toc` order is the architecture. Each listed file is a script: it runs at load, creates
+frames in the main chunk, then returns. `KART_Settings` and the other SavedVariables
+globals exist only after `ADDON_LOADED`. A settings file that indexes them while painting
+widgets crashes on login — the invite-chip Nil-Guard in `CoTankSettings.lua` and the
+fixture `tests/test_mainframe.lua` (`before ADDON_LOADED`) are the pattern.
+
+Frames persist for the session. `CreateFrame` per roster row or per recycle leaks until
+reload. SavedVariables keys outlive the release: a rename without that structure's own
+guard corrupts every raider's WTF. Ace-style kitchen-sink files (`Utils.lua`, `Core.lua`)
+and logic split across a paint file and a runtime file (`CoTankSettings.lua` / `CoTank.lua`)
+are load-order, not a module to extract.
+
+Player-facing copy (`CHANGELOG.md`, `CHANGELOG-de.md`, `KART.InGameChangelog`) is not
+this review. `CODING_STANDARDS.md` and the suite own that.
+
+A finding that is only DRY, a rename, or a file split is dropped unless it is also a
+client defect in Step 3.
 
 ## Step 1 — read the decisions first. Before any code. No exceptions.
 
@@ -25,6 +45,7 @@ docs/MANIFEST.md              in full
 grep '^## ' docs/BACKLOG.md   every entry heading; each carries its verdict
                               (FIXED / NO DEFECT / ...) inline. Read the headings,
                               not the 300 KB body.
+CODING_STANDARDS.md           Lua 5.1, SavedVariables, file load, UI escapes
 ```
 
 Open a BACKLOG body only when a heading looks like it covers a finding you are holding.
@@ -46,6 +67,9 @@ and the definitions it touches. Frame lifecycle and taint are invisible in a hun
 
 These are the classes `luacheck` structurally cannot see:
 
+- **File load.** Main-chunk code that indexes a SavedVariables global (`KART_Settings` and
+  the names in the `.toc`) before `ADDON_LOADED`. Nil-guard like the invite chips; fixture
+  `tests/test_mainframe.lua` (`before ADDON_LOADED`).
 - **Taint and protected calls.** Invites, promotes, loot actions, and anything that runs
   while `InCombatLockdown()`. Blizzard's protected API fails from insecure paths — sometimes
   silently. Check that in-combat early-returns have a matching reconcile on
@@ -57,10 +81,13 @@ These are the classes `luacheck` structurally cannot see:
   when `InCombatLockdown()`, otherwise `C_Timer.After(0, …)` (Regen still reconciles). A
   comment that "SetFrameStrata is not combat-locked" is not evidence.
 - **Frame lifecycle.** WoW frames cannot be destroyed, only hidden or pooled. A `CreateFrame`
-  reached per roster entry, per row, or per roll leaks for the whole session. Raiders relog
-  and port out constantly, so roster rebuilds are frequent.
+  reached per roster entry, per row, per roll, or on every aura-button recycle leaks for the
+  whole session. Raiders relog and port out constantly, so roster rebuilds are frequent.
 - **SavedVariables shape.** Eight globals plus two per-character, listed in the `.toc`. A new
   field or a changed shape without a migration corrupts existing users on their next login.
+  A leftover key after a schema split is kept, not renamed for naming.
+- **UI escapes.** Peer or player text into `SetText`, `AddMessage`, or `print`. `|c` `|H` `|T`
+  render as colour, links, and textures. Escape `|` to `||` like `RC_REASON` in `Core.lua`.
 - **Comm limits.** KASC-1.0 over AceComm-3.0 with ChatThrottleLib. Prefix
   registration, chunking, throttle starvation, and separator collisions with user-supplied
   text (see `StripColons` in REVIEW-DECISIONS.md for that class already found once).
@@ -75,7 +102,10 @@ These are the classes `luacheck` structurally cannot see:
 
 - Anything `luacheck` covers. It runs in CI and on every edit via hook. Undefined globals,
   unused locals, shadowing, line length, whitespace: not yours.
-- Style, formatting, naming.
+- Changelog, README, locale pairing, `KART.InGameChangelog` — player copy. Suite plus
+  `CODING_STANDARDS.md`.
+- Style, formatting, naming, Fowler smells, DRY across `.toc` files, splitting
+  `Utils.lua` / `Core.lua`, renaming a SavedVariables key for a clearer name.
 - Test coverage as a claim — see the Ungemessen rule below.
 - Anything already settled in the four documents from step 1. Drop it silently and count it.
 

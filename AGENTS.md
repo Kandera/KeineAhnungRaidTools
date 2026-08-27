@@ -1,6 +1,6 @@
 # Project Conventions
 
-User-facing copy, Lua 5.1, SavedVariables shape: `CODING_STANDARDS.md`.
+Changelog, locales, Lua 5.1, SavedVariables: `CODING_STANDARDS.md`.
 
 ## Domain
 

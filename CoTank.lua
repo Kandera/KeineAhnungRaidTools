@@ -3,6 +3,7 @@ KART.CT = KART.CT or {}
 local CT = KART.CT
 local LSM = LibStub("LibSharedMedia-3.0", true)
 local KAUI = LibStub("KAUI-1.0")
+local KASC = LibStub("KASC-1.0")
 
 local DEFAULT_HEALTH_TEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
 
@@ -1421,6 +1422,7 @@ function CT.Refresh()
         end
         CT.RefreshAskButton()
         CT.RefreshPreview()
+        CT.RefreshSwapLine()
         return
     end
     CT.pendingHide = nil
@@ -1458,6 +1460,7 @@ function CT.Refresh()
     end
     CT.RefreshAskButton()
     CT.RefreshPreview()
+    CT.RefreshSwapLine()
     if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
         KART.RefreshEditModeChrome()
     end
@@ -1639,12 +1642,8 @@ function CT.SyncWidgets()
     if taunt then
         setChecked(KART.CbCtTauntAnnounce, taunt.announce)
         setChecked(KART.CbCtTauntOnlyGroup, taunt.onlyInGroup ~= false)
-        local dungeonOn = taunt.onlyInDungeon
-        if dungeonOn == nil then dungeonOn = taunt.onlyInInstance ~= false end
-        local raidOn = taunt.onlyInRaid
-        if raidOn == nil then raidOn = taunt.onlyInInstance ~= false end
-        setChecked(KART.CbCtTauntOnlyDungeon, dungeonOn ~= false)
-        setChecked(KART.CbCtTauntOnlyRaid, raidOn ~= false)
+        setChecked(KART.CbCtTauntOnlyDungeon, CT.TauntWantsDungeon(taunt))
+        setChecked(KART.CbCtTauntOnlyRaid, CT.TauntWantsRaid(taunt))
         setChecked(KART.CbCtTauntButton, taunt.button)
         setChecked(KART.CbCtTauntBtnLock, taunt.locked ~= false)
         setChecked(KART.CbCtTauntBtnGroup, taunt.buttonOnlyInGroup ~= false)
@@ -1661,6 +1660,21 @@ function CT.SyncWidgets()
         end
         if KART.EbCtTauntAsk and KART.EbCtTauntAsk.SetText then
             KART.EbCtTauntAsk:SetText(taunt.ask or "%n, please taunt!")
+        end
+        local sl = taunt.swapLine or {}
+        setSlider(KART.SldCtSwapDuration, sl.duration or 3)
+        setSlider(KART.SldCtSwapFontSize, sl.fontSize or 24)
+        setChecked(KART.CbCtSwapEnabled, sl.enabled ~= false)
+        setChecked(KART.CbCtSwapTest, sl.testMode == true)
+        setChecked(KART.CbCtSwapOutline, sl.outline ~= false)
+        if KART.BtnCtSwapFont and KART.BtnCtSwapFont.text then
+            local fontName = sl.fontName or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
+            KART.BtnCtSwapFont.text:SetText((KART.L and KART.L.BTN_FONT_PREFIX or "Font: ") .. fontName)
+        end
+        if KART.RefreshSwapSoundChips then KART.RefreshSwapSoundChips() end
+        if KART.CtSwapColorPreview and sl.color then
+            local c = sl.color
+            KART.CtSwapColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
         end
     end
 
@@ -1776,12 +1790,14 @@ function CT.FormatTauntMessage(template, vars)
     return out
 end
 
-local function TauntWantsDungeon(t)
+function CT.TauntWantsDungeon(t)
+    if not t then return true end
     if t.onlyInDungeon ~= nil then return t.onlyInDungeon ~= false end
     return t.onlyInInstance ~= false
 end
 
-local function TauntWantsRaid(t)
+function CT.TauntWantsRaid(t)
+    if not t then return true end
     if t.onlyInRaid ~= nil then return t.onlyInRaid ~= false end
     return t.onlyInInstance ~= false
 end
@@ -1794,8 +1810,8 @@ function CT.ShouldAnnounce()
     if t.onlyInGroup ~= false and not IsInGroup() then return false end
     local _, instanceType = IsInInstance()
     if instanceType == "arena" or instanceType == "pvp" then return false end
-    local dungeon = TauntWantsDungeon(t)
-    local raid = TauntWantsRaid(t)
+    local dungeon = CT.TauntWantsDungeon(t)
+    local raid = CT.TauntWantsRaid(t)
     if dungeon or raid then
         if instanceType == "party" then return dungeon end
         if instanceType == "raid" then return raid end
@@ -1884,6 +1900,208 @@ function CT.Ask()
     if not template or template == "" then template = TAUNT_DEFAULT_ASK end
     local msg = CT.FormatTauntMessage(template, FillTauntVars(nil, cotank))
     CT.SendTauntChat(msg, cotank)
+    local dest = WhisperDest(cotank)
+    if dest and KASC and KASC.Send then
+        KASC:Send("CT_ASK:" .. msg, "WHISPER", dest, { prio = "ALERT" })
+    end
+end
+
+local SWAP_LINE_DEFAULTS = {
+    enabled = true,
+    fontSize = 24,
+    duration = 3,
+    outline = true,
+    sound = "off",
+    testMode = false,
+    color = { r = 1, g = 0.82, b = 0 },
+    point = "CENTER", relativePoint = "CENTER", x = 0, y = 120,
+}
+
+local function SwapLineCfg()
+    local t = TauntCfg()
+    local s = t and t.swapLine
+    if type(s) ~= "table" then return {} end
+    return s
+end
+
+local function SwapLineOpt(key)
+    local s = SwapLineCfg()
+    if s[key] ~= nil then return s[key] end
+    return SWAP_LINE_DEFAULTS[key]
+end
+
+local function SwapLinePreviewing()
+    if KART.IsEditModeActive and KART.IsEditModeActive() then return true end
+    return SwapLineOpt("testMode") == true
+end
+
+local function SwapLineSampleText()
+    local t = TauntCfg() or {}
+    local template = t.ask
+    if not template or template == "" then template = TAUNT_DEFAULT_ASK end
+    local n = ""
+    if UnitName then n = PublicString(UnitName("player")) end
+    if n == "" then n = "Tank" end
+    return CT.FormatTauntMessage(template, { t = "Boss", s = "Taunt", n = n })
+end
+
+local function CancelSwapLineTimer()
+    if CT.swapLineTimer and CT.swapLineTimer.Cancel then
+        CT.swapLineTimer:Cancel()
+    end
+    CT.swapLineTimer = nil
+end
+
+local function SwapLineColor()
+    local c = SwapLineOpt("color")
+    if type(c) ~= "table" then c = SWAP_LINE_DEFAULTS.color end
+    return c.r or 1, c.g or 0.82, c.b or 0
+end
+
+function CT.EnsureSwapLine()
+    local f = CT.swapLine
+    if f and f.GetWidth then return f end
+    f = CreateFrame("Frame", "KART_TauntSwapLine", UIParent)
+    f:SetSize(400, 32)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    if f.SetClampedToScreen then f:SetClampedToScreen(true) end
+    local text = f:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("CENTER")
+    text:SetJustifyH("CENTER")
+    f.text = text
+    -- A FontString has no pixels of its own. Without a region, EnableMouse still lets
+    -- clicks fall through to the Edit Mode dim.
+    local hit = f:CreateTexture(nil, "BACKGROUND")
+    hit:SetAllPoints(f)
+    if hit.SetColorTexture then hit:SetColorTexture(0, 0, 0, 0.01) end
+    f.hit = hit
+    f:SetScript("OnDragStart", function(self)
+        if SwapLinePreviewing() and not InCombatLockdown() then
+            self:StartMoving()
+        end
+    end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
+        local t = TauntCfg()
+        if not t then return end
+        t.swapLine = t.swapLine or {}
+        t.swapLine.point = point
+        t.swapLine.relativePoint = relativePoint
+        t.swapLine.x = xOfs
+        t.swapLine.y = yOfs
+    end)
+    CT.swapLine = f
+    if KART.RegisterEditModeFrame then
+        KART.RegisterEditModeFrame(f, "EDIT_MODE_LABEL_TAUNT_SWAP")
+    end
+    return f
+end
+
+function CT.StyleSwapLine()
+    local f = CT.EnsureSwapLine()
+    local size = tonumber(SwapLineOpt("fontSize")) or SWAP_LINE_DEFAULTS.fontSize
+    if size < 12 then size = 12 end
+    if size > 48 then size = 48 end
+    local outline = SwapLineOpt("outline")
+    if outline == nil then outline = true end
+    local flags = outline ~= false and "OUTLINE" or ""
+    local cfg = SwapLineCfg()
+    local fontName = cfg.fontName
+    if not fontName and KART_Settings then fontName = KART_Settings.fontName end
+    local path = "Fonts\\FRIZQT__.TTF"
+    local ui = KART.UI
+    if ui and ui.GetFontPath then
+        path = ui:GetFontPath(fontName) or path
+    end
+    if f.text.SetFont then f.text:SetFont(path, size, flags) end
+    f.text:SetTextColor(SwapLineColor())
+    local w = 200
+    if f.text.GetStringWidth then
+        w = math.max(200, (f.text:GetStringWidth() or 0) + 16)
+    end
+    f:SetSize(w, size + 8)
+    local point = SwapLineOpt("point")
+    local rel = SwapLineOpt("relativePoint")
+    local x = SwapLineOpt("x")
+    local y = SwapLineOpt("y")
+    f:ClearAllPoints()
+    f:SetPoint(point or "CENTER", UIParent, rel or "CENTER", x or 0, y or 120)
+    local edit = SwapLinePreviewing()
+    f:EnableMouse(edit and true or false)
+    if f.hit then
+        if edit then f.hit:Show() else f.hit:Hide() end
+    end
+    return f
+end
+
+local function SwapLineSafeText(msg)
+    if type(msg) ~= "string" then return "" end
+    return msg:gsub("|", "||")
+end
+
+function CT.RefreshSwapLine()
+    if SwapLineOpt("enabled") == false then
+        CancelSwapLineTimer()
+        if CT.swapLine then CT.swapLine:Hide() end
+        return
+    end
+    local preview = SwapLinePreviewing()
+    if not preview and not (CT.swapLine and CT.swapLine:IsShown() and CT.swapLineTimer) then
+        if CT.swapLine then CT.swapLine:Hide() end
+        return
+    end
+    local f = CT.StyleSwapLine()
+    if preview then
+        CancelSwapLineTimer()
+        f.text:SetText(SwapLineSafeText(SwapLineSampleText()))
+        CT.StyleSwapLine()
+        f:Show()
+        if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
+            KART.RefreshEditModeChrome()
+        end
+    end
+end
+
+function CT.ShowSwapLine(msg)
+    if type(msg) ~= "string" or msg == "" then return end
+    if SwapLineOpt("enabled") == false then
+        CancelSwapLineTimer()
+        if CT.swapLine then CT.swapLine:Hide() end
+        return
+    end
+    local f = CT.StyleSwapLine()
+    f.text:SetText(SwapLineSafeText(msg))
+    CT.StyleSwapLine()
+    f:Show()
+    local sound = SwapLineOpt("sound")
+    local kit = SOUNDKIT
+    if sound == "warning" then
+        PlaySound((kit and kit.RAID_WARNING) or 8959)
+    elseif sound == "ready" then
+        PlaySound((kit and kit.READY_CHECK) or 8960)
+    end
+    if SwapLinePreviewing() then return end
+    CancelSwapLineTimer()
+    local dur = tonumber(SwapLineOpt("duration")) or SWAP_LINE_DEFAULTS.duration
+    if dur < 1 then dur = 1 end
+    if dur > 10 then dur = 10 end
+    if C_Timer and C_Timer.NewTimer then
+        CT.swapLineTimer = C_Timer.NewTimer(dur, function()
+            CT.swapLineTimer = nil
+            if SwapLinePreviewing() then return end
+            if CT.swapLine then CT.swapLine:Hide() end
+        end)
+    end
+end
+
+if KASC and not KASC._kartCtAsk then
+    KASC._kartCtAsk = true
+    -- Reviewed 2026-08: every group member, Co-Tank module off included. See REVIEW-DECISIONS.md.
+    KASC:RegisterMessage("CT_ASK", { payload = true, group = true }, function(payload)
+        if CT.ShowSwapLine then CT.ShowSwapLine(payload) end
+    end)
 end
 
 function CT.TauntIcon()

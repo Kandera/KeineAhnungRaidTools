@@ -1,6 +1,6 @@
 # Coding standards
 
-Read during review (`/code-review`, `lua-reviewer`). Implementation agents reach this via the pointer in `CLAUDE.md` / `AGENTS.md` when writing user-facing copy, Lua, or SavedVariables.
+Read during review (`lua-reviewer`) and when writing changelog, locales, Lua, or SavedVariables. `lua-reviewer` does not own changelog; the suite and this file do.
 
 ## Language
 
@@ -16,7 +16,7 @@ Exceptions (intentionally German):
 - **`Locales/deDE.lua`:** localized string *values* stay German. Comments inside it stay English.
 - **`README-de.md` / `CHANGELOG-de.md`:** German mirrors of the English primaries. Update the English file first, then the `-de` file in the same turn.
 
-When updating `CHANGELOG.md`/`README.md` for a user-facing change, update `CHANGELOG-de.md`/`README-de.md` alongside it. Doc-update workflow: project memory `feedback_changelog_readme`.
+When updating player-facing changelog, three files, English first: `CHANGELOG.md`, then `CHANGELOG-de.md`, then `KART.InGameChangelog` in `Utils.lua`. Same turn.
 
 ## Changelog style
 
@@ -28,7 +28,13 @@ WoW runs Lua 5.1 on LuaJIT. No `goto`, `unpack` not `table.unpack`, no integer d
 
 ## SavedVariables
 
-No central migration. Each structure guards its own shape — `Droptimizer.lua` checks a `schemaVersion`, `OfficerNotes.MigrateOfficerNoteKey` renames a key. A shape change without such a guard corrupts existing users on their next login. The authoritative list of variables is the `.toc`.
+No central migration. Each structure guards its own shape — `Droptimizer.lua` checks a `schemaVersion`, `OfficerNotes.MigrateOfficerNoteKey` renames a key. A shape change without such a guard corrupts existing users on their next login. The authoritative list of variables is the `.toc`. A leftover key after a schema split stays; do not rename it for a clearer name.
+
+`.toc` files run before `ADDON_LOADED` fills those globals. Main-chunk widget paint that indexes `KART_Settings` (or any SavedVariables name) uses the invite-chip Nil-Guard. Fixture: `tests/test_mainframe.lua` (`before ADDON_LOADED`).
+
+## UI escapes
+
+Peer or player text that lands in `SetText`, `AddMessage`, or `print` treats `|c` `|H` `|T` as colour, links, and textures. Escape `|` to `||` like `RC_REASON` in `Core.lua`.
 
 ## Patch-bound ID tables
 

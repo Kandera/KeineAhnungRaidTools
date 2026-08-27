@@ -426,11 +426,11 @@ scrollFrame.scrollBarHideable = true
 -- Heights include headroom for large content fonts where a title's wrap height feeds into the
 -- layout (Automation's AutoLog title).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 565, -- Automation: enable card + promote/invite card + AutoLog
+    [1] = 535, -- Automation: enable card + promote/invite card + AutoLog
     [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
-    [4] = 580, -- Settings: two half cards + accent/profiles row + RC companion card
-    [6] = 1160, -- Co-Tank: preview + module + size + taunt/swap headings
+    [4] = 670, -- Settings: two half cards + accent/profiles + addon versions + RC companion
+    [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -738,7 +738,7 @@ KART.CreateTabTitle(3, L.LABEL_BUFFCHECK_SETTINGS)
 
 local bcCard = KART.UI:CreateCard(KART.BuffCheckPanel)
 bcCard:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -12)
-bcCard:SetSize(500, 190)
+bcCard:SetSize(500, 160)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
 -- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
@@ -775,13 +775,6 @@ KART.BtnBuffPreview:SetScript("OnClick", function()
         KART.ShowBuffCheck()
         KART.UpdateBuffCheck(true)
     end
-end)
-
-KART.BtnAddonNag = KART.UI:CreateModernButton(bcCard, L.BTN_ADDON_NAG, L.DESC_ADDON_NAG)
-KART.BtnAddonNag:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -148)
-KART.BtnAddonNag:SetSize(220, 22)
-KART.BtnAddonNag:SetScript("OnClick", function()
-    if KART.BroadcastAddonNag then KART.BroadcastAddonNag() end
 end)
 
 KART.SldBuffCheckAlpha = KART.UI:CreateSettingsSlider(bcCard, {
@@ -941,7 +934,7 @@ KART.UI:RegisterLabel(alTitle)
 
 local alCard = KART.UI:CreateCard(KART.PromotePanel)
 alCard:SetPoint("TOPLEFT", alTitle, "BOTTOMLEFT", 0, -10)
-alCard:SetSize(500, 200)
+alCard:SetSize(500, 170)
 
 local function AutoLogChanged()
     if KART.AutoLog then KART.AutoLog.Evaluate() end
@@ -993,20 +986,20 @@ KART.SldAlMinKey:ClearAllPoints()
 KART.SldAlMinKey:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -96)
 KART.CbAlDungeons = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlDungeons", label = L.SET_AL_DUNGEONS,
-    store = SettingsStore, key = "autoLogDungeons", y = -140,
+    store = SettingsStore, key = "autoLogDungeons", y = -110,
     onChanged = AutoLogChanged,
 })
 KART.CbAlDungeons:ClearAllPoints()
-KART.CbAlDungeons:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -140)
+KART.CbAlDungeons:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -110)
 KART.CbAlDungeons.text:SetWidth(192)
 KART.CbAlDungeons.text:SetJustifyH("LEFT")
 KART.CbAlDelves = KART.UI:CreateSettingsCheckbox(alCard, {
     name = "KART_AlDelves", label = L.SET_AL_DELVES,
-    store = SettingsStore, key = "autoLogDelves", y = -170,
+    store = SettingsStore, key = "autoLogDelves", y = -140,
     onChanged = AutoLogChanged,
 })
 KART.CbAlDelves:ClearAllPoints()
-KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -170)
+KART.CbAlDelves:SetPoint("TOPLEFT", alCard, "TOPLEFT", 260, -140)
 KART.CbAlDelves.text:SetWidth(192)
 KART.CbAlDelves.text:SetJustifyH("LEFT")
 
@@ -1227,6 +1220,28 @@ KART.BtnProfileDelete:SetScript("OnClick", function()
     dlg.button1, dlg.button2 = KART.L.BTN_YES, KART.L.BTN_NO
     StaticPopup_Show("KART_PROFILE_DELETE_CONFIRM", name, nil, { name = name })
 end)
+
+-- Raid-lead version check: a window for raiders whose RC / NSRT / WowUtils is behind yours.
+-- Lives on Settings, not Buff Check — it is not a buff-checker control.
+local addonVerCard = KART.UI:CreateCard(KART.SettingsPanel)
+addonVerCard:SetPoint("TOPLEFT", colCard, "BOTTOMLEFT", 0, -20)
+addonVerCard:SetSize(500, 72)
+KART.AddonVersionCard = addonVerCard
+
+KART.BtnAddonNag = KART.UI:CreateModernButton(addonVerCard, L.BTN_ADDON_NAG, L.DESC_ADDON_NAG)
+KART.BtnAddonNag:SetPoint("TOPLEFT", addonVerCard, "TOPLEFT", 20, -14)
+KART.BtnAddonNag:SetSize(240, 25)
+KART.BtnAddonNag:SetScript("OnClick", function()
+    if KART.BroadcastAddonNag then KART.BroadcastAddonNag() end
+end)
+
+KART.AddonVersionNote = addonVerCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+KART.AddonVersionNote:SetPoint("TOPLEFT", KART.BtnAddonNag, "BOTTOMLEFT", 0, -8)
+KART.AddonVersionNote:SetWidth(460)
+KART.AddonVersionNote:SetJustifyH("LEFT")
+KART.AddonVersionNote:SetWordWrap(true)
+KART.AddonVersionNote:SetText(L.NOTE_ADDON_VERSIONS)
+KART.UI:RegisterLabel(KART.AddonVersionNote)
 
 -- 9. Close button. The artwork no longer has a baked X; this glyph is the only one.
 -- Not RegisterCloseButtonText: that restyle path forces 18px OUTLINE. Size stays
@@ -1748,6 +1763,11 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnProfileSaveNew.text:SetText(L.BTN_PROFILE_SAVE_NEW)   KART.BtnProfileSaveNew.tooltipText = L.DESC_PROFILE_SAVE_NEW
     KART.BtnProfileSave.text:SetText(L.BTN_PROFILE_SAVE)          KART.BtnProfileSave.tooltipText = L.DESC_PROFILE_SAVE
     KART.BtnProfileDelete.text:SetText(L.BTN_PROFILE_DELETE)      KART.BtnProfileDelete.tooltipText = L.DESC_PROFILE_DELETE
+    if KART.BtnAddonNag then
+        KART.BtnAddonNag.text:SetText(L.BTN_ADDON_NAG)
+        KART.BtnAddonNag.tooltipText = L.DESC_ADDON_NAG
+    end
+    if KART.AddonVersionNote then KART.AddonVersionNote:SetText(L.NOTE_ADDON_VERSIONS) end
 
     -- Header search
     searchBtn.text:SetText(L.BTN_SEARCH)

@@ -215,3 +215,10 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   (Invite.lua:205-209). A second bulk invite started within 120 seconds of the first inherits the
   remainder of the first invite's window instead of getting its own. Deliberate -- the flag is
   one-shot and cheap, not worth a generation counter.
+
+## Verified, no change needed (2026-08-27 review of unpushed Co-Tank / chrome)
+
+- **`CT_ASK` is registered with `group = true` and is not gated on `ctModuleEnabled`**
+  (CoTank.lua `KASC:RegisterMessage("CT_ASK")`). Deliberate: the other tank should see the Taunt
+  Swap line even when their Co-Tank module is off. `CT.Disable` does not unregister the handler.
+  The line itself still honours `ct.taunt.swapLine.enabled`. Do not add a module gate.
