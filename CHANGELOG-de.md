@@ -8,11 +8,16 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Die Taunt-Swap-Zeile lässt sich ausschalten.**
+- **Die Taunt-Swap-Zeile lässt sich im Bearbeiten-Modus verschieben.**
+- **Eine Taunt-Swap-Zeile** erscheint beim anderen Tank für ein paar Sekunden, mit eigenen Look-Einstellungen.
+- **Taunt Swap hat einen Testmodus**, damit du die Zeile in der Stadt einstellen kannst.
 - **Buff-Check zeigt Gesundheitsstein und Seelenstein.**
 - **Ein Schalter blendet Blizzards Raid-Manager aus**, solange die Raidlead-Leiste an ist. Northern Sky bleibt.
 - **Der freie Slot unter Buff Check** öffnet Rollenabfrage, Umwandeln und Ping-Einschränkung.
-- **Umschalt-Klick auf Posten flüstert Fläschchen, Essen und Rune**, und der Buff-Checker sagt Bescheid wenn niemandem etwas fehlt.
+- **Umschalt-Klick auf Posten flüstert Fläschchen und Essen**, und der Buff-Checker sagt Bescheid wenn niemandem etwas fehlt.
 - **Co-Tank-Fenster** für Leben, Debuffs und Buffs des anderen Tanks, aus bis du es einschaltest. Testmodus und der Co-Tank-Tab zeigen es in der Stadt.
+- **Ein Einstellungen-Button unter der Co-Tank-Vorschau** öffnet Look, Text und Auren.
 - **Co-Tank Look-, Text- und Auren-Einstellungen** öffnen sich in einem Begleitfenster neben dem Hauptfenster.
 - **Co-Tank-Balkentextur und optionaler Verlauf**, mit LibSharedMedia wenn installiert.
 - **Sagen, wenn du tauntest**, plus ein Button der den anderen Tank zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
@@ -24,23 +29,25 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
 - **Buff-Check Advanced zeigt RC, NSRT und WowUtils** als aktuell, veraltet oder nicht installiert.
-- **Der Raidlead kann veraltete Addons anstoßen**, und die betroffenen Raider bekommen ein schließbares Update-Fenster.
+- **Addon-Versionen prüfen unter Settings** schickt Raidern, deren RC, NSRT oder WowUtils hinterherhinkt, ein Fenster.
 
 ### Geändert
+- **RC, NSRT und WowUtils zeigen OK oder OLD.**
+- **Taunt-Filter Gruppe, Dungeons und Raids sitzen in einer Chip-Zeile**, wie die Kanäle.
 - **Gesundheitsstein zählt den Stein in deinen Taschen.**
 - **Ein Gesundheitsstein, von dem du nichts gehört hast, bleibt grau.**
-- **Fläschchen werden über die Spell-IDs dieser Saison gefunden.**
+- **Fläschchen werden über die Spells dieser Saison gefunden.**
 - **Leere WoWUtils- und RC-Karten sagen, was zu tun ist.**
 - **RC auf der Heute-Leiste steht AN und AUS.**
-- **Regler-Knöpfe leuchten rund**, nicht eckig.
+- **Regler-Knöpfe leuchten rund.**
 - **Settings-Regler lassen sich leichter mit der Maus greifen.**
 - **Bar Layer hat dieselbe Reglerbreite** wie die anderen Look-Regler.
-- **Ebenen-Regler zeigen kurze Stratum-Namen**, damit MEDIUM und DIALOG passen.
+- **Ebenen-Regler zeigen kurze Namen.**
 - **Die Co-Tank-Vorschau kann außer Reichweite, tot und den Ziel-Rahmen zeigen**, ohne den Testmodus.
 - **Abschnitts-Überschriften sitzen über ihren Karten**, wie Auto Combat Log.
 - **Die WoWUtils-Boss-Liste sitzt auf einer Karte**, mit Einladen und Entfernen in jeder Zeile.
 - **Footer-Store-Links bleiben in der Sidebar.**
-- **Das Schließen-X im Fenster ist ein Live-Zeichen**, nicht in der Grafik eingebrannt.
+- **Das Schließen-X im Fenster ist ein Live-Zeichen.**
 - **ON-Chips folgen der Akzentfarbe.**
 - **Invite-Kanal-Chips behalten ihre Farbe nach dem Login.**
 - **Die Heute-Leiste sitzt auf einer Linie mit den Settings-Karten.**
@@ -50,7 +57,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Footer zeigt eine kleinere Version, Store-Marken und von Kandera.**
 - **Module in der Sidebar sitzen unter MODULES**, analog zu SYSTEM.
 - **Changelog, die Owed-Erinnerung, das Co-Tank-Flyout und der Buff-Checker teilen sich eine Titelleiste.**
-- **Co-Tank nutzt die gleiche Schrift und einen beschrifteten Übernehmen-Button**, mit größerem Standard-Aura-Abstand.
+- **Co-Tank nutzt die gleiche Schrift und einen beschrifteten Übernehmen-Button.**
 - **Settings-Regler haben ein Zahlenfeld** rechts neben der Leiste.
 - **Automation und WoWUtils haben ON-Chips** wie die anderen Module.
 - **Bearbeiten-Modus und Changelog sitzen über den Footer-Links.**
@@ -60,7 +67,6 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Co-Tank-Skalierung passt in ihre Karte.**
 - **Das Changelog im Spiel ist leichter zu überfliegen.**
 - **Im Changelog steht der Name fett**, die Erklärung etwas kleiner.
-- **Taunt-Ansage kann Dungeons oder Raids sein**, jeweils ein eigener Schalter.
 - **Raid-Buff-Check-Spalten sitzen unter Rdy und Name.**
 - **Ask-for-a-Swap Gruppe und Raid sitzen nebeneinander.**
 - **Taunt-Kanäle sitzen in einer Chip-Zeile.**
@@ -73,7 +79,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Fensterskalierung gilt auch für das Co-Tank-Einstellungsfenster.**
 - **GitHub- und Store-Links öffnen eine Box zum Kopieren.**
 - **Einstellungs-Schalter zeigen An und Aus deutlicher.**
-- **Co-Tank-Look-Beschriftungen passen in die Zeile** statt „Heilabsorbs anzeigen“ abzuschneiden.
+- **Co-Tank-Look-Beschriftungen passen in die Zeile.**
 - **Verlauf-Start und -Ende zeigen ein Farbfeld.**
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
@@ -84,7 +90,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Edit-Modus im Kampf verlassen wirft keinen Fehler mehr** an Raidlead-Leiste oder Co-Tank-Zeile.
 - **Die Weltkarte wirft keinen Fehler mehr** an der Raidlead-Leiste.
 - **Das Changelog im Spiel öffnet sich ohne Fehler** und nutzt dieselbe Fenster-Grafik wie der Buff-Checker.
-- **Settings- und Co-Tank-Tabs zeigen ihre Einstellungen wieder.** Die Invite-Kanal-Chips brechen das Fenster beim Laden nicht mehr ab.
+- **Settings- und Co-Tank-Tabs zeigen ihre Einstellungen wieder.**
+- **Der Co-Tank-Tab wirft beim Laden keinen Fehler mehr.**
+- **Taunt-Swap-Text bleibt reiner Text.**
+- **NSRT-Nicknames in RC bleiben reiner Text.**
 - **Invite-Kanal-Chips sitzen unter ihrer Beschriftung**, nicht darüber.
 - **Entsperren zeigt die Co-Tank-Zeile nicht mehr in Arena oder Schlachtfeld.**
 - **Der Co-Tank-Testmodus bleibt auf dem Bildschirm**, während der Co-Tank-Tab offen ist; die Vorschau zeigt Dummy-Buffs und -Debuffs.

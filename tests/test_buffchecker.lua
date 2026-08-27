@@ -825,10 +825,10 @@ do
 end
 
 -- =====================================================================================
---  Shift-click /Report whispers flask, food and rune to the people missing them
+--  Shift-click /Report whispers flask and food to the people missing them
 -- =====================================================================================
--- Raid chat stays the click. Whisper is a private poke for the three consumables a raider
--- can fix themselves; class buffs and the advanced panel stay out of it.
+-- Raid chat stays the click. Whisper is a private poke for flask and food; rune, class
+-- buffs and the advanced panel stay out of it. Rune is on the grid, not a raid duty.
 do
     local _, lm = F.NewRaid()
     lm.KART.MissingBuffs = {
@@ -855,6 +855,8 @@ do
     T.eq(not not (byTarget.Alric:find("Intellect", 1, true) or byTarget.Alric:find("Intelligenz", 1, true)),
         false, "class buffs are not whispered")
     T.is_nil(byTarget.Alric:find("Intellect", 1, true), "no intellect line in Alric's whisper")
+    T.eq(not not (byTarget.Sinja and byTarget.Sinja:find("Rune", 1, true)), false,
+        "rune is not whispered even when it is missing")
 end
 
 do
@@ -884,6 +886,15 @@ end
 
 do
     local _, lm = F.NewRaid()
+    lm.KART.MissingBuffs = { flask = {}, food = {}, rune = { "Sinja" } }
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function() lm.KART.WhisperMissingConsumables() end)
+    KARTTEST.AdvanceTime(10)
+    T.eq(#KARTTEST.chat, 0, "a missing rune is not whispered")
+end
+
+do
+    local _, lm = F.NewRaid()
     Render(lm)
     KARTTEST.modifiers.shift = true
     KARTTEST.ClearChat()
@@ -907,14 +918,24 @@ do
     RaidSim.As(lm, function()
         T.eq(lm.KART.ConsumablesComplete(), false, "a missing flask is not complete")
     end)
+    lm.KART.MissingBuffs = { flask = {}, food = {}, rune = { "Alric" } }
+    RaidSim.As(lm, function()
+        T.eq(lm.KART.ConsumablesComplete(), true, "a missing rune is still complete")
+    end)
 end
 
 do
-    -- Rune is whisper-only: recorded so Shift-Report can poke people, never posted to raid chat.
+    -- Rune is on the grid so you can see it, but it is not a raid duty: not whispered,
+    -- not posted, not part of the all-ok banner.
     local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     local missing = Render(lm)
-    T.truthy(#(missing.rune or {}) > 0, "rune absences are recorded")
+    T.eq(#(missing.rune or {}), 0, "rune absences are not tracked for report or whisper")
+    local gridSeesMissingRune = false
+    for _, p in ipairs(lm.KART.BuffRosterSnapshot.players) do
+        if not p.states.rune then gridSeesMissingRune = true end
+    end
+    T.truthy(gridSeesMissingRune, "the grid still shows who has no rune")
     KARTTEST.ClearChat()
     RaidSim.As(lm, function() lm.KART.ReportMissingBuffs() end)
     KARTTEST.AdvanceTime(10)
@@ -922,7 +943,7 @@ do
     for _, m in ipairs(KARTTEST.chat) do
         if m.msg:find("Rune", 1, true) then runeInChat = true end
     end
-    T.eq(runeInChat, false, "but rune is not posted to raid chat")
+    T.eq(runeInChat, false, "and rune is not posted to raid chat")
 end
 
 do
@@ -966,6 +987,21 @@ do
     local banner = lm.KART.BuffCheckFrame.okBanner:GetText() or ""
     T.truthy(banner:find("flask", 1, true) or banner:find("Fläsch", 1, true),
         "and names the consumables")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local auras = {}
+    for _, client in ipairs(sim.clients) do
+        auras[client.unit] = {
+            { name = "Flask of Power", spellId = 1 },
+            { name = "Well Fed", spellId = 1232585 },
+        }
+    end
+    KARTTEST.auras = auras
+    Render(lm)
+    T.eq(lm.KART.BuffCheckFrame.okBanner:IsShown(), true,
+        "flask and food are enough for the all-ok banner")
 end
 
 -- =====================================================================================

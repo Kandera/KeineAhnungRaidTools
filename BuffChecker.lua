@@ -28,8 +28,8 @@ KART.BuffData = {
       spells = {1235111, 1235108, 1235110, 1235057},
       report = "item", reportLabelKey = "BC_REPORT_FLASK", whisper = true },
     { id = "vantus", labelKey = "BC_LABEL_VANTUS", col = 10, icon = 5976918, spells = {1277389, 1303164}, nameMatch = "Vantus" },
-    -- whisper without report: Shift-click Report pokes the player; raid chat stays flask/food only.
-    { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true, whisper = true },
+    -- Column only: rune is not always a raid duty, so it is neither reported nor whispered.
+    { id = "rune",   labelKey = "BC_LABEL_RUNE",   col = 11, icon = 4549099, spells = {453112, 1264426}, isRune = true },
     -- Item/aura IDs are the swap point after a live raid measurement. Healthstone is a bag
     -- item, not an aura: 5512 is the stone, 224464 the demonic one Northern Sky also counts.
     -- Soulstone is aura 20707 on the target, not warlock passive 231811.
@@ -674,12 +674,13 @@ local function setInd(row, idx, has, buffData, classes, extra)
         local textObj = ind.text or ind
         ind.missingSlots = nil
         ind.tooltipTitle = buffData.label
+        -- ASCII like Ench/Gems "OK": Friz Quadrata has no check/cross, so ✓/✗ render as empty boxes.
         if has == "ok" then
-            textObj:SetText("✓")
+            textObj:SetText("OK")
             textObj:SetTextColor(unpack(KART.SUCCESS))
             ind.addonTip = extra
         elseif has == "old" then
-            textObj:SetText("✗")
+            textObj:SetText("OLD")
             textObj:SetTextColor(unpack(KART.DANGER))
             ind.addonTip = extra
         elseif has == "missing" then
@@ -770,7 +771,7 @@ local function RefreshOkBanner(isPreview)
     end
 end
 
--- One whisper per raider, flask/food/rune only. Class buffs stay on the raid Report click.
+-- One whisper per raider, flask and food only. Class buffs stay on the raid Report click.
 -- Names are snapshotted now for the same reason ReportMissingBuffs snapshots: MissingBuffs is
 -- wiped on the next render, which can land before a staggered C_Timer.After fires.
 function KART.WhisperMissingConsumables()
@@ -1307,9 +1308,9 @@ function KART.UpdateBuffCheck(isPreview)
                 elseif data.isAddonCheck then
                     local textObj = ind.text or ind
                     if i == 1 then
-                        textObj:SetText("✓"); textObj:SetTextColor(unpack(KART.SUCCESS))
+                        textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.SUCCESS))
                     elseif i == 2 then
-                        textObj:SetText("✗"); textObj:SetTextColor(unpack(KART.DANGER))
+                        textObj:SetText("OLD"); textObj:SetTextColor(unpack(KART.DANGER))
                     elseif i == 3 then
                         textObj:SetText("-"); textObj:SetTextColor(0.5, 0.5, 0.5)
                     else

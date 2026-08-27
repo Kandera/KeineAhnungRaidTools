@@ -25,7 +25,10 @@ RaidSim.As(me, function()
 end)
 T.truthy(KART.MainFrame and KART.ShowTab, "the main window builds")
 T.eq(#KART.FooterLinks, 3, "footer links survive load (SetFont before SetText)")
-T.truthy(KART.BtnAddonNag, "the raid-lead addon nag button is on the Buff-Checker settings card")
+T.truthy(KART.BtnAddonNag, "Check Addon Versions is on the Settings tab")
+T.eq(KART.BtnAddonNag:GetParent():GetParent(), KART.SettingsPanel,
+    "Check Addon Versions sits on Settings, not Buff Check")
+T.truthy(KART.SldCtSwapDuration, "Taunt Swap duration lives on the Co-Tank tab")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
 -- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or
@@ -95,12 +98,31 @@ end
 -- Co-Tank settings flyout --------------------------------------------------------------------------
 do
     T.eq(KART.CtFlyout:GetParent(), _G.UIParent, "the flyout is parented to UIParent, not the row")
+    T.truthy(KART.BtnCtSettings, "a Settings button sits on the Co-Tank tab")
+    T.eq(KART.BtnCtSettings:GetParent(), KART.CbCtModuleEnabled:GetParent(),
+        "under the preview, on the same card as Test Mode")
+    local function PointY(frame)
+        local _, _, _, _, y = frame:GetPoint(1)
+        return y
+    end
+    T.truthy(PointY(KART.CbCtTestMode) < PointY(KART.BtnCtSettings),
+        "Test Mode sits below the Settings button")
+    T.truthy(PointY(KART.CbCtOnlyGroup) < PointY(KART.CbCtTestMode),
+        "Only in Group sits below Test Mode")
     me.env.KART_Settings.ctModuleEnabled = true
     As(function()
         KART.MainFrame:Show()
         KART.ShowTab(6)
     end)
     T.truthy(KART.CtFlyout:IsShown(), "opening Co-Tank with the module on shows the flyout")
+    As(function()
+        KART.CtFlyout.closeBtn:GetScript("OnClick")(KART.CtFlyout.closeBtn)
+    end)
+    T.eq(KART.CtFlyout:IsShown(), false, "X hides the flyout")
+    As(function()
+        KART.BtnCtSettings:GetScript("OnClick")(KART.BtnCtSettings)
+    end)
+    T.truthy(KART.CtFlyout:IsShown(), "Settings reopens the flyout after X")
     As(function() KART.ShowTab(4) end)
     T.eq(KART.CtFlyout:IsShown(), false, "switching away from Co-Tank hides the flyout")
     me.env.KART_Settings.ctModuleEnabled = false
@@ -218,6 +240,19 @@ do
 end
 
 do
+    -- Swap-line color preview and sound chips paint at file load, before ADDON_LOADED.
+    local saved = me.env.KART_Settings
+    me.env.KART_Settings = nil
+    local ok, err = pcall(function()
+        RaidSim.As(me, function()
+            if KART.RefreshSwapSoundChips then KART.RefreshSwapSoundChips() end
+        end)
+    end)
+    me.env.KART_Settings = saved
+    T.truthy(ok, "swap-line chips refresh before ADDON_LOADED: " .. tostring(err))
+end
+
+do
     -- On vs off has to survive the mouse leaving: CreateModernButton's default OnLeave paints
     -- resting gray, which made every chip look off.
     As(function()
@@ -236,6 +271,20 @@ do
     T.eq(stayR, onR, "leaving an on chip keeps the on border")
     T.eq(stayG, onG, "leaving an on chip keeps the on border")
     T.eq(stayB, onB, "leaving an on chip keeps the on border")
+end
+
+do
+    -- CoTankSettings chips call KAUI.Lighten on hover; that file had no LibStub, so the live
+    -- client threw as soon as the mouse entered Group / Dungeons / Raids.
+    local chip = KART.CbCtTauntOnlyGroup
+    T.truthy(chip and chip.GetScript, "taunt filter chips exist")
+    local ok, err = pcall(function()
+        As(function()
+            chip:GetScript("OnEnter")(chip)
+            chip:GetScript("OnLeave")(chip)
+        end)
+    end)
+    T.truthy(ok, "hovering a taunt filter chip does not error: " .. tostring(err))
 end
 
 -- Keybinds -----------------------------------------------------------------------------------------

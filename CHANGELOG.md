@@ -8,11 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **The Taunt Swap line can be switched off.**
+- **The Taunt Swap line can be dragged in Edit Mode.**
+- **A Taunt Swap line** appears on the other tank for a few seconds, with its own look settings.
+- **Taunt Swap has a test mode** so you can set the line in town.
 - **Buff Check shows Healthstone and Soulstone.**
 - **A toggle hides Blizzard's raid manager** while the Raidlead bar is on. Northern Sky stays.
 - **The empty slot under Buff Check** opens Role Poll, Convert and Restrict Pings.
-- **Shift-click Report whispers flask, food and rune**, and the buff checker says so when nobody is missing them.
+- **Shift-click Report whispers flask and food**, and the buff checker says so when nobody is missing them.
 - **Co-Tank frame** for the other tank's health, debuffs and buffs, off until you enable it. Test mode and the Co-Tank tab preview it in town.
+- **A Settings button under the Co-Tank preview** opens Look, Text and Auras.
 - **Co-Tank Look, Text and Auras settings** open in a companion panel beside the main window.
 - **Co-Tank bar texture and optional gradient**, with LibSharedMedia when installed.
 - **Say when you taunt**, and an on-screen button that asks the other tank to take it. Both off until you turn them on.
@@ -24,23 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
 - **Buff Check Advanced shows RC, NSRT and WowUtils** as current, outdated, or not installed.
-- **The raid leader can nag outdated addons**, and those raiders get a closeable update window.
+- **Check Addon Versions on Settings** sends a window to raiders whose RC, NSRT or WowUtils is behind.
 
 ### Changed
+- **RC, NSRT and WowUtils show OK or OLD.**
+- **Taunt group, dungeon and raid filters sit on one chip row**, like the channels.
 - **Healthstone reads the stone in your bags.**
 - **A healthstone you have not heard about is grey.**
-- **Flasks are found by this season's spell ids.**
+- **Flasks are found by this season's spells.**
 - **Empty WoWUtils and RC cards say what to do.**
 - **RC on the tonight strip reads ON and OFF.**
-- **Slider thumbs glow as a circle**, not a square.
+- **Slider thumbs glow as a circle.**
 - **Settings sliders are easier to grab** with the mouse.
 - **Bar layer uses the same slider width** as the other look sliders.
-- **Layer sliders show short stratum names** so MEDIUM and DIALOG fit.
+- **Layer sliders show short names.**
 - **The Co-Tank preview can show out of range, dead and the target border**, without turning Test Mode on.
 - **Section titles sit above their cards**, like Auto Combat Log.
 - **The WoWUtils boss list sits on a card**, with Invite and Remove on each row.
 - **Footer store links stay inside the sidebar.**
-- **The window close X is a live glyph**, not baked into the art.
+- **The window close X is a live glyph.**
 - **ON chips follow the accent color.**
 - **Invite channel chips keep their color after login.**
 - **Tonight strip lines up with the settings cards.**
@@ -50,16 +57,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Footer shows a smaller version, store marks, and by Kandera.**
 - **Modules in the sidebar sit under MODULES**, matching SYSTEM.
 - **Changelog, the owed reminder, the Co-Tank flyout and the buff checker share one title bar.**
-- **Co-Tank uses the same type and a labeled take-it button**, with a wider factory aura gap.
+- **Co-Tank uses the same type and a labeled take-it button.**
 - **Settings sliders have a number box** to the right of the track.
 - **Automation and WoWUtils have ON chips** like the other modules.
 - **Edit Mode and Changelog sit above the footer links.**
 - **Co-Tank width and height sit side by side.**
+- **The Co-Tank companion window can be dragged.**
 - **Invite channel chips show on and off clearly.**
 - **Co-Tank scale fits in its card.**
 - **The in-game changelog is easier to scan.**
 - **In-game changelog names the change in bold**, then a smaller note.
-- **Taunt announce can be dungeons or raids**, each on its own switch.
 - **Raid Buff Check columns line up** under Rdy and Name.
 - **Ask-for-a-Swap group and raid filters sit side by side.**
 - **Taunt channels sit on one chip row**, like the invite channels.
@@ -72,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Window scale also applies to the Co-Tank settings flyout.**
 - **GitHub and store links open a box you can copy from.**
 - **Settings toggles show on and off more clearly.**
-- **Co-Tank Look labels fit their row** instead of clipping "Show Heal Absorbs".
+- **Co-Tank Look labels fit their row.**
 - **Gradient start and end show a colour chip.**
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
@@ -83,11 +90,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Leaving Edit Mode in combat no longer errors** on the raidlead bar or Co-Tank row.
 - **Opening the world map no longer errors** on the raidlead bar.
 - **The in-game changelog opens without an error** and uses the same window art as the buff checker.
-- **Settings and Co-Tank tabs show their controls again.** The invite-channel chips no longer abort the window while it is loading.
+- **Settings and Co-Tank tabs show their controls again.**
+- **The Co-Tank tab no longer errors on load.**
+- **Taunt Swap text stays plain text.**
+- **NSRT nicknames in RC stay plain text.**
 - **Invite channel chips sit under their label**, not on top of it.
 - **Unlocking the Co-Tank row no longer shows it in arenas or battlegrounds.**
 - **Co-Tank test mode stays on the screen** while the Co-Tank tab is open; the preview shows dummy buffs and debuffs.
 - **Co-Tank name and health text sit on the bar**, not under it.
+- **Co-Tank shields sit on the end of the health bar.**
 - **Co-Tank gradient fill stays on the bar** instead of painting a solid white strip.
 - **Co-Tank test buffs and debuffs sit on top of the bar.**
 - **Co-Tank buffs and debuffs show on the live bar** in a dungeon or raid, not only as dummy icons in test mode.

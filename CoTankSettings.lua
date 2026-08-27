@@ -1,5 +1,7 @@
 -- Co-Tank settings tab and Look/Text/Auras flyout. Same module as CoTank.lua (KART.CT).
 local addonName, KART = ...
+local KAUI = LibStub("KAUI-1.0")
+local LSM = LibStub("LibSharedMedia-3.0", true)
 KART.CT = KART.CT or {}
 local CT = KART.CT
 local L = KART.L
@@ -84,14 +86,25 @@ KART.CbCtModuleEnabled = KART.UI:CreateSettingsCheckbox(ctModCard, {
 KART.CbCtModuleEnabled.text:SetWidth(190)
 KART.CbCtModuleEnabled.text:SetJustifyH("LEFT")
 
+-- X on the flyout only hides it; this is the way back in while the tab stays open.
+KART.BtnCtSettings = KART.UI:CreateModernButton(ctModCard, L.TAB_SETTINGS)
+KART.BtnCtSettings:SetSize(120, 22)
+KART.BtnCtSettings:SetPoint("TOPLEFT", ctModCard, "TOPLEFT", 260, -18)
+KART.BtnCtSettings:SetScript("OnClick", function()
+    if not KART.CtFlyout then return end
+    if not (KART_Settings and KART_Settings.ctModuleEnabled) then return end
+    if CT.UpdateFlyoutAnchor then CT.UpdateFlyoutAnchor() end
+    KART.CtFlyout:Show()
+end)
+
 KART.CbCtTestMode = KART.UI:CreateSettingsCheckbox(ctModCard, {
     name = "KART_CtTestMode", label = L.SET_CT_TESTMODE,
-    store = CtStore, key = "testMode", y = -20,
+    store = CtStore, key = "testMode", y = -50,
     tooltip = L.DESC_CT_TESTMODE,
     onChanged = CtRefresh,
 })
 KART.CbCtTestMode:ClearAllPoints()
-KART.CbCtTestMode:SetPoint("TOPLEFT", ctModCard, "TOPLEFT", 260, -20)
+KART.CbCtTestMode:SetPoint("TOPLEFT", ctModCard, "TOPLEFT", 260, -50)
 KART.CbCtTestMode.text:SetWidth(190)
 KART.CbCtTestMode.text:SetJustifyH("LEFT")
 
@@ -106,12 +119,12 @@ KART.CbCtLock.text:SetJustifyH("LEFT")
 
 KART.CbCtOnlyGroup = KART.UI:CreateSettingsCheckbox(ctModCard, {
     name = "KART_CtOnlyGroup", label = L.SET_CT_ONLY_GROUP,
-    store = CtStore, key = "onlyInGroup", y = -50,
+    store = CtStore, key = "onlyInGroup", y = -80,
     tooltip = L.DESC_CT_ONLY_GROUP,
     onChanged = CtRefresh,
 })
 KART.CbCtOnlyGroup:ClearAllPoints()
-KART.CbCtOnlyGroup:SetPoint("TOPLEFT", ctModCard, "TOPLEFT", 260, -50)
+KART.CbCtOnlyGroup:SetPoint("TOPLEFT", ctModCard, "TOPLEFT", 260, -80)
 KART.CbCtOnlyGroup.text:SetWidth(190)
 KART.CbCtOnlyGroup.text:SetJustifyH("LEFT")
 
@@ -1128,7 +1141,7 @@ KART.UI:RegisterLabel(ctTauntTitle)
 
 local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctTauntCard:SetPoint("TOPLEFT", ctTauntTitle, "BOTTOMLEFT", 0, -10)
-ctTauntCard:SetSize(500, 252)
+ctTauntCard:SetSize(500, 234)
 
 KART.CbCtTauntAnnounce = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
     name = "KART_CtTauntAnnounce", label = L.SET_CT_TAUNT_ANNOUNCE,
@@ -1138,44 +1151,21 @@ KART.CbCtTauntAnnounce = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
 KART.CbCtTauntAnnounce.text:SetWidth(430)
 KART.CbCtTauntAnnounce.text:SetJustifyH("LEFT")
 
-KART.CbCtTauntOnlyGroup = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntOnlyGroup", label = L.SET_CT_TAUNT_ONLY_GROUP,
-    store = CtTaunt, key = "onlyInGroup", y = -54,
-    tooltip = L.DESC_CT_TAUNT_ONLY_GROUP,
-})
-KART.CbCtTauntOnlyGroup.text:SetWidth(430)
-KART.CbCtTauntOnlyGroup.text:SetJustifyH("LEFT")
-
-KART.CbCtTauntOnlyDungeon = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntOnlyDungeon", label = L.SET_CT_TAUNT_ONLY_DUNGEON,
-    store = CtTaunt, key = "onlyInDungeon", y = -76,
-    tooltip = L.DESC_CT_TAUNT_ONLY_DUNGEON,
-})
-KART.CbCtTauntOnlyDungeon.text:SetWidth(192)
-KART.CbCtTauntOnlyDungeon.text:SetJustifyH("LEFT")
-
-KART.CbCtTauntOnlyRaid = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntOnlyRaid", label = L.SET_CT_TAUNT_ONLY_RAID,
-    store = CtTaunt, key = "onlyInRaid", y = -76,
-    tooltip = L.DESC_CT_TAUNT_ONLY_RAID,
-})
-KART.CbCtTauntOnlyRaid:ClearAllPoints()
-KART.CbCtTauntOnlyRaid:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -76)
-KART.CbCtTauntOnlyRaid.text:SetWidth(192)
-KART.CbCtTauntOnlyRaid.text:SetJustifyH("LEFT")
+-- Group / Dungeons / Raids: same packed ON/OFF chips as the channel row below.
+local tauntFilterHost = CreateFrame("Frame", nil, ctTauntCard)
+tauntFilterHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -54)
+tauntFilterHost:SetSize(460, 22)
 
 local ctTauntChanTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-ctTauntChanTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -100)
+ctTauntChanTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -82)
 ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS)
 KART.UI:RegisterLabel(ctTauntChanTitle)
 
--- Packed chip row, same ON/OFF fill as invite channels: five labels in a line
--- (wrapping if a locale is long) instead of a tight two-column checkbox stack.
 local tauntChipHost = CreateFrame("Frame", nil, ctTauntCard)
-tauntChipHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -118)
+tauntChipHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -100)
 tauntChipHost:SetSize(460, 22)
 
-local function PaintTauntChannelChip(btn, on)
+local function PaintTauntChip(btn, on)
     local r, g, b = KART.UI:AccentColor()
     if on then
         btn:SetBackdropColor(r, g, b, 0.55)
@@ -1188,30 +1178,43 @@ local function PaintTauntChannelChip(btn, on)
     end
 end
 
-local function CreateTauntChannelChip(label, key)
+local function LayoutChipRow(chips, host)
+    local n = #chips
+    local gap, maxW, h = 4, 460, 22
+    local w = math.floor((maxW - gap * (n - 1)) / n)
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    for i, chip in ipairs(chips) do
+        chip:SetSize(w, h)
+        chip.text:SetFont(font, 9, "")
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", host, "TOPLEFT", (i - 1) * (w + gap), 0)
+    end
+    host:SetHeight(h)
+end
+
+local function CreateTauntToggleChip(label, readOn, toggle, tooltip)
     local btn = KART.UI:CreateModernButton(ctTauntCard, label)
     btn:SetHeight(22)
+    btn.tooltipText = tooltip
     local function refresh()
         if not KART_Settings then
             btn.chipOn = false
-            PaintTauntChannelChip(btn, false)
+            PaintTauntChip(btn, false)
             return
         end
-        local ch = CtTauntChannels()
-        btn.chipOn = ch[key] == true
-        PaintTauntChannelChip(btn, btn.chipOn)
+        btn.chipOn = not not readOn()
+        PaintTauntChip(btn, btn.chipOn)
     end
     function btn:SetChecked(value)
         self.chipOn = not not value
-        PaintTauntChannelChip(self, self.chipOn)
+        PaintTauntChip(self, self.chipOn)
     end
     function btn:GetChecked()
         return self.chipOn
     end
     btn:SetScript("OnClick", function()
         if not KART_Settings then return end
-        local ch = CtTauntChannels()
-        ch[key] = not ch[key]
+        toggle()
         refresh()
     end)
     btn:SetScript("OnEnter", function(self)
@@ -1222,13 +1225,53 @@ local function CreateTauntChannelChip(label, key)
         else
             self:SetBackdropColor(0.18, 0.18, 0.18, 1)
         end
+        if self.tooltipText then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
+            GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
+            GameTooltip:Show()
+        end
     end)
-    btn:SetScript("OnLeave", function() refresh() end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+        refresh()
+    end)
     btn.Refresh = refresh
-    btn.channelKey = key
     refresh()
     return btn
 end
+
+local function FilterChipOn(key)
+    local t = CtTaunt()
+    if key == "onlyInGroup" then return t.onlyInGroup ~= false end
+    if key == "onlyInDungeon" then return CT.TauntWantsDungeon(t) end
+    if key == "onlyInRaid" then return CT.TauntWantsRaid(t) end
+    return false
+end
+
+local function CreateTauntFilterChip(label, key, tooltip)
+    return CreateTauntToggleChip(label, function()
+        return FilterChipOn(key)
+    end, function()
+        CtTaunt()[key] = not FilterChipOn(key)
+    end, tooltip)
+end
+
+local function CreateTauntChannelChip(label, key)
+    return CreateTauntToggleChip(label, function()
+        return CtTauntChannels()[key] == true
+    end, function()
+        local ch = CtTauntChannels()
+        ch[key] = not ch[key]
+    end)
+end
+
+KART.CbCtTauntOnlyGroup = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_GROUP, "onlyInGroup", L.DESC_CT_TAUNT_ONLY_GROUP)
+KART.CbCtTauntOnlyDungeon = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_DUNGEON, "onlyInDungeon", L.DESC_CT_TAUNT_ONLY_DUNGEON)
+KART.CbCtTauntOnlyRaid = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_RAID, "onlyInRaid", L.DESC_CT_TAUNT_ONLY_RAID)
+KART.TauntFilterChips = {
+    KART.CbCtTauntOnlyGroup, KART.CbCtTauntOnlyDungeon, KART.CbCtTauntOnlyRaid,
+}
 
 KART.CbCtTauntWhisper = CreateTauntChannelChip(L.SET_CT_TAUNT_WHISPER, "WHISPER")
 KART.CbCtTauntGroup = CreateTauntChannelChip(L.SET_CT_TAUNT_GROUP, "GROUP")
@@ -1240,20 +1283,14 @@ KART.TauntChannelChips = {
     KART.CbCtTauntSay, KART.CbCtTauntYell,
 }
 
+function KART.LayoutTauntFilterChips()
+    LayoutChipRow(KART.TauntFilterChips, tauntFilterHost)
+end
 function KART.LayoutTauntChannelChips()
     -- One row of equal chips; wrapping left Yell on its own line and a hole on the right.
-    local n = #KART.TauntChannelChips
-    local gap, maxW, h = 4, 460, 22
-    local w = math.floor((maxW - gap * (n - 1)) / n)
-    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
-    for i, chip in ipairs(KART.TauntChannelChips) do
-        chip:SetSize(w, h)
-        chip.text:SetFont(font, 9, "")
-        chip:ClearAllPoints()
-        chip:SetPoint("TOPLEFT", tauntChipHost, "TOPLEFT", (i - 1) * (w + gap), 0)
-    end
-    tauntChipHost:SetHeight(h)
+    LayoutChipRow(KART.TauntChannelChips, tauntChipHost)
 end
+KART.LayoutTauntFilterChips()
 KART.LayoutTauntChannelChips()
 
 local ctTauntMsgLabel = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1354,11 +1391,201 @@ KART.BtnCtTauntMacro:SetScript("OnClick", function()
     end
 end)
 
+local function CtSwapLine()
+    if not KART_Settings then
+        return { color = { r = 1, g = 0.82, b = 0 }, sound = "off", outline = true, enabled = true }
+    end
+    local t = CtTaunt()
+    t.swapLine = t.swapLine or {}
+    local s = t.swapLine
+    s.color = s.color or { r = 1, g = 0.82, b = 0 }
+    if s.enabled == nil then s.enabled = true end
+    if s.outline == nil then s.outline = true end
+    if s.sound == nil then s.sound = "off" end
+    if s.duration == nil then s.duration = 3 end
+    if s.fontSize == nil then s.fontSize = 24 end
+    return s
+end
+local function CtSwapLineChanged()
+    if KART.CtSwapColorPreview then
+        local c = CtSwapLine().color
+        KART.CtSwapColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
+    end
+    if CT.StyleSwapLine then CT.StyleSwapLine() end
+    if CT.RefreshSwapLine then CT.RefreshSwapLine() end
+end
+
+local ctSwapTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+ctSwapTitle:SetPoint("TOPLEFT", ctAskCard, "BOTTOMLEFT", 0, -18)
+ctSwapTitle:SetText(L.LABEL_CT_TAUNT_SWAP)
+KART.UI:RegisterLabel(ctSwapTitle)
+
+local ctSwapCard = KART.UI:CreateCard(KART.CoTankPanel)
+ctSwapCard:SetPoint("TOPLEFT", ctSwapTitle, "BOTTOMLEFT", 0, -10)
+ctSwapCard:SetSize(500, 310)
+
+KART.CbCtSwapEnabled = KART.UI:CreateSettingsCheckbox(ctSwapCard, {
+    name = "KART_CtSwapEnabled", label = L.SET_CT_SWAP_ENABLED,
+    store = CtSwapLine, key = "enabled", y = -20,
+    tooltip = L.DESC_CT_SWAP_ENABLED,
+    onChanged = CtSwapLineChanged,
+})
+KART.CbCtSwapEnabled.text:SetWidth(430)
+KART.CbCtSwapEnabled.text:SetJustifyH("LEFT")
+
+KART.CbCtSwapTest = KART.UI:CreateSettingsCheckbox(ctSwapCard, {
+    name = "KART_CtSwapTest", label = L.SET_CT_SWAP_TEST,
+    store = CtSwapLine, key = "testMode", y = -54,
+    tooltip = L.DESC_CT_SWAP_TEST,
+    onChanged = CtSwapLineChanged,
+})
+KART.CbCtSwapTest.text:SetWidth(430)
+KART.CbCtSwapTest.text:SetJustifyH("LEFT")
+
+KART.SldCtSwapDuration = KART.UI:CreateSettingsSlider(ctSwapCard, {
+    name = "KART_CtSwapDurationSlider", label = L.SET_CT_SWAP_DURATION,
+    min = 1, max = 10, store = CtSwapLine, key = "duration", y = -88,
+    onChanged = CtSwapLineChanged,
+})
+KART.SldCtSwapFontSize = KART.UI:CreateSettingsSlider(ctSwapCard, {
+    name = "KART_CtSwapFontSizeSlider", label = L.SET_CT_SWAP_FONT_SIZE,
+    min = 12, max = 48, store = CtSwapLine, key = "fontSize", y = -128,
+    onChanged = CtSwapLineChanged,
+})
+
+KART.BtnCtSwapFont = KART.UI:CreateModernButton(ctSwapCard, L.BTN_SELECT_FONT)
+KART.BtnCtSwapFont:SetPoint("TOPLEFT", ctSwapCard, "TOPLEFT", 20, -174)
+KART.BtnCtSwapFont:SetSize(220, 22)
+KART.BtnCtSwapFont:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_SWAP_FONT)
+        if LSM then
+            local fonts = LSM:List("font")
+            for _, name in ipairs(fonts) do
+                rootDescription:CreateButton(name, function()
+                    CtSwapLine().fontName = name
+                    self.text:SetText(L.BTN_FONT_PREFIX .. name)
+                    CtSwapLineChanged()
+                end)
+            end
+        else
+            rootDescription:CreateButton("Friz Quadrata", function()
+                CtSwapLine().fontName = "Friz Quadrata"
+                self.text:SetText(L.BTN_FONT_PREFIX .. "Friz Quadrata")
+                CtSwapLineChanged()
+            end)
+        end
+    end)
+end)
+
+KART.BtnCtSwapColor = KART.UI:CreateModernButton(ctSwapCard, L.SET_CT_SWAP_COLOR)
+KART.BtnCtSwapColor:SetPoint("TOPLEFT", ctSwapCard, "TOPLEFT", 260, -174)
+KART.BtnCtSwapColor:SetSize(180, 22)
+KART.BtnCtSwapColor:SetScript("OnClick", function()
+    CtPickColor(CtSwapLine().color, CtSwapLineChanged)
+end)
+KART.CtSwapColorPreview = ctSwapCard:CreateTexture(nil, "OVERLAY")
+KART.CtSwapColorPreview:SetSize(22, 22)
+KART.CtSwapColorPreview:SetPoint("LEFT", KART.BtnCtSwapColor, "RIGHT", 8, 0)
+local function RefreshCtSwapColorPreview()
+    local c = CtSwapLine().color
+    KART.CtSwapColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
+end
+RefreshCtSwapColorPreview()
+
+KART.CbCtSwapOutline = KART.UI:CreateSettingsCheckbox(ctSwapCard, {
+    name = "KART_CtSwapOutline", label = L.SET_CT_SWAP_OUTLINE,
+    store = CtSwapLine, key = "outline", y = -206,
+    onChanged = CtSwapLineChanged,
+})
+KART.CbCtSwapOutline.text:SetWidth(430)
+KART.CbCtSwapOutline.text:SetJustifyH("LEFT")
+
+local swapSoundLabel = ctSwapCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+swapSoundLabel:SetPoint("TOPLEFT", ctSwapCard, "TOPLEFT", 20, -238)
+swapSoundLabel:SetText(L.SET_CT_SWAP_SOUND)
+KART.UI:RegisterLabel(swapSoundLabel)
+
+local swapSoundHost = CreateFrame("Frame", nil, ctSwapCard)
+swapSoundHost:SetPoint("TOPLEFT", ctSwapCard, "TOPLEFT", 20, -256)
+swapSoundHost:SetSize(460, 22)
+
+local function PaintSwapSoundChip(btn, on)
+    local r, g, b = KART.UI:AccentColor()
+    if on then
+        btn:SetBackdropColor(r, g, b, 0.55)
+        btn:SetBackdropBorderColor(r, g, b, 1)
+        btn.text:SetTextColor(1, 1, 1)
+    else
+        btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+        btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+        btn.text:SetTextColor(0.55, 0.55, 0.55)
+    end
+end
+
+local function CreateSwapSoundChip(label, key)
+    local btn = KART.UI:CreateModernButton(ctSwapCard, label)
+    btn:SetHeight(22)
+    local function refresh()
+        if not KART_Settings then
+            btn.chipOn = key == "off"
+            PaintSwapSoundChip(btn, btn.chipOn)
+            return
+        end
+        local on = (CtSwapLine().sound or "off") == key
+        btn.chipOn = on
+        PaintSwapSoundChip(btn, on)
+    end
+    btn:SetScript("OnClick", function()
+        if not KART_Settings then return end
+        CtSwapLine().sound = key
+        if KART.RefreshSwapSoundChips then KART.RefreshSwapSoundChips() end
+    end)
+    btn:SetScript("OnEnter", function(self)
+        local r, g, b = KART.UI:AccentColor()
+        if self.chipOn then
+            local lr, lg, lb = KAUI.Lighten(r, g, b, 0.12)
+            self:SetBackdropColor(lr, lg, lb, 0.75)
+        else
+            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
+        end
+    end)
+    btn:SetScript("OnLeave", function() refresh() end)
+    btn.Refresh = refresh
+    refresh()
+    return btn
+end
+
+KART.CbCtSwapSoundOff = CreateSwapSoundChip(L.SET_CT_SWAP_SOUND_OFF, "off")
+KART.CbCtSwapSoundWarning = CreateSwapSoundChip(L.SET_CT_SWAP_SOUND_WARNING, "warning")
+KART.CbCtSwapSoundReady = CreateSwapSoundChip(L.SET_CT_SWAP_SOUND_READY, "ready")
+KART.SwapSoundChips = {
+    KART.CbCtSwapSoundOff, KART.CbCtSwapSoundWarning, KART.CbCtSwapSoundReady,
+}
+function KART.RefreshSwapSoundChips()
+    for _, chip in ipairs(KART.SwapSoundChips) do chip:Refresh() end
+end
+function KART.LayoutSwapSoundChips()
+    local n = #KART.SwapSoundChips
+    local gap, maxW, h = 4, 460, 22
+    local w = math.floor((maxW - gap * (n - 1)) / n)
+    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
+    for i, chip in ipairs(KART.SwapSoundChips) do
+        chip:SetSize(w, h)
+        chip.text:SetFont(font, 9, "")
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", swapSoundHost, "TOPLEFT", (i - 1) * (w + gap), 0)
+    end
+end
+KART.LayoutSwapSoundChips()
 
 KART.UI:RegisterLocaleRefresher(function()
     L = KART.L
     -- Co-Tank tab
     KART.CbCtModuleEnabled.text:SetText(L.SET_CT_MODULE_ENABLED)  KART.CbCtModuleEnabled.tooltipText = L.DESC_CT_MODULE_ENABLED
+    if KART.BtnCtSettings and KART.BtnCtSettings.text then
+        KART.BtnCtSettings.text:SetText(L.TAB_SETTINGS)
+    end
     KART.CbCtTestMode.text:SetText(L.SET_CT_TESTMODE)             KART.CbCtTestMode.tooltipText = L.DESC_CT_TESTMODE
     KART.CbCtLock.text:SetText(L.SET_CT_LOCK)                     KART.CbCtLock.tooltipText = L.DESC_CT_LOCK
     if KART.CbCtOnlyGroup then
@@ -1525,6 +1752,7 @@ KART.UI:RegisterLocaleRefresher(function()
     if KART.CbCtTauntRW then KART.CbCtTauntRW.text:SetText(L.SET_CT_TAUNT_RW) end
     if KART.CbCtTauntSay then KART.CbCtTauntSay.text:SetText(L.SET_CT_TAUNT_SAY) end
     if KART.CbCtTauntYell then KART.CbCtTauntYell.text:SetText(L.SET_CT_TAUNT_YELL) end
+    if KART.LayoutTauntFilterChips then KART.LayoutTauntFilterChips() end
     if KART.LayoutTauntChannelChips then KART.LayoutTauntChannelChips() end
     if KART.CbCtTauntButton then
         KART.CbCtTauntButton.text:SetText(L.SET_CT_TAUNT_BUTTON)
@@ -1543,6 +1771,30 @@ KART.UI:RegisterLocaleRefresher(function()
     if KART.BtnCtTauntMacro then
         KART.BtnCtTauntMacro.text:SetText(L.BTN_CT_TAUNT_MACRO)
         KART.BtnCtTauntMacro.tooltipText = L.DESC_CT_TAUNT_MACRO
+    end
+    if ctSwapTitle then ctSwapTitle:SetText(L.LABEL_CT_TAUNT_SWAP) end
+    if KART.CbCtSwapEnabled then
+        KART.CbCtSwapEnabled.text:SetText(L.SET_CT_SWAP_ENABLED)
+        KART.CbCtSwapEnabled.tooltipText = L.DESC_CT_SWAP_ENABLED
+    end
+    if KART.CbCtSwapTest then
+        KART.CbCtSwapTest.text:SetText(L.SET_CT_SWAP_TEST)
+        KART.CbCtSwapTest.tooltipText = L.DESC_CT_SWAP_TEST
+    end
+    if KART.SldCtSwapDuration then KART.SldCtSwapDuration.title:SetText(L.SET_CT_SWAP_DURATION) end
+    if KART.SldCtSwapFontSize then KART.SldCtSwapFontSize.title:SetText(L.SET_CT_SWAP_FONT_SIZE) end
+    if KART.BtnCtSwapColor then KART.BtnCtSwapColor.text:SetText(L.SET_CT_SWAP_COLOR) end
+    if KART.CbCtSwapOutline then KART.CbCtSwapOutline.text:SetText(L.SET_CT_SWAP_OUTLINE) end
+    if swapSoundLabel then swapSoundLabel:SetText(L.SET_CT_SWAP_SOUND) end
+    if KART.CbCtSwapSoundOff then KART.CbCtSwapSoundOff.text:SetText(L.SET_CT_SWAP_SOUND_OFF) end
+    if KART.CbCtSwapSoundWarning then KART.CbCtSwapSoundWarning.text:SetText(L.SET_CT_SWAP_SOUND_WARNING) end
+    if KART.CbCtSwapSoundReady then KART.CbCtSwapSoundReady.text:SetText(L.SET_CT_SWAP_SOUND_READY) end
+    if KART.LayoutSwapSoundChips then KART.LayoutSwapSoundChips() end
+    if KART.BtnCtSwapFont and KART.BtnCtSwapFont.text then
+        local name = (KART_Settings and KART_Settings.ct and KART_Settings.ct.taunt
+            and KART_Settings.ct.taunt.swapLine and KART_Settings.ct.taunt.swapLine.fontName)
+            or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
+        KART.BtnCtSwapFont.text:SetText(L.BTN_FONT_PREFIX .. name)
     end
     if CT.RefreshAskButton then CT.RefreshAskButton() end
     if KART.CtFlyoutTabButtons then
