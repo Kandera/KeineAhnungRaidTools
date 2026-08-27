@@ -151,6 +151,10 @@ local folded, original = KASC.Identity.GetNickname("raid1")
 T.eq(RC.DisplayName("raid1"), original or "Bob", "display prefers the NSRT nick")
 T.eq(RC.DisplayName("Bob-TarrenMill"), "Bobby",
     "display resolves a raid name to the NSRT nick")
+KARTTEST.SetRaid({ { name = "Eve", guid = "Player-1-EEEE", nickname = "|cff00ff00Evil|r" } })
+T.eq(RC.DisplayName("raid1"), "||cff00ff00Evil||r",
+    "display escapes UI pipes in an NSRT nick")
+KARTTEST.SetRaid({ { name = "Bob", guid = "Player-1-BBBB", nickname = "Bobby" } })
 
 local originalMenu = function()
     if not RCLootCouncil.isMasterLooter then return end
@@ -238,11 +242,25 @@ RCLootCouncil.isMasterLooter = true
 RC.SyncAwardWrap()
 local mlAward = RCLootCouncilML.Award
 RCLootCouncil.isMasterLooter = false
+RCLootCouncil.isCouncil = true
 RC.SyncAwardWrap()
 T.truthy(RCLootCouncilML.Award ~= mlAward, "non-ML Award is the relay wrap")
+T.truthy(vf.RightClickMenu ~= originalMenu, "council-not-ML keeps the menu wrap")
 RCLootCouncil.isMasterLooter = true
 RC.SyncAwardWrap()
 T.eq(RCLootCouncilML.Award, mlAward, "ML Award is restored so KART is not on the trade stack")
+
+RCLootCouncil.isMasterLooter = false
+RCLootCouncil.isCouncil = true
+RC.SyncAwardWrap()
+RCLootCouncil.isMasterLooter = true
+RCLootCouncil:NewMLCheck()
+T.eq(RCLootCouncilML.Award, mlAward,
+    "NewMLCheck unwraps Award so the lead's trade stack is RC's")
+T.eq(vf.RightClickMenu, originalMenu,
+    "NewMLCheck restores RC's RightClickMenu on the ML client")
+T.eq(menuFrame.initialize, originalMenu,
+    "NewMLCheck restores MSA initialize on the ML client")
 
 RCLootCouncil.GetActiveModule = prevGetActiveModule
 _G.RCLootCouncil_VotingFrame_RightclickMenu = nil

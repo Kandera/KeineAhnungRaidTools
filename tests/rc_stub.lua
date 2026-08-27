@@ -15,6 +15,8 @@ function KARTTEST.InstallRC()
         masterLooter = "Lead-TarrenMill",
         player = { name = "Lead-TarrenMill" },
         GetML = function() return "Lead-TarrenMill" end,
+        NewMLCheck = function() end,
+        OnCouncilReceived = function() end,
         GetLootTable = function()
             return KARTTEST.rcLootTable or {}
         end,
