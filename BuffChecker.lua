@@ -76,7 +76,10 @@ KART.BuffData = {
       -- Flametongue and Windfury, both their old and current table entries.
       neutralSpells = {5400, 5401, 5872, 5875}, page = "advanced" },
     { id = "enchants",labelKey= "BC_LABEL_ENCHANTS",col= 4, isGearCheck = "enchants", page = "advanced" },
-    { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" }
+    { id = "gems",   labelKey = "BC_LABEL_GEMS",   col = 5, isGearCheck = "gems", page = "advanced" },
+    { id = "addonRC",   labelKey = "BC_LABEL_RC",   col = 6, isAddonCheck = "RCLootCouncil",        page = "advanced" },
+    { id = "addonNSRT", labelKey = "BC_LABEL_NSRT", col = 7, isAddonCheck = "NorthernSkyRaidTools", page = "advanced" },
+    { id = "addonWU",   labelKey = "BC_LABEL_WU",   col = 8, isAddonCheck = "wowutils",             page = "advanced" }
 }
 
 -- label/reportLabel are resolved from keys so a locale change (applied after file load,
@@ -386,7 +389,7 @@ function KART.CreateBuffCheckFrame()
         
         row.indicators = {}
         for j, data in ipairs(KART.BuffData) do
-            if not data.isRepair and not data.isGearCheck then
+            if not data.isRepair and not data.isGearCheck and not data.isAddonCheck then
                 local tex = row:CreateTexture(nil, "OVERLAY")
                 tex:SetSize(20, 20)
                 tex:SetPoint("LEFT", offsets[data.col] - 10, 0)
@@ -404,7 +407,12 @@ function KART.CreateBuffCheckFrame()
                 
                 frame:EnableMouse(true)
                 frame:SetScript("OnEnter", function(self)
-                    if self.tooltipTitle and self.missingSlots then
+                    if self.addonTip then
+                        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                        GameTooltip:SetText(self.tooltipTitle or "", 1, 1, 1)
+                        GameTooltip:AddLine(self.addonTip, 0.8, 0.8, 0.8)
+                        GameTooltip:Show()
+                    elseif self.tooltipTitle and self.missingSlots then
                         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                         GameTooltip:SetText(self.tooltipTitle, 1, 1, 1)
                         
@@ -626,7 +634,7 @@ function KART.UpdateBuffCheckThrottled()
     end)
 end
 
-local function setInd(row, idx, has, buffData, classes)
+local function setInd(row, idx, has, buffData, classes, extra)
     local ind = row.indicators[idx]
     if not ind then return end
     local classNeeded = buffData.class
@@ -658,6 +666,30 @@ local function setInd(row, idx, has, buffData, classes)
             textObj:SetTextColor(unpack(KART.DANGER))
             ind.missingSlots = has
             ind.tooltipTitle = buffData.reportLabel or buffData.label
+        end
+        return
+    end
+
+    if buffData.isAddonCheck then
+        local textObj = ind.text or ind
+        ind.missingSlots = nil
+        ind.tooltipTitle = buffData.label
+        if has == "ok" then
+            textObj:SetText("✓")
+            textObj:SetTextColor(unpack(KART.SUCCESS))
+            ind.addonTip = extra
+        elseif has == "old" then
+            textObj:SetText("✗")
+            textObj:SetTextColor(unpack(KART.DANGER))
+            ind.addonTip = extra
+        elseif has == "missing" then
+            textObj:SetText("-")
+            textObj:SetTextColor(0.5, 0.5, 0.5)
+            ind.addonTip = (L and L.BC_ADDON_NOT_INSTALLED) or "not installed"
+        else
+            textObj:SetText("?")
+            textObj:SetTextColor(0.5, 0.5, 0.5)
+            ind.addonTip = (L and L.BC_ADDON_NO_HELLO) or "no KART handshake yet"
         end
         return
     end
@@ -1052,6 +1084,18 @@ local function FillPlayerBuffStates(unit, shortName, buffDataCount, timeNow)
                 end
             end
         end
+        if buff.isAddonCheck then
+            local mine = KART.NeighborVersion(buff.isAddonCheck)
+            local hasHello, theirs
+            if UnitIsUnit(unit, "player") then
+                hasHello, theirs = true, mine
+            else
+                hasHello = shortName and KART.PlayerVersions and KART.PlayerVersions[shortName] ~= nil
+                theirs = shortName and KART.PlayerAddonVersions and KART.PlayerAddonVersions[shortName]
+                    and KART.PlayerAddonVersions[shortName][buff.isAddonCheck]
+            end
+            KART.BuffStatesCache[buff.id] = KART.AddonCellStatus(theirs, mine, hasHello)
+        end
     end
 end
 
@@ -1103,7 +1147,8 @@ function KART.ScanBuffRoster()
         for _, buff in ipairs(KART.BuffData) do
             local has = KART.BuffStatesCache[buff.id]
             if buff.isRepair then has = (shortName and KART.DurabilityCache[shortName]) or 100 end
-            local isMissing = not buff.isGearCheck and not buff.isRepair and (not has or has == "wrong")
+            local isMissing = not buff.isGearCheck and not buff.isRepair and not buff.isAddonCheck
+                and (not has or has == "wrong")
             if isMissing and (buff.report or buff.whisper) and buff.page ~= "advanced" then
                 if not buff.class or KART.ClassCache[buff.class] then
                     table.insert(KART.MissingBuffs[buff.id], nameStr)
@@ -1259,6 +1304,17 @@ function KART.UpdateBuffCheck(isPreview)
                     local textObj = ind.text or ind
                     if i == 2 then textObj:SetText("-1"); textObj:SetTextColor(unpack(KART.DANGER)); ind.missingSlots = "5"; ind.tooltipTitle = data.reportLabel or data.label
                     else textObj:SetText("OK"); textObj:SetTextColor(unpack(KART.SUCCESS)); ind.missingSlots = nil end
+                elseif data.isAddonCheck then
+                    local textObj = ind.text or ind
+                    if i == 1 then
+                        textObj:SetText("✓"); textObj:SetTextColor(unpack(KART.SUCCESS))
+                    elseif i == 2 then
+                        textObj:SetText("✗"); textObj:SetTextColor(unpack(KART.DANGER))
+                    elseif i == 3 then
+                        textObj:SetText("-"); textObj:SetTextColor(0.5, 0.5, 0.5)
+                    else
+                        textObj:SetText("?"); textObj:SetTextColor(0.5, 0.5, 0.5)
+                    end
                 elseif not data.isRepair then
                     ind:SetDesaturated(false)
                     if i == 1 and j == 7 then -- Beispiel für auslaufendes Food
@@ -1342,7 +1398,17 @@ function KART.UpdateBuffCheck(isPreview)
         for j, buff in ipairs(KART.BuffData) do
             local has = player.states[buff.id]
             if buff.isRepair then has = player.repair end
-            setInd(row, j, has, buff, KART.ClassCache)
+            local extra
+            if buff.isAddonCheck then
+                if UnitIsUnit(player.unit, "player") then
+                    extra = KART.NeighborVersion(buff.isAddonCheck)
+                else
+                    extra = player.shortName and KART.PlayerAddonVersions
+                        and KART.PlayerAddonVersions[player.shortName]
+                        and KART.PlayerAddonVersions[player.shortName][buff.isAddonCheck]
+                end
+            end
+            setInd(row, j, has, buff, KART.ClassCache, extra)
             if KART.BuffCheckMode == "advanced" then
                 if buff.page == "advanced" then row.indicators[j]:Show() else row.indicators[j]:Hide() end
             else

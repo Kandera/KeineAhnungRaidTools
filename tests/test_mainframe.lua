@@ -25,6 +25,7 @@ RaidSim.As(me, function()
 end)
 T.truthy(KART.MainFrame and KART.ShowTab, "the main window builds")
 T.eq(#KART.FooterLinks, 3, "footer links survive load (SetFont before SetText)")
+T.truthy(KART.BtnAddonNag, "the raid-lead addon nag button is on the Buff-Checker settings card")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
 -- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or

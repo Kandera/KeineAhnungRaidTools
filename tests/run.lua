@@ -235,6 +235,8 @@ dofile("tests/test_diagnostics.lua")
 
 dofile("tests/test_hello.lua")
 
+dofile("tests/test_addon_versions.lua")
+
 dofile("tests/test_transport.lua")
 
 dofile("tests/test_rc_companion.lua")

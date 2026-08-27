@@ -104,6 +104,29 @@ KARTTEST.inRange["Lead"] = true
 T.eq(RC.TryTradeOwed(1), true, "a click in range opens trade with the trader")
 T.eq(KARTTEST.initiatedTrades[1], "Lead", "InitiateTrade uses the short trader name")
 
+RCLootCouncil.TradeUI.isTrading = true
+KARTTEST.initiatedTrades = {}
+T.eq(RC.TryTradeOwed(1), false, "owed does not InitiateTrade while a trade is already open")
+T.eq(#KARTTEST.initiatedTrades, 0, "and does not call InitiateTrade")
+RCLootCouncil.TradeUI.isTrading = false
+
+ResetOwed()
+RC.EnableOwed()
+local origLink = GetTradeTargetItemLink
+_G.GetTradeTargetItemLink = function() error("secret trade link") end
+local ok = pcall(function()
+    RCLootCouncil.TradeUI:OnEvent_UI_INFO_MESSAGE("UI_INFO_MESSAGE", _G.LE_GAME_ERR_TRADE_COMPLETE)
+end)
+_G.GetTradeTargetItemLink = origLink
+T.eq(ok, true, "RC TRADE_COMPLETE still runs when a trade link is secret")
+
+AsBob()
+ResetOwed()
+RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
+KARTTEST.tradeTargetItems = { LINK }
+RCLootCouncil.TradeUI:OnEvent_UI_INFO_MESSAGE("UI_INFO_MESSAGE", _G.LE_GAME_ERR_TRADE_COMPLETE)
+T.eq(#RC.OwedItems(), 0, "a completed trade still clears the owed row via RC's handler")
+
 local store = RC.EnsureOwedStore()
 store.schemaVersion = nil
 store.items = "nope"

@@ -20,6 +20,8 @@ function KARTTEST.InstallRC()
         end,
         TradeUI = {
             OnAwardReceived = function() end,
+            OnEvent_TRADE_ACCEPT_UPDATE = function() end,
+            OnEvent_UI_INFO_MESSAGE = function() end,
         },
     }
     _G.RCLootCouncilML = {

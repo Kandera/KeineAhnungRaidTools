@@ -221,6 +221,7 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
+            "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
             "**Buff Check shows Healthstone and Soulstone.**",
             "**Flasks are found by this season's spell ids.**",
             "**Healthstone reads the stone in your bags.**",
@@ -628,6 +629,237 @@ function KART.IsOlderVersion(ver, current)
     if a1 ~= b1 then return a1 < b1 end
     if a2 ~= b2 then return a2 < b2 end
     return a3 < b3
+end
+
+-- ==========================================================================
+--  Neighbor-addon versions (RC / NSRT / wowutils)
+-- ==========================================================================
+-- Carried on KA_HELLO as extra name=version entries, but only for addons that are actually
+-- loaded here. Absence on the wire is "not installed", not "outdated". Comparison is always
+-- against OUR local versions — the same baseline the raid-lead nag broadcasts.
+KART.NEIGHBOR_ADDONS = {
+    { name = "RCLootCouncil",        folder = "RCLootCouncil" },
+    { name = "NorthernSkyRaidTools", folder = "NorthernSkyRaidTools" },
+    { name = "wowutils",             folder = "wowutils" },
+}
+
+local ADDON_DISPLAY = {
+    KART = "KART",
+    RCLootCouncil = "RCLootCouncil",
+    NorthernSkyRaidTools = "NSRT",
+    wowutils = "WowUtils",
+}
+
+function KART.AddonDisplayName(name)
+    return ADDON_DISPLAY[name] or name
+end
+
+-- HELLO versions may only be [%w%.%-_]. Take the legal prefix so a toc "1.0.6 (beta)" still
+-- announces, and so NSRT's git-describe (already legal) is kept whole.
+function KART.SanitizeWireVersion(ver)
+    if type(ver) ~= "string" then return nil end
+    local s = ver:match("^[%w%.%-_]+")
+    if not s or s == "" then return nil end
+    return s
+end
+
+function KART.NeighborVersion(folder)
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(folder)) then return nil end
+    local ver = C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(folder, "Version")
+    return KART.SanitizeWireVersion(ver)
+end
+
+function KART.RegisterNeighborAddons()
+    for _, addon in ipairs(KART.NEIGHBOR_ADDONS) do
+        local ver = KART.NeighborVersion(addon.folder)
+        if ver then KASC:RegisterAddon(addon.name, ver) end
+    end
+end
+
+function KART.LocalAddonVersions()
+    local t = { KART = KART.Version }
+    for _, addon in ipairs(KART.NEIGHBOR_ADDONS) do
+        local v = KART.NeighborVersion(addon.folder)
+        if v then t[addon.name] = v end
+    end
+    return t
+end
+
+-- theirs: peer's version or nil. mine: our version or nil. hasHello: we have their KA_HELLO.
+function KART.AddonCellStatus(theirs, mine, hasHello)
+    if not hasHello then return "unknown" end
+    if not theirs then return "missing" end
+    if mine and KART.IsOlderVersion(theirs, mine) then return "old" end
+    return "ok"
+end
+
+function KART.OutdatedAgainst(localVers, leadVers)
+    if type(localVers) ~= "table" or type(leadVers) ~= "table" then return {} end
+    local function leadVer(name)
+        local e = leadVers[name]
+        if type(e) == "table" then return e.version end
+        if type(e) == "string" then return e end
+    end
+    local out = {}
+    local function maybe(name)
+        local mine, theirs = localVers[name], leadVer(name)
+        if mine and theirs and KART.IsOlderVersion(mine, theirs) then
+            out[#out + 1] = { name = name, have = mine, latest = theirs }
+        end
+    end
+    maybe("KART")
+    for _, addon in ipairs(KART.NEIGHBOR_ADDONS) do maybe(addon.name) end
+    return out
+end
+
+KART.Version = KART.Version or (C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version")) or "0.0.0"
+KASC:RegisterAddon("KART", KART.Version)
+KART.RegisterNeighborAddons()
+
+-- Peer version bookkeeping used to live in Core.lua. It lives here so a RaidSim client — which
+-- never loads Core — still records neighbor versions from HELLO and still warns once.
+--
+-- Guarded: the harness slurps Utils.lua into a throwaway env that still sees the leftover KASC
+-- from the last RaidSim client, and RegisterMessage refuses a second handler for the same token.
+local function RegisterAddonVersionHandlers()
+    if KASC._kartAddonVersionHandlers then return end
+    KASC._kartAddonVersionHandlers = true
+KASC:OnPeer(function(shortName, _, peers, solicited)
+    if type(peers) ~= "table" or not shortName then return end
+    local kart = peers.KART
+    if kart then
+        KART.PlayerVersions = KART.PlayerVersions or {}
+        KART.PlayerVersions[shortName] = kart.version
+
+        if not KART.UpdateWarned and kart.version ~= KART.Version then
+            -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
+            -- usable numbers instead of failing the match outright and collapsing to 0.0.0.
+            local nMaj, nMin, nPat = kart.version:match("(%d+)%.?(%d*)%.?(%d*)")
+            local oMaj, oMin, oPat = tostring(KART.Version or ""):match("(%d+)%.?(%d*)%.?(%d*)")
+            nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
+            oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
+            -- Sanity clamp before trusting the number: no handler authenticates a sender, so
+            -- anyone can claim a huge version, and UpdateWarned latches after the first print --
+            -- one bogus claim would suppress the real warning for the whole session. A genuine
+            -- release never jumps more than a major ahead.
+            local plausible = nMaj <= oMaj + 1
+            if plausible and (nMaj > oMaj
+                or (nMaj == oMaj and nMin > oMin)
+                or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
+                KART.UpdateWarned = true
+                print(string.format(KART.L.UPDATE_AVAILABLE, kart.version, KART.Version))
+            end
+        end
+    end
+
+    KART.PlayerAddonVersions = KART.PlayerAddonVersions or {}
+    local bag = {}
+    if kart then bag.KART = kart.version end
+    for _, addon in ipairs(KART.NEIGHBOR_ADDONS) do
+        local p = peers[addon.name]
+        if p and p.version then bag[addon.name] = p.version end
+    end
+    if kart or next(bag) then KART.PlayerAddonVersions[shortName] = bag end
+
+    -- Neighbors are not spoof-clamped: NSRT's major is the game version and jumps 11 → 12 for real.
+    KART.UpdateWarnedAddons = KART.UpdateWarnedAddons or {}
+    for _, addon in ipairs(KART.NEIGHBOR_ADDONS) do
+        local p = peers[addon.name]
+        local mine = KART.NeighborVersion(addon.folder)
+        if mine and p and p.version and not KART.UpdateWarnedAddons[addon.name]
+            and KART.IsOlderVersion(mine, p.version) then
+            KART.UpdateWarnedAddons[addon.name] = true
+            print(string.format(KART.L.UPDATE_AVAILABLE_ADDON, KART.AddonDisplayName(addon.name), p.version, mine))
+        end
+    end
+
+    if KART.VersionCheckActive and solicited and kart then
+        print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
+    end
+
+    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() and KART.UpdateBuffCheckThrottled then
+        KART.UpdateBuffCheckThrottled()
+    end
+end)
+end
+RegisterAddonVersionHandlers()
+
+function KART.SenderIsGroupLeader(ctx)
+    if not (ctx and ctx.shortName) then return false end
+    for unit in KAUtil.EachGroupUnit() do
+        local name = UnitName(unit)
+        local short = name and name:match("([^%-]+)")
+        if short == ctx.shortName then return KART.UnitLeads(unit) end
+    end
+    return false
+end
+
+function KART.ShowAddonUpdatePopup(entries)
+    if not entries or #entries == 0 then return end
+    local L = KART.L
+    local title = (L and L.ADDON_UPDATE_TITLE) or "Update addons"
+    local f = KART.addonUpdatePopup
+    if not f then
+        f = CreateFrame("Frame", "KART_AddonUpdatePopup", UIParent, "BackdropTemplate")
+        f:SetSize(360, 140)
+        f:SetPoint("CENTER")
+        KART.UI:RegisterStrataFrame(f, true)
+        KART.UI:ApplyPopupArtwork(f)
+        KART.UI:ApplyPopupChrome(f, { title = title })
+        KART.UI:AddShowFade(f)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetClampedToScreen(true)
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        KART.RegisterEscapeFrame(f)
+        f.lines = {}
+        KART.addonUpdatePopup = f
+    else
+        f.title:SetText(title)
+    end
+    local y = -48
+    for i, e in ipairs(entries) do
+        local fs = f.lines[i]
+        if not fs then
+            fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            f.lines[i] = fs
+        end
+        fs:ClearAllPoints()
+        fs:SetPoint("TOPLEFT", f, "TOPLEFT", 20, y)
+        fs:SetPoint("TOPRIGHT", f, "TOPRIGHT", -20, y)
+        fs:SetJustifyH("LEFT")
+        fs:SetText(string.format(KART.L.ADDON_UPDATE_LINE, KART.AddonDisplayName(e.name)))
+        fs:Show()
+        y = y - 22
+    end
+    for i = #entries + 1, #f.lines do f.lines[i]:Hide() end
+    f:SetHeight(math.max(120, 80 + #entries * 22))
+    f:Show()
+end
+
+function KART.BroadcastAddonNag()
+    local L = KART.L
+    if not IsInGroup() then
+        print((L and L.ADDON_NAG_NOT_GROUP) or "KART: You must be in a group to send the addon update reminder.")
+        return
+    end
+    if not KART.UnitLeads("player") then
+        print((L and L.ADDON_NAG_NOT_LEAD) or "KART: Only the raid leader can send the addon update reminder.")
+        return
+    end
+    KART.RegisterNeighborAddons()
+    KASC:Send("ADDON_NAG:" .. KASC.SerializeHello(), nil, nil, { prio = "BULK" })
+end
+
+if not KASC._kartAddonNag then
+    KASC._kartAddonNag = true
+    KASC:RegisterMessage("ADDON_NAG", { payload = true, group = true }, function(payload, ctx)
+        if not KART.SenderIsGroupLeader(ctx) then return end
+        local outdated = KART.OutdatedAgainst(KART.LocalAddonVersions(), KASC.ParseHello(payload))
+        if #outdated > 0 then KART.ShowAddonUpdatePopup(outdated) end
+    end)
 end
 
 -- ==========================================================================

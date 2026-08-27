@@ -177,7 +177,13 @@ end
 RCLootCouncil.isMasterLooter = false
 RCLootCouncil.isCouncil = true
 KARTTEST.rcMenuOpened = nil
+local msaCalls = 0
+_G.MSA_DropDownMenu_Initialize = function()
+    msaCalls = msaCalls + 1
+end
 RC.HookVotingFrame()
+T.eq(msaCalls, 0,
+    "HookVotingFrame does not Initialize the MSA menu (that SetAttribute taints TradeFrame)")
 menuFrame.initialize(vf)
 T.eq(KARTTEST.rcMenuOpened, true,
     "HookVotingFrame succeeds on a later call and opens the RC right-click menu for council")
@@ -227,6 +233,16 @@ T.eq(KARTTEST.rcAwards[1].extra[2], mlCallback, "ML Award forwards callback")
 T.eq(KARTTEST.rcAwards[1].extra[3], "extra", "ML Award forwards varargs")
 T.eq((KASC.diag.sentByToken.RC_AWARD or 0) - beforeML, 0,
     "ML Award does not send RC_AWARD")
+
+RCLootCouncil.isMasterLooter = true
+RC.SyncAwardWrap()
+local mlAward = RCLootCouncilML.Award
+RCLootCouncil.isMasterLooter = false
+RC.SyncAwardWrap()
+T.truthy(RCLootCouncilML.Award ~= mlAward, "non-ML Award is the relay wrap")
+RCLootCouncil.isMasterLooter = true
+RC.SyncAwardWrap()
+T.eq(RCLootCouncilML.Award, mlAward, "ML Award is restored so KART is not on the trade stack")
 
 RCLootCouncil.GetActiveModule = prevGetActiveModule
 _G.RCLootCouncil_VotingFrame_RightclickMenu = nil

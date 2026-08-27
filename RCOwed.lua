@@ -7,7 +7,6 @@ local Identity = KASC.Identity
 
 local SCHEMA = 1
 local owedHooked = false
-local owedEventsRegistered = false
 local incomingLinks = {}
 local hidingInternally = false
 local owedRows = {}
@@ -238,6 +237,10 @@ function RC.TryTradeOwed(index)
         print(L.RC_OWED_OUT_OF_RANGE or "|cffff0000KART:|r Not in trade range.")
         return false
     end
+    local addon = RC.GetAddon()
+    local tradeUI = addon and addon.TradeUI
+    if tradeUI and tradeUI.isTrading then return false end
+    if _G.TradeFrame and TradeFrame.IsShown and TradeFrame:IsShown() then return false end
     InitiateTrade(short)
     return true
 end
@@ -246,8 +249,10 @@ local function SnapshotIncoming()
     wipe(incomingLinks)
     local maxSlots = (_G.MAX_TRADE_ITEMS or 7) - 1
     for i = 1, maxSlots do
-        local link = GetTradeTargetItemLink(i)
-        if link then incomingLinks[#incomingLinks + 1] = link end
+        local ok, link = pcall(GetTradeTargetItemLink, i)
+        if ok and link and not (KAUtil.IsSecret and KAUtil.IsSecret(link)) then
+            incomingLinks[#incomingLinks + 1] = link
+        end
     end
 end
 
@@ -256,34 +261,26 @@ local function HookTradeUI()
     local addon = RC.GetAddon()
     local tradeUI = addon and addon.TradeUI
     if type(tradeUI) ~= "table" or type(tradeUI.OnAwardReceived) ~= "function" then return end
+    -- Listen after RC's own TRADE_COMPLETE. Do not hook TRADE_ACCEPT_UPDATE:
+    -- GetTradeTargetItemLink during accept taints the Trade button, the session
+    -- stays open, and the next InitiateTrade is "you are already trading" until reload.
     hooksecurefunc(tradeUI, "OnAwardReceived", function(_, session, winner, trader)
-        RC.HandleOwedAward(session, winner, trader)
+        pcall(RC.HandleOwedAward, session, winner, trader)
     end)
-    owedHooked = true
-end
-
-local function RegisterOwedEvents()
-    if owedEventsRegistered then return end
-    owedEventsRegistered = true
-    local f = CreateFrame("Frame")
-    f:RegisterEvent("TRADE_ACCEPT_UPDATE")
-    f:RegisterEvent("UI_INFO_MESSAGE")
-    f:SetScript("OnEvent", function(_, event, ...)
-        if event == "TRADE_ACCEPT_UPDATE" then
-            SnapshotIncoming()
-        elseif event == "UI_INFO_MESSAGE" then
+    if type(tradeUI.OnEvent_UI_INFO_MESSAGE) == "function" then
+        hooksecurefunc(tradeUI, "OnEvent_UI_INFO_MESSAGE", function(_, _, ...)
             if select(1, ...) == _G.LE_GAME_ERR_TRADE_COMPLETE then
-                RC.HandleOwedIncomingLinks(incomingLinks)
+                pcall(SnapshotIncoming)
+                pcall(RC.HandleOwedIncomingLinks, incomingLinks)
                 wipe(incomingLinks)
             end
-        end
-    end)
-    RC.OwedEventFrame = f
+        end)
+    end
+    owedHooked = true
 end
 
 function RC.EnableOwed()
     RC.EnsureOwedStore()
-    RegisterOwedEvents()
     HookTradeUI()
     RC.RefreshOwedDisplay()
 end

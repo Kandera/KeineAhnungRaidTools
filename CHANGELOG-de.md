@@ -23,6 +23,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Look-Einstellungen für die Raidlead-Leiste** für Skalierung, Button-Größe und Deckkraft; die Leiste im Spiel ist die Vorschau.
 - **Ebene der Raidlead-Leiste** hat einen eigenen Regler und einen Schalter, um unter der Weltkarte zu bleiben.
 - **Ein gewonnenes Item öffnet eine Trade-Erinnerung**, damit du zum Raidlead laufen kannst; unter Einstellungen abschaltbar.
+- **Buff-Check Advanced zeigt RC, NSRT und WowUtils** als aktuell, veraltet oder nicht installiert.
+- **Der Raidlead kann veraltete Addons anstoßen**, und die betroffenen Raider bekommen ein schließbares Update-Fenster.
 
 ### Geändert
 - **Gesundheitsstein zählt den Stein in deinen Taschen.**
@@ -76,6 +78,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Nach einem Trade über RC's Trade UI hängst du nicht mehr im Handel fest.**
 - **Co-Tank erzeugt keine übrigbleibenden Frames mehr**, wenn Live-Auren nicht da sind.
 - **Die Flask/Food-Zahl auf der Heute-Leiste stimmt mit dem Buff-Check-Fenster überein.**
 - **Edit-Modus im Kampf verlassen wirft keinen Fehler mehr** an Raidlead-Leiste oder Co-Tank-Zeile.

@@ -10,8 +10,8 @@ local function SettingsStore() return KART_Settings end
 local mlMissingWarned = {}
 local awardRegistered = false
 local votingFrameHooked = false
-local awardWrapped = false
 local suppressAward = false
+local originalAwardFn
 
 local function ShowNickNames()
     return KART_Settings and KART_Settings.rcShowNickNames ~= false
@@ -36,19 +36,27 @@ function RC.DisplayName(unitOrName)
     return Ambiguate(unitOrName, "short")
 end
 
-local function WrapAward(addon)
-    if awardWrapped then return true end
+-- ML Award must be RC's own function. A KART closure on that stack taints TradeFrame:
+-- the Trade button does nothing, the session stays open, the next click is
+-- "you are already trading" until reload. Council-not-ML still needs the wrap to relay.
+function RC.SyncAwardWrap()
+    local addon = RC.GetAddon()
     local ml = _G.RCLootCouncilML
-    if not ml or type(ml.Award) ~= "function" then return false end
-    local originalAward = ml.Award
+    if not addon or not ml or type(ml.Award) ~= "function" then return false end
+    if not originalAwardFn then
+        originalAwardFn = ml.Award
+    end
+    if addon.isMasterLooter then
+        ml.Award = originalAwardFn
+        return true
+    end
     ml.Award = function(self, session, winnerName, response, ...)
         if suppressAward then return end
         if addon.isMasterLooter then
-            return originalAward(self, session, winnerName, response, ...)
+            return originalAwardFn(self, session, winnerName, response, ...)
         end
         RC.RequestAward(session, winnerName, response, ...)
     end
-    awardWrapped = true
     return true
 end
 
@@ -82,7 +90,7 @@ function RC.HookVotingFrame()
     if votingFrameHooked then return end
     local addon = RC.GetAddon()
     if not addon then return end
-    if not WrapAward(addon) then return end
+    if not RC.SyncAwardWrap() then return end
     local ok, vf = pcall(function() return addon:GetActiveModule("votingframe") end)
     if not ok or not vf or type(vf.RightClickMenu) ~= "function" then return end
     local menuFrame = _G.RCLootCouncil_VotingFrame_RightclickMenu
@@ -102,9 +110,10 @@ function RC.HookVotingFrame()
     end
     vf.RightClickMenu = wrappedRightClickMenu
     menuFrame.initialize = wrappedRightClickMenu
-    if type(_G.MSA_DropDownMenu_Initialize) == "function" then
-        pcall(_G.MSA_DropDownMenu_Initialize, menuFrame, vf.RightClickMenu, "MENU")
-    end
+    -- Do not MSA_DropDownMenu_Initialize here. That path SetAttribute("initmenu") on the
+    -- secure delegate without a hardware click and, with no session, RightClickMenu indexes
+    -- lootTable[session] as nil. The taint sits on the UI until reload — TradeFrame opens
+    -- black and the loot session dies. RC initializes on the actual right-click.
     HookSetCellName(vf)
     votingFrameHooked = true
 end
@@ -277,8 +286,11 @@ end
 
 function RC.OnRosterUpdate()
     RC.PushCouncilToRC()
-    if RC.IsRCLoaded() and not votingFrameHooked then
-        RC.HookVotingFrame()
+    if RC.IsRCLoaded() then
+        RC.SyncAwardWrap()
+        if not votingFrameHooked then
+            RC.HookVotingFrame()
+        end
     end
 end
 

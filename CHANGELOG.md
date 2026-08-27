@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raidlead bar look settings** for scale, button size and bar opacity; the live bar is the preview.
 - **Raidlead bar layer** is its own slider, with a switch to sit under the world map.
 - **Winning an item opens a trade reminder** so you can walk to the raid leader; switch it off in Settings.
+- **Buff Check Advanced shows RC, NSRT and WowUtils** as current, outdated, or not installed.
+- **The raid leader can nag outdated addons**, and those raiders get a closeable update window.
 
 ### Changed
 - **Healthstone reads the stone in your bags.**
@@ -75,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **Trading from RC's Trade UI no longer leaves you stuck in a trade.**
 - **Co-Tank no longer creates leftover frames** when live aura strips are unavailable.
 - **The tonight strip flask/food count matches the Buff Check window.**
 - **Leaving Edit Mode in combat no longer errors** on the raidlead bar or Co-Tank row.

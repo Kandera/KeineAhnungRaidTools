@@ -137,6 +137,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         end
 
         if KART.RC then KART.RC.Enable() end
+        if KART.RegisterNeighborAddons then KART.RegisterNeighborAddons() end
 
         -- Minimap Icon mit LibDBIcon registrieren (KART_Settings.minimap is guaranteed a table by
         -- the Defaults merge above — Defaults.minimap = {}).
@@ -176,6 +177,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "ADDON_LOADED" then
         if arg1 == "RCLootCouncil" and KART.RC then KART.RC.Enable() end
+        if (arg1 == "RCLootCouncil" or arg1 == "NorthernSkyRaidTools" or arg1 == "wowutils")
+            and KART.RegisterNeighborAddons then
+            KART.RegisterNeighborAddons()
+            KASC:AnnounceHelloIfChanged()
+        end
 
     elseif event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_OFFICER"
         or event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_BN_WHISPER" then
@@ -370,45 +376,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 end)
 
 -- =====================================================================
---  Addon-message handlers -- peer bookkeeping and ready-check reasons
+--  Addon-message handlers -- ready-check reasons
 -- =====================================================================
--- Peer version bookkeeping. The comparison, the update warning and the chat output all live
--- here rather than in KASC: they are locale-dependent and none of them is a networking
--- concern.
-KASC:OnPeer(function(shortName, _, peers, solicited)
-    local kart = peers.KART
-    if not kart then return end
-
-    KART.PlayerVersions = KART.PlayerVersions or {}
-    KART.PlayerVersions[shortName] = kart.version
-
-    if not KART.UpdateWarned and kart.version ~= KART.Version then
-        -- Lenient parse: a 2-part version ("2.9") or a trailing build suffix still yields
-        -- usable numbers instead of failing the match outright and collapsing to 0.0.0.
-        local nMaj, nMin, nPat = kart.version:match("(%d+)%.?(%d*)%.?(%d*)")
-        local oMaj, oMin, oPat = KART.Version:match("(%d+)%.?(%d*)%.?(%d*)")
-        nMaj, nMin, nPat = tonumber(nMaj) or 0, tonumber(nMin) or 0, tonumber(nPat) or 0
-        oMaj, oMin, oPat = tonumber(oMaj) or 0, tonumber(oMin) or 0, tonumber(oPat) or 0
-        -- Sanity clamp before trusting the number: no handler authenticates a sender, so
-        -- anyone can claim a huge version, and UpdateWarned latches after the first print --
-        -- one bogus claim would suppress the real warning for the whole session. A genuine
-        -- release never jumps more than a major ahead.
-        local plausible = nMaj <= oMaj + 1
-        if plausible and (nMaj > oMaj
-            or (nMaj == oMaj and nMin > oMin)
-            or (nMaj == oMaj and nMin == oMin and nPat > oPat)) then
-            KART.UpdateWarned = true
-            print(string.format(KART.L.UPDATE_AVAILABLE, kart.version, KART.Version))
-        end
-    end
-
-    -- Only an actual ANSWER to our request prints a result line. A passive announcement -- someone
-    -- joining the group, or toggling the Loot Council module -- can land inside the same five-second
-    -- window and used to print a line for a request that person never received (B10).
-    if KART.VersionCheckActive and solicited then
-        print(string.format(KART.L.VERSION_CHECK_RES, shortName, kart.version))
-    end
-end)
+-- Peer version bookkeeping (HELLO compare, UPDATE_AVAILABLE, neighbor versions) lives in
+-- Utils.lua so RaidSim clients, which never load this file, still see it.
 
 -- RC_REASON: Core.lua owns the cache's lifecycle (READY_CHECK above wipes KART.ReadyCheckReasons)
 -- and the sending dialog (KART.ShowReadyCheckReasonDialog below), so the receiver lives here too.

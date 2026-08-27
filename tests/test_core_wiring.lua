@@ -58,6 +58,14 @@ T.truthy(not code:find('frame:RegisterEvent("TRADE_SHOW")', 1, true),
 
     "TRADE_SHOW is not registered")
 
+local owedSrc = assert(io.open("RCOwed.lua", "r")):read("*a")
+T.truthy(not owedSrc:find('RegisterEvent("TRADE_ACCEPT_UPDATE")', 1, true),
+    "owed reminder does not register TRADE_ACCEPT_UPDATE (RC already does)")
+T.truthy(not owedSrc:find("OnEvent_TRADE_ACCEPT_UPDATE", 1, true),
+    "owed reminder does not hook RC TRADE_ACCEPT_UPDATE (GetTradeTargetItemLink during accept sticks the trade)")
+T.truthy(not owedSrc:find('RegisterEvent("UI_INFO_MESSAGE")', 1, true),
+    "owed reminder does not register UI_INFO_MESSAGE (RC already does)")
+
 
 
 Wired("KART.RefreshProfileButton()", "the profile button is relabelled when settings are applied")
@@ -107,6 +115,10 @@ do
         and branch:find("KART.RC.Enable()", 1, true),
 
         "RCLootCouncil ADDON_LOADED re-enables the RC companion")
+
+    T.truthy(branch and branch:find("KART.RegisterNeighborAddons()", 1, true),
+
+        "late-loaded neighbors re-register on the hello")
 
 end
 

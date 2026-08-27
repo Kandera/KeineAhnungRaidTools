@@ -814,9 +814,18 @@ _G.PixelUtil = {
 
 -- Optional addon presence ---------------------------------------------------------------
 _G.C_AddOns = _G.C_AddOns or {}
+KARTTEST.loadedAddons = KARTTEST.loadedAddons or {}
+KARTTEST.addonVersions = KARTTEST.addonVersions or {}
 function C_AddOns.IsAddOnLoaded(name)
+    if KARTTEST.loadedAddons[name] then return true end
     if name == "RCLootCouncil" then return not not _G.KARTTEST.rcLoaded end
     return false
+end
+function C_AddOns.GetAddOnMetadata(name, field)
+    if field ~= "Version" then return nil end
+    if KARTTEST.addonVersions[name] then return KARTTEST.addonVersions[name] end
+    if name == "KeineAhnungRaidTools" then return "4.0.1" end
+    return nil
 end
 
 -- Addon restrictions --------------------------------------------------------------------

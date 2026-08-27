@@ -738,7 +738,7 @@ KART.CreateTabTitle(3, L.LABEL_BUFFCHECK_SETTINGS)
 
 local bcCard = KART.UI:CreateCard(KART.BuffCheckPanel)
 bcCard:SetPoint("TOPLEFT", KART.BuffCheckPanel, "TOPLEFT", 20, -12)
-bcCard:SetSize(500, 160)
+bcCard:SetSize(500, 190)
 
 -- Master switch: fully disables the Buff-Checker window/UI (saves CPU). The KART Sync responder
 -- (oil/ilvl/gear) keeps answering regardless, so the raid leader still sees accurate data for you.
@@ -775,6 +775,13 @@ KART.BtnBuffPreview:SetScript("OnClick", function()
         KART.ShowBuffCheck()
         KART.UpdateBuffCheck(true)
     end
+end)
+
+KART.BtnAddonNag = KART.UI:CreateModernButton(bcCard, L.BTN_ADDON_NAG, L.DESC_ADDON_NAG)
+KART.BtnAddonNag:SetPoint("TOPLEFT", bcCard, "TOPLEFT", 20, -148)
+KART.BtnAddonNag:SetSize(220, 22)
+KART.BtnAddonNag:SetScript("OnClick", function()
+    if KART.BroadcastAddonNag then KART.BroadcastAddonNag() end
 end)
 
 KART.SldBuffCheckAlpha = KART.UI:CreateSettingsSlider(bcCard, {
