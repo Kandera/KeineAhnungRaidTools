@@ -84,6 +84,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Auto-Promote wartet, bis der Kampf vorbei ist.**
 - **Nach einem Trade über RC's Trade UI hängst du nicht mehr im Handel fest.**
 - **Co-Tank erzeugt keine übrigbleibenden Frames mehr**, wenn Live-Auren nicht da sind.
 - **Die Flask/Food-Zahl auf der Heute-Leiste stimmt mit dem Buff-Check-Fenster überein.**

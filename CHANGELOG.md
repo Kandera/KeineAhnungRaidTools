@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **Auto-promote waits until combat ends.**
 - **Trading from RC's Trade UI no longer leaves you stuck in a trade.**
 - **Co-Tank no longer creates leftover frames** when live aura strips are unavailable.
 - **The tonight strip flask/food count matches the Buff Check window.**

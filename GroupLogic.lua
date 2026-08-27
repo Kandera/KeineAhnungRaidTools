@@ -147,6 +147,11 @@ end
 -- Logik für Auto-Promote
 function KART.HandleAutoPromote()
     if KART_Settings.autoModuleEnabled == false then return end
+    -- PromoteToAssistant is HasRestrictions (C_PartyInfo). Calling it while InCombatLockdown is
+    -- ADDON_ACTION_BLOCKED — the live stack is GROUP_ROSTER_UPDATE → this function via the 1s
+    -- throttle. Keyword invites already refuse in combat; Core.lua retries this on
+    -- PLAYER_REGEN_ENABLED so someone who joined mid-pull still gets assistant afterwards.
+    if InCombatLockdown() then return end
     if not UnitIsGroupLeader("player") or not IsInGroup() then return end -- IsInRaid implies IsInGroup
     for unit in KAUtil.EachGroupUnit() do
         local name, realm = UnitName(unit)

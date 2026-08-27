@@ -210,6 +210,29 @@ do
     T.eq(#out, 0, "a disabled automation module promotes nobody")
 end
 
+-- Combat lockdown -----------------------------------------------------------------------------------
+-- PromoteToAssistant is HasRestrictions (C_PartyInfo). Calling it while InCombatLockdown is
+-- ADDON_ACTION_BLOCKED — the live stack is GROUP_ROSTER_UPDATE → HandleAutoPromoteThrottled's
+-- 1s timer → HandleAutoPromote. Keyword invites already refuse in combat; this path did not.
+do
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    PromoteList("Wuusch")
+    local prevCombat = KARTTEST.inCombat
+    KARTTEST.inCombat = true
+    local out = Run()
+    KARTTEST.inCombat = prevCombat
+    T.eq(#out, 0, "in combat nobody is promoted")
+end
+
+do
+    -- Same roster, combat dropped: the PLAYER_REGEN_ENABLED retry (Core.lua) calls this again, and
+    -- the person who joined mid-pull still gets assistant once it is legal.
+    Raid({ { name = "Wuusch", guid = "Player-1-B" } })
+    PromoteList("Wuusch")
+    KARTTEST.inCombat = false
+    T.eq(Run()[1], "Wuusch", "out of combat the same person is promoted")
+end
+
 -- Leave the shared roster the way this file found it: KARTTEST.activeUnit is global across every
 -- test file, and a stray "raidN" here would make the next file's "player" somebody else entirely.
 KARTTEST.activeUnit = nil

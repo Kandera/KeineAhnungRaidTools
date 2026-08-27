@@ -221,6 +221,7 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
+            "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
             "**Buff Check shows Healthstone and Soulstone.**",
             "**Flasks are found by this season's spells.**",

@@ -137,6 +137,11 @@ Wired('elseif event == "PLAYER_REGEN_DISABLED" then', "PLAYER_REGEN_DISABLED is 
 
 Wired("KART.SetEditModeActive(false)", "combat leaves edit mode")
 Wired("KART.RefreshEditModeChrome()", "regen restores edit-mode chrome")
+do
+    local branch = code:match('elseif event == "PLAYER_REGEN_ENABLED" then\n(.-)\nelseif event ==')
+    T.truthy(branch and branch:find("KART.HandleAutoPromote()", 1, true),
+        "regen retries auto-promote skipped during combat")
+end
 
 
 

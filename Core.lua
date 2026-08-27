@@ -349,6 +349,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         -- see KART.ApplyKeybinds).
         if KART.RefreshEditModeChrome then KART.RefreshEditModeChrome() end
         KART.UpdateRaidleadBarVisibility()
+        if KART.HandleAutoPromote then KART.HandleAutoPromote() end
         if KART.RC and KART.RC.OnOwedOutOfCombat then KART.RC.OnOwedOutOfCombat() end
         if KART.CT then KART.CT.OnRegenEnabled() end
     elseif event == "PLAYER_ENTERING_WORLD" then
