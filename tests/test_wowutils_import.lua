@@ -92,7 +92,7 @@ do
     local n, status = WU.ImportPastedText(Block(3379, "Normal", "Nymrissa", "Alpha-Blackmoore"))
     T.eq(status, "ok", "first paste imports")
     T.eq(n, 1, "first paste adds one boss")
-    n, status = WU.ImportPastedText(Block(3379, "Heroic", "Nymrissa", "Alpha-Blackmoore"))
+    status = select(2, WU.ImportPastedText(Block(3379, "Heroic", "Nymrissa", "Alpha-Blackmoore")))
     T.eq(status, "ok", "second difficulty imports")
     T.eq(#WU.bosses, 2, "Normal stays when Heroic is imported next")
     T.eq(WU.bosses[1].difficulty, "Normal", "first row is still Normal")

@@ -146,8 +146,7 @@ KARTTEST.RestoreRoster(awardSnap)
 local nickSnap = KARTTEST.SnapshotRoster()
 KARTTEST.SetNSAPI(true)
 KARTTEST.SetRaid({ { name = "Bob", guid = "Player-1-BBBB", nickname = "Bobby" } })
-local KASC = LibStub("KASC-1.0")
-local folded, original = KASC.Identity.GetNickname("raid1")
+local _, original = KASC.Identity.GetNickname("raid1")
 T.eq(RC.DisplayName("raid1"), original or "Bob", "display prefers the NSRT nick")
 T.eq(RC.DisplayName("Bob-TarrenMill"), "Bobby",
     "display resolves a raid name to the NSRT nick")
@@ -210,7 +209,7 @@ RCLootCouncil.masterLooter = "Lead-TarrenMill"
 KARTTEST.activeUnit = "raid1"
 local beforeRelay = KASC.diag.sentByToken.RC_AWARD or 0
 local relayPayload
-local origSend = KASC.Send
+origSend = KASC.Send
 KASC.Send = function(self, msg, ...)
     if type(msg) == "string" and msg:sub(1, 9) == "RC_AWARD:" then
         relayPayload = msg

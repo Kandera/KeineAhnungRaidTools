@@ -1095,13 +1095,13 @@ end
 
 do
     local KAUtil = LibStub("KAUtil-1.0")
-    local env = setmetatable({}, { __index = _G })
-    env.KART = { L = {} }
+    local utilsEnv = setmetatable({}, { __index = _G })
+    utilsEnv.KART = { L = {} }
     local chunk = assert(loadstring(assert(io.open("Utils.lua", "r")):read("*a"), "@Utils.lua"))
-    setfenv(chunk, env)
-    chunk("KeineAhnungRaidTools", env.KART)
+    setfenv(chunk, utilsEnv)
+    chunk("KeineAhnungRaidTools", utilsEnv.KART)
     local old = { ct = { width = 200, locked = true } }
-    KAUtil.MergeDefaults(old, env.KART.Defaults)
+    KAUtil.MergeDefaults(old, utilsEnv.KART.Defaults)
     T.eq(old.ct.schemaVersion, 4, "MergeDefaults fills ct.schemaVersion from defaults")
     T.eq(old.ct.width, 200, "MergeDefaults preserves existing ct.width")
     T.truthy(old.ct.healthTexture, "MergeDefaults fills healthTexture on old profiles")
@@ -1111,7 +1111,7 @@ do
     T.eq(old.ct.buffs.hideLongDuration, true, "MergeDefaults fills buff long-duration hide on old profiles")
     T.eq(old.ct.debuffs.size, 28, "MergeDefaults fills the larger debuff size on old profiles without a strip blob")
     local world = { ct = { schemaVersion = 3, taunt = { onlyInInstance = false } } }
-    KAUtil.MergeDefaults(world, env.KART.Defaults)
+    KAUtil.MergeDefaults(world, utilsEnv.KART.Defaults)
     T.eq(world.ct.taunt.onlyInDungeon, true, "MergeDefaults fills dungeon on before migrate")
     KART.CT.MigrateProfile(world.ct)
     T.eq(world.ct.taunt.onlyInDungeon, false, "v3 world-announce still wins after MergeDefaults")

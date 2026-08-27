@@ -1080,7 +1080,7 @@ do
 end
 
 do
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.itemCounts = { [5512] = 1 }
     Scan(lm)
     T.eq(PlayerState(lm, "Bramor", "hs"), true, "a healthstone in our bags is present on our row")
@@ -1091,7 +1091,7 @@ end
 do
     -- "unknown" is a non-empty string, which is truthy: SetDesaturated(not has) would leave
     -- a full-color stone, so every raider without KART looked like they had one.
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.auras = {}
     KARTTEST.itemCounts = { [5512] = 1 }
     Render(lm)
@@ -1105,7 +1105,7 @@ do
 end
 
 do
-    local sim, lm = F.NewRaid()
+    local _, lm = F.NewRaid()
     KARTTEST.itemCounts = { [224464] = 3 }
     Scan(lm)
     T.eq(PlayerState(lm, "Bramor", "hs"), true, "the demonic healthstone counts as having a stone")

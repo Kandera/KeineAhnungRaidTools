@@ -31,7 +31,11 @@ files["tests/"] = {
                 -- ChatThrottleLib is a plain global, not a LibStub library, and the harness both
                 -- reads and writes it: run.lua relaxes the start-up clamp on its own instance, and
                 -- raidsim.lua pre-seeds one per simulated client.
-                "ChatThrottleLib" },
+                "ChatThrottleLib",
+                -- Tests stub and mutate these; the addon treats them as read-only client/neighbour
+                -- globals, so they stay in read_globals for addon files.
+                "C_UnitAuras", "C_AddOns", "RCLootCouncil", "RCLootCouncilML",
+                "CompactRaidFrameManager" },
 }
 
 -- MainFrame.lua:850 shadows the upvalue `L` (the locale table) from line 2. Single occurrence
@@ -73,19 +77,26 @@ read_globals = {
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",
     -- Unit / group API
     "UnitName", "UnitGUID", "UnitExists", "UnitClass", "UnitIsGroupLeader", "UnitIsGroupAssistant",
-    "UnitIsUnit", "UnitIsConnected", "IsInRaid", "IsInGroup", "IsInGuild", "GetNumGroupMembers",
+    "UnitIsUnit", "UnitIsConnected", "UnitIsDeadOrGhost", "UnitInRange", "UnitGroupRolesAssigned",
+    "UnitHealth", "UnitHealthMax", "UnitGetTotalAbsorbs", "UnitGetTotalHealAbsorbs",
+    "IsInRaid", "IsInGroup", "IsInGuild", "IsInInstance", "GetNumGroupMembers", "GetNumSubgroupMembers",
     "Ambiguate", "GetGuildInfo", "PromoteToAssistant", "UninviteUnit",
     "ClearOverrideBindings", "SetOverrideBindingClick", "GetReadyCheckStatus", "ConfirmReadyCheck",
     "GetRealmName", "GetNormalizedRealmName", "GetLocale", "GetInstanceInfo", "GetDifficultyInfo",
+    "C_SpecializationInfo", "C_Spell", "SOUNDKIT", "PlaySound",
+    "GetMacroIndexByName", "EditMacro", "CreateMacro", "InitiateRolePoll",
     -- Items / trade
     "GetInventoryItemLink", "GetAverageItemLevel", "GetWeaponEnchantInfo",
     "CheckInteractDistance", "InitiateTrade", "GetTradePlayerItemLink", "GetTradeTargetItemLink", "ClickTradeButton",
+    "TradeFrame",
     "LE_GAME_ERR_TRADE_COMPLETE", "MAX_TRADE_ITEMS",
     "GameFontNormal",
     -- Loot rolls
     "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot",
     -- Chat / time / misc
     "SendChatMessage", "GetTime", "LoggingCombat", "hooksecurefunc",
+    "DEFAULT_CHAT_FRAME", "WorldMapFrame",
+    "RegisterStateDriver", "UnregisterStateDriver", "CompactRaidFrameManager_UpdateShown",
     "ColorPickerFrame", "StaticPopup_Show", "AddonCompartmentFrame", "MenuUtil",
     "C_ChatInfo", "C_Item", "C_AddOns", "C_ChallengeMode", "C_TransmogCollection",
     "C_MountJournal", "C_PetJournal", "C_ToyBox", "C_TooltipInfo", "C_CVar", "GetBuildInfo",

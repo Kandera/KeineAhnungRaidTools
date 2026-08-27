@@ -396,10 +396,11 @@ do
         label = "On",
     })
     cb:SetChecked(false)
-    local r, g, b, a = cb:GetBackdropColor()
+    local r, _, _, a = cb:GetBackdropColor()
     T.eq(r, 0.22, "off track is a visible gray, not black")
     T.eq(a, 0.95, "off track is nearly opaque")
     cb:SetChecked(true)
+    local g, b
     r, g, b, a = cb:GetBackdropColor()
     T.eq(r, 0.1, "on track uses the accent red")
     T.eq(g, 0.5, "on track uses the accent green")
