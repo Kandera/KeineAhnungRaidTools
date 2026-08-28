@@ -276,7 +276,7 @@ do
     env.KART_Settings.ntCursor = 0
     KARTTEST.instance.mapID = 9002
     NT.OnEvent("PLAYER_ENTERING_WORLD")
-    nFlush, lastFlush = flushSent()
+    lastFlush = select(2, flushSent())
     T.eq(lastFlush, "NT_FLUSH:3470", "zone-in uses first sendable when cursor empty")
 
     resetNT()

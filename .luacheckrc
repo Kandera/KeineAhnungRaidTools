@@ -72,6 +72,14 @@ read_globals = {
     "C_RestrictedActions",
     "GetCursorInfo", "CreateColor", "ReloadUI", "SetCVar",
     "C_Timer", "C_PartyInfo", "C_BattleNet", "C_Container", "C_UnitAuras", "C_LootHistory",
+    "C_Secrets",
+    -- Encounter Journal (Notes.lua default order)
+    "EJ_GetNumTiers", "EJ_GetEncounterInfoByIndex", "EJ_GetInstanceForMap",
+    "EJ_GetInstanceByIndex", "EJ_SelectTier", "EJ_GetInstanceInfo", "EJ_SelectInstance",
+    -- NSRT OptionalDep globals (Reminders table + Reloe Load & Send)
+    "NSRT", "NorthernSkyRaidTools",
+    -- Drag-reorder drop target (Notes panel)
+    "GetMouseFoci",
     -- Asked for by the council panel's rank column, which needs the guild roster fetched (B124).
     "C_GuildInfo",
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",
