@@ -1433,6 +1433,540 @@ do
     NT._shareQueued = nil
 end
 
+-- Town operator: NT_FLUSH Shares; the waiting scheduleLeadFlush attempt must not Share again.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    NT.leadInRaid = true
+    NT.leadRestricted = true
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    local nShare = 0
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            nShare = nShare + 1
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(nShare, 0, "Share now queues while the lead is Restricted")
+    env._ntHandlers.NT_FLUSH("3470", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 1, "NT_FLUSH Shares once")
+    env._ntHandlers.NT_LEAD("1\t0", { shortName = "Bramor", lead = true })
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(nShare, 1, "the waiting flush attempt does not Share again after NT_FLUSH")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    env._isLead = true
+end
+
+-- Town operator: NT_LEAD unblocks Share now; the waiting scheduleLeadFlush must not Share again.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    NT.leadInRaid = true
+    NT.leadRestricted = true
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    local nShare = 0
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            nShare = nShare + 1
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(nShare, 0, "Share now queues while Restricted (LEAD-first)")
+    env._ntHandlers.NT_LEAD("1\t0", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 1, "NT_LEAD Shares the queued note once")
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(nShare, 1, "the waiting flush attempt does not Share again after NT_LEAD")
+    env._ntHandlers.NT_FLUSH("3470", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 1, "NT_FLUSH after NT_LEAD does not Share again")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    env._isLead = true
+end
+
+-- Town Infer + queued Share now: NT_LEAD must not Share the Mythic guess or stamp
+-- the queue, or NT_FLUSH skips and STATE never sends the published Heroic note.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    local nShare = 0
+    NT.leadInRaid = true
+    NT.leadRestricted = true
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    NT.generation = 0
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            nShare = nShare + 1
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        BossM = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\nmythic note",
+        BossH = "EncounterID:3470;Name:Nekzali;Difficulty:Heroic\nheroic note",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 3470,
+        ntGeneration = 0,
+        ntChecksum = "",
+        ntOrderByInstance = {},
+    }
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+        if journalId == 1 then
+            return "World Bosses", nil, nil, nil, nil, nil, nil, nil, nil, 0
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 2805 then return 77 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(nShare, 0, "Share now queues while Restricted (no stand)")
+    env._ntHandlers.NT_LEAD("1\t0", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 0, "NT_LEAD + Infer does not Load & Send the guessed difficulty")
+    T.eq(NT._queueShareCursor, nil, "NT_LEAD + Infer does not stamp the queue skip")
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(nShare, 0, "the waiting flush attempt does not Infer-Share either")
+    env._ntHandlers.NT_FLUSH("3470", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 0, "FLUSH + Infer still does not Share")
+    T.eq(NT.pendingFlush, 3470, "FLUSH + Infer keeps pendingFlush after a queued Share now")
+    T.eq(NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 2,
+        editor = "Bramor",
+        operator = "Alric",
+        mapId = 2805,
+        diff = 15,
+        cursor = 3470,
+        checksum = "",
+        order = { 3470 },
+        skipped = {},
+    }), true, "operator applies the lead's Heroic stand")
+    T.eq(nShare, 1, "ApplyRemoteState retries pendingFlush after the published stand")
+    T.eq(type(env._shared and env._shared[3]) == "string" and env._shared[3]:find("Difficulty:Heroic", 1, true) ~= nil, true,
+        "the retried Share is the published Heroic note, not the Infer Mythic guess")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
+    NT._encountersForMap = nil
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._shareQueued = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    env._isLead = true
+end
+
+-- Operator in the instance: kill must not Share; NT_FLUSH is the one send (lead RequestFlush).
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "raid"
+    inst.difficultyID = 16
+    inst.mapID = 1
+    env._isLead = false
+    env._shared = nil
+    local nShare = 0
+    NT.leadInRaid = true
+    NT.leadRestricted = false
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            nShare = nShare + 1
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+        Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497 }, skipped = {} },
+        },
+    }
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    T.eq(nShare, 0, "operator in-instance kill does not Share before NT_FLUSH")
+    env._ntHandlers.NT_FLUSH("3497", { shortName = "Bramor", lead = true })
+    T.eq(nShare, 1, "operator Shares once on NT_FLUSH")
+    T.eq(env._shared and env._shared[3] and env._shared[3]:find("3497", 1, true) ~= nil, true,
+        "that Share is the next note")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    env._isLead = true
+end
+
+-- Queue skip without a published stand must clear pendingFlush, or STATE retried the Infer share.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    local nShare = 0
+    NT.leadInRaid = true
+    NT.leadRestricted = false
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            nShare = nShare + 1
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        BossM = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\nmythic note",
+        BossH = "EncounterID:3470;Name:Nekzali;Difficulty:Heroic\nheroic note",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 3470,
+        ntGeneration = 0,
+        ntChecksum = "",
+        ntOrderByInstance = {},
+    }
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+        if journalId == 1 then
+            return "World Bosses", nil, nil, nil, nil, nil, nil, nil, nil, 0
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 2805 then return 77 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    NT._queueShareCursor = 3470
+    NT.pendingFlush = nil
+    NT.generation = 0
+    NT.ApplyFlushAndShare(3470)
+    T.eq(nShare, 0, "queue skip does not Share again")
+    T.eq(NT.pendingFlush, nil, "queue skip clears pendingFlush without a published stand")
+    T.eq(NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 2, editor = "Bramor", operator = "Alric",
+        mapId = 2805, diff = 15, cursor = 3470, checksum = "",
+        order = { 3470 }, skipped = {},
+    }), true, "STATE after a queued Share still applies")
+    T.eq(nShare, 0, "STATE does not retry a Share the queue already covered")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
+    NT._encountersForMap = nil
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    NT.leadInRaid = nil
+    env._isLead = true
+end
+
+-- Queue overlap is not a 2s TTL: a late NT_FLUSH for the same cursor still skips.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    local nShare = 0
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function()
+            nShare = nShare + 1
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    NT._queueShareCursor = 3470
+    NT.pendingFlush = nil
+    KARTTEST.AdvanceTime(3)
+    NT.ApplyFlushAndShare(3470)
+    T.eq(nShare, 0, "queue skip still holds after 3s")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT._queueShareCursor = nil
+    NT.pendingFlush = nil
+    env._isLead = true
+end
+
+-- Missing Hello: lead sends (design fallback); the operator still can (no self in PlayerVersions).
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "raid"
+    inst.difficultyID = 16
+    inst.mapID = 1
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = nil
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    env._isLead = true
+    KARTTEST.activeUnit = "raid2"
+    env._shared = nil
+    T.eq(NT.ShareIfChosen(), true, "lead Shares when the operator is present without Hello")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "no Hello is lead fallback, not silence")
+
+    env._isLead = false
+    KARTTEST.activeUnit = "raid1"
+    env._shared = nil
+    T.eq(NT.ShareIfChosen(), true, "operator Shares without a self entry in PlayerVersions")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "operator Load & Sends on the missing-Hello split")
+
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env._isLead = true
+end
+
 -- Town PEW still pulls; leave publishes the lead window so town Share now unblocks.
 do
     local inst = KARTTEST.instance

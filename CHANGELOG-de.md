@@ -98,6 +98,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Notes in der Stadt warten auf die Schwierigkeit des Leads**, bevor sie teilen.
 - **Ein Tab im Notes-Operatornamen wird ignoriert.**
 - **Buff Check fragt beim Öffnen**, wer einen Gesundheitsstein hat.
+- **Ein Kill teilt die nächste Note nur einmal**, auch wenn der Operator im Raid ist.
+- **Share now und der Kill-Flush schicken dieselbe Note nicht zweimal.**
+- **Der Lead teilt weiter**, wenn der Notiz-Operator kein KART hat.
+- **Ein Battle.net-Stichwort das nicht einladen kann, antwortet trotzdem** per Battle.net.
 - **Klick auf einen Boss in der Notes-Liste startet dort.** Vorherige Bosse bleiben in der Liste.
 - **Die Notes-Liste zeigt jede importierte Notiz**, auch die aus einem 1-Boss-Raid.
 - **Der Notes-Tab wirft keinen Fehler mehr**, wenn du nicht im Raid bist.

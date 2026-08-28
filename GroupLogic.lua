@@ -45,7 +45,7 @@ end
 -- name so a burst of messages does not spam.
 KART.inviteAutoReplyAt = KART.inviteAutoReplyAt or {}
 
-function KART.MaybeInviteAutoReply(sender, reasonKey)
+function KART.MaybeInviteAutoReply(sender, reasonKey, event, ...)
     if not sender or sender == "" then return end
     if KAUtil.IsSecret(sender) then return end
     local now = GetTime()
@@ -54,9 +54,16 @@ function KART.MaybeInviteAutoReply(sender, reasonKey)
     if last and (now - last) < 5 then return end
     KART.inviteAutoReplyAt[debounceKey] = now
     local msg = KART.L["INVITE_REPLY_" .. reasonKey]
-    if msg and msg ~= "" then
-        SendChatMessage(msg, "WHISPER", nil, sender)
+    if not msg or msg == "" then return end
+    -- CHAT_MSG_BN_WHISPER's sender is a BattleTag. Character WHISPER does not reach them.
+    if event == "CHAT_MSG_BN_WHISPER" then
+        local bnetID = select(11, ...)
+        if bnetID and C_BattleNet and C_BattleNet.SendWhisper then
+            C_BattleNet.SendWhisper(bnetID, msg)
+        end
+        return
     end
+    SendChatMessage(msg, "WHISPER", nil, sender)
 end
 
 -- Logik für Keyword-Einladungen
@@ -78,7 +85,7 @@ function KART.HandleChatInvite(msg, sender, event, ...)
 
     local canAct = not IsInGroup() or KAUtil.HasGroupPermissions()
     if not canAct then
-        KART.MaybeInviteAutoReply(sender, "NOT_LEADER")
+        KART.MaybeInviteAutoReply(sender, "NOT_LEADER", event, ...)
         return
     end
 
@@ -119,12 +126,12 @@ function KART.HandleChatInvite(msg, sender, event, ...)
     end
 
     if fullSixth and not KART_Settings.autoConvertToRaid then
-        KART.MaybeInviteAutoReply(sender, "FULL")
+        KART.MaybeInviteAutoReply(sender, "FULL", event, ...)
         return
     end
 
     if InCombatLockdown() then
-        KART.MaybeInviteAutoReply(sender, "COMBAT")
+        KART.MaybeInviteAutoReply(sender, "COMBAT", event, ...)
         return
     end
 

@@ -164,6 +164,32 @@ do
 end
 
 do
+    -- Auto-reply on BN must not SendChatMessage to the BattleTag (that is not a character).
+    local prevRoster = KARTTEST.SnapshotRoster()
+    local prevSolo2 = KARTTEST.solo
+    KARTTEST.solo = {}
+    KARTTEST.SetParty({
+        { name = "Corvin", realm = "TarrenMill", leader = true },
+        { name = "Merrit", realm = "TarrenMill" },
+    })
+    KARTTEST.activeUnit = "player"
+    KART.inviteAutoReplyAt = {}
+    accounts[81] = { gameAccountInfo = { characterName = "Alric", realmName = "TarrenMill" } }
+    local bnSent = {}
+    env.C_BattleNet.SendWhisper = function(id, text)
+        bnSent[#bnSent + 1] = { id = id, text = text }
+    end
+    KARTTEST.ClearChat()
+    BNInvite("inv", 81)
+    T.eq(#invited, 0, "a BN keyword from a non-leader invites nobody")
+    T.eq(#KARTTEST.chat, 0, "and does not whisper the BattleTag as a character")
+    T.eq(bnSent[1] and bnSent[1].id, 81, "the auto-reply is C_BattleNet.SendWhisper")
+    T.eq(bnSent[1] and bnSent[1].text, "not leader", "with the not-leader line")
+    KARTTEST.solo = prevSolo2
+    KARTTEST.RestoreRoster(prevRoster)
+end
+
+do
     local _, got = BNInvite("not a keyword", 77)
     T.eq(#got, 0, "an unrelated Battle.net whisper invites nobody")
 end

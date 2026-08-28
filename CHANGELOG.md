@@ -98,6 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Notes in town wait for the lead's difficulty** before sharing.
 - **A tab in the note operator name is ignored.**
 - **Opening Buff Check asks who has a healthstone.**
+- **A kill shares the next note once**, even when the operator is in the raid.
+- **Share now and the kill flush no longer send the same note twice.**
+- **The lead still shares** when the note operator has no KART.
+- **A Battle.net keyword that cannot invite still replies** on Battle.net.
 - **Click a boss on the Notes list to start there.** Earlier bosses stay on the list.
 - **The Notes list shows every imported note**, including a one-boss raid.
 - **Opening the Notes tab no longer errors** when you are not in a raid.

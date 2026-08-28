@@ -89,6 +89,7 @@ function NT.ClearVisitIfLeftRaid()
     if instanceType ~= "raid" or not NT.VALID_DIFFICULTY[difficultyID] then
         NT.lastVisit = nil
         KART_Settings.ntLastVisit = 0
+        NT._queueShareCursor = nil
         return true
     end
     return false
@@ -895,17 +896,34 @@ function NT.DecodeLeadWindow(payload)
     return a == "1", b == "1"
 end
 
+-- Overlap with NT_FLUSH is the same click; a later visit must still Share this id.
+local flushWaitGen = 0
+
+local function cancelScheduledFlush()
+    flushWaitGen = flushWaitGen + 1
+end
+
+local function rememberQueuedShare()
+    NT._queueShareCursor = tonumber(KART_Settings and KART_Settings.ntCursor) or 0
+end
+
+-- Infer is town UI, not a stand. Queue-skip would drop pendingFlush before STATE.
+local function shareQueuedIfPublished()
+    if not NT.HasPublishedStand(KART_Settings) then return false end
+    if NT.ShareIfChosen() then
+        rememberQueuedShare()
+        return true
+    end
+    return false
+end
+
 function NT.ApplyLeadWindow(inRaid, restricted)
     NT.leadInRaid = not not inRaid
     NT.leadRestricted = not not restricted
     if NT._shareQueued and not NT.LeadWindowBlocksShare() and not NT.AurasSecret() then
-        if NT.ShareIfChosen() then
-            local c = tonumber(KART_Settings and KART_Settings.ntCursor) or 0
-            NT._queueShareCursor = c
-            -- Overlap with NT_FLUSH is the same click; a later visit must still Share this id.
-            C_Timer.After(2, function()
-                if NT._queueShareCursor == c then NT._queueShareCursor = nil end
-            end)
+        if shareQueuedIfPublished() then
+            -- Share now already sent; do not let the Restricted retry Share again.
+            cancelScheduledFlush()
         end
     end
 end
@@ -993,8 +1011,6 @@ end
 -- =====================================================================
 --  Events: kill / zone-in enqueue; lead-only flush when auras are clear
 -- =====================================================================
-
-local flushWaitGen = 0
 
 local function orderBag(settings, difficultyID)
     NT.EnsureShape(settings)
@@ -1123,9 +1139,13 @@ function NT.ApplyFlushAndShare(encID)
     -- Queued Share now already Load & Sent this cursor when NT_LEAD unblocked; skip the overlap.
     if sendable and sendable == NT._queueShareCursor then
         NT._queueShareCursor = nil
+        NT.pendingFlush = nil
+        cancelScheduledFlush()
     elseif sendable and published then
         NT._queueShareCursor = nil
-        NT.ShareIfChosen()
+        if NT.ShareIfChosen() then
+            cancelScheduledFlush()
+        end
     end
     -- Keep the flag only when Share failed for lack of a published stand (FLUSH before STATE).
     -- Otherwise a leftover id rewinds the cursor on the next ApplyRemoteState.
@@ -1150,10 +1170,11 @@ local function scheduleLeadFlush(cursor)
             if NT.LocalInstanceIsNotesRaid() then
                 NT.RequestFlush(cursor)
             else
-                NT.ShareIfChosen()
+                shareQueuedIfPublished()
             end
-        else
-            NT.ShareIfChosen()
+        elseif not (NT.LocalInstanceIsNotesRaid() and NT.leadInRaid == true) then
+            -- In-instance operator waits for NT_FLUSH from the lead.
+            shareQueuedIfPublished()
         end
     end
     attempt()
@@ -1364,6 +1385,7 @@ function NT.OnEvent(e, ...)
         KART_Settings.ntCursor = cursor
         NT.lastVisit = visit
         KART_Settings.ntLastVisit = visit
+        NT._queueShareCursor = nil
         -- Publish before NT_FLUSH so the town operator has map/diff when they are the sender.
         bumpAndPublish()
         scheduleLeadFlush(cursor)
