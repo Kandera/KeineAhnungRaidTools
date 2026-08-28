@@ -307,3 +307,87 @@ do
     T.eq(#env._ntSent, 1, "queued Share now flushes once auras clear")
     T.eq(env._ntSent[1], "NT_FLUSH:3470", "queued flush is the cursor")
 end
+
+-- Operator in town: Share now uses the raid stand, not local open-world difficulty.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = true
+    env._shared = nil
+    env._ntSent = {}
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntOperatorName = ""
+    KART.L.NT_STATUS_NO_NOTE = "No shared note for this boss."
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    T.eq(NT.CurrentMapKey(), "1234:16", "town CurrentMapKey uses raid stand")
+    NT.ShareNow()
+    T.eq(NT.statusLabel.text == "No shared note for this boss.", false,
+        "town Share now does not NO_NOTE for lack of local difficulty")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "town Share now reaches NSRT Share")
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end
+
+-- Operator in town while the in-instance lead is already waiting: queue, do not send.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = true
+    env._shared = nil
+    NT.pendingFlush = 3470
+    KARTTEST.aurasSecret = false
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(NT.statusLabel.text, "Waiting until combat ends.", "town + pendingFlush queues")
+    T.eq(env._shared, nil, "pendingFlush does not Share")
+    NT.pendingFlush = nil
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end
+
+-- Operator in the group but not assist: print promote; non-lead does not silent-return.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    KARTTEST.SetRaid({
+        { name = "Wuuschdk", realm = "TarrenMill", assist = false, guid = "Player-1-WU" },
+    })
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntOperatorName = "Wuuschdk"
+    KART.L.NT_STATUS_PROMOTE = "Promote the note operator to assistant so they can share."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(NT.statusLabel.text, "Promote the note operator to assistant so they can share.",
+        "operator not assist prints promote")
+    T.eq(env._shared, nil, "unpromoted operator does not Share")
+    NT.pendingFlush = nil
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end

@@ -150,9 +150,29 @@ function NT.SetSkipped(mapKey, encID, skipped)
     bumpAndPublish()
 end
 
-function NT.CurrentMapKey()
-    local _, _, diff = GetInstanceInfo()
+-- Local GetInstanceInfo when that is a notes-valid raid; otherwise the published stand.
+function NT.RaidMapDiff()
+    local _, instanceType, diff = GetInstanceInfo()
     local mapId = select(8, GetInstanceInfo())
+    if instanceType == "raid" and NT.VALID_DIFFICULTY[diff] then
+        if KART_Settings then
+            KART_Settings.ntMapId = mapId
+            KART_Settings.ntDiff = diff
+        end
+        return mapId, diff
+    end
+    if KART_Settings then
+        local standMap = tonumber(KART_Settings.ntMapId) or 0
+        local standDiff = tonumber(KART_Settings.ntDiff) or 0
+        if standMap ~= 0 and NT.VALID_DIFFICULTY[standDiff] then
+            return standMap, standDiff
+        end
+    end
+    return mapId, diff
+end
+
+function NT.CurrentMapKey()
+    local mapId, diff = NT.RaidMapDiff()
     return NT.InstanceKey(mapId, diff)
 end
 
@@ -664,6 +684,11 @@ function NT.ShareNow()
         if cursor and cursor ~= 0 then NT.EnqueueFlush(cursor) end
         return
     end
+    -- In-instance lead already waiting: operator outside must not Load & Send into combat.
+    if NT.pendingFlush then
+        NT.SetStatus(L.NT_STATUS_QUEUED or "")
+        return
+    end
     if not NT.HasNSRT() then
         local msg = L.NT_STATUS_NO_NSRT or ""
         NT.SetStatus(msg)
@@ -675,7 +700,7 @@ function NT.ShareNow()
         NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
         return
     end
-    local _, _, diff = GetInstanceInfo()
+    local _, diff = NT.RaidMapDiff()
     local diffName = NT.DIFFICULTY_NAMES[diff]
     local noteName = NT.NoteNameForEncounter(cursor, diffName)
     if not noteName then
@@ -685,14 +710,15 @@ function NT.ShareNow()
         return
     end
     local opts = NT.SenderOpts(noteName)
-    local who = NT.ChooseSender(opts)
     local weOp = NT.WeAreOperator()
     local weLead = UnitIsGroupLeader("player") and true or false
-    if who == "operator" and not opts.operatorAssist then
+    if opts.operatorPresent and not opts.operatorAssist then
         local msg = L.NT_STATUS_PROMOTE or ""
         NT.SetStatus(msg)
         NT.PlayerPrint(msg)
+        if not weLead then return end
     end
+    local who = NT.ChooseSender(opts)
     if who == "lead" and opts.operatorPresent and not opts.checksumMatch then
         local msg = L.NT_STATUS_STALE or ""
         NT.SetStatus(msg)
@@ -781,7 +807,7 @@ local function visibleBossRows()
     for _, enc in ipairs(NT.EncountersForMap()) do
         names[enc.id] = enc.name
     end
-    local _, _, diff = GetInstanceInfo()
+    local _, diff = NT.RaidMapDiff()
     local diffName = NT.DIFFICULTY_NAMES[diff]
     local noteByEnc = {}
     if diffName then
