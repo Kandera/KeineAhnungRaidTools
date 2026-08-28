@@ -1,8 +1,10 @@
 local addonName, KART = ...
 KART.NT = KART.NT or {}
 local NT = KART.NT
+local KAUI = LibStub("KAUI-1.0")
 
 NT.DIFFICULTY_NAMES = { [14] = "Normal", [15] = "Heroic", [16] = "Mythic" }
+NT.DIFFICULTY_IDS = { Normal = 14, Heroic = 15, Mythic = 16 }
 NT.VALID_DIFFICULTY = { [14] = true, [15] = true, [16] = true }
 
 -- =====================================================================
@@ -194,6 +196,12 @@ function NT.RaidMapDiff()
             return standMap, standDiff
         end
     end
+    -- Operator in town before anyone zones in: pick the current-tier raid
+    -- whose encounters overlap imported NSRT notes (not the world-boss journal).
+    local infMap, infDiff = NT.InferRaidStand()
+    if infMap and NT.VALID_DIFFICULTY[infDiff] then
+        return infMap, infDiff
+    end
     return mapId, diff
 end
 
@@ -213,6 +221,14 @@ function NT.Move(i, j)
     local idA = NT._visibleIds and NT._visibleIds[i]
     local idB = NT._visibleIds and NT._visibleIds[j]
     if idA and idB then
+        local function ensure(id)
+            for _, x in ipairs(bag.order) do
+                if x == id then return end
+            end
+            bag.order[#bag.order + 1] = id
+        end
+        ensure(idA)
+        ensure(idB)
         ia, ib = nil, nil
         for idx, id in ipairs(bag.order) do
             if id == idA then ia = idx end
@@ -226,6 +242,87 @@ function NT.Move(i, j)
     NT.SetOrder(key, bag.order)
 end
 
+-- Last EJ tier is Mythic+; current expansion raids are numTiers-1 (AutoNote / RC).
+local function ejRaidTier()
+    if type(EJ_GetNumTiers) ~= "function" then return nil end
+    local num = EJ_GetNumTiers() or 0
+    if num <= 0 then return nil end
+    return num > 1 and (num - 1) or num
+end
+
+local function ejEncounters(journalId)
+    local out = {}
+    if not journalId or journalId == 0 then return out end
+    if type(EJ_GetEncounterInfoByIndex) ~= "function" then return out end
+    if type(EJ_SelectInstance) == "function" then EJ_SelectInstance(journalId) end
+    local i = 1
+    while true do
+        local name, _, _, _, _, _, dungeonEncounterID = EJ_GetEncounterInfoByIndex(i, journalId)
+        if not name then break end
+        if dungeonEncounterID then
+            out[#out + 1] = { id = dungeonEncounterID, name = name }
+        end
+        i = i + 1
+    end
+    return out
+end
+
+-- No live raid and no published stand: difficulty from imported notes, map from
+-- the current-tier EJ raid with the most matching encounter IDs. Index 1 is world bosses.
+function NT.InferRaidStand()
+    local counts = { Normal = 0, Heroic = 0, Mythic = 0 }
+    if type(NSRT) == "table" and type(NSRT.Reminders) == "table" then
+        for _, body in pairs(NSRT.Reminders) do
+            if type(body) == "string" then
+                local _, diff = NT.ParseNoteHeader(body)
+                if diff and counts[diff] then counts[diff] = counts[diff] + 1 end
+            end
+        end
+    end
+    local bestName, bestN = nil, 0
+    local prefer = { "Mythic", "Heroic", "Normal" }
+    for i = 1, #prefer do
+        local name = prefer[i]
+        if counts[name] > bestN then
+            bestName, bestN = name, counts[name]
+        end
+    end
+    if not bestName then return nil end
+    local noteSet = {}
+    if type(NSRT) == "table" and type(NSRT.Reminders) == "table" then
+        for _, body in pairs(NSRT.Reminders) do
+            if type(body) == "string" then
+                local enc, diff = NT.ParseNoteHeader(body)
+                if enc and diff == bestName then noteSet[enc] = true end
+            end
+        end
+    end
+    local tier = ejRaidTier()
+    if not tier or type(EJ_GetInstanceByIndex) ~= "function" then return nil end
+    if type(EJ_SelectTier) == "function" then EJ_SelectTier(tier) end
+    local bestMap, bestScore = nil, 0
+    local idx = 2
+    while true do
+        local instId = EJ_GetInstanceByIndex(idx, true)
+        if not instId then break end
+        local score = 0
+        local encs = ejEncounters(instId)
+        for n = 1, #encs do
+            if noteSet[encs[n].id] then score = score + 1 end
+        end
+        if score > bestScore then
+            local mapId = type(EJ_GetInstanceInfo) == "function" and select(10, EJ_GetInstanceInfo(instId)) or nil
+            if mapId and mapId ~= 0 then
+                bestScore = score
+                bestMap = mapId
+            end
+        end
+        idx = idx + 1
+    end
+    if not bestMap or bestScore == 0 then return nil end
+    return bestMap, NT.DIFFICULTY_IDS[bestName]
+end
+
 -- Tests inject NT._encountersForMap; live clients walk the Encounter Journal.
 -- Do not numeric-sort encounter IDs: EJ / injected order is kill order.
 function NT.EncountersFromEJ()
@@ -234,14 +331,14 @@ function NT.EncountersFromEJ()
         return out
     end
     local mapId = NT.RaidMapDiff()
+    if not mapId or mapId == 0 then return out end
     local journalId
-    if type(EJ_GetInstanceForMap) == "function" and mapId then
+    if type(EJ_GetInstanceForMap) == "function" then
         journalId = EJ_GetInstanceForMap(mapId)
     end
     if (not journalId or journalId == 0) and type(EJ_GetInstanceByIndex) == "function" then
-        local numTiers = EJ_GetNumTiers() or 0
-        local tier = numTiers > 1 and (numTiers - 1) or numTiers
-        if tier >= 1 and type(EJ_SelectTier) == "function" then EJ_SelectTier(tier) end
+        local tier = ejRaidTier()
+        if tier and type(EJ_SelectTier) == "function" then EJ_SelectTier(tier) end
         local idx = 1
         while true do
             local instId = EJ_GetInstanceByIndex(idx, true)
@@ -258,15 +355,7 @@ function NT.EncountersFromEJ()
         end
     end
     if not journalId or journalId == 0 then return out end
-    if type(EJ_SelectInstance) == "function" then EJ_SelectInstance(journalId) end
-    local i = 1
-    while true do
-        local name, _, _, _, _, _, dungeonEncounterID = EJ_GetEncounterInfoByIndex(i, journalId)
-        if not name then break end
-        out[#out + 1] = { id = dungeonEncounterID, name = name }
-        i = i + 1
-    end
-    return out
+    return ejEncounters(journalId)
 end
 
 function NT.EncountersForMap()
@@ -276,13 +365,39 @@ function NT.EncountersForMap()
     return NT.EncountersFromEJ()
 end
 
+-- Notes whose encounter is not in this map's EJ (other raid, or a 1-boss lair)
+-- still belong on the list. The night may interleave two raids; do not filter
+-- those ids out. Reviewed 2026-08-28: docs/REVIEW-DECISIONS.md.
+function NT.AppendMissingNoteIds(order, difficultyName)
+    local seen = {}
+    local out = {}
+    for _, id in ipairs(order or {}) do
+        if id and not seen[id] then
+            seen[id] = true
+            out[#out + 1] = id
+        end
+    end
+    if not difficultyName then return out end
+    for _, n in ipairs(NT.ListSharedNotes(difficultyName)) do
+        local id = n.encID
+        if id and not seen[id] then
+            seen[id] = true
+            out[#out + 1] = id
+        end
+    end
+    return out
+end
+
 function NT.DefaultEncounterOrder()
     local list = NT.EncountersForMap()
     local order = {}
-    for i, enc in ipairs(list) do
-        order[i] = enc.id
+    for _, enc in ipairs(list) do
+        if enc.id then
+            order[#order + 1] = enc.id
+        end
     end
-    return order
+    local _, diff = NT.RaidMapDiff()
+    return NT.AppendMissingNoteIds(order, NT.DIFFICULTY_NAMES[diff])
 end
 
 -- ActiveReminder matching this encounter wins; otherwise first sorted name.
@@ -379,6 +494,27 @@ function NT.ListSharedNotes(difficultyName)
         end
     end
     return out
+end
+
+-- Paste box: Reloe's shared import on this client. Does not put the body on KASC.
+function NT.ImportReminderText(str)
+    if type(str) ~= "string" then str = "" end
+    str = str:match("^%s*(.-)%s*$") or ""
+    if str == "" then return "empty" end
+    local n = 0
+    for _ in str:gmatch("EncounterID:") do
+        n = n + 1
+    end
+    if n == 0 then return "parse" end
+    local NSI = NorthernSkyRaidTools
+    if type(NSI) ~= "table" or type(NSI.ImportFullReminderString) ~= "function" then
+        return "no_nsrt"
+    end
+    local ok = pcall(NSI.ImportFullReminderString, NSI, str, false, false)
+    if not ok then return "no_nsrt" end
+    if NT.RefreshBossList then NT.RefreshBossList() end
+    if NT.RefreshStatus then NT.RefreshStatus() end
+    return "ok", n
 end
 
 function NT.Share(name)
@@ -519,6 +655,7 @@ function NT.ApplyRemoteState(settings, incoming)
     NT.generation = settings.ntGeneration
     if NT.RefreshBossList then NT.RefreshBossList() end
     if NT.RefreshStatus then NT.RefreshStatus() end
+    if NT.SyncOperatorEditBox then NT.SyncOperatorEditBox() end
     -- NT_FLUSH is ALERT; NT_STATE is NORMAL. Retry only when we had no stand to Share with.
     if NT.pendingFlush then
         if lackedStand then
@@ -563,6 +700,42 @@ function NT.LocalMayPublishState()
     if not name then return false end
     local nick = KASC.Identity.GetNickname("player")
     return NT.MatchOperator(KART_Settings.ntOperatorName, name, playerRealm(), nick)
+end
+
+-- The operator *name* is a raid stand. Only the lead writes it. A raider typing
+-- their own name must not become LocalMayPublishState and must not bump generation.
+function NT.MayEditOperator()
+    return UnitIsGroupLeader("player") and true or false
+end
+
+function NT.SyncOperatorEditBox()
+    local box = NT.OperatorEditBox
+    if not box then return end
+    local name = (KART_Settings and KART_Settings.ntOperatorName) or ""
+    NT._syncingOperator = true
+    if box.SetText then box:SetText(name) end
+    NT._syncingOperator = false
+    if NT.MayEditOperator() then
+        if box.Enable then box:Enable() end
+    else
+        if box.Disable then box:Disable() end
+    end
+end
+
+function NT.CommitOperatorName(text)
+    if not KART_Settings then return false end
+    if not NT.MayEditOperator() then
+        NT.SyncOperatorEditBox()
+        return false
+    end
+    text = tostring(text or "")
+    KART_Settings.ntOperatorName = text
+    if text ~= NT._publishedOperatorName then
+        NT._publishedOperatorName = text
+        bumpAndPublish()
+    end
+    if NT.RefreshStatus then NT.RefreshStatus() end
+    return true
 end
 
 function NT.SenderMayPublishState(ctx, settings)
@@ -716,6 +889,10 @@ local function orderBag(settings, difficultyID)
     if #order == 0 then
         order = NT.DefaultEncounterOrder()
     end
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    if diffName then
+        order = NT.AppendMissingNoteIds(order, diffName)
+    end
     return order, skipped
 end
 
@@ -745,10 +922,14 @@ end
 
 function NT.SkipAndAdvance()
     if not KART_Settings then return end
-    local cursor = tonumber(KART_Settings.ntCursor) or 0
-    if cursor == 0 then return end
+    local cursor = NT.ResolveSendableCursor(tonumber(KART_Settings.ntCursor) or 0)
+    if not cursor then
+        NT.SetStatus((KART.L or {}).NT_STATUS_LAST_BOSS or "")
+        return
+    end
     local key = NT._listMapKey or NT.CurrentMapKey()
     if not key then return end
+    KART_Settings.ntCursor = cursor
     NT.SetSkipped(key, cursor, true)
 end
 
@@ -760,20 +941,12 @@ function NT.ShareIfChosen()
         NT.PlayerPrint(msg)
         return false
     end
-    local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
-    if cursor ~= 0 then
-        local sendable = NT.ResolveSendableCursor(cursor)
-        if sendable then
-            cursor = sendable
-            KART_Settings.ntCursor = sendable
-        else
-            cursor = 0
-        end
-    end
-    if cursor == 0 then
+    local cursor = NT.ResolveSendableCursor(KART_Settings and tonumber(KART_Settings.ntCursor) or 0)
+    if not cursor then
         NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
         return false
     end
+    if KART_Settings then KART_Settings.ntCursor = cursor end
     local _, diff = NT.RaidMapDiff()
     local diffName = NT.DIFFICULTY_NAMES[diff]
     local noteName = NT.NoteNameForEncounter(cursor, diffName)
@@ -1077,6 +1250,7 @@ function NT.OnEvent(e, ...)
             ensureLeadWindowPoll()
         end
         if NT.RefreshStatus then NT.RefreshStatus() end
+        if NT.SyncOperatorEditBox then NT.SyncOperatorEditBox() end
     end
 end
 
@@ -1115,15 +1289,23 @@ local function visibleBossRows()
     local skipped = (bag and bag.skipped) or {}
     local names = {}
     for _, enc in ipairs(NT.EncountersForMap()) do
-        names[enc.id] = enc.name
+        if enc.id then
+            names[enc.id] = enc.name
+        end
     end
     local _, diff = NT.RaidMapDiff()
     local diffName = NT.DIFFICULTY_NAMES[diff]
+    if diffName then
+        order = NT.AppendMissingNoteIds(order, diffName)
+    end
     local noteByEnc = {}
     if diffName then
         for _, n in ipairs(NT.ListSharedNotes(diffName)) do
             noteByEnc[n.encID] = n.name
-            if not names[n.encID] then names[n.encID] = n.name end
+            if not names[n.encID] then
+                local _, _, headerName = NT.ParseNoteHeader(n.body)
+                names[n.encID] = headerName or n.name
+            end
         end
     end
     local hasNSRT = NT.HasNSRT()
@@ -1157,7 +1339,10 @@ function NT.RefreshBossList()
     local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
 
     if #bosses == 0 then
-        if panel.emptyLabel then panel.emptyLabel:Show() end
+        if panel.emptyLabel then
+            panel.emptyLabel:SetText(L.NT_STATUS_LAST_BOSS or "")
+            panel.emptyLabel:Show()
+        end
         panel:SetHeight(24)
         if NT.bossListCard then NT.bossListCard:SetHeight(48) end
         if KART.UpdateScrollRange then KART.UpdateScrollRange() end
@@ -1192,8 +1377,12 @@ function NT.RefreshBossList()
             })
             row.skip:ClearAllPoints()
             row.skip:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-            row.skip.text:SetWidth(70)
-            row.nameText:SetPoint("RIGHT", row.skip, "LEFT", -10, 0)
+            -- CreateSettingsCheckbox puts the label to the right of the pill; on a
+            -- right-aligned row that hangs outside the card. Flip it to the left.
+            row.skip.text:ClearAllPoints()
+            row.skip.text:SetPoint("RIGHT", row.skip, "LEFT", -8, 0)
+            row.skip.text:SetJustifyH("RIGHT")
+            row.nameText:SetPoint("RIGHT", row.skip.text, "LEFT", -10, 0)
 
             row:RegisterForDrag("LeftButton")
             row:SetScript("OnDragStart", function(self)
@@ -1281,29 +1470,120 @@ function NT.BuildPanel(parent)
     NT.OperatorEditBox:SetSize(460, 28)
     NT.OperatorEditBox:SetPoint("TOPLEFT", opLabel, "BOTTOMLEFT", 0, -8)
     NT.OperatorEditBox:SetScript("OnTextChanged", function(self)
+        if NT._syncingOperator then return end
         if not KART_Settings then return end
+        if not NT.MayEditOperator() then return end
         KART_Settings.ntOperatorName = self:GetText() or ""
     end)
     NT.OperatorEditBox:SetScript("OnEditFocusLost", function(self)
-        if not KART_Settings then return end
-        local text = self:GetText() or ""
-        KART_Settings.ntOperatorName = text
-        if text ~= NT._publishedOperatorName then
-            NT._publishedOperatorName = text
-            bumpAndPublish()
-        end
-        NT.RefreshStatus()
+        NT.CommitOperatorName(self:GetText() or "")
     end)
     NT.OperatorEditBox:SetScript("OnEnter", function(self)
+        local Lx = KART.L or {}
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L.NT_LABEL_OPERATOR, 1, 1, 1)
-        GameTooltip:AddLine(L.DESC_NT_OPERATOR, nil, nil, nil, true)
+        GameTooltip:SetText(Lx.NT_LABEL_OPERATOR, 1, 1, 1)
+        GameTooltip:AddLine(Lx.DESC_NT_OPERATOR, nil, nil, nil, true)
         GameTooltip:Show()
     end)
     NT.OperatorEditBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    NT.SyncOperatorEditBox()
+
+    local importCard = KART.UI:CreateCard(parent)
+    importCard:SetPoint("TOPLEFT", opCard, "BOTTOMLEFT", 0, -12)
+    importCard:SetSize(500, 190)
+
+    local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    pasteLabel:SetPoint("TOPLEFT", 20, -15)
+    pasteLabel:SetText(L.NT_LABEL_PASTE)
+    KART.UI:RegisterLabel(pasteLabel)
+
+    local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
+    pasteBG:SetSize(460, 90)
+    pasteBG:SetPoint("TOPLEFT", 20, -35)
+    KART.UI:SetPixelBackdrop(pasteBG, {
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
+    pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    KART.UI:ApplyRoundedMask(pasteBG, KAUI.CORNER_RADIUS_LG)
+
+    local pasteScroll = CreateFrame("ScrollFrame", "KART_NTPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
+    pasteScroll:SetPoint("TOPLEFT", 4, -4)
+    pasteScroll:SetPoint("BOTTOMRIGHT", -22, 4)
+    local pasteScrollThumb = KART.UI:StripScrollbarTextures(pasteScroll)
+    if pasteScrollThumb then pasteScrollThumb:SetSize(6, 16) end
+    KART.UI:RegisterAccentTexture(pasteScrollThumb, 0.6)
+
+    NT.ImportEditBox = CreateFrame("EditBox", "KART_NTImportEditBox", pasteScroll)
+    NT.ImportEditBox:SetWidth(428)
+    NT.ImportEditBox:SetHeight(300)
+    NT.ImportEditBox:SetMultiLine(true)
+    NT.ImportEditBox:SetAutoFocus(false)
+    NT.ImportEditBox:SetFontObject("GameFontHighlightSmall")
+    NT.ImportEditBox:SetScript("OnTextChanged", function() end)
+    NT.ImportEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    NT.ImportEditBox:SetScript("OnEditFocusGained", function()
+        local r, g, b = KART.UI:AccentColor()
+        pasteBG:SetBackdropBorderColor(r, g, b, 1)
+    end)
+    NT.ImportEditBox:SetScript("OnEditFocusLost", function()
+        pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
+    end)
+    pasteScroll:SetScrollChild(NT.ImportEditBox)
+    KART.UI:RegisterEditBox(NT.ImportEditBox)
+
+    local pasteClickCatcher = CreateFrame("Frame", nil, pasteBG)
+    pasteClickCatcher:SetAllPoints(pasteScroll)
+    pasteClickCatcher:SetFrameLevel(math.max(pasteScroll:GetFrameLevel() - 1, 0))
+    pasteClickCatcher:EnableMouse(true)
+    pasteClickCatcher:SetScript("OnMouseDown", function()
+        NT.ImportEditBox:SetFocus()
+        NT.ImportEditBox:SetCursorPosition(#NT.ImportEditBox:GetText())
+    end)
+
+    NT.BtnImport = KART.UI:CreateModernButton(importCard, L.NT_BTN_IMPORT)
+    NT.BtnImport:SetSize(180, 26)
+    NT.BtnImport:SetPoint("TOPLEFT", 20, -135)
+    NT.BtnImport:SetScript("OnEnter", function(self)
+        local Lx = KART.L or {}
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(Lx.NT_BTN_IMPORT, 1, 1, 1)
+        GameTooltip:AddLine(Lx.DESC_NT_PASTE, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    NT.BtnImport:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    NT.BtnImport:SetScript("OnClick", function()
+        local Lx = KART.L or {}
+        local text = NT.ImportEditBox and NT.ImportEditBox:GetText() or ""
+        local status, n = NT.ImportReminderText(text)
+        local msg = ""
+        if status == "ok" then
+            msg = string.format(Lx.NT_STATUS_IMPORTED or "%d", n or 0)
+        elseif status == "empty" then
+            msg = Lx.NT_STATUS_IMPORT_EMPTY or ""
+        elseif status == "parse" then
+            msg = Lx.NT_STATUS_IMPORT_PARSE or ""
+        else
+            msg = Lx.NT_STATUS_NO_NSRT or ""
+        end
+        if NT.importStatusLabel and NT.importStatusLabel.SetText then
+            NT.importStatusLabel:SetText(escapeUI(msg))
+        end
+        NT.SetStatus(msg)
+        if status ~= "ok" and msg ~= "" then NT.PlayerPrint(msg) end
+    end)
+
+    NT.importStatusLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    NT.importStatusLabel:SetPoint("TOPLEFT", 20, -168)
+    NT.importStatusLabel:SetPoint("RIGHT", importCard, "RIGHT", -20, 0)
+    NT.importStatusLabel:SetJustifyH("LEFT")
+    NT.importStatusLabel:SetTextColor(0.5, 0.5, 0.5)
+    KART.UI:RegisterLabel(NT.importStatusLabel)
 
     local bossCard = KART.UI:CreateCard(parent)
-    bossCard:SetPoint("TOPLEFT", opCard, "BOTTOMLEFT", 0, -12)
+    bossCard:SetPoint("TOPLEFT", importCard, "BOTTOMLEFT", 0, -12)
     bossCard:SetSize(500, 80)
     NT.bossListCard = bossCard
 
@@ -1350,6 +1630,7 @@ function NT.BuildPanel(parent)
         parent:HookScript("OnShow", function()
             NT.RefreshBossList()
             NT.RefreshStatus()
+            NT.SyncOperatorEditBox()
         end)
     end
 
@@ -1360,6 +1641,10 @@ function NT.BuildPanel(parent)
             KART.CbNtModuleEnabled.tooltipText = Lx.DESC_NT_MODULE_ENABLED
         end
         if opLabel then opLabel:SetText(Lx.NT_LABEL_OPERATOR) end
+        if pasteLabel then pasteLabel:SetText(Lx.NT_LABEL_PASTE) end
+        if NT.BtnImport and NT.BtnImport.text then
+            NT.BtnImport.text:SetText(Lx.NT_BTN_IMPORT)
+        end
         if NT.BtnResetOrder and NT.BtnResetOrder.text then
             NT.BtnResetOrder.text:SetText(Lx.NT_BTN_RESET_ORDER)
         end
@@ -1383,6 +1668,7 @@ function NT.SyncWidgets()
     if KART.CbNtModuleEnabled then settingsMap[KART.CbNtModuleEnabled] = "ntModuleEnabled" end
     if NT.OperatorEditBox then settingsMap[NT.OperatorEditBox] = "ntOperatorName" end
     KART.ApplySettingsMap(settingsMap)
+    NT.SyncOperatorEditBox()
     NT.RefreshBossList()
     NT.RefreshStatus()
 end

@@ -447,7 +447,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 670, -- Settings: two half cards + accent/profiles + addon versions + RC companion
     [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
-    [7] = 320, -- Notes: enable + operator + boss list + share; live-measured below
+    [7] = 520, -- Notes: enable + operator + import + boss list + share; live-measured below
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -458,9 +458,9 @@ function KART.UpdateScrollRange()
         local card = KART.WU and KART.WU.bossListCard
         h = 280 + ((card and card:GetHeight()) or 48)
     elseif tab == 7 then
-        -- Enable + operator + share cards, and the boss card (grows with the list).
+        -- Enable + operator + import + share cards, and the boss card (grows with the list).
         local card = KART.NT and KART.NT.bossListCard
-        h = 270 + ((card and card:GetHeight()) or 80)
+        h = 472 + ((card and card:GetHeight()) or 80)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.

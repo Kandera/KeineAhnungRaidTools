@@ -489,10 +489,13 @@ KART.L_deDE = {
     SET_NT_MODULE_ENABLED = "NSRT-Notizen aktivieren",
     DESC_NT_MODULE_ENABLED = "Lädt und sendet automatisch die nächste Northern-Sky-geteilte Notiz nach einem Kill und beim Betreten des Raids.",
     NT_LABEL_OPERATOR = "Notiz-Operator",
-    DESC_NT_OPERATOR = "Charaktername oder Northern-Sky-Spitzname. Wenn sie nicht im Raid sind, übernimmst du ihre Aufgaben; dieses Feld ändert sich nicht.",
+    DESC_NT_OPERATOR = "Nur der Raidlead setzt das. Charaktername oder Northern-Sky-Spitzname. Wenn sie nicht im Raid sind, übernimmst du ihre Aufgaben.",
+    NT_LABEL_PASTE = "Geteilte Notizen einfügen",
+    DESC_NT_PASTE = "Derselbe Export wie /ns. Import schreibt in Northern Sky auf diesem Charakter; Jetzt teilen sendet.",
     NT_BTN_SHARE = "Jetzt teilen",
     NT_BTN_SKIP_ADVANCE = "Überspringen und weiter",
     NT_BTN_RESET_ORDER = "Reihenfolge zurücksetzen",
+    NT_BTN_IMPORT = "Notizen importieren",
     NT_SKIP = "Auslassen",
     NT_STATUS_OPERATOR_HERE = "Operator: %s (in der Gruppe)",
     NT_STATUS_OPERATOR_GONE = "Operator: %s (nicht in der Gruppe) — du sendest",
@@ -503,6 +506,9 @@ KART.L_deDE = {
     NT_STATUS_STALE = "Operator-Notiz ist älter als die letzte Freigabe; der Lead sendet.",
     NT_STATUS_PROMOTE = "Befördere den Notiz-Operator zum Assistenten, damit er teilen kann.",
     NT_STATUS_LAST_BOSS = "Keine weitere Notiz.",
+    NT_STATUS_IMPORTED = "%d Notizen importiert.",
+    NT_STATUS_IMPORT_EMPTY = "Füge einen Northern-Sky-Export für geteilte Notizen ein.",
+    NT_STATUS_IMPORT_PARSE = "Keine EncounterID-Zeilen gefunden.",
 
     -- Droptimizer Gains (companion app sync)
 

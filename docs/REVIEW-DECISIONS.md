@@ -229,3 +229,9 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   `NT.NoteNameForEncounter`). Spec asked for ActiveReminder then last imported. NSRT's
   `Reminders` table has no import order. ActiveReminder matching the encounter wins; otherwise
   the first name after a stable sort of keys. Do not invent an import-order sidecar.
+
+- **A mixed order across two raids is intended** (`Notes.lua` list / cursor / Share). The
+  guild may kill three bosses in raid 1, the one-boss raid, then the rest of raid 1. The
+  Notes list is the night's sequence (NSRT library ∩ current difficulty), not "this
+  instance only". Do not drop the other raid's note from the list, do not auto-skip it
+  while inside raid 1, and do not treat zoning Raid1 → Raid2 → Raid1 as a cursor bug.

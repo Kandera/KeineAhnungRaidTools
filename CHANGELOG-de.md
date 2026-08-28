@@ -88,6 +88,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Die Notes-Liste zeigt jede importierte Notiz**, auch die aus einem 1-Boss-Raid.
+- **Der Notes-Tab wirft keinen Fehler mehr**, wenn du nicht im Raid bist.
+- **Der Notes-Tab listet importierte Bosse**, auch wenn du nicht im Raid bist.
+- **Auslassen in der Notes-Liste bleibt in der Karte.**
+- **Geteilte Notizen können im Notes-Tab eingefügt werden.**
+- **Nur der Raidlead setzt den Notiz-Operator.**
 - **Auto-Promote wartet, bis der Kampf vorbei ist.**
 - **Nach einem Trade über RC's Trade UI hängst du nicht mehr im Handel fest.**
 - **Co-Tank erzeugt keine übrigbleibenden Frames mehr**, wenn Live-Auren nicht da sind.

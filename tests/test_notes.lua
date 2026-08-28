@@ -590,6 +590,8 @@ end
 
 -- Injected EJ order is used as-is; encounter IDs are not numeric-sorted.
 do
+    local savedNSRT = env.NSRT
+    env.NSRT = { Reminders = {} }
     NT._encountersForMap = function()
         return { { id = 3470, name = "Nekzali" }, { id = 100, name = "Low" }, { id = 9999, name = "High" } }
     end
@@ -597,7 +599,34 @@ do
     T.eq(order[1], 3470, "injected first encounter is first")
     T.eq(order[2], 100, "injected order is used, not numeric-sorted")
     T.eq(order[3], 9999, "injected last encounter stays last")
+    T.eq(#order, 3, "no extra ids without notes")
     NT._encountersForMap = nil
+    env.NSRT = savedNSRT
+end
+
+-- Imported notes from another instance (1-boss raid) still appear after EJ bosses.
+do
+    local savedNSRT = env.NSRT
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.NSRT = { Reminders = {
+        A = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+        B = "EncounterID:100;Name:Low;Difficulty:Mythic\ncd",
+        Extra = "EncounterID:8800;Name:Nymrissa;Difficulty:Mythic\ncd",
+    }}
+    NT._encountersForMap = function()
+        return { { id = 3470, name = "Nekzali" }, { id = 100, name = "Low" } }
+    end
+    local order = NT.DefaultEncounterOrder()
+    T.eq(#order, 3, "a note whose encounter is not in EJ is appended")
+    T.eq(order[1], 3470, "EJ order is kept")
+    T.eq(order[2], 100, "EJ second stays second")
+    T.eq(order[3], 8800, "the extra note is last, not numeric-sorted into the middle")
+    local withBag = NT.AppendMissingNoteIds({ 3470, 100 }, "Mythic")
+    T.eq(#withBag, 3, "a saved 8-boss order still gains the 9th note")
+    T.eq(withBag[3], 8800, "the extra id is appended to the saved order")
+    NT._encountersForMap = nil
+    env.NSRT = savedNSRT
 end
 
 -- Share now queues while auras are secret; does not send into combat.
@@ -813,6 +842,22 @@ do
     NT.SkipAndAdvance()
     T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3497], true, "SkipAndAdvance skips the cursor")
     T.eq(env.KART_Settings.ntCursor, 3445, "SkipAndAdvance moves to the next sendable")
+
+    env._shared = nil
+    env.KART_Settings.ntCursor = 0
+    env.KART_Settings.ntOrderByInstance["1:16"].skipped = {}
+    NT.ShareNow()
+    T.eq(env.KART_Settings.ntCursor, 3470, "Share now with no cursor starts at the first sendable")
+    T.eq(env._shared and env._shared[3]:find("3470", 1, true) ~= nil, true,
+        "Share now with no cursor sends the first note")
+
+    env._shared = nil
+    env.KART_Settings.ntCursor = 0
+    env.KART_Settings.ntOrderByInstance["1:16"].skipped = {}
+    NT.SkipAndAdvance()
+    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3470], true,
+        "SkipAndAdvance with no cursor skips the first sendable")
+    T.eq(env.KART_Settings.ntCursor, 3497, "and moves to the next sendable")
 end
 
 -- Several notes for one encounter: ActiveReminder wins; else first stable match.
@@ -854,11 +899,149 @@ do
     local list = NT.EncountersFromEJ()
     T.eq(#list, 1, "town EncountersFromEJ uses the stand map")
     T.eq(list[1] and list[1].id, 3470, "stand map yields the raid encounter")
+
+    -- Town, no stand: map 0 must not resolve the world-boss journal (live: key "0:0").
+    -- No NSRT notes → nothing to infer a raid from.
+    inst.mapID = 0
+    inst.difficultyID = 0
+    env.KART_Settings.ntMapId = 0
+    env.KART_Settings.ntDiff = 0
+    local savedNSRT = env.NSRT
+    env.NSRT = nil
+    local askedMap
+    env.EJ_GetInstanceForMap = function(mapId)
+        askedMap = mapId
+        return 322
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i)
+        if i == 1 then return "Grand Empress Shek'zara", nil, nil, nil, nil, nil, 2351 end
+        if i == 2 then return "Ivus the Decayed" end
+        return nil
+    end
+    list = NT.EncountersFromEJ()
+    T.eq(#list, 0, "town without a stand does not walk the world-boss journal")
+    T.eq(askedMap, nil, "EJ_GetInstanceForMap is not called for map 0")
+    env.NSRT = savedNSRT
+
+    -- Valid stand: EJ rows with a name but no dungeonEncounterID are omitted.
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 16
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 1234 then return 77 end
+        return nil
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Shek'zara", nil, nil, nil, nil, nil, 2351 end
+        if journalId == 77 and i == 2 then return "Ivus the Decayed" end
+        if journalId == 77 and i == 3 then return "Wekemara", nil, nil, nil, nil, nil, 2318 end
+        return nil
+    end
+    list = NT.EncountersFromEJ()
+    T.eq(#list, 2, "EJ rows with no dungeonEncounterID are omitted")
+    T.eq(list[1] and list[1].id, 2351, "first named boss with an id is kept")
+    T.eq(list[2] and list[2].id, 2318, "a later boss after a nil-id row is still kept")
+
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
     env.EJ_GetNumTiers = nil
     env.EJ_GetEncounterInfoByIndex = nil
     env.EJ_GetInstanceForMap = nil
     env.EJ_SelectInstance = nil
+end
+
+-- Town operator: no published stand, but NSRT notes pick the current-tier raid
+-- (skip world bosses at EJ index 1, same as AutoNote).
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local savedNSRT = env.NSRT
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
+    env.KART_Settings.ntMapId = 0
+    env.KART_Settings.ntDiff = 0
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+        if journalId == 1 then
+            return "World Bosses", nil, nil, nil, nil, nil, nil, nil, nil, 0
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 1 and i == 1 then return "Ivus the Decayed" end
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    local askedMap
+    env.EJ_GetInstanceForMap = function(mapId)
+        askedMap = mapId
+        if mapId == 2805 then return 77 end
+        if mapId == 0 then return 1 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    local mapId, diff = NT.RaidMapDiff()
+    T.eq(mapId, 2805, "town infers the raid whose notes match")
+    T.eq(diff, 16, "town infers Mythic from note headers")
+    T.eq(env.KART_Settings.ntMapId, 0, "inference does not stamp the stand")
+    local list = NT.EncountersFromEJ()
+    T.eq(#list, 1, "inferred stand walks that raid")
+    T.eq(list[1] and list[1].id, 3470, "inferred raid yields the note's encounter")
+    T.eq(askedMap == 0, false, "inference does not call EJ_GetInstanceForMap(0)")
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.NSRT = savedNSRT
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
+end
+
+-- DefaultEncounterOrder and RefreshBossList skip encounters with no id
+-- (live LuaError: names[enc.id] with enc = { name = "Ivus the Decayed" }).
+do
+    local savedNSRT = env.NSRT
+    env.NSRT = { Reminders = {} }
+    NT._encountersForMap = function()
+        return {
+            { id = 2351, name = "Grand Empress Shek'zara" },
+            { name = "Ivus the Decayed" },
+            { id = 2318, name = "Wekemara" },
+        }
+    end
+    local order = NT.DefaultEncounterOrder()
+    T.eq(#order, 2, "DefaultEncounterOrder skips nil ids")
+    T.eq(order[1], 2351, "first id is kept")
+    T.eq(order[2], 2318, "id after a nil-id row is kept, not dropped by a hole")
+
+    NT.bossListFrame = {
+        rows = {},
+        SetHeight = function() end,
+        emptyLabel = { Show = function() end, Hide = function() end, SetText = function() end },
+    }
+    NT.bossListCard = { SetHeight = function() end }
+    NT._refreshingList = false
+    local ok = pcall(NT.RefreshBossList)
+    T.eq(ok, true, "RefreshBossList does not error on an encounter with no id")
+    env.NSRT = savedNSRT
+    NT._encountersForMap = nil
+    NT.bossListFrame = nil
+    NT.bossListCard = nil
+    NT._refreshingList = false
 end
 
 -- Successful ApplyRemoteState refreshes the Notes panel.
@@ -1325,4 +1508,59 @@ do
     T.eq(sawReq, true, "enabling the module in a group pulls NT_STATE")
     KARTTEST.RestoreRoster(roster)
     NT._stateRequested = nil
+end
+
+-- Operator slot is a raid stand: only the lead may change it.
+do
+    env._isLead = false
+    T.eq(NT.MayEditOperator(), false, "a raider may not edit the operator slot")
+    env._isLead = true
+    T.eq(NT.MayEditOperator(), true, "the lead may edit the operator slot")
+
+    env._isLead = false
+    env.KART_Settings.ntOperatorName = "Mario"
+    env.KART_Settings.ntGeneration = 3
+    NT.generation = 3
+    env._ntSent = {}
+    T.eq(NT.CommitOperatorName("abc"), false, "raider commit is refused")
+    T.eq(env.KART_Settings.ntOperatorName, "Mario", "abc does not replace the raid operator")
+    T.eq(NT.generation, 3, "refused commit does not bump generation")
+    local published = false
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_STATE:" then published = true end
+    end
+    T.eq(published, false, "raider commit does not publish NT_STATE")
+
+    env._isLead = true
+    T.eq(NT.CommitOperatorName("Kandera"), true, "lead can put themselves in the slot")
+    T.eq(env.KART_Settings.ntOperatorName, "Kandera", "lead commit stores the new operator")
+    T.eq(NT.generation > 3, true, "lead commit bumps generation")
+end
+
+-- Paste imports into local NSRT shared reminders (not personal, not KASC).
+do
+    env._imported = nil
+    T.eq(NT.ImportReminderText(""), "empty", "blank paste is empty")
+    T.eq(NT.ImportReminderText("   "), "empty", "whitespace paste is empty")
+    T.eq(NT.ImportReminderText("no headers here"), "parse", "text without EncounterID is a parse miss")
+
+    local savedNSI = env.NorthernSkyRaidTools
+    env.NorthernSkyRaidTools = nil
+    T.eq(NT.ImportReminderText("EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd"), "no_nsrt",
+        "missing NSRT does not import")
+
+    env.NorthernSkyRaidTools = {
+        ImportFullReminderString = function(self, str, personal, isUpdate)
+            env._imported = { str = str, personal = personal, isUpdate = isUpdate, self = self }
+            env.NSRT = env.NSRT or { Reminders = {} }
+            env.NSRT.Reminders["Nekzali - Mythic"] = str
+        end,
+    }
+    local status, n = NT.ImportReminderText("EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd")
+    T.eq(status, "ok", "a shared-note export imports")
+    T.eq(n, 1, "one EncounterID counts as one note")
+    T.eq(env._imported.personal, false, "import is shared, not personal")
+    T.eq(env._imported.isUpdate, false, "import is not an in-place update")
+    T.eq(env._imported.self, env.NorthernSkyRaidTools, "Reloe receives self")
+    env.NorthernSkyRaidTools = savedNSI
 end

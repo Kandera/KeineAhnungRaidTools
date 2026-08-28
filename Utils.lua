@@ -221,6 +221,12 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
+            "**Opening the Notes tab no longer errors** when you are not in a raid.",
+            "**The Notes tab lists imported bosses** when you are not in the raid.",
+            "**The Notes list shows every imported note**, including a one-boss raid.",
+            "**Skip on the Notes list stays inside the card.**",
+            "**Shared notes can be pasted on the Notes tab.**",
+            "**Only the raid leader can set the note operator.**",
             "**Share now waits** while the raid is in combat, including when you are outside.",
             "**The Notes status line shows who would send.**",
             "**Boss notes can be dragged to reorder.**",

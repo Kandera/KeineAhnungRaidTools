@@ -489,10 +489,13 @@ KART.L_enUS = {
     SET_NT_MODULE_ENABLED = "Enable NSRT Notes",
     DESC_NT_MODULE_ENABLED = "Automatically Load & Send the next Northern Sky shared note after a kill, and when you zone into the raid.",
     NT_LABEL_OPERATOR = "Note operator",
-    DESC_NT_OPERATOR = "Character name or Northern Sky nickname. If they are not in the raid, you do their tasks; this field does not change.",
+    DESC_NT_OPERATOR = "Only the raid leader sets this. Character name or Northern Sky nickname. If they are not in the raid, you do their tasks.",
+    NT_LABEL_PASTE = "Paste shared notes",
+    DESC_NT_PASTE = "The same export as /ns. Import writes into Northern Sky on this character; Share now sends.",
     NT_BTN_SHARE = "Share now",
     NT_BTN_SKIP_ADVANCE = "Skip-and-advance",
     NT_BTN_RESET_ORDER = "Reset order",
+    NT_BTN_IMPORT = "Import notes",
     NT_SKIP = "Skip",
     NT_STATUS_OPERATOR_HERE = "Operator: %s (in group)",
     NT_STATUS_OPERATOR_GONE = "Operator: %s (not in group) — you send",
@@ -503,6 +506,9 @@ KART.L_enUS = {
     NT_STATUS_STALE = "Operator note is older than the last share; lead will send.",
     NT_STATUS_PROMOTE = "Promote the note operator to assistant so they can share.",
     NT_STATUS_LAST_BOSS = "No further note.",
+    NT_STATUS_IMPORTED = "Imported %d notes.",
+    NT_STATUS_IMPORT_EMPTY = "Paste a Northern Sky shared-note export.",
+    NT_STATUS_IMPORT_PARSE = "No EncounterID lines found.",
 
     -- Droptimizer Gains (companion app sync)
 

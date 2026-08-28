@@ -88,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **The Notes list shows every imported note**, including a one-boss raid.
+- **Opening the Notes tab no longer errors** when you are not in a raid.
+- **The Notes tab lists imported bosses** when you are not in the raid.
+- **Skip on the Notes list stays inside the card.**
+- **Shared notes can be pasted on the Notes tab.**
+- **Only the raid leader can set the note operator.**
 - **Auto-promote waits until combat ends.**
 - **Trading from RC's Trade UI no longer leaves you stuck in a trade.**
 - **Co-Tank no longer creates leftover frames** when live aura strips are unavailable.
