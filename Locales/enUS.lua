@@ -6,6 +6,7 @@ KART.L_enUS = {
     TAB_BUFFCHECK = "Buff-Checker",
     TAB_SETTINGS = "Settings",
     TAB_COTANK = "Co-Tank",
+    TAB_NOTES = "Notes",
     TAB_CT_LOOK = "Look",
     TAB_CT_TEXT = "Text",
     TAB_CT_AURAS = "Auras",
@@ -483,6 +484,25 @@ KART.L_enUS = {
     WU_MSG_INVITED         = "%d players invited for %s.",
     WU_MSG_ALREADY_IN      = "(%d already in raid)",
     WU_MSG_REMOVED         = "%d players removed for %s.",
+
+    -- NSRT Notes
+    SET_NT_MODULE_ENABLED = "Enable NSRT Notes",
+    DESC_NT_MODULE_ENABLED = "Automatically Load & Send the next Northern Sky shared note after a kill, and when you zone into the raid.",
+    NT_LABEL_OPERATOR = "Note operator",
+    DESC_NT_OPERATOR = "Character name or Northern Sky nickname. If they are not in the raid, you do their tasks; this field does not change.",
+    NT_BTN_SHARE = "Share now",
+    NT_BTN_SKIP_ADVANCE = "Skip-and-advance",
+    NT_BTN_RESET_ORDER = "Reset order",
+    NT_SKIP = "Skip",
+    NT_STATUS_OPERATOR_HERE = "Operator: %s (in group)",
+    NT_STATUS_OPERATOR_GONE = "Operator: %s (not in group) — you send",
+    NT_STATUS_SENDER = "Sender: %s",
+    NT_STATUS_QUEUED = "Waiting until combat ends.",
+    NT_STATUS_NO_NSRT = "Northern Sky Raid Tools is not loaded.",
+    NT_STATUS_NO_NOTE = "No shared note for this boss.",
+    NT_STATUS_STALE = "Operator note is older than the last share; lead will send.",
+    NT_STATUS_PROMOTE = "Promote the note operator to assistant so they can share.",
+    NT_STATUS_LAST_BOSS = "No further note.",
 
     -- Droptimizer Gains (companion app sync)
 

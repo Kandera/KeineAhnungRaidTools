@@ -1304,12 +1304,21 @@ _G.SOUNDKIT = { RAID_WARNING = 8959, READY_CHECK = 8960 }
 -- be out there. Defaults to a raid because that is what almost every test here is about.
 -- mapID (return 8) defaults to 2912 like before; overridable via KARTTEST.instance.mapID so a test
 -- can tell two instances apart by id as well as by name (LootHistory's instance/instanceID fields).
+-- One table for the whole process: every raidsim client sees the same GetInstanceInfo. A sender
+-- that is supposed to be in town is an isolated test (unprimed ntMapId/ntDiff), not a second
+-- instance field on the simulator.
 KARTTEST.instance = { name = "The Voidspire", instanceType = "raid",
                       difficultyID = 16, difficultyName = "Mythic" }
 function _G.GetInstanceInfo()
     local i = KARTTEST.instance
     return i.name, i.instanceType or "raid", i.difficultyID, i.difficultyName, 20, 0, false,
            i.mapID or 2912
+end
+
+-- Midnight: GetMouseFocus is gone. Notes row drop reads this list and walks GetParent to the row.
+KARTTEST.mouseFoci = {}
+function _G.GetMouseFoci()
+    return KARTTEST.mouseFoci
 end
 
 -- Combat logging, as real state: AutoLog's whole job is deciding when to turn this on and, more
@@ -1432,6 +1441,12 @@ function _G.IsInGuild() return false end
 function _G.GetBuildInfo() return "12.1.0", "60000", "Aug 06 2026", 120100 end
 _G.C_CVar = { GetCVar = function(name) return KARTTEST.cvars and KARTTEST.cvars[name] or nil end }
 KARTTEST.cvars = { ActionButtonUseKeyDown = "1" }
+
+KARTTEST.aurasSecret = false
+_G.C_Secrets = _G.C_Secrets or {}
+function _G.C_Secrets.ShouldAurasBeSecret()
+    return not not KARTTEST.aurasSecret
+end
 
 _G.ITEM_CLASSES_ALLOWED = "Classes: %s"
 

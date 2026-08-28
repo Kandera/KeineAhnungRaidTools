@@ -11,7 +11,7 @@ Changelog, locales, Lua 5.1, SavedVariables: `CODING_STANDARDS.md`.
 
 ## Navigation
 
-- **Banners:** `grep -n '^-- =====' -A1 <file>`. Never read a large file whole. `LootCouncil.lua` (~6.8k, 27 banners) first.
+- **Banners:** `grep -n '^-- =====' -A1 <file>`. Never read a large file whole. `LootCouncil.lua` (~6.8k, 27 banners) first. `Notes.lua` (~1.2k) the same way.
 - **Comm:** `Libs/KASC-1.0` (`KASC:Send`) over AceComm-3.0. There is no `KARTSync.lua`.
 - **SavedVariables names:** the `.toc`. Shape rules in `CODING_STANDARDS.md`.
 

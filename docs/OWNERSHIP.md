@@ -27,6 +27,7 @@ Invite, auto-promote and buff-check ownership below is unchanged.
 The raid-lead bar, invite keywords, auto-promote list and buff-check settings are each player's
 own KART settings unless noted otherwise; they are not broadcast raid-wide like the old LC config
 was.
+NSRT Notes (`NT_STATE`, `NT_LEAD`, `NT_STATE_REQ`) is the exception: boss order, skips, cursor, operator name, generation and cursor checksum are raid-broadcast so the note operator and the lead share one stand. `NT_LEAD` is the lead's in-instance Restricted window; `NT_STATE_REQ` is a pull, not a push on hello. It is not loot-config sync.
 
 ## What must stay true (raid-lead tools)
 

@@ -6,6 +6,7 @@ KART.L_deDE = {
     TAB_BUFFCHECK = "Buff-Checker",
     TAB_SETTINGS = "Einstellungen",
     TAB_COTANK = "Co-Tank",
+    TAB_NOTES = "Notizen",
     TAB_CT_LOOK = "Look",
     TAB_CT_TEXT = "Text",
     TAB_CT_AURAS = "Auras",
@@ -483,6 +484,25 @@ KART.L_deDE = {
     WU_MSG_INVITED         = "%d Spieler für %s eingeladen.",
     WU_MSG_ALREADY_IN      = "(%d bereits im Raid)",
     WU_MSG_REMOVED         = "%d Spieler für %s entfernt.",
+
+    -- NSRT Notes
+    SET_NT_MODULE_ENABLED = "NSRT-Notizen aktivieren",
+    DESC_NT_MODULE_ENABLED = "Lädt und sendet automatisch die nächste Northern-Sky-geteilte Notiz nach einem Kill und beim Betreten des Raids.",
+    NT_LABEL_OPERATOR = "Notiz-Operator",
+    DESC_NT_OPERATOR = "Charaktername oder Northern-Sky-Spitzname. Wenn sie nicht im Raid sind, übernimmst du ihre Aufgaben; dieses Feld ändert sich nicht.",
+    NT_BTN_SHARE = "Jetzt teilen",
+    NT_BTN_SKIP_ADVANCE = "Überspringen und weiter",
+    NT_BTN_RESET_ORDER = "Reihenfolge zurücksetzen",
+    NT_SKIP = "Auslassen",
+    NT_STATUS_OPERATOR_HERE = "Operator: %s (in der Gruppe)",
+    NT_STATUS_OPERATOR_GONE = "Operator: %s (nicht in der Gruppe) — du sendest",
+    NT_STATUS_SENDER = "Sender: %s",
+    NT_STATUS_QUEUED = "Warte, bis der Kampf endet.",
+    NT_STATUS_NO_NSRT = "Northern Sky Raid Tools ist nicht geladen.",
+    NT_STATUS_NO_NOTE = "Keine geteilte Notiz für diesen Boss.",
+    NT_STATUS_STALE = "Operator-Notiz ist älter als die letzte Freigabe; der Lead sendet.",
+    NT_STATUS_PROMOTE = "Befördere den Notiz-Operator zum Assistenten, damit er teilen kann.",
+    NT_STATUS_LAST_BOSS = "Keine weitere Notiz.",
 
     -- Droptimizer Gains (companion app sync)
 

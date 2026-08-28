@@ -220,6 +220,10 @@ KART.InGameChangelog = {
     {
         version = "Unreleased",
         entries = {
+            "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
+            "**Share now waits** while the raid is in combat, including when you are outside.",
+            "**The Notes status line shows who would send.**",
+            "**Boss notes can be dragged to reorder.**",
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
@@ -503,6 +507,16 @@ KART.Defaults = {
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
     ctModuleEnabled = false,
+    ntModuleEnabled = false,
+    ntOperatorName = "",
+    ntOrderByInstance = {},
+    ntCursor = 0,
+    ntLastVisit = 0,
+    ntGeneration = 0,
+    ntEditor = "",
+    ntChecksum = "",
+    ntMapId = 0,
+    ntDiff = 0,
     ct = {
         schemaVersion = 4,
         -- position
@@ -1098,7 +1112,7 @@ KART.KeybindActions = {
     { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
 }
 
--- Maps each of the 6 main-window tab-content panels to its ShowTab index. Used by
+-- Maps each of the 7 main-window tab-content panels to its ShowTab index. Used by
 -- KART.BuildSearchIndex to figure out which tab a given label belongs to, by walking up the
 -- label's parent chain until one of these panels is found.
 local SEARCH_TAB_PANELS = {
@@ -1108,13 +1122,14 @@ local SEARCH_TAB_PANELS = {
     { panel = "SettingsPanel", tabIndex = 4 },
     { panel = "WoWUtilsPanel", tabIndex = 5 },
     { panel = "CoTankPanel", tabIndex = 6 },
+    { panel = "NotesPanel", tabIndex = 7 },
 }
 
 -- Builds the settings search index by walking KART.UI's label registry — every settings label
 -- already gets registered there by its creation site (checkboxes, sliders, card titles, hints,
 -- tab titles), so no per-widget registration is needed here. A label whose parent chain never
--- reaches one of the 6 main tab panels (e.g. one that belongs to a popup window like Loot
--- History) is silently skipped, which is how "only the 6 main tabs are searchable" enforces itself.
+-- reaches one of the 7 main tab panels (e.g. one that belongs to a popup window like Loot
+-- History) is silently skipped, which is how "only the 7 main tabs are searchable" enforces itself.
 function KART.BuildSearchIndex()
     local index = {}
     for _, fs in ipairs(KART.UI:GetLabels()) do

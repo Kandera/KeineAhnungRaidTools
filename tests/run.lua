@@ -205,6 +205,7 @@ dofile("tests/test_kaui.lua")
 dofile("tests/test_groupinvite.lua")
 
 dofile("tests/test_wowutils_import.lua")
+dofile("tests/test_notes.lua")
 
 dofile("tests/test_identity.lua")
 
@@ -234,6 +235,8 @@ dofile("tests/test_raidleadbar.lua")
 dofile("tests/test_diagnostics.lua")
 
 dofile("tests/test_hello.lua")
+
+dofile("tests/test_notes_sync.lua")
 
 dofile("tests/test_addon_versions.lua")
 

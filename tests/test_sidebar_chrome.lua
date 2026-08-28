@@ -75,7 +75,7 @@ do
     T.truthy(type(KART.InGameChangelog) == "table", "in-game changelog table exists")
     T.truthy(#KART.InGameChangelog >= 2, "changelog covers unreleased and a shipped version")
     T.eq(KART.InGameChangelog[1].version, "Unreleased", "first block is unreleased")
-    T.truthy(KART.InGameChangelog[1].entries[1]:find("Tonight strip", 1, true),
+    T.truthy(KART.InGameChangelog[1].entries[1]:find("NSRT Notes", 1, true),
         "in-game unreleased list starts with the current polish")
     local lead, rest = KART.ParseChangelogLine("**Lead** rest of the line")
     T.eq(lead, "Lead", "changelog lead is the starred span")

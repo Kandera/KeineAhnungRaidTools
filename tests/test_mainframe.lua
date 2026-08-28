@@ -17,7 +17,7 @@ local KART = me.KART
 -- what those two controls do IS the call into them.
 RaidSim.As(me, function()
     me.KART.CreateTabTitle = me.KART.CreateTabTitle or function() end
-    for _, path in ipairs({ "MainFrame.lua", "CoTank.lua", "CoTankSettings.lua", "Profiles.lua", "RaidleadBar.lua" }) do
+    for _, path in ipairs({ "MainFrame.lua", "Notes.lua", "CoTank.lua", "CoTankSettings.lua", "Profiles.lua", "RaidleadBar.lua" }) do
         local chunk = assert(loadstring(assert(io.open(path, "r")):read("*a"), "@" .. path))
         setfenv(chunk, me.env)
         chunk("KeineAhnungRaidTools", KART)
@@ -67,13 +67,35 @@ do
     T.truthy(KART.CoTankPanel and KART.CoTankPanel:IsShown(), "and shows the Co-Tank panel")
     T.eq(KART.SettingsPanel:IsShown(), false, "Settings is not shown on the Co-Tank tab")
 
+    As(function() KART.ShowTab(7) end)
+    T.eq(KART.CurrentTab, 7, "the Notes tab is ShowTab index 7")
+    T.truthy(KART.NotesPanel and KART.NotesPanel:IsShown(), "and shows the Notes panel")
+    T.eq(KART.CoTankPanel:IsShown(), false, "not stacked on Co-Tank")
+
     -- Exactly one content panel visible at a time. Two showing at once is the shape of every
     -- "settings are drawn over the loot council tab" report.
     local visible = 0
-    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel, KART.CoTankPanel }) do
+    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel, KART.CoTankPanel, KART.NotesPanel }) do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")
+
+    local listHits, statusHits = 0, 0
+    local origList, origStatus = KART.NT.RefreshBossList, KART.NT.RefreshStatus
+    KART.NT.RefreshBossList = function(...)
+        listHits = listHits + 1
+        return origList(...)
+    end
+    KART.NT.RefreshStatus = function(...)
+        statusHits = statusHits + 1
+        return origStatus(...)
+    end
+    As(function() KART.ShowTab(1) end)
+    As(function() KART.ShowTab(7) end)
+    T.eq(listHits >= 1, true, "ShowTab(7) refreshes the Notes boss list")
+    T.eq(statusHits >= 1, true, "ShowTab(7) refreshes Notes status")
+    KART.NT.RefreshBossList = origList
+    KART.NT.RefreshStatus = origStatus
 end
 
 -- Settings / Raidlead card packing: accent+profiles share a parent, look sliders sit on the
@@ -216,6 +238,7 @@ do
         me.env.KART_Settings.ctModuleEnabled = true
         me.env.KART_Settings.autoModuleEnabled = true
         me.env.KART_Settings.wuModuleEnabled = false
+        me.env.KART_Settings.ntModuleEnabled = false
         KART.RefreshModuleChips()
     end)
     T.eq(KART.BtnRaidlead.chip:GetText(), "ON", "raidlead chip reflects showRaidleadBar")
@@ -223,6 +246,7 @@ do
     T.eq(KART.BtnCoTank.chip:GetText(), "ON", "co-tank chip reflects ctModuleEnabled")
     T.eq(KART.BtnPromote.chip:GetText(), "ON", "automation chip reflects autoModuleEnabled")
     T.eq(KART.BtnWoWUtils.chip:GetText(), "OFF", "wowutils chip reflects wuModuleEnabled")
+    T.eq(KART.BtnNotes.chip:GetText(), "OFF", "notes chip reflects ntModuleEnabled")
     T.is_nil(KART.BtnSettings.chip, "settings tab has no chip")
 end
 
