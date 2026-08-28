@@ -488,6 +488,10 @@ function NT.ApplyRemoteState(settings, incoming)
     NT.generation = settings.ntGeneration
     if NT.RefreshBossList then NT.RefreshBossList() end
     if NT.RefreshStatus then NT.RefreshStatus() end
+    -- NT_FLUSH is ALERT; NT_STATE is NORMAL. A pending share that arrived first now has a stand.
+    if NT.pendingFlush then
+        NT.ApplyFlushAndShare(NT.pendingFlush)
+    end
     return true
 end
 
@@ -823,6 +827,8 @@ function NT.OnEvent(e, ...)
         local cursor = NT.NextAfter(order, skipped, encID)
         if cursor then cursor = NT.ResolveSendableCursor(cursor) end
         KART_Settings.ntCursor = cursor
+        -- Publish before NT_FLUSH so the town operator has map/diff when they are the sender.
+        bumpAndPublish()
         if cursor then scheduleLeadFlush(cursor) end
         return
     end
@@ -852,6 +858,8 @@ function NT.OnEvent(e, ...)
         KART_Settings.ntCursor = cursor
         NT.lastVisit = visit
         KART_Settings.ntLastVisit = visit
+        -- Publish before NT_FLUSH so the town operator has map/diff when they are the sender.
+        bumpAndPublish()
         scheduleLeadFlush(cursor)
     end
 end

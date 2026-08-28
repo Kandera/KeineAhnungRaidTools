@@ -206,6 +206,15 @@ do
         return n, last
     end
 
+    local function stateSent()
+        for _, m in ipairs(env._ntSent) do
+            if type(m) == "string" and m:sub(1, 9) == "NT_STATE:" then
+                return m
+            end
+        end
+        return nil
+    end
+
     resetNT()
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 0)
     T.eq(#env._ntSent, 0, "wipe does not flush")
@@ -231,7 +240,9 @@ do
     resetNT()
     KARTTEST.aurasSecret = true
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
-    T.eq(#env._ntSent, 0, "secret auras defer the flush")
+    T.eq(flushSent(), 0, "secret auras defer the flush")
+    T.truthy(stateSent() and stateSent():find("\t1\t16\t", 1, true),
+        "kill publishes stand while Restricted so the operator has map/diff")
     T.eq(env._shared, nil, "secret auras do not Load & Send yet")
     KARTTEST.aurasSecret = false
     KARTTEST.AdvanceTime(1.1)
@@ -330,6 +341,41 @@ do
     T.eq(env.KART_Settings.ntCursor, 3470, "empty SV shares the first sendable")
     T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "first raid night Load & Sends")
     T.eq(env.KART_Settings.ntLastVisit, 2805, "visit is written after a cursor was resolved")
+    T.truthy(stateSent() and stateSent():find("\t2805\t16\t", 1, true),
+        "zone-in publishes stamped stand so a town operator can RaidMapDiff")
+    T.eq((env.KART_Settings.ntGeneration or 0) > 0, true, "zone-in bumps generation")
+
+    -- Lead is not the sender: still publish stand so the town operator can Share.
+    resetNT()
+    local opRoster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Bramor", realm = "TarrenMill", guid = "Player-1-BR" },
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+    })
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 0,
+        ntLastVisit = 0,
+        ntGeneration = 0,
+        ntOrderByInstance = {},
+    }
+    env._shared = nil
+    env._ntSent = {}
+    NT.generation = 0
+    KARTTEST.instance.mapID = 2805
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(env.KART_Settings.ntMapId, 2805, "lead still stamps live map when operator will send")
+    T.eq(env._shared, nil, "lead does not Share when operator is the chosen sender")
+    T.truthy(stateSent() and stateSent():find("\t2805\t16\t", 1, true),
+        "zone-in publishes stand even when the lead is not the sender")
+    nFlush = flushSent()
+    T.eq(nFlush, 1, "lead still flushes so the operator receives NT_FLUSH")
+    KART.PlayerVersions = nil
+    KARTTEST.RestoreRoster(opRoster)
 
     -- No sendable cursor: do not consume the visit token.
     resetNT()
@@ -352,6 +398,64 @@ do
     T.eq(env._shared, nil, "no sendable note means no Load & Send")
     NT._encountersForMap = nil
     seedNSRT()
+end
+
+-- ALERT NT_FLUSH can overtake NORMAL NT_STATE. Operator in town has no stand until STATE lands.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    NT.pendingFlush = nil
+    NT.generation = 0
+    KARTTEST.aurasSecret = false
+    KARTTEST.SetParty({
+        { name = "Bramor", realm = "TarrenMill", guid = "Player-1-BR" },
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+    })
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 0,
+        ntGeneration = 0,
+        ntChecksum = "",
+        ntOrderByInstance = {},
+    }
+    NT.ApplyFlushAndShare(3470)
+    T.eq(env._shared, nil, "FLUSH before stand does not Load & Send")
+    T.eq(NT.pendingFlush, 3470, "FLUSH before stand keeps pendingFlush")
+    T.eq(NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 2,
+        editor = "Bramor",
+        operator = "Alric",
+        mapId = 1,
+        diff = 16,
+        cursor = 3470,
+        checksum = "",
+        order = { 3470 },
+        skipped = {},
+    }), true, "operator applies lead stand")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE",
+        "ApplyRemoteState retries pendingFlush so overtaken STATE still Shares")
+    NT.pendingFlush = nil
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env._isLead = true
 end
 
 -- SetOrder / SetSkipped bump generation and persist order (data, not drag).
