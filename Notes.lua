@@ -5,6 +5,10 @@ local NT = KART.NT
 NT.DIFFICULTY_NAMES = { [14] = "Normal", [15] = "Heroic", [16] = "Mythic" }
 NT.VALID_DIFFICULTY = { [14] = true, [15] = true, [16] = true }
 
+-- =====================================================================
+--  Sequence: header, cursor, generation, order, who sends
+-- =====================================================================
+
 local function djb2(str)
     local h = 5381
     for i = 1, #str do
@@ -338,8 +342,9 @@ function NT.ChooseSender(opts)
     return nil
 end
 
--- NSRT / NorthernSkyRaidTools are resolved as globals at call time (chunk env), never captured
--- at load and never via _G — OptionalDep may load after this file; tests inject into the sandbox.
+-- =====================================================================
+--  NSRT adapter (globals at call time — OptionalDep may load after this file)
+-- =====================================================================
 
 function NT.HasNSRT()
     return type(NSRT) == "table"
@@ -912,6 +917,10 @@ if not NT._eventFrame then
     end)
     NT._eventFrame = f
 end
+
+-- =====================================================================
+--  Notes panel
+-- =====================================================================
 
 local ROW_H = 28
 local ROW_GAP = 3

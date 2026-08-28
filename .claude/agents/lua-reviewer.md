@@ -91,8 +91,18 @@ These are the classes `luacheck` structurally cannot see:
 - **Comm limits.** KASC-1.0 over AceComm-3.0 with ChatThrottleLib. Prefix
   registration, chunking, throttle starvation, and separator collisions with user-supplied
   text (see `StripColons` in REVIEW-DECISIONS.md for that class already found once).
+  A leftover send flag (`pendingFlush` and cousins) that a later remote apply writes back
+  over a newer cursor is a defect when that client already had a notes-valid stand. Retry
+  only when the stand was empty (FLUSH arrived before STATE).
+- **Out-of-instance sender.** Some roles Send from town (`GetInstanceInfo` is not 14/15/16).
+  `RaidMapDiff` / Share use the published stand (`ntMapId` / `ntDiff`). A path that only
+  succeeds when that client's live instance is already a notes-valid raid is a defect
+  for that role.
 - **Event symmetry.** `RegisterEvent` without an `UnregisterEvent`; `OnUpdate` scripts left
-  attached after their frame's purpose ends.
+  attached after their frame's purpose ends. A settings gate on the frame `OnEvent` script
+  that the exported handler does not share: leave-clear (and unregister) still run when
+  the module switch is off. The script is the gate the client hits; fire
+  `GetScript("OnEvent")` to see it, not only the exported function.
 - **Patch-bound ID tables.** Enchant, spell and item ID lists are per-patch maintenance
   (`GOOD_ENCHANTS` is explicitly so). Report drift as drift, never as a defect.
 - **Lua 5.1 / LuaJIT.** No `goto`, `unpack` not `table.unpack`, no integer division, `#` on a

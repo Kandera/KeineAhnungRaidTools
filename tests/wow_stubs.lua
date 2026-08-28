@@ -1304,6 +1304,9 @@ _G.SOUNDKIT = { RAID_WARNING = 8959, READY_CHECK = 8960 }
 -- be out there. Defaults to a raid because that is what almost every test here is about.
 -- mapID (return 8) defaults to 2912 like before; overridable via KARTTEST.instance.mapID so a test
 -- can tell two instances apart by id as well as by name (LootHistory's instance/instanceID fields).
+-- One table for the whole process: every raidsim client sees the same GetInstanceInfo. A sender
+-- that is supposed to be in town is an isolated test (unprimed ntMapId/ntDiff), not a second
+-- instance field on the simulator.
 KARTTEST.instance = { name = "The Voidspire", instanceType = "raid",
                       difficultyID = 16, difficultyName = "Mythic" }
 function _G.GetInstanceInfo()
