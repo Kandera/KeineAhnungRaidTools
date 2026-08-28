@@ -51,3 +51,35 @@ do
     T.eq(op.env.KART_Settings.ntGeneration, 2, "operator SV generation updated")
     T.eq(op.env.KART_Settings.ntChecksum, "deadbeef", "operator applied lead checksum")
 end
+
+-- A plain raider (neither lead nor matched operator) must not publish NT_STATE.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local lead = lm
+
+    lead.env.KART_Settings.ntModuleEnabled = true
+    raider.env.KART_Settings.ntModuleEnabled = true
+    lead.env.KART_Settings.ntOperatorName = "Wuusch"
+    raider.env.KART_Settings.ntOperatorName = "Wuusch"
+
+    lead.env.KART_Settings.ntGeneration = 2
+    lead.KART.NT.generation = 2
+    raider.env.KART_Settings.ntGeneration = 99
+    raider.env.KART_Settings.ntEditor = "Alric-TarrenMill"
+    raider.env.KART_Settings.ntMapId = 1
+    raider.env.KART_Settings.ntDiff = 16
+    raider.env.KART_Settings.ntCursor = 3470
+    raider.env.KART_Settings.ntChecksum = "evil"
+    raider.env.KART_Settings.ntOrderByInstance = {
+        ["1:16"] = { order = { 3470 }, skipped = {} },
+    }
+    raider.KART.NT.generation = 99
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(raider, function()
+        raider.KART.NT.PublishState()
+    end)
+    T.eq(#RaidSim.Sent(sim, "NT_STATE:"), 0, "raider does not publish NT_STATE")
+    T.eq(lead.KART.NT.generation, 2, "raider publish does not move lead gen")
+    T.eq(lead.env.KART_Settings.ntGeneration, 2, "lead SV generation unchanged")
+end

@@ -296,10 +296,40 @@ local function localStateFromSettings(settings)
     }
 end
 
+-- Who may publish NT_STATE: raid lead or the matched note operator (design).
+local function playerRealm()
+    local _, realm = UnitName("player")
+    if realm and realm ~= "" then return realm end
+    return (GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or ""
+end
+
+function NT.LocalMayPublishState()
+    if UnitIsGroupLeader("player") then return true end
+    if not KART_Settings then return false end
+    local name = UnitName("player")
+    if not name then return false end
+    local nick = KASC.Identity.GetNickname("player")
+    return NT.MatchOperator(KART_Settings.ntOperatorName, name, playerRealm(), nick)
+end
+
+function NT.SenderMayPublishState(ctx, settings)
+    if not ctx or not settings then return false end
+    if KART.SenderIsGroupLeader and KART.SenderIsGroupLeader(ctx) then return true end
+    local realm = (ctx.sender and ctx.sender:match("^[^%-]+%-(.+)$")) or ""
+    local nick
+    local key = ctx.Key and ctx:Key()
+    if key and KASC.Identity.IsResolvedKey(key) then
+        local unit = KASC.Identity.FindUnitForKey(key)
+        if unit then nick = KASC.Identity.GetNickname(unit) end
+    end
+    return NT.MatchOperator(settings.ntOperatorName, ctx.shortName, realm, nick)
+end
+
 -- Publish only on local edit or after a successful local share that changes checksum.
 -- Never publish from KASC:OnPeer / peer hello — returning clients pull.
 function NT.PublishState()
     if not NT.KascEnabled() then return end
+    if not NT.LocalMayPublishState() then return end
     local state = localStateFromSettings(KART_Settings)
     if not state then return end
     local encoded = NT.EncodeState(state)
@@ -314,9 +344,10 @@ function NT.RequestFlush(encID)
     KASC:Send("NT_FLUSH:" .. tostring(id), nil, nil, { prio = "ALERT", guaranteed = true })
 end
 
-KASC:RegisterMessage("NT_STATE", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload)
+KASC:RegisterMessage("NT_STATE", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload, ctx)
     local incoming = NT.DecodeState(payload)
     if not incoming then return end
+    if not NT.SenderMayPublishState(ctx, KART_Settings) then return end
     NT.ApplyRemoteState(KART_Settings, incoming)
 end)
 
