@@ -3,14 +3,24 @@
 -- (RegisterMessage asserts on duplicate tokens).
 local env = setmetatable({}, { __index = _G })
 env.KART_Settings = {}
+env._ntSent = {}
+env._isLead = false
+env.UnitIsGroupLeader = function() return env._isLead end
 local KART = { L = {}, UI = { RegisterStaticPopup = function() end, CreateCard = function() return {} end } }
 env.KART = KART
 do
     local realLibStub = LibStub
     local kascStub = {
         RegisterMessage = function() end,
-        Send = function() end,
+        Send = function(_, msg)
+            env._ntSent[#env._ntSent + 1] = msg
+        end,
         OnPeer = function() end,
+        Identity = {
+            GetNickname = function() return nil end,
+            IsResolvedKey = function() return false end,
+            FindUnitForKey = function() return nil end,
+        },
     }
     env.LibStub = setmetatable({}, {
         __index = realLibStub,
@@ -133,4 +143,68 @@ do
     T.eq(round.gen, 2, "gen roundtrips")
     T.eq(round.cursor, 3470, "cursor roundtrips")
     T.eq(round.skipped[3445], true, "skip roundtrips")
+end
+
+-- Event wiring: kill advances cursor and lead flushes; wipe / non-lead / zone visit.
+do
+    local function resetNT()
+        env._ntSent = {}
+        env._isLead = true
+        NT.lastVisit = nil
+        KARTTEST.aurasSecret = false
+        env.KART_Settings = {
+            ntModuleEnabled = true,
+            ntOperatorName = "",
+            ntMapId = 1,
+            ntDiff = 16,
+            ntCursor = 3470,
+            ntOrderByInstance = {
+                ["1:16"] = { order = { 3470, 3497, 3445 }, skipped = { [3445] = true } },
+            },
+        }
+    end
+
+    resetNT()
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 0)
+    T.eq(#env._ntSent, 0, "wipe does not flush")
+    T.eq(env.KART_Settings.ntCursor, 3470, "wipe does not move cursor")
+
+    resetNT()
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    T.eq(env.KART_Settings.ntCursor, 3497, "kill advances cursor via NextAfter")
+    T.eq(#env._ntSent, 1, "lead flushes after kill when auras clear")
+    T.eq(env._ntSent[1], "NT_FLUSH:3497", "flush carries next encounter id")
+
+    resetNT()
+    env._isLead = false
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    T.eq(env.KART_Settings.ntCursor, 3497, "non-lead still advances cursor")
+    T.eq(#env._ntSent, 0, "non-lead does not emit NT_FLUSH on kill")
+
+    resetNT()
+    KARTTEST.aurasSecret = true
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    T.eq(#env._ntSent, 0, "secret auras defer the flush")
+    KARTTEST.aurasSecret = false
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(#env._ntSent, 1, "flush fires once auras clear")
+    T.eq(env._ntSent[1], "NT_FLUSH:3497", "deferred flush is the advanced cursor")
+
+    resetNT()
+    KARTTEST.instance.mapID = 9001
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(NT.lastVisit, 9001, "zone-in stores visit token")
+    T.eq(#env._ntSent, 1, "lead zone-in flushes current cursor")
+    T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in flushes existing cursor")
+    env._ntSent = {}
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 0, "same visit does not flush again")
+
+    resetNT()
+    env.KART_Settings.ntCursor = 0
+    KARTTEST.instance.mapID = 9002
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in uses first sendable when cursor empty")
 end

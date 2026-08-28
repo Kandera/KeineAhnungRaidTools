@@ -503,6 +503,10 @@ KART.Defaults = {
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
     ctModuleEnabled = false,
+    ntModuleEnabled = false,
+    ntOperatorName = "",
+    ntOrderByInstance = {},
+    ntCursor = 0,
     ct = {
         schemaVersion = 4,
         -- position

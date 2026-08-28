@@ -357,6 +357,92 @@ KASC:RegisterMessage("NT_FLUSH", { payload = true, group = true, enabled = NT.Ka
     NT.pendingFlush = encID
 end)
 
+-- =====================================================================
+--  Events: kill / zone-in enqueue; lead-only flush when auras are clear
+-- =====================================================================
+
+local flushWaitGen = 0
+
+local function orderBag(settings, difficultyID)
+    NT.EnsureShape(settings)
+    local mapId = settings.ntMapId or 0
+    local diff = settings.ntDiff or difficultyID or 0
+    local bag = settings.ntOrderByInstance[NT.InstanceKey(mapId, diff)]
+    return (bag and bag.order) or {}, (bag and bag.skipped) or {}
+end
+
+local function firstSendable(order, skipped)
+    for _, id in ipairs(order) do
+        if not skipped[id] then return id end
+    end
+    return nil
+end
+
+local function cursorOrFirst(settings, difficultyID)
+    local order, skipped = orderBag(settings, difficultyID)
+    local cursor = tonumber(settings.ntCursor) or 0
+    if cursor ~= 0 and not skipped[cursor] then return cursor end
+    return firstSendable(order, skipped)
+end
+
+-- Wait until auras are not secret (poll 1s, max ~60s), then lead-only RequestFlush.
+local function scheduleLeadFlush(cursor)
+    if not cursor then return end
+    flushWaitGen = flushWaitGen + 1
+    local myGen = flushWaitGen
+    local ticks = 0
+    local function attempt()
+        if myGen ~= flushWaitGen then return end
+        if NT.AurasSecret() then
+            ticks = ticks + 1
+            if ticks >= 60 then return end
+            C_Timer.After(1, attempt)
+            return
+        end
+        if UnitIsGroupLeader("player") then
+            NT.RequestFlush(cursor)
+        end
+    end
+    attempt()
+end
+
+function NT.OnEvent(e, ...)
+    if e == "ENCOUNTER_END" then
+        local encID, _, _, _, kill = ...
+        if not NT.ShouldEnqueueKill(kill) then return end
+        if not KART_Settings then return end
+        local order, skipped = orderBag(KART_Settings, select(3, GetInstanceInfo()))
+        local cursor = NT.NextAfter(order, skipped, encID)
+        KART_Settings.ntCursor = cursor
+        if cursor then scheduleLeadFlush(cursor) end
+        return
+    end
+
+    if e == "PLAYER_ENTERING_WORLD" then
+        local _, instanceType, difficultyID = GetInstanceInfo()
+        local visit = select(8, GetInstanceInfo())
+        local isLead = UnitIsGroupLeader("player") and true or false
+        if not NT.ShouldEnqueueZone(NT.lastVisit, visit, instanceType, difficultyID, isLead) then
+            return
+        end
+        NT.lastVisit = visit
+        if not KART_Settings then return end
+        local cursor = cursorOrFirst(KART_Settings, difficultyID)
+        if cursor then
+            KART_Settings.ntCursor = cursor
+            scheduleLeadFlush(cursor)
+        end
+    end
+end
+
+local f = CreateFrame("Frame")
+f:RegisterEvent("ENCOUNTER_END")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:SetScript("OnEvent", function(_, e, ...)
+    if not KART_Settings or KART_Settings.ntModuleEnabled ~= true then return end
+    NT.OnEvent(e, ...)
+end)
+
 function NT.BuildPanel(parent)
     -- Panel widgets land in Task 7 / Task 8.
 end
