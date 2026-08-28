@@ -425,6 +425,13 @@ function NT.OnEvent(e, ...)
         local isLead = UnitIsGroupLeader("player") and true or false
         if not KART_Settings then return end
         NT.EnsureShape(KART_Settings)
+        -- Left the raid (or not a notes-valid difficulty): drop the visit so a later
+        -- hearth/re-enter of the same map id is treated as a new visit.
+        if instanceType ~= "raid" or not NT.VALID_DIFFICULTY[difficultyID] then
+            NT.lastVisit = nil
+            KART_Settings.ntLastVisit = 0
+            return
+        end
         -- 0/nil = no previous visit (Defaults use 0 so test_locales is happy).
         local prev = NT.lastVisit or KART_Settings.ntLastVisit
         if prev == 0 then prev = nil end

@@ -224,4 +224,34 @@ do
     T.eq(env.KART_Settings.ntLastVisit, 9003, "SV visit survives simulated reload")
     NT.OnEvent("PLAYER_ENTERING_WORLD")
     T.eq(#env._ntSent, 0, "reload same visit does not enqueue")
+
+    -- Hearth / leave then re-enter same map: new visit must share again.
+    resetNT()
+    KARTTEST.instance.mapID = 9004
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 1, "zone into raid enqueues once")
+    env._ntSent = {}
+    NT.lastVisit = nil
+    T.eq(env.KART_Settings.ntLastVisit, 9004, "still inside: SV holds visit")
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 0, "reload inside same visit does not enqueue")
+    -- Leave: open world (or wrong difficulty) clears the visit token.
+    env._ntSent = {}
+    KARTTEST.instance.instanceType = "none"
+    KARTTEST.instance.difficultyID = 0
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(NT.lastVisit == nil or NT.lastVisit == 0, true, "leave clears session visit")
+    T.eq(env.KART_Settings.ntLastVisit == nil or env.KART_Settings.ntLastVisit == 0, true,
+        "leave clears SV visit")
+    T.eq(#env._ntSent, 0, "leave itself does not enqueue")
+    -- Re-enter same mapID as lead → new visit → share current cursor once.
+    env._ntSent = {}
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    KARTTEST.instance.mapID = 9004
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 1, "hearth and re-enter same map enqueues again")
+    T.eq(env._ntSent[1], "NT_FLUSH:3470", "re-enter shares current cursor")
 end
