@@ -83,6 +83,7 @@ function NT.EnsureShape(settings)
     if settings.ntModuleEnabled == nil then settings.ntModuleEnabled = false end
     settings.ntOperatorName = settings.ntOperatorName or ""
     settings.ntOrderByInstance = settings.ntOrderByInstance or {}
+    if settings.ntLastVisit == nil then settings.ntLastVisit = 0 end
 end
 
 function NT.MatchOperator(operatorName, unitName, realm, nickname)
@@ -422,11 +423,16 @@ function NT.OnEvent(e, ...)
         local _, instanceType, difficultyID = GetInstanceInfo()
         local visit = select(8, GetInstanceInfo())
         local isLead = UnitIsGroupLeader("player") and true or false
-        if not NT.ShouldEnqueueZone(NT.lastVisit, visit, instanceType, difficultyID, isLead) then
+        if not KART_Settings then return end
+        NT.EnsureShape(KART_Settings)
+        -- 0/nil = no previous visit (Defaults use 0 so test_locales is happy).
+        local prev = NT.lastVisit or KART_Settings.ntLastVisit
+        if prev == 0 then prev = nil end
+        if not NT.ShouldEnqueueZone(prev, visit, instanceType, difficultyID, isLead) then
             return
         end
         NT.lastVisit = visit
-        if not KART_Settings then return end
+        KART_Settings.ntLastVisit = visit
         local cursor = cursorOrFirst(KART_Settings, difficultyID)
         if cursor then
             KART_Settings.ntCursor = cursor

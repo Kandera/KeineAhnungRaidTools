@@ -507,6 +507,7 @@ KART.Defaults = {
     ntOperatorName = "",
     ntOrderByInstance = {},
     ntCursor = 0,
+    ntLastVisit = 0,
     ct = {
         schemaVersion = 4,
         -- position

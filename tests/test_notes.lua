@@ -158,6 +158,7 @@ do
             ntMapId = 1,
             ntDiff = 16,
             ntCursor = 3470,
+            ntLastVisit = 0,
             ntOrderByInstance = {
                 ["1:16"] = { order = { 3470, 3497, 3445 }, skipped = { [3445] = true } },
             },
@@ -196,6 +197,7 @@ do
     KARTTEST.instance.difficultyID = 16
     NT.OnEvent("PLAYER_ENTERING_WORLD")
     T.eq(NT.lastVisit, 9001, "zone-in stores visit token")
+    T.eq(env.KART_Settings.ntLastVisit, 9001, "zone-in persists visit on SV")
     T.eq(#env._ntSent, 1, "lead zone-in flushes current cursor")
     T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in flushes existing cursor")
     env._ntSent = {}
@@ -207,4 +209,19 @@ do
     KARTTEST.instance.mapID = 9002
     NT.OnEvent("PLAYER_ENTERING_WORLD")
     T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in uses first sendable when cursor empty")
+
+    resetNT()
+    KARTTEST.instance.mapID = 9003
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 1, "first PEW enqueues")
+    T.eq(env.KART_Settings.ntLastVisit, 9003, "visit persisted on SavedVariables")
+    env._ntSent = {}
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 0, "same mapID again does not enqueue")
+    -- Simulated reload: session cleared, SV still has ntLastVisit.
+    env._ntSent = {}
+    NT.lastVisit = nil
+    T.eq(env.KART_Settings.ntLastVisit, 9003, "SV visit survives simulated reload")
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(#env._ntSent, 0, "reload same visit does not enqueue")
 end
