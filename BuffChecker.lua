@@ -605,6 +605,7 @@ end
 -- Master switch for the whole Buff-Checker window/UI (saves CPU for raiders who don't need it).
 -- Does NOT affect the KART Sync responder in Core.lua (REQ_OIL/REQ_ILVL/REQ_GEAR) — that keeps
 -- answering regardless, so the raid leader still gets accurate data about this player.
+local lastHsRequest = -5
 function KART.ShowBuffCheck()
     if KART_Settings.bcModuleEnabled == false then
         print("|cff00ff00KART:|r " .. KART.L.BC_MODULE_DISABLED_MSG)
@@ -615,6 +616,14 @@ function KART.ShowBuffCheck()
     end
     KART.BuffCheckFrame:Show()
     KART.UpdateBuffCheck()
+    -- Healthstone is on the default view; REQ_HS used to fire only from Advanced/Refresh.
+    if IsInGroup() then
+        local now = GetTime()
+        if now - lastHsRequest >= 5 then
+            lastHsRequest = now
+            KASC:Send("REQ_HS")
+        end
+    end
 end
 
 -- Throttling für Performance-Optimierung

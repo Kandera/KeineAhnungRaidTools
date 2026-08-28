@@ -95,6 +95,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Notes in der Stadt warten auf die Schwierigkeit des Leads**, bevor sie teilen.
+- **Ein Tab im Notes-Operatornamen wird ignoriert.**
+- **Buff Check fragt beim Öffnen**, wer einen Gesundheitsstein hat.
 - **Klick auf einen Boss in der Notes-Liste startet dort.** Vorherige Bosse bleiben in der Liste.
 - **Die Notes-Liste zeigt jede importierte Notiz**, auch die aus einem 1-Boss-Raid.
 - **Der Notes-Tab wirft keinen Fehler mehr**, wenn du nicht im Raid bist.

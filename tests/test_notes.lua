@@ -173,6 +173,15 @@ do
     T.eq(round.skipped[3445], true, "skip roundtrips")
 end
 
+do
+    local s = { gen = 2, editor = "A-T", operator = "Wuusch\t16", mapId = 1, diff = 16,
+                cursor = 3470, checksum = "deadbeef", order = { 3470 }, skipped = {} }
+    local round = NT.DecodeState(NT.EncodeState(s))
+    T.eq(round and round.operator, "Wuusch16", "tab in the operator is stripped on the wire")
+    T.eq(round and round.diff, 16, "tab in the operator does not steal the next NT_STATE field")
+    T.eq(round and round.mapId, 1, "mapId stays in its own field")
+end
+
 -- Event wiring: kill advances cursor and lead flushes; wipe / non-lead / zone visit.
 do
     local function seedNSRT()
@@ -523,6 +532,106 @@ do
     NT.pendingFlush = nil
     KARTTEST.RestoreRoster(roster)
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env._isLead = true
+end
+
+-- Town Infer looks like a notes-valid raid (mixed Mythic+Heroic library, tie → Mythic).
+-- FLUSH must not Share that guess, or STATE's Heroic stand arrives with pendingFlush already gone.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    NT.pendingFlush = nil
+    NT.generation = 0
+    KARTTEST.aurasSecret = false
+    KARTTEST.SetParty({
+        { name = "Bramor", realm = "TarrenMill", guid = "Player-1-BR" },
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+    })
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        BossM = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\nmythic note",
+        BossH = "EncounterID:3470;Name:Nekzali;Difficulty:Heroic\nheroic note",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 0,
+        ntGeneration = 0,
+        ntChecksum = "",
+        ntOrderByInstance = {},
+    }
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+        if journalId == 1 then
+            return "World Bosses", nil, nil, nil, nil, nil, nil, nil, nil, 0
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 2805 then return 77 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    local infMap, infDiff = NT.RaidMapDiff()
+    T.eq(infMap, 2805, "mixed library still infers a raid map")
+    T.eq(infDiff, 16, "tie infers Mythic")
+    T.eq(env.KART_Settings.ntMapId, 0, "inference still does not stamp the stand")
+    NT.ApplyFlushAndShare(3470)
+    T.eq(env._shared, nil, "FLUSH + Infer does not Load & Send the guessed difficulty")
+    T.eq(NT.pendingFlush, 3470, "FLUSH + Infer keeps pendingFlush until a published stand")
+    T.eq(NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 2,
+        editor = "Bramor",
+        operator = "Alric",
+        mapId = 2805,
+        diff = 15,
+        cursor = 3470,
+        checksum = "",
+        order = { 3470 },
+        skipped = {},
+    }), true, "operator applies the lead's Heroic stand")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE",
+        "ApplyRemoteState retries pendingFlush after the published stand")
+    T.eq(type(env._shared and env._shared[3]) == "string" and env._shared[3]:find("Difficulty:Heroic", 1, true) ~= nil, true,
+        "the retried Share is the published Heroic note, not the Infer Mythic guess")
+    NT.pendingFlush = nil
+    NT._encountersForMap = nil
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
     env._isLead = true
 end
 
@@ -1652,6 +1761,9 @@ do
     T.eq(NT.CommitOperatorName("Kandera"), true, "lead can put themselves in the slot")
     T.eq(env.KART_Settings.ntOperatorName, "Kandera", "lead commit stores the new operator")
     T.eq(NT.generation > 3, true, "lead commit bumps generation")
+
+    T.eq(NT.CommitOperatorName("Alric\t"), true, "lead commit with a tab is accepted")
+    T.eq(env.KART_Settings.ntOperatorName, "Alric", "tab is stripped from the operator name")
 end
 
 -- Paste imports into local NSRT shared reminders (not personal, not KASC).

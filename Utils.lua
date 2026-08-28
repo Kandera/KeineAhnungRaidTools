@@ -221,6 +221,9 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
+            "**Notes in town wait for the lead's difficulty** before sharing.",
+            "**A tab in the note operator name is ignored.**",
+            "**Opening Buff Check asks who has a healthstone.**",
             "**The WoWUtils tab is gone.** Notes paste loads notes and invites.",
             "**Share now in town loads the marked note**, even when you are not in a raid.",
             "**Every Notes list row shows the difficulty.**",

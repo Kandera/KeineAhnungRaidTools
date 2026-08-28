@@ -1166,5 +1166,33 @@ do
     T.eq(saw, true, "and 0 when we do not")
 end
 
+do
+    -- Healthstone sits on the default view. Opening the window (Ready Check, the bar) must
+    -- ask peers; painting alone must not, or every roster tick would spam REQ_HS.
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+    Render(lm)
+    local painted
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_HS" then painted = true end
+    end
+    T.eq(painted, nil, "painting Buff Check does not ask for healthstones")
+
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.bcModuleEnabled = true
+        lm.KART.CreateTabTitle = lm.KART.CreateTabTitle or function() end
+        lm.KART.UpdateStyles = lm.KART.UpdateStyles or function() end
+        lm.KART.ShowBuffCheck()
+    end)
+    KARTTEST.AdvanceTime(0)
+    local asked
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_HS" then asked = true end
+    end
+    T.eq(asked, true, "opening Buff Check asks the raid for healthstones")
+end
+
 
 

@@ -232,6 +232,15 @@ function NT.RaidMapDiff()
     return mapId, diff
 end
 
+-- Live instance stamps ntMapId/ntDiff; Infer does not. Flush/Share wait for this.
+function NT.HasPublishedStand(settings)
+    settings = settings or KART_Settings
+    if type(settings) ~= "table" then return false end
+    local standMap = tonumber(settings.ntMapId) or 0
+    local standDiff = tonumber(settings.ntDiff) or 0
+    return standMap ~= 0 and NT.VALID_DIFFICULTY[standDiff] == true
+end
+
 function NT.CurrentMapKey()
     local mapId, diff = NT.RaidMapDiff()
     return NT.InstanceKey(mapId, diff)
@@ -697,17 +706,22 @@ local function setFromCsv(csv)
     return out
 end
 
+-- NT_STATE is tab-separated; a tab in a field shifts every later column.
+local function wireField(s)
+    return (tostring(s or ""):gsub("[\t\r\n]", ""))
+end
+
 -- Wire: gen \t editor \t operator \t mapId \t diff \t cursor \t checksum \t orderCsv \t skipCsv
 function NT.EncodeState(state)
     if type(state) ~= "table" then return nil end
     return table.concat({
         tostring(state.gen or 0),
-        state.editor or "",
-        state.operator or "",
+        wireField(state.editor),
+        wireField(state.operator),
         tostring(state.mapId or 0),
         tostring(state.diff or 0),
         tostring(state.cursor or 0),
-        state.checksum or "",
+        wireField(state.checksum),
         csvFromList(state.order),
         csvFromSet(state.skipped),
     }, "\t")
@@ -736,9 +750,7 @@ function NT.ApplyRemoteState(settings, incoming)
     local localGen = settings.ntGeneration or NT.generation or 0
     if not NT.AcceptGeneration(localGen, incoming.gen) then return false end
 
-    local prevMap = tonumber(settings.ntMapId) or 0
-    local prevDiff = tonumber(settings.ntDiff) or 0
-    local lackedStand = prevMap == 0 or not NT.VALID_DIFFICULTY[prevDiff]
+    local lackedStand = not NT.HasPublishedStand(settings)
 
     NT.EnsureShape(settings)
     settings.ntGeneration = tonumber(incoming.gen) or 0
@@ -838,7 +850,7 @@ function NT.CommitOperatorName(text)
         NT.SyncOperatorEditBox()
         return false
     end
-    text = tostring(text or "")
+    text = wireField(text)
     KART_Settings.ntOperatorName = text
     if text ~= NT._publishedOperatorName then
         NT._publishedOperatorName = text
@@ -1106,20 +1118,19 @@ function NT.ApplyFlushAndShare(encID)
     NT.pendingFlush = id
     local sendable = NT.ResolveSendableCursor(id)
     KART_Settings.ntCursor = sendable or id
+    -- Infer is town UI, not a stand. Share and clear the flag only after live/published map+diff.
+    local published = NT.HasPublishedStand(KART_Settings)
     -- Queued Share now already Load & Sent this cursor when NT_LEAD unblocked; skip the overlap.
     if sendable and sendable == NT._queueShareCursor then
         NT._queueShareCursor = nil
-    elseif sendable then
+    elseif sendable and published then
         NT._queueShareCursor = nil
         NT.ShareIfChosen()
     end
-    -- Keep the flag only when Share failed for lack of a notes-valid stand (FLUSH before STATE).
+    -- Keep the flag only when Share failed for lack of a published stand (FLUSH before STATE).
     -- Otherwise a leftover id rewinds the cursor on the next ApplyRemoteState.
-    if NT.pendingFlush then
-        local mapId, diff = NT.RaidMapDiff()
-        if mapId and mapId ~= 0 and NT.VALID_DIFFICULTY[diff] then
-            NT.pendingFlush = nil
-        end
+    if NT.pendingFlush and published then
+        NT.pendingFlush = nil
     end
 end
 

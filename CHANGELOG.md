@@ -95,6 +95,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **Notes in town wait for the lead's difficulty** before sharing.
+- **A tab in the note operator name is ignored.**
+- **Opening Buff Check asks who has a healthstone.**
 - **Click a boss on the Notes list to start there.** Earlier bosses stay on the list.
 - **The Notes list shows every imported note**, including a one-boss raid.
 - **Opening the Notes tab no longer errors** when you are not in a raid.
