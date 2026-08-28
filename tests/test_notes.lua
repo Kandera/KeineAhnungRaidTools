@@ -66,3 +66,25 @@ do
     T.eq(S({ hasNote = false }), nil, "no note: nobody sends")
     T.eq(S({ isLead = false, operatorPresent = false }), nil, "non-lead without operator does not send")
 end
+
+do
+    T.eq(NT.ShouldEnqueueKill(1), true, "a kill enqueues")
+    T.eq(NT.ShouldEnqueueKill(0), false, "a wipe does not enqueue")
+    T.eq(NT.ShouldEnqueueKill(nil), false, "nil kill does not enqueue")
+end
+
+do
+    T.eq(NT.ShouldEnqueueZone(nil, 1001, "raid", 16, true), true, "first raid zone-in enqueues")
+    T.eq(NT.ShouldEnqueueZone(1001, 1001, "raid", 16, true), false, "same visit does not")
+    T.eq(NT.ShouldEnqueueZone(1001, 1002, "raid", 16, true), true, "new instance id enqueues")
+    T.eq(NT.ShouldEnqueueZone(nil, 1001, "raid", 16, false), false, "non-lead does not zone-enqueue")
+    T.eq(NT.ShouldEnqueueZone(nil, 1001, "none", 16, true), false, "open world does not")
+    T.eq(NT.ShouldEnqueueZone(nil, 1001, "raid", 1, true), false, "wrong difficulty does not")
+end
+
+do
+    KARTTEST.aurasSecret = true
+    T.eq(NT.AurasSecret(), true, "secret auras block share")
+    KARTTEST.aurasSecret = false
+    T.eq(NT.AurasSecret(), false, "clear auras allow share")
+end

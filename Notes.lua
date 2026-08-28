@@ -3,6 +3,7 @@ KART.NT = KART.NT or {}
 local NT = KART.NT
 
 NT.DIFFICULTY_NAMES = { [14] = "Normal", [15] = "Heroic", [16] = "Mythic" }
+NT.VALID_DIFFICULTY = { [14] = true, [15] = true, [16] = true }
 
 local function djb2(str)
     local h = 5381
@@ -35,6 +36,29 @@ function NT.NextAfter(order, skipped, killedEncID)
         if id == killedEncID then seen = true end
     end
     return nil
+end
+
+function NT.ApplyKill(order, skipped, killedEncID)
+    return NT.NextAfter(order, skipped, killedEncID)
+end
+
+function NT.AurasSecret()
+    local fn = C_Secrets and C_Secrets.ShouldAurasBeSecret
+    if not fn then return false end
+    local ok, secret = pcall(fn)
+    return ok and secret and true or false
+end
+
+function NT.ShouldEnqueueKill(kill)
+    return kill ~= nil and kill ~= 0
+end
+
+function NT.ShouldEnqueueZone(prevVisit, newVisit, instanceType, difficultyID, isLead)
+    if not isLead then return false end
+    if instanceType ~= "raid" then return false end
+    if not NT.VALID_DIFFICULTY[difficultyID] then return false end
+    if not newVisit then return false end
+    return prevVisit ~= newVisit
 end
 
 function NT.AcceptGeneration(localGen, incomingGen)

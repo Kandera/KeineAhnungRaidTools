@@ -1433,6 +1433,12 @@ function _G.GetBuildInfo() return "12.1.0", "60000", "Aug 06 2026", 120100 end
 _G.C_CVar = { GetCVar = function(name) return KARTTEST.cvars and KARTTEST.cvars[name] or nil end }
 KARTTEST.cvars = { ActionButtonUseKeyDown = "1" }
 
+KARTTEST.aurasSecret = false
+_G.C_Secrets = _G.C_Secrets or {}
+function _G.C_Secrets.ShouldAurasBeSecret()
+    return not not KARTTEST.aurasSecret
+end
+
 _G.ITEM_CLASSES_ALLOWED = "Classes: %s"
 
 -- What Blizzard says about a Bind-on-Pickup item's remaining trade window, which it says in the
