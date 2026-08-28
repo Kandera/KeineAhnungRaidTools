@@ -84,6 +84,178 @@ function NT.EnsureShape(settings)
     settings.ntOperatorName = settings.ntOperatorName or ""
     settings.ntOrderByInstance = settings.ntOrderByInstance or {}
     if settings.ntLastVisit == nil then settings.ntLastVisit = 0 end
+    if settings.ntGeneration == nil then settings.ntGeneration = 0 end
+    settings.ntEditor = settings.ntEditor or ""
+end
+
+function NT.LocalGeneration()
+    if KART_Settings then
+        local g = tonumber(KART_Settings.ntGeneration)
+        if g then return g end
+    end
+    return tonumber(NT.generation) or 0
+end
+
+local function escapeUI(s)
+    return tostring(s or ""):gsub("|", "||")
+end
+
+function NT.PlayerPrint(msg)
+    print(escapeUI(msg))
+end
+
+local function bumpAndPublish()
+    if not KART_Settings then return end
+    if NT.LocalMayPublishState() then
+        local nextGen = NT.BumpGeneration(NT.generation or 0, KART_Settings.ntGeneration)
+        NT.generation = nextGen
+        KART_Settings.ntGeneration = nextGen
+        local name = UnitName("player")
+        if name then KART_Settings.ntEditor = name end
+        NT.PublishState()
+    end
+    if NT.RefreshBossList then NT.RefreshBossList() end
+    if NT.statusLabel and NT.RefreshStatus then NT.RefreshStatus() end
+end
+
+function NT.SetOrder(mapKey, order)
+    if not KART_Settings or not mapKey then return end
+    NT.EnsureShape(KART_Settings)
+    local bag = KART_Settings.ntOrderByInstance[mapKey]
+    if not bag then
+        bag = { order = {}, skipped = {} }
+        KART_Settings.ntOrderByInstance[mapKey] = bag
+    end
+    local copy = {}
+    for i, id in ipairs(order or {}) do copy[i] = id end
+    bag.order = copy
+    bag.skipped = bag.skipped or {}
+    bumpAndPublish()
+end
+
+function NT.SetSkipped(mapKey, encID, skipped)
+    if not KART_Settings or not mapKey or not encID then return end
+    NT.EnsureShape(KART_Settings)
+    local bag = KART_Settings.ntOrderByInstance[mapKey]
+    if not bag then
+        bag = { order = {}, skipped = {} }
+        KART_Settings.ntOrderByInstance[mapKey] = bag
+    end
+    bag.skipped = bag.skipped or {}
+    if skipped then
+        bag.skipped[encID] = true
+    else
+        bag.skipped[encID] = nil
+    end
+    bumpAndPublish()
+end
+
+function NT.CurrentMapKey()
+    local _, _, diff = GetInstanceInfo()
+    local mapId = select(8, GetInstanceInfo())
+    return NT.InstanceKey(mapId, diff)
+end
+
+function NT.Move(i, j)
+    if not KART_Settings then return end
+    local key = NT._listMapKey or NT.CurrentMapKey()
+    if not key then return end
+    NT.EnsureShape(KART_Settings)
+    local bag = KART_Settings.ntOrderByInstance[key]
+    if not bag or not bag.order then return end
+    local ia, ib = i, j
+    local idA = NT._visibleIds and NT._visibleIds[i]
+    local idB = NT._visibleIds and NT._visibleIds[j]
+    if idA and idB then
+        ia, ib = nil, nil
+        for idx, id in ipairs(bag.order) do
+            if id == idA then ia = idx end
+            if id == idB then ib = idx end
+        end
+    end
+    local a, b = bag.order[ia], bag.order[ib]
+    if not a or not b or ia == ib then return end
+    bag.order[ia], bag.order[ib] = b, a
+    NT.SetOrder(key, bag.order)
+end
+
+-- Tests inject NT._encountersForMap; live clients walk the Encounter Journal.
+-- Do not numeric-sort encounter IDs: EJ / injected order is kill order.
+function NT.EncountersFromEJ()
+    local out = {}
+    if type(EJ_GetNumTiers) ~= "function" or type(EJ_GetEncounterInfoByIndex) ~= "function" then
+        return out
+    end
+    local mapId = select(8, GetInstanceInfo())
+    local journalId
+    if type(EJ_GetInstanceForMap) == "function" and mapId then
+        journalId = EJ_GetInstanceForMap(mapId)
+    end
+    if (not journalId or journalId == 0) and type(EJ_GetInstanceByIndex) == "function" then
+        local numTiers = EJ_GetNumTiers() or 0
+        local tier = numTiers > 1 and (numTiers - 1) or numTiers
+        if tier >= 1 and type(EJ_SelectTier) == "function" then EJ_SelectTier(tier) end
+        local idx = 1
+        while true do
+            local instId = EJ_GetInstanceByIndex(idx, true)
+            if not instId then break end
+            local infoMap
+            if type(EJ_GetInstanceInfo) == "function" then
+                infoMap = select(10, EJ_GetInstanceInfo(instId))
+            end
+            if mapId and infoMap == mapId then
+                journalId = instId
+                break
+            end
+            idx = idx + 1
+        end
+    end
+    if not journalId or journalId == 0 then return out end
+    if type(EJ_SelectInstance) == "function" then EJ_SelectInstance(journalId) end
+    local i = 1
+    while true do
+        local name, _, _, _, _, _, dungeonEncounterID = EJ_GetEncounterInfoByIndex(i, journalId)
+        if not name then break end
+        out[#out + 1] = { id = dungeonEncounterID, name = name }
+        i = i + 1
+    end
+    return out
+end
+
+function NT.EncountersForMap()
+    if type(NT._encountersForMap) == "function" then
+        return NT._encountersForMap() or {}
+    end
+    return NT.EncountersFromEJ()
+end
+
+function NT.DefaultEncounterOrder()
+    local list = NT.EncountersForMap()
+    local order = {}
+    for i, enc in ipairs(list) do
+        order[i] = enc.id
+    end
+    return order
+end
+
+function NT.NoteNameForEncounter(encID, difficultyName)
+    if not encID or not difficultyName then return nil end
+    local found
+    for _, n in ipairs(NT.ListSharedNotes(difficultyName)) do
+        if n.encID == encID then found = n.name end
+    end
+    return found
+end
+
+function NT.ResetOrder()
+    if not KART_Settings then return end
+    local key = NT._listMapKey or NT.CurrentMapKey()
+    NT.EnsureShape(KART_Settings)
+    KART_Settings.ntOrderByInstance[key] = {
+        order = NT.DefaultEncounterOrder(),
+        skipped = {},
+    }
+    bumpAndPublish()
 end
 
 function NT.MatchOperator(operatorName, unitName, realm, nickname)
@@ -411,6 +583,138 @@ local function scheduleLeadFlush(cursor)
     attempt()
 end
 
+function NT.EnqueueFlush(cursor)
+    scheduleLeadFlush(cursor)
+end
+
+local function operatorUnit()
+    if not KART_Settings then return nil end
+    local op = KART_Settings.ntOperatorName
+    if not op or op == "" then return nil end
+    local KAUtil = LibStub("KAUtil-1.0")
+    for unit in KAUtil.EachGroupUnit() do
+        local name, realm = UnitName(unit)
+        local nick = KASC.Identity.GetNickname(unit)
+        if NT.MatchOperator(op, name, realm, nick) then return unit, name end
+    end
+    return nil
+end
+
+function NT.WeAreOperator()
+    if not KART_Settings then return false end
+    local name, realm = UnitName("player")
+    if not name then return false end
+    local nick = KASC.Identity.GetNickname("player")
+    return NT.MatchOperator(KART_Settings.ntOperatorName, name, realm ~= "" and realm or playerRealm(), nick)
+end
+
+function NT.SenderOpts(noteName)
+    local settings = KART_Settings
+    local unit = operatorUnit()
+    local checksum = noteName and NT.CursorChecksum(noteName) or nil
+    local published = settings and settings.ntChecksum or ""
+    local checksumMatch = (not published or published == "") or (checksum ~= nil and checksum == published)
+    local kartUp = false
+    if unit then
+        local short = UnitName(unit)
+        kartUp = (KART.PlayerVersions and short and KART.PlayerVersions[short] ~= nil)
+            or NT.WeAreOperator()
+    end
+    return {
+        moduleEnabled = settings and settings.ntModuleEnabled == true,
+        isLead = UnitIsGroupLeader("player") and true or false,
+        operatorPresent = unit ~= nil,
+        operatorAssist = unit ~= nil and (UnitIsGroupAssistant(unit) or UnitIsGroupLeader(unit)) and true or false,
+        operatorKart = kartUp,
+        checksumMatch = checksumMatch,
+        hasNote = noteName ~= nil,
+    }
+end
+
+function NT.SetStatus(msg)
+    if NT.statusLabel and NT.statusLabel.SetText then
+        NT.statusLabel:SetText(escapeUI(msg))
+    end
+end
+
+function NT.RefreshStatus()
+    local L = KART.L or {}
+    if not NT.HasNSRT() then
+        NT.SetStatus(L.NT_STATUS_NO_NSRT or "")
+        return
+    end
+    local op = KART_Settings and KART_Settings.ntOperatorName or ""
+    if op ~= "" then
+        if operatorUnit() then
+            NT.SetStatus(string.format(L.NT_STATUS_OPERATOR_HERE or "%s", op))
+        else
+            NT.SetStatus(string.format(L.NT_STATUS_OPERATOR_GONE or "%s", op))
+        end
+        return
+    end
+    local who = UnitName("player") or ""
+    NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", who))
+end
+
+function NT.ShareNow()
+    local L = KART.L or {}
+    if NT.AurasSecret() then
+        NT.SetStatus(L.NT_STATUS_QUEUED or "")
+        local cursor = KART_Settings and tonumber(KART_Settings.ntCursor)
+        if cursor and cursor ~= 0 then NT.EnqueueFlush(cursor) end
+        return
+    end
+    if not NT.HasNSRT() then
+        local msg = L.NT_STATUS_NO_NSRT or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+        return
+    end
+    local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
+    if cursor == 0 then
+        NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
+        return
+    end
+    local _, _, diff = GetInstanceInfo()
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    local noteName = NT.NoteNameForEncounter(cursor, diffName)
+    if not noteName then
+        local msg = L.NT_STATUS_NO_NOTE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+        return
+    end
+    local opts = NT.SenderOpts(noteName)
+    local who = NT.ChooseSender(opts)
+    local weOp = NT.WeAreOperator()
+    local weLead = UnitIsGroupLeader("player") and true or false
+    if who == "operator" and not opts.operatorAssist then
+        local msg = L.NT_STATUS_PROMOTE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+    end
+    if who == "lead" and opts.operatorPresent and not opts.checksumMatch then
+        local msg = L.NT_STATUS_STALE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+    end
+    local weSend = (who == "operator" and weOp) or (who == "lead" and weLead)
+    if not weSend then return end
+    if NT.Share(noteName) then
+        local label = (who == "operator" and (KART_Settings.ntOperatorName or "")) or (UnitName("player") or "")
+        NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", label))
+        local sum = NT.CursorChecksum(noteName)
+        if KART_Settings and sum then
+            KART_Settings.ntChecksum = sum
+            bumpAndPublish()
+        end
+    else
+        local msg = L.NT_STATUS_NO_NSRT or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+    end
+end
+
 function NT.OnEvent(e, ...)
     if e == "ENCOUNTER_END" then
         local encID, _, _, _, kill = ...
@@ -464,6 +768,146 @@ if not NT._eventFrame then
     NT._eventFrame = f
 end
 
+local ROW_H = 28
+local ROW_GAP = 3
+
+local function visibleBossRows()
+    local key = NT.CurrentMapKey()
+    if KART_Settings then NT.EnsureShape(KART_Settings) end
+    local bag = KART_Settings and KART_Settings.ntOrderByInstance[key]
+    local order = (bag and bag.order and #bag.order > 0) and bag.order or NT.DefaultEncounterOrder()
+    local skipped = (bag and bag.skipped) or {}
+    local names = {}
+    for _, enc in ipairs(NT.EncountersForMap()) do
+        names[enc.id] = enc.name
+    end
+    local _, _, diff = GetInstanceInfo()
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    local noteByEnc = {}
+    if diffName then
+        for _, n in ipairs(NT.ListSharedNotes(diffName)) do
+            noteByEnc[n.encID] = n.name
+            if not names[n.encID] then names[n.encID] = n.name end
+        end
+    end
+    local hasNSRT = NT.HasNSRT()
+    local rows = {}
+    for _, id in ipairs(order) do
+        if not hasNSRT or noteByEnc[id] then
+            rows[#rows + 1] = {
+                id = id,
+                name = names[id] or tostring(id),
+                skipped = skipped[id] and true or false,
+            }
+        end
+    end
+    return rows, key
+end
+
+function NT.RefreshBossList()
+    local panel = NT.bossListFrame
+    if not panel or NT._refreshingList then return end
+    NT._refreshingList = true
+    local L = KART.L or {}
+    if panel.rows then
+        for _, row in ipairs(panel.rows) do row:Hide() end
+    end
+    panel.rows = panel.rows or {}
+
+    local bosses, key = visibleBossRows()
+    NT._listMapKey = key
+    NT._visibleIds = {}
+    for n, boss in ipairs(bosses) do NT._visibleIds[n] = boss.id end
+    local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
+
+    if #bosses == 0 then
+        if panel.emptyLabel then panel.emptyLabel:Show() end
+        panel:SetHeight(24)
+        if NT.bossListCard then NT.bossListCard:SetHeight(48) end
+        if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+        NT._refreshingList = false
+        return
+    end
+    if panel.emptyLabel then panel.emptyLabel:Hide() end
+
+    local totalH = 0
+    for i, boss in ipairs(bosses) do
+        local row = panel.rows[i]
+        if not row then
+            row = CreateFrame("Frame", nil, panel)
+            row:SetHeight(ROW_H)
+            row:EnableMouse(true)
+
+            row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.nameText:SetPoint("LEFT", 4, 0)
+            row.nameText:SetJustifyH("LEFT")
+            KART.UI:RegisterLabel(row.nameText)
+
+            row.btnDown = KART.UI:CreateModernButton(row, L.NT_BTN_DOWN)
+            row.btnDown:SetSize(36, 22)
+            row.btnDown:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
+            row.btnUp = KART.UI:CreateModernButton(row, L.NT_BTN_UP)
+            row.btnUp:SetSize(36, 22)
+            row.btnUp:SetPoint("RIGHT", row.btnDown, "LEFT", -4, 0)
+
+            row.skipStore = {}
+            row.skip = KART.UI:CreateSettingsCheckbox(row, {
+                name = nil, label = L.NT_SKIP, y = 0,
+                store = row.skipStore, key = "skipped",
+                onChanged = function()
+                    if NT._refreshingList then return end
+                    if row.encID and NT._listMapKey then
+                        NT.SetSkipped(NT._listMapKey, row.encID, row.skip:GetChecked())
+                    end
+                end,
+            })
+            row.skip:ClearAllPoints()
+            row.skip:SetPoint("RIGHT", row.btnUp, "LEFT", -8, 0)
+            row.skip.text:SetWidth(70)
+            row.nameText:SetPoint("RIGHT", row.skip, "LEFT", -10, 0)
+
+            panel.rows[i] = row
+        end
+
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i - 1) * (ROW_H + ROW_GAP)))
+        row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+
+        local label = boss.name
+        if boss.id == cursor then label = "> " .. label end
+        row.encID = boss.id
+        row.index = i
+        row.nameText:SetText(escapeUI(label))
+        row.skip:SetChecked(boss.skipped)
+        row.btnUp:SetScript("OnClick", function()
+            if i > 1 then NT.Move(i, i - 1) end
+        end)
+        row.btnDown:SetScript("OnClick", function()
+            if i < #bosses then NT.Move(i, i + 1) end
+        end)
+        row:SetScript("OnMouseDown", function(_, button)
+            if button ~= "LeftButton" then return end
+            if NT._dragFrom and NT._dragFrom ~= i then
+                NT.Move(NT._dragFrom, i)
+                NT._dragFrom = nil
+            else
+                NT._dragFrom = i
+            end
+        end)
+
+        row:Show()
+        totalH = i * (ROW_H + ROW_GAP)
+    end
+
+    panel:SetHeight(math.max(totalH, 24))
+    if NT.bossListCard then
+        NT.bossListCard:SetHeight(math.max(totalH, 24) + 52)
+    end
+    if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    NT._refreshingList = false
+end
+
 function NT.BuildPanel(parent)
     if NT._panelBuilt then return end
     NT._panelBuilt = true
@@ -484,19 +928,110 @@ function NT.BuildPanel(parent)
     KART.CbNtModuleEnabled.text:SetWidth(430)
     KART.CbNtModuleEnabled.text:SetJustifyH("LEFT")
 
+    local opCard = KART.UI:CreateCard(parent)
+    opCard:SetPoint("TOPLEFT", enableCard, "BOTTOMLEFT", 0, -12)
+    opCard:SetSize(500, 90)
+
+    local opLabel = opCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    opLabel:SetPoint("TOPLEFT", opCard, "TOPLEFT", 20, -15)
+    opLabel:SetText(L.NT_LABEL_OPERATOR)
+    KART.UI:RegisterLabel(opLabel)
+
+    NT.OperatorEditBox = KART.UI:CreateStyledEditBox(opCard, "KART_NtOperatorEditBox")
+    NT.OperatorEditBox:SetSize(460, 28)
+    NT.OperatorEditBox:SetPoint("TOPLEFT", opLabel, "BOTTOMLEFT", 0, -8)
+    NT.OperatorEditBox:SetScript("OnTextChanged", function(self)
+        if not KART_Settings then return end
+        KART_Settings.ntOperatorName = self:GetText() or ""
+    end)
+    NT.OperatorEditBox:SetScript("OnEditFocusLost", function(self)
+        if not KART_Settings then return end
+        local text = self:GetText() or ""
+        KART_Settings.ntOperatorName = text
+        if text ~= NT._publishedOperatorName then
+            NT._publishedOperatorName = text
+            bumpAndPublish()
+        end
+        NT.RefreshStatus()
+    end)
+    NT.OperatorEditBox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L.NT_LABEL_OPERATOR, 1, 1, 1)
+        GameTooltip:AddLine(L.DESC_NT_OPERATOR, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    NT.OperatorEditBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local bossCard = KART.UI:CreateCard(parent)
+    bossCard:SetPoint("TOPLEFT", opCard, "BOTTOMLEFT", 0, -12)
+    bossCard:SetSize(500, 80)
+    NT.bossListCard = bossCard
+
+    NT.BtnResetOrder = KART.UI:CreateModernButton(bossCard, L.NT_BTN_RESET_ORDER)
+    NT.BtnResetOrder:SetSize(160, 24)
+    NT.BtnResetOrder:SetPoint("TOPRIGHT", bossCard, "TOPRIGHT", -12, -10)
+    NT.BtnResetOrder:SetScript("OnClick", function() NT.ResetOrder() end)
+
+    NT.bossListFrame = CreateFrame("Frame", nil, bossCard)
+    NT.bossListFrame:SetPoint("TOPLEFT", bossCard, "TOPLEFT", 16, -38)
+    NT.bossListFrame:SetPoint("BOTTOMRIGHT", bossCard, "BOTTOMRIGHT", -16, 12)
+    NT.bossListFrame.rows = {}
+
+    NT.bossListFrame.emptyLabel = NT.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    NT.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 4, -2)
+    NT.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
+    KART.UI:RegisterLabel(NT.bossListFrame.emptyLabel)
+
+    local shareCard = KART.UI:CreateCard(parent)
+    shareCard:SetPoint("TOPLEFT", bossCard, "BOTTOMLEFT", 0, -12)
+    shareCard:SetSize(500, 80)
+
+    NT.BtnShareNow = KART.UI:CreateModernButton(shareCard, L.NT_BTN_SHARE)
+    NT.BtnShareNow:SetSize(180, 26)
+    NT.BtnShareNow:SetPoint("TOPLEFT", 20, -16)
+    NT.BtnShareNow:SetScript("OnClick", function() NT.ShareNow() end)
+
+    NT.statusLabel = shareCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    NT.statusLabel:SetPoint("TOPLEFT", 20, -50)
+    NT.statusLabel:SetPoint("RIGHT", shareCard, "RIGHT", -20, 0)
+    NT.statusLabel:SetJustifyH("LEFT")
+    NT.statusLabel:SetTextColor(0.5, 0.5, 0.5)
+    KART.UI:RegisterLabel(NT.statusLabel)
+
+    NT.RefreshBossList()
+    NT.RefreshStatus()
+
     KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
         if KART.CbNtModuleEnabled then
             KART.CbNtModuleEnabled.text:SetText(Lx.SET_NT_MODULE_ENABLED)
             KART.CbNtModuleEnabled.tooltipText = Lx.DESC_NT_MODULE_ENABLED
         end
+        if opLabel then opLabel:SetText(Lx.NT_LABEL_OPERATOR) end
+        if NT.BtnResetOrder and NT.BtnResetOrder.text then
+            NT.BtnResetOrder.text:SetText(Lx.NT_BTN_RESET_ORDER)
+        end
+        if NT.BtnShareNow and NT.BtnShareNow.text then
+            NT.BtnShareNow.text:SetText(Lx.NT_BTN_SHARE)
+        end
+        if NT.bossListFrame and NT.bossListFrame.rows then
+            for _, row in ipairs(NT.bossListFrame.rows) do
+                if row.btnUp and row.btnUp.text then row.btnUp.text:SetText(Lx.NT_BTN_UP) end
+                if row.btnDown and row.btnDown.text then row.btnDown.text:SetText(Lx.NT_BTN_DOWN) end
+                if row.skip and row.skip.text then row.skip.text:SetText(Lx.NT_SKIP) end
+            end
+        end
+        NT.RefreshStatus()
     end)
 end
 
 function NT.SyncWidgets()
     local settingsMap = {}
     if KART.CbNtModuleEnabled then settingsMap[KART.CbNtModuleEnabled] = "ntModuleEnabled" end
+    if NT.OperatorEditBox then settingsMap[NT.OperatorEditBox] = "ntOperatorName" end
     KART.ApplySettingsMap(settingsMap)
+    NT.RefreshBossList()
+    NT.RefreshStatus()
 end
 
 if KART.NotesPanel then

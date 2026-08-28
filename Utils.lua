@@ -220,6 +220,7 @@ KART.InGameChangelog = {
     {
         version = "Unreleased",
         entries = {
+            "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
@@ -508,6 +509,11 @@ KART.Defaults = {
     ntOrderByInstance = {},
     ntCursor = 0,
     ntLastVisit = 0,
+    ntGeneration = 0,
+    ntEditor = "",
+    ntChecksum = "",
+    ntMapId = 0,
+    ntDiff = 0,
     ct = {
         schemaVersion = 4,
         -- position

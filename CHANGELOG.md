@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **NSRT Notes** loads and shares the next Northern Sky shared note after a kill.
 - **The Taunt Swap line can be switched off.**
 - **The Taunt Swap line can be dragged in Edit Mode.**
 - **A Taunt Swap line** appears on the other tank for a few seconds, with its own look settings.

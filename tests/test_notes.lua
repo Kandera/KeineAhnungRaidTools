@@ -255,3 +255,55 @@ do
     T.eq(#env._ntSent, 1, "hearth and re-enter same map enqueues again")
     T.eq(env._ntSent[1], "NT_FLUSH:3470", "re-enter shares current cursor")
 end
+
+-- SetOrder / SetSkipped bump generation and persist order (data, not drag).
+do
+    NT.EnsureShape(env.KART_Settings)
+    local key = NT.InstanceKey(1, 16)
+    env.KART_Settings.ntOrderByInstance[key] = { order = { 1, 2 }, skipped = {} }
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntGeneration = 0
+    NT.generation = 0
+    env._isLead = true
+    local g1 = NT.BumpGeneration(0, 0)
+    NT.SetOrder(key, { 2, 1 })
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[1], 2, "SetOrder stores the new order")
+    T.eq(NT.LocalGeneration(), g1, "SetOrder bumps generation")
+    local g2 = NT.LocalGeneration()
+    NT.SetSkipped(key, 2, true)
+    T.eq(env.KART_Settings.ntOrderByInstance[key].skipped[2], true, "SetSkipped records the skip")
+    T.eq(NT.LocalGeneration() > g2, true, "SetSkipped bumps generation")
+end
+
+-- Injected EJ order is used as-is; encounter IDs are not numeric-sorted.
+do
+    NT._encountersForMap = function()
+        return { { id = 3470, name = "Nekzali" }, { id = 100, name = "Low" }, { id = 9999, name = "High" } }
+    end
+    local order = NT.DefaultEncounterOrder()
+    T.eq(order[1], 3470, "injected first encounter is first")
+    T.eq(order[2], 100, "injected order is used, not numeric-sorted")
+    T.eq(order[3], 9999, "injected last encounter stays last")
+    NT._encountersForMap = nil
+end
+
+-- Share now queues while auras are secret; does not send into combat.
+do
+    env._isLead = true
+    env._ntSent = {}
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntOperatorName = ""
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    KARTTEST.aurasSecret = true
+    NT.ShareNow()
+    T.eq(NT.statusLabel.text, "Waiting until combat ends.", "Share now queues while auras are secret")
+    T.eq(#env._ntSent, 0, "Share now does not flush while secret")
+    KARTTEST.aurasSecret = false
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(#env._ntSent, 1, "queued Share now flushes once auras clear")
+    T.eq(env._ntSent[1], "NT_FLUSH:3470", "queued flush is the cursor")
+end

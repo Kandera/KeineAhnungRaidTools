@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **NSRT Notes** lädt nach einem Kill die nächste Northern-Sky-Shared-Note und sendet sie.
 - **Die Taunt-Swap-Zeile lässt sich ausschalten.**
 - **Die Taunt-Swap-Zeile lässt sich im Bearbeiten-Modus verschieben.**
 - **Eine Taunt-Swap-Zeile** erscheint beim anderen Tank für ein paar Sekunden, mit eigenen Look-Einstellungen.
