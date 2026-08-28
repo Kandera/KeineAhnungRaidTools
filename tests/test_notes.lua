@@ -377,6 +377,44 @@ do
     KART.PlayerVersions = nil
     KARTTEST.RestoreRoster(opRoster)
 
+    -- After boss 1, published checksum must be the next cursor note, not the last sent one.
+    resetNT()
+    local sumRoster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Bramor", realm = "TarrenMill", guid = "Player-1-BR" },
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+    })
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.KART_Settings.ntOperatorName = "Alric"
+    env.KART_Settings.ntChecksum = NT.CursorChecksum(NT.NoteNameForEncounter(3470, "Mythic"))
+    env._shared = nil
+    env._ntSent = {}
+    NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    T.eq(env._shared, nil, "kill with chosen operator: lead does not Share")
+    local nextName = NT.NoteNameForEncounter(3497, "Mythic")
+    T.eq(env.KART_Settings.ntChecksum, NT.CursorChecksum(nextName),
+        "kill checksum is the next cursor note, not the last sent one")
+    KART.PlayerVersions = nil
+    KARTTEST.RestoreRoster(sumRoster)
+
+    -- Module off on leave still clears the visit token (frame gate).
+    resetNT()
+    KARTTEST.instance.mapID = 9007
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(env.KART_Settings.ntLastVisit, 9007, "visit stored before module-off leave")
+    env.KART_Settings.ntModuleEnabled = false
+    env._ntSent = {}
+    env._shared = nil
+    KARTTEST.instance.instanceType = "none"
+    KARTTEST.instance.difficultyID = 0
+    NT._eventFrame:GetScript("OnEvent")(NT._eventFrame, "PLAYER_ENTERING_WORLD")
+    T.eq(NT.lastVisit == nil or NT.lastVisit == 0, true, "module-off leave clears session visit")
+    T.eq(env.KART_Settings.ntLastVisit == nil or env.KART_Settings.ntLastVisit == 0, true,
+        "module-off leave clears SV visit")
+    T.eq(env._shared, nil, "module-off leave does not Share")
+
     -- No sendable cursor: do not consume the visit token.
     resetNT()
     NT._encountersForMap = function() return {} end
@@ -455,6 +493,52 @@ do
     NT.pendingFlush = nil
     KARTTEST.RestoreRoster(roster)
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env._isLead = true
+end
+
+-- Leftover pendingFlush on a client that already has a stand must not rewind the cursor.
+do
+    env._isLead = true
+    env._shared = nil
+    NT.pendingFlush = 3470
+    NT.generation = 2
+    KARTTEST.aurasSecret = false
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+        Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3497,
+        ntGeneration = 2,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497 }, skipped = {} },
+        },
+    }
+    T.eq(NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 3,
+        editor = "Alric",
+        operator = "Alric",
+        mapId = 1,
+        diff = 16,
+        cursor = 3497,
+        checksum = "new",
+        order = { 3470, 3497 },
+        skipped = {},
+    }), true, "later STATE from operator is accepted")
+    T.eq(env.KART_Settings.ntCursor, 3497, "leftover pendingFlush does not rewind cursor")
+    T.eq(NT.pendingFlush, nil, "pendingFlush clears when the stand was already valid")
+    T.eq(env._shared, nil, "leftover pendingFlush does not re-Share the old note")
     env._isLead = true
 end
 

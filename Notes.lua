@@ -61,6 +61,19 @@ function NT.ShouldEnqueueZone(prevVisit, newVisit, instanceType, difficultyID, i
     return prevVisit ~= newVisit
 end
 
+-- Leave (open world / wrong difficulty) drops the visit so a later re-enter is new.
+-- Must run even when the module is off, otherwise hearth-while-disabled sticks the token.
+function NT.ClearVisitIfLeftRaid()
+    if not KART_Settings then return false end
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    if instanceType ~= "raid" or not NT.VALID_DIFFICULTY[difficultyID] then
+        NT.lastVisit = nil
+        KART_Settings.ntLastVisit = 0
+        return true
+    end
+    return false
+end
+
 function NT.AcceptGeneration(localGen, incomingGen)
     localGen = tonumber(localGen) or 0
     incomingGen = tonumber(incomingGen) or 0
@@ -106,6 +119,12 @@ end
 
 local function bumpAndPublish()
     if not KART_Settings then return end
+    -- Spec: checksum is the cursor note that would be sent, not the last sent body.
+    local cursor = tonumber(KART_Settings.ntCursor) or 0
+    local _, diff = NT.RaidMapDiff()
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    local noteName = (cursor ~= 0 and diffName) and NT.NoteNameForEncounter(cursor, diffName) or nil
+    KART_Settings.ntChecksum = (noteName and NT.CursorChecksum(noteName)) or ""
     if NT.LocalMayPublishState() then
         local nextGen = NT.BumpGeneration(NT.generation or 0, KART_Settings.ntGeneration)
         NT.generation = nextGen
@@ -463,6 +482,10 @@ function NT.ApplyRemoteState(settings, incoming)
     local localGen = settings.ntGeneration or NT.generation or 0
     if not NT.AcceptGeneration(localGen, incoming.gen) then return false end
 
+    local prevMap = tonumber(settings.ntMapId) or 0
+    local prevDiff = tonumber(settings.ntDiff) or 0
+    local lackedStand = prevMap == 0 or not NT.VALID_DIFFICULTY[prevDiff]
+
     NT.EnsureShape(settings)
     settings.ntGeneration = tonumber(incoming.gen) or 0
     settings.ntEditor = incoming.editor or ""
@@ -488,9 +511,13 @@ function NT.ApplyRemoteState(settings, incoming)
     NT.generation = settings.ntGeneration
     if NT.RefreshBossList then NT.RefreshBossList() end
     if NT.RefreshStatus then NT.RefreshStatus() end
-    -- NT_FLUSH is ALERT; NT_STATE is NORMAL. A pending share that arrived first now has a stand.
+    -- NT_FLUSH is ALERT; NT_STATE is NORMAL. Retry only when we had no stand to Share with.
     if NT.pendingFlush then
-        NT.ApplyFlushAndShare(NT.pendingFlush)
+        if lackedStand then
+            NT.ApplyFlushAndShare(NT.pendingFlush)
+        else
+            NT.pendingFlush = nil
+        end
     end
     return true
 end
@@ -710,6 +737,14 @@ function NT.ApplyFlushAndShare(encID)
     local sendable = NT.ResolveSendableCursor(id)
     KART_Settings.ntCursor = sendable or id
     if sendable then NT.ShareIfChosen() end
+    -- Keep the flag only when Share failed for lack of a notes-valid stand (FLUSH before STATE).
+    -- Otherwise a leftover id rewinds the cursor on the next ApplyRemoteState.
+    if NT.pendingFlush then
+        local mapId, diff = NT.RaidMapDiff()
+        if mapId and mapId ~= 0 and NT.VALID_DIFFICULTY[diff] then
+            NT.pendingFlush = nil
+        end
+    end
 end
 
 -- Wait until auras are not secret (poll 1s, max ~60s), then lead-only RequestFlush.
@@ -842,9 +877,7 @@ function NT.OnEvent(e, ...)
         NT.EnsureShape(KART_Settings)
         -- Left the raid (or not a notes-valid difficulty): drop the visit so a later
         -- hearth/re-enter of the same map id is treated as a new visit.
-        if instanceType ~= "raid" or not NT.VALID_DIFFICULTY[difficultyID] then
-            NT.lastVisit = nil
-            KART_Settings.ntLastVisit = 0
+        if NT.ClearVisitIfLeftRaid() then
             return
         end
         -- 0/nil = no previous visit (Defaults use 0 so test_locales is happy).
@@ -870,7 +903,11 @@ if not NT._eventFrame then
     f:RegisterEvent("ENCOUNTER_END")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:SetScript("OnEvent", function(_, e, ...)
-        if not KART_Settings or KART_Settings.ntModuleEnabled ~= true then return end
+        if not KART_Settings then return end
+        if KART_Settings.ntModuleEnabled ~= true then
+            if e == "PLAYER_ENTERING_WORLD" then NT.ClearVisitIfLeftRaid() end
+            return
+        end
         NT.OnEvent(e, ...)
     end)
     NT._eventFrame = f
