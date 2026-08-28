@@ -49,6 +49,30 @@ do
 end
 
 do
+    T.eq(NT.DisplayBossName("Nek'zali the Soulcaller", "Heroic"),
+        "Nek'zali the Soulcaller - Heroic", "EJ names get the list difficulty")
+    T.eq(NT.DisplayBossName("Nymrissa - Heroic", "Heroic"),
+        "Nymrissa - Heroic", "an imported name that already has the difficulty is not doubled")
+    T.eq(NT.DisplayBossName("Nymrissa - Mythic", "Heroic"),
+        "Nymrissa - Heroic", "a leftover suffix is replaced with the list difficulty")
+    T.eq(NT.DisplayBossName("Sszorak", nil), "Sszorak", "no difficulty leaves the name alone")
+end
+
+do
+    KART.WU = {
+        bosses = { { encounterID = 3470, difficulty = "Mythic", players = { "A", "B" } } },
+        IndexForEncounter = function(enc, diff)
+            if enc == 3470 and diff == "Mythic" then return 1 end
+            return nil
+        end,
+    }
+    T.eq(NT.WuPlayersFor(3470, "Mythic"), 2, "row count uses the WU list")
+    T.eq(select(2, NT.WuPlayersFor(3470, "Mythic")), 1, "and returns the WU index")
+    T.eq(NT.WuPlayersFor(3470, "Heroic"), 0, "a missing difficulty is count 0")
+    KART.WU = nil
+end
+
+do
     local order = { 3470, 3445, 3497 }
     local skipped = { [3445] = true }
     T.eq(NT.NextAfter(order, skipped, 3470), 3497, "skip the skipped boss after a kill")
@@ -686,6 +710,62 @@ do
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
 end
 
+-- Solo in town: UnitIsGroupLeader is false (no group). Share now still loads the cursor note.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    KARTTEST.SetRaid({})
+    env._isLead = false
+    env._shared = nil
+    env._loaded = nil
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    env.NorthernSkyRaidTools = {
+        SetReminder = function(_, name)
+            env._loaded = name
+        end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        ["Nekzali - Heroic"] = "EncounterID:3470;Name:Nekzali - Heroic;Difficulty:Heroic\ncd1",
+        ["Sentinels - Heroic"] = "EncounterID:3497;Name:Sentinels - Heroic;Difficulty:Heroic\ncd2",
+    }}
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 15
+    env.KART_Settings.ntCursor = 3497
+    env.KART_Settings.ntOperatorName = ""
+    env.KART_Settings.ntChecksum = ""
+    NT.EnsureShape(env.KART_Settings)
+    env.KART_Settings.ntOrderByInstance["1234:15"] = { order = { 3470, 3497 }, skipped = {} }
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(env._loaded, "Sentinels - Heroic", "solo town Share now loads the marked boss in NSRT")
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntMapId = 1234
+    NT.EnsureShape(env.KART_Settings)
+    env.KART_Settings.ntOrderByInstance["1234:16"] = { order = { 3470 }, skipped = {} }
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end
+
 -- pendingFlush is share-now, not a Restricted queue: town still Shares, then the flag clears.
 do
     local inst = KARTTEST.instance
@@ -858,6 +938,43 @@ do
     T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3470], true,
         "SkipAndAdvance with no cursor skips the first sendable")
     T.eq(env.KART_Settings.ntCursor, 3497, "and moves to the next sendable")
+end
+
+-- Tonight starts at boss 4; bosses 1-3 stay on the list (not skipped).
+do
+    env._isLead = false
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntGeneration = 0,
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497, 3445 }, skipped = {} },
+        },
+    }
+    NT.generation = 0
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Lead", realm = KARTTEST.realm, guid = "Player-1-LEAD", role = "TANK", class = "WARRIOR", classFile = "WARRIOR" },
+        { name = "Alt", realm = KARTTEST.realm, guid = "Player-1-ALT", role = "DAMAGER", class = "MAGE", classFile = "MAGE" },
+    })
+    NT.SetCursor(3445)
+    T.eq(env.KART_Settings.ntCursor, 3470, "a raider in the group cannot set the start cursor")
+    env._isLead = true
+    NT.SetCursor(3445)
+    T.eq(env.KART_Settings.ntCursor, 3445, "lead click sets the start cursor")
+    T.is_nil(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3470],
+        "setting the start does not skip boss 1")
+    T.is_nil(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3497],
+        "setting the start does not skip boss 2")
+    env._isLead = false
+    env.KART_Settings.ntCursor = 3470
+    KARTTEST.SetRaid({})
+    NT.SetCursor(3445)
+    T.eq(env.KART_Settings.ntCursor, 3445, "in town with no group, click still sets the start")
+    KARTTEST.RestoreRoster(roster)
 end
 
 -- Several notes for one encounter: ActiveReminder wins; else first stable match.
@@ -1562,5 +1679,85 @@ do
     T.eq(env._imported.personal, false, "import is shared, not personal")
     T.eq(env._imported.isUpdate, false, "import is not an in-place update")
     T.eq(env._imported.self, env.NorthernSkyRaidTools, "Reloe receives self")
+
+    env._wuReplaced = nil
+    KART.WU = {
+        ReplaceImportedText = function(text)
+            env._wuReplaced = text
+            return 1, "ok"
+        end,
+    }
+    KART.RefreshStatusStrip = function() env._stripHits = (env._stripHits or 0) + 1 end
+    env._stripHits = 0
+    NT.ImportReminderText("EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ninvitelist:A-Realm;\n")
+    T.eq(type(env._wuReplaced) == "string" and env._wuReplaced:find("invitelist:", 1, true) ~= nil, true,
+        "notes import also replaces the invite library")
+    T.eq(env._stripHits >= 1, true, "notes import refreshes the tonight strip")
+    KART.WU = nil
+    KART.RefreshStatusStrip = nil
+
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 99
+    NT.EnsureShape(env.KART_Settings)
+    env.KART_Settings.ntOrderByInstance["1:16"] = { order = { 99, 88 }, skipped = { [99] = true } }
+    env.KART_Settings.ntOrderByInstance["99:16"] = { order = { 1, 2, 3 }, skipped = {} }
+    NT._encountersForMap = function()
+        return { { id = 3470, name = "Nekzali" } }
+    end
+    local again = NT.ImportReminderText("EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd")
+    T.eq(again, "ok", "a second import still succeeds")
+    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].order[1], 3470,
+        "import replaces the saved drag order")
+    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[99], nil,
+        "import clears skips from the old order")
+    T.eq(env.KART_Settings.ntOrderByInstance["99:16"], nil,
+        "import drops drag bags from other instances")
+    T.eq(env.KART_Settings.ntCursor, 0, "import clears the start cursor")
+    NT._encountersForMap = nil
     env.NorthernSkyRaidTools = savedNSI
+end
+
+-- Delete notes uses Reloe RemoveReminder on shared names, then resets order.
+do
+    env._removed = {}
+    env.NSRT = { Reminders = {
+        A = "EncounterID:3470;Name:A;Difficulty:Mythic\ncd",
+        B = "EncounterID:100;Name:B;Difficulty:Mythic\ncd",
+    }}
+    env.NorthernSkyRaidTools = {
+        RemoveReminder = function(_, name, personal)
+            env._removed[#env._removed + 1] = { name = name, personal = personal }
+            env.NSRT.Reminders[name] = nil
+        end,
+        GetAllReminderNames = function()
+            local list = {}
+            for name in pairs(env.NSRT.Reminders) do
+                list[#list + 1] = { name = name }
+            end
+            return list
+        end,
+    }
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    NT.EnsureShape(env.KART_Settings)
+    env.KART_Settings.ntOrderByInstance["99:16"] = { order = { 1 }, skipped = {} }
+    NT.ImportEditBox = {
+        text = "EncounterID:3470;Name:A;Difficulty:Mythic\ncd",
+        SetText = function(self, v) self.text = tostring(v or "") end,
+        GetText = function(self) return self.text end,
+    }
+    local status, n = NT.DeleteSharedNotes()
+    T.eq(status, "ok", "delete reports ok")
+    T.eq(n, 2, "delete removes both shared notes")
+    T.eq(env._removed[1].personal, false, "delete is shared, not personal")
+    T.eq(env.NSRT.Reminders.A, nil, "Reloe no longer has note A")
+    T.eq(env.KART_Settings.ntOrderByInstance["99:16"], nil,
+        "delete drops drag bags from other instances")
+    T.eq(env.KART_Settings.ntCursor, 0, "delete clears the start cursor")
+    T.eq(NT.ImportEditBox:GetText(), "", "delete clears the paste box")
+    NT.ImportEditBox:SetText("leftover paste")
+    T.eq(NT.DeleteSharedNotes(), "empty", "a second delete with an empty library is empty")
+    T.eq(NT.ImportEditBox:GetText(), "", "empty delete still clears leftover paste")
 end

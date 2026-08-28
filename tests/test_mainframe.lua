@@ -58,8 +58,10 @@ do
     As(function() KART.ShowTab(4) end)
     T.eq(KART.CurrentTab, 4, "and switching updates it")
     As(function() KART.ShowTab(5) end)
-    T.eq(KART.CurrentTab, 5, "the WoWUtils tab is its own ShowTab index")
-    T.truthy(KART.WoWUtilsPanel and KART.WoWUtilsPanel:IsShown(), "and shows the WoWUtils panel")
+    T.eq(KART.CurrentTab, 5, "ShowTab 5 is unused (former WoWUtils)")
+    T.is_nil(KART.BtnWoWUtils, "there is no WoWUtils sidebar tab")
+    T.is_nil(KART.WoWUtilsPanel, "and no WoWUtils panel")
+    T.eq(KART.NotesPanel:IsShown(), false, "ShowTab 5 does not show Notes")
     T.eq(KART.PromotePanel:IsShown(), false, "not stacked on Automation")
 
     As(function() KART.ShowTab(6) end)
@@ -75,7 +77,7 @@ do
     -- Exactly one content panel visible at a time. Two showing at once is the shape of every
     -- "settings are drawn over the loot council tab" report.
     local visible = 0
-    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.WoWUtilsPanel, KART.CoTankPanel, KART.NotesPanel }) do
+    for _, panel in pairs({ KART.PromotePanel, KART.RaidleadPanel, KART.BuffCheckPanel, KART.SettingsPanel, KART.CoTankPanel, KART.NotesPanel }) do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")
@@ -96,6 +98,38 @@ do
     T.eq(statusHits >= 1, true, "ShowTab(7) refreshes Notes status")
     KART.NT.RefreshBossList = origList
     KART.NT.RefreshStatus = origStatus
+end
+
+-- Notes rows: invite count plus Invite/Remove, driven by WU.bosses.
+do
+    As(function()
+        local NT = KART.NT
+        NT.EnsureShape(me.env.KART_Settings)
+        me.env.KART_Settings.wuModuleEnabled = true
+        me.env.NSRT = nil
+        NT._encountersForMap = function()
+            return { { id = 3470, name = "Nekzali" } }
+        end
+        local key = NT.CurrentMapKey()
+        me.env.KART_Settings.ntOrderByInstance[key] = { order = { 3470 }, skipped = {} }
+        local _, diff = NT.RaidMapDiff()
+        local diffName = NT.DIFFICULTY_NAMES[diff]
+        KART.WU.bosses = {{
+            encounterID = 3470,
+            difficulty = diffName,
+            name = "Nekzali",
+            players = { "A-Realm", "B-Realm" },
+        }}
+        NT.RefreshBossList()
+    end)
+    local row = KART.NT.bossListFrame and KART.NT.bossListFrame.rows and KART.NT.bossListFrame.rows[1]
+    T.truthy(row, "Notes list paints a row")
+    T.eq(row and row.wuIndex, 1, "the row maps to the WU list")
+    T.eq(row and row.nameText:GetText():find("%(2%)") ~= nil, true,
+        "the row shows the invite count")
+    T.truthy(row and row.btnInvite and row.btnRemove, "Invite and Remove sit on the row")
+    KART.NT._encountersForMap = nil
+    KART.WU.bosses = {}
 end
 
 -- Settings / Raidlead card packing: accent+profiles share a parent, look sliders sit on the
@@ -245,9 +279,11 @@ do
     T.eq(KART.BtnBuffCheck.chip:GetText(), "OFF", "buff check chip reflects bcModuleEnabled")
     T.eq(KART.BtnCoTank.chip:GetText(), "ON", "co-tank chip reflects ctModuleEnabled")
     T.eq(KART.BtnPromote.chip:GetText(), "ON", "automation chip reflects autoModuleEnabled")
-    T.eq(KART.BtnWoWUtils.chip:GetText(), "OFF", "wowutils chip reflects wuModuleEnabled")
     T.eq(KART.BtnNotes.chip:GetText(), "OFF", "notes chip reflects ntModuleEnabled")
     T.is_nil(KART.BtnSettings.chip, "settings tab has no chip")
+    T.truthy(KART.CbWuModule, "the Invite checkbox exists")
+    T.eq(KART.CbWuModule:GetParent():GetParent(), KART.NotesPanel,
+        "and sits on the Notes panel")
 end
 
 -- Invite channel chips are built at MainFrame file load, before Core.lua's ADDON_LOADED
@@ -383,6 +419,7 @@ do
     T.truthy(As(function() return KARTTEST.AcceptPopup("KART_RESET_CONFIRM") end),
         "and the confirmation is answerable")
 
+    T.eq(KART.Defaults.ntModuleEnabled, false, "Notes is off until you turn it on")
     T.eq(me.env.KART_Settings.pullTimerDuration, KART.Defaults.pullTimerDuration,
         "a changed setting is back at its default")
     T.eq(me.env.KART_Settings.inviteKeywords, KART.Defaults.inviteKeywords,

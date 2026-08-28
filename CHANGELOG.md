@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - **NSRT Notes** loads and shares the next Northern Sky shared note after a kill.
+- **Delete notes** next to Import clears shared Northern Sky notes and the paste box.
 - **Share now waits** while the raid is in combat, including when you are outside.
 - **The Notes status line shows who would send.**
 - **Boss notes can be dragged to reorder.**
@@ -36,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Check Addon Versions on Settings** sends a window to raiders whose RC, NSRT or WowUtils is behind.
 
 ### Changed
+- **The WoWUtils tab is gone.** Notes paste loads notes and invites.
+- **Share now in town loads the marked note**, even when you are not in a raid.
+- **Every Notes list row shows the difficulty.**
+- **Dragging a boss on the Notes list highlights where it will land.**
+- **Importing notes starts from the Encounter Journal order.**
+- **Co-Tank frame opacity tints the whole row**, including auras and the border.
 - **RC, NSRT and WowUtils show OK or OLD.**
 - **Taunt group, dungeon and raid filters sit on one chip row**, like the channels.
 - **Healthstone reads the stone in your bags.**
@@ -88,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Co-Tank debuffs can hide long auras and Bloodlust downs**, and icon size goes up to 100px.
 
 ### Fixed
+- **Click a boss on the Notes list to start there.** Earlier bosses stay on the list.
 - **The Notes list shows every imported note**, including a one-boss raid.
 - **Opening the Notes tab no longer errors** when you are not in a raid.
 - **The Notes tab lists imported bosses** when you are not in the raid.

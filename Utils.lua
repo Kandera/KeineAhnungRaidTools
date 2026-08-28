@@ -221,9 +221,17 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
+            "**The WoWUtils tab is gone.** Notes paste loads notes and invites.",
+            "**Share now in town loads the marked note**, even when you are not in a raid.",
+            "**Every Notes list row shows the difficulty.**",
+            "**Delete notes** next to Import clears shared Northern Sky notes and the paste box.",
+            "**Dragging a boss on the Notes list highlights where it will land.**",
+            "**Importing notes starts from the Encounter Journal order.**",
             "**Opening the Notes tab no longer errors** when you are not in a raid.",
             "**The Notes tab lists imported bosses** when you are not in the raid.",
+            "**Co-Tank frame opacity tints the whole row**, including auras and the border.",
             "**The Notes list shows every imported note**, including a one-boss raid.",
+            "**Click a boss on the Notes list to start there.** Earlier bosses stay on the list.",
             "**Skip on the Notes list stays inside the card.**",
             "**Shared notes can be pasted on the Notes tab.**",
             "**Only the raid leader can set the note operator.**",
@@ -513,7 +521,7 @@ KART.Defaults = {
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
     ctModuleEnabled = false,
-    ntModuleEnabled = false,
+    ntModuleEnabled = false, -- Notes stays off until the player turns it on
     ntOperatorName = "",
     ntOrderByInstance = {},
     ntCursor = 0,
@@ -1118,15 +1126,15 @@ KART.KeybindActions = {
     { key = "buffCheckToggle", button = "KART_RL_BuffCheckToggleBtn" },
 }
 
--- Maps each of the 7 main-window tab-content panels to its ShowTab index. Used by
--- KART.BuildSearchIndex to figure out which tab a given label belongs to, by walking up the
--- label's parent chain until one of these panels is found.
+-- Maps each main-window tab-content panel to its ShowTab index. Index 5 is
+-- unused (former WoWUtils). Used by KART.BuildSearchIndex to figure out which
+-- tab a given label belongs to, by walking up the label's parent chain until
+-- one of these panels is found.
 local SEARCH_TAB_PANELS = {
     { panel = "PromotePanel", tabIndex = 1 },
     { panel = "RaidleadPanel", tabIndex = 2 },
     { panel = "BuffCheckPanel", tabIndex = 3 },
     { panel = "SettingsPanel", tabIndex = 4 },
-    { panel = "WoWUtilsPanel", tabIndex = 5 },
     { panel = "CoTankPanel", tabIndex = 6 },
     { panel = "NotesPanel", tabIndex = 7 },
 }
@@ -1134,8 +1142,8 @@ local SEARCH_TAB_PANELS = {
 -- Builds the settings search index by walking KART.UI's label registry — every settings label
 -- already gets registered there by its creation site (checkboxes, sliders, card titles, hints,
 -- tab titles), so no per-widget registration is needed here. A label whose parent chain never
--- reaches one of the 7 main tab panels (e.g. one that belongs to a popup window like Loot
--- History) is silently skipped, which is how "only the 7 main tabs are searchable" enforces itself.
+-- reaches one of the main tab panels (e.g. one that belongs to a popup window like Loot
+-- History) is silently skipped, which is how "only the main tabs are searchable" enforces itself.
 function KART.BuildSearchIndex()
     local index = {}
     for _, fs in ipairs(KART.UI:GetLabels()) do

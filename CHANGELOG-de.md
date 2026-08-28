@@ -9,6 +9,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unreleased]
 ### Hinzugefügt
 - **NSRT Notes** lädt nach einem Kill die nächste Northern-Sky-Shared-Note und sendet sie.
+- **Notizen löschen** neben Import entfernt geteilte Northern-Sky-Notizen und leert das Paste-Feld.
 - **Teilen jetzt wartet**, bis der Raidkampf endet, auch wenn du draußen bist.
 - **Die Notes-Statuszeile zeigt, wer senden würde.**
 - **Bosse in Notes lassen sich per Ziehen umsortieren.**
@@ -36,6 +37,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Addon-Versionen prüfen unter Settings** schickt Raidern, deren RC, NSRT oder WowUtils hinterherhinkt, ein Fenster.
 
 ### Geändert
+- **Der WoWUtils-Tab ist weg.** Ein Notes-Paste lädt Notizen und Einladungslisten.
+- **Teilen jetzt in der Stadt lädt die markierte Notiz**, auch ohne Raidgruppe.
+- **Jede Notes-Zeile zeigt die Schwierigkeit.**
+- **Beim Ziehen eines Bosses in Notes leuchtet die Zielzeile.**
+- **Importierte Notizen starten in Encounter-Journal-Reihenfolge.**
+- **Die Co-Tank-Deckkraft gilt für die ganze Zeile**, inklusive Auren und Rahmen.
 - **RC, NSRT und WowUtils zeigen OK oder OLD.**
 - **Taunt-Filter Gruppe, Dungeons und Raids sitzen in einer Chip-Zeile**, wie die Kanäle.
 - **Gesundheitsstein zählt den Stein in deinen Taschen.**
@@ -88,6 +95,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Co-Tank-Debuffs können lange Auren und Bloodlust-Nachwirkungen ausblenden**, und die Symbolgröße geht bis 100px.
 
 ### Behoben
+- **Klick auf einen Boss in der Notes-Liste startet dort.** Vorherige Bosse bleiben in der Liste.
 - **Die Notes-Liste zeigt jede importierte Notiz**, auch die aus einem 1-Boss-Raid.
 - **Der Notes-Tab wirft keinen Fehler mehr**, wenn du nicht im Raid bist.
 - **Der Notes-Tab listet importierte Bosse**, auch wenn du nicht im Raid bist.

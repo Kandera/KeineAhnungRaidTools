@@ -50,6 +50,48 @@ do
         "the first list does not swallow the next EncounterID")
 end
 
+-- Notes paste: timer lines sit between the header and invitelist.
+do
+    local n = Parse((
+        "EncounterID:3379;Difficulty:Heroic;Name:Nymrissa\n"
+        .. "time:4;ph:1;tag:Shoxxypump;spellid:370537;\n"
+        .. "time:37;ph:1;tag:Holykopter;spellid:200183;\n"
+        .. "invitelist:Kandypal-Blackmoore,Eriina-Frostwolf,Flixla;\n"
+        .. "EncounterID:3470;Difficulty:Heroic;Name:Nek'zali\n"
+        .. "invitelist:Kevrar-Blackrock,Holykopter-Blackmoore;\n"
+    ))
+    T.eq(n, 2, "timer lines do not hide the invitelist")
+    T.eq(#WU.bosses[1].players, 3, "Nymrissa list is parsed after the timers")
+    T.eq(WU.bosses[1].players[1], "Kandypal-Blackmoore", "first Nymrissa name")
+    T.eq(WU.bosses[2].name, "Nek'zali", "second boss still parses")
+    T.eq(#WU.bosses[2].players, 2, "Nek'zali keeps its own list")
+end
+
+-- Reloe header field order: Name before Difficulty.
+do
+    local n = Parse(
+        "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\n"
+        .. "invitelist:Alpha-Blackmoore,Bravo-Thrall;\n"
+    )
+    T.eq(n, 1, "Name-before-Difficulty header still parses")
+    T.eq(WU.bosses[1].encounterID, 3470, "encounter id")
+    T.eq(WU.bosses[1].difficulty, "Mythic", "difficulty from a later field")
+    T.eq(WU.bosses[1].name, "Nekzali", "name from an earlier field")
+    T.eq(#WU.bosses[1].players, 2, "invitelist still splits")
+end
+
+-- A block with no invitelist is notes-only: skipped, later blocks still count.
+do
+    local n = Parse((
+        "EncounterID:1;Difficulty:Heroic;Name:NoList\n"
+        .. "time:0;ph:1;tag:X;spellid:1;\n"
+        .. "EncounterID:2;Difficulty:Heroic;Name:HasList\n"
+        .. "invitelist:Alpha-Blackmoore;\n"
+    ))
+    T.eq(n, 1, "a notes-only block does not count as an invite row")
+    T.eq(WU.bosses[1].name, "HasList", "the block with an invitelist is kept")
+end
+
 -- Older space-separated pastes still import ------------------------------------------------
 do
     local n = Parse(
@@ -85,6 +127,21 @@ local function FreshImportState()
     WU.lastImportedText = nil
     WU.committedImportText = nil
     env.KART_Settings.wuImportText = ""
+end
+
+-- Notes import replaces the invite library instead of stacking.
+do
+    FreshImportState()
+    WU.ReplaceImportedText(Block(3379, "Mythic", "Nymrissa", "TeamA-Blackmoore"))
+    local n, status = WU.ReplaceImportedText(Block(3470, "Heroic", "Nekzali", "TeamB-Blackmoore"))
+    T.eq(status, "ok", "a second notes paste imports")
+    T.eq(n, 1, "replace reports the new list size")
+    T.eq(#WU.bosses, 1, "the previous evening is not stacked")
+    T.eq(WU.bosses[1].name, "Nekzali", "only the new paste remains")
+    T.eq((env.KART_Settings.wuImportText or ""):find("Nymrissa", 1, true) ~= nil, false,
+        "saved paste no longer holds the old evening")
+    T.eq(WU.IndexForEncounter(3470, "Heroic"), 1, "IndexForEncounter finds the replaced row")
+    T.eq(WU.IndexForEncounter(3379, "Mythic"), nil, "and the old encounter is gone")
 end
 
 do

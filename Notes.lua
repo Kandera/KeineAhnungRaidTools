@@ -34,6 +34,20 @@ function NT.ParseNoteHeader(str)
     return enc, diff, name
 end
 
+-- List labels: EJ names have no difficulty; Reloe extra-instance names often already
+-- end in " - Heroic". Strip a Normal/Heroic/Mythic suffix, then pin the list difficulty.
+function NT.DisplayBossName(name, difficultyName)
+    name = tostring(name or "")
+    if name == "" then return name end
+    -- Lua 5.1 patterns have no |; Reloe names are "Nymrissa - Heroic".
+    local base = name:match("^(.*) %- Normal%s*$")
+        or name:match("^(.*) %- Heroic%s*$")
+        or name:match("^(.*) %- Mythic%s*$")
+    if base and base ~= "" then name = base end
+    if not difficultyName or difficultyName == "" then return name end
+    return name .. " - " .. difficultyName
+end
+
 function NT.NextAfter(order, skipped, killedEncID)
     skipped = skipped or {}
     local seen = false
@@ -175,6 +189,19 @@ function NT.SetSkipped(mapKey, encID, skipped)
     if skipped and tonumber(KART_Settings.ntCursor) == encID then
         KART_Settings.ntCursor = NT.ResolveSendableCursor(encID) or 0
     end
+    bumpAndPublish()
+end
+
+-- Tonight's start. Does not skip earlier bosses; they stay on the list.
+-- Town (no group): anyone may set it locally. In a group: lead or operator.
+function NT.SetCursor(encID)
+    if not KART_Settings or not encID then return end
+    if not NT.LocalMayPublishState() and IsInGroup() then return end
+    NT.EnsureShape(KART_Settings)
+    encID = tonumber(encID)
+    if not encID then return end
+    if tonumber(KART_Settings.ntCursor) == encID then return end
+    KART_Settings.ntCursor = encID
     bumpAndPublish()
 end
 
@@ -419,14 +446,22 @@ function NT.NoteNameForEncounter(encID, difficultyName)
     return nil
 end
 
-function NT.ResetOrder()
+-- wipeAll: a new library (import / delete). Last night's drag bags must not survive.
+function NT.ResetOrder(resetCursor, wipeAll)
     if not KART_Settings then return end
-    local key = NT._listMapKey or NT.CurrentMapKey()
     NT.EnsureShape(KART_Settings)
+    if wipeAll then
+        KART_Settings.ntOrderByInstance = {}
+        NT._listMapKey = nil
+    end
+    local key = NT._listMapKey or NT.CurrentMapKey()
     KART_Settings.ntOrderByInstance[key] = {
         order = NT.DefaultEncounterOrder(),
         skipped = {},
     }
+    if resetCursor then
+        KART_Settings.ntCursor = 0
+    end
     bumpAndPublish()
 end
 
@@ -512,9 +547,84 @@ function NT.ImportReminderText(str)
     end
     local ok = pcall(NSI.ImportFullReminderString, NSI, str, false, false)
     if not ok then return "no_nsrt" end
-    if NT.RefreshBossList then NT.RefreshBossList() end
+    -- A new paste is a new library. Do not keep last night's drag order.
+    NT.ResetOrder(true, true)
+    local WU = KART.WU
+    if WU and type(WU.ReplaceImportedText) == "function" then
+        WU.ReplaceImportedText(str)
+    end
+    if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
     if NT.RefreshStatus then NT.RefreshStatus() end
     return "ok", n
+end
+
+function NT.ClearImportEditBox()
+    if NT.ImportEditBox and NT.ImportEditBox.SetText then
+        NT.ImportEditBox:SetText("")
+    end
+end
+
+function NT.DeleteSharedNotes()
+    local NSI = NorthernSkyRaidTools
+    if type(NSI) ~= "table" or type(NSI.RemoveReminder) ~= "function" then
+        return "no_nsrt"
+    end
+    local names = {}
+    if type(NSI.GetAllReminderNames) == "function" then
+        local ok, list = pcall(NSI.GetAllReminderNames, NSI, false)
+        if ok and type(list) == "table" then
+            for i = 1, #list do
+                local entry = list[i]
+                local name = type(entry) == "table" and entry.name or entry
+                if type(name) == "string" then names[#names + 1] = name end
+            end
+        end
+    end
+    if #names == 0 and type(NSRT) == "table" and type(NSRT.Reminders) == "table" then
+        for name in pairs(NSRT.Reminders) do
+            if type(name) == "string" then names[#names + 1] = name end
+        end
+    end
+    if #names == 0 then
+        NT.ClearImportEditBox()
+        return "empty"
+    end
+    for i = 1, #names do
+        pcall(NSI.RemoveReminder, NSI, names[i], false)
+    end
+    if type(NSI.UpdateReminderFrame) == "function" then
+        pcall(NSI.UpdateReminderFrame, NSI, true)
+    end
+    NT.ResetOrder(true, true)
+    if NT.RefreshStatus then NT.RefreshStatus() end
+    NT.ClearImportEditBox()
+    return "ok", #names
+end
+
+if KART.UI and KART.UI.RegisterStaticPopup then
+    KART.UI:RegisterStaticPopup("KART_NT_DELETE_CONFIRM", {
+        text = (KART.L and KART.L.NT_DELETE_CONFIRM)
+            or "Delete all shared notes from Northern Sky on this character?",
+        button1 = YES,
+        button2 = NO,
+        OnAccept = function()
+            local Lx = KART.L or {}
+            local status, n = NT.DeleteSharedNotes()
+            local msg
+            if status == "ok" then
+                msg = string.format(Lx.NT_STATUS_DELETED or "%d", n or 0)
+            elseif status == "empty" then
+                msg = Lx.NT_STATUS_DELETE_EMPTY or ""
+            else
+                msg = Lx.NT_STATUS_NO_NSRT or ""
+            end
+            if NT.importStatusLabel and NT.importStatusLabel.SetText then
+                NT.importStatusLabel:SetText(escapeUI(msg))
+            end
+            if NT.SetStatus then NT.SetStatus(msg) end
+            if msg ~= "" then NT.PlayerPrint(msg) end
+        end,
+    })
 end
 
 function NT.Share(name)
@@ -958,7 +1068,7 @@ function NT.ShareIfChosen()
     end
     local opts = NT.SenderOpts(noteName)
     local weOp = NT.WeAreOperator()
-    local weLead = UnitIsGroupLeader("player") and true or false
+    local weLead = NT.LocalIsLead()
     if opts.operatorPresent and not opts.operatorAssist then
         local msg = L.NT_STATUS_PROMOTE or ""
         NT.SetStatus(msg)
@@ -1063,6 +1173,12 @@ function NT.WeAreOperator()
     return NT.MatchOperator(KART_Settings.ntOperatorName, name, realm ~= "" and realm or playerRealm(), nick)
 end
 
+-- No group: you are the sender. UnitIsGroupLeader is false when ungrouped.
+function NT.LocalIsLead()
+    if not IsInGroup() then return true end
+    return UnitIsGroupLeader("player") and true or false
+end
+
 function NT.SenderOpts(noteName)
     local settings = KART_Settings
     local unit = operatorUnit()
@@ -1077,7 +1193,7 @@ function NT.SenderOpts(noteName)
     end
     return {
         moduleEnabled = settings and settings.ntModuleEnabled == true,
-        isLead = UnitIsGroupLeader("player") and true or false,
+        isLead = NT.LocalIsLead(),
         operatorPresent = unit ~= nil,
         operatorAssist = unit ~= nil and (UnitIsGroupAssistant(unit) or UnitIsGroupLeader(unit)) and true or false,
         operatorKart = kartUp,
@@ -1281,6 +1397,108 @@ end
 local ROW_H = 28
 local ROW_GAP = 3
 
+local function rowUnderMouse()
+    local foci = GetMouseFoci and GetMouseFoci()
+    if type(foci) ~= "table" then return nil end
+    for n = 1, #foci do
+        local f = foci[n]
+        while f do
+            if f.encID and f.index then return f end
+            f = f.GetParent and f:GetParent()
+        end
+    end
+    return nil
+end
+
+-- During a drag the source keeps mouse capture, so GetMouseFoci stays on it.
+-- Cursor geometry is what actually follows the pointer across rows.
+local function rowAtCursor()
+    local panel = NT.bossListFrame
+    if not panel or not panel.rows then return nil end
+    if type(GetCursorPosition) == "function" then
+        local cx, cy = GetCursorPosition()
+        if cx and cy then
+            for _, r in ipairs(panel.rows) do
+                if r.IsShown and r:IsShown() then
+                    local scale = r.GetEffectiveScale and r:GetEffectiveScale() or 1
+                    if scale and scale ~= 0 then
+                        local x, y = cx / scale, cy / scale
+                        local left = r.GetLeft and r:GetLeft()
+                        local right = r.GetRight and r:GetRight()
+                        local top = r.GetTop and r:GetTop()
+                        local bottom = r.GetBottom and r:GetBottom()
+                        if left and right and top and bottom
+                            and x >= left and x <= right
+                            and y <= top and y >= bottom then
+                            return r
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return rowUnderMouse()
+end
+
+local function paintDragHighlight(source)
+    local panel = NT.bossListFrame
+    if not panel or not panel.rows then return end
+    local dest = rowAtCursor()
+    local ar, ag, ab = 0.3, 0.7, 1
+    if KART.UI and KART.UI.AccentColor then
+        ar, ag, ab = KART.UI:AccentColor()
+    end
+    for _, r in ipairs(panel.rows) do
+        if r.SetAlpha then
+            if r == source then
+                r:SetAlpha(0.45)
+            else
+                r:SetAlpha(1)
+            end
+        end
+        if r.nameText and r.nameText.SetTextColor then
+            if dest and r == dest and r ~= source then
+                r.nameText:SetTextColor(ar, ag, ab)
+            else
+                r.nameText:SetTextColor(1, 1, 1)
+            end
+        end
+        if r.dropTint then
+            if dest and r == dest and r ~= source then
+                if r.dropTint.SetColorTexture then
+                    r.dropTint:SetColorTexture(ar, ag, ab, 0.28)
+                end
+                if r.dropTint.Show then r.dropTint:Show() end
+            elseif r.dropTint.Hide then
+                r.dropTint:Hide()
+            end
+        end
+    end
+end
+
+local function clearDragHighlight()
+    local panel = NT.bossListFrame
+    if not panel or not panel.rows then return end
+    for _, r in ipairs(panel.rows) do
+        if r.SetAlpha then r:SetAlpha(1) end
+        if r.nameText and r.nameText.SetTextColor then
+            r.nameText:SetTextColor(1, 1, 1)
+        end
+        if r.dropTint and r.dropTint.Hide then r.dropTint:Hide() end
+        if r.SetScript then r:SetScript("OnUpdate", nil) end
+    end
+end
+
+-- Matching WU.bosses row for this encounter + list difficulty. Count 0 and
+-- a nil index mean notes-only (Invite/Remove stay disabled).
+function NT.WuPlayersFor(encID, diffName)
+    if not (KART.WU and KART.WU.IndexForEncounter) then return 0, nil end
+    local idx = KART.WU.IndexForEncounter(encID, diffName)
+    if not idx then return 0, nil end
+    local entry = KART.WU.bosses and KART.WU.bosses[idx]
+    return (entry and #(entry.players or {})) or 0, idx
+end
+
 local function visibleBossRows()
     local key = NT.CurrentMapKey()
     if KART_Settings then NT.EnsureShape(KART_Settings) end
@@ -1312,10 +1530,13 @@ local function visibleBossRows()
     local rows = {}
     for _, id in ipairs(order) do
         if not hasNSRT or noteByEnc[id] then
+            local playerCount, wuIndex = NT.WuPlayersFor(id, diffName)
             rows[#rows + 1] = {
                 id = id,
-                name = names[id] or tostring(id),
+                name = NT.DisplayBossName(names[id] or tostring(id), diffName),
                 skipped = skipped[id] and true or false,
+                playerCount = playerCount,
+                wuIndex = wuIndex,
             }
         end
     end
@@ -1375,8 +1596,16 @@ function NT.RefreshBossList()
                     end
                 end,
             })
+            row.btnRemove = KART.UI:CreateModernButton(row, L.WU_BTN_REMOVE)
+            row.btnRemove:SetSize(80, 22)
+            row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
+            row.btnInvite = KART.UI:CreateModernButton(row, L.WU_BTN_INVITE)
+            row.btnInvite:SetSize(80, 22)
+            row.btnInvite:SetPoint("RIGHT", row.btnRemove, "LEFT", -8, 0)
+
             row.skip:ClearAllPoints()
-            row.skip:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+            row.skip:SetPoint("RIGHT", row.btnInvite, "LEFT", -8, 0)
             -- CreateSettingsCheckbox puts the label to the right of the pill; on a
             -- right-aligned row that hangs outside the card. Flip it to the left.
             row.skip.text:ClearAllPoints()
@@ -1384,28 +1613,61 @@ function NT.RefreshBossList()
             row.skip.text:SetJustifyH("RIGHT")
             row.nameText:SetPoint("RIGHT", row.skip.text, "LEFT", -10, 0)
 
+            row.dropTint = row:CreateTexture(nil, "BACKGROUND")
+            row.dropTint:SetAllPoints()
+            row.dropTint:Hide()
+
+            row:SetMovable(true)
             row:RegisterForDrag("LeftButton")
             row:SetScript("OnDragStart", function(self)
                 NT._dragFrom = self.index
+                NT._justDragged = false
+                if GameTooltip then GameTooltip:Hide() end
+                paintDragHighlight(self)
+                self:SetScript("OnUpdate", function()
+                    paintDragHighlight(self)
+                end)
             end)
             row:SetScript("OnDragStop", function()
-                local dest
+                local dest = rowAtCursor()
+                local from = NT._dragFrom
+                NT._dragFrom = nil
+                clearDragHighlight()
+                local moved = from and dest and dest.index and from ~= dest.index
+                NT._justDragged = moved and true or nil
+                if moved then
+                    NT.Move(from, dest.index)
+                end
+            end)
+            row:SetScript("OnMouseUp", function(self, button)
+                if button ~= "LeftButton" then return end
+                if NT._justDragged then
+                    NT._justDragged = nil
+                    return
+                end
                 local foci = GetMouseFoci and GetMouseFoci()
                 if type(foci) == "table" then
                     for n = 1, #foci do
                         local f = foci[n]
                         while f do
-                            if f.encID and f.index then dest = f break end
+                            if self.skip and (f == self.skip or f == self.skip.text) then return end
+                            if self.btnInvite and (f == self.btnInvite or f == self.btnInvite.text) then return end
+                            if self.btnRemove and (f == self.btnRemove or f == self.btnRemove.text) then return end
                             f = f.GetParent and f:GetParent()
                         end
-                        if dest then break end
                     end
                 end
-                local from = NT._dragFrom
-                NT._dragFrom = nil
-                if from and dest and dest.index and from ~= dest.index then
-                    NT.Move(from, dest.index)
-                end
+                if self.encID then NT.SetCursor(self.encID) end
+            end)
+            row:SetScript("OnEnter", function(self)
+                local Lx = KART.L or {}
+                if not GameTooltip or not Lx.DESC_NT_SET_CURSOR then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(Lx.DESC_NT_SET_CURSOR, 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function()
+                if GameTooltip then GameTooltip:Hide() end
             end)
 
             panel.rows[i] = row
@@ -1415,12 +1677,33 @@ function NT.RefreshBossList()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i - 1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
 
-        local label = i .. ". " .. (boss.name or "")
+        local label = i .. ". " .. escapeUI(boss.name or "")
         if boss.id == cursor then label = "> " .. label end
+        if (boss.playerCount or 0) > 0 then
+            label = label .. " |cff888888(" .. boss.playerCount .. ")|r"
+        end
         row.encID = boss.id
         row.index = i
-        row.nameText:SetText(escapeUI(label))
+        row.wuIndex = boss.wuIndex
+        row.nameText:SetText(label)
         row.skip:SetChecked(boss.skipped)
+
+        local canAct = boss.wuIndex
+            and KART.WU
+            and not (KART_Settings and KART_Settings.wuModuleEnabled == false)
+        if canAct then
+            row.btnInvite:Enable()
+            row.btnRemove:Enable()
+        else
+            row.btnInvite:Disable()
+            row.btnRemove:Disable()
+        end
+        row.btnInvite:SetScript("OnClick", function()
+            if row.wuIndex and KART.WU then KART.WU.InviteBoss(row.wuIndex) end
+        end)
+        row.btnRemove:SetScript("OnClick", function()
+            if row.wuIndex and KART.WU then KART.WU.RemoveForBoss(row.wuIndex) end
+        end)
 
         row:Show()
         totalH = i * (ROW_H + ROW_GAP)
@@ -1442,7 +1725,7 @@ function NT.BuildPanel(parent)
 
     local enableCard = KART.UI:CreateCard(parent)
     enableCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    enableCard:SetSize(500, 50)
+    enableCard:SetSize(500, 88)
     KART.CbNtModuleEnabled = KART.UI:CreateSettingsCheckbox(enableCard, {
         name = "KART_NtModuleEnabled", label = L.SET_NT_MODULE_ENABLED,
         store = SettingsStore, key = "ntModuleEnabled", y = -20,
@@ -1456,6 +1739,18 @@ function NT.BuildPanel(parent)
     })
     KART.CbNtModuleEnabled.text:SetWidth(430)
     KART.CbNtModuleEnabled.text:SetJustifyH("LEFT")
+
+    KART.CbWuModule = KART.UI:CreateSettingsCheckbox(enableCard, {
+        name = "KART_WuModuleEnabled", label = L.SET_WU_MODULE_ENABLED,
+        store = SettingsStore, key = "wuModuleEnabled", y = -52,
+        tooltip = L.DESC_WU_MODULE_ENABLED,
+        onChanged = function()
+            if KART.RefreshModuleChips then KART.RefreshModuleChips() end
+            NT.RefreshBossList()
+        end,
+    })
+    KART.CbWuModule.text:SetWidth(430)
+    KART.CbWuModule.text:SetJustifyH("LEFT")
 
     local opCard = KART.UI:CreateCard(parent)
     opCard:SetPoint("TOPLEFT", enableCard, "BOTTOMLEFT", 0, -12)
@@ -1558,7 +1853,7 @@ function NT.BuildPanel(parent)
         local Lx = KART.L or {}
         local text = NT.ImportEditBox and NT.ImportEditBox:GetText() or ""
         local status, n = NT.ImportReminderText(text)
-        local msg = ""
+        local msg
         if status == "ok" then
             msg = string.format(Lx.NT_STATUS_IMPORTED or "%d", n or 0)
         elseif status == "empty" then
@@ -1573,6 +1868,25 @@ function NT.BuildPanel(parent)
         end
         NT.SetStatus(msg)
         if status ~= "ok" and msg ~= "" then NT.PlayerPrint(msg) end
+    end)
+
+    NT.BtnDeleteNotes = KART.UI:CreateModernButton(importCard, L.NT_BTN_DELETE)
+    NT.BtnDeleteNotes:SetSize(180, 26)
+    NT.BtnDeleteNotes:SetPoint("LEFT", NT.BtnImport, "RIGHT", 10, 0)
+    NT.BtnDeleteNotes:SetScript("OnEnter", function(self)
+        local Lx = KART.L or {}
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(Lx.NT_BTN_DELETE, 1, 1, 1)
+        GameTooltip:AddLine(Lx.DESC_NT_DELETE, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    NT.BtnDeleteNotes:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    NT.BtnDeleteNotes:SetScript("OnClick", function()
+        local Lx = KART.L or {}
+        if StaticPopupDialogs and StaticPopupDialogs["KART_NT_DELETE_CONFIRM"] then
+            StaticPopupDialogs["KART_NT_DELETE_CONFIRM"].text = Lx.NT_DELETE_CONFIRM or ""
+        end
+        StaticPopup_Show("KART_NT_DELETE_CONFIRM")
     end)
 
     NT.importStatusLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1640,10 +1954,17 @@ function NT.BuildPanel(parent)
             KART.CbNtModuleEnabled.text:SetText(Lx.SET_NT_MODULE_ENABLED)
             KART.CbNtModuleEnabled.tooltipText = Lx.DESC_NT_MODULE_ENABLED
         end
+        if KART.CbWuModule then
+            KART.CbWuModule.text:SetText(Lx.SET_WU_MODULE_ENABLED)
+            KART.CbWuModule.tooltipText = Lx.DESC_WU_MODULE_ENABLED
+        end
         if opLabel then opLabel:SetText(Lx.NT_LABEL_OPERATOR) end
         if pasteLabel then pasteLabel:SetText(Lx.NT_LABEL_PASTE) end
         if NT.BtnImport and NT.BtnImport.text then
             NT.BtnImport.text:SetText(Lx.NT_BTN_IMPORT)
+        end
+        if NT.BtnDeleteNotes and NT.BtnDeleteNotes.text then
+            NT.BtnDeleteNotes.text:SetText(Lx.NT_BTN_DELETE)
         end
         if NT.BtnResetOrder and NT.BtnResetOrder.text then
             NT.BtnResetOrder.text:SetText(Lx.NT_BTN_RESET_ORDER)
@@ -1657,6 +1978,12 @@ function NT.BuildPanel(parent)
         if NT.bossListFrame and NT.bossListFrame.rows then
             for _, row in ipairs(NT.bossListFrame.rows) do
                 if row.skip and row.skip.text then row.skip.text:SetText(Lx.NT_SKIP) end
+                if row.btnInvite and row.btnInvite.text then
+                    row.btnInvite.text:SetText(Lx.WU_BTN_INVITE)
+                end
+                if row.btnRemove and row.btnRemove.text then
+                    row.btnRemove.text:SetText(Lx.WU_BTN_REMOVE)
+                end
             end
         end
         NT.RefreshStatus()
@@ -1666,6 +1993,7 @@ end
 function NT.SyncWidgets()
     local settingsMap = {}
     if KART.CbNtModuleEnabled then settingsMap[KART.CbNtModuleEnabled] = "ntModuleEnabled" end
+    if KART.CbWuModule then settingsMap[KART.CbWuModule] = "wuModuleEnabled" end
     if NT.OperatorEditBox then settingsMap[NT.OperatorEditBox] = "ntOperatorName" end
     KART.ApplySettingsMap(settingsMap)
     NT.SyncOperatorEditBox()

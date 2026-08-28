@@ -350,7 +350,7 @@ local function ApplyBarFillTexture(bar, ct, allowGradient)
     bar.kartGradientActive = false
     if allowGradient and ct and ct.gradient then
         tex:SetTexture("Interface\\Buttons\\WHITE8X8")
-        bar.kartGradientActive = ApplyHealthGradient(bar, ct) and true or false
+        bar.kartGradientActive = ApplyHealthGradient(bar, ct, 1) and true or false
         if not bar.kartGradientActive then
             tex:SetTexture(path)
         end
@@ -1279,14 +1279,13 @@ function CT.Paint(snap, row)
         row.health:SetMinMaxValues(0, max)
         row.health:SetValue(health)
         local r, g, b = HealthBarColor(snap, ct)
-        local fillAlpha = ct.healthAlpha or CtOrDefault("healthAlpha")
-        -- SetStatusBarColor writes vertex colour and wipes SetGradient. Re-apply the gradient
-        -- every paint instead of colouring the bar white (which is what a wiped gradient looks like).
-        if ct.gradient and ApplyHealthGradient(row.health, ct, fillAlpha) then
+        -- Frame opacity lives on row:SetAlpha (RowAlpha). Vertex alpha stays 1 so
+        -- the fill is not dimmed twice, and auras/border inherit the row.
+        if ct.gradient and ApplyHealthGradient(row.health, ct, 1) then
             row.health.kartGradientActive = true
         else
             row.health.kartGradientActive = false
-            row.health:SetStatusBarColor(r, g, b, fillAlpha)
+            row.health:SetStatusBarColor(r, g, b, 1)
         end
         if row.healthBg then
             local trackAlpha = ct.trackAlpha or CtOrDefault("trackAlpha")
@@ -2260,14 +2259,14 @@ end
 
 -- ===== Row fade ---------------------------------------------------------------------------
 function CT.RowAlpha(snap, ct)
+    local frame = (ct and ct.healthAlpha) or 1
+    local fade = 1
     if snap.dead then
-        return (ct and ct.deadFade) or 0.35
+        fade = (ct and ct.deadFade) or 0.35
+    elseif snap.offline then
+        fade = (ct and ct.offlineFade) or 0.35
+    elseif (not ct or ct.rangeFade ~= false) and not snap.inRange then
+        fade = (ct and ct.rangeAlpha) or 0.4
     end
-    if snap.offline then
-        return (ct and ct.offlineFade) or 0.35
-    end
-    if (not ct or ct.rangeFade ~= false) and not snap.inRange then
-        return (ct and ct.rangeAlpha) or 0.4
-    end
-    return 1
+    return frame * fade
 end

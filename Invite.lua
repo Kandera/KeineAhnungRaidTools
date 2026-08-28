@@ -1,12 +1,5 @@
 local addonName, KART = ...
 local KAUtil = LibStub("KAUtil-1.0")
-local KAUI = LibStub("KAUI-1.0")
-
--- This file's checkbox is built at file load time, before Core.lua's ADDON_LOADED handler has
--- created KART_Settings -- passing the table directly here would freeze it onto nil forever.
--- Passed as `store` instead of the table itself, so KAUI resolves the current global at click
--- time rather than capturing it now (see ResolveStore in KAUI-1.0.lua).
-local function SettingsStore() return KART_Settings end
 
 KART.WU = KART.WU or {}
 local WU = KART.WU
@@ -17,32 +10,25 @@ WU.bosses = {}  -- { encounterID, difficulty, name, players[] }
 --  Parser
 -- =====================================================================
 
--- Parses a WoWUtils export and adds the result to WU.bosses. Imports are never
--- wiped or overwritten by a later import: pasting Normal and then Heroic
--- keeps both difficulties, and pasting a second roster for the same boss +
--- difficulty (e.g. Split-Team B) keeps both rosters side by side instead of
--- replacing the first one. When more than one entry shares the same boss +
--- difficulty, they're labeled "Boss Name A", "Boss Name B", ... in import
--- order so they stay distinguishable. Use WU.ResetBosses() to clear everything.
+-- Parses a notes / WoWUtils paste into WU.bosses. Each EncounterID: block is
+-- one boss; invitelist: may sit after timer lines. Header fields are matched
+-- by name (EncounterID / Difficulty / Name), not by order. Blocks with no
+-- invitelist are skipped (notes-only). Callers that need a fresh library wipe
+-- WU.bosses first (ReplaceImportedText, SyncBossesToSavedText).
 function WU.ParseImport(rawText)
     if not rawText or KAUtil.TrimString(rawText) == "" then return 0 end
 
     local parsedCount = 0
-    -- Capture: [^;]+ is correct for the real WoWUtils export — each invitelist is terminated by a
-    -- trailing ";" ("...Name-Realm;"), so the match stops there and never bleeds into the next boss
-    -- block; %s+ absorbs the blank line before "invitelist:". Verified against a real multi-boss
-    -- export (review 2026-07-24). Split: the live list is comma-separated with no spaces
-    -- ("Name-Realm,Name-Realm,..."), so splitting on %S+ made the whole line one player and every
-    -- boss showed "(1)". Commas first, so a realm with a space stays one name; whitespace only
-    -- when there is no comma, for older space-separated pastes.
-    for encounterID, difficulty, bossName, playerStr in rawText:gmatch(
-            "EncounterID:(%d+);Difficulty:([^;]+);Name:([^\n\r]+)%s+invitelist:([^;]+)") do
+    local starts = {}
+    local pos = 1
+    while true do
+        local s = rawText:find("EncounterID:", pos, true)
+        if not s then break end
+        starts[#starts + 1] = s
+        pos = s + 12
+    end
 
-        bossName   = KAUtil.TrimString(bossName)
-        difficulty = KAUtil.TrimString(difficulty)
-        playerStr  = KAUtil.TrimString(playerStr)
-        encounterID = tonumber(encounterID)
-
+    local function addBoss(encounterID, difficulty, bossName, playerStr)
         local players = {}
         if playerStr:find(",", 1, true) then
             for p in playerStr:gmatch("[^,]+") do
@@ -54,48 +40,73 @@ function WU.ParseImport(rawText)
                 table.insert(players, p)
             end
         end
+        if #players == 0 then return end
 
-        if #players > 0 then
-            parsedCount = parsedCount + 1
-
-            local groupCount = 0
+        parsedCount = parsedCount + 1
+        local groupCount = 0
+        for _, boss in ipairs(WU.bosses) do
+            if boss.encounterID == encounterID and boss.difficulty == difficulty then
+                groupCount = groupCount + 1
+            end
+        end
+        if groupCount == 1 then
             for _, boss in ipairs(WU.bosses) do
                 if boss.encounterID == encounterID and boss.difficulty == difficulty then
-                    groupCount = groupCount + 1
+                    boss.name = boss.baseName .. " A"
+                    break
                 end
             end
+        end
+        local name = bossName
+        if groupCount > 0 then
+            name = bossName .. " " .. string.char(65 + groupCount)
+        end
+        table.insert(WU.bosses, {
+            encounterID = encounterID,
+            difficulty  = difficulty,
+            name        = name,
+            baseName    = bossName,
+            players     = players,
+        })
+    end
 
-            if groupCount == 1 then
-                -- A second entry for this boss+difficulty just showed up;
-                -- retroactively label the first one "A" too.
-                for _, boss in ipairs(WU.bosses) do
-                    if boss.encounterID == encounterID and boss.difficulty == difficulty then
-                        boss.name = boss.baseName .. " A"
-                        break
-                    end
-                end
-            end
-
-            local name = bossName
-            if groupCount > 0 then
-                name = bossName .. " " .. string.char(65 + groupCount) -- B, C, D, ...
-            end
-
-            table.insert(WU.bosses, {
-                encounterID = encounterID,
-                difficulty  = difficulty,
-                name        = name,
-                baseName    = bossName,
-                players     = players,
-            })
+    for i = 1, #starts do
+        local s = starts[i]
+        local e = starts[i + 1] and (starts[i + 1] - 1) or #rawText
+        local block = rawText:sub(s, e)
+        local firstLine = block:match("^[^\n\r]+") or block
+        local enc = tonumber(firstLine:match("EncounterID:(%d+)"))
+        local diff = firstLine:match("Difficulty:([^;\n]+)")
+        local name = firstLine:match("Name:([^;\n]+)")
+        if diff then diff = KAUtil.TrimString(diff) end
+        if name then name = KAUtil.TrimString(name) end
+        local playerStr = block:match("invitelist:([^;]+)")
+        if enc and diff and name and playerStr then
+            addBoss(enc, diff, name, KAUtil.TrimString(playerStr))
         end
     end
 
-    -- Remember the exact text we parsed, so the Import button can refuse to re-parse identical text
-    -- (which would duplicate every boss as "Name A"/"Name B") — e.g. after the saved text was
-    -- already auto-parsed at login. Genuinely additive imports paste *different* text each time.
     if parsedCount > 0 then WU.lastImportedText = rawText end
     return parsedCount
+end
+
+-- Notes paste: the blob is the whole evening. Wipe the previous invite library.
+function WU.ReplaceImportedText(text)
+    text = text or ""
+    WU.bosses = {}
+    WU.lastImportedText = nil
+    WU.activeBossIdx = nil
+    local trimmed = KAUtil.TrimString(text)
+    local count = 0
+    if trimmed ~= "" then
+        count = WU.ParseImport(text)
+    end
+    WU.committedImportText = text
+    if KART_Settings then KART_Settings.wuImportText = text end
+    if WU.RefreshBossList then WU.RefreshBossList() end
+    if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
+    if trimmed == "" then return 0, "empty" end
+    return count, "ok"
 end
 
 -- Commits a successful paste into KART_Settings.wuImportText. The edit box is a staging
@@ -142,16 +153,14 @@ end
 -- list on disable and never rebuild it on re-enable — the list would only come back via a manual
 -- Import or a reload.
 function WU.SyncBossesToSavedText()
-    if not WU.ImportEditBox then return end
-    local text = KART_Settings.wuImportText or ""
+    local text = (KART_Settings and KART_Settings.wuImportText) or ""
     WU.committedImportText = text
-    if text == WU.lastImportedText then return end -- already exactly this list
+    if text == WU.lastImportedText then return end
 
     WU.bosses = {}
     WU.lastImportedText = nil
     local count = text ~= "" and WU.ParseImport(text) or 0
-    if not WU.RefreshBossList then return end
-    WU.RefreshBossList()
+    if WU.RefreshBossList then WU.RefreshBossList() end
     if WU.statusLabel then
         if count > 0 then
             WU.statusLabel:SetText(string.format(KART.L.WU_STATUS_LOADED, count))
@@ -173,7 +182,7 @@ function WU.ResetBosses()
     KART_Settings.wuImportText = ""
     WU.activeBossIdx = nil
     if WU.ImportEditBox then WU.ImportEditBox:SetText("") end
-    WU.RefreshBossList()
+    if WU.RefreshBossList then WU.RefreshBossList() end
     if KART.RefreshStatusStrip then KART.RefreshStatusStrip() end
 end
 
@@ -209,7 +218,28 @@ local function GroupNameSet()
     return alreadyIn
 end
 
+function WU.IndexForEncounter(encID, difficulty)
+    encID = tonumber(encID)
+    if not encID or type(difficulty) ~= "string" or difficulty == "" then return nil end
+    for i, boss in ipairs(WU.bosses) do
+        if boss.encounterID == encID and boss.difficulty == difficulty then
+            return i
+        end
+    end
+    return nil
+end
+
 function WU.ActiveBossIndex()
+    local NT = KART.NT
+    if NT and KART_Settings then
+        local cursor = tonumber(KART_Settings.ntCursor) or 0
+        if cursor ~= 0 and NT.RaidMapDiff and NT.DIFFICULTY_NAMES then
+            local _, diff = NT.RaidMapDiff()
+            local diffName = NT.DIFFICULTY_NAMES[diff]
+            local idx = diffName and WU.IndexForEncounter(cursor, diffName)
+            if idx then return idx end
+        end
+    end
     if WU.activeBossIdx and WU.bosses[WU.activeBossIdx] then return WU.activeBossIdx end
     if WU.bosses[1] then return 1 end
     return nil
@@ -434,280 +464,17 @@ KART.UI:RegisterStaticPopup("KART_WU_RESET_CONFIRM", {
     end,
 })
 
--- =====================================================================
---  Boss List UI
--- =====================================================================
-
-local ROW_H   = 28
-local ROW_GAP = 3
-
+-- Notes owns the boss-list chrome (count, Invite, Remove). Parser / invite /
+-- remove stay here so the tonight strip and bulk invite keep one owner.
 function WU.RefreshBossList()
-    local panel = WU.bossListFrame
-    if not panel then return end
-
-    if panel.rows then
-        for _, row in ipairs(panel.rows) do row:Hide() end
+    if KART.NT and type(KART.NT.RefreshBossList) == "function" then
+        KART.NT.RefreshBossList()
     end
-    panel.rows = panel.rows or {}
-
-    if #WU.bosses == 0 then
-        panel.emptyLabel:Show()
-        panel:SetHeight(24)
-        if KART.UpdateScrollRange then KART.UpdateScrollRange() end
-        return
-    end
-    panel.emptyLabel:Hide()
-
-    local totalH = 0
-    for i, boss in ipairs(WU.bosses) do
-        local row = panel.rows[i]
-        if not row then
-            row = CreateFrame("Frame", nil, panel)
-            row:SetHeight(ROW_H)
-
-            row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            row.nameText:SetPoint("LEFT", 4, 0)
-            row.nameText:SetJustifyH("LEFT")
-            KART.UI:RegisterLabel(row.nameText)
-
-            row.btnRemove = KART.UI:CreateModernButton(row, KART.L.WU_BTN_REMOVE)
-            row.btnRemove:SetSize(80, 22)
-            row.btnRemove:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-
-            row.btnInvite = KART.UI:CreateModernButton(row, KART.L.WU_BTN_INVITE)
-            row.btnInvite:SetSize(80, 22)
-            row.btnInvite:SetPoint("RIGHT", row.btnRemove, "LEFT", -8, 0)
-
-            row.nameText:SetPoint("RIGHT", row.btnInvite, "LEFT", -10, 0)
-
-            panel.rows[i] = row
-        end
-
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i-1) * (ROW_H + ROW_GAP)))
-        row:SetPoint("RIGHT",   panel, "RIGHT",   0, 0)
-
-        row.nameText:SetText(boss.name .. " |cff888888(" .. #boss.players .. ")|r")
-
-        row:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-            GameTooltip:SetText(boss.name, 1, 0.82, 0)
-            GameTooltip:AddLine(boss.difficulty, 0.7, 0.7, 0.7)
-            GameTooltip:AddLine(KART.L.WU_ENCOUNTER_ID .. (boss.encounterID or "?"), 0.5, 0.5, 0.5)
-            GameTooltip:AddLine(#boss.players .. " " .. KART.L.WU_PLAYERS, 0.8, 0.8, 0.8)
-            GameTooltip:Show()
-        end)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        row.btnInvite:SetScript("OnClick", function() WU.InviteBoss(i) end)
-        row.btnRemove:SetScript("OnClick", function() WU.RemoveForBoss(i) end)
-
-        row:Show()
-        totalH = i * (ROW_H + ROW_GAP)
-    end
-
-    panel:SetHeight(math.max(totalH, 24))
-    if WU.bossListCard then
-        WU.bossListCard:SetHeight(math.max(totalH, 24) + 24)
-    end
-    -- Boss list height feeds the WoWUtils tab's scroll range.
-    if KART.UpdateScrollRange then KART.UpdateScrollRange() end
-end
-
--- =====================================================================
---  Panel builder  (fills KART.WoWUtilsPanel)
--- =====================================================================
-
-function WU.BuildPanel(parent)
-    local L = KART.L
-
-    KART.CreateTabTitle(5, L.WU_TITLE)
-
-    local wuEnableCard = KART.UI:CreateCard(parent)
-    wuEnableCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
-    wuEnableCard:SetSize(500, 50)
-    KART.CbWuModule = KART.UI:CreateSettingsCheckbox(wuEnableCard, {
-        name = "KART_WuModuleEnabled", label = L.SET_WU_MODULE_ENABLED,
-        store = SettingsStore, key = "wuModuleEnabled", y = -20,
-        tooltip = L.DESC_WU_MODULE_ENABLED,
-        onChanged = function()
-            if KART.RefreshModuleChips then KART.RefreshModuleChips() end
-        end,
-    })
-    KART.CbWuModule.text:SetWidth(430)
-    KART.CbWuModule.text:SetJustifyH("LEFT")
-
-    local importCard = KART.UI:CreateCard(parent)
-    importCard:SetPoint("TOPLEFT", wuEnableCard, "BOTTOMLEFT", 0, -12)
-    importCard:SetSize(500, 190)
-
-    local pasteLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    pasteLabel:SetPoint("TOPLEFT", 20, -15)
-    pasteLabel:SetText(L.WU_LABEL_PASTE)
-    KART.UI:RegisterLabel(pasteLabel)
-
-    local pasteBG = CreateFrame("Frame", nil, importCard, "BackdropTemplate")
-    pasteBG:SetSize(460, 90)
-    pasteBG:SetPoint("TOPLEFT", 20, -35)
-    KART.UI:SetPixelBackdrop(pasteBG, {
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    -- Same inset/border colors as KART.UI:CreateStyledEditBox; the multi-line box can't use that
-    -- factory directly (the EditBox lives inside a ScrollFrame, the visual box is this frame),
-    -- so the focus accent is mirrored below via the inner EditBox's focus scripts.
-    pasteBG:SetBackdropColor(0.03, 0.05, 0.08, 0.9)
-    pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    KART.UI:ApplyRoundedMask(pasteBG, KAUI.CORNER_RADIUS_LG)
-
-    local pasteScroll = CreateFrame("ScrollFrame", "KART_WUPasteScroll", pasteBG, "UIPanelScrollFrameTemplate")
-    pasteScroll:SetPoint("TOPLEFT", 4, -4)
-    pasteScroll:SetPoint("BOTTOMRIGHT", -22, 4)
-
-    local pasteScrollThumb = KART.UI:StripScrollbarTextures(pasteScroll)
-    if pasteScrollThumb then pasteScrollThumb:SetSize(6, 16) end
-    KART.UI:RegisterAccentTexture(pasteScrollThumb, 0.6)
-
-    WU.ImportEditBox = CreateFrame("EditBox", "KART_WUImportEditBox", pasteScroll)
-    WU.ImportEditBox:SetWidth(428)
-    -- An EditBox with no explicit height auto-sizes to a single line, far shorter than the
-    -- visible paste box (pasteBG, 90px tall) — clicking anywhere below that first line then hits
-    -- empty scroll-frame space instead of the EditBox, so the cursor never activates there. Fix:
-    -- give it a fixed height comfortably taller than the viewport, so every click inside the
-    -- visible box lands on the EditBox, and pasted text beyond the viewport still scrolls.
-    WU.ImportEditBox:SetHeight(300)
-    WU.ImportEditBox:SetMultiLine(true)
-    WU.ImportEditBox:SetAutoFocus(false)
-    WU.ImportEditBox:SetFontObject("GameFontHighlightSmall")
-    -- Staging only. wuImportText is committed on a successful Import (see
-    -- WU.ImportPastedText); writing it here erased stacked exports the moment the
-    -- next paste replaced the box.
-    WU.ImportEditBox:SetScript("OnTextChanged", function() end)
-    WU.ImportEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    WU.ImportEditBox:SetScript("OnEditFocusGained", function()
-        local r, g, b = KART.UI:AccentColor()
-        pasteBG:SetBackdropBorderColor(r, g, b, 1)
-    end)
-    WU.ImportEditBox:SetScript("OnEditFocusLost", function()
-        pasteBG:SetBackdropBorderColor(0.15, 0.2, 0.26, 1)
-    end)
-    pasteScroll:SetScrollChild(WU.ImportEditBox)
-    KART.UI:RegisterEditBox(WU.ImportEditBox)
-
-    -- Catches clicks on the empty part of the box and hands focus to the EditBox.
-    --
-    -- The SetHeight(300) above was the first attempt at this and does not hold: a multi-line EditBox
-    -- auto-sizes its height to its own text, so the forced height survives only until the first text
-    -- change. After that the frame is one line tall, everything below it is bare ScrollFrame, and
-    -- clicking there did nothing -- only the top of the visible box started editing (B6).
-    --
-    -- Deliberately a sibling BEHIND the scroll frame rather than an overlay: the EditBox keeps
-    -- receiving the clicks that land on it, so the caret still goes exactly where it is clicked, and
-    -- only clicks that would otherwise have hit nothing reach this.
-    local pasteClickCatcher = CreateFrame("Frame", nil, pasteBG)
-    pasteClickCatcher:SetAllPoints(pasteScroll)
-    pasteClickCatcher:SetFrameLevel(math.max(pasteScroll:GetFrameLevel() - 1, 0))
-    pasteClickCatcher:EnableMouse(true)
-    pasteClickCatcher:SetScript("OnMouseDown", function()
-        WU.ImportEditBox:SetFocus()
-        WU.ImportEditBox:SetCursorPosition(#WU.ImportEditBox:GetText())
-    end)
-
-    WU.BtnImport = KART.UI:CreateModernButton(importCard, L.WU_BTN_IMPORT)
-    WU.BtnImport:SetSize(180, 26)
-    WU.BtnImport:SetPoint("TOPLEFT", 20, -135)
-    WU.BtnImport:SetScript("OnClick", function()
-        local text = WU.ImportEditBox:GetText()
-        local _, status = WU.ImportPastedText(text)
-        if status == "same" or status == "ok" then
-            WU.statusLabel:SetText(string.format(L.WU_STATUS_LOADED, #WU.bosses))
-            WU.statusLabel:SetTextColor(0.2, 0.8, 0.2)
-        elseif status == "empty" then
-            return
-        else
-            WU.statusLabel:SetText(L.WU_STATUS_PARSE_ERROR)
-            WU.statusLabel:SetTextColor(0.9, 0.3, 0.3)
-        end
-    end)
-
-    WU.BtnReset = KART.UI:CreateModernButton(importCard, L.WU_BTN_RESET)
-    WU.BtnReset:SetSize(100, 26)
-    WU.BtnReset:SetPoint("LEFT", WU.BtnImport, "RIGHT", 10, 0)
-    WU.BtnReset:SetScript("OnClick", function()
-        -- Also offer the reset when the visible list is empty but a saved import text still exists:
-        -- that text is what rebuilds the list on the next login/profile switch, so it is exactly what
-        -- needs clearing (see WU.ResetBosses). Only a truly clean slate is a no-op.
-        if #WU.bosses == 0 and (KART_Settings.wuImportText or "") == "" then return end
-        StaticPopupDialogs["KART_WU_RESET_CONFIRM"].text = L.WU_RESET_CONFIRM_TEXT
-        StaticPopup_Show("KART_WU_RESET_CONFIRM")
-    end)
-
-    WU.statusLabel = importCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    WU.statusLabel:SetPoint("TOPLEFT", 20, -168)
-    WU.statusLabel:SetText(L.WU_STATUS_EMPTY)
-    WU.statusLabel:SetTextColor(0.5, 0.5, 0.5)
-    KART.UI:RegisterLabel(WU.statusLabel)
-
-    local wuBossTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    wuBossTitle:SetPoint("TOPLEFT", importCard, "BOTTOMLEFT", 0, -18)
-    wuBossTitle:SetText(L.WU_LABEL_BOSSES)
-    KART.UI:RegisterLabel(wuBossTitle)
-
-    local bossCard = KART.UI:CreateCard(parent)
-    bossCard:SetPoint("TOPLEFT", wuBossTitle, "BOTTOMLEFT", 0, -10)
-    bossCard:SetSize(500, 48)
-    WU.bossListCard = bossCard
-
-    WU.bossListFrame = CreateFrame("Frame", nil, bossCard)
-    WU.bossListFrame:SetPoint("TOPLEFT", bossCard, "TOPLEFT", 16, -12)
-    WU.bossListFrame:SetPoint("BOTTOMRIGHT", bossCard, "BOTTOMRIGHT", -16, 12)
-    WU.bossListFrame.rows = {}
-
-    WU.bossListFrame.emptyLabel = WU.bossListFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    WU.bossListFrame.emptyLabel:SetPoint("TOPLEFT", 4, -2)
-    WU.bossListFrame.emptyLabel:SetText(L.WU_STATUS_EMPTY)
-    WU.bossListFrame.emptyLabel:SetTextColor(0.45, 0.45, 0.45)
-    KART.UI:RegisterLabel(WU.bossListFrame.emptyLabel)
-
-    KART.UI:RegisterLocaleRefresher(function()
-        local Lx = KART.L
-        if KART.TabTitles and KART.TabTitles[5] then
-            KART.TabTitles[5]:SetText(Lx.WU_TITLE)
-        end
-        if KART.CbWuModule then
-            KART.CbWuModule.text:SetText(Lx.SET_WU_MODULE_ENABLED)
-            KART.CbWuModule.tooltipText = Lx.DESC_WU_MODULE_ENABLED
-        end
-        pasteLabel:SetText(Lx.WU_LABEL_PASTE)
-        WU.BtnImport.text:SetText(Lx.WU_BTN_IMPORT)
-        WU.BtnReset.text:SetText(Lx.WU_BTN_RESET)
-        -- Empty-state texts; SyncSettingsToUI overwrites the status right after these
-        -- refreshers run when a saved import auto-parses.
-        WU.statusLabel:SetText(Lx.WU_STATUS_EMPTY)
-        WU.bossListFrame.emptyLabel:SetText(Lx.WU_STATUS_EMPTY)
-        wuBossTitle:SetText(Lx.WU_LABEL_BOSSES)
-        if WU.bossListFrame.rows then
-            for _, row in ipairs(WU.bossListFrame.rows) do
-                if row.btnInvite and row.btnInvite.text then
-                    row.btnInvite.text:SetText(Lx.WU_BTN_INVITE)
-                end
-                if row.btnRemove and row.btnRemove.text then
-                    row.btnRemove.text:SetText(Lx.WU_BTN_REMOVE)
-                end
-            end
-        end
-    end)
 end
 
 function WU.SyncWidgets()
     local settingsMap = {}
     if KART.CbWuModule then settingsMap[KART.CbWuModule] = "wuModuleEnabled" end
-    if WU.ImportEditBox then settingsMap[WU.ImportEditBox] = "wuImportText" end
     KART.ApplySettingsMap(settingsMap)
 end
 
--- Invite.lua loads after MainFrame.lua, so the panel already exists here.
-if KART.WoWUtilsPanel then
-    WU.BuildPanel(KART.WoWUtilsPanel)
-end

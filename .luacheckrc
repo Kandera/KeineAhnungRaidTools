@@ -79,7 +79,7 @@ read_globals = {
     -- NSRT OptionalDep globals (Reminders table + Reloe Load & Send)
     "NSRT", "NorthernSkyRaidTools",
     -- Drag-reorder drop target (Notes panel)
-    "GetMouseFoci",
+    "GetMouseFoci", "GetCursorPosition",
     -- Asked for by the council panel's rank column, which needs the guild roster fetched (B124).
     "C_GuildInfo",
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",

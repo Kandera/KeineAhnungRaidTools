@@ -32,29 +32,31 @@ end
 
 -- 1. Tab-Wechsel Logik (wird in KART Tabelle gespeichert)
 function KART.ShowTab(tabIndex)
+    -- Index 5 is unused (former WoWUtils). Numeric loops so a hole does not
+    -- stop ipairs at 4 and hide Co-Tank / Notes.
     local panels = {
-        KART.PromotePanel,
-        KART.RaidleadPanel,
-        KART.BuffCheckPanel,
-        KART.SettingsPanel,
-        KART.WoWUtilsPanel,
-        KART.CoTankPanel,
-        KART.NotesPanel,
+        [1] = KART.PromotePanel,
+        [2] = KART.RaidleadPanel,
+        [3] = KART.BuffCheckPanel,
+        [4] = KART.SettingsPanel,
+        [6] = KART.CoTankPanel,
+        [7] = KART.NotesPanel,
     }
-    for i, panel in ipairs(panels) do
+    for i = 1, 7 do
+        local panel = panels[i]
         if panel then panel:SetShown(i == tabIndex) end
     end
 
     local buttons = {
-        KART.BtnPromote,
-        KART.BtnRaidlead,
-        KART.BtnBuffCheck,
-        KART.BtnSettings,
-        KART.BtnWoWUtils,
-        KART.BtnCoTank,
-        KART.BtnNotes,
+        [1] = KART.BtnPromote,
+        [2] = KART.BtnRaidlead,
+        [3] = KART.BtnBuffCheck,
+        [4] = KART.BtnSettings,
+        [6] = KART.BtnCoTank,
+        [7] = KART.BtnNotes,
     }
-    for i, btn in ipairs(buttons) do
+    for i = 1, 7 do
+        local btn = buttons[i]
         if btn then btn:SetActive(i == tabIndex) end
     end
 
@@ -233,15 +235,11 @@ KART.BtnBuffCheck = KART.UI:CreateTabButton(clickArea, L.TAB_BUFFCHECK, { module
 KART.BtnBuffCheck:SetPoint("TOPLEFT", KART.BtnRaidlead, "BOTTOMLEFT", 0, -5)
 KART.BtnBuffCheck:SetScript("OnClick", function() KART.ShowTab(3) end)
 
-KART.BtnWoWUtils = KART.UI:CreateTabButton(clickArea, L.TAB_WOWUTILS, { moduleChip = true, icon = Media("tab-wowutils.png") })
-KART.BtnWoWUtils:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
-KART.BtnWoWUtils:SetScript("OnClick", function() KART.ShowTab(5) end)
-
 -- The Settings tab must always be the last entry in the sidebar. When adding a new tab
 -- button, anchor it above this one (i.e. insert it between the previous last tab and
 -- Settings, and re-anchor Settings to the new button).
 KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK, { moduleChip = true, icon = Media("tab-cotank.png") })
-KART.BtnCoTank:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
+KART.BtnCoTank:SetPoint("TOPLEFT", KART.BtnBuffCheck, "BOTTOMLEFT", 0, -5)
 KART.BtnCoTank:SetScript("OnClick", function() KART.ShowTab(6) end)
 
 KART.BtnNotes = KART.UI:CreateTabButton(clickArea, L.TAB_NOTES, { moduleChip = true, icon = Media("tab-wowutils.png") })
@@ -289,7 +287,6 @@ KART.ModuleChipKeys = {
     [KART.BtnPromote] = "autoModuleEnabled",
     [KART.BtnRaidlead] = "showRaidleadBar",
     [KART.BtnBuffCheck] = "bcModuleEnabled",
-    [KART.BtnWoWUtils] = "wuModuleEnabled",
     [KART.BtnCoTank] = "ctModuleEnabled",
     [KART.BtnNotes] = "ntModuleEnabled",
 }
@@ -404,10 +401,6 @@ KART.BuffCheckPanel:SetAllPoints()
 KART.SettingsPanel = CreateFrame("Frame", nil, scrollChild)
 KART.SettingsPanel:SetAllPoints()
 
-KART.WoWUtilsPanel = CreateFrame("Frame", nil, scrollChild)
-KART.WoWUtilsPanel:SetAllPoints()
-KART.WoWUtilsPanel:Hide()
-
 KART.CoTankPanel = CreateFrame("Frame", nil, scrollChild)
 KART.CoTankPanel:SetAllPoints()
 KART.CoTankPanel:Hide()
@@ -437,30 +430,26 @@ scrollFrame.scrollBarHideable = true
 
 -- Per-tab scroll range. With the old fixed 750px scroll child, every tab was scrollable even
 -- when its content fully fit into view (e.g. Raidlead). Static content heights for the fixed
--- tabs; WoWUtils is measured live because the boss list (row count) varies. The child height
+-- tabs; Notes is measured live because the boss list (row count) varies. The child height
 -- is floored to the visible height so the scroll range collapses to zero when everything fits.
 -- Heights include headroom for large content fonts where a title's wrap height feeds into the
--- layout (Automation's AutoLog title).
+-- layout (Automation's AutoLog title). Index 5 is unused (former WoWUtils).
 local PANEL_CONTENT_HEIGHTS = {
     [1] = 535, -- Automation: enable card + promote/invite card + AutoLog
     [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 670, -- Settings: two half cards + accent/profiles + addon versions + RC companion
     [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
-    [7] = 520, -- Notes: enable + operator + import + boss list + share; live-measured below
+    [7] = 558, -- Notes: enable (share+invite) + operator + import + boss list + share
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
     if not tab then return end
     local h = PANEL_CONTENT_HEIGHTS[tab]
-    if tab == 5 then
-        -- Enable + import cards, Bosses heading, and the boss card (grows with the list).
-        local card = KART.WU and KART.WU.bossListCard
-        h = 280 + ((card and card:GetHeight()) or 48)
-    elseif tab == 7 then
+    if tab == 7 then
         -- Enable + operator + import + share cards, and the boss card (grows with the list).
         local card = KART.NT and KART.NT.bossListCard
-        h = 472 + ((card and card:GetHeight()) or 80)
+        h = 510 + ((card and card:GetHeight()) or 80)
     end
     scrollChild:SetHeight(math.max(h or 750, scrollFrame:GetHeight()))
     -- Clamp instead of hard-resetting, so restyles (font slider) don't yank the view to the top.
@@ -1656,7 +1645,6 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnPromote.text:SetText(L.TAB_PROMOTE)
     KART.BtnRaidlead.text:SetText(L.TAB_RAIDLEAD)
     KART.BtnBuffCheck.text:SetText(L.TAB_BUFFCHECK)
-    KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnCoTank.text:SetText(L.TAB_COTANK)
     if KART.BtnNotes then KART.BtnNotes.text:SetText(L.TAB_NOTES) end
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
@@ -1689,7 +1677,6 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
     if KART.TabTitles[6] then KART.TabTitles[6]:SetText(L.LABEL_COTANK_SETTINGS) end
     if KART.TabTitles[7] then KART.TabTitles[7]:SetText(L.TAB_NOTES) end
-    -- TabTitles[5] belongs to Invite.lua and is refreshed there.
 
     -- Raidlead tab
     KART.CbActivate.text:SetText(L.SET_RL_ACTIVATE)   KART.CbActivate.tooltipText = L.DESC_RL_ACTIVATE

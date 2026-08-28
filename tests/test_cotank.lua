@@ -237,6 +237,12 @@ do
     snap.dead = false
     ct.rangeFade = false
     T.eq(KART.CT.RowAlpha(snap, ct), 1, "range fade off keeps full alpha")
+    snap.inRange = true
+    ct.healthAlpha = 0.5
+    T.eq(KART.CT.RowAlpha(snap, ct), 0.5, "fill opacity is the whole row, including auras")
+    snap.inRange = false
+    ct.rangeFade = true
+    T.eq(KART.CT.RowAlpha(snap, ct), 0.2, "range fade multiplies the frame opacity")
 end
 
 do
