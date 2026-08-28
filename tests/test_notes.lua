@@ -337,7 +337,7 @@ do
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
 end
 
--- Operator in town while the in-instance lead is already waiting: queue, do not send.
+-- pendingFlush is share-now, not a Restricted queue: town still Shares, then the flag clears.
 do
     local inst = KARTTEST.instance
     local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
@@ -353,11 +353,12 @@ do
     env.KART_Settings.ntDiff = 16
     env.KART_Settings.ntCursor = 3470
     KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
     NT.statusLabel = { SetText = function(self, s) self.text = s end }
     NT.ShareNow()
-    T.eq(NT.statusLabel.text, "Waiting until combat ends.", "town + pendingFlush queues")
-    T.eq(env._shared, nil, "pendingFlush does not Share")
-    NT.pendingFlush = nil
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "town + pendingFlush still Shares")
+    T.eq(NT.statusLabel.text == "Waiting until combat ends.", false, "pendingFlush does not queue")
+    T.eq(NT.pendingFlush, nil, "successful Share clears pendingFlush")
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
 end
 

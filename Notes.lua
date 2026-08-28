@@ -347,7 +347,9 @@ function NT.Share(name)
     local okSet = pcall(NSI.SetReminder, NSI, name)
     if not okSet then return false end
     local okSend = pcall(NSI.Broadcast, NSI, "NSI_REM_SHARE", "RAID", NSRT.Reminders[name], nil, true)
-    return okSend and true or false
+    if not okSend then return false end
+    NT.pendingFlush = nil
+    return true
 end
 
 function NT.CursorChecksum(name)
@@ -682,11 +684,6 @@ function NT.ShareNow()
         NT.SetStatus(L.NT_STATUS_QUEUED or "")
         local cursor = KART_Settings and tonumber(KART_Settings.ntCursor)
         if cursor and cursor ~= 0 then NT.EnqueueFlush(cursor) end
-        return
-    end
-    -- In-instance lead already waiting: operator outside must not Load & Send into combat.
-    if NT.pendingFlush then
-        NT.SetStatus(L.NT_STATUS_QUEUED or "")
         return
     end
     if not NT.HasNSRT() then
