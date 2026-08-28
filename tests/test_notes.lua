@@ -174,6 +174,12 @@ do
         KARTTEST.instance.mapID = 1
         KARTTEST.instance.instanceType = "raid"
         KARTTEST.instance.difficultyID = 16
+        NT._stateRequested = nil
+        NT._lastLeadPayload = nil
+        NT.leadInRaid = nil
+        NT.leadRestricted = nil
+        NT._shareQueued = nil
+        NT._queueShareCursor = nil
         seedNSRT()
         NT._encountersForMap = function()
             return {
@@ -310,7 +316,7 @@ do
     T.eq(NT.lastVisit == nil or NT.lastVisit == 0, true, "leave clears session visit")
     T.eq(env.KART_Settings.ntLastVisit == nil or env.KART_Settings.ntLastVisit == 0, true,
         "leave clears SV visit")
-    T.eq(#env._ntSent, 0, "leave itself does not enqueue")
+    T.eq(flushSent(), 0, "leave itself does not flush")
     -- Re-enter same mapID as lead → new visit → share current cursor once.
     env._ntSent = {}
     KARTTEST.instance.instanceType = "raid"
@@ -561,6 +567,27 @@ do
     T.eq(NT.LocalGeneration() > g2, true, "SetSkipped bumps generation")
 end
 
+-- Drag-reorder inserts at the drop index; it does not swap the two ends.
+do
+    NT.EnsureShape(env.KART_Settings)
+    local key = NT.InstanceKey(1, 16)
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntOrderByInstance[key] = { order = { 3470, 3497, 3445 }, skipped = {} }
+    env.KART_Settings.ntModuleEnabled = true
+    env._isLead = true
+    NT._listMapKey = key
+    NT._visibleIds = { 3470, 3497, 3445 }
+    NT.Move(1, 3)
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[1], 3497, "first slot is the old second")
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[2], 3445, "middle is the old last")
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[3], 3470, "dropped row lands at the drop index")
+    NT._visibleIds = { 3497, 3445, 3470 }
+    NT.Move(3, 1)
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[1], 3470, "drop on first puts it first")
+    T.eq(env.KART_Settings.ntOrderByInstance[key].order[2], 3497, "the rest shift down")
+end
+
 -- Injected EJ order is used as-is; encounter IDs are not numeric-sorted.
 do
     NT._encountersForMap = function()
@@ -587,7 +614,11 @@ do
     KARTTEST.aurasSecret = true
     NT.ShareNow()
     T.eq(NT.statusLabel.text, "Waiting until combat ends.", "Share now queues while auras are secret")
-    T.eq(#env._ntSent, 0, "Share now does not flush while secret")
+    local flushedWhileSecret = false
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_FLUSH:" then flushedWhileSecret = true end
+    end
+    T.eq(flushedWhileSecret, false, "Share now does not flush while secret")
     KARTTEST.aurasSecret = false
     KARTTEST.AdvanceTime(1.1)
     local queuedFlush
@@ -848,4 +879,450 @@ do
     T.eq(statusHits, 1, "ApplyRemoteState refreshes status")
     NT.RefreshBossList = origList
     NT.RefreshStatus = origStatus
+end
+
+-- NT_STATE_REQ pulls; the answerer publishes stand + lead window. Never from OnPeer.
+do
+    env._isLead = true
+    env._ntSent = {}
+    NT._lastStateAnswer = nil
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 1
+    env.KART_Settings.ntDiff = 16
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntGeneration = 2
+    env.KART_Settings.ntOperatorName = "Wuusch"
+    NT.generation = 2
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+
+    NT.RequestState()
+    local sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, true, "RequestState emits NT_STATE_REQ")
+
+    env._ntSent = {}
+    T.truthy(env._ntHandlers.NT_STATE_REQ, "NT_STATE_REQ handler is registered")
+    env._ntHandlers.NT_STATE_REQ("", { shortName = "Alric", lead = false })
+    local sawState, sawLead = false, false
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_STATE:" then sawState = true end
+        if type(m) == "string" and m:sub(1, 8) == "NT_LEAD:" then sawLead = true end
+    end
+    T.eq(sawState, true, "REQ as lead publishes NT_STATE")
+    T.eq(sawLead, true, "REQ as lead publishes NT_LEAD")
+
+    env._ntSent = {}
+    env._ntHandlers.NT_STATE_REQ("", { shortName = "Alric", lead = false })
+    T.eq(#env._ntSent, 0, "REQ answer is on a 5s cooldown")
+
+    env._isLead = false
+    env.KART_Settings.ntOperatorName = "Wuusch"
+    env._ntSent = {}
+    NT._lastStateAnswer = nil
+    env._ntHandlers.NT_STATE_REQ("", { shortName = "Alric", lead = false })
+    T.eq(#env._ntSent, 0, "raider does not answer NT_STATE_REQ")
+
+    KARTTEST.RestoreRoster(roster)
+end
+
+-- Lead Restricted window: town operator queues Share now; fail-open until a window arrives.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    env._ntSent = {}
+    NT.pendingFlush = nil
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._shareQueued = nil
+    NT._lastSharedCursor = nil
+    NT._lastSharedAt = nil
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+
+    NT.ShareNow()
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "fail-open: no NT_LEAD yet still Shares")
+
+    env._shared = nil
+    T.truthy(env._ntHandlers.NT_LEAD, "NT_LEAD handler is registered")
+    env._ntHandlers.NT_LEAD("1\t1", { shortName = "Bramor", lead = true })
+    T.eq(NT.leadInRaid, true, "NT_LEAD inRaid bit")
+    T.eq(NT.leadRestricted, true, "NT_LEAD restricted bit")
+    NT.ShareNow()
+    T.eq(env._shared, nil, "operator Share now does not Share while lead is Restricted inside")
+    T.eq(NT.statusLabel.text, "Waiting until combat ends.", "Share now queues on lead Restricted")
+
+    env._ntHandlers.NT_LEAD("1\t0", { shortName = "Bramor", lead = true })
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "unrestrict retries the queued Share now")
+
+    env._shared = nil
+    env._ntHandlers.NT_FLUSH("3470", { shortName = "Bramor", lead = true })
+    T.eq(env._shared, nil, "FLUSH after the queued share does not Load & Send twice")
+
+    env._shared = nil
+    env._ntHandlers.NT_LEAD("1\t1", { shortName = "Alric", lead = false })
+    T.eq(NT.leadRestricted, false, "non-lead NT_LEAD is ignored")
+
+    env._isLead = true
+    NT.leadInRaid = true
+    NT.leadRestricted = true
+    KARTTEST.aurasSecret = false
+    env._shared = nil
+    env.KART_Settings.ntOperatorName = ""
+    NT.ShareNow()
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE",
+        "lead Share now uses local AurasSecret, not the echoed window")
+
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    NT._shareQueued = nil
+end
+
+-- Town PEW still pulls; leave publishes the lead window so town Share now unblocks.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    env._isLead = false
+    env._ntSent = {}
+    NT._stateRequested = nil
+    NT._lastLeadPayload = nil
+    env.KART_Settings.ntModuleEnabled = true
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    local sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, true, "grouped town PEW pulls NT_STATE")
+    env._ntSent = {}
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, false, "second PEW in the same group does not pull again")
+
+    env._isLead = true
+    env._ntSent = {}
+    NT._lastLeadPayload = nil
+    inst.instanceType = "raid"
+    inst.difficultyID = 16
+    inst.mapID = 1
+    KARTTEST.aurasSecret = false
+    NT.PublishLeadWindow(true)
+    T.eq(env._ntSent[#env._ntSent], "NT_LEAD:1\t0", "lead in a notes raid publishes inRaid 1 restricted 0")
+    env._ntSent = {}
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    local lastLead
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 8) == "NT_LEAD:" then lastLead = m end
+    end
+    T.eq(lastLead, "NT_LEAD:0\t0", "leave publishes inRaid 0 so town Share now unblocks")
+
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT._stateRequested = nil
+    NT._lastLeadPayload = nil
+end
+
+-- RequestFlush is in-instance lead only. Town lead must not emit NT_FLUSH.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    env._isLead = true
+    env._ntSent = {}
+    env._shared = nil
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntCursor = 3470
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    NT.RequestFlush(3470)
+    local flushed
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_FLUSH:" then flushed = m end
+    end
+    T.eq(flushed, nil, "town lead RequestFlush does not emit NT_FLUSH")
+    T.eq(env._shared, nil, "town lead RequestFlush does not Share")
+
+    inst.instanceType = "raid"
+    inst.difficultyID = 16
+    inst.mapID = 1
+    env._ntSent = {}
+    NT.RequestFlush(3470)
+    flushed = nil
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_FLUSH:" then flushed = m end
+    end
+    T.eq(flushed, "NT_FLUSH:3470", "in-instance lead RequestFlush emits NT_FLUSH")
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end
+
+-- Idle status is who would send, not only operator presence.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    KARTTEST.aurasSecret = false
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    KART.L.NT_STATUS_STALE = "Operator note is older than the last share; lead will send."
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    KART.L.NT_STATUS_OPERATOR_GONE = "Operator: %s (not in group) — you send"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+
+    NT.RefreshStatus()
+    T.eq(NT.statusLabel.text, "Sender: Alric", "status names the operator when they would send")
+
+    env.KART_Settings.ntChecksum = "not-the-note"
+    NT.RefreshStatus()
+    T.eq(NT.statusLabel.text, "Operator note is older than the last share; lead will send.",
+        "status is stale when the operator would not send")
+
+    env.KART_Settings.ntChecksum = ""
+    NT.leadInRaid = true
+    NT.leadRestricted = true
+    NT.RefreshStatus()
+    T.eq(NT.statusLabel.text, "Waiting until combat ends.",
+        "status is queued while the lead is Restricted inside")
+
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+    env._isLead = true
+    env.KART_Settings.ntOperatorName = "Wuusch"
+    KARTTEST.SetRaid({
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    KARTTEST.activeUnit = "raid1"
+    NT.RefreshStatus()
+    T.eq(NT.statusLabel.text, "Operator: Wuusch (not in group) — you send",
+        "status is operator gone when the lead would send")
+
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+end
+
+-- Joining a group in town pulls once; leave group allows a later pull.
+do
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", guid = "Player-1-AL" },
+    })
+    env._isLead = false
+    env._ntSent = {}
+    NT._stateRequested = nil
+    env.KART_Settings.ntModuleEnabled = true
+    NT.OnEvent("GROUP_ROSTER_UPDATE")
+    local sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, true, "group join pulls NT_STATE")
+    env._ntSent = {}
+    NT.OnEvent("GROUP_ROSTER_UPDATE")
+    sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, false, "roster noise does not pull again")
+
+    KARTTEST.SetRaid({})
+    NT.OnEvent("GROUP_ROSTER_UPDATE")
+    T.eq(NT._stateRequested, nil, "leaving the group clears the pull flag")
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", guid = "Player-1-AL" },
+    })
+    env._ntSent = {}
+    NT.OnEvent("GROUP_ROSTER_UPDATE")
+    sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, true, "rejoin pulls NT_STATE again")
+
+    KARTTEST.RestoreRoster(roster)
+    NT._stateRequested = nil
+end
+
+-- Module-off GROUP_ROSTER_UPDATE still clears the pull flag (frame gate).
+do
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", guid = "Player-1-AL" },
+    })
+    env.KART_Settings.ntModuleEnabled = true
+    NT._stateRequested = true
+    env.KART_Settings.ntModuleEnabled = false
+    KARTTEST.SetRaid({})
+    NT._eventFrame:GetScript("OnEvent")(NT._eventFrame, "GROUP_ROSTER_UPDATE")
+    T.eq(NT._stateRequested, nil, "module-off leave group clears the pull flag")
+    KARTTEST.RestoreRoster(roster)
+    NT._stateRequested = nil
+end
+
+-- Operator in town, locally Restricted, lead not inside: queued Share now resumes when auras clear.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    local savedRealm = KARTTEST.realm
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.activeUnit = "raid1"
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", assist = true, guid = "Player-1-AL" },
+        { name = "Bramor", realm = "TarrenMill", leader = true, guid = "Player-1-BR" },
+    })
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env._isLead = false
+    env._shared = nil
+    NT.leadInRaid = false
+    NT.leadRestricted = false
+    NT._shareQueued = nil
+    KARTTEST.aurasSecret = true
+    KART.PlayerVersions = { Alric = "3.3.1" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "Alric",
+        ntMapId = 1234,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntChecksum = "",
+        ntOrderByInstance = {
+            ["1234:16"] = { order = { 3470 }, skipped = {} },
+        },
+    }
+    KART.L.NT_STATUS_QUEUED = "Waiting until combat ends."
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    NT.ShareNow()
+    T.eq(env._shared, nil, "operator Share now does not Share while locally Restricted")
+    KARTTEST.aurasSecret = false
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE",
+        "queued operator Share now resumes when auras clear and lead is not inside")
+    KART.PlayerVersions = nil
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.realm = savedRealm
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    NT.leadInRaid = nil
+    NT.leadRestricted = nil
+end
+
+-- Turning the module on in a group pulls once.
+do
+    local roster = KARTTEST.SnapshotRoster()
+    KARTTEST.SetRaid({
+        { name = "Alric", realm = "TarrenMill", guid = "Player-1-AL" },
+    })
+    env._isLead = false
+    env._ntSent = {}
+    NT._stateRequested = true
+    env.KART_Settings.ntModuleEnabled = true
+    NT.OnModuleEnabled()
+    local sawReq = false
+    for _, m in ipairs(env._ntSent) do
+        if m == "NT_STATE_REQ" then sawReq = true end
+    end
+    T.eq(sawReq, true, "enabling the module in a group pulls NT_STATE")
+    KARTTEST.RestoreRoster(roster)
+    NT._stateRequested = nil
 end

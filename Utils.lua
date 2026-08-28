@@ -221,6 +221,9 @@ KART.InGameChangelog = {
         version = "Unreleased",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
+            "**Share now waits** while the raid is in combat, including when you are outside.",
+            "**The Notes status line shows who would send.**",
+            "**Boss notes can be dragged to reorder.**",
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",

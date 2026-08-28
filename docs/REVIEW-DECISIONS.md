@@ -222,3 +222,10 @@ spot also carries a short `-- Reviewed 2026-07:` inline comment pointing here.
   (CoTank.lua `KASC:RegisterMessage("CT_ASK")`). Deliberate: the other tank should see the Taunt
   Swap line even when their Co-Tank module is off. `CT.Disable` does not unregister the handler.
   The line itself still honours `ct.taunt.swapLine.enabled`. Do not add a module gate.
+
+## Verified, no change needed (2026-08-28 NSRT Notes)
+
+- **Several NSRT notes for one encounter are not "last imported"** (`Notes.lua`
+  `NT.NoteNameForEncounter`). Spec asked for ActiveReminder then last imported. NSRT's
+  `Reminders` table has no import order. ActiveReminder matching the encounter wins; otherwise
+  the first name after a stable sort of keys. Do not invent an import-order sidecar.

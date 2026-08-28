@@ -219,9 +219,10 @@ function NT.Move(i, j)
             if id == idB then ib = idx end
         end
     end
-    local a, b = bag.order[ia], bag.order[ib]
-    if not a or not b or ia == ib then return end
-    bag.order[ia], bag.order[ib] = b, a
+    if not ia or not ib or ia == ib then return end
+    local item = table.remove(bag.order, ia)
+    if not item then return end
+    table.insert(bag.order, ib, item)
     NT.SetOrder(key, bag.order)
 end
 
@@ -284,6 +285,8 @@ function NT.DefaultEncounterOrder()
     return order
 end
 
+-- ActiveReminder matching this encounter wins; otherwise first sorted name.
+-- Reviewed 2026-08-28: NSRT has no import order. See docs/REVIEW-DECISIONS.md.
 function NT.NoteNameForEncounter(encID, difficultyName)
     if not encID or not difficultyName then return nil end
     if type(NSRT) == "table" and type(NSRT.ActiveReminder) == "string" and NSRT.ActiveReminder ~= "" then
@@ -400,7 +403,7 @@ function NT.CursorChecksum(name)
 end
 
 -- =====================================================================
---  KASC NT_STATE / NT_FLUSH (IDs only — never the note body)
+--  KASC NT_STATE / NT_FLUSH / NT_LEAD / NT_STATE_REQ (IDs only — never the note body)
 -- =====================================================================
 
 local KASC = LibStub("KASC-1.0")
@@ -575,8 +578,56 @@ function NT.SenderMayPublishState(ctx, settings)
     return NT.MatchOperator(settings.ntOperatorName, ctx.shortName, realm, nick)
 end
 
+-- Local GetInstanceInfo is a notes-valid raid. Not RaidMapDiff: town must not look in-raid
+-- just because a stand is published.
+function NT.LocalInstanceIsNotesRaid()
+    local _, instanceType, diff = GetInstanceInfo()
+    return instanceType == "raid" and NT.VALID_DIFFICULTY[diff] == true
+end
+
+-- Operator in town: block Share now when the lead is inside and Restricted.
+-- Fail-open until the first NT_LEAD (leadInRaid nil). Lead uses local AurasSecret, not the echo.
+function NT.LeadWindowBlocksShare()
+    if UnitIsGroupLeader("player") then return false end
+    if NT.leadInRaid == nil then return false end
+    return NT.leadInRaid == true and NT.leadRestricted == true
+end
+
+function NT.DecodeLeadWindow(payload)
+    if type(payload) ~= "string" then return nil end
+    local a, b = payload:match("^([01])\t([01])$")
+    if not a then return nil end
+    return a == "1", b == "1"
+end
+
+function NT.ApplyLeadWindow(inRaid, restricted)
+    NT.leadInRaid = not not inRaid
+    NT.leadRestricted = not not restricted
+    if NT._shareQueued and not NT.LeadWindowBlocksShare() and not NT.AurasSecret() then
+        if NT.ShareIfChosen() then
+            local c = tonumber(KART_Settings and KART_Settings.ntCursor) or 0
+            NT._queueShareCursor = c
+            -- Overlap with NT_FLUSH is the same click; a later visit must still Share this id.
+            C_Timer.After(2, function()
+                if NT._queueShareCursor == c then NT._queueShareCursor = nil end
+            end)
+        end
+    end
+end
+
+function NT.PublishLeadWindow(force)
+    if not NT.KascEnabled() then return end
+    if not UnitIsGroupLeader("player") then return end
+    local inRaid = NT.LocalInstanceIsNotesRaid()
+    local restricted = NT.AurasSecret()
+    local payload = (inRaid and "1" or "0") .. "\t" .. (restricted and "1" or "0")
+    if not force and NT._lastLeadPayload == payload then return end
+    NT._lastLeadPayload = payload
+    KASC:Send("NT_LEAD:" .. payload, nil, nil, { prio = "NORMAL", guaranteed = true })
+end
+
 -- Publish only on local edit or after a successful local share that changes checksum.
--- Never publish from KASC:OnPeer / peer hello — returning clients pull.
+-- Never publish from KASC:OnPeer / peer hello — returning clients pull via NT_STATE_REQ.
 function NT.PublishState()
     if not NT.KascEnabled() then return end
     if not NT.LocalMayPublishState() then return end
@@ -587,9 +638,28 @@ function NT.PublishState()
     KASC:Send("NT_STATE:" .. encoded, nil, nil, { prio = "NORMAL", guaranteed = true })
 end
 
+function NT.RequestState()
+    if not NT.KascEnabled() then return end
+    if not IsInGroup() then return end
+    KASC:Send("NT_STATE_REQ", nil, nil, { prio = "NORMAL", guaranteed = true })
+end
+
+local STATE_ANSWER_COOLDOWN = 5
+
+function NT.AnswerStateRequest()
+    if not NT.KascEnabled() then return end
+    if not NT.LocalMayPublishState() then return end
+    local now = GetTime()
+    if now - (NT._lastStateAnswer or -STATE_ANSWER_COOLDOWN) < STATE_ANSWER_COOLDOWN then return end
+    NT._lastStateAnswer = now
+    NT.PublishState()
+    NT.PublishLeadWindow(true)
+end
+
 function NT.RequestFlush(encID)
     if not NT.KascEnabled() then return end
     if not UnitIsGroupLeader("player") then return end
+    if not NT.LocalInstanceIsNotesRaid() then return end
     local id = tonumber(encID)
     if not id then return end
     KASC:Send("NT_FLUSH:" .. tostring(id), nil, nil, { prio = "ALERT", guaranteed = true })
@@ -611,6 +681,17 @@ if KASC and not KASC._kartNtState then
         local encID = tonumber(payload)
         if not encID then return end
         NT.ApplyFlushAndShare(encID)
+    end)
+
+    KASC:RegisterMessage("NT_LEAD", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload, ctx)
+        if not (KART.SenderIsGroupLeader and KART.SenderIsGroupLeader(ctx)) then return end
+        local inRaid, restricted = NT.DecodeLeadWindow(payload)
+        if inRaid == nil then return end
+        NT.ApplyLeadWindow(inRaid, restricted)
+    end)
+
+    KASC:RegisterMessage("NT_STATE_REQ", { group = true, enabled = NT.KascEnabled }, function()
+        NT.AnswerStateRequest()
     end)
 end
 
@@ -720,6 +801,7 @@ function NT.ShareIfChosen()
     local weSend = (who == "operator" and weOp) or (who == "lead" and weLead)
     if not weSend then return false end
     if NT.Share(noteName) then
+        NT._shareQueued = nil
         local label = (who == "operator" and (KART_Settings.ntOperatorName or "")) or (UnitName("player") or "")
         NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", label))
         local sum = NT.CursorChecksum(noteName)
@@ -741,7 +823,13 @@ function NT.ApplyFlushAndShare(encID)
     NT.pendingFlush = id
     local sendable = NT.ResolveSendableCursor(id)
     KART_Settings.ntCursor = sendable or id
-    if sendable then NT.ShareIfChosen() end
+    -- Queued Share now already Load & Sent this cursor when NT_LEAD unblocked; skip the overlap.
+    if sendable and sendable == NT._queueShareCursor then
+        NT._queueShareCursor = nil
+    elseif sendable then
+        NT._queueShareCursor = nil
+        NT.ShareIfChosen()
+    end
     -- Keep the flag only when Share failed for lack of a notes-valid stand (FLUSH before STATE).
     -- Otherwise a leftover id rewinds the cursor on the next ApplyRemoteState.
     if NT.pendingFlush then
@@ -752,22 +840,26 @@ function NT.ApplyFlushAndShare(encID)
     end
 end
 
--- Wait until auras are not secret (poll 1s, max ~60s), then lead-only RequestFlush.
+-- Wait until auras are not secret and the lead window is not Restricted, then flush or Share.
 local function scheduleLeadFlush(cursor)
     if not cursor then return end
     flushWaitGen = flushWaitGen + 1
     local myGen = flushWaitGen
-    local ticks = 0
     local function attempt()
         if myGen ~= flushWaitGen then return end
-        if NT.AurasSecret() then
-            ticks = ticks + 1
-            if ticks >= 60 then return end
+        NT.PublishLeadWindow()
+        if NT.AurasSecret() or NT.LeadWindowBlocksShare() then
             C_Timer.After(1, attempt)
             return
         end
         if UnitIsGroupLeader("player") then
-            NT.RequestFlush(cursor)
+            if NT.LocalInstanceIsNotesRaid() then
+                NT.RequestFlush(cursor)
+            else
+                NT.ShareIfChosen()
+            end
+        else
+            NT.ShareIfChosen()
         end
     end
     attempt()
@@ -833,28 +925,98 @@ function NT.RefreshStatus()
         NT.SetStatus(L.NT_STATUS_NO_NSRT or "")
         return
     end
-    local op = KART_Settings and KART_Settings.ntOperatorName or ""
-    if op ~= "" then
-        if operatorUnit() then
-            NT.SetStatus(string.format(L.NT_STATUS_OPERATOR_HERE or "%s", op))
-        else
-            NT.SetStatus(string.format(L.NT_STATUS_OPERATOR_GONE or "%s", op))
-        end
+    if NT.AurasSecret() or NT.LeadWindowBlocksShare() then
+        NT.SetStatus(L.NT_STATUS_QUEUED or "")
         return
     end
-    local who = UnitName("player") or ""
-    NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", who))
+    local cursor = NT.ResolveSendableCursor(KART_Settings and tonumber(KART_Settings.ntCursor) or 0)
+    if not cursor then
+        NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
+        return
+    end
+    local _, diff = NT.RaidMapDiff()
+    local noteName = NT.NoteNameForEncounter(cursor, NT.DIFFICULTY_NAMES[diff])
+    if not noteName then
+        NT.SetStatus(L.NT_STATUS_NO_NOTE or "")
+        return
+    end
+    local opts = NT.SenderOpts(noteName)
+    if opts.operatorPresent and not opts.operatorAssist then
+        NT.SetStatus(L.NT_STATUS_PROMOTE or "")
+        return
+    end
+    if opts.operatorPresent and not opts.checksumMatch then
+        NT.SetStatus(L.NT_STATUS_STALE or "")
+        return
+    end
+    local who = NT.ChooseSender(opts)
+    if who == "operator" then
+        NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", KART_Settings.ntOperatorName or ""))
+        return
+    end
+    if who == "lead" then
+        local op = KART_Settings and KART_Settings.ntOperatorName or ""
+        if op ~= "" and not opts.operatorPresent then
+            NT.SetStatus(string.format(L.NT_STATUS_OPERATOR_GONE or "%s", op))
+            return
+        end
+        NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", UnitName("player") or ""))
+        return
+    end
+    NT.SetStatus("")
 end
 
 function NT.ShareNow()
     local L = KART.L or {}
-    if NT.AurasSecret() then
+    if NT.AurasSecret() or NT.LeadWindowBlocksShare() then
         NT.SetStatus(L.NT_STATUS_QUEUED or "")
+        NT._shareQueued = true
         local cursor = KART_Settings and tonumber(KART_Settings.ntCursor)
         if cursor and cursor ~= 0 then NT.EnqueueFlush(cursor) end
         return
     end
     NT.ShareIfChosen()
+end
+
+local function maybePullState()
+    if not IsInGroup() then
+        NT._stateRequested = nil
+        return
+    end
+    if NT._stateRequested then return end
+    NT.RequestState()
+    NT._stateRequested = true
+end
+
+function NT.OnModuleEnabled()
+    NT._stateRequested = nil
+    maybePullState()
+    if UnitIsGroupLeader("player") then NT.PublishLeadWindow() end
+end
+
+local windowPollGen = 0
+
+local function ensureLeadWindowPoll()
+    if not NT.KascEnabled() or not UnitIsGroupLeader("player") then return end
+    if not NT.LocalInstanceIsNotesRaid() then
+        NT.PublishLeadWindow()
+        return
+    end
+    if NT._windowPolling then return end
+    NT._windowPolling = true
+    windowPollGen = windowPollGen + 1
+    local my = windowPollGen
+    local function tick()
+        if my ~= windowPollGen then return end
+        if not NT.KascEnabled() or not UnitIsGroupLeader("player") or not NT.LocalInstanceIsNotesRaid() then
+            NT._windowPolling = nil
+            NT.PublishLeadWindow()
+            return
+        end
+        NT.PublishLeadWindow()
+        C_Timer.After(1, tick)
+    end
+    tick()
 end
 
 function NT.OnEvent(e, ...)
@@ -880,6 +1042,12 @@ function NT.OnEvent(e, ...)
         local isLead = UnitIsGroupLeader("player") and true or false
         if not KART_Settings then return end
         NT.EnsureShape(KART_Settings)
+        -- Pull even in town (operator / relog). Once per group; leave group clears the flag.
+        maybePullState()
+        if isLead then
+            NT.PublishLeadWindow()
+            ensureLeadWindowPoll()
+        end
         -- Left the raid (or not a notes-valid difficulty): drop the visit so a later
         -- hearth/re-enter of the same map id is treated as a new visit.
         if NT.ClearVisitIfLeftRaid() then
@@ -899,6 +1067,16 @@ function NT.OnEvent(e, ...)
         -- Publish before NT_FLUSH so the town operator has map/diff when they are the sender.
         bumpAndPublish()
         scheduleLeadFlush(cursor)
+        return
+    end
+
+    if e == "GROUP_ROSTER_UPDATE" then
+        maybePullState()
+        if UnitIsGroupLeader("player") then
+            NT.PublishLeadWindow()
+            ensureLeadWindowPoll()
+        end
+        if NT.RefreshStatus then NT.RefreshStatus() end
     end
 end
 
@@ -907,10 +1085,14 @@ if not NT._eventFrame then
     local f = CreateFrame("Frame")
     f:RegisterEvent("ENCOUNTER_END")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("GROUP_ROSTER_UPDATE")
     f:SetScript("OnEvent", function(_, e, ...)
         if not KART_Settings then return end
         if KART_Settings.ntModuleEnabled ~= true then
             if e == "PLAYER_ENTERING_WORLD" then NT.ClearVisitIfLeftRaid() end
+            if e == "GROUP_ROSTER_UPDATE" and not IsInGroup() then
+                NT._stateRequested = nil
+            end
             return
         end
         NT.OnEvent(e, ...)
@@ -997,14 +1179,6 @@ function NT.RefreshBossList()
             row.nameText:SetJustifyH("LEFT")
             KART.UI:RegisterLabel(row.nameText)
 
-            row.btnDown = KART.UI:CreateModernButton(row, L.NT_BTN_DOWN)
-            row.btnDown:SetSize(36, 22)
-            row.btnDown:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-
-            row.btnUp = KART.UI:CreateModernButton(row, L.NT_BTN_UP)
-            row.btnUp:SetSize(36, 22)
-            row.btnUp:SetPoint("RIGHT", row.btnDown, "LEFT", -4, 0)
-
             row.skipStore = {}
             row.skip = KART.UI:CreateSettingsCheckbox(row, {
                 name = nil, label = L.NT_SKIP, y = 0,
@@ -1017,9 +1191,33 @@ function NT.RefreshBossList()
                 end,
             })
             row.skip:ClearAllPoints()
-            row.skip:SetPoint("RIGHT", row.btnUp, "LEFT", -8, 0)
+            row.skip:SetPoint("RIGHT", row, "RIGHT", -4, 0)
             row.skip.text:SetWidth(70)
             row.nameText:SetPoint("RIGHT", row.skip, "LEFT", -10, 0)
+
+            row:RegisterForDrag("LeftButton")
+            row:SetScript("OnDragStart", function(self)
+                NT._dragFrom = self.index
+            end)
+            row:SetScript("OnDragStop", function()
+                local dest
+                local foci = GetMouseFoci and GetMouseFoci()
+                if type(foci) == "table" then
+                    for n = 1, #foci do
+                        local f = foci[n]
+                        while f do
+                            if f.encID and f.index then dest = f break end
+                            f = f.GetParent and f:GetParent()
+                        end
+                        if dest then break end
+                    end
+                end
+                local from = NT._dragFrom
+                NT._dragFrom = nil
+                if from and dest and dest.index and from ~= dest.index then
+                    NT.Move(from, dest.index)
+                end
+            end)
 
             panel.rows[i] = row
         end
@@ -1028,27 +1226,12 @@ function NT.RefreshBossList()
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -((i - 1) * (ROW_H + ROW_GAP)))
         row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
 
-        local label = boss.name
+        local label = i .. ". " .. (boss.name or "")
         if boss.id == cursor then label = "> " .. label end
         row.encID = boss.id
         row.index = i
         row.nameText:SetText(escapeUI(label))
         row.skip:SetChecked(boss.skipped)
-        row.btnUp:SetScript("OnClick", function()
-            if i > 1 then NT.Move(i, i - 1) end
-        end)
-        row.btnDown:SetScript("OnClick", function()
-            if i < #bosses then NT.Move(i, i + 1) end
-        end)
-        row:SetScript("OnMouseDown", function(_, button)
-            if button ~= "LeftButton" then return end
-            if NT._dragFrom and NT._dragFrom ~= i then
-                NT.Move(NT._dragFrom, i)
-                NT._dragFrom = nil
-            else
-                NT._dragFrom = i
-            end
-        end)
 
         row:Show()
         totalH = i * (ROW_H + ROW_GAP)
@@ -1077,6 +1260,9 @@ function NT.BuildPanel(parent)
         tooltip = L.DESC_NT_MODULE_ENABLED,
         onChanged = function()
             if KART.RefreshModuleChips then KART.RefreshModuleChips() end
+            if KART_Settings and KART_Settings.ntModuleEnabled then
+                NT.OnModuleEnabled()
+            end
         end,
     })
     KART.CbNtModuleEnabled.text:SetWidth(430)
@@ -1185,8 +1371,6 @@ function NT.BuildPanel(parent)
         end
         if NT.bossListFrame and NT.bossListFrame.rows then
             for _, row in ipairs(NT.bossListFrame.rows) do
-                if row.btnUp and row.btnUp.text then row.btnUp.text:SetText(Lx.NT_BTN_UP) end
-                if row.btnDown and row.btnDown.text then row.btnDown.text:SetText(Lx.NT_BTN_DOWN) end
                 if row.skip and row.skip.text then row.skip.text:SetText(Lx.NT_SKIP) end
             end
         end

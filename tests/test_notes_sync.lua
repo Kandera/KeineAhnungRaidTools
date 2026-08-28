@@ -137,3 +137,37 @@ do
     T.eq(#raider.env._nsiShares, 0, "exactly one sender: raider does not Share")
     T.eq(#RaidSim.Sent(sim, "NT_FLUSH:"), 1, "kill still emits NT_FLUSH")
 end
+
+-- Returning operator pulls NT_STATE; hello still does not push.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local lead, op = lm, raider
+
+    lead.env.KART_Settings.ntModuleEnabled = true
+    op.env.KART_Settings.ntModuleEnabled = true
+    lead.env.KART_Settings.ntOperatorName = "Wuusch"
+    op.env.KART_Settings.ntOperatorName = "Wuusch"
+
+    op.env.KART_Settings.ntGeneration = 1
+    op.KART.NT.generation = 1
+    lead.env.KART_Settings.ntGeneration = 4
+    lead.env.KART_Settings.ntEditor = "Bramor-TarrenMill"
+    lead.env.KART_Settings.ntMapId = 1
+    lead.env.KART_Settings.ntDiff = 16
+    lead.env.KART_Settings.ntCursor = 3470
+    lead.env.KART_Settings.ntChecksum = "pulled"
+    lead.env.KART_Settings.ntOrderByInstance = {
+        ["1:16"] = { order = { 3470 }, skipped = {} },
+    }
+    lead.KART.NT.generation = 4
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(op, function()
+        op.KART.NT.RequestState()
+    end)
+    T.eq(#RaidSim.Sent(sim, "NT_STATE_REQ"), 1, "operator pull emits NT_STATE_REQ")
+    T.eq(#RaidSim.Sent(sim, "NT_STATE:"), 1, "lead answers the pull with NT_STATE")
+    T.eq(op.KART.NT.generation, 4, "operator applied the pulled generation")
+    T.eq(op.env.KART_Settings.ntChecksum, "pulled", "operator applied the pulled checksum")
+    T.eq(#RaidSim.Sent(sim, "NT_LEAD:"), 1, "lead answers the pull with NT_LEAD")
+end

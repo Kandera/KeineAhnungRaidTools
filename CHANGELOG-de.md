@@ -9,6 +9,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unreleased]
 ### Hinzugefügt
 - **NSRT Notes** lädt nach einem Kill die nächste Northern-Sky-Shared-Note und sendet sie.
+- **Teilen jetzt wartet**, bis der Raidkampf endet, auch wenn du draußen bist.
+- **Die Notes-Statuszeile zeigt, wer senden würde.**
+- **Bosse in Notes lassen sich per Ziehen umsortieren.**
 - **Die Taunt-Swap-Zeile lässt sich ausschalten.**
 - **Die Taunt-Swap-Zeile lässt sich im Bearbeiten-Modus verschieben.**
 - **Eine Taunt-Swap-Zeile** erscheint beim anderen Tank für ein paar Sekunden, mit eigenen Look-Einstellungen.

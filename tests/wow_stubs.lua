@@ -1315,6 +1315,12 @@ function _G.GetInstanceInfo()
            i.mapID or 2912
 end
 
+-- Midnight: GetMouseFocus is gone. Notes row drop reads this list and walks GetParent to the row.
+KARTTEST.mouseFoci = {}
+function _G.GetMouseFoci()
+    return KARTTEST.mouseFoci
+end
+
 -- Combat logging, as real state: AutoLog's whole job is deciding when to turn this on and, more
 -- delicately, when it is allowed to turn it back off. None of these three existed here before
 -- 2026-08-01, so KART.AutoLog.Evaluate had never run.
