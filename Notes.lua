@@ -2,6 +2,8 @@ local addonName, KART = ...
 KART.NT = KART.NT or {}
 local NT = KART.NT
 
+NT.DIFFICULTY_NAMES = { [14] = "Normal", [15] = "Heroic", [16] = "Mythic" }
+
 local function djb2(str)
     local h = 5381
     for i = 1, #str do
@@ -57,4 +59,34 @@ function NT.EnsureShape(settings)
     if settings.ntModuleEnabled == nil then settings.ntModuleEnabled = false end
     settings.ntOperatorName = settings.ntOperatorName or ""
     settings.ntOrderByInstance = settings.ntOrderByInstance or {}
+end
+
+function NT.MatchOperator(operatorName, unitName, realm, nickname)
+    if not operatorName or operatorName == "" or not unitName then return false end
+    local KAUtil = LibStub("KAUtil-1.0")
+    local fold = function(s) return KAUtil.CaseFold(s) end
+    local want = fold(operatorName)
+    if want == fold(unitName) then return true end
+    if nickname and want == fold(nickname) then return true end
+    if realm and realm ~= "" then
+        local qualified = fold(unitName) .. "-" .. fold(realm)
+        local canon = fold(unitName) .. "-" .. KAUtil.CanonRealm(realm)
+        if want == qualified or want == canon then return true end
+        -- operator typed with a space in the realm
+        if want == fold(unitName .. "-" .. realm) then return true end
+        local opBase, opRealm = operatorName:match("^(.-)%-(.+)$")
+        if opBase and opRealm then
+            local opCanon = fold(opBase) .. "-" .. KAUtil.CanonRealm(opRealm)
+            if opCanon == qualified or opCanon == canon then return true end
+        end
+    end
+    return false
+end
+
+function NT.ChooseSender(opts)
+    if not opts or opts.moduleEnabled == false or not opts.hasNote then return nil end
+    local opOk = opts.operatorPresent and opts.operatorAssist and opts.operatorKart and opts.checksumMatch
+    if opOk then return "operator" end
+    if opts.isLead then return "lead" end
+    return nil
 end

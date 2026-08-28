@@ -1,13 +1,6 @@
 -- NSRT Notes: sequence, cursor, generation. Isolated load of Notes.lua.
 local env = setmetatable({}, { __index = _G })
 env.KART_Settings = {}
-env.LibStub = function()
-    return {
-        RegisterMessage = function() end,
-        Send = function() end,
-        DefaultChannel = function() return "RAID" end,
-    }
-end
 local KART = { L = {}, UI = { RegisterStaticPopup = function() end, CreateCard = function() return {} end } }
 env.KART = KART
 do
@@ -46,4 +39,30 @@ end
 
 do
     T.eq(NT.InstanceKey(1234, 16), "1234:16", "instance key is map+difficulty")
+end
+
+do
+    T.eq(NT.MatchOperator("Wuusch", "Wuuschdk", "TarrenMill", "Wuusch"), true, "nickname matches")
+    T.eq(NT.MatchOperator("Wuuschdk", "Wuuschdk", "TarrenMill", nil), true, "short name matches")
+    T.eq(NT.MatchOperator("Wuuschdk-Tarren Mill", "Wuuschdk", "TarrenMill", nil), true, "realm-qualified matches canon")
+    T.eq(NT.MatchOperator("Wuusch", "Alric", "TarrenMill", "Kandera"), false, "wrong nick does not match")
+end
+
+do
+    local function S(over)
+        local o = {
+            moduleEnabled = true, isLead = true, operatorPresent = true,
+            operatorAssist = true, operatorKart = true, checksumMatch = true, hasNote = true,
+        }
+        for k, v in pairs(over or {}) do o[k] = v end
+        return NT.ChooseSender(o)
+    end
+    T.eq(S(), "operator", "operator preferred when present and fresh")
+    T.eq(S({ operatorPresent = false }), "lead", "absent operator falls back to lead")
+    T.eq(S({ operatorKart = false }), "lead", "no KART hello is absence")
+    T.eq(S({ operatorAssist = false }), "lead", "operator without assist is not the sender")
+    T.eq(S({ checksumMatch = false }), "lead", "stale note: lead sends")
+    T.eq(S({ moduleEnabled = false }), nil, "disabled module sends nobody")
+    T.eq(S({ hasNote = false }), nil, "no note: nobody sends")
+    T.eq(S({ isLead = false, operatorPresent = false }), nil, "non-lead without operator does not send")
 end
