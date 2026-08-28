@@ -39,6 +39,7 @@ function KART.ShowTab(tabIndex)
         KART.SettingsPanel,
         KART.WoWUtilsPanel,
         KART.CoTankPanel,
+        KART.NotesPanel,
     }
     for i, panel in ipairs(panels) do
         if panel then panel:SetShown(i == tabIndex) end
@@ -51,6 +52,7 @@ function KART.ShowTab(tabIndex)
         KART.BtnSettings,
         KART.BtnWoWUtils,
         KART.BtnCoTank,
+        KART.BtnNotes,
     }
     for i, btn in ipairs(buttons) do
         if btn then btn:SetActive(i == tabIndex) end
@@ -238,8 +240,12 @@ KART.BtnCoTank = KART.UI:CreateTabButton(clickArea, L.TAB_COTANK, { moduleChip =
 KART.BtnCoTank:SetPoint("TOPLEFT", KART.BtnWoWUtils, "BOTTOMLEFT", 0, -5)
 KART.BtnCoTank:SetScript("OnClick", function() KART.ShowTab(6) end)
 
+KART.BtnNotes = KART.UI:CreateTabButton(clickArea, L.TAB_NOTES, { moduleChip = true, icon = Media("tab-wowutils.png") })
+KART.BtnNotes:SetPoint("TOPLEFT", KART.BtnCoTank, "BOTTOMLEFT", 0, -5)
+KART.BtnNotes:SetScript("OnClick", function() KART.ShowTab(7) end)
+
 KART.SidebarSystemHeader = clickArea:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-KART.SidebarSystemHeader:SetPoint("TOPLEFT", KART.BtnCoTank, "BOTTOMLEFT", 2, -10)
+KART.SidebarSystemHeader:SetPoint("TOPLEFT", KART.BtnNotes, "BOTTOMLEFT", 2, -10)
 KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM)
 KART.UI:RegisterLabel(KART.SidebarSystemHeader)
 
@@ -281,6 +287,7 @@ KART.ModuleChipKeys = {
     [KART.BtnBuffCheck] = "bcModuleEnabled",
     [KART.BtnWoWUtils] = "wuModuleEnabled",
     [KART.BtnCoTank] = "ctModuleEnabled",
+    [KART.BtnNotes] = "ntModuleEnabled",
 }
 function KART.RefreshModuleChips()
     local s = KART_Settings
@@ -402,6 +409,11 @@ KART.CoTankPanel:SetAllPoints()
 KART.CoTankPanel:Hide()
 KART.CreateTabTitle(6, KART.L.LABEL_COTANK_SETTINGS)
 
+KART.NotesPanel = CreateFrame("Frame", nil, scrollChild)
+KART.NotesPanel:SetAllPoints()
+KART.NotesPanel:Hide()
+KART.CreateTabTitle(7, L.TAB_NOTES)
+
 -- Scrollbar Thumb, accent-tinted via KART.UI's accent-texture registry
 local scrollThumb = KART.UI:StripScrollbarTextures(scrollFrame)
 if scrollThumb then scrollThumb:SetSize(8, 30) end
@@ -431,6 +443,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 670, -- Settings: two half cards + accent/profiles + addon versions + RC companion
     [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
+    [7] = 80, -- Notes: enable card only until Task 8 four-card panel
 }
 function KART.UpdateScrollRange()
     local tab = KART.CurrentTab
@@ -1637,6 +1650,7 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnBuffCheck.text:SetText(L.TAB_BUFFCHECK)
     KART.BtnWoWUtils.text:SetText(L.TAB_WOWUTILS)
     KART.BtnCoTank.text:SetText(L.TAB_COTANK)
+    if KART.BtnNotes then KART.BtnNotes.text:SetText(L.TAB_NOTES) end
     KART.BtnSettings.text:SetText(L.TAB_SETTINGS)
     if KART.SidebarModulesHeader then KART.SidebarModulesHeader:SetText(L.LABEL_MODULES) end
     if KART.SidebarSystemHeader then KART.SidebarSystemHeader:SetText(L.LABEL_SYSTEM) end
@@ -1666,6 +1680,7 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.TabTitles[3]:SetText(L.LABEL_BUFFCHECK_SETTINGS)
     KART.TabTitles[4]:SetText(L.LABEL_GENERAL_SETTINGS)
     if KART.TabTitles[6] then KART.TabTitles[6]:SetText(L.LABEL_COTANK_SETTINGS) end
+    if KART.TabTitles[7] then KART.TabTitles[7]:SetText(L.TAB_NOTES) end
     -- TabTitles[5] belongs to Invite.lua and is refreshed there.
 
     -- Raidlead tab

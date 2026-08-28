@@ -345,18 +345,22 @@ function NT.RequestFlush(encID)
     KASC:Send("NT_FLUSH:" .. tostring(id), nil, nil, { prio = "ALERT", guaranteed = true })
 end
 
-KASC:RegisterMessage("NT_STATE", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload, ctx)
-    local incoming = NT.DecodeState(payload)
-    if not incoming then return end
-    if not NT.SenderMayPublishState(ctx, KART_Settings) then return end
-    NT.ApplyRemoteState(KART_Settings, incoming)
-end)
+-- Guard: test_mainframe reloads Notes.lua after MainFrame; KASC rejects duplicate tokens.
+if KASC and not KASC._kartNtState then
+    KASC._kartNtState = true
+    KASC:RegisterMessage("NT_STATE", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload, ctx)
+        local incoming = NT.DecodeState(payload)
+        if not incoming then return end
+        if not NT.SenderMayPublishState(ctx, KART_Settings) then return end
+        NT.ApplyRemoteState(KART_Settings, incoming)
+    end)
 
-KASC:RegisterMessage("NT_FLUSH", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload)
-    local encID = tonumber(payload)
-    if not encID then return end
-    NT.pendingFlush = encID
-end)
+    KASC:RegisterMessage("NT_FLUSH", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload)
+        local encID = tonumber(payload)
+        if not encID then return end
+        NT.pendingFlush = encID
+    end)
+end
 
 -- =====================================================================
 --  Events: kill / zone-in enqueue; lead-only flush when auras are clear
@@ -448,16 +452,51 @@ function NT.OnEvent(e, ...)
     end
 end
 
-local f = CreateFrame("Frame")
-f:RegisterEvent("ENCOUNTER_END")
-f:RegisterEvent("PLAYER_ENTERING_WORLD")
-f:SetScript("OnEvent", function(_, e, ...)
-    if not KART_Settings or KART_Settings.ntModuleEnabled ~= true then return end
-    NT.OnEvent(e, ...)
-end)
+-- Guard: second Notes.lua load must not register a second event frame.
+if not NT._eventFrame then
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("ENCOUNTER_END")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:SetScript("OnEvent", function(_, e, ...)
+        if not KART_Settings or KART_Settings.ntModuleEnabled ~= true then return end
+        NT.OnEvent(e, ...)
+    end)
+    NT._eventFrame = f
+end
 
 function NT.BuildPanel(parent)
-    -- Panel widgets land in Task 7 / Task 8.
+    if NT._panelBuilt then return end
+    NT._panelBuilt = true
+    local L = KART.L
+    local function SettingsStore() return KART_Settings end
+
+    local enableCard = KART.UI:CreateCard(parent)
+    enableCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -12)
+    enableCard:SetSize(500, 50)
+    KART.CbNtModuleEnabled = KART.UI:CreateSettingsCheckbox(enableCard, {
+        name = "KART_NtModuleEnabled", label = L.SET_NT_MODULE_ENABLED,
+        store = SettingsStore, key = "ntModuleEnabled", y = -20,
+        tooltip = L.DESC_NT_MODULE_ENABLED,
+        onChanged = function()
+            if KART.RefreshModuleChips then KART.RefreshModuleChips() end
+        end,
+    })
+    KART.CbNtModuleEnabled.text:SetWidth(430)
+    KART.CbNtModuleEnabled.text:SetJustifyH("LEFT")
+
+    KART.UI:RegisterLocaleRefresher(function()
+        local Lx = KART.L
+        if KART.CbNtModuleEnabled then
+            KART.CbNtModuleEnabled.text:SetText(Lx.SET_NT_MODULE_ENABLED)
+            KART.CbNtModuleEnabled.tooltipText = Lx.DESC_NT_MODULE_ENABLED
+        end
+    end)
+end
+
+function NT.SyncWidgets()
+    local settingsMap = {}
+    if KART.CbNtModuleEnabled then settingsMap[KART.CbNtModuleEnabled] = "ntModuleEnabled" end
+    KART.ApplySettingsMap(settingsMap)
 end
 
 if KART.NotesPanel then

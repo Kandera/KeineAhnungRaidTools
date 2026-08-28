@@ -64,6 +64,7 @@ function KART.SyncSettingsToUI()
     if KART.RC and KART.RC.SyncWidgets then KART.RC.SyncWidgets() end
     if KART.WU and KART.WU.SyncWidgets then KART.WU.SyncWidgets() end
     if KART.CT and KART.CT.SyncWidgets then KART.CT.SyncWidgets() end
+    if KART.NT and KART.NT.SyncWidgets then KART.NT.SyncWidgets() end
     -- Refresh styles AFTER the widgets have their values, so toggle-switch visuals (which only
     -- update via UpdateStyles/RefreshVisual) reflect the just-loaded state — matters after a profile
     -- switch, which has no separate UpdateStyles of its own the way ADDON_LOADED does.
