@@ -26,6 +26,7 @@ local CLIENT_FILES = {
     "GroupLogic.lua",
     "BuffChecker.lua",
     "Invite.lua",
+    "Notes.lua",
     "AutoLog.lua",
     "RCCompanion.lua",
     "RCOwed.lua",

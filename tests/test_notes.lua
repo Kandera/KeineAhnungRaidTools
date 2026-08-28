@@ -1,8 +1,25 @@
 -- NSRT Notes: sequence, cursor, generation. Isolated load of Notes.lua.
+-- Wrap LibStub so Notes.lua never registers onto run.lua's shared _G KASC
+-- (RegisterMessage asserts on duplicate tokens).
 local env = setmetatable({}, { __index = _G })
 env.KART_Settings = {}
 local KART = { L = {}, UI = { RegisterStaticPopup = function() end, CreateCard = function() return {} end } }
 env.KART = KART
+do
+    local realLibStub = LibStub
+    local kascStub = {
+        RegisterMessage = function() end,
+        Send = function() end,
+        OnPeer = function() end,
+    }
+    env.LibStub = setmetatable({}, {
+        __index = realLibStub,
+        __call = function(_, name, silent)
+            if name == "KASC-1.0" then return kascStub end
+            return realLibStub(name, silent)
+        end,
+    })
+end
 do
     local chunk = assert(loadstring(assert(io.open("Notes.lua", "r"):read("*a")), "@Notes.lua"))
     setfenv(chunk, env)
@@ -107,4 +124,13 @@ do
     T.eq(NT.Share("Boss1"), true, "share returns true")
     T.eq(env._shared[1], "NSI_REM_SHARE", "uses Reloe event not NSI_MSG")
     T.eq(NT.Share("Nope"), false, "missing name does not share")
+end
+
+do
+    local s = { gen = 2, editor = "A-T", operator = "Wuusch", mapId = 1, diff = 16,
+                cursor = 3470, checksum = "deadbeef", order = { 3470, 3445 }, skipped = { [3445] = true } }
+    local round = NT.DecodeState(NT.EncodeState(s))
+    T.eq(round.gen, 2, "gen roundtrips")
+    T.eq(round.cursor, 3470, "cursor roundtrips")
+    T.eq(round.skipped[3445], true, "skip roundtrips")
 end
