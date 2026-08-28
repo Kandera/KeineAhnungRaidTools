@@ -2,74 +2,74 @@
 
 # Keine Ahnung Raid Tools (KART)
 
-A lightweight, modular World of Warcraft addon built specifically for raid and group leaders. It streamlines invite management, raid-readiness checks, and gives quick access to essential raid lead tools.
+A lightweight, modular World of Warcraft addon for raid and group leaders. Invites, readiness, a compact raidlead bar, Co-Tank, and — from 4.1 — Load & Send of the next [Northern Sky](https://github.com/Reloe/NorthernSkyRaidTools) shared note after a kill.
 
 ## Features
 
 ### 1. Automation
-All automatic group functions bundled into a single tab:
-*   **Keyword Invite:** Reacts to configurable keywords (e.g. "inv", "+") in whispers, guild chat, or Battle.net messages. The guild-chat trigger is a separate toggle (disabled by default) to avoid accidental invites from casual guild chat.
-*   **Auto-Promote:** Automatically promotes predefined players to assistant as soon as they join the group. Ideal for co-leads and fixed raid roles. Each entry accepts either a character name or a [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) nickname, so it keeps applying automatically even after that person switches to a different character.
-*   **Auto-Raid:** Automatically converts the group into a raid when a 6th player requests an invite; a full 5-man party stays a party.
+All automatic group functions on one tab:
+*   **Keyword Invite:** Reacts to configurable keywords (e.g. "inv", "+") on the channels you enable: whisper, Battle.net, guild, and officer chat. Guild and officer are off by default so casual chat does not invite. If a keyword matched but the invite could not go out, KART replies on that same channel (including Battle.net).
+*   **Auto-Promote:** Promotes predefined players to assistant when they join. Each entry is a character name or an NSRT nickname, so it still applies after they switch alts. Promote waits until combat ends.
+*   **Auto-Raid:** Converts the group to a raid when a 6th player requests an invite; a full 5-man party stays a party.
 
 ### 2. Raid Lead Bar
-A compact, movable bar for quick access to:
-*   **Raid Target Icons:** Set markers on targets.
-*   **World Markers:** Place colored pillars on the terrain.
-*   **Ready Check:** Instantly start a ready check.
-*   **Pull Timer:** Customizable countdown for pull start (native WoW countdown, no BigWigs/DBM required; default: 10 seconds).
-*   **Keybinds:** Ready Check, Clear World Markers, Pull Timer, and the Buff Checker toggle can each be bound to a key from the Raid Lead settings tab (click a bind button, then press the key; binding it there steals the key from whichever action already had it, like Blizzard's own keybind UI). Bindings keep working through combat lockdown once set.
+A compact, movable bar:
+*   **Raid Target Icons** and **World Markers.** Right-click a marker on the bar to clear that marker.
+*   **Ready Check** and a native **Pull Timer** (no BigWigs/DBM; default 10 seconds).
+*   **Look:** scale, button size, bar opacity, and layer (including under the world map). Optional combat auto-hide. Optional hide of Blizzard's raid manager while the bar is shown; Northern Sky is not touched.
+*   **Keybinds** on the Raidlead tab (Ready Check, clear world markers, Pull Timer, Buff Checker). Once set, they keep working through combat lockdown.
 
 ### 3. Enhanced Ready Check
-*   When players click "Not Ready", a modern window opens where they can select a quick reason (AFK, drink, 1 min) or enter custom free text. These reasons are posted to the raid lead in chat and shown in the Buff Checker via a small hint icon next to the player's name (full text in tooltip on hover) — regardless of text length, without breaking the layout.
+*   When players click "Not Ready", they pick a short reason (AFK, drink, 1 min) or type free text. The lead sees it in chat and as a hint icon on the Buff Checker (full text on hover).
 
 ### 4. Buff Checker & KART Sync
-A detailed window for checking raid readiness:
-*   **Stat Check:** Checks Intellect, Stamina, Mark of the Wild, Battle Shout, Blessing of the Bronze, and Skyfury.
-*   **Consumables:** Shows who has an active Food, Flask, or Rune buff.
-*   **Extended View (Gear Check):** A dedicated view shows exact item level as well as missing enchants and gems. An interactive tooltip shows exactly which armor slots are missing them.
-*   **Weapon Oil & KART Sync:** Hidden addon messages between KART users read out the exact weapon oil status, even when players are too far away to inspect.
-*   **Durability:** Shows equipment repair status (requires *LibDurability*).
-*   **Report Function:** Posts missing buffs directly to raid or party chat.
-*   **Ready Check Integration:** Opens automatically when a ready check starts.
-*   **Module Toggle:** The Buff Checker can be fully disabled to save CPU when not needed. The background KART sync (oil/ilvl/gear answers for others) stays active regardless, so the raid lead still sees correct data about this player.
+Raid-readiness window:
+*   **Stat Check:** Intellect, Stamina, Mark of the Wild, Battle Shout, Blessing of the Bronze, and Skyfury.
+*   **Consumables:** Food, Flask, Rune, plus **Healthstone** (the stone in bags) and **Soulstone**.
+*   **Extended View (Gear Check):** Item level, missing enchants and gems, with a tooltip for which slots.
+*   **Weapon Oil & KART Sync:** Hidden addon messages read oil even when the player is too far to inspect.
+*   **Durability** (needs *LibDurability*). **Report** posts missing buffs to raid or party; Shift-click Report whispers flask and food to whoever is missing them.
+*   Opens on a ready check. Can be disabled to save CPU; background sync (oil/ilvl/gear for others) stays on.
+*   **Advanced** shows whether RC, NSRT and WowUtils are current, outdated, or missing. **Check Addon Versions** on Settings sends a window to raiders who are behind.
+*   The empty slot under Buff Check opens Role Poll, Convert, and Restrict Pings.
 
 ### 5. Co-Tank frame
-*   Enable it on the Co-Tank tab (off by default). The tab shows a live preview of the row so you can set it up in town.
-*   Test mode keeps the invented row after you close the window. Live: tank role, optional group/instance filters (dungeons and raids on by default). Unlock the row to place it without a group.
-*   Left-click the row to target the other tank.
-*   Optional: announce your own taunt so the other tank hears it, and an on-screen button (or action-bar macro) that asks them to take the mob. Both off until you turn them on.
+*   Off until you enable it on the Co-Tank tab. The tab previews the row in town. Test mode keeps the invented row after you close the window.
+*   Live: other tank's health, debuffs and buffs. Optional group/instance filters (dungeons stay off; raids on by default). Unlock to place it without a group. Left-click targets the other tank.
+*   Look, Text and Auras open in a companion panel (bar texture and optional gradient, LibSharedMedia when installed).
+*   Optional: say when you taunt, an on-screen **take it** button (or action-bar macro), and a short Taunt Swap line on the other tank. All off until you turn them on. Test mode for the line in town.
 
-### 6. RCLootCouncil companion
-KART 4.0 no longer ships a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. **WowUtils** (addon + Bridge) paints sim columns on RC's voting frame.
+### 6. NSRT Notes
+After a kill — and when the lead zones into the raid — KART loads and shares the next Northern Sky **shared** note so healers are not stuck on the previous boss.
+*   Paste imported shared notes on the **Notes** tab. **Delete notes** next to Import clears the NSRT shared library and the paste box.
+*   The list is Encounter Journal order, then extra notes. Drag to reorder (drop target highlights), skip, or click a boss to start there. Each row shows difficulty; Invite and Remove swap that boss's imported roster.
+*   A designated **note operator** (often calling from town) owns the list when they are in the group, assistant, and not stale. Only the raid leader sets the operator name. The lead sends if the operator is missing or has no KART.
+*   **Share now** waits while the raid is in combat, including when you are outside. In town, share uses the lead's published difficulty, not a local guess. The status line shows who would send.
 
-KART adds three hooks on top of RC:
+### 7. RCLootCouncil companion
+KART does not ship a built-in loot council. **Install [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** for session, voting, trade UI and loot history. **WowUtils** (addon + Bridge) paints sim columns on RC's voting frame.
 
-*   **Council by nickname:** On the Settings tab, the raid leader lists council members as [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) nicknames (or character names). KART pushes only the GUIDs of members whose current alt is in the raid into RC's council list whenever the roster changes.
-*   **Award relay:** Council members click Award in RC's voting frame; KART whispers the raid leader, whose client calls RC's `Award()` so the lead can keep trading instead of living in the voting UI.
-*   **Winner trade reminder:** When you win an item, a small window lists what you are owed so you can walk to the raid leader and open trade. The leader still uses RCLootCouncil's Trade UI. Personal toggle on the Settings tab (on by default); `/kart owed` reopens the list.
+KART adds three hooks:
+
+*   **Council by nickname:** On Settings, the raid leader lists council as NSRT nicknames (or character names). KART pushes only GUIDs of members whose current alt is in the raid into RC's council list.
+*   **Award relay:** Council clicks Award in RC; KART whispers the raid leader, whose client calls RC's `Award()` so the lead can keep trading.
+*   **Winner trade reminder:** When you win an item, a small window lists what you are owed so you can walk to the lead. The lead still uses RC's Trade UI. Toggle on Settings (on by default); `/kart owed` reopens it.
 
 This guild runs KART as a raid requirement. Other raiders still need RCLootCouncil and WowUtils (addon + Bridge). The old desktop **KART Companion** tray app is discontinued; it is not the WowUtils Bridge.
 
-### 7. WoWUtils roster paste
-*   Raid compositions can be imported from WoWUtils via copy-paste on the **WoWUtils** tab (boss-by-boss format with encounter, difficulty, and invite list).
-*   Each imported boss gets its own row with **Invite** and **Remove** buttons to swap compositions quickly.
-*   Multiple imports merge by encounter + difficulty; **Reset** clears the saved list.
-
 ### 8. Customization (Settings)
-*   Fully customizable interface (colors, transparency, fonts).
-*   Standard-compliant controls: windows and text fields can be closed/deselected with ESC.
-*   English and German language support.
-*   Access via minimap icon or the Addon Compartment frame.
-*   Version checker: check whether all raiders are running the latest KART version (`/kart v`).
-*   **Modular disabling:** The Buff Checker can be fully disabled to save CPU when not needed.
+*   Colors, transparency, fonts. Windows and text fields close or deselect with ESC.
+*   English and German. Minimap icon or Addon Compartment.
+*   **Edit Mode** dims the world with a Done banner so every enabled module frame can be placed in town without changing saved locks.
+*   In-game changelog panel; footer links for CurseForge, Wago and GitHub (copy-from box).
+*   Version check: `/kart v`. Modular disable for the Buff Checker.
 
 ## Requirements
 
+*   **[Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools)** — shared notes (Notes tab) and nicknames for auto-promote and the RC council list. Character names still work when a nickname is absent.
 *   **RCLootCouncil** — loot council (required for loot features).
 *   **WowUtils addon** — RC voting-frame columns.
 *   **WowUtils Bridge** — WowUtils' data pipe (not the discontinued KART Companion tray app).
-*   **Northern Sky Raid Tools** (optional) — nicknames for auto-promote and RC council list; falls back to character names when absent.
 
 ## Slash Commands
 

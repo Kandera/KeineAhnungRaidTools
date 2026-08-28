@@ -218,7 +218,7 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
-        version = "Unreleased",
+        version = "4.1.0",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
             "**Notes in town wait for the lead's difficulty** before sharing.",

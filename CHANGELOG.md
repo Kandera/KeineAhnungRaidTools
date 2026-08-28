@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.1.0] - 2026-08-29
 ### Added
 - **NSRT Notes** loads and shares the next Northern Sky shared note after a kill.
 - **Delete notes** next to Import clears shared Northern Sky notes and the paste box.
@@ -906,7 +908,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
 [1.10.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v1.9.2...v1.10.0

@@ -2,74 +2,74 @@
 
 # Keine Ahnung Raid Tools (KART)
 
-Ein leichtgewichtiges und modulares World of Warcraft Addon, das speziell für Raid- und Gruppenleiter entwickelt wurde. Es vereinfacht das Einladungsmanagement, die Kontrolle der Schlachtzugsvorbereitung und bietet schnellen Zugriff auf wichtige Raidlead-Funktionen.
+Ein leichtgewichtiges, modulares World of Warcraft Addon für Raid- und Gruppenleiter. Einladungen, Bereitschaft, kompakte Raidlead-Leiste, Co-Tank, und ab 4.1 Load & Send der nächsten [Northern-Sky](https://github.com/Reloe/NorthernSkyRaidTools)-Shared-Note nach einem Kill.
 
 ## Funktionen
 
 ### 1. Automation
-Alle automatischen Gruppen-Funktionen gebündelt in einem Tab:
-*   **Keyword-Invite:** Reagiert auf konfigurierbare Schlagworte (z. B. "inv", "+") im Flüstern, Gildenchat oder über das Battle.net. Der Gildenchat-Trigger ist ein eigener Schalter (standardmäßig deaktiviert), um versehentliche Invites durch normale Gildenchat-Gespräche zu vermeiden.
-*   **Auto-Promote:** Befördert vordefinierte Spieler automatisch zu Assistenten, sobald sie der Gruppe beitreten. Ideal für Co-Leiter und feste Rollen im Raid. Jeder Eintrag akzeptiert wahlweise einen Charakternamen oder einen [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools) (NSRT) Nickname, sodass er automatisch weitergilt, auch wenn diese Person auf einen anderen Charakter wechselt.
-*   **Auto-Raid:** Wandelt die Gruppe automatisch in einen Schlachtzug um, sobald ein 6. Spieler um eine Einladung bittet; eine volle 5er-Gruppe bleibt eine Gruppe.
+Alle automatischen Gruppen-Funktionen in einem Tab:
+*   **Keyword-Invite:** Reagiert auf konfigurierbare Schlagworte (z. B. "inv", "+") auf den Kanälen, die du einschaltest: Flüstern, Battle.net, Gilde und Offizier. Gilde und Offizier sind standardmäßig aus, damit normaler Chat nicht einlädt. Wenn ein Stichwort passte, die Einladung aber nicht rausging, antwortet KART auf demselben Kanal (auch Battle.net).
+*   **Auto-Promote:** Befördert vordefinierte Spieler zu Assistenten, sobald sie beitreten. Jeder Eintrag ist ein Charaktername oder ein NSRT-Nickname, gilt also auch nach einem Alt-Wechsel. Befördern wartet, bis der Kampf vorbei ist.
+*   **Auto-Raid:** Wandelt die Gruppe in einen Schlachtzug um, sobald ein 6. Spieler um eine Einladung bittet; eine volle 5er-Gruppe bleibt eine Gruppe.
 
 ### 2. Raidlead-Leiste
-Eine kompakte, verschiebbare Leiste für den schnellen Zugriff auf:
-*   **Schlachtzugs-Symbole:** Setzen von Markern auf Ziele.
-*   **Welt-Marker:** Platzieren von farbigen Säulen im Gelände.
-*   **Ready-Check:** Startet sofort eine Bereitschaftsabfrage.
-*   **Pull-Timer:** Anpassbarer Countdown für den Kampfbeginn (nativer WoW-Countdown, kein BigWigs/DBM nötig; Standard: 10 Sekunden).
-*   **Tastenbelegung:** Ready-Check, Welt-Marker löschen, Pull-Timer und der Buff-Checker-Umschalter lassen sich jeweils im Raidlead-Einstellungstab auf eine Taste legen (Bind-Button klicken, dann die Taste drücken; die Taste wird dabei der Aktion entzogen, die sie zuvor belegt hatte, genau wie bei Blizzards eigener Tastenbelegung). Einmal gesetzt, funktionieren die Bindings auch während einer Kampfsperre weiter.
+Eine kompakte, verschiebbare Leiste:
+*   **Schlachtzugs-Symbole** und **Welt-Marker.** Rechtsklick auf einen Marker in der Leiste löscht genau diesen Marker.
+*   **Ready-Check** und ein nativer **Pull-Timer** (kein BigWigs/DBM; Standard 10 Sekunden).
+*   **Look:** Skalierung, Button-Größe, Deckkraft und Ebene (auch unter der Weltkarte). Optional automatisch im Kampf ausblenden. Optional Blizzards Raid-Manager ausblenden, solange die Leiste an ist; Northern Sky bleibt.
+*   **Tastenbelegung** im Raidlead-Tab (Ready-Check, Welt-Marker löschen, Pull-Timer, Buff-Checker). Einmal gesetzt, funktionieren die Bindings auch während einer Kampfsperre.
 
 ### 3. Erweiterter Ready-Check
-*   Wenn Spieler auf "Nicht bereit" klicken, öffnet sich ein modernes Fenster, in dem sie schnelle Gründe (Bio, Trinken, 1 Min) oder einen eigenen Freitext angeben können. Diese Gründe werden dem Raidlead im Chat gepostet und im Buff-Checker über ein kleines Hinweis-Icon neben dem Namen angezeigt (voller Text im Tooltip beim Hovern) — unabhängig von der Textlänge, ohne dass das Layout überläuft.
+*   Wenn Spieler auf "Nicht bereit" klicken, wählen sie einen kurzen Grund (Bio, Trinken, 1 Min) oder Freitext. Der Lead sieht das im Chat und als Hinweis-Icon im Buff-Checker (voller Text beim Hovern).
 
 ### 4. Buff-Checker & KART Sync
-Ein detailliertes Fenster zur Überprüfung der Raid-Vorbereitung:
-*   **Stat-Check:** Überprüft Intelligenz, Ausdauer, Mal der Wildnis, Schlachtruf, Segen der Bronze und Himmelszorn.
-*   **Verbrauchsgüter:** Zeigt an, wer Essen (Food), Fläschchen (Flask) oder Runen aktiv hat.
-*   **Erweiterte Ansicht (Gear-Check):** Eine spezielle Ansicht zeigt das genaue Item-Level sowie fehlende Verzauberungen und Edelsteine. Ein interaktiver Tooltip verrät exakt, auf welchen Rüstungsslots diese fehlen.
-*   **Waffenöl & KART Sync:** Über versteckte Addon-Nachrichten zwischen KART-Nutzern wird der exakte Status von Waffenöl ausgelesen, selbst wenn Spieler zu weit entfernt sind.
-*   **Haltbarkeit:** Zeigt den Reparaturstatus der Ausrüstung (erfordert *LibDurability*).
-*   **Bericht-Funktion:** Postet fehlende Buffs direkt in den Raid- oder Gruppenchat.
-*   **Ready-Check Integration:** Öffnet sich automatisch bei einer Bereitschaftsabfrage.
-*   **Modul-Schalter:** Der Buff-Checker lässt sich komplett deaktivieren, um CPU zu sparen, wenn man ihn nicht braucht. Der Hintergrund-KART-Sync (Öl/ilvl/Gear-Antworten für andere) bleibt davon unberührt aktiv, damit der Raidleiter trotzdem korrekte Daten über diesen Spieler sieht.
+Fenster zur Raid-Vorbereitung:
+*   **Stat-Check:** Intelligenz, Ausdauer, Mal der Wildnis, Schlachtruf, Segen der Bronze und Himmelszorn.
+*   **Verbrauchsgüter:** Essen, Fläschchen, Runen, plus **Gesundheitsstein** (Stein in den Taschen) und **Seelenstein**.
+*   **Erweiterte Ansicht (Gear-Check):** Item-Level, fehlende Verzauberungen und Edelsteine, mit Tooltip für die Slots.
+*   **Waffenöl & KART Sync:** Versteckte Addon-Nachrichten lesen Öl auch, wenn der Spieler zu weit weg ist.
+*   **Haltbarkeit** (braucht *LibDurability*). **Bericht** postet fehlende Buffs in Raid oder Gruppe; Umschalt-Klick auf Posten flüstert Fläschchen und Essen an alle, denen etwas fehlt.
+*   Öffnet sich bei einer Bereitschaftsabfrage. Lässt sich deaktivieren, um CPU zu sparen; der Hintergrund-Sync (Öl/ilvl/Gear für andere) bleibt an.
+*   **Advanced** zeigt, ob RC, NSRT und WowUtils aktuell, veraltet oder fehlend sind. **Addon-Versionen prüfen** unter Settings schickt Raidern, die hinterherhinken, ein Fenster.
+*   Der freie Slot unter Buff Check öffnet Rollenabfrage, Umwandeln und Ping-Einschränkung.
 
 ### 5. Co-Tank-Fenster
-*   Im Co-Tank-Tab einschalten (standardmäßig aus). Der Tab zeigt eine Vorschau der Zeile, damit du sie in der Stadt einstellen kannst.
-*   Testmodus lässt die erfundene Zeile nach dem Schließen stehen. Live: Tank-Rolle, optional nur Gruppe / nur Instanz (Dungeon und Raid standardmäßig an). Entsperren zum Platzieren ohne Gruppe.
-*   Linksklick auf die Zeile zielt den anderen Tank an.
-*   Optional: eigenen Taunt ansagen, damit der andere Tank es hört, plus ein Button (oder Aktionsleisten-Makro) der ihn zum Übernehmen auffordert. Beides aus, bis du es einschaltest.
+*   Aus, bis du es im Co-Tank-Tab einschaltest. Der Tab zeigt eine Vorschau in der Stadt. Der Testmodus lässt die erfundene Zeile nach dem Schließen stehen.
+*   Live: Leben, Debuffs und Buffs des anderen Tanks. Optionale Gruppen-/Instanzfilter (Dungeons bleiben aus; Raids standardmäßig an). Entsperren zum Platzieren ohne Gruppe. Linksklick zielt den anderen Tank an.
+*   Look, Text und Auren öffnen sich in einem Begleitfenster (Balkentextur und optionaler Verlauf, LibSharedMedia wenn installiert).
+*   Optional: eigenen Taunt sagen, ein **Übernehmen**-Button (oder Aktionsleisten-Makro) und eine kurze Taunt-Swap-Zeile beim anderen Tank. Alles aus, bis du es einschaltest. Testmodus für die Zeile in der Stadt.
 
-### 6. RCLootCouncil-Begleiter
-KART 4.0 bringt keinen eingebauten Loot Council mehr mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. **WowUtils** (Addon + Bridge) malt Sim-Spalten ins RC-Abstimmungsfenster.
+### 6. NSRT Notes
+Nach einem Kill — und wenn der Lead den Raid betritt — lädt KART die nächste Northern-Sky-**Shared-Note** und sendet sie, damit Heiler nicht auf dem vorherigen Boss hängen bleiben.
+*   Geteilte Notizen auf dem **Notes**-Tab einfügen. **Notizen löschen** neben Import leert die NSRT-Shared-Library und das Paste-Feld.
+*   Die Liste startet in Encounter-Journal-Reihenfolge, danach Extra-Notizen. Ziehen zum Umsortieren (Zielzeile leuchtet), auslassen oder einen Boss anklicken, um dort zu starten. Jede Zeile zeigt die Schwierigkeit; Einladen und Entfernen tauschen den importierten Roster dieses Bosses.
+*   Ein **Notiz-Operator** (oft Caller von draußen) besitzt die Liste, wenn er in der Gruppe ist, Assistent ist und nicht veraltet. Nur der Raidlead setzt den Operatornamen. Der Lead sendet, wenn der Operator fehlt oder kein KART hat.
+*   **Teilen jetzt** wartet, solange der Raid im Kampf ist, auch wenn du draußen bist. In der Stadt gilt die veröffentlichte Schwierigkeit des Leads, kein lokales Raten. Die Statuszeile zeigt, wer senden würde.
+
+### 7. RCLootCouncil-Begleiter
+KART bringt keinen eingebauten Loot Council mit. **Installiere [RCLootCouncil](https://www.curseforge.com/wow/addons/rclootcouncil)** für Session, Abstimmung, Trade-UI und Loot-Historie. **WowUtils** (Addon + Bridge) malt Sim-Spalten ins RC-Abstimmungsfenster.
 
 KART ergänzt drei Hooks:
 
-*   **Council per Nickname:** Auf dem Settings-Tab trägt der Raidleiter Council-Mitglieder als [Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools)-Nicknames (oder Charakternamen) ein. KART schreibt nur die GUIDs von Mitgliedern, deren aktueller Alt im Raid steht, bei Roster-Änderungen in RCs Council-Liste.
-*   **Award-Weiterleitung:** Council-Mitglieder klicken Award im RC-Abstimmungsfenster; KART flüstert dem Raidlead zu, dessen Client RCs `Award()` aufruft, während der Lead weiter handelt.
-*   **Trade-Erinnerung für Gewinner:** Wenn du ein Item gewinnst, listet ein kleines Fenster, was dir noch zusteht, damit du zum Raidlead laufen und den Handel öffnen kannst. Der Lead nutzt weiter die Trade-UI von RCLootCouncil. Persönlicher Schalter auf dem Settings-Tab (standardmäßig an); `/kart owed` öffnet die Liste erneut.
+*   **Council per Nickname:** Unter Settings trägt der Raidlead Council als NSRT-Nicknames (oder Charakternamen) ein. KART schreibt nur die GUIDs von Mitgliedern, deren aktueller Alt im Raid steht, in RCs Council-Liste.
+*   **Award-Weiterleitung:** Council klickt Award in RC; KART flüstert dem Raidlead, dessen Client RCs `Award()` aufruft, während der Lead weiter handelt.
+*   **Trade-Erinnerung für Gewinner:** Wenn du ein Item gewinnst, listet ein kleines Fenster, was dir noch zusteht, damit du zum Lead laufen kannst. Der Lead nutzt weiter RCs Trade-UI. Schalter unter Settings (standardmäßig an); `/kart owed` öffnet die Liste erneut.
 
 In dieser Gilde ist KART raidpflichtig. Alle anderen brauchen weiterhin RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
 
-### 7. WoWUtils-Roster per Paste
-*   Raid-Zusammenstellungen lassen sich auf dem **WoWUtils**-Tab per Copy-Paste aus WoWUtils importieren (Boss-für-Boss-Format mit Encounter, Difficulty und Invite-Liste).
-*   Pro Boss eine Zeile mit **Einladen**- und **Entfernen**-Buttons zum schnellen Umbau der Zusammensetzung.
-*   Mehrere Imports werden nach Encounter + Difficulty zusammengeführt; **Zurücksetzen** leert die gespeicherte Liste.
-
 ### 8. Anpassung (Settings)
-*   Vollständig anpassbares Interface (Farben, Transparenz, Schriftarten).
-*   Standardkonforme Steuerung: Fenster und Textfelder lassen sich mit ESC schließen oder abwählen.
-*   Deutsch und Englisch.
-*   Zugriff über Minimap-Icon oder Addon Compartment Frame.
-*   Versionscheck (`/kart v`).
-*   **Modul-Schalter:** Der Buff-Checker lässt sich deaktivieren.
+*   Farben, Transparenz, Schriftarten. Fenster und Textfelder schließen oder abwählen mit ESC.
+*   Deutsch und Englisch. Minimap-Icon oder Addon Compartment.
+*   **Bearbeiten-Modus** dunkelt die Welt ab mit einem Fertig-Banner, damit jedes eingeschaltete Modul-Fenster in der Stadt platziert werden kann, ohne gespeicherte Sperren zu ändern.
+*   Changelog-Panel im Spiel; Footer-Links für CurseForge, Wago und GitHub (Box zum Kopieren).
+*   Versionscheck: `/kart v`. Buff-Checker lässt sich deaktivieren.
 
 ## Voraussetzungen
 
+*   **[Northern Sky Raid Tools](https://github.com/Reloe/NorthernSkyRaidTools)** — Shared Notes (Notes-Tab) und Nicknames für Auto-Promote und die RC-Council-Liste. Charakternamen gelten, wenn kein Nickname da ist.
 *   **RCLootCouncil** — Loot Council (für Loot-Features erforderlich).
 *   **WowUtils-Addon** — Spalten im RC-Abstimmungsfenster.
 *   **WowUtils-Bridge** — WowUtils-Datenpipe (nicht die eingestellte KART-Companion-Tray-App).
-*   **Northern Sky Raid Tools** (optional) — Nicknames für Auto-Promote und RC-Council; sonst Charakternamen.
 
 ## Slash-Befehle
 
