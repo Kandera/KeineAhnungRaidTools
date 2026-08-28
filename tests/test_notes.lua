@@ -88,3 +88,23 @@ do
     KARTTEST.aurasSecret = false
     T.eq(NT.AurasSecret(), false, "clear auras allow share")
 end
+
+do
+    T.eq(NT.HasNSRT(), false, "no NSRT")
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(self, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+    }}
+    T.eq(NT.HasNSRT(), true, "NSRT table is enough")
+    local list = NT.ListSharedNotes("Mythic")
+    T.eq(#list, 1, "one mythic note")
+    T.eq(list[1].encID, 3470, "listed by encounter")
+    T.eq(NT.Share("Boss1"), true, "share returns true")
+    T.eq(env._shared[1], "NSI_REM_SHARE", "uses Reloe event not NSI_MSG")
+    T.eq(NT.Share("Nope"), false, "missing name does not share")
+end

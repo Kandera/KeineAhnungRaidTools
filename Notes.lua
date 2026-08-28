@@ -114,3 +114,51 @@ function NT.ChooseSender(opts)
     if opts.isLead then return "lead" end
     return nil
 end
+
+-- NSRT / NorthernSkyRaidTools are resolved as globals at call time (chunk env), never captured
+-- at load and never via _G — OptionalDep may load after this file; tests inject into the sandbox.
+
+function NT.HasNSRT()
+    return type(NSRT) == "table"
+end
+
+function NT.NoteBody(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    if type(NSRT) ~= "table" or type(NSRT.Reminders) ~= "table" then return nil end
+    local body = NSRT.Reminders[name]
+    if type(body) ~= "string" or body == "" then return nil end
+    return body
+end
+
+function NT.ListSharedNotes(difficultyName)
+    local out = {}
+    if type(NSRT) ~= "table" or type(NSRT.Reminders) ~= "table" then return out end
+    for name, body in pairs(NSRT.Reminders) do
+        if type(body) == "string" then
+            local enc, diff = NT.ParseNoteHeader(body)
+            if enc and diff == difficultyName then
+                out[#out + 1] = { name = name, encID = enc, body = body }
+            end
+        end
+    end
+    return out
+end
+
+function NT.Share(name)
+    local NSI = NorthernSkyRaidTools
+    if type(NSI) ~= "table" then return false end
+    if type(NSI.SetReminder) ~= "function" or type(NSI.Broadcast) ~= "function" then return false end
+    if type(NSRT) ~= "table" or type(NSRT.Reminders) ~= "table" then return false end
+    local body = NSRT.Reminders[name]
+    if type(body) ~= "string" or body == "" then return false end
+    local okSet = pcall(NSI.SetReminder, NSI, name)
+    if not okSet then return false end
+    local okSend = pcall(NSI.Broadcast, NSI, "NSI_REM_SHARE", "RAID", NSRT.Reminders[name], nil, true)
+    return okSend and true or false
+end
+
+function NT.CursorChecksum(name)
+    local body = NT.NoteBody(name)
+    if not body then return nil end
+    return NT.Checksum(body)
+end
