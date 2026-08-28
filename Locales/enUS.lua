@@ -491,6 +491,7 @@ KART.L_enUS = {
     NT_LABEL_OPERATOR = "Note operator",
     DESC_NT_OPERATOR = "Character name or Northern Sky nickname. If they are not in the raid, you do their tasks; this field does not change.",
     NT_BTN_SHARE = "Share now",
+    NT_BTN_SKIP_ADVANCE = "Skip-and-advance",
     NT_BTN_RESET_ORDER = "Reset order",
     NT_BTN_UP = "Up",
     NT_BTN_DOWN = "Down",

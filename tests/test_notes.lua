@@ -4,14 +4,18 @@
 local env = setmetatable({}, { __index = _G })
 env.KART_Settings = {}
 env._ntSent = {}
+env._ntHandlers = {}
 env._isLead = false
 env.UnitIsGroupLeader = function() return env._isLead end
 local KART = { L = {}, UI = { RegisterStaticPopup = function() end, CreateCard = function() return {} end } }
+KART.SenderIsGroupLeader = function(ctx) return ctx and ctx.lead == true end
 env.KART = KART
 do
     local realLibStub = LibStub
     local kascStub = {
-        RegisterMessage = function() end,
+        RegisterMessage = function(_, token, _, fn)
+            env._ntHandlers[token] = fn
+        end,
         Send = function(_, msg)
             env._ntSent[#env._ntSent + 1] = msg
         end,
@@ -147,11 +151,37 @@ end
 
 -- Event wiring: kill advances cursor and lead flushes; wipe / non-lead / zone visit.
 do
+    local function seedNSRT()
+        env.NorthernSkyRaidTools = {
+            SetReminder = function() end,
+            Broadcast = function(_, ev, ch, body)
+                env._shared = { ev, ch, body }
+            end,
+        }
+        env.NSRT = { Reminders = {
+            Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+            Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+            Boss3 = "EncounterID:3445;Name:Skipped;Difficulty:Mythic\ncd",
+        }}
+    end
+
     local function resetNT()
         env._ntSent = {}
+        env._shared = nil
         env._isLead = true
         NT.lastVisit = nil
         KARTTEST.aurasSecret = false
+        KARTTEST.instance.mapID = 1
+        KARTTEST.instance.instanceType = "raid"
+        KARTTEST.instance.difficultyID = 16
+        seedNSRT()
+        NT._encountersForMap = function()
+            return {
+                { id = 3470, name = "Nekzali" },
+                { id = 3497, name = "Next" },
+                { id = 3445, name = "Skipped" },
+            }
+        end
         env.KART_Settings = {
             ntModuleEnabled = true,
             ntOperatorName = "",
@@ -165,31 +195,50 @@ do
         }
     end
 
+    local function flushSent()
+        local n, last = 0, nil
+        for _, m in ipairs(env._ntSent) do
+            if type(m) == "string" and m:sub(1, 9) == "NT_FLUSH:" then
+                n = n + 1
+                last = m
+            end
+        end
+        return n, last
+    end
+
     resetNT()
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 0)
     T.eq(#env._ntSent, 0, "wipe does not flush")
     T.eq(env.KART_Settings.ntCursor, 3470, "wipe does not move cursor")
+    T.eq(env._shared, nil, "wipe does not Load & Send")
 
     resetNT()
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
     T.eq(env.KART_Settings.ntCursor, 3497, "kill advances cursor via NextAfter")
-    T.eq(#env._ntSent, 1, "lead flushes after kill when auras clear")
-    T.eq(env._ntSent[1], "NT_FLUSH:3497", "flush carries next encounter id")
+    local nFlush, lastFlush = flushSent()
+    T.eq(nFlush, 1, "lead flushes after kill when auras clear")
+    T.eq(lastFlush, "NT_FLUSH:3497", "flush carries next encounter id")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "kill Load & Sends via NSRT")
+    T.eq(env._shared and env._shared[3]:find("3497", 1, true) ~= nil, true, "kill shares the next note")
 
     resetNT()
     env._isLead = false
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
     T.eq(env.KART_Settings.ntCursor, 3497, "non-lead still advances cursor")
     T.eq(#env._ntSent, 0, "non-lead does not emit NT_FLUSH on kill")
+    T.eq(env._shared, nil, "non-lead kill does not Load & Send")
 
     resetNT()
     KARTTEST.aurasSecret = true
     NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
     T.eq(#env._ntSent, 0, "secret auras defer the flush")
+    T.eq(env._shared, nil, "secret auras do not Load & Send yet")
     KARTTEST.aurasSecret = false
     KARTTEST.AdvanceTime(1.1)
-    T.eq(#env._ntSent, 1, "flush fires once auras clear")
-    T.eq(env._ntSent[1], "NT_FLUSH:3497", "deferred flush is the advanced cursor")
+    nFlush, lastFlush = flushSent()
+    T.eq(nFlush, 1, "flush fires once auras clear")
+    T.eq(lastFlush, "NT_FLUSH:3497", "deferred flush is the advanced cursor")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "deferred flush Load & Sends")
 
     resetNT()
     KARTTEST.instance.mapID = 9001
@@ -198,8 +247,10 @@ do
     NT.OnEvent("PLAYER_ENTERING_WORLD")
     T.eq(NT.lastVisit, 9001, "zone-in stores visit token")
     T.eq(env.KART_Settings.ntLastVisit, 9001, "zone-in persists visit on SV")
-    T.eq(#env._ntSent, 1, "lead zone-in flushes current cursor")
-    T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in flushes existing cursor")
+    nFlush, lastFlush = flushSent()
+    T.eq(nFlush, 1, "lead zone-in flushes current cursor")
+    T.eq(lastFlush, "NT_FLUSH:3470", "zone-in flushes existing cursor")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "zone-in Load & Sends via NSRT")
     env._ntSent = {}
     NT.OnEvent("PLAYER_ENTERING_WORLD")
     T.eq(#env._ntSent, 0, "same visit does not flush again")
@@ -208,12 +259,14 @@ do
     env.KART_Settings.ntCursor = 0
     KARTTEST.instance.mapID = 9002
     NT.OnEvent("PLAYER_ENTERING_WORLD")
-    T.eq(env._ntSent[1], "NT_FLUSH:3470", "zone-in uses first sendable when cursor empty")
+    nFlush, lastFlush = flushSent()
+    T.eq(lastFlush, "NT_FLUSH:3470", "zone-in uses first sendable when cursor empty")
 
     resetNT()
     KARTTEST.instance.mapID = 9003
     NT.OnEvent("PLAYER_ENTERING_WORLD")
-    T.eq(#env._ntSent, 1, "first PEW enqueues")
+    nFlush = flushSent()
+    T.eq(nFlush, 1, "first PEW enqueues")
     T.eq(env.KART_Settings.ntLastVisit, 9003, "visit persisted on SavedVariables")
     env._ntSent = {}
     NT.OnEvent("PLAYER_ENTERING_WORLD")
@@ -231,7 +284,8 @@ do
     KARTTEST.instance.instanceType = "raid"
     KARTTEST.instance.difficultyID = 16
     NT.OnEvent("PLAYER_ENTERING_WORLD")
-    T.eq(#env._ntSent, 1, "zone into raid enqueues once")
+    nFlush = flushSent()
+    T.eq(nFlush, 1, "zone into raid enqueues once")
     env._ntSent = {}
     NT.lastVisit = nil
     T.eq(env.KART_Settings.ntLastVisit, 9004, "still inside: SV holds visit")
@@ -252,8 +306,52 @@ do
     KARTTEST.instance.difficultyID = 16
     KARTTEST.instance.mapID = 9004
     NT.OnEvent("PLAYER_ENTERING_WORLD")
-    T.eq(#env._ntSent, 1, "hearth and re-enter same map enqueues again")
-    T.eq(env._ntSent[1], "NT_FLUSH:3470", "re-enter shares current cursor")
+    nFlush, lastFlush = flushSent()
+    T.eq(nFlush, 1, "hearth and re-enter same map enqueues again")
+    T.eq(lastFlush, "NT_FLUSH:3470", "re-enter shares current cursor")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "re-enter Load & Sends")
+
+    -- First raid night: empty SV, unprimed map. Stamp the live stand and share boss 1.
+    resetNT()
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 0,
+        ntLastVisit = 0,
+        ntOrderByInstance = {},
+    }
+    env._shared = nil
+    KARTTEST.instance.mapID = 2805
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(env.KART_Settings.ntMapId, 2805, "zone-in stamps live map onto the stand")
+    T.eq(env.KART_Settings.ntDiff, 16, "zone-in stamps live difficulty onto the stand")
+    T.eq(env.KART_Settings.ntCursor, 3470, "empty SV shares the first sendable")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "first raid night Load & Sends")
+    T.eq(env.KART_Settings.ntLastVisit, 2805, "visit is written after a cursor was resolved")
+
+    -- No sendable cursor: do not consume the visit token.
+    resetNT()
+    NT._encountersForMap = function() return {} end
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 0,
+        ntDiff = 0,
+        ntCursor = 0,
+        ntLastVisit = 0,
+        ntOrderByInstance = {},
+    }
+    env.NSRT = { Reminders = {} }
+    env._shared = nil
+    KARTTEST.instance.mapID = 2806
+    NT.OnEvent("PLAYER_ENTERING_WORLD")
+    T.eq(env.KART_Settings.ntLastVisit == nil or env.KART_Settings.ntLastVisit == 0, true,
+        "no cursor means visit is not consumed")
+    T.eq(env._shared, nil, "no sendable note means no Load & Send")
+    NT._encountersForMap = nil
+    seedNSRT()
 end
 
 -- SetOrder / SetSkipped bump generation and persist order (data, not drag).
@@ -304,8 +402,11 @@ do
     T.eq(#env._ntSent, 0, "Share now does not flush while secret")
     KARTTEST.aurasSecret = false
     KARTTEST.AdvanceTime(1.1)
-    T.eq(#env._ntSent, 1, "queued Share now flushes once auras clear")
-    T.eq(env._ntSent[1], "NT_FLUSH:3470", "queued flush is the cursor")
+    local queuedFlush
+    for _, m in ipairs(env._ntSent) do
+        if type(m) == "string" and m:sub(1, 9) == "NT_FLUSH:" then queuedFlush = m end
+    end
+    T.eq(queuedFlush, "NT_FLUSH:3470", "queued flush is the cursor")
 end
 
 -- Operator in town: Share now uses the raid stand, not local open-world difficulty.
@@ -391,4 +492,172 @@ do
     NT.pendingFlush = nil
     KARTTEST.RestoreRoster(roster)
     inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+end
+
+-- NT_FLUSH receive applies the cursor and Load & Sends when this client is the chosen sender.
+do
+    env._isLead = true
+    env._shared = nil
+    env._ntSent = {}
+    KARTTEST.aurasSecret = false
+    KARTTEST.instance.mapID = 1
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497 }, skipped = {} },
+        },
+    }
+    T.truthy(env._ntHandlers.NT_FLUSH, "NT_FLUSH handler is registered")
+    env._ntHandlers.NT_FLUSH("3497", { shortName = "Bramor", lead = true })
+    T.eq(env.KART_Settings.ntCursor, 3497, "flush receive applies payload to cursor")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "flush receive Load & Sends")
+
+    env._shared = nil
+    env.KART_Settings.ntCursor = 3470
+    env._ntHandlers.NT_FLUSH("3497", { shortName = "Alric", lead = false })
+    T.eq(env.KART_Settings.ntCursor, 3470, "non-lead flush does not move cursor")
+    T.eq(env._shared, nil, "non-lead flush does not Load & Send")
+end
+
+-- RequestFlush is lead-only.
+do
+    env._isLead = false
+    env._ntSent = {}
+    env._shared = nil
+    env.KART_Settings.ntModuleEnabled = true
+    NT.RequestFlush(3470)
+    T.eq(#env._ntSent, 0, "non-lead RequestFlush does not emit")
+    T.eq(env._shared, nil, "non-lead RequestFlush does not Share")
+end
+
+-- Skip-and-advance: skipped cursor moves; Share now does not send a skipped id.
+do
+    env._isLead = true
+    env._shared = nil
+    env._ntSent = {}
+    KARTTEST.aurasSecret = false
+    KARTTEST.instance.mapID = 1
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+        Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+        Boss3 = "EncounterID:3445;Name:Third;Difficulty:Mythic\ncd",
+    }}
+    env.KART_Settings = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntGeneration = 0,
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497, 3445 }, skipped = {} },
+        },
+    }
+    NT.generation = 0
+    NT.SetSkipped("1:16", 3470, true)
+    T.eq(env.KART_Settings.ntCursor, 3497, "skipping the current cursor advances it")
+
+    env._shared = nil
+    env.KART_Settings.ntCursor = 3470
+    env.KART_Settings.ntOrderByInstance["1:16"].skipped = { [3470] = true }
+    NT.ShareNow()
+    T.eq(env.KART_Settings.ntCursor, 3497, "Share now advances off a skipped cursor")
+    T.eq(env._shared and env._shared[3]:find("3497", 1, true) ~= nil, true,
+        "Share now sends the next sendable, not the skipped id")
+
+    env._shared = nil
+    env.KART_Settings.ntCursor = 3497
+    env.KART_Settings.ntOrderByInstance["1:16"].skipped = {}
+    NT.SkipAndAdvance()
+    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[3497], true, "SkipAndAdvance skips the cursor")
+    T.eq(env.KART_Settings.ntCursor, 3445, "SkipAndAdvance moves to the next sendable")
+end
+
+-- Several notes for one encounter: ActiveReminder wins; else first stable match.
+do
+    env.NSRT = {
+        ActiveReminder = "Alpha",
+        Reminders = {
+            Alpha = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\nalpha",
+            Later = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\nlater",
+        },
+    }
+    T.eq(NT.NoteNameForEncounter(3470, "Mythic"), "Alpha", "ActiveReminder matching the encounter wins")
+    env.NSRT.ActiveReminder = "Unrelated"
+    env.NSRT.Reminders.Unrelated = "EncounterID:9999;Name:Other;Difficulty:Mythic\nx"
+    T.eq(NT.NoteNameForEncounter(3470, "Mythic"), "Alpha",
+        "without a matching ActiveReminder, first stable name wins")
+end
+
+-- EncountersFromEJ / ResetOrder use the raid stand map, not local town GetInstanceInfo.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    inst.instanceType = "none"
+    inst.difficultyID = 1
+    inst.mapID = 99
+    env.KART_Settings.ntMapId = 1234
+    env.KART_Settings.ntDiff = 16
+    env.EJ_GetNumTiers = function() return 1 end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 1234 then return 77 end
+        return nil
+    end
+    env.EJ_SelectInstance = function() end
+    NT._encountersForMap = nil
+    local list = NT.EncountersFromEJ()
+    T.eq(#list, 1, "town EncountersFromEJ uses the stand map")
+    T.eq(list[1] and list[1].id, 3470, "stand map yields the raid encounter")
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.EJ_GetNumTiers = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
+    env.EJ_SelectInstance = nil
+end
+
+-- Successful ApplyRemoteState refreshes the Notes panel.
+do
+    local listHits, statusHits = 0, 0
+    local origList, origStatus = NT.RefreshBossList, NT.RefreshStatus
+    NT.RefreshBossList = function() listHits = listHits + 1 end
+    NT.RefreshStatus = function() statusHits = statusHits + 1 end
+    env.KART_Settings.ntGeneration = 1
+    NT.generation = 1
+    local ok = NT.ApplyRemoteState(env.KART_Settings, {
+        gen = 4, editor = "Bramor", operator = "Wuusch",
+        mapId = 1, diff = 16, cursor = 3470, checksum = "abcd",
+        order = { 3470 }, skipped = {},
+    })
+    T.eq(ok, true, "higher generation applies")
+    T.eq(listHits, 1, "ApplyRemoteState refreshes the boss list")
+    T.eq(statusHits, 1, "ApplyRemoteState refreshes status")
+    NT.RefreshBossList = origList
+    NT.RefreshStatus = origStatus
 end

@@ -147,6 +147,9 @@ function NT.SetSkipped(mapKey, encID, skipped)
     else
         bag.skipped[encID] = nil
     end
+    if skipped and tonumber(KART_Settings.ntCursor) == encID then
+        KART_Settings.ntCursor = NT.ResolveSendableCursor(encID) or 0
+    end
     bumpAndPublish()
 end
 
@@ -206,7 +209,7 @@ function NT.EncountersFromEJ()
     if type(EJ_GetNumTiers) ~= "function" or type(EJ_GetEncounterInfoByIndex) ~= "function" then
         return out
     end
-    local mapId = select(8, GetInstanceInfo())
+    local mapId = NT.RaidMapDiff()
     local journalId
     if type(EJ_GetInstanceForMap) == "function" and mapId then
         journalId = EJ_GetInstanceForMap(mapId)
@@ -260,11 +263,19 @@ end
 
 function NT.NoteNameForEncounter(encID, difficultyName)
     if not encID or not difficultyName then return nil end
-    local found
-    for _, n in ipairs(NT.ListSharedNotes(difficultyName)) do
-        if n.encID == encID then found = n.name end
+    if type(NSRT) == "table" and type(NSRT.ActiveReminder) == "string" and NSRT.ActiveReminder ~= "" then
+        local body = NT.NoteBody(NSRT.ActiveReminder)
+        if body then
+            local enc, diff = NT.ParseNoteHeader(body)
+            if enc == encID and diff == difficultyName then
+                return NSRT.ActiveReminder
+            end
+        end
     end
-    return found
+    for _, n in ipairs(NT.ListSharedNotes(difficultyName)) do
+        if n.encID == encID then return n.name end
+    end
+    return nil
 end
 
 function NT.ResetOrder()
@@ -326,12 +337,18 @@ end
 function NT.ListSharedNotes(difficultyName)
     local out = {}
     if type(NSRT) ~= "table" or type(NSRT.Reminders) ~= "table" then return out end
+    local names = {}
     for name, body in pairs(NSRT.Reminders) do
-        if type(body) == "string" then
-            local enc, diff = NT.ParseNoteHeader(body)
-            if enc and diff == difficultyName then
-                out[#out + 1] = { name = name, encID = enc, body = body }
-            end
+        if type(name) == "string" and type(body) == "string" then
+            names[#names + 1] = name
+        end
+    end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local body = NSRT.Reminders[name]
+        local enc, diff = NT.ParseNoteHeader(body)
+        if enc and diff == difficultyName then
+            out[#out + 1] = { name = name, encID = enc, body = body }
         end
     end
     return out
@@ -469,6 +486,8 @@ function NT.ApplyRemoteState(settings, incoming)
     settings.ntOrderByInstance[key] = { order = order, skipped = skipped }
 
     NT.generation = settings.ntGeneration
+    if NT.RefreshBossList then NT.RefreshBossList() end
+    if NT.RefreshStatus then NT.RefreshStatus() end
     return true
 end
 
@@ -534,9 +553,11 @@ end
 
 function NT.RequestFlush(encID)
     if not NT.KascEnabled() then return end
+    if not UnitIsGroupLeader("player") then return end
     local id = tonumber(encID)
     if not id then return end
     KASC:Send("NT_FLUSH:" .. tostring(id), nil, nil, { prio = "ALERT", guaranteed = true })
+    NT.ApplyFlushAndShare(id)
 end
 
 -- Guard: test_mainframe reloads Notes.lua after MainFrame; KASC rejects duplicate tokens.
@@ -549,10 +570,11 @@ if KASC and not KASC._kartNtState then
         NT.ApplyRemoteState(KART_Settings, incoming)
     end)
 
-    KASC:RegisterMessage("NT_FLUSH", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload)
+    KASC:RegisterMessage("NT_FLUSH", { payload = true, group = true, enabled = NT.KascEnabled }, function(payload, ctx)
+        if not (KART.SenderIsGroupLeader and KART.SenderIsGroupLeader(ctx)) then return end
         local encID = tonumber(payload)
         if not encID then return end
-        NT.pendingFlush = encID
+        NT.ApplyFlushAndShare(encID)
     end)
 end
 
@@ -564,24 +586,126 @@ local flushWaitGen = 0
 
 local function orderBag(settings, difficultyID)
     NT.EnsureShape(settings)
-    local mapId = settings.ntMapId or 0
-    local diff = settings.ntDiff or difficultyID or 0
+    local mapId = tonumber(settings.ntMapId) or 0
+    local diff = tonumber(settings.ntDiff) or difficultyID or 0
+    if mapId == 0 or not NT.VALID_DIFFICULTY[diff] then
+        local liveMap, liveDiff = NT.RaidMapDiff()
+        if mapId == 0 then mapId = liveMap end
+        if not NT.VALID_DIFFICULTY[diff] then diff = liveDiff end
+    end
     local bag = settings.ntOrderByInstance[NT.InstanceKey(mapId, diff)]
-    return (bag and bag.order) or {}, (bag and bag.skipped) or {}
+    local order = (bag and bag.order) or {}
+    local skipped = (bag and bag.skipped) or {}
+    if #order == 0 then
+        order = NT.DefaultEncounterOrder()
+    end
+    return order, skipped
 end
 
-local function firstSendable(order, skipped)
+function NT.ResolveSendableCursor(cursor)
+    if not KART_Settings then return nil end
+    local order, skipped = orderBag(KART_Settings)
+    local _, diff = NT.RaidMapDiff()
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    cursor = tonumber(cursor) or 0
+    local function sendable(id)
+        if not id or skipped[id] then return false end
+        if not NT.HasNSRT() then return true end
+        return NT.NoteNameForEncounter(id, diffName) ~= nil
+    end
+    if cursor ~= 0 and sendable(cursor) then return cursor end
+    local seen = (cursor == 0)
     for _, id in ipairs(order) do
-        if not skipped[id] then return id end
+        if seen and sendable(id) then return id end
+        if cursor ~= 0 and id == cursor then seen = true end
     end
     return nil
 end
 
-local function cursorOrFirst(settings, difficultyID)
-    local order, skipped = orderBag(settings, difficultyID)
-    local cursor = tonumber(settings.ntCursor) or 0
-    if cursor ~= 0 and not skipped[cursor] then return cursor end
-    return firstSendable(order, skipped)
+local function cursorOrFirst(settings)
+    return NT.ResolveSendableCursor(tonumber(settings.ntCursor) or 0)
+end
+
+function NT.SkipAndAdvance()
+    if not KART_Settings then return end
+    local cursor = tonumber(KART_Settings.ntCursor) or 0
+    if cursor == 0 then return end
+    local key = NT._listMapKey or NT.CurrentMapKey()
+    if not key then return end
+    NT.SetSkipped(key, cursor, true)
+end
+
+function NT.ShareIfChosen()
+    local L = KART.L or {}
+    if not NT.HasNSRT() then
+        local msg = L.NT_STATUS_NO_NSRT or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+        return false
+    end
+    local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
+    if cursor ~= 0 then
+        local sendable = NT.ResolveSendableCursor(cursor)
+        if sendable then
+            cursor = sendable
+            KART_Settings.ntCursor = sendable
+        else
+            cursor = 0
+        end
+    end
+    if cursor == 0 then
+        NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
+        return false
+    end
+    local _, diff = NT.RaidMapDiff()
+    local diffName = NT.DIFFICULTY_NAMES[diff]
+    local noteName = NT.NoteNameForEncounter(cursor, diffName)
+    if not noteName then
+        local msg = L.NT_STATUS_NO_NOTE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+        return false
+    end
+    local opts = NT.SenderOpts(noteName)
+    local weOp = NT.WeAreOperator()
+    local weLead = UnitIsGroupLeader("player") and true or false
+    if opts.operatorPresent and not opts.operatorAssist then
+        local msg = L.NT_STATUS_PROMOTE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+        if not weLead then return false end
+    end
+    local who = NT.ChooseSender(opts)
+    if who == "lead" and opts.operatorPresent and not opts.checksumMatch then
+        local msg = L.NT_STATUS_STALE or ""
+        NT.SetStatus(msg)
+        NT.PlayerPrint(msg)
+    end
+    local weSend = (who == "operator" and weOp) or (who == "lead" and weLead)
+    if not weSend then return false end
+    if NT.Share(noteName) then
+        local label = (who == "operator" and (KART_Settings.ntOperatorName or "")) or (UnitName("player") or "")
+        NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", label))
+        local sum = NT.CursorChecksum(noteName)
+        if KART_Settings and sum then
+            KART_Settings.ntChecksum = sum
+            bumpAndPublish()
+        end
+        return true
+    end
+    local msg = L.NT_STATUS_NO_NSRT or ""
+    NT.SetStatus(msg)
+    NT.PlayerPrint(msg)
+    return false
+end
+
+function NT.ApplyFlushAndShare(encID)
+    local id = tonumber(encID)
+    if not id or not KART_Settings then return end
+    NT.pendingFlush = id
+    local sendable = NT.ResolveSendableCursor(id)
+    KART_Settings.ntCursor = sendable or id
+    if sendable then NT.ShareIfChosen() end
 end
 
 -- Wait until auras are not secret (poll 1s, max ~60s), then lead-only RequestFlush.
@@ -686,71 +810,25 @@ function NT.ShareNow()
         if cursor and cursor ~= 0 then NT.EnqueueFlush(cursor) end
         return
     end
-    if not NT.HasNSRT() then
-        local msg = L.NT_STATUS_NO_NSRT or ""
-        NT.SetStatus(msg)
-        NT.PlayerPrint(msg)
-        return
-    end
-    local cursor = KART_Settings and tonumber(KART_Settings.ntCursor) or 0
-    if cursor == 0 then
-        NT.SetStatus(L.NT_STATUS_LAST_BOSS or "")
-        return
-    end
-    local _, diff = NT.RaidMapDiff()
-    local diffName = NT.DIFFICULTY_NAMES[diff]
-    local noteName = NT.NoteNameForEncounter(cursor, diffName)
-    if not noteName then
-        local msg = L.NT_STATUS_NO_NOTE or ""
-        NT.SetStatus(msg)
-        NT.PlayerPrint(msg)
-        return
-    end
-    local opts = NT.SenderOpts(noteName)
-    local weOp = NT.WeAreOperator()
-    local weLead = UnitIsGroupLeader("player") and true or false
-    if opts.operatorPresent and not opts.operatorAssist then
-        local msg = L.NT_STATUS_PROMOTE or ""
-        NT.SetStatus(msg)
-        NT.PlayerPrint(msg)
-        if not weLead then return end
-    end
-    local who = NT.ChooseSender(opts)
-    if who == "lead" and opts.operatorPresent and not opts.checksumMatch then
-        local msg = L.NT_STATUS_STALE or ""
-        NT.SetStatus(msg)
-        NT.PlayerPrint(msg)
-    end
-    local weSend = (who == "operator" and weOp) or (who == "lead" and weLead)
-    if not weSend then return end
-    if NT.Share(noteName) then
-        local label = (who == "operator" and (KART_Settings.ntOperatorName or "")) or (UnitName("player") or "")
-        NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", label))
-        local sum = NT.CursorChecksum(noteName)
-        if KART_Settings and sum then
-            KART_Settings.ntChecksum = sum
-            bumpAndPublish()
-        end
-    else
-        local msg = L.NT_STATUS_NO_NSRT or ""
-        NT.SetStatus(msg)
-        NT.PlayerPrint(msg)
-    end
+    NT.ShareIfChosen()
 end
 
 function NT.OnEvent(e, ...)
     if e == "ENCOUNTER_END" then
+        NT.RaidMapDiff()
         local encID, _, _, _, kill = ...
         if not NT.ShouldEnqueueKill(kill) then return end
         if not KART_Settings then return end
-        local order, skipped = orderBag(KART_Settings, select(3, GetInstanceInfo()))
+        local order, skipped = orderBag(KART_Settings)
         local cursor = NT.NextAfter(order, skipped, encID)
+        if cursor then cursor = NT.ResolveSendableCursor(cursor) end
         KART_Settings.ntCursor = cursor
         if cursor then scheduleLeadFlush(cursor) end
         return
     end
 
     if e == "PLAYER_ENTERING_WORLD" then
+        NT.RaidMapDiff()
         local _, instanceType, difficultyID = GetInstanceInfo()
         local visit = select(8, GetInstanceInfo())
         local isLead = UnitIsGroupLeader("player") and true or false
@@ -769,13 +847,12 @@ function NT.OnEvent(e, ...)
         if not NT.ShouldEnqueueZone(prev, visit, instanceType, difficultyID, isLead) then
             return
         end
+        local cursor = cursorOrFirst(KART_Settings)
+        if not cursor then return end
+        KART_Settings.ntCursor = cursor
         NT.lastVisit = visit
         KART_Settings.ntLastVisit = visit
-        local cursor = cursorOrFirst(KART_Settings, difficultyID)
-        if cursor then
-            KART_Settings.ntCursor = cursor
-            scheduleLeadFlush(cursor)
-        end
+        scheduleLeadFlush(cursor)
     end
 end
 
@@ -1014,6 +1091,11 @@ function NT.BuildPanel(parent)
     NT.BtnShareNow:SetPoint("TOPLEFT", 20, -16)
     NT.BtnShareNow:SetScript("OnClick", function() NT.ShareNow() end)
 
+    NT.BtnSkipAdvance = KART.UI:CreateModernButton(shareCard, L.NT_BTN_SKIP_ADVANCE)
+    NT.BtnSkipAdvance:SetSize(200, 26)
+    NT.BtnSkipAdvance:SetPoint("LEFT", NT.BtnShareNow, "RIGHT", 10, 0)
+    NT.BtnSkipAdvance:SetScript("OnClick", function() NT.SkipAndAdvance() end)
+
     NT.statusLabel = shareCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     NT.statusLabel:SetPoint("TOPLEFT", 20, -50)
     NT.statusLabel:SetPoint("RIGHT", shareCard, "RIGHT", -20, 0)
@@ -1023,6 +1105,13 @@ function NT.BuildPanel(parent)
 
     NT.RefreshBossList()
     NT.RefreshStatus()
+
+    if parent.HookScript then
+        parent:HookScript("OnShow", function()
+            NT.RefreshBossList()
+            NT.RefreshStatus()
+        end)
+    end
 
     KART.UI:RegisterLocaleRefresher(function()
         local Lx = KART.L
@@ -1036,6 +1125,9 @@ function NT.BuildPanel(parent)
         end
         if NT.BtnShareNow and NT.BtnShareNow.text then
             NT.BtnShareNow.text:SetText(Lx.NT_BTN_SHARE)
+        end
+        if NT.BtnSkipAdvance and NT.BtnSkipAdvance.text then
+            NT.BtnSkipAdvance.text:SetText(Lx.NT_BTN_SKIP_ADVANCE)
         end
         if NT.bossListFrame and NT.bossListFrame.rows then
             for _, row in ipairs(NT.bossListFrame.rows) do

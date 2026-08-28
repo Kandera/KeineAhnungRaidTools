@@ -79,6 +79,23 @@ do
         if panel and panel:IsShown() then visible = visible + 1 end
     end
     T.eq(visible, 1, "exactly one tab's panel is shown")
+
+    local listHits, statusHits = 0, 0
+    local origList, origStatus = KART.NT.RefreshBossList, KART.NT.RefreshStatus
+    KART.NT.RefreshBossList = function(...)
+        listHits = listHits + 1
+        return origList(...)
+    end
+    KART.NT.RefreshStatus = function(...)
+        statusHits = statusHits + 1
+        return origStatus(...)
+    end
+    As(function() KART.ShowTab(1) end)
+    As(function() KART.ShowTab(7) end)
+    T.eq(listHits >= 1, true, "ShowTab(7) refreshes the Notes boss list")
+    T.eq(statusHits >= 1, true, "ShowTab(7) refreshes Notes status")
+    KART.NT.RefreshBossList = origList
+    KART.NT.RefreshStatus = origStatus
 end
 
 -- Settings / Raidlead card packing: accent+profiles share a parent, look sliders sit on the

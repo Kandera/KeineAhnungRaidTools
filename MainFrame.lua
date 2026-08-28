@@ -67,6 +67,10 @@ function KART.ShowTab(tabIndex)
     -- defined further down in this file, after the scroll frame exists).
     KART.CurrentTab = tabIndex
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    if tabIndex == 7 and KART.NT then
+        if KART.NT.RefreshBossList then KART.NT.RefreshBossList() end
+        if KART.NT.RefreshStatus then KART.NT.RefreshStatus() end
+    end
     if KART.CT and KART.CT.OnSettingsTab then
         local open = tabIndex == 6 and KART.MainFrame and KART.MainFrame:IsShown()
         KART.CT.OnSettingsTab(open and true or false)

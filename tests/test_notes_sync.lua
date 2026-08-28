@@ -83,3 +83,57 @@ do
     T.eq(lead.KART.NT.generation, 2, "raider publish does not move lead gen")
     T.eq(lead.env.KART_Settings.ntGeneration, 2, "lead SV generation unchanged")
 end
+
+-- Kill Load & Sends exactly once: lead is the chosen sender; KASC drops the self-echo.
+do
+    local sim, lm, _, raider = F.NewRaid()
+    local lead = lm
+    KARTTEST.aurasSecret = false
+    KARTTEST.instance.instanceType = "raid"
+    KARTTEST.instance.difficultyID = 16
+    KARTTEST.instance.mapID = 1
+
+    local function stubNSRT(client)
+        client.env._nsiShares = {}
+        client.env.NSRT = { Reminders = {
+            Boss1 = "EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd",
+            Boss2 = "EncounterID:3497;Name:Next;Difficulty:Mythic\ncd",
+        }}
+        client.env.NorthernSkyRaidTools = {
+            SetReminder = function() end,
+            Broadcast = function(_, ev)
+                client.env._nsiShares[#client.env._nsiShares + 1] = ev
+            end,
+        }
+    end
+    stubNSRT(lead)
+    stubNSRT(raider)
+
+    local stand = {
+        ntModuleEnabled = true,
+        ntOperatorName = "",
+        ntMapId = 1,
+        ntDiff = 16,
+        ntCursor = 3470,
+        ntOrderByInstance = {
+            ["1:16"] = { order = { 3470, 3497 }, skipped = {} },
+        },
+    }
+    for k, v in pairs(stand) do
+        lead.env.KART_Settings[k] = v
+        raider.env.KART_Settings[k] = v
+    end
+    -- Tables are shared if assigned by reference; give the raider their own bag.
+    raider.env.KART_Settings.ntOrderByInstance = {
+        ["1:16"] = { order = { 3470, 3497 }, skipped = {} },
+    }
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lead, function()
+        lead.KART.NT.OnEvent("ENCOUNTER_END", 3470, "Boss", 16, 20, 1)
+    end)
+    T.eq(#lead.env._nsiShares, 1, "lead Load & Sends after kill")
+    T.eq(lead.env._nsiShares[1], "NSI_REM_SHARE", "lead uses NSI_REM_SHARE")
+    T.eq(#raider.env._nsiShares, 0, "exactly one sender: raider does not Share")
+    T.eq(#RaidSim.Sent(sim, "NT_FLUSH:"), 1, "kill still emits NT_FLUSH")
+end

@@ -491,6 +491,7 @@ KART.L_deDE = {
     NT_LABEL_OPERATOR = "Notiz-Operator",
     DESC_NT_OPERATOR = "Charaktername oder Northern-Sky-Spitzname. Wenn sie nicht im Raid sind, übernimmst du ihre Aufgaben; dieses Feld ändert sich nicht.",
     NT_BTN_SHARE = "Jetzt teilen",
+    NT_BTN_SKIP_ADVANCE = "Überspringen und weiter",
     NT_BTN_RESET_ORDER = "Reihenfolge zurücksetzen",
     NT_BTN_UP = "Hoch",
     NT_BTN_DOWN = "Runter",
