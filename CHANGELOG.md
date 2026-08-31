@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**
 
+### Fixed
+- **The winner trade reminder drops a row when you actually receive the item.**
+
 ## [4.1.0] - 2026-08-29
 ### Added
 - **NSRT Notes** loads and shares the next Northern Sky shared note after a kill.

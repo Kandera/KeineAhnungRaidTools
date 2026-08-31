@@ -10,6 +10,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ### Hinzugefügt
 - **Buff-Check Erweitert zeigt flüchtige Tränke und Fläschchen, mit einem Taschen-Check.**
 
+### Behoben
+- **Die Gewinner-Erinnerung hakt ein Item ab, sobald du es wirklich bekommst.**
+
 ## [4.1.0] - 2026-08-29
 ### Hinzugefügt
 - **NSRT Notes** lädt nach einem Kill die nächste Northern-Sky-Shared-Note und sendet sie.

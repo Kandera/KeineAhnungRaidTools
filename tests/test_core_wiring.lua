@@ -65,6 +65,8 @@ T.truthy(not owedSrc:find("OnEvent_TRADE_ACCEPT_UPDATE", 1, true),
     "owed reminder does not hook RC TRADE_ACCEPT_UPDATE (GetTradeTargetItemLink during accept sticks the trade)")
 T.truthy(not owedSrc:find('RegisterEvent("UI_INFO_MESSAGE")', 1, true),
     "owed reminder does not register UI_INFO_MESSAGE (RC already does)")
+T.truthy(owedSrc:find('RegisterEvent("TRADE_TARGET_ITEM_CHANGED")', 1, true),
+    "owed reminder snapshots incoming items when the lead puts them in trade")
 
 
 

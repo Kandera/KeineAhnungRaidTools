@@ -15,6 +15,9 @@ local RC = KART.RC
 
 local LINK = "|cffa335ee|Hitem:19019::::::::80:::::::::|h[Thunderfury]|h|r"
 local LINK2 = "|cffa335ee|Hitem:17182::::::::80:::::::::|h[Sulfuras]|h|r"
+-- Same drop as LINK after uniqueId/level/spec are stripped — what GetTradeTargetItemLink
+-- returns once the item is in the winner's trade slots.
+local LINK_TRADED = "|cffa335ee|Hitem:19019:::::::4242:80:256:::::::::|h[Thunderfury]|h|r"
 
 local function AsBob()
     KARTTEST.SetRaid({
@@ -87,6 +90,28 @@ RC.HandleOwedIncomingLinks({ LINK2 })
 T.eq(#RC.OwedItems(), 0, "receiving the item in trade clears the owed row")
 
 ResetOwed()
+RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
+RC.HandleOwedIncomingLinks({ LINK_TRADED })
+T.eq(#RC.OwedItems(), 0, "a traded link whose uniqueId differs from the award still clears the owed row")
+
+ResetOwed()
+KARTTEST.rcLootTable = { [1] = { link = LINK }, [2] = { link = LINK } }
+RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
+RC.HandleOwedAward(2, "Bob-TarrenMill", "Lead-TarrenMill")
+RC.HandleOwedIncomingLinks({ LINK_TRADED })
+T.eq(#RC.OwedItems(), 1, "receiving one copy of a duplicated drop leaves the other owed")
+
+ResetOwed()
+local MIDNIGHT = "|cffa335ee|Hitem:249326::::::::80:268::14:8:11946,10390,12043,10255,1540," ..
+    "10879,11996:::::|h[Gloombind]|h|r"
+local MIDNIGHT_TRADED = "|cffa335ee|Hitem:249326:::::::77:80:268::14:8:11946,10390,12043,10255,1540," ..
+    "10879,11996:::::|h[Gloombind]|h|r"
+KARTTEST.rcLootTable = { [1] = { link = MIDNIGHT } }
+RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
+RC.HandleOwedIncomingLinks({ MIDNIGHT_TRADED })
+T.eq(#RC.OwedItems(), 0, "a Midnight bonus-list link still clears when uniqueId differs")
+
+ResetOwed()
 KARTTEST.inCombat = true
 RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
 T.eq(#RC.OwedItems(), 1, "an award in combat is still recorded")
@@ -126,6 +151,15 @@ RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
 KARTTEST.tradeTargetItems = { LINK }
 RCLootCouncil.TradeUI:OnEvent_UI_INFO_MESSAGE("UI_INFO_MESSAGE", _G.LE_GAME_ERR_TRADE_COMPLETE)
 T.eq(#RC.OwedItems(), 0, "a completed trade still clears the owed row via RC's handler")
+
+ResetOwed()
+RC.EnableOwed()
+RC.HandleOwedAward(1, "Bob-TarrenMill", "Lead-TarrenMill")
+KARTTEST.tradeTargetItems = { LINK_TRADED }
+KARTTEST.FireEvent("TRADE_TARGET_ITEM_CHANGED", 1)
+KARTTEST.tradeTargetItems = {}
+RCLootCouncil.TradeUI:OnEvent_UI_INFO_MESSAGE("UI_INFO_MESSAGE", _G.LE_GAME_ERR_TRADE_COMPLETE)
+T.eq(#RC.OwedItems(), 0, "a trade whose slot links are gone at TRADE_COMPLETE still clears from the earlier snapshot")
 
 local store = RC.EnsureOwedStore()
 store.schemaVersion = nil

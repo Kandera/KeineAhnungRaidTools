@@ -248,6 +248,7 @@ KART.InGameChangelog = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
+            "**The winner trade reminder drops a row when you actually receive the item.**",
             "**Buff Check shows Healthstone and Soulstone.**",
             "**Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**",
             "**Flasks are found by this season's spells.**",

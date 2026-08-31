@@ -54,10 +54,23 @@ local function RemoveSession(store, session)
     store.items = kept
 end
 
+-- uniqueId, player level and specID change between the loot-table link and the
+-- bag item that arrives in trade. Bonus ids (difficulty, variant) stay. Matching
+-- the full string never cleared a live trade; matching itemID alone would tick
+-- off the wrong copy of a duplicated drop.
+local NEUTRALIZE = "^item:(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):%d*:%d*:%d*:"
+local NEUTRALIZE_TO = "item:%1:%2:%3:%4:%5:%6:%7::::"
+
+local function Neutralized(link)
+    local s = KAUtil.GetItemString(link)
+    if not s then return nil end
+    return (s:gsub(NEUTRALIZE, NEUTRALIZE_TO):gsub(":+$", ""))
+end
+
 local function SameItem(a, b)
     if not a or not b then return false end
     if a == b then return true end
-    local sa, sb = KAUtil.GetItemString(a), KAUtil.GetItemString(b)
+    local sa, sb = Neutralized(a), Neutralized(b)
     return sa ~= nil and sa == sb
 end
 
@@ -210,10 +223,12 @@ function RC.HandleOwedIncomingLinks(links)
     if type(links) ~= "table" then return end
     local store = RC.EnsureOwedStore()
     local kept = {}
+    local consumed = {}
     for _, row in ipairs(store.items) do
         local received = false
-        for _, link in ipairs(links) do
-            if SameItem(row.link, link) then
+        for i, link in ipairs(links) do
+            if not consumed[i] and SameItem(row.link, link) then
+                consumed[i] = true
                 received = true
                 break
             end
@@ -256,21 +271,41 @@ local function SnapshotIncoming()
     end
 end
 
+local owedEvents
+
+-- Snapshot when the lead puts items in, not on TRADE_ACCEPT_UPDATE: reading
+-- GetTradeTargetItemLink during accept taints the Trade button. At
+-- TRADE_COMPLETE the trade frame is already empty, so a snapshot then is too late.
+local function EnsureOwedEvents()
+    if owedEvents then return end
+    owedEvents = CreateFrame("Frame")
+    owedEvents:RegisterEvent("TRADE_SHOW")
+    owedEvents:RegisterEvent("TRADE_TARGET_ITEM_CHANGED")
+    owedEvents:SetScript("OnEvent", function(_, event)
+        if event == "TRADE_SHOW" then
+            wipe(incomingLinks)
+        else
+            pcall(SnapshotIncoming)
+        end
+    end)
+end
+
 local function HookTradeUI()
     if owedHooked or not RC.IsRCLoaded() then return end
     local addon = RC.GetAddon()
     local tradeUI = addon and addon.TradeUI
     if type(tradeUI) ~= "table" or type(tradeUI.OnAwardReceived) ~= "function" then return end
-    -- Listen after RC's own TRADE_COMPLETE. Do not hook TRADE_ACCEPT_UPDATE:
-    -- GetTradeTargetItemLink during accept taints the Trade button, the session
-    -- stays open, and the next InitiateTrade is "you are already trading" until reload.
     hooksecurefunc(tradeUI, "OnAwardReceived", function(_, session, winner, trader)
         pcall(RC.HandleOwedAward, session, winner, trader)
     end)
     if type(tradeUI.OnEvent_UI_INFO_MESSAGE) == "function" then
         hooksecurefunc(tradeUI, "OnEvent_UI_INFO_MESSAGE", function(_, _, ...)
             if select(1, ...) == _G.LE_GAME_ERR_TRADE_COMPLETE then
-                pcall(SnapshotIncoming)
+                -- TARGET_ITEM_CHANGED already filled incomingLinks. Re-reading
+                -- the slots here would wipe that snapshot once the frame is gone.
+                if #incomingLinks == 0 then
+                    pcall(SnapshotIncoming)
+                end
                 pcall(RC.HandleOwedIncomingLinks, incomingLinks)
                 wipe(incomingLinks)
             end
@@ -281,6 +316,7 @@ end
 
 function RC.EnableOwed()
     RC.EnsureOwedStore()
+    EnsureOwedEvents()
     HookTradeUI()
     RC.RefreshOwedDisplay()
 end
