@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Hinzugefügt
+- **Buff-Check Erweitert zeigt flüchtige Tränke und Fläschchen, mit einem Taschen-Check.**
 
 ## [4.1.0] - 2026-08-29
 ### Hinzugefügt

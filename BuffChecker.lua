@@ -92,23 +92,87 @@ local function ResolveBuffDataLabels()
 end
 ResolveBuffDataLabels()
 
--- Bag count for our own Healthstone column. Reads BuffData.items so a live-raid ID swap
--- is one table, not a second copy in the comm responder.
--- Presence, not charges: a live dump of GetItemCount(5512) was 1, while includeUses
--- (the third argument) can be 0 on that same item.
-function KART.CountOwnHealthstones()
+-- Bag counts. Reads an id list so a live-raid swap is one table, not a second copy
+-- in the comm responder. Presence, not charges: a live dump of GetItemCount(5512)
+-- was 1, while includeUses (the third argument) can be 0 on that same item.
+local function CountOwnItems(ids)
     local fn = C_Item and C_Item.GetItemCount
-    if not fn then return 0 end
+    if not fn or not ids then return 0 end
     local n = 0
-    for _, buff in ipairs(KART.BuffData) do
-        if buff.isHealthstone and buff.items then
-            for _, id in ipairs(buff.items) do
-                local ok, c = pcall(fn, id)
-                if ok and type(c) == "number" then n = n + c end
-            end
-        end
+    for i = 1, #ids do
+        local ok, c = pcall(fn, ids[i])
+        if ok and type(c) == "number" then n = n + c end
     end
     return n
+end
+
+function KART.CountOwnHealthstones()
+    for _, buff in ipairs(KART.BuffData) do
+        if buff.isHealthstone and buff.items then
+            return CountOwnItems(buff.items)
+        end
+    end
+    return 0
+end
+
+-- Fleeting cauldron items only — personal flasks/pots are a different id.
+-- Flask ids: Northern Sky ReadyCheckConsumables (Max Fleeting + Fleeting; not Personal).
+-- Potion ids: Wowhead / Ellesmere CDM for this season's Voidlight cauldron types.
+-- Same swap rule as BuffData flask spells.
+KART.FleetingFlaskItems = {
+    245929, 245928, -- Shattered Sun
+    245933, 245932, -- Magisters
+    245931, 245930, -- Blood Knights
+    245926, 245927, -- Thalassian Resistance
+}
+KART.FleetingPotionItems = {
+    245898, 245897, -- Light's Potential
+    245902, 245903, -- Recklessness
+    245910, 245911, -- Draught of Rampant Abandon
+    245917, 245916, -- Lightfused Mana
+    245904,         -- Devoured Dreams
+    245900, 245901, -- Zealotry
+}
+
+function KART.CountOwnFleetingFlasks()
+    return CountOwnItems(KART.FleetingFlaskItems)
+end
+
+function KART.CountOwnFleetingPots()
+    return CountOwnItems(KART.FleetingPotionItems)
+end
+
+-- Peers answer CONS:pots:flasks. Not Hello: KA_HELLO is versions/capabilities only.
+-- Healthstone is the same pattern (REQ_HS on open), not a handshake field.
+local lastConsRequest = -5
+function KART.RequestFleetingCounts()
+    if not IsInGroup() then return end
+    local now = GetTime()
+    if now - lastConsRequest < 5 then return end
+    lastConsRequest = now
+    KASC:Send("REQ_CONS")
+end
+
+local CONS_MAX = 999
+
+local function ClampCons(n)
+    if n > CONS_MAX then return CONS_MAX end
+    if n < 0 then return 0 end
+    return n
+end
+
+local function OwnFleetingCounts()
+    return ClampCons(KART.CountOwnFleetingPots()), ClampCons(KART.CountOwnFleetingFlasks())
+end
+
+-- Two unsigned integers. Values above CONS_MAX are clamped, not dropped, so a
+-- hostile 10000 and a real stack of 20 land in the same cell instead of `? / ?`.
+local function ParseConsPayload(payload)
+    if type(payload) ~= "string" then return nil end
+    local pots, flasks = payload:match("^(%d+):(%d+)$")
+    pots, flasks = tonumber(pots), tonumber(flasks)
+    if pots == nil or flasks == nil then return nil end
+    return ClampCons(pots), ClampCons(flasks)
 end
 
 local function BuildSlotNames()
@@ -147,6 +211,12 @@ KART.UI:RegisterLocaleRefresher(function()
     if f then
         if f.reportBtn then f.reportBtn.tooltipText = L.TIP_REPORT end
         if f.okBanner then f.okBanner:SetText(L.BC_ALL_CONSUMABLES_OK) end
+        if f.hIlvl then f.hIlvl:SetText(L.BC_LABEL_ILVL) end
+        if f.hCons then f.hCons:SetText(L.BC_LABEL_CONS) end
+        if f.bagBtn then
+            if f.bagBtn.text then f.bagBtn.text:SetText(L.BTN_BAG_CHECK) end
+            f.bagBtn.tooltipText = L.TIP_BAG_CHECK
+        end
     end
 end)
 
@@ -208,6 +278,7 @@ function KART.PruneDepartedPeers()
     prune(KART.DurabilityCache)
     prune(KART.EnchantScan)
     prune(KART.HSCache)
+    prune(KART.ConsCache)
 end
 
 -- ReadyCheck status -> its Blizzard ready-check icon; an unlisted/nil status hides the icon. Shared
@@ -220,6 +291,23 @@ function KART.SetReadyCheckIcon(icon, status)
         icon:Show()
     else
         icon:Hide()
+    end
+end
+
+-- Advanced-only. `known` false paints "? / ?". Zero pots uses DANGER; flasks are the
+-- second number either way. Not fed into MissingBuffs.
+local function PaintConsText(fs, known, pots, flasks)
+    if not fs then return end
+    if not known then
+        fs:SetText("? / ?")
+        fs:SetTextColor(0.5, 0.5, 0.5)
+        return
+    end
+    fs:SetText((pots or 0) .. " / " .. (flasks or 0))
+    if (pots or 0) == 0 then
+        fs:SetTextColor(unpack(KART.DANGER))
+    else
+        fs:SetTextColor(1, 1, 1)
     end
 end
 
@@ -302,6 +390,17 @@ function KART.CreateBuffCheckFrame()
     hIlvl:SetTextColor(0.8, 0.8, 0.8)
     hIlvl:Hide()
     f.hIlvl = hIlvl
+
+    -- Advanced-only bag counts: fleeting pots / flasks. Not a BuffData column, so /Report
+    -- never sees it. Occupies the default flask slot, which is hidden in this view.
+    local CONS_COL = 9
+    local hCons = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hCons:SetPoint("TOPLEFT", f, "TOPLEFT", offsets[CONS_COL], -35)
+    hCons:SetText(L.BC_LABEL_CONS)
+    hCons:SetTextColor(0.8, 0.8, 0.8)
+    hCons:Hide()
+    f.hCons = hCons
+    f.consCol = CONS_COL
 
     -- Erstes Label: Name
     local hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -386,6 +485,10 @@ function KART.CreateBuffCheckFrame()
         row.ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.ilvlText:SetPoint("LEFT", row, "LEFT", offsets[2] - 10, 0)
         row.ilvlText:Hide()
+
+        row.consText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.consText:SetPoint("LEFT", row, "LEFT", offsets[CONS_COL] - 10, 0)
+        row.consText:Hide()
         
         row.indicators = {}
         for j, data in ipairs(KART.BuffData) do
@@ -447,7 +550,7 @@ function KART.CreateBuffCheckFrame()
     end
 
     -- Debounced, and matching the responders' own answer cooldown in KASC. One click asks the whole
-    -- raid four questions and every KART client answers all four: 80 outbound messages in a 20-man
+    -- raid five questions and every KART client answers all five: 100 outbound messages in a 20-man
     -- raid. A few impatient clicks used to overrun Blizzard's chat rate limiter, which drops the
     -- overflow silently and without retry -- so clicking again to make the missing data appear was
     -- precisely what stopped it from appearing (B16).
@@ -461,6 +564,7 @@ function KART.CreateBuffCheckFrame()
         KASC:Send("REQ_ILVL")
         KASC:Send("REQ_GEAR")
         KASC:Send("REQ_HS")
+        KART.RequestFleetingCounts()
     end
 
     local modeBtn = KART.UI:CreateModernButton(f, L.BTN_MODE_ADVANCED)
@@ -503,6 +607,15 @@ function KART.CreateBuffCheckFrame()
             KART.ReportMissingBuffs()
         end
     end)
+
+    f.bagBtn = KART.UI:CreateModernButton(f, L.BTN_BAG_CHECK, L.TIP_BAG_CHECK)
+    f.bagBtn:SetPoint("LEFT", f.reportBtn, "RIGHT", 8, 0)
+    f.bagBtn:SetSize(110, 22)
+    f.bagBtn:SetScript("OnClick", function()
+        KART.RequestFleetingCounts()
+        KART.UpdateBuffCheck()
+    end)
+    f.bagBtn:Hide()
 
     f.okBanner = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.okBanner:SetPoint("BOTTOMLEFT", 170, 14)
@@ -557,6 +670,10 @@ function KART.CreateBuffCheckFrame()
             self.hIlvl:ClearAllPoints()
             self.hIlvl:SetPoint("TOPLEFT", self, "TOPLEFT", offsets[2] + extra, -35)
         end
+        if self.hCons then
+            self.hCons:ClearAllPoints()
+            self.hCons:SetPoint("TOPLEFT", self, "TOPLEFT", offsets[self.consCol] + extra, -35)
+        end
         
         for i = 1, 40 do
             local row = self.rows[i]
@@ -566,6 +683,10 @@ function KART.CreateBuffCheckFrame()
                 if row.ilvlText then
                     row.ilvlText:ClearAllPoints()
                     row.ilvlText:SetPoint("LEFT", row, "LEFT", offsets[2] - 10 + extra, 0)
+                end
+                if row.consText then
+                    row.consText:ClearAllPoints()
+                    row.consText:SetPoint("LEFT", row, "LEFT", offsets[self.consCol] - 10 + extra, 0)
                 end
                 for j, ind in ipairs(row.indicators) do
                     ind:ClearAllPoints()
@@ -622,6 +743,11 @@ function KART.ShowBuffCheck()
         if now - lastHsRequest >= 5 then
             lastHsRequest = now
             KASC:Send("REQ_HS")
+            -- Mode survives Hide. A ready check that reopens Advanced must
+            -- ask for bag counts, not only the default-view healthstone bit.
+            if KART.BuffCheckMode == "advanced" then
+                KART.RequestFleetingCounts()
+            end
         end
     end
 end
@@ -1180,6 +1306,16 @@ function KART.ScanBuffRoster()
             ilvl = shortName and KART.ILvlCache and KART.ILvlCache[shortName]
             ilvlKnown = ilvl ~= nil
         end
+        local consPots, consFlasks, consKnown
+        if UnitIsUnit(unit, "player") then
+            consPots, consFlasks = OwnFleetingCounts()
+            consKnown = true
+        else
+            local cached = shortName and KART.ConsCache and KART.ConsCache[shortName]
+            if cached then
+                consPots, consFlasks, consKnown = cached.pots, cached.flasks, true
+            end
+        end
 
         players[#players + 1] = {
             unit = unit,
@@ -1191,6 +1327,9 @@ function KART.ScanBuffRoster()
             reason = reason,
             ilvl = ilvl,
             ilvlKnown = ilvlKnown,
+            consPots = consPots,
+            consFlasks = consFlasks,
+            consKnown = consKnown,
             repair = (shortName and KART.DurabilityCache[shortName]) or 100,
             states = states,
         }
@@ -1247,11 +1386,15 @@ function KART.UpdateBuffCheck(isPreview)
             if KART.BuffData[i].page == "advanced" then h:Show() else h:Hide() end
         end
         KART.BuffCheckFrame.hIlvl:Show()
+        if KART.BuffCheckFrame.hCons then KART.BuffCheckFrame.hCons:Show() end
+        if KART.BuffCheckFrame.bagBtn then KART.BuffCheckFrame.bagBtn:Show() end
     else
         for i, h in ipairs(KART.BuffCheckFrame.headerStrings) do 
             if KART.BuffData[i].page == "advanced" then h:Hide() else h:Show() end
         end
         KART.BuffCheckFrame.hIlvl:Hide()
+        if KART.BuffCheckFrame.hCons then KART.BuffCheckFrame.hCons:Hide() end
+        if KART.BuffCheckFrame.bagBtn then KART.BuffCheckFrame.bagBtn:Hide() end
     end
 
     if isPreview then
@@ -1297,8 +1440,11 @@ function KART.UpdateBuffCheck(isPreview)
                 row.ilvlText:SetText(string.format("%.1f", 620 + i))
                 row.ilvlText:SetTextColor(0.2, 1, 0.2)
                 row.ilvlText:Show()
+                PaintConsText(row.consText, true, 12 + i, 1)
+                if row.consText then row.consText:Show() end
             else
                 row.ilvlText:Hide()
+                if row.consText then row.consText:Hide() end
             end
             
             for j, data in ipairs(KART.BuffData) do
@@ -1401,8 +1547,11 @@ function KART.UpdateBuffCheck(isPreview)
         end
         if KART.BuffCheckMode == "advanced" then
             row.ilvlText:Show()
+            PaintConsText(row.consText, player.consKnown, player.consPots, player.consFlasks)
+            if row.consText then row.consText:Show() end
         else
             row.ilvlText:Hide()
+            if row.consText then row.consText:Hide() end
         end
 
         for j, buff in ipairs(KART.BuffData) do
@@ -1532,4 +1681,23 @@ KASC:RegisterMessage("REQ_HS", { group = true }, function()
     if not IsInGroup() then return end
     local n = KART.CountOwnHealthstones and KART.CountOwnHealthstones() or 0
     KASC:Send("HS:" .. ((n > 0) and "1" or "0"))
+end)
+
+-- Fleeting pot/flask bag counts. Peers answer CONS:pots:flasks; anything else is dropped.
+KASC:RegisterMessage("CONS", { payload = true, group = true }, function(payload, ctx)
+    local pots, flasks = ParseConsPayload(payload)
+    if pots == nil then return end
+    KART.ConsCache = KART.ConsCache or {}
+    KART.ConsCache[ctx.shortName] = { pots = pots, flasks = flasks }
+    if KART.BuffCheckFrame and KART.BuffCheckFrame:IsShown() then KART.UpdateBuffCheckThrottled() end
+end)
+
+local lastConsAnswer = -5
+KASC:RegisterMessage("REQ_CONS", { group = true }, function()
+    local now = GetTime()
+    if now - lastConsAnswer < 5 then return end
+    lastConsAnswer = now
+    if not IsInGroup() then return end
+    local pots, flasks = OwnFleetingCounts()
+    KASC:Send("CONS:" .. pots .. ":" .. flasks)
 end)

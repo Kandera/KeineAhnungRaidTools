@@ -68,6 +68,8 @@ KART.L_deDE = {
     BTN_REFRESH = "Aktualisieren",
     BTN_REPORT = "Posten",
     TIP_REPORT = "Klick: in den Raid posten.\nUmschalt-Klick: Fläschchen und Essen an die flüstern, denen sie fehlen.",
+    BTN_BAG_CHECK = "Taschen-Check",
+    TIP_BAG_CHECK = "Fragt die Raid, wie viele flüchtige Tränke und Fläschchen in den Taschen sind. Schreibt nichts in den Chat.",
     BTN_RESET = "Standardwerte",
     BTN_SELECT_FONT = "Schriftart wählen",
     BTN_ACCENT_COLOR = "Akzentfarbe",
@@ -81,6 +83,7 @@ KART.L_deDE = {
     BTN_MODE_ADVANCED = "Ansicht: Erweitert",
     BTN_MODE_DEFAULT = "Ansicht: Ready Check",
     BC_LABEL_ILVL = "iLvl",
+    BC_LABEL_CONS = "Pot / Fläsch",
     LANG_EN = "English",
     LANG_DE = "Deutsch",
 

@@ -68,6 +68,8 @@ KART.L_enUS = {
     BTN_REFRESH = "Refresh",
     BTN_REPORT = "Report",
     TIP_REPORT = "Click: post to raid.\nShift-click: whisper flask and food to whoever is missing them.",
+    BTN_BAG_CHECK = "Bag Check",
+    TIP_BAG_CHECK = "Ask the raid how many fleeting potions and flasks they have in bags. Does not post to chat.",
     BTN_RESET = "Reset Defaults",
     BTN_SELECT_FONT = "Select Font",
     BTN_ACCENT_COLOR = "Accent Color",
@@ -81,6 +83,7 @@ KART.L_enUS = {
     BTN_MODE_ADVANCED = "View: Advanced",
     BTN_MODE_DEFAULT = "View: Ready Check",
     BC_LABEL_ILVL = "iLvl",
+    BC_LABEL_CONS = "Pot / Flask",
     LANG_EN = "English",
     LANG_DE = "German",
 

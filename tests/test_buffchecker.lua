@@ -1194,5 +1194,287 @@ do
     T.eq(asked, true, "opening Buff Check asks the raid for healthstones")
 end
 
+-- ==========================================================================
+--  Fleeting pots / flasks — Advanced bag counts, not a report line
+-- ==========================================================================
+-- Same pipe as Healthstone (own GetItemCount, peers answer a KASC token), except the
+-- number is kept and painted. Not a BuffData row: /Report and the flask aura column
+-- stay on auras. Personal (non-fleeting) flasks do not count.
+
+local function ConsText(client, rowIndex)
+    local row = client.KART.BuffCheckFrame.rows[rowIndex]
+    return row and row.consText
+end
+
+local function RenderAdvanced(client)
+    RaidSim.As(client, function()
+        client.KART.BuffCheckMode = "advanced"
+    end)
+    Render(client)
+end
+
+do
+    local _, lm = F.NewRaid()
+    T.truthy(lm.KART.FleetingPotionItems and lm.KART.FleetingPotionItems[1],
+        "fleeting potion ids live on a list the live raid can swap")
+    T.truthy(lm.KART.FleetingFlaskItems and lm.KART.FleetingFlaskItems[1],
+        "and so do fleeting flask ids")
+    local pots, seen = lm.KART.FleetingPotionItems, {}
+    for _, id in ipairs(pots) do
+        T.eq(seen[id], nil, "potion id " .. tostring(id) .. " is not duplicated")
+        seen[id] = true
+    end
+    for _, id in ipairs(lm.KART.FleetingFlaskItems) do
+        T.eq(seen[id], nil, "flask id " .. tostring(id) .. " is not also a potion")
+        seen[id] = true
+    end
+    -- Personal Magisters flask (NS ready-check list, not fleeting).
+    T.eq(seen[241322], nil, "a personal flask is not in either fleeting list")
+end
+
+do
+    local _, lm = F.NewRaid()
+    local potId = lm.KART.FleetingPotionItems[1]
+    local flaskId = lm.KART.FleetingFlaskItems[1]
+    KARTTEST.itemCounts = { [potId] = 10, [flaskId] = 1, [241322] = 3 }
+    T.eq(lm.KART.CountOwnFleetingPots(), 10, "own bags sum fleeting potions")
+    T.eq(lm.KART.CountOwnFleetingFlasks(), 1, "and fleeting flasks")
+    KARTTEST.itemCounts = { [potId] = 10, [lm.KART.FleetingPotionItems[2] or potId] = 5 }
+    if lm.KART.FleetingPotionItems[2] and lm.KART.FleetingPotionItems[2] ~= potId then
+        T.eq(lm.KART.CountOwnFleetingPots(), 15, "two fleeting potion ids add")
+    end
+    KARTTEST.itemCounts = {}
+end
+
+do
+    -- Bags are not the flask aura. A fleeting flask in bags with no buff is still
+    -- missing on the ready-check flask column, and /Report still says flask.
+    local _, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    KARTTEST.itemCounts = { [lm.KART.FleetingFlaskItems[1]] = 1 }
+    local missing = Scan(lm)
+    T.truthy(HasName(missing.flask, "Alric"), "a fleeting flask in bags does not clear the aura flask report")
+    T.eq(lm.KART.CountOwnFleetingFlasks(), 1, "but the bag count still sees it")
+    KARTTEST.itemCounts = {}
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    Say(alric, "CONS:15:1")
+    local cached = lm.KART.ConsCache and lm.KART.ConsCache["Alric"]
+    T.eq(cached and cached.pots, 15, "a peer CONS pots count is cached")
+    T.eq(cached and cached.flasks, 1, "and flasks")
+
+    Say(alric, "CONS:0:0")
+    cached = lm.KART.ConsCache["Alric"]
+    T.eq(cached.pots, 0, "zero pots is a real answer")
+    T.eq(cached.flasks, 0, "and so is zero flasks")
+
+    local good = lm.KART.ConsCache["Alric"]
+    for _, bad in ipairs({ "CONS:15", "CONS:a:1", "CONS:15:1:2", "CONS:-1:0", "CONS:15:x" }) do
+        Say(alric, bad)
+        T.eq(lm.KART.ConsCache["Alric"], good, "rejected and the last good answer stands: " .. bad)
+    end
+
+    Say(alric, "CONS:1000:0")
+    cached = lm.KART.ConsCache["Alric"]
+    T.eq(cached.pots, 999, "a count above the wire cap is clamped, not dropped")
+    T.eq(cached.flasks, 0, "and the other field is kept")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local alric = sim.byName.Alric
+    Say(alric, "CONS:15:1")
+    RaidSim.Leave(sim, "Alric")
+    RaidSim.As(lm, function() lm.KART.PruneDepartedPeers() end)
+    T.is_nil(lm.KART.ConsCache["Alric"], "a departed raider's consumable answer is dropped")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    local potId = lm.KART.FleetingPotionItems[1]
+    KARTTEST.itemCounts = { [potId] = 4 }
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.As(lm, function()
+        lm.KASC.Dispatch("REQ_CONS", "RAID", "Alric-TarrenMill")
+    end)
+    KARTTEST.AdvanceTime(0)
+    local saw
+    for _, e in ipairs(sim.log) do
+        if e.msg == "CONS:4:0" then saw = true end
+    end
+    T.eq(saw, true, "REQ_CONS answers with own fleeting counts")
+    KARTTEST.itemCounts = { [potId] = 1000 }
+    sim.log = {}
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.As(lm, function()
+        lm.KASC.Dispatch("REQ_CONS", "RAID", "Alric-TarrenMill")
+    end)
+    KARTTEST.AdvanceTime(0)
+    saw = false
+    for _, e in ipairs(sim.log) do
+        if e.msg == "CONS:999:0" then saw = true end
+    end
+    T.eq(saw, true, "and a bag count above the wire cap is sent clamped")
+    KARTTEST.itemCounts = {}
+end
+
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.ClearLog(sim)
+    Render(lm)
+    local painted
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then painted = true end
+    end
+    T.eq(painted, nil, "painting Buff Check does not ask for fleeting counts")
+
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.bcModuleEnabled = true
+        lm.KART.CreateTabTitle = lm.KART.CreateTabTitle or function() end
+        lm.KART.UpdateStyles = lm.KART.UpdateStyles or function() end
+        lm.KART.ShowBuffCheck()
+    end)
+    KARTTEST.AdvanceTime(0)
+    local askedOnOpen
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then askedOnOpen = true end
+    end
+    T.eq(askedOnOpen, nil, "opening Buff Check does not ask for fleeting counts")
+
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        lm.KART.BuffCheckFrame.modeBtn:GetScript("OnClick")(lm.KART.BuffCheckFrame.modeBtn)
+    end)
+    KARTTEST.AdvanceTime(0)
+    local asked
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then asked = true end
+    end
+    T.eq(asked, true, "switching to Advanced asks the raid for fleeting counts")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    RaidSim.As(lm, function() lm.KART.BuffCheckMode = "advanced" end)
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        lm.env.KART_Settings.bcModuleEnabled = true
+        lm.KART.CreateTabTitle = lm.KART.CreateTabTitle or function() end
+        lm.KART.UpdateStyles = lm.KART.UpdateStyles or function() end
+        lm.KART.ShowBuffCheck()
+    end)
+    KARTTEST.AdvanceTime(0)
+    local asked
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then asked = true end
+    end
+    T.eq(asked, true, "reopening Buff Check already in Advanced asks for fleeting counts")
+end
+
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    Render(lm)
+    T.truthy(lm.KART.BuffCheckFrame.bagBtn, "Advanced has a Bag Check button")
+    T.truthy(not lm.KART.BuffCheckFrame.bagBtn:IsShown(), "hidden on the default view")
+
+    RenderAdvanced(lm)
+    T.eq(lm.KART.BuffCheckFrame.bagBtn:IsShown(), true, "shown in Advanced")
+
+    KARTTEST.now = KARTTEST.now + 10
+    RaidSim.ClearLog(sim)
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function()
+        lm.KART.BuffCheckFrame.bagBtn:GetScript("OnClick")(lm.KART.BuffCheckFrame.bagBtn)
+    end)
+    KARTTEST.AdvanceTime(0)
+    local cons, oil
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then cons = true end
+        if e.msg == "REQ_OIL" then oil = true end
+    end
+    T.eq(cons, true, "Bag Check asks for fleeting counts")
+    T.eq(oil, nil, "and does not refresh oil")
+    T.eq(#KARTTEST.chat, 0, "and does not post to chat")
+
+    RaidSim.ClearLog(sim)
+    RaidSim.As(lm, function()
+        lm.KART.BuffCheckFrame.bagBtn:GetScript("OnClick")(lm.KART.BuffCheckFrame.bagBtn)
+    end)
+    KARTTEST.AdvanceTime(0)
+    cons = nil
+    for _, e in ipairs(sim.log) do
+        if e.msg == "REQ_CONS" then cons = true end
+    end
+    T.eq(cons, nil, "a second Bag Check inside five seconds is silent")
+end
+
+do
+    local _, lm = F.NewRaid()
+    local potId = lm.KART.FleetingPotionItems[1]
+    KARTTEST.itemCounts = { [potId] = 15 }
+    KARTTEST.auras = {}
+    Render(lm)
+    local txt = ConsText(lm, 1)
+    T.truthy(txt, "the fleeting count is a row FontString")
+    T.truthy(not txt:IsShown(), "and it stays hidden on the default view")
+
+    RenderAdvanced(lm)
+    T.eq(txt:IsShown(), true, "Advanced shows the count")
+    T.eq(txt:GetText(), "15 / 0", "own row is pots / flasks")
+    local r, g, b = txt:GetTextColor()
+    T.eq(r, 1, "a non-zero pot count is not danger")
+    T.eq(lm.KART.BuffCheckFrame.hCons:IsShown(), true, "the Pot / Flask header is Advanced-only")
+    T.eq(lm.KART.BuffCheckFrame.hIlvl:IsShown(), true, "and sits next to iLvl, not instead of it")
+
+    RaidSim.As(lm, function() lm.KART.BuffCheckMode = "default" end)
+    Render(lm)
+    T.truthy(not txt:IsShown(), "leaving Advanced hides the count again")
+    T.truthy(not lm.KART.BuffCheckFrame.hCons:IsShown(), "and the header")
+    KARTTEST.itemCounts = {}
+end
+
+do
+    local sim, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    KARTTEST.itemCounts = {}
+    local alric = sim.byName.Alric
+    RenderAdvanced(lm)
+    local alricTxt = ConsText(lm, 4)
+    T.eq(alricTxt:GetText(), "? / ?", "without a peer answer the count is unknown")
+    local r, g, b = alricTxt:GetTextColor()
+    T.eq(r, 0.5, "unknown is grey")
+
+    Say(alric, "CONS:0:1")
+    RenderAdvanced(lm)
+    T.eq(alricTxt:GetText(), "0 / 1", "a peer zero-pots answer paints")
+    r, g, b = alricTxt:GetTextColor()
+    T.truthy(r == lm.KART.DANGER[1] and g == lm.KART.DANGER[2] and b == lm.KART.DANGER[3],
+        "zero pots is danger; the flask number is still shown")
+end
+
+do
+    -- /Report and Shift-click whisper stay on auras. A bag count must not grow MissingBuffs
+    -- or add a line, even when every fleeting slot is empty.
+    local _, lm = F.NewRaid()
+    KARTTEST.auras = {}
+    KARTTEST.itemCounts = {}
+    Scan(lm)
+    T.is_nil(lm.KART.MissingBuffs.cons, "fleeting counts are not a MissingBuffs key")
+    KARTTEST.ClearChat()
+    RaidSim.As(lm, function() lm.KART.ReportMissingBuffs() end)
+    local joined = ""
+    for _, m in ipairs(KARTTEST.chat) do joined = joined .. m.msg end
+    T.eq(joined:find("Pot / Flask", 1, true) or joined:find("CONS", 1, true), nil,
+        "/Report does not mention fleeting bag counts")
+end
+
 
 

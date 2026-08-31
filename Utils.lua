@@ -249,6 +249,7 @@ KART.InGameChangelog = {
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
             "**Buff Check shows Healthstone and Soulstone.**",
+            "**Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**",
             "**Flasks are found by this season's spells.**",
             "**Healthstone reads the stone in your bags.**",
             "**A healthstone you have not heard about is grey.**",
