@@ -27,6 +27,7 @@ Fenster zur Raid-Vorbereitung:
 *   **Stat-Check:** Intelligenz, Ausdauer, Mal der Wildnis, Schlachtruf, Segen der Bronze und Himmelszorn.
 *   **Verbrauchsgüter:** Essen, Fläschchen, Runen, plus **Gesundheitsstein** (Stein in den Taschen) und **Seelenstein**.
 *   **Erweiterte Ansicht (Gear-Check):** Item-Level, fehlende Verzauberungen und Edelsteine, mit Tooltip für die Slots.
+*   **Flüchtige Taschen (Erweitert):** wie viele Kessel-Tränke und Fläschchen jeder KART-Spieler hat (`Pot / Fläsch`). **Taschen-Check** fragt die Raid danach und schreibt nichts in den Chat. Die Fläschchen-Spalte in der Ready-Check-Ansicht bleibt die Aura.
 *   **Waffenöl & KART Sync:** Versteckte Addon-Nachrichten lesen Öl auch, wenn der Spieler zu weit weg ist.
 *   **Haltbarkeit** (braucht *LibDurability*). **Bericht** postet fehlende Buffs in Raid oder Gruppe; Umschalt-Klick auf Posten flüstert Fläschchen und Essen an alle, denen etwas fehlt.
 *   Öffnet sich bei einer Bereitschaftsabfrage. Lässt sich deaktivieren, um CPU zu sparen; der Hintergrund-Sync (Öl/ilvl/Gear für andere) bleibt an.
@@ -53,7 +54,7 @@ KART ergänzt drei Hooks:
 
 *   **Council per Nickname:** Unter Settings trägt der Raidlead Council als NSRT-Nicknames (oder Charakternamen) ein. KART schreibt nur die GUIDs von Mitgliedern, deren aktueller Alt im Raid steht, in RCs Council-Liste.
 *   **Award-Weiterleitung:** Council klickt Award in RC; KART flüstert dem Raidlead, dessen Client RCs `Award()` aufruft, während der Lead weiter handelt.
-*   **Trade-Erinnerung für Gewinner:** Wenn du ein Item gewinnst, listet ein kleines Fenster, was dir noch zusteht, damit du zum Lead laufen kannst. Der Lead nutzt weiter RCs Trade-UI. Schalter unter Settings (standardmäßig an); `/kart owed` öffnet die Liste erneut.
+*   **Trade-Erinnerung für Gewinner:** Wenn du ein Item gewinnst, listet ein kleines Fenster, was dir noch zusteht, damit du zum Lead laufen kannst. Eine Zeile fällt weg, sobald du das Item im Trade wirklich bekommst. Der Lead nutzt weiter RCs Trade-UI. Schalter unter Settings (standardmäßig an); `/kart owed` öffnet die Liste erneut.
 
 In dieser Gilde ist KART raidpflichtig. Alle anderen brauchen weiterhin RCLootCouncil und WowUtils (Addon + Bridge). Die alte Desktop-App **KART Companion** ist eingestellt; das ist nicht die WowUtils-Bridge.
 

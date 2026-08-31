@@ -27,6 +27,7 @@ Raid-readiness window:
 *   **Stat Check:** Intellect, Stamina, Mark of the Wild, Battle Shout, Blessing of the Bronze, and Skyfury.
 *   **Consumables:** Food, Flask, Rune, plus **Healthstone** (the stone in bags) and **Soulstone**.
 *   **Extended View (Gear Check):** Item level, missing enchants and gems, with a tooltip for which slots.
+*   **Fleeting bags (Advanced):** how many cauldron potions and flasks each KART player has (`pots / flasks`). **Bag Check** asks the raid for those counts and does not post to chat. The Flask column on the ready-check view is still the aura.
 *   **Weapon Oil & KART Sync:** Hidden addon messages read oil even when the player is too far to inspect.
 *   **Durability** (needs *LibDurability*). **Report** posts missing buffs to raid or party; Shift-click Report whispers flask and food to whoever is missing them.
 *   Opens on a ready check. Can be disabled to save CPU; background sync (oil/ilvl/gear for others) stays on.
@@ -53,7 +54,7 @@ KART adds three hooks:
 
 *   **Council by nickname:** On Settings, the raid leader lists council as NSRT nicknames (or character names). KART pushes only GUIDs of members whose current alt is in the raid into RC's council list.
 *   **Award relay:** Council clicks Award in RC; KART whispers the raid leader, whose client calls RC's `Award()` so the lead can keep trading.
-*   **Winner trade reminder:** When you win an item, a small window lists what you are owed so you can walk to the lead. The lead still uses RC's Trade UI. Toggle on Settings (on by default); `/kart owed` reopens it.
+*   **Winner trade reminder:** When you win an item, a small window lists what you are owed so you can walk to the lead. A row drops when you actually receive that item in trade. The lead still uses RC's Trade UI. Toggle on Settings (on by default); `/kart owed` reopens it.
 
 This guild runs KART as a raid requirement. Other raiders still need RCLootCouncil and WowUtils (addon + Bridge). The old desktop **KART Companion** tray app is discontinued; it is not the WowUtils Bridge.
 
