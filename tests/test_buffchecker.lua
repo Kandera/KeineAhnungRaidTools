@@ -1429,7 +1429,7 @@ do
     RenderAdvanced(lm)
     T.eq(txt:IsShown(), true, "Advanced shows the count")
     T.eq(txt:GetText(), "15 / 0", "own row is pots / flasks")
-    local r, g, b = txt:GetTextColor()
+    local r = txt:GetTextColor()
     T.eq(r, 1, "a non-zero pot count is not danger")
     T.eq(lm.KART.BuffCheckFrame.hCons:IsShown(), true, "the Pot / Flask header is Advanced-only")
     T.eq(lm.KART.BuffCheckFrame.hIlvl:IsShown(), true, "and sits next to iLvl, not instead of it")
@@ -1449,7 +1449,8 @@ do
     RenderAdvanced(lm)
     local alricTxt = ConsText(lm, 4)
     T.eq(alricTxt:GetText(), "? / ?", "without a peer answer the count is unknown")
-    local r, g, b = alricTxt:GetTextColor()
+    local r, g, b
+    r = alricTxt:GetTextColor()
     T.eq(r, 0.5, "unknown is grey")
 
     Say(alric, "CONS:0:1")
