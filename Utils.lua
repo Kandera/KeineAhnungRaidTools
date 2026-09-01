@@ -218,6 +218,13 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.2.0",
+        entries = {
+            "**Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**",
+            "**The winner trade reminder drops a row when you actually receive the item.**",
+        },
+    },
+    {
         version = "4.1.0",
         entries = {
             "**NSRT Notes** loads and shares the next Northern Sky shared note after a kill.",
@@ -248,9 +255,7 @@ KART.InGameChangelog = {
             "**Tonight strip** shows who is in, who is missing flask or food, and whether RC is on.",
             "**Auto-promote waits until combat ends.**",
             "**Trading from RC's Trade UI no longer leaves you stuck in a trade.**",
-            "**The winner trade reminder drops a row when you actually receive the item.**",
             "**Buff Check shows Healthstone and Soulstone.**",
-            "**Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**",
             "**Flasks are found by this season's spells.**",
             "**Healthstone reads the stone in your bags.**",
             "**A healthstone you have not heard about is grey.**",

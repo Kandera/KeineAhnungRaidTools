@@ -74,9 +74,9 @@ end
 do
     T.truthy(type(KART.InGameChangelog) == "table", "in-game changelog table exists")
     T.truthy(#KART.InGameChangelog >= 2, "changelog covers the current release and a prior version")
-    T.eq(KART.InGameChangelog[1].version, "4.1.0", "first block is the current release")
-    T.truthy(KART.InGameChangelog[1].entries[1]:find("NSRT Notes", 1, true),
-        "in-game 4.1.0 list starts with NSRT Notes")
+    T.eq(KART.InGameChangelog[1].version, "4.2.0", "first block is the current release")
+    T.truthy(KART.InGameChangelog[1].entries[1]:find("fleeting potion", 1, true),
+        "in-game 4.2.0 list starts with fleeting bag counts")
     local lead, rest = KART.ParseChangelogLine("**Lead** rest of the line")
     T.eq(lead, "Lead", "changelog lead is the starred span")
     T.eq(rest, "rest of the line", "and the note is everything after it")

@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.2.0] - 2026-09-01
 ### Hinzugefügt
 - **Buff-Check Erweitert zeigt flüchtige Tränke und Fläschchen, mit einem Taschen-Check.**
 
@@ -913,7 +915,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v3.4.1...v4.0.0
