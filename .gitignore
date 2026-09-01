@@ -4,19 +4,13 @@
 # VSCode Ordner
 .vscode/
 
-# Cursor Agent Skills bleiben lokal. Rules unter .cursor/rules/ gehoeren ins Repo.
-.cursor/skills/
+# Cursor: Skills, Rules und sonstige IDE-Konfiguration bleiben lokal.
+.cursor/
 
-# Claude Code Ordner: settings.json, settings.local.json und worktrees/ sind lokal.
-# agents/ und hooks/ sind dagegen Projektwerkzeug und gehoeren ins Repo. Deshalb
-# .claude/* statt .claude/ -- eine Negation kann eine Datei nicht zurueckholen,
-# solange ihr Verzeichnis selbst ausgeschlossen ist.
-.claude/*
-!.claude/agents/
-!.claude/hooks/
+# Claude Code: komplett lokal.
+.claude/
 
-# Codex-Ordner: dasselbe Werkzeug wie .claude/, nur fuer einen anderen Client.
-# Anders als dort komplett lokal -- kein Teil davon muss ins Repo.
+# Codex-Ordner: komplett lokal.
 .codex/
 
 # Serena-Ordner: Projektkonfiguration und Symbolindex des Lua-Language-Servers.
@@ -29,16 +23,20 @@
 # VSCode Workspace Dateien
 *.code-workspace
 
-# Interne Arbeitsnotizen (Plaene, Specs, Reviews) - bleiben lokal
-docs/superpowers/
+# Interne Arbeitsnotizen, Domain-Docs und Agent-Anleitungen -- lokal.
+docs/
+CLAUDE.md
+AGENTS.md
+CODING_STANDARDS.md
+CONTEXT.md
 
 # Coverage output (KART_COVERAGE=1 luajit tests/run.lua)
 luacov.stats.out
 luacov.report.out
 
 # Arbeitsverzeichnis der subagent-driven-development-Laeufe (Ledger, Briefings,
-# Berichte, Review-Diffs). Reines Geruest: die Diagnosen, die bleiben sollen,
-# stehen in docs/BACKLOG.md und in den Kommentaren am Code.
+# Berichte, Review-Diffs). Reines Geruest; Diagnosen die bleiben sollen stehen
+# in lokalen docs/ und in den Kommentaren am Code.
 .superpowers/
 
 # Local 3.x loot council archive (not shipped, not committed)
