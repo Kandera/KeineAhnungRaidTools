@@ -401,6 +401,9 @@ do
     T.eq(env._brkSent[#env._brkSent], "BRK:0:0", "slash 0 sends cancel")
     T.eq(BT.frame:IsShown(), false, "slash 0 closes the window")
     env._brkSent = {}
+    local printed = {}
+    local origPrint = rawget(env, "print")
+    env.print = function(msg) printed[#printed + 1] = tostring(msg) end
     cmd("0.5")
     T.eq(#env._brkSent, 0, "slash under one minute is rejected")
     cmd("61")
@@ -409,6 +412,10 @@ do
     cmd("12")
     T.eq(#env._brkSent, 0, "slash during an encounter is rejected")
     env.IsEncounterInProgress = nil
+    T.eq(printed[1], KART.L.BREAK_WRONG_FORMAT, "0.5 prints wrong-format message")
+    T.eq(printed[2], KART.L.BREAK_WRONG_FORMAT, "61 prints wrong-format message")
+    T.eq(printed[3], KART.L.BREAK_ENCOUNTER, "encounter prints encounter message")
+    if origPrint then env.print = origPrint else env.print = nil end
     KART.UnitLeads = function() return false end
     cmd("12")
     T.eq(#env._brkSent, 0, "non-lead slash does not send")
