@@ -462,3 +462,37 @@ do
     BT.OnCancel()
 end
 
+do
+    BT.OnCancel()
+    BT.OnStart(45, 0)
+    T.eq(BT.frame:IsShown(), true, "remaining time under 60s still opens (BW reboot)")
+    BT.OnCancel()
+end
+
+do
+    env.IsInGroup = function() return true end
+    KART.UnitLeads = function() return true end
+    KART.UnitAssists = function() return false end
+    env.KART_Settings.breakShowImages = true
+    env._brkSent = {}
+    env._dbm.DBM_TimerBegin("DBM_TimerBegin", "break-dup", "Break", 720, "icon", "break")
+    T.eq(#env._brkSent, 1, "first DBM begin sends once")
+    env._dbm.DBM_TimerStart("DBM_TimerStart", "break-dup", "Break", 720, "icon", "break")
+    T.eq(#env._brkSent, 1, "DBM Start after Begin does not send a second BRK")
+    BT.OnCancel()
+end
+
+do
+    env.BigWigsLoader = nil
+    env.DBM = nil
+    T.eq(BT.TryRegisterSlash(), true, "slash owned before BW loads")
+    env._bwLate = {}
+    env.BigWigsLoader = {
+        RegisterMessage = function(_, ev, fn) env._bwLate[ev] = fn end,
+    }
+    BT.HookBossMods()
+    T.eq(rawget(env, "SLASH_KARTBREAK1"), nil, "drops /break when BW loads later")
+    T.truthy(env._bwLate.BigWigs_StartBreak, "hooks BW that loaded after KART")
+    env.BigWigsLoader = nil
+end
+

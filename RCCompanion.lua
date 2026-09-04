@@ -424,6 +424,9 @@ function RC.BuildSettingsCard()
     end)
 
     RC.UpdateStatusLabel()
+    if KART.BT and KART.BT.PlaceSettingsCard then
+        KART.BT.PlaceSettingsCard()
+    end
 end
 
 function RC.SyncWidgets()

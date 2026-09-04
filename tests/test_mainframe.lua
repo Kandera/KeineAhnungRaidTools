@@ -31,6 +31,17 @@ T.eq(KART.BtnAddonNag:GetParent():GetParent(), KART.SettingsPanel,
 T.truthy(KART.CbBreakShowImages, "break pictures checkbox is on Settings")
 T.eq(KART.CbBreakShowImages:GetParent():GetParent(), KART.SettingsPanel,
     "break pictures sit on Settings, not Raidlead")
+do
+    -- RC.SettingsCard is created on Enable, after BreakTimer.lua already anchored
+    -- under AddonVersionCard. Re-place must sit below the RC card, not on top of it.
+    KART.RC = KART.RC or {}
+    KART.RC.SettingsCard = CreateFrame("Frame", nil, KART.SettingsPanel)
+    KART.RC.SettingsCard:SetPoint("TOPLEFT", KART.AddonVersionCard, "BOTTOMLEFT", 0, -20)
+    KART.RC.SettingsCard:SetSize(500, 210)
+    KART.BT.PlaceSettingsCard()
+    local _, rel = KART.BT.SettingsCard:GetPoint(1)
+    T.eq(rel, KART.RC.SettingsCard, "break pictures card sits under the RC card")
+end
 T.truthy(KART.SldCtSwapDuration, "Taunt Swap duration lives on the Co-Tank tab")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language

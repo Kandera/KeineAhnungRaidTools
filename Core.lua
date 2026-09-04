@@ -179,6 +179,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 
     elseif event == "ADDON_LOADED" then
         if arg1 == "RCLootCouncil" and KART.RC then KART.RC.Enable() end
+        if (arg1 == "BigWigs" or arg1 == "DBM-Core") and KART.BT and KART.BT.HookBossMods then
+            KART.BT.HookBossMods()
+        end
         if (arg1 == "RCLootCouncil" or arg1 == "NorthernSkyRaidTools" or arg1 == "wowutils")
             and KART.RegisterNeighborAddons then
             KART.RegisterNeighborAddons()

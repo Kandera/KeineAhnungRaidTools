@@ -45,9 +45,11 @@ end
 BT.POOL = {
     { file = "1.png", contentW = 776, contentH = 960, texW = 1024, texH = 1024 },
     { file = "2.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
-    { file = "3.png", contentW = 825, contentH = 1024, texW = 1024, texH = 1024 },
-    { file = "4.png", contentW = 971, contentH = 975, texW = 1024, texH = 1024 },
+    { file = "3.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
+    { file = "4.png", contentW = 825, contentH = 1024, texW = 1024, texH = 1024 },
     { file = "5.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
+    { file = "6.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
+    { file = "7.png", contentW = 1024, contentH = 576, texW = 1024, texH = 1024 },
 }
 
 local function MediaBreak(file)
@@ -253,7 +255,6 @@ function BT.OnStart(seconds, showImages)
     seconds = tonumber(seconds)
     if not seconds or seconds < 0 then return end
     if seconds == 0 then return BT.OnCancel() end
-    if seconds > 0 and seconds < 60 then return end
     if seconds > 3600 then return end
     BT.EnsureFrame()
     -- A later text-only start must not hide a picture already shown from BRK:1.
@@ -339,15 +340,25 @@ end)
 
 local function SettingsStore() return KART_Settings end
 
-if KART.SettingsPanel and KART.UI and KART.UI.CreateCard then
-    local card = KART.UI:CreateCard(KART.SettingsPanel)
+-- RC.SettingsCard is built later in RC.Enable, after this file loads. Place
+-- again from RC.BuildSettingsCard so the two cards do not share AddonVersionCard.
+function BT.PlaceSettingsCard()
+    local card = BT.SettingsCard
+    if not card then return end
+    card:ClearAllPoints()
     local above = (KART.RC and KART.RC.SettingsCard) or KART.AddonVersionCard
     if above then
         card:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -20)
     else
         card:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -12)
     end
+end
+
+if KART.SettingsPanel and KART.UI and KART.UI.CreateCard then
+    local card = KART.UI:CreateCard(KART.SettingsPanel)
+    BT.SettingsCard = card
     card:SetSize(500, 72)
+    BT.PlaceSettingsCard()
     KART.CbBreakShowImages = KART.UI:CreateSettingsCheckbox(card, {
         name = "KART_BreakShowImages",
         label = KART.L.SET_BREAK_IMAGES,
@@ -407,6 +418,10 @@ function BT.OnBossModStart(seconds, nick)
 end
 
 function BT.HookBossMods()
+    if not BT.ShouldRegisterSlash() then
+        SLASH_KARTBREAK1 = nil
+        if SlashCmdList then SlashCmdList.KARTBREAK = nil end
+    end
     if BigWigsLoader and BigWigsLoader.RegisterMessage then
         BigWigsLoader.RegisterMessage(BT, "BigWigs_StartBreak", function(...)
             local seconds, nick = parseStartBreakArgs(...)
@@ -418,6 +433,7 @@ function BT.HookBossMods()
         return
     end
     if DBM and DBM.RegisterCallback then
+        if BT.hookedDBM then return end
         local breakTimerIds = {}
         local function onBegin(event, timerId, msg, duration, icon, timerType)
             if event ~= "DBM_TimerBegin" and event ~= "DBM_TimerStart" then
@@ -425,10 +441,15 @@ function BT.HookBossMods()
                     nil, event, timerId, msg, duration, icon
             end
             if timerType ~= "break" then return end
-            if timerId then breakTimerIds[timerId] = true end
             duration = tonumber(duration)
             if not duration then return end
-            if duration == 0 and timerId then breakTimerIds[timerId] = nil end
+            if duration == 0 then
+                if timerId then breakTimerIds[timerId] = nil end
+                BT.OnBossModStart(0, nil)
+                return
+            end
+            if timerId and breakTimerIds[timerId] then return end
+            if timerId then breakTimerIds[timerId] = true end
             BT.OnBossModStart(duration, nil)
         end
         DBM:RegisterCallback("DBM_TimerBegin", onBegin)
@@ -440,6 +461,7 @@ function BT.HookBossMods()
                 BT.OnCancel()
             end
         end)
+        BT.hookedDBM = true
     end
 end
 

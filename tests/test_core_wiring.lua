@@ -86,6 +86,8 @@ Wired("KART.RC.OpenOwedWindow()", "/kart owed opens the winner reminder")
 
 T.truthy(toc:find("CoTank%.lua"), "toc lists CoTank.lua")
 T.truthy(toc:find("CoTankSettings%.lua"), "toc lists CoTankSettings.lua")
+T.truthy(toc:find("OptionalDeps:.*BigWigs", 1, false), "toc OptionalDeps lists BigWigs so it loads before KART")
+T.truthy(toc:find("DBM%-Core"), "toc OptionalDeps lists DBM-Core")
 
 Wired('frame:RegisterEvent("CHAT_MSG_OFFICER")', "CHAT_MSG_OFFICER is registered for invite keywords")
 Wired("channels.OFFICER", "officer chat is gated by inviteChannels")
@@ -117,6 +119,10 @@ do
         and branch:find("KART.RC.Enable()", 1, true),
 
         "RCLootCouncil ADDON_LOADED re-enables the RC companion")
+
+    T.truthy(branch and branch:find("KART.BT.HookBossMods", 1, true),
+
+        "late-loaded BigWigs or DBM re-hooks the break timer")
 
     T.truthy(branch and branch:find("KART.RegisterNeighborAddons()", 1, true),
 
