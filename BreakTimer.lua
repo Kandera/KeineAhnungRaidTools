@@ -320,9 +320,7 @@ function BT.SenderMayControl(ctx)
         if name and KAUtil.CaseFold(name) == KAUtil.CaseFold(senderShort) then
             local unitRealm = KAUtil.CanonRealm(realm)
             if unitRealm == "" then unitRealm = ownRealm end
-            if senderRealmRaw and senderRealmRaw ~= "" and unitRealm ~= wantSenderRealm then
-                -- sender names a realm that does not match this unit
-            else
+            if not senderRealmRaw or senderRealmRaw == "" or unitRealm == wantSenderRealm then
                 return unitMayControl(unit)
             end
         end
@@ -435,10 +433,13 @@ function BT.HookBossMods()
     if DBM and DBM.RegisterCallback then
         if BT.hookedDBM then return end
         local breakTimerIds = {}
-        local function onBegin(event, timerId, msg, duration, icon, timerType)
-            if event ~= "DBM_TimerBegin" and event ~= "DBM_TimerStart" then
-                event, timerId, msg, duration, icon, timerType =
-                    nil, event, timerId, msg, duration, icon
+        local function onBegin(...)
+            local a1, a2, a3, a4, a5, a6 = ...
+            local timerId, duration, timerType
+            if a1 == "DBM_TimerBegin" or a1 == "DBM_TimerStart" then
+                timerId, duration, timerType = a2, a4, a6
+            else
+                timerId, duration, timerType = a1, a3, a5
             end
             if timerType ~= "break" then return end
             duration = tonumber(duration)

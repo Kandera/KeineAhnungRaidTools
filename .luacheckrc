@@ -35,7 +35,7 @@ files["tests/"] = {
                 -- Tests stub and mutate these; the addon treats them as read-only client/neighbour
                 -- globals, so they stay in read_globals for addon files.
                 "C_UnitAuras", "C_AddOns", "RCLootCouncil", "RCLootCouncilML",
-                "CompactRaidFrameManager" },
+                "CompactRaidFrameManager", "SLASH_KARTBREAK1" },
 }
 
 -- MainFrame.lua:850 shadows the upvalue `L` (the locale table) from line 2. Single occurrence
@@ -49,7 +49,7 @@ globals = {
     -- Named frames created by the addon and reached through _G
     "KART_GearScanTooltip",
     -- Addon-owned slash command registration
-    "SLASH_KART1",
+    "SLASH_KART1", "SLASH_KARTBREAK1",
     -- Blizzard-provided table that addons are expected to add entries to, not just read
     "SlashCmdList",
     -- Blizzard-provided table that addons are expected to add named popups to, not just read
@@ -78,6 +78,8 @@ read_globals = {
     "EJ_GetInstanceByIndex", "EJ_SelectTier", "EJ_GetInstanceInfo", "EJ_SelectInstance",
     -- NSRT OptionalDep globals (Reminders table + Reloe Load & Send)
     "NSRT", "NorthernSkyRaidTools",
+    -- Boss-mod OptionalDeps (break timer hooks; nil when the addon is not loaded)
+    "BigWigsLoader", "DBM",
     -- Drag-reorder drop target (Notes panel)
     "GetMouseFoci", "GetCursorPosition",
     -- Asked for by the council panel's rank column, which needs the guild roster fetched (B124).
@@ -91,6 +93,7 @@ read_globals = {
     "Ambiguate", "GetGuildInfo", "PromoteToAssistant", "UninviteUnit",
     "ClearOverrideBindings", "SetOverrideBindingClick", "GetReadyCheckStatus", "ConfirmReadyCheck",
     "GetRealmName", "GetNormalizedRealmName", "GetLocale", "GetInstanceInfo", "GetDifficultyInfo",
+    "IsEncounterInProgress",
     "C_SpecializationInfo", "C_Spell", "SOUNDKIT", "PlaySound",
     "GetMacroIndexByName", "EditMacro", "CreateMacro", "InitiateRolePoll",
     -- Items / trade
