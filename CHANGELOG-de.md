@@ -8,6 +8,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-09-04
 ### Hinzugefügt
 - **Ein Pausenfenster öffnet sich bei `/break`**, mit Dauer, lokaler Endzeit und optionalen Gildenbildern.
 
