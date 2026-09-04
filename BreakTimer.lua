@@ -207,8 +207,8 @@ end
 
 function BT.SenderMayControl(ctx)
     if not ctx then return false end
-    -- Roster walk is the live path; tests replace UnitLeads/Assists with closures over env.
     local leads, assists = false, false
+    local found = false
     if KAUtil and KAUtil.EachGroupUnit then
         for unit in KAUtil.EachGroupUnit() do
             local name, realm = UnitName(unit)
@@ -216,12 +216,18 @@ function BT.SenderMayControl(ctx)
             if full == ctx.sender or name == ctx.shortName then
                 leads = KART.UnitLeads(unit)
                 assists = KART.UnitAssists(unit)
+                found = true
                 break
             end
         end
     end
-    if not leads and not assists then
-        -- Isolated tests have no roster: honour the stub on "player".
+    if not found then
+        local playerName, playerRealm = UnitName("player")
+        if not playerName then return false end
+        local playerFull = playerRealm and (playerName .. "-" .. playerRealm) or playerName
+        if ctx.shortName ~= playerName and ctx.sender ~= playerFull then
+            return false
+        end
         leads = KART.UnitLeads("player")
         assists = KART.UnitAssists("player")
     end

@@ -130,12 +130,17 @@ do
     local ctx = { sender = "Pug-TarrenMill", shortName = "Pug" }
     T.eq(BT.SenderMayControl(ctx), false, "a raider cannot flip pictures")
     env._lead = true
-    T.eq(BT.SenderMayControl(ctx), true, "a lead can")
+    T.eq(BT.SenderMayControl(ctx), false, "local lead does not authorize a stranger's BRK")
 end
 
 do
     local fn = env._brkHandlers.BRK
     T.truthy(fn, "BRK is registered")
+    local savedUnitName = env.UnitName
+    env.UnitName = function(unit)
+        if unit == "player" then return "Ann", "" end
+        return savedUnitName and savedUnitName(unit)
+    end
     env._lead = true
     fn("0:0", { sender = "Ann-TarrenMill", shortName = "Ann" })
     T.eq(BT.frame:IsShown(), false, "BRK:0 closes")
@@ -147,4 +152,8 @@ do
     BT.OnCancel()
     fn("180:1", { sender = "Pug-TarrenMill", shortName = "Pug" })
     T.eq(BT.frame:IsShown(), false, "unauthorized BRK is ignored")
+    env._lead = true
+    fn("180:1", { sender = "Pug-TarrenMill", shortName = "Pug" })
+    T.eq(BT.frame:IsShown(), false, "stranger BRK ignored even when local player is lead")
+    env.UnitName = savedUnitName
 end
