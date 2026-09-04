@@ -105,18 +105,47 @@ function BT.ApplyLayout()
     local pad = 8
     local imgW, imgH = 0, 0
     if BT.wantPictures and not BT.minimized then
-        local entry = BT.currentImage or BT.PickImage()
-        BT.currentImage = entry
-        if entry and BT.image then
-            imgW, imgH = BT.ContainSize(entry.contentW, entry.contentH, MAX_IMAGE_SIDE)
-            BT.image:ClearAllPoints()
-            BT.image:SetPoint("TOP", f, "TOP", 0, -(barH + pad))
-            BT.image:SetSize(imgW, imgH)
-            BT.image:SetTexture(MediaBreak(entry.file))
-            local u = entry.contentW / entry.texW
-            local v = entry.contentH / entry.texH
-            BT.image:SetTexCoord(0, u, 0, v)
-            BT.image:Show()
+        local pool = BT.POOL or {}
+        local n = #pool
+        if n > 0 and BT.image then
+            local entry = BT.currentImage or BT.PickImage()
+            local failed = {}
+            local loadedEntry = nil
+            local tryEntry = entry
+            local attempts = 0
+            while tryEntry and attempts < n do
+                attempts = attempts + 1
+                failed[tryEntry.file] = true
+                local tex = BT.image:SetTexture(MediaBreak(tryEntry.file))
+                if tex ~= false then
+                    loadedEntry = tryEntry
+                    break
+                end
+                tryEntry = nil
+                for i = 1, n do
+                    local candidate = pool[i]
+                    if candidate and not failed[candidate.file] then
+                        tryEntry = candidate
+                        break
+                    end
+                end
+            end
+            if loadedEntry then
+                BT.currentImage = loadedEntry
+                imgW, imgH = BT.ContainSize(loadedEntry.contentW, loadedEntry.contentH, MAX_IMAGE_SIDE)
+                BT.image:ClearAllPoints()
+                BT.image:SetPoint("TOP", f, "TOP", 0, -(barH + pad))
+                BT.image:SetSize(imgW, imgH)
+                local u = loadedEntry.contentW / loadedEntry.texW
+                local v = loadedEntry.contentH / loadedEntry.texH
+                BT.image:SetTexCoord(0, u, 0, v)
+                BT.image:Show()
+            else
+                BT.currentImage = nil
+                imgW, imgH = 0, 0
+                BT.image:SetTexture(nil)
+                BT.image:Hide()
+            end
         elseif BT.image then
             BT.image:SetTexture(nil)
             BT.image:Hide()

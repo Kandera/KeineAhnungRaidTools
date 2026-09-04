@@ -240,3 +240,14 @@ do
     T.eq(BT.image:IsShown(), false, "minimized hides the image")
     BT.OnCancel()
 end
+
+do
+    BT.EnsureFrame()
+    local origSetTexture = BT.image.SetTexture
+    BT.image.SetTexture = function() return false end
+    BT.OnStart(720, 1)
+    T.eq(BT.image:IsShown(), false, "failed SetTexture hides the image")
+    T.eq(BT.frame:GetHeight(), 28, "failed SetTexture uses bar-only height")
+    BT.image.SetTexture = origSetTexture
+    BT.OnCancel()
+end
