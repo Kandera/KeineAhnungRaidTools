@@ -131,6 +131,14 @@ do
     T.eq(BT.SenderMayControl(ctx), false, "a raider cannot flip pictures")
     env._lead = true
     T.eq(BT.SenderMayControl(ctx), false, "local lead does not authorize a stranger's BRK")
+    local savedUnitName = env.UnitName
+    env.UnitName = function(unit)
+        if unit == "player" then return "Ann", "TarrenMill" end
+        return savedUnitName and savedUnitName(unit)
+    end
+    ctx = { sender = "Ann-OtherRealm", shortName = "Ann" }
+    T.eq(BT.SenderMayControl(ctx), false, "realm mismatch rejects player fallback even when local lead")
+    env.UnitName = savedUnitName
 end
 
 do
@@ -138,7 +146,7 @@ do
     T.truthy(fn, "BRK is registered")
     local savedUnitName = env.UnitName
     env.UnitName = function(unit)
-        if unit == "player" then return "Ann", "" end
+        if unit == "player" then return "Ann", "TarrenMill" end
         return savedUnitName and savedUnitName(unit)
     end
     env._lead = true
@@ -156,4 +164,15 @@ do
     fn("180:1", { sender = "Pug-TarrenMill", shortName = "Pug" })
     T.eq(BT.frame:IsShown(), false, "stranger BRK ignored even when local player is lead")
     env.UnitName = savedUnitName
+end
+
+do
+    BT.OnCancel()
+    env._brkSent = {}
+    env.IsInGroup = function() return true end
+    BT.SendBreak(180, 0)
+    T.eq(#env._brkSent, 1, "SendBreak sends BRK in group")
+    T.eq(env._brkSent[1], "BRK:180:0", "SendBreak payload")
+    T.eq(BT.frame:IsShown(), true, "SendBreak opens the window locally")
+    BT.OnCancel()
 end

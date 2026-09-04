@@ -203,6 +203,7 @@ function BT.SendBreak(seconds, showImages)
     if IsInGroup() then
         KASC:Send("BRK:" .. tostring(seconds) .. ":" .. tostring(flag))
     end
+    BT.OnStart(seconds, showImages)
 end
 
 function BT.SenderMayControl(ctx)
@@ -213,7 +214,7 @@ function BT.SenderMayControl(ctx)
         for unit in KAUtil.EachGroupUnit() do
             local name, realm = UnitName(unit)
             local full = realm and (name .. "-" .. realm) or name
-            if full == ctx.sender or name == ctx.shortName then
+            if full == ctx.sender then
                 leads = KART.UnitLeads(unit)
                 assists = KART.UnitAssists(unit)
                 found = true
@@ -225,7 +226,11 @@ function BT.SenderMayControl(ctx)
         local playerName, playerRealm = UnitName("player")
         if not playerName then return false end
         local playerFull = playerRealm and (playerName .. "-" .. playerRealm) or playerName
-        if ctx.shortName ~= playerName and ctx.sender ~= playerFull then
+        local senderRealm = ctx.sender and ctx.sender:match("-(.+)$")
+        local playerMatch = (ctx.sender == playerFull)
+            or (ctx.shortName == playerName
+                and (not senderRealm or senderRealm == playerRealm))
+        if not playerMatch then
             return false
         end
         leads = KART.UnitLeads("player")
