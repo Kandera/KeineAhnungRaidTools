@@ -35,4 +35,5 @@ Notes.lua
 AutoLog.lua
 Core.lua
 RCCompanion.lua
+BreakTimer.lua
 RCOwed.lua

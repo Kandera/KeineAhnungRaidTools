@@ -519,6 +519,13 @@ KART.L_enUS = {
     NT_STATUS_DELETED = "Deleted %d notes.",
     NT_STATUS_DELETE_EMPTY = "No shared notes to delete.",
 
+    -- Break timer
+    SET_BREAK_IMAGES = "Break window pictures",
+    DESC_BREAK_IMAGES = "When you start a break, every KART client shows a random picture from this addon. Off by default.",
+    BREAK_STATUS = "Breaktime %d min until %s",
+    BREAK_WRONG_FORMAT = "Time must be 1 to 60 minutes. Example: /break 12",
+    BREAK_ENCOUNTER = "Break timers cannot start during an encounter.",
+
     -- Droptimizer Gains (companion app sync)
 
     -- Misc (added 2026-07)

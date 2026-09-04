@@ -206,6 +206,7 @@ dofile("tests/test_groupinvite.lua")
 
 dofile("tests/test_wowutils_import.lua")
 dofile("tests/test_notes.lua")
+dofile("tests/test_break_timer.lua")
 
 dofile("tests/test_identity.lua")
 

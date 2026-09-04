@@ -532,6 +532,7 @@ KART.Defaults = {
     rlBarBgAlpha = 80, -- bar backdrop opacity in percent (buttons keep their own backdrop)
     pullTimerDuration = 10,
     rcReasonDialog = true,
+    breakShowImages = false, -- starter flag on BRK; default off so public installs do not show guild memes
     keybinds = {}, -- filled per-action at runtime (see KART.ApplyKeybinds); nil fields in a table literal are a no-op anyway
     bcModuleEnabled = false,
     ctModuleEnabled = false,

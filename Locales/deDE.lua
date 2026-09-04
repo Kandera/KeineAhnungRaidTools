@@ -519,6 +519,13 @@ KART.L_deDE = {
     NT_STATUS_DELETED = "%d Notizen gelöscht.",
     NT_STATUS_DELETE_EMPTY = "Keine geteilten Notizen zum Löschen.",
 
+    -- Break timer
+    SET_BREAK_IMAGES = "Bilder im Break-Fenster",
+    DESC_BREAK_IMAGES = "Wenn du eine Pause startest, sieht jeder KART-Client ein Zufallsbild aus diesem Addon. Standard aus.",
+    BREAK_STATUS = "Pausenzeit %d Min bis %s",
+    BREAK_WRONG_FORMAT = "Zeit muss 1 bis 60 Minuten sein. Beispiel: /break 12",
+    BREAK_ENCOUNTER = "Break-Timer gehen nicht während eines Encounters.",
+
     -- Droptimizer Gains (companion app sync)
 
     -- Misc (added 2026-07)

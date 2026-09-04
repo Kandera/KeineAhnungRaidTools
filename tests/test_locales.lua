@@ -79,6 +79,7 @@ local SOURCES = {
     "BuffChecker.lua", "GroupLogic.lua", "Invite.lua", "Notes.lua", "RaidleadBar.lua",
     "CoTank.lua", "CoTankSettings.lua",
     "RCCompanion.lua",
+    "BreakTimer.lua",
     "RCOwed.lua",
 }
 
