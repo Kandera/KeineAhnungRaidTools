@@ -52,6 +52,7 @@ T.truthy(core:find("KART.RC.SyncWidgets()", 1, true), "Core fans out to RC widge
 T.truthy(core:find("KART.WU.SyncWidgets()", 1, true), "Core fans out to WoWUtils widgets")
 T.truthy(core:find("KART.CT.SyncWidgets()", 1, true), "Core fans out to Co-Tank widgets")
 T.truthy(core:find("KART.NT.SyncWidgets()", 1, true), "Core fans out to Notes widgets")
+T.truthy(core:find("KART.BT.SyncWidgets()", 1, true), "Core fans out to Break Timer widgets")
 T.eq(core:find("settingsMap[", 1, true), nil, "Core.lua does not keep the widget map")
 
 for key, path in pairs(declared) do
