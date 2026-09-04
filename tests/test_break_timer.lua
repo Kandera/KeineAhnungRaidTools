@@ -8,6 +8,8 @@ local KART = {
         BREAK_STATUS = "Breaktime %d min until %s",
         SET_BREAK_IMAGES = "Break window pictures",
         DESC_BREAK_IMAGES = "When you start a break, every KART client shows a random picture.",
+        BREAK_WRONG_FORMAT = "Time must be 1 to 60 minutes. Example: /break 12",
+        BREAK_ENCOUNTER = "Break timers cannot start during an encounter.",
     },
     UI = {
         RegisterStaticPopup = function() end,
@@ -26,6 +28,7 @@ local KART = {
 }
 env.KART = KART
 env.KART_Settings = { breakShowImages = false }
+env.SlashCmdList = {}
 do
     local realLibStub = LibStub
     local kascStub = {
@@ -251,3 +254,174 @@ do
     BT.image.SetTexture = origSetTexture
     BT.OnCancel()
 end
+
+do
+    env.BigWigsLoader = {}
+    T.eq(BT.TryRegisterSlash(), false, "refuses /break while BigWigsLoader exists")
+    env.BigWigsLoader = nil
+    env.DBM = nil
+    T.eq(BT.TryRegisterSlash(), true, "registers /break when no boss mod is loaded")
+    T.eq(SLASH_KARTBREAK1 or rawget(env, "SLASH_KARTBREAK1"), "/break",
+        "the slash string is /break")
+end
+
+do
+    -- Starter path: nick is player
+    env.UnitName = function(u) if u == "player" then return "Ann", "TarrenMill" end end
+    env.KART_Settings.breakShowImages = true
+    env.IsInGroup = function() return true end
+    env._brkSent = {}
+    BT.OnBossModStart(720, "Ann")
+    T.eq(BT.frame:IsShown(), true, "boss-mod start opens the window")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "starter sends the picture flag")
+    BT.OnCancel()
+end
+
+do
+    env._bw = {}
+    env.BigWigsLoader = {
+        RegisterMessage = function(_, ev, fn) env._bw[ev] = fn end,
+    }
+    env.DBM = nil
+    BT.HookBossMods()
+    T.truthy(env._bw.BigWigs_StartBreak, "StartBreak hooked")
+    T.truthy(env._bw.BigWigs_StopBreak, "StopBreak hooked")
+    T.is_nil(env._dbm, "DBM is not hooked while BigWigsLoader exists")
+end
+
+do
+    env.UnitName = function(u) if u == "player" then return "Ann", "TarrenMill" end end
+    env.KART_Settings.breakShowImages = true
+    env.IsInGroup = function() return true end
+    env._brkSent = {}
+    env._bw.BigWigs_StartBreak("BigWigs_StartBreak", {}, 720, "Ann")
+    T.eq(BT.frame:IsShown(), true, "live BW callback opens the window")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "live BW starter sends BRK")
+    BT.OnCancel()
+    env._brkSent = {}
+    env._bw.BigWigs_StartBreak({}, 300, "Ann")
+    T.eq(env._brkSent[#env._brkSent], "BRK:300:1", "plugin,seconds,nick still parses")
+    BT.OnCancel()
+    env._brkSent = {}
+    env._bw.BigWigs_StartBreak(180, "Ann")
+    T.eq(env._brkSent[#env._brkSent], "BRK:180:1", "seconds,nick still parses")
+    env._bw.BigWigs_StopBreak("BigWigs_StopBreak")
+    T.eq(BT.frame:IsShown(), false, "StopBreak closes the window")
+end
+
+do
+    env.UnitName = function(u) if u == "player" then return "Ann", "TarrenMill" end end
+    env.KART_Settings.breakShowImages = true
+    env.IsInGroup = function() return true end
+    env._brkSent = {}
+    local starts = 0
+    local orig = BT.OnStart
+    BT.OnStart = function(...)
+        starts = starts + 1
+        return orig(...)
+    end
+    BT.OnBossModStart(720, "Ann")
+    BT.OnStart = orig
+    T.eq(starts, 1, "starter SendBreak does not OnStart a second time")
+    BT.OnCancel()
+end
+
+do
+    env.UnitName = function(u) if u == "player" then return "Ann", "TarrenMill" end end
+    env.KART_Settings.breakShowImages = true
+    env.IsInGroup = function() return true end
+    env._brkSent = {}
+    BT.OnBossModStart(720, "Other")
+    T.eq(BT.frame:IsShown(), true, "BW receiver opens the window")
+    T.eq(#env._brkSent, 0, "BW receiver does not send BRK")
+    T.eq(BT.wantPictures, false, "BW receiver starts without pictures")
+    BT.OnCancel()
+end
+
+do
+    env._dbm = {}
+    env.BigWigsLoader = nil
+    env.DBM = {
+        RegisterCallback = function(_, ev, fn) env._dbm[ev] = fn end,
+    }
+    BT.HookBossMods()
+    T.truthy(env._dbm.DBM_TimerBegin, "DBM_TimerBegin hooked")
+    T.truthy(env._dbm.DBM_TimerStart, "DBM_TimerStart hooked")
+    T.truthy(env._dbm.DBM_TimerStop, "DBM_TimerStop hooked")
+end
+
+do
+    env.UnitName = function(u) if u == "player" then return "Ann", "TarrenMill" end end
+    env.KART_Settings.breakShowImages = true
+    env.IsInGroup = function() return true end
+    KART.UnitLeads = function() return true end
+    KART.UnitAssists = function() return false end
+    env._brkSent = {}
+    env._dbm.DBM_TimerBegin("DBM_TimerBegin", "break-1", "Break", 720, "icon", "break")
+    T.eq(BT.frame:IsShown(), true, "DBM break begin opens the window")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "DBM lead starter sends BRK")
+    env._dbm.DBM_TimerStop("DBM_TimerStop", "other-timer")
+    T.eq(BT.frame:IsShown(), true, "unrelated TimerStop does not close the break")
+    env._dbm.DBM_TimerStop("DBM_TimerStop", "break-1")
+    T.eq(BT.frame:IsShown(), false, "break TimerStop closes the window")
+end
+
+do
+    env.IsInGroup = function() return true end
+    KART.UnitLeads = function() return false end
+    KART.UnitAssists = function() return false end
+    env.KART_Settings.breakShowImages = true
+    env._brkSent = {}
+    env._dbm.DBM_TimerBegin("DBM_TimerBegin", "break-2", "Break", 180, "icon", "break")
+    T.eq(BT.frame:IsShown(), true, "DBM non-lead still opens the window")
+    T.eq(#env._brkSent, 0, "DBM non-lead does not send BRK")
+    T.eq(BT.wantPictures, false, "DBM non-lead starts without pictures")
+    env._dbm.DBM_TimerBegin("DBM_TimerBegin", "break-3", "Break", 0, "icon", "break")
+    T.eq(BT.frame:IsShown(), false, "DBM duration 0 cancels")
+    BT.OnCancel()
+end
+
+do
+    env.BigWigsLoader = nil
+    env.DBM = nil
+    env.IsInGroup = function() return true end
+    env.IsEncounterInProgress = nil
+    KART.UnitLeads = function() return true end
+    KART.UnitAssists = function() return false end
+    env.KART_Settings.breakShowImages = false
+    T.eq(BT.TryRegisterSlash(), true, "slash registers with no boss mod")
+    local cmd = env.SlashCmdList.KARTBREAK
+    T.truthy(cmd, "slash handler is installed")
+    env._brkSent = {}
+    cmd("12")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:0", "slash 12 sends minutes as seconds")
+    T.eq(BT.frame:IsShown(), true, "slash 12 opens the window")
+    env._brkSent = {}
+    cmd("0")
+    T.eq(env._brkSent[#env._brkSent], "BRK:0:0", "slash 0 sends cancel")
+    T.eq(BT.frame:IsShown(), false, "slash 0 closes the window")
+    env._brkSent = {}
+    cmd("0.5")
+    T.eq(#env._brkSent, 0, "slash under one minute is rejected")
+    cmd("61")
+    T.eq(#env._brkSent, 0, "slash over 60 minutes is rejected")
+    env.IsEncounterInProgress = function() return true end
+    cmd("12")
+    T.eq(#env._brkSent, 0, "slash during an encounter is rejected")
+    env.IsEncounterInProgress = nil
+    KART.UnitLeads = function() return false end
+    cmd("12")
+    T.eq(#env._brkSent, 0, "non-lead slash does not send")
+    local starts = 0
+    local orig = BT.OnStart
+    BT.OnStart = function(...)
+        starts = starts + 1
+        return orig(...)
+    end
+    KART.UnitLeads = function() return true end
+    cmd("12")
+    BT.OnStart = orig
+    T.eq(starts, 1, "slash SendBreak does not OnStart a second time")
+    BT.OnCancel()
+end
+

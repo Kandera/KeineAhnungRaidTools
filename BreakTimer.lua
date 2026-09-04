@@ -361,3 +361,102 @@ function BT.SyncWidgets()
     KART.ApplySettingsMap(settingsMap)
 end
 
+-- Live BigWigsLoader.SendMessage prepends the event name, so varargs are
+-- (event, plugin, seconds, nick). Older or test callers may omit the event
+-- or the plugin; the first number is always seconds, and nick follows it.
+local function parseStartBreakArgs(...)
+    local n = select("#", ...)
+    for i = 1, n do
+        local v = select(i, ...)
+        if type(v) == "number" then
+            local nick = select(i + 1, ...)
+            if type(nick) ~= "string" then nick = nil end
+            return v, nick
+        end
+    end
+end
+
+function BT.OnBossModStart(seconds, nick)
+    seconds = tonumber(seconds)
+    if not seconds then return end
+    local starter
+    if type(nick) == "string" then
+        local me = UnitName("player")
+        starter = nick == me or (UnitIsUnit and UnitIsUnit(nick, "player"))
+    else
+        -- DBM has no nick: only lead, assist, or solo may send BRK.
+        starter = (not IsInGroup()) or KART.UnitLeads("player") or KART.UnitAssists("player")
+    end
+    local show = starter and KART_Settings and KART_Settings.breakShowImages
+    if starter then
+        -- SendBreak already OnStarts (and OnStart(0) cancels).
+        BT.SendBreak(seconds, show)
+        return
+    end
+    BT.OnStart(seconds, 0)
+end
+
+function BT.HookBossMods()
+    if BigWigsLoader and BigWigsLoader.RegisterMessage then
+        BigWigsLoader.RegisterMessage(BT, "BigWigs_StartBreak", function(...)
+            local seconds, nick = parseStartBreakArgs(...)
+            BT.OnBossModStart(seconds, nick)
+        end)
+        BigWigsLoader.RegisterMessage(BT, "BigWigs_StopBreak", function()
+            BT.OnCancel()
+        end)
+        return
+    end
+    if DBM and DBM.RegisterCallback then
+        local breakTimerIds = {}
+        local function onBegin(event, timerId, msg, duration, icon, timerType)
+            if event ~= "DBM_TimerBegin" and event ~= "DBM_TimerStart" then
+                event, timerId, msg, duration, icon, timerType =
+                    nil, event, timerId, msg, duration, icon
+            end
+            if timerType ~= "break" then return end
+            if timerId then breakTimerIds[timerId] = true end
+            duration = tonumber(duration)
+            if not duration then return end
+            if duration == 0 and timerId then breakTimerIds[timerId] = nil end
+            BT.OnBossModStart(duration, nil)
+        end
+        DBM:RegisterCallback("DBM_TimerBegin", onBegin)
+        DBM:RegisterCallback("DBM_TimerStart", onBegin)
+        DBM:RegisterCallback("DBM_TimerStop", function(event, timerId)
+            if event ~= "DBM_TimerStop" then timerId = event end
+            if timerId and breakTimerIds[timerId] then
+                breakTimerIds[timerId] = nil
+                BT.OnCancel()
+            end
+        end)
+    end
+end
+
+function BT.TryRegisterSlash()
+    if not BT.ShouldRegisterSlash() then return false end
+    SLASH_KARTBREAK1 = "/break"
+    SlashCmdList = SlashCmdList or {}
+    SlashCmdList.KARTBREAK = function(input)
+        if IsEncounterInProgress and IsEncounterInProgress() then
+            print(KART.L.BREAK_ENCOUNTER)
+            return
+        end
+        if IsInGroup() and not (KART.UnitLeads("player") or KART.UnitAssists("player")) then
+            return
+        end
+        local minutes = tonumber(input)
+        if not minutes or minutes < 0 or minutes > 60 or (minutes > 0 and minutes < 1) then
+            print(KART.L.BREAK_WRONG_FORMAT)
+            return
+        end
+        local seconds = math.floor(minutes * 60)
+        local show = KART_Settings and KART_Settings.breakShowImages
+        BT.SendBreak(seconds, show)
+    end
+    return true
+end
+
+BT.HookBossMods()
+BT.TryRegisterSlash()
+
