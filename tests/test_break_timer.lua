@@ -193,3 +193,50 @@ do
     T.eq(BT.frame:IsShown(), true, "SendBreak opens the window locally")
     BT.OnCancel()
 end
+
+do
+    T.truthy(BT.POOL and #BT.POOL >= 1, "the pool lists at least one file after media ships")
+    local saved = BT.POOL
+    BT.POOL = {}
+    T.is_nil(BT.PickImage(), "empty pool picks nothing")
+    BT.POOL = saved
+end
+
+do
+    local saved = BT.POOL
+    BT.POOL = {}
+    BT.OnStart(720, 1)
+    T.truthy(BT.image, "EnsureFrame creates the image texture")
+    T.eq(BT.image:IsShown(), false, "empty pool does not show the image")
+    T.eq(BT.image:GetTexture(), nil, "empty pool does not set a texture")
+    T.eq(BT.frame:IsShown(), true, "text-only window still shows")
+    BT.POOL = saved
+    BT.OnCancel()
+end
+
+do
+    for i, entry in ipairs(BT.POOL) do
+        T.truthy(entry.file:find("%.png$"), "pool file " .. i .. " includes .png")
+        T.truthy(entry.contentW > 0 and entry.contentH > 0, "pool " .. i .. " content size is non-zero")
+        T.truthy(entry.texW > 0 and entry.texH > 0, "pool " .. i .. " texture size is non-zero")
+    end
+    BT.currentImage = { file = "stale.png", contentW = 1, contentH = 1, texW = 1, texH = 1 }
+    BT.OnStart(720, 1)
+    T.truthy(BT.currentImage and BT.currentImage.file ~= "stale.png", "new start picks a fresh image")
+    T.eq(BT.image:IsShown(), true, "pictures on shows the image")
+    local tex = BT.image:GetTexture()
+    T.truthy(tex and tex:find("%.png"), "texture path includes .png")
+    T.truthy(tex and tex:find("media\\break\\"), "texture is under media/break")
+    local imgW, imgH = BT.ContainSize(BT.currentImage.contentW, BT.currentImage.contentH, 400)
+    T.eq(BT.image:GetWidth(), imgW, "image width is contain-fit")
+    T.eq(BT.image:GetHeight(), imgH, "image height is contain-fit")
+    T.eq(BT.frame:GetWidth(), math.max(280, imgW + 16), "frame width wraps the image")
+    T.eq(BT.frame:GetHeight(), 28 + imgH + 16, "frame height is bar plus image")
+    BT.OnStart(720, 0)
+    T.eq(BT.image:IsShown(), false, "pictures off hides the image")
+    BT.OnStart(720, 1)
+    BT.minimized = true
+    BT.ApplyLayout()
+    T.eq(BT.image:IsShown(), false, "minimized hides the image")
+    BT.OnCancel()
+end

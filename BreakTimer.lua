@@ -41,6 +41,25 @@ function BT.ShouldRegisterSlash()
     return BigWigsLoader == nil and DBM == nil
 end
 
+-- contentW/H are the unpadded pixels; texW/H are the PNG size (power of two).
+BT.POOL = {
+    { file = "1.png", contentW = 776, contentH = 960, texW = 1024, texH = 1024 },
+    { file = "2.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
+    { file = "3.png", contentW = 825, contentH = 1024, texW = 1024, texH = 1024 },
+    { file = "4.png", contentW = 971, contentH = 975, texW = 1024, texH = 1024 },
+    { file = "5.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
+}
+
+local function MediaBreak(file)
+    return "Interface\\AddOns\\" .. addonName .. "\\media\\break\\" .. file
+end
+
+function BT.PickImage()
+    local n = BT.POOL and #BT.POOL or 0
+    if n == 0 then return nil end
+    return BT.POOL[math.random(1, n)]
+end
+
 local BAR_HEIGHT = 28
 local FRAME_WIDTH = 280
 
@@ -83,8 +102,31 @@ function BT.ApplyLayout()
     local f = BT.frame
     if not f then return end
     local barH = BAR_HEIGHT
-    local imgH = 0
-    f:SetSize(FRAME_WIDTH, barH + imgH)
+    local pad = 8
+    local imgW, imgH = 0, 0
+    if BT.wantPictures and not BT.minimized then
+        local entry = BT.currentImage or BT.PickImage()
+        BT.currentImage = entry
+        if entry and BT.image then
+            imgW, imgH = BT.ContainSize(entry.contentW, entry.contentH, MAX_IMAGE_SIDE)
+            BT.image:ClearAllPoints()
+            BT.image:SetPoint("TOP", f, "TOP", 0, -(barH + pad))
+            BT.image:SetSize(imgW, imgH)
+            BT.image:SetTexture(MediaBreak(entry.file))
+            local u = entry.contentW / entry.texW
+            local v = entry.contentH / entry.texH
+            BT.image:SetTexCoord(0, u, 0, v)
+            BT.image:Show()
+        elseif BT.image then
+            BT.image:SetTexture(nil)
+            BT.image:Hide()
+        end
+    elseif BT.image then
+        BT.image:Hide()
+    end
+    local width = math.max(FRAME_WIDTH, imgW + pad * 2)
+    local height = barH + (imgH > 0 and (imgH + pad * 2) or 0)
+    f:SetSize(width, height)
 end
 
 function BT.EnsureFrame()
@@ -164,6 +206,9 @@ function BT.EnsureFrame()
     BT.statusText:SetPoint("RIGHT", minBtn, "LEFT", -6, 0)
     BT.statusText:SetJustifyH("LEFT")
 
+    BT.image = f:CreateTexture(nil, "ARTWORK")
+    BT.image:Hide()
+
     BT.imageHolder = CreateFrame("Frame", nil, f)
     BT.imageHolder:SetPoint("TOPLEFT", bar, "BOTTOMLEFT")
     BT.imageHolder:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT")
@@ -183,6 +228,7 @@ function BT.OnStart(seconds, showImages)
     BT.EnsureFrame()
     BT.wantPictures = showImages == true or showImages == 1
     BT.minimized = false
+    BT.currentImage = nil
     applyMinimize()
     BT.ApplyLayout()
     restorePosition(BT.frame)
