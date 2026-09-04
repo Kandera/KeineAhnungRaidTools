@@ -95,3 +95,56 @@ do
     env.DBM = nil
     T.eq(BT.ShouldRegisterSlash(), true, "neither boss mod: KART owns /break")
 end
+
+do
+    T.truthy(BT.OnStart, "OnStart exists")
+    BT.OnStart(720, 0)
+    local f = env.KART_BreakFrame or _G.KART_BreakFrame
+    -- Isolated CreateFrame stores the name on env if the stub writes _G; also keep BT.frame.
+    f = f or BT.frame
+    T.truthy(f, "start creates the frame")
+    T.eq(f:IsShown(), true, "start shows the frame")
+    T.eq(BT.statusText:GetText(), BT.FormatStatus(720, time()), "status uses FormatStatus")
+    local special = false
+    for _, name in ipairs(UISpecialFrames) do
+        if name == "KART_BreakFrame" then special = true end
+    end
+    T.eq(special, false, "break frame is not in UISpecialFrames")
+    BT.OnCancel()
+    T.eq(f:IsShown(), false, "cancel hides the frame")
+end
+
+do
+    BT.OnStart(60, 0)
+    BT.OnStart(120, 0)
+    T.eq(BT.frame:IsShown(), true, "a second start still has one frame")
+    T.eq(BT.statusText:GetText(), BT.FormatStatus(120, time()), "the later duration wins")
+    BT.OnCancel()
+end
+
+do
+    env._lead = false
+    env._assist = false
+    KART.UnitLeads = function() return env._lead end
+    KART.UnitAssists = function() return env._assist end
+    local ctx = { sender = "Pug-TarrenMill", shortName = "Pug" }
+    T.eq(BT.SenderMayControl(ctx), false, "a raider cannot flip pictures")
+    env._lead = true
+    T.eq(BT.SenderMayControl(ctx), true, "a lead can")
+end
+
+do
+    local fn = env._brkHandlers.BRK
+    T.truthy(fn, "BRK is registered")
+    env._lead = true
+    fn("0:0", { sender = "Ann-TarrenMill", shortName = "Ann" })
+    T.eq(BT.frame:IsShown(), false, "BRK:0 closes")
+    fn("180:1", { sender = "Ann-TarrenMill", shortName = "Ann" })
+    T.eq(BT.frame:IsShown(), true, "authorized BRK opens")
+    T.eq(BT.wantPictures, true, "flag 1 arms pictures")
+    env._lead = false
+    env._assist = false
+    BT.OnCancel()
+    fn("180:1", { sender = "Pug-TarrenMill", shortName = "Pug" })
+    T.eq(BT.frame:IsShown(), false, "unauthorized BRK is ignored")
+end

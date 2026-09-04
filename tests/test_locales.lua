@@ -195,6 +195,7 @@ do
         bcPoint = true, bcRelativePoint = true, bcX = true, bcY = true,
         bcWidth = true, bcHeight = true,
         rlBarPoint = true, rlBarRelativePoint = true, rlBarX = true, rlBarY = true,
+        breakWindowPos = true, -- written on first drag; missing pos restores CENTER
     }
 
     local utils = Slurp("Utils.lua")
