@@ -7,11 +7,10 @@ local MAX_IMAGE_SIDE = 400
 
 function BT.ParsePayload(payload)
     if type(payload) ~= "string" then return nil, 0 end
-    local secStr, imgStr = payload:match("^(%d+):(%d+)$")
+    local secStr, imgStr = payload:match("^(%d+):(.+)$")
     if secStr then
         local seconds = tonumber(secStr)
-        local img = tonumber(imgStr)
-        if img ~= 1 then img = 0 end
+        local img = (imgStr == "1") and 1 or 0
         return seconds, img
     end
     secStr = payload:match("^(%d+)$")
