@@ -264,7 +264,10 @@ function BT.OnStart(seconds, showImages)
         BT.wantPictures = false
     end
     BT.minimized = false
-    BT.currentImage = nil
+    -- Keep the already-shown file; a later text-only start must not re-roll it.
+    if not (BT.frame:IsShown() and BT.currentImage) then
+        BT.currentImage = nil
+    end
     applyMinimize()
     BT.ApplyLayout()
     restorePosition(BT.frame)

@@ -246,9 +246,11 @@ do
     BT.OnStart(720, 1)
     T.eq(BT.image:IsShown(), true, "pictures 1 shows the image")
     T.eq(BT.wantPictures, true, "pictures 1 arms wantPictures")
+    local keptFile = BT.currentImage and BT.currentImage.file
     BT.OnStart(720, 0)
     T.eq(BT.wantPictures, true, "text-only restart does not downgrade pictures")
     T.eq(BT.image:IsShown(), true, "text-only restart leaves the image shown")
+    T.eq(BT.currentImage and BT.currentImage.file, keptFile, "text-only restart does not re-roll the picture")
     BT.OnCancel()
     T.eq(BT.wantPictures, false, "cancel clears pictures")
     BT.OnStart(720, 0)
