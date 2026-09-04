@@ -17,7 +17,7 @@ local KART = me.KART
 -- what those two controls do IS the call into them.
 RaidSim.As(me, function()
     me.KART.CreateTabTitle = me.KART.CreateTabTitle or function() end
-    for _, path in ipairs({ "MainFrame.lua", "Notes.lua", "CoTank.lua", "CoTankSettings.lua", "Profiles.lua", "RaidleadBar.lua" }) do
+    for _, path in ipairs({ "MainFrame.lua", "BreakTimer.lua", "Notes.lua", "CoTank.lua", "CoTankSettings.lua", "Profiles.lua", "RaidleadBar.lua" }) do
         local chunk = assert(loadstring(assert(io.open(path, "r")):read("*a"), "@" .. path))
         setfenv(chunk, me.env)
         chunk("KeineAhnungRaidTools", KART)
@@ -28,6 +28,9 @@ T.eq(#KART.FooterLinks, 3, "footer links survive load (SetFont before SetText)")
 T.truthy(KART.BtnAddonNag, "Check Addon Versions is on the Settings tab")
 T.eq(KART.BtnAddonNag:GetParent():GetParent(), KART.SettingsPanel,
     "Check Addon Versions sits on Settings, not Buff Check")
+T.truthy(KART.CbBreakShowImages, "break pictures checkbox is on Settings")
+T.eq(KART.CbBreakShowImages:GetParent():GetParent(), KART.SettingsPanel,
+    "break pictures sit on Settings, not Raidlead")
 T.truthy(KART.SldCtSwapDuration, "Taunt Swap duration lives on the Co-Tank tab")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language

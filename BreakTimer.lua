@@ -252,3 +252,37 @@ KASC:RegisterMessage("BRK", { payload = true, group = true }, function(payload, 
     BT.OnStart(seconds, img)
 end)
 
+local function SettingsStore() return KART_Settings end
+
+if KART.SettingsPanel and KART.UI and KART.UI.CreateCard then
+    local card = KART.UI:CreateCard(KART.SettingsPanel)
+    local above = (KART.RC and KART.RC.SettingsCard) or KART.AddonVersionCard
+    if above then
+        card:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -20)
+    else
+        card:SetPoint("TOPLEFT", KART.SettingsPanel, "TOPLEFT", 20, -12)
+    end
+    card:SetSize(500, 72)
+    KART.CbBreakShowImages = KART.UI:CreateSettingsCheckbox(card, {
+        name = "KART_BreakShowImages",
+        label = KART.L.SET_BREAK_IMAGES,
+        store = SettingsStore,
+        key = "breakShowImages",
+        y = -20,
+        tooltip = KART.L.DESC_BREAK_IMAGES,
+    })
+    KART.UI:RegisterLocaleRefresher(function()
+        local L = KART.L
+        if KART.CbBreakShowImages then
+            KART.CbBreakShowImages.text:SetText(L.SET_BREAK_IMAGES)
+            KART.CbBreakShowImages.tooltipText = L.DESC_BREAK_IMAGES
+        end
+    end)
+end
+
+function BT.SyncWidgets()
+    local settingsMap = {}
+    if KART.CbBreakShowImages then settingsMap[KART.CbBreakShowImages] = "breakShowImages" end
+    KART.ApplySettingsMap(settingsMap)
+end
+

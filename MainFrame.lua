@@ -438,7 +438,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [1] = 535, -- Automation: enable card + promote/invite card + AutoLog
     [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
-    [4] = 670, -- Settings: two half cards + accent/profiles + addon versions + RC companion
+    [4] = 780, -- Settings: interface + accent/profiles + addon versions + RC companion + break pictures
     [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
     [7] = 558, -- Notes: enable (share+invite) + operator + import + boss list + share
 }
