@@ -117,7 +117,8 @@ function BT.ApplyLayout()
                 attempts = attempts + 1
                 failed[tryEntry.file] = true
                 local tex = BT.image:SetTexture(MediaBreak(tryEntry.file))
-                if tex ~= false then
+                -- false per ketho; nil return plus unset GetTexture is a failed live load.
+                if tex ~= false and BT.image:GetTexture() then
                     loadedEntry = tryEntry
                     break
                 end
@@ -255,7 +256,13 @@ function BT.OnStart(seconds, showImages)
     if seconds > 0 and seconds < 60 then return end
     if seconds > 3600 then return end
     BT.EnsureFrame()
-    BT.wantPictures = showImages == true or showImages == 1
+    -- A later text-only start must not hide a picture already shown from BRK:1.
+    local incomingPictures = showImages == true or showImages == 1
+    if incomingPictures then
+        BT.wantPictures = true
+    elseif not (BT.frame:IsShown() and BT.wantPictures) then
+        BT.wantPictures = false
+    end
     BT.minimized = false
     BT.currentImage = nil
     applyMinimize()
@@ -450,7 +457,8 @@ function BT.TryRegisterSlash()
             print(KART.L.BREAK_WRONG_FORMAT)
             return
         end
-        local seconds = math.floor(minutes * 60)
+        minutes = math.floor(minutes)
+        local seconds = minutes * 60
         local show = KART_Settings and KART_Settings.breakShowImages
         BT.SendBreak(seconds, show)
     end

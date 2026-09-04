@@ -235,8 +235,6 @@ do
     T.eq(BT.image:GetHeight(), imgH, "image height is contain-fit")
     T.eq(BT.frame:GetWidth(), math.max(280, imgW + 16), "frame width wraps the image")
     T.eq(BT.frame:GetHeight(), 28 + imgH + 16, "frame height is bar plus image")
-    BT.OnStart(720, 0)
-    T.eq(BT.image:IsShown(), false, "pictures off hides the image")
     BT.OnStart(720, 1)
     BT.minimized = true
     BT.ApplyLayout()
@@ -245,13 +243,39 @@ do
 end
 
 do
+    BT.OnStart(720, 1)
+    T.eq(BT.image:IsShown(), true, "pictures 1 shows the image")
+    T.eq(BT.wantPictures, true, "pictures 1 arms wantPictures")
+    BT.OnStart(720, 0)
+    T.eq(BT.wantPictures, true, "text-only restart does not downgrade pictures")
+    T.eq(BT.image:IsShown(), true, "text-only restart leaves the image shown")
+    BT.OnCancel()
+    T.eq(BT.wantPictures, false, "cancel clears pictures")
+    BT.OnStart(720, 0)
+    T.eq(BT.wantPictures, false, "fresh start after cancel applies incoming 0")
+    T.eq(BT.image:IsShown(), false, "fresh text-only start keeps pictures off")
+    BT.OnCancel()
+end
+
+do
     BT.EnsureFrame()
     local origSetTexture = BT.image.SetTexture
+    local origGetTexture = BT.image.GetTexture
+    -- ketho: false. Live client may return nil and leave GetTexture unset.
     BT.image.SetTexture = function() return false end
+    BT.image.GetTexture = function() return nil end
     BT.OnStart(720, 1)
     T.eq(BT.image:IsShown(), false, "failed SetTexture hides the image")
     T.eq(BT.frame:GetHeight(), 28, "failed SetTexture uses bar-only height")
+    BT.OnCancel()
+    -- Live path: nil return, texture never binds.
+    BT.image.SetTexture = function() return nil end
+    BT.image.GetTexture = function() return nil end
+    BT.OnStart(720, 1)
+    T.eq(BT.image:IsShown(), false, "nil SetTexture with no texture is text-only")
+    T.eq(BT.frame:GetHeight(), 28, "nil SetTexture uses bar-only height")
     BT.image.SetTexture = origSetTexture
+    BT.image.GetTexture = origGetTexture
     BT.OnCancel()
 end
 
@@ -429,6 +453,10 @@ do
     cmd("12")
     BT.OnStart = orig
     T.eq(starts, 1, "slash SendBreak does not OnStart a second time")
+    BT.OnCancel()
+    env._brkSent = {}
+    cmd("12.9")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:0", "slash 12.9 floors to 12 minutes")
     BT.OnCancel()
 end
 
