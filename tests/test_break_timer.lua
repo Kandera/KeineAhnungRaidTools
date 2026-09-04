@@ -142,6 +142,23 @@ do
 end
 
 do
+    local snap = KARTTEST.SnapshotRoster()
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.SetRaid({ { name = "Ann", leader = true } })
+    local savedUnitName = env.UnitName
+    env.UnitName = function(unit)
+        if unit == "raid1" then return "Ann", nil end
+        return savedUnitName and savedUnitName(unit)
+    end
+    KART.UnitLeads = function(unit) return unit == "raid1" end
+    KART.UnitAssists = function() return false end
+    local ctx = { sender = "Ann-TarrenMill", shortName = "Ann" }
+    T.truthy(BT.SenderMayControl(ctx), "same-realm lead matches when UnitName omits realm")
+    env.UnitName = savedUnitName
+    KARTTEST.RestoreRoster(snap)
+end
+
+do
     local fn = env._brkHandlers.BRK
     T.truthy(fn, "BRK is registered")
     local savedUnitName = env.UnitName

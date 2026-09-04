@@ -207,36 +207,41 @@ function BT.SendBreak(seconds, showImages)
 end
 
 function BT.SenderMayControl(ctx)
-    if not ctx then return false end
-    local leads, assists = false, false
-    local found = false
-    if KAUtil and KAUtil.EachGroupUnit then
-        for unit in KAUtil.EachGroupUnit() do
-            local name, realm = UnitName(unit)
-            local full = realm and (name .. "-" .. realm) or name
-            if full == ctx.sender then
-                leads = KART.UnitLeads(unit)
-                assists = KART.UnitAssists(unit)
-                found = true
-                break
+    if not ctx or not ctx.sender then return false end
+    if not KAUtil or not KAUtil.IsFullNameInGroup then return false end
+
+    local function unitMayControl(unit)
+        return KART.UnitLeads(unit) or KART.UnitAssists(unit)
+    end
+
+    if not KAUtil.IsFullNameInGroup(ctx.sender) then
+        if not KAUtil.IsSelfFullName or not KAUtil.IsSelfFullName(ctx.sender) then
+            return false
+        end
+        return unitMayControl("player")
+    end
+
+    local senderShort = ctx.shortName or ctx.sender:match("^([^%-]+)")
+    if not senderShort then return false end
+
+    local senderRealmRaw = ctx.sender:match("-(.+)$")
+    local ownRealm = KAUtil.CanonRealm(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    local wantSenderRealm = KAUtil.CanonRealm(senderRealmRaw)
+    if wantSenderRealm == "" then wantSenderRealm = ownRealm end
+
+    for unit in KAUtil.EachGroupUnit() do
+        local name, realm = UnitName(unit)
+        if name and KAUtil.CaseFold(name) == KAUtil.CaseFold(senderShort) then
+            local unitRealm = KAUtil.CanonRealm(realm)
+            if unitRealm == "" then unitRealm = ownRealm end
+            if senderRealmRaw and senderRealmRaw ~= "" and unitRealm ~= wantSenderRealm then
+                -- sender names a realm that does not match this unit
+            else
+                return unitMayControl(unit)
             end
         end
     end
-    if not found then
-        local playerName, playerRealm = UnitName("player")
-        if not playerName then return false end
-        local playerFull = playerRealm and (playerName .. "-" .. playerRealm) or playerName
-        local senderRealm = ctx.sender and ctx.sender:match("-(.+)$")
-        local playerMatch = (ctx.sender == playerFull)
-            or (ctx.shortName == playerName
-                and (not senderRealm or senderRealm == playerRealm))
-        if not playerMatch then
-            return false
-        end
-        leads = KART.UnitLeads("player")
-        assists = KART.UnitAssists("player")
-    end
-    return leads or assists
+    return false
 end
 
 KASC:RegisterMessage("BRK", { payload = true, group = true }, function(payload, ctx)
