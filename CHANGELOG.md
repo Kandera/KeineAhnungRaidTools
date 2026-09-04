@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A break window opens on `/break`**, with the length, the local end time, and optional guild pictures.
+
 ## [4.2.0] - 2026-09-01
 ### Added
 - **Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**

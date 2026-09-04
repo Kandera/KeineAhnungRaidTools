@@ -218,6 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.3.0",
+        entries = {
+            "**A break window opens on `/break`**, with the length, the local end time, and optional guild pictures.",
+        },
+    },
+    {
         version = "4.2.0",
         entries = {
             "**Buff Check Advanced shows fleeting potion and flask counts, with a Bag Check button.**",

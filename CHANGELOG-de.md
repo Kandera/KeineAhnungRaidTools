@@ -8,6 +8,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **Ein Pausenfenster öffnet sich bei `/break`**, mit Dauer, lokaler Endzeit und optionalen Gildenbildern.
+
 ## [4.2.0] - 2026-09-01
 ### Hinzugefügt
 - **Buff-Check Erweitert zeigt flüchtige Tränke und Fläschchen, mit einem Taschen-Check.**
