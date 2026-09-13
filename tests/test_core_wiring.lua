@@ -138,6 +138,10 @@ Wired('elseif event == "PLAYER_CONTROL_LOST" then', "and routed in the event han
 
 Wired("KART.OnControlLost()", "which is what re-opens what Blizzard closed")
 
+Wired('frame:RegisterEvent("GUILD_ROSTER_UPDATE")', "GUILD_ROSTER_UPDATE is registered for guild-rank invite")
+Wired('frame:RegisterEvent("PLAYER_GUILD_UPDATE")', "PLAYER_GUILD_UPDATE is registered for guild-rank invite")
+Wired("KART.HandleGuildRosterUpdate()", "guild roster updates refresh rank chips and pending invites")
+
 Wired("KART.MainFrame:SetScale", "window scale is applied to the main frame")
 Wired("KART.CtFlyout:SetScale", "and to the Co-Tank flyout")
 

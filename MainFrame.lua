@@ -69,6 +69,10 @@ function KART.ShowTab(tabIndex)
     -- defined further down in this file, after the scroll frame exists).
     KART.CurrentTab = tabIndex
     if KART.UpdateScrollRange then KART.UpdateScrollRange() end
+    if tabIndex == 1 then
+        if KART.RequestGuildRoster then KART.RequestGuildRoster() end
+        if KART.RefreshGuildRankChips then KART.RefreshGuildRankChips() end
+    end
     if tabIndex == 7 and KART.NT then
         if KART.NT.RefreshBossList then KART.NT.RefreshBossList() end
         if KART.NT.RefreshStatus then KART.NT.RefreshStatus() end
@@ -435,7 +439,7 @@ scrollFrame.scrollBarHideable = true
 -- Heights include headroom for large content fonts where a title's wrap height feeds into the
 -- layout (Automation's AutoLog title). Index 5 is unused (former WoWUtils).
 local PANEL_CONTENT_HEIGHTS = {
-    [1] = 535, -- Automation: enable card + promote/invite card + AutoLog
+    [1] = 750, -- Automation: enable + promote/invite + guild ranks + AutoLog
     [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 780, -- Settings: interface + accent/profiles + addon versions + RC companion + break pictures
@@ -934,11 +938,141 @@ KART.CbAutoRaid:SetPoint("TOPLEFT", KART.InviteChannelChips[1], "BOTTOMLEFT", 0,
 KART.CbAutoRaid.text:SetWidth(430)
 KART.CbAutoRaid.text:SetJustifyH("LEFT")
 
+local guildCard = KART.UI:CreateCard(KART.PromotePanel)
+guildCard:SetPoint("TOPLEFT", autoCard, "BOTTOMLEFT", 0, -12)
+guildCard:SetSize(500, 190)
+KART.GuildInviteCard = guildCard
+
+local giLabel = guildCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+giLabel:SetPoint("TOPLEFT", guildCard, "TOPLEFT", 20, -15)
+giLabel:SetText(L.LABEL_GUILD_INVITE)
+KART.UI:RegisterLabel(giLabel)
+KART.GuildInviteLabel = giLabel
+
+KART.GuildInviteHint = guildCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+KART.GuildInviteHint:SetPoint("TOPLEFT", giLabel, "BOTTOMLEFT", 0, -10)
+KART.GuildInviteHint:SetWidth(460)
+KART.GuildInviteHint:SetJustifyH("LEFT")
+KART.GuildInviteHint:SetText(L.GI_HINT_NOT_GUILD)
+KART.UI:RegisterLabel(KART.GuildInviteHint)
+
+KART.GuildRankChipHost = CreateFrame("Frame", nil, guildCard)
+KART.GuildRankChipHost:SetPoint("TOPLEFT", giLabel, "BOTTOMLEFT", 0, -8)
+KART.GuildRankChipHost:SetSize(460, 84)
+KART.GuildRankChips = {}
+
+local function InviteGuildRankSet()
+    if not KART_Settings then return nil end
+    KART_Settings.inviteGuildRanks = KART_Settings.inviteGuildRanks or {}
+    return KART_Settings.inviteGuildRanks
+end
+
+local function CreateGuildRankChip(parent)
+    local btn = KART.UI:CreateModernButton(parent, "")
+    btn:SetSize(108, 22)
+    local function paint(on)
+        local r, g, b = KART.UI:AccentColor()
+        if on then
+            btn:SetBackdropColor(r, g, b, 0.55)
+            btn:SetBackdropBorderColor(r, g, b, 1)
+            btn.text:SetTextColor(1, 1, 1)
+        else
+            btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+            btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+            btn.text:SetTextColor(0.55, 0.55, 0.55)
+        end
+    end
+    local function refresh()
+        local ranks = InviteGuildRankSet()
+        if not ranks or btn.rankIndex == nil then return end
+        btn.chipOn = ranks[btn.rankIndex] == true
+        paint(btn.chipOn)
+    end
+    btn:SetScript("OnClick", function()
+        local ranks = InviteGuildRankSet()
+        if not ranks or btn.rankIndex == nil then return end
+        ranks[btn.rankIndex] = not ranks[btn.rankIndex]
+        refresh()
+    end)
+    btn:SetScript("OnEnter", function(self)
+        local r, g, b = KART.UI:AccentColor()
+        if self.chipOn then
+            local lr, lg, lb = KAUI.Lighten(r, g, b, 0.12)
+            self:SetBackdropColor(lr, lg, lb, 0.75)
+        else
+            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
+        end
+        if self.tooltipText then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
+            GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
+            GameTooltip:Show()
+        end
+    end)
+    btn:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+        refresh()
+    end)
+    btn.Refresh = refresh
+    return btn
+end
+
+function KART.RefreshGuildRankChips()
+    local host = KART.GuildRankChipHost
+    if not host then return end
+    local chips = KART.GuildRankChips
+    local n = 0
+    if IsInGuild() and GuildControlGetNumRanks then
+        n = GuildControlGetNumRanks() or 0
+    end
+    for _, chip in ipairs(chips) do chip:Hide() end
+    if n == 0 then
+        if KART.GuildInviteHint then
+            KART.GuildInviteHint:SetText(KART.L.GI_HINT_NOT_GUILD)
+            KART.GuildInviteHint:Show()
+        end
+        host:SetHeight(8)
+        if KART.BtnGuildInvite then KART.BtnGuildInvite:Disable() end
+        return
+    end
+    if KART.GuildInviteHint then KART.GuildInviteHint:Hide() end
+    if KART.BtnGuildInvite then KART.BtnGuildInvite:Enable() end
+    local cols, w, h, gap = 4, 108, 22, 6
+    local rows = math.ceil(n / cols)
+    host:SetHeight(rows * (h + gap) - gap)
+    for i = 1, n do
+        local chip = chips[i]
+        if not chip then
+            chip = CreateGuildRankChip(host)
+            chips[i] = chip
+        end
+        local col = (i - 1) % cols
+        local row = math.floor((i - 1) / cols)
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", host, "TOPLEFT", col * (w + gap), -row * (h + gap))
+        chip.rankIndex = i - 1
+        local rankName = GuildControlGetRankName(i) or ("#" .. i)
+        chip.text:SetText((rankName:gsub("|", "||")))
+        chip.tooltipText = KART.L.DESC_GUILD_INVITE
+        chip:Show()
+        chip:Refresh()
+    end
+end
+
+KART.BtnGuildInvite = KART.UI:CreateModernButton(guildCard, L.BTN_GUILD_INVITE, L.DESC_GUILD_INVITE)
+KART.BtnGuildInvite:SetSize(130, 24)
+KART.BtnGuildInvite:SetPoint("TOPLEFT", KART.GuildRankChipHost, "BOTTOMLEFT", 0, -12)
+KART.BtnGuildInvite:SetScript("OnClick", function()
+    if KART.InviteGuildRanks then KART.InviteGuildRanks() end
+end)
+KART.UI:FitButtonToLabel(KART.BtnGuildInvite)
+KART.RefreshGuildRankChips()
+
 -- Auto Combat Log card: content filters for AutoLog.lua. Widget callbacks re-evaluate
 -- immediately so toggling a filter while already inside an instance takes effect without
 -- re-zoning (including stopping an addon-owned log when the master switch goes off).
 local alTitle = KART.PromotePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-alTitle:SetPoint("TOPLEFT", autoCard, "BOTTOMLEFT", 0, -18)
+alTitle:SetPoint("TOPLEFT", guildCard, "BOTTOMLEFT", 0, -18)
 alTitle:SetText(L.LABEL_AUTOLOG)
 KART.UI:RegisterLabel(alTitle)
 
@@ -1617,6 +1751,7 @@ function KART.SyncMainFrameWidgets()
     if KART.SldRlBarButtonSize then settingsMap[KART.SldRlBarButtonSize] = "rlBarButtonSize" end
     if KART.SldRlBarAlpha then settingsMap[KART.SldRlBarAlpha] = "rlBarAlpha" end
     KART.ApplySettingsMap(settingsMap)
+    if KART.RefreshGuildRankChips then KART.RefreshGuildRankChips() end
 
     if KART.BtnFont then KART.BtnFont.text:SetText(KART.L.BTN_FONT_PREFIX .. (KART_Settings.fontName or "Standard")) end
 
@@ -1748,6 +1883,14 @@ KART.UI:RegisterLocaleRefresher(function()
         end
     end
     KART.CbAutoRaid.text:SetText(L.SET_AUTO_RAID)                 KART.CbAutoRaid.tooltipText = L.DESC_AUTO_RAID
+    if KART.GuildInviteLabel then KART.GuildInviteLabel:SetText(L.LABEL_GUILD_INVITE) end
+    if KART.GuildInviteHint then KART.GuildInviteHint:SetText(L.GI_HINT_NOT_GUILD) end
+    if KART.BtnGuildInvite then
+        KART.BtnGuildInvite.text:SetText(L.BTN_GUILD_INVITE)
+        KART.BtnGuildInvite.tooltipText = L.DESC_GUILD_INVITE
+        KART.UI:FitButtonToLabel(KART.BtnGuildInvite)
+    end
+    if KART.RefreshGuildRankChips then KART.RefreshGuildRankChips() end
     alTitle:SetText(L.LABEL_AUTOLOG)
     KART.CbAlEnabled.text:SetText(L.SET_AL_ENABLED)               KART.CbAlEnabled.tooltipText = L.DESC_AL_ENABLED
     KART.CbAlRaidLFR.text:SetText(L.SET_AL_RAID_LFR)

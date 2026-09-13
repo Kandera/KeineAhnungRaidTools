@@ -307,10 +307,14 @@ do
     me.env.KART_Settings = nil
     local ok, err = pcall(function()
         for _, chip in ipairs(KART.InviteChannelChips) do chip:Refresh() end
+        if KART.RefreshGuildRankChips then KART.RefreshGuildRankChips() end
     end)
     me.env.KART_Settings = saved
     T.truthy(ok, "invite chips refresh before ADDON_LOADED: " .. tostring(err))
     T.truthy(#KART.InviteChannelChips == 4, "four invite channel chips exist")
+    T.truthy(KART.BtnGuildInvite, "the guild-rank invite button exists")
+    T.eq(KART.BtnGuildInvite:GetParent(), KART.GuildInviteCard,
+        "and sits on the guild-invite card")
 end
 
 do

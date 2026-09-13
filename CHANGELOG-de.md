@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Hinzugefügt
+- **Online-Gildenmitglieder nach Rang einladen** im Automation-Tab. Einen oder mehrere Ränge wählen, dann den Invite bestätigen.
 
 ## [4.3.0] - 2026-09-04
 ### Hinzugefügt

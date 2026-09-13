@@ -226,9 +226,14 @@ function NT.RaidMapDiff()
     end
     -- Operator in town before anyone zones in: pick the current-tier raid
     -- whose encounters overlap imported NSRT notes (not the world-boss journal).
+    -- 1-boss lairs may have no EJ raid overlap — still use the note difficulty
+    -- so AppendMissingNoteIds can populate the list (map stays unpublished).
     local infMap, infDiff = NT.InferRaidStand()
     if infMap and NT.VALID_DIFFICULTY[infDiff] then
         return infMap, infDiff
+    end
+    if NT.VALID_DIFFICULTY[infDiff] then
+        return 0, infDiff
     end
     return mapId, diff
 end
@@ -306,6 +311,8 @@ end
 
 -- No live raid and no published stand: difficulty from imported notes, map from
 -- the current-tier EJ raid with the most matching encounter IDs. Index 1 is world bosses.
+-- When notes exist but no EJ map scores (1-boss lair, other raid), still return the
+-- difficulty so the list can AppendMissing; second return is nil for the map.
 function NT.InferRaidStand()
     local counts = { Normal = 0, Heroic = 0, Mythic = 0 }
     if type(NSRT) == "table" and type(NSRT.Reminders) == "table" then
@@ -325,6 +332,7 @@ function NT.InferRaidStand()
         end
     end
     if not bestName then return nil end
+    local diffId = NT.DIFFICULTY_IDS[bestName]
     local noteSet = {}
     if type(NSRT) == "table" and type(NSRT.Reminders) == "table" then
         for _, body in pairs(NSRT.Reminders) do
@@ -335,7 +343,9 @@ function NT.InferRaidStand()
         end
     end
     local tier = ejRaidTier()
-    if not tier or type(EJ_GetInstanceByIndex) ~= "function" then return nil end
+    if not tier or type(EJ_GetInstanceByIndex) ~= "function" then
+        return nil, diffId
+    end
     if type(EJ_SelectTier) == "function" then EJ_SelectTier(tier) end
     local bestMap, bestScore = nil, 0
     local idx = 2
@@ -356,8 +366,10 @@ function NT.InferRaidStand()
         end
         idx = idx + 1
     end
-    if not bestMap or bestScore == 0 then return nil end
-    return bestMap, NT.DIFFICULTY_IDS[bestName]
+    if not bestMap or bestScore == 0 then
+        return nil, diffId
+    end
+    return bestMap, diffId
 end
 
 -- Tests inject NT._encountersForMap; live clients walk the Encounter Journal.
@@ -457,12 +469,16 @@ function NT.NoteNameForEncounter(encID, difficultyName)
 end
 
 -- wipeAll: a new library (import / delete). Last night's drag bags must not survive.
+-- Clear the published stand too: a leftover Mythic stand with a fresh Heroic paste
+-- would filter the list to empty ("No further note") until someone zones in.
 function NT.ResetOrder(resetCursor, wipeAll)
     if not KART_Settings then return end
     NT.EnsureShape(KART_Settings)
     if wipeAll then
         KART_Settings.ntOrderByInstance = {}
         NT._listMapKey = nil
+        KART_Settings.ntMapId = 0
+        KART_Settings.ntDiff = 0
     end
     local key = NT._listMapKey or NT.CurrentMapKey()
     KART_Settings.ntOrderByInstance[key] = {
@@ -1110,7 +1126,20 @@ function NT.ShareIfChosen()
         NT.PlayerPrint(msg)
     end
     local weSend = (who == "operator" and weOp) or (who == "lead" and weLead)
-    if not weSend then return false end
+    if not weSend then
+        -- Import leaves "Imported N notes." on the status line; replace it so a
+        -- non-sender click is not a silent no-op.
+        NT.RefreshStatus()
+        local msg
+        if who == "operator" then
+            msg = string.format(L.NT_STATUS_SENDER or "%s", KART_Settings.ntOperatorName or "")
+        else
+            msg = L.NT_STATUS_NOT_SENDER or ""
+            if msg ~= "" then NT.SetStatus(msg) end
+        end
+        if msg ~= "" then NT.PlayerPrint(msg) end
+        return false
+    end
     if NT.Share(noteName) then
         NT._shareQueued = nil
         local label = (who == "operator" and (KART_Settings.ntOperatorName or "")) or (UnitName("player") or "")
@@ -1284,7 +1313,7 @@ function NT.RefreshStatus()
         NT.SetStatus(string.format(L.NT_STATUS_SENDER or "%s", UnitName("player") or ""))
         return
     end
-    NT.SetStatus("")
+    NT.SetStatus(L.NT_STATUS_NOT_SENDER or "")
 end
 
 function NT.ShareNow()

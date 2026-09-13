@@ -2342,6 +2342,11 @@ do
     KART.WU = nil
     KART.RefreshStatusStrip = nil
 
+    local inst = KARTTEST.instance
+    local savedInst = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
     env.KART_Settings.ntMapId = 1
     env.KART_Settings.ntDiff = 16
     env.KART_Settings.ntCursor = 99
@@ -2353,13 +2358,18 @@ do
     end
     local again = NT.ImportReminderText("EncounterID:3470;Name:Nekzali;Difficulty:Mythic\ncd")
     T.eq(again, "ok", "a second import still succeeds")
-    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].order[1], 3470,
-        "import replaces the saved drag order")
-    T.eq(env.KART_Settings.ntOrderByInstance["1:16"].skipped[99], nil,
+    T.eq(env.KART_Settings.ntMapId, 0, "import clears the leftover published stand map")
+    T.eq(env.KART_Settings.ntDiff, 0, "import clears the leftover published stand difficulty")
+    T.eq(env.KART_Settings.ntOrderByInstance["1:16"], nil,
+        "import drops the old stand's drag bag")
+    T.eq(env.KART_Settings.ntOrderByInstance["0:16"].order[1], 3470,
+        "import rebuilds order under the inferred difficulty key")
+    T.eq(env.KART_Settings.ntOrderByInstance["0:16"].skipped[99], nil,
         "import clears skips from the old order")
     T.eq(env.KART_Settings.ntOrderByInstance["99:16"], nil,
         "import drops drag bags from other instances")
     T.eq(env.KART_Settings.ntCursor, 0, "import clears the start cursor")
+    inst.instanceType, inst.difficultyID, inst.mapID = savedInst.instanceType, savedInst.difficultyID, savedInst.mapID
     NT._encountersForMap = nil
     env.NorthernSkyRaidTools = savedNSI
 end
@@ -2406,4 +2416,256 @@ do
     NT.ImportEditBox:SetText("leftover paste")
     T.eq(NT.DeleteSharedNotes(), "empty", "a second delete with an empty library is empty")
     T.eq(NT.ImportEditBox:GetText(), "", "empty delete still clears leftover paste")
+end
+
+-- Import wipeAll clears a leftover stand so a Heroic paste is not filtered by
+-- yesterday's Mythic ntDiff (empty list / "No further note").
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local savedNSRT = env.NSRT
+    local savedNSI = env.NorthernSkyRaidTools
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
+    env.KART_Settings.ntMapId = 2805
+    env.KART_Settings.ntDiff = 16
+    env.NSRT = { Reminders = {} }
+    env.NorthernSkyRaidTools = {
+        ImportFullReminderString = function(_, str)
+            env.NSRT.Reminders["Nymrissa - Heroic"] = str
+        end,
+    }
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    local status = NT.ImportReminderText("EncounterID:3379;Difficulty:Heroic;Name:Nymrissa\ncd")
+    T.eq(status, "ok", "Heroic lair import succeeds over a Mythic stand")
+    T.eq(env.KART_Settings.ntDiff, 0, "import cleared the Mythic stand")
+    local _, diff = NT.RaidMapDiff()
+    T.eq(diff, 15, "after import, list difficulty follows the Heroic paste")
+    local hasLair = false
+    for _, id in ipairs(NT.DefaultEncounterOrder()) do
+        if id == 3379 then hasLair = true end
+    end
+    T.eq(hasLair, true, "Heroic lair note is on the order after clearing the stand")
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.NSRT = savedNSRT
+    env.NorthernSkyRaidTools = savedNSI
+    NT._encountersForMap = nil
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+end
+
+-- 1-boss lair notes (Nymrissa / Tidebound Grotto): town, no published stand, and
+-- no EJ raid overlap. Infer must still yield the note difficulty so the list can
+-- AppendMissingNoteIds — otherwise Import reports ok and shows "No further note."
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local savedNSRT = env.NSRT
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
+    env.KART_Settings.ntMapId = 0
+    env.KART_Settings.ntDiff = 0
+    env.NSRT = { Reminders = {
+        ["Nymrissa - Heroic"] = "EncounterID:3379;Difficulty:Heroic;Name:Nymrissa\ncd",
+    }}
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+        if journalId == 1 then
+            return "World Bosses", nil, nil, nil, nil, nil, nil, nil, nil, 0
+        end
+    end
+    -- Current-tier raid exists, but 3379 is a separate lair — no overlap.
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        if journalId == 1 and i == 1 then return "Ivus the Decayed" end
+        return nil
+    end
+    env.EJ_GetInstanceForMap = function(mapId)
+        if mapId == 2805 then return 77 end
+        if mapId == 0 then return 1 end
+        return nil
+    end
+    NT._encountersForMap = nil
+
+    local mapId, diff = NT.RaidMapDiff()
+    T.eq(diff, 15, "lair notes infer Heroic when EJ has no matching raid map")
+    T.eq(mapId, 0, "lair-only infer does not invent a raid map")
+    T.eq(NT.HasPublishedStand(env.KART_Settings), false, "difficulty-only infer does not publish a stand")
+
+    local order = NT.DefaultEncounterOrder()
+    local hasLair = false
+    for _, id in ipairs(order) do
+        if id == 3379 then hasLair = true end
+    end
+    T.eq(hasLair, true, "DefaultEncounterOrder appends the lair encounter from notes")
+    T.eq(#NT.ListSharedNotes("Heroic"), 1, "Heroic list difficulty sees the imported lair note")
+
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.NSRT = savedNSRT
+    NT._encountersForMap = nil
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+    env.EJ_GetInstanceForMap = nil
+end
+
+-- After a lair import the stand stays unpublished (map 0). Share now must still
+-- Load & Send from the inferred difficulty — the list is visible, so the button must work.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedNSRT = env.NSRT
+    local savedNSI = env.NorthernSkyRaidTools
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
+    KARTTEST.SetRaid({})
+    env._isLead = false
+    env._shared = nil
+    env._loaded = nil
+    NT.pendingFlush = nil
+    KARTTEST.aurasSecret = false
+    env.NorthernSkyRaidTools = {
+        SetReminder = function(_, name) env._loaded = name end,
+        Broadcast = function(_, ev, ch, body)
+            env._shared = { ev, ch, body }
+        end,
+    }
+    env.NSRT = { Reminders = {
+        ["Nymrissa - Heroic"] = "EncounterID:3379;Difficulty:Heroic;Name:Nymrissa\ncd",
+    }}
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 0
+    env.KART_Settings.ntDiff = 0
+    env.KART_Settings.ntCursor = 0
+    env.KART_Settings.ntOperatorName = ""
+    env.KART_Settings.ntChecksum = ""
+    NT.EnsureShape(env.KART_Settings)
+    env.EJ_GetNumTiers = function() return 2 end
+    env.EJ_SelectTier = function() end
+    env.EJ_SelectInstance = function() end
+    env.EJ_GetInstanceByIndex = function(idx, isRaid)
+        if not isRaid then return nil end
+        if idx == 1 then return 1 end
+        if idx == 2 then return 77 end
+        return nil
+    end
+    env.EJ_GetInstanceInfo = function(journalId)
+        if journalId == 77 then
+            return "Voidspire", nil, nil, nil, nil, nil, nil, nil, nil, 2805
+        end
+    end
+    env.EJ_GetEncounterInfoByIndex = function(i, journalId)
+        if journalId == 77 and i == 1 then return "Nekzali", nil, nil, nil, nil, nil, 3470 end
+        return nil
+    end
+    NT._encountersForMap = nil
+    NT.ResetOrder(true, true)
+    T.eq(NT.HasPublishedStand(env.KART_Settings), false, "lair import left the stand unpublished")
+    T.eq(NT.ResolveSendableCursor(0), 3379, "cursor 0 resolves to the lair note")
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    NT.statusLabel = { SetText = function(self, s) self.text = s end }
+    T.eq(NT.ShareIfChosen(), true, "Share now works without a published stand for lair notes")
+    T.eq(env._loaded, "Nymrissa - Heroic", "Share loads the lair note in NSRT")
+    T.eq(env._shared and env._shared[1], "NSI_REM_SHARE", "Share broadcasts NSI_REM_SHARE")
+    KARTTEST.RestoreRoster(roster)
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.NSRT = savedNSRT
+    env.NorthernSkyRaidTools = savedNSI
+    env.EJ_GetNumTiers = nil
+    env.EJ_SelectTier = nil
+    env.EJ_SelectInstance = nil
+    env.EJ_GetInstanceByIndex = nil
+    env.EJ_GetInstanceInfo = nil
+    env.EJ_GetEncounterInfoByIndex = nil
+end
+
+-- Non-sender Share now must not stay stuck on the import status line.
+do
+    local inst = KARTTEST.instance
+    local saved = { instanceType = inst.instanceType, difficultyID = inst.difficultyID, mapID = inst.mapID }
+    local roster = KARTTEST.SnapshotRoster()
+    local savedActive = KARTTEST.activeUnit
+    KARTTEST.SetRaid({
+        { name = "Mario", realm = "Blackmoore", assist = true, guid = "Player-1-MA" },
+        { name = "Raider", realm = "Blackmoore", guid = "Player-1-RA" },
+    })
+    KARTTEST.activeUnit = "raid2"
+    env._isLead = false
+    inst.instanceType = "none"
+    inst.difficultyID = 0
+    inst.mapID = 0
+    KART.PlayerVersions = { Mario = "1.0" }
+    env.NorthernSkyRaidTools = {
+        SetReminder = function() end,
+        Broadcast = function(_, ev, ch, body) env._shared = { ev, ch, body } end,
+    }
+    env.NSRT = { Reminders = {
+        ["Nymrissa - Heroic"] = "EncounterID:3379;Difficulty:Heroic;Name:Nymrissa\ncd",
+    }}
+    env.KART_Settings.ntModuleEnabled = true
+    env.KART_Settings.ntMapId = 0
+    env.KART_Settings.ntDiff = 0
+    env.KART_Settings.ntCursor = 3379
+    env.KART_Settings.ntOperatorName = "Mario"
+    env.KART_Settings.ntChecksum = ""
+    NT.EnsureShape(env.KART_Settings)
+    env.KART_Settings.ntOrderByInstance["0:15"] = { order = { 3379 }, skipped = {} }
+    env.EJ_GetNumTiers = function() return 1 end
+    env.EJ_GetInstanceByIndex = function() return nil end
+    NT._encountersForMap = function() return {} end
+    env._shared = nil
+    KART.L.NT_STATUS_SENDER = "Sender: %s"
+    KART.L.NT_STATUS_IMPORTED = "Imported %d notes."
+    KART.L.NT_STATUS_NOT_SENDER = "Only the note operator or raid lead can Share now."
+    NT.statusLabel = { SetText = function(self, s) self.text = s end, text = "Imported 9 notes." }
+    T.eq(NT.ShareIfChosen(), false, "raider Share now does not send when Mario is the operator")
+    T.eq(env._shared, nil, "raider does not Broadcast")
+    T.eq(NT.statusLabel.text, "Sender: Mario", "status replaces the import line with who should send")
+    KARTTEST.activeUnit = savedActive
+    KARTTEST.RestoreRoster(roster)
+    KART.PlayerVersions = nil
+    NT._encountersForMap = nil
+    inst.instanceType, inst.difficultyID, inst.mapID = saved.instanceType, saved.difficultyID, saved.mapID
+    env.EJ_GetNumTiers = nil
+    env.EJ_GetInstanceByIndex = nil
 end

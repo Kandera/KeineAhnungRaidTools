@@ -31,6 +31,8 @@ frame:RegisterEvent("PLAYER_LOGOUT")
 -- resolution changes under us (B23). Both events fire without the addon touching anything.
 frame:RegisterEvent("UI_SCALE_CHANGED")
 frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+frame:RegisterEvent("PLAYER_GUILD_UPDATE")
 
 -- DataBroker Object für Minimap und Compartment
 local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("KeineAhnungRaidTools", {
@@ -372,6 +374,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
         if KART.RegisterLibDurability then KART.RegisterLibDurability() end
         if KART.RC then KART.RC.HookVotingFrame() end
         if KART.CT then KART.CT.Refresh() end
+    elseif event == "GUILD_ROSTER_UPDATE" or event == "PLAYER_GUILD_UPDATE" then
+        -- Guild-rank invite chips and the council-era B124 lesson: the roster is not loaded until
+        -- something asks. canRequest (arg1 on GUILD_ROSTER_UPDATE) means Blizzard wants a refresh.
+        if event == "GUILD_ROSTER_UPDATE" and arg1 and KART.RequestGuildRoster then
+            KART.RequestGuildRoster()
+        end
+        if KART.HandleGuildRosterUpdate then KART.HandleGuildRosterUpdate() end
     elseif event == "PLAYER_CONTROL_LOST" then
         KART.OnControlLost()
     elseif event == "CHALLENGE_MODE_START" then

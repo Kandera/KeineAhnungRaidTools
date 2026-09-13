@@ -1436,6 +1436,12 @@ function _G.SendChatMessage(msg, channel, _, target)
 end
 function KARTTEST.ClearChat() KARTTEST.chat = {} end
 function _G.IsInGuild() return false end
+function _G.GetNumGuildMembers() return 0 end
+function _G.GetGuildRosterInfo() end
+function _G.GuildControlGetNumRanks() return 0 end
+function _G.GuildControlGetRankName() return "" end
+_G.C_GuildInfo = _G.C_GuildInfo or {}
+function _G.C_GuildInfo.GuildRoster() end
 -- The tooltip, as data. C_TooltipInfo.GetHyperlink is how an addon reads a line no item API exposes
 -- -- the class restriction on a tier token, which is the only thing that can judge one (see
 -- ClassLocked in LootCouncilRelevance.lua). Driven per fixture item by def.classesAllowed, a list of

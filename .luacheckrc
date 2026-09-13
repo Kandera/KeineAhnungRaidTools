@@ -94,6 +94,7 @@ read_globals = {
     "ClearOverrideBindings", "SetOverrideBindingClick", "GetReadyCheckStatus", "ConfirmReadyCheck",
     "GetRealmName", "GetNormalizedRealmName", "GetLocale", "GetInstanceInfo", "GetDifficultyInfo",
     "IsEncounterInProgress",
+    "GetGuildRosterInfo", "GetNumGuildMembers", "GuildControlGetNumRanks", "GuildControlGetRankName",
     "C_SpecializationInfo", "C_Spell", "SOUNDKIT", "PlaySound",
     "GetMacroIndexByName", "EditMacro", "CreateMacro", "InitiateRolePoll",
     -- Items / trade

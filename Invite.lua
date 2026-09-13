@@ -218,6 +218,184 @@ local function GroupNameSet()
     return alreadyIn
 end
 
+local function NameAlreadyIn(alreadyIn, player)
+    local short = player:match("([^%-]+)") or player
+    return alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)]
+end
+
+-- Shared bulk-invite pipeline: skip people already in the group, convert a party that would
+-- overflow 5, print invited/skipped. WU.InviteBoss and the guild-rank invite both go through here
+-- so those two cannot disagree about combat, lead, or the solo self-seed.
+--
+-- "Not in a group at all" is not a lack of permission: HasGroupPermissions is false while
+-- ungrouped, and gating on it alone refused bulk invite at its main use. Solo or party leader
+-- may convert; an explicit bulk invite always intends a raid, so this ignores autoConvertToRaid.
+function KART.InviteNameList(names, label)
+    if type(names) ~= "table" then return end
+    if IsInGroup() and not KAUtil.HasGroupPermissions() then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
+        return
+    end
+    if InCombatLockdown() then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
+        return
+    end
+
+    local alreadyIn = GroupNameSet()
+    local toInvite = 0
+    for _, player in ipairs(names) do
+        if not NameAlreadyIn(alreadyIn, player) then toInvite = toInvite + 1 end
+    end
+    if (not IsInGroup() or UnitIsGroupLeader("player")) and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
+        if IsInGroup() then
+            C_PartyInfo.ConvertToRaid()
+        else
+            KART.pendingBulkRaidConvert = true
+            C_Timer.After(120, function() KART.pendingBulkRaidConvert = false end)
+        end
+    end
+
+    local invited, skipped = 0, 0
+    for _, player in ipairs(names) do
+        if NameAlreadyIn(alreadyIn, player) then
+            skipped = skipped + 1
+        else
+            C_PartyInfo.InviteUnit(player)
+            invited = invited + 1
+        end
+    end
+
+    local msg = string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_INVITED, invited, label or "")
+    if skipped > 0 then
+        msg = msg .. string.format(" " .. KART.L.WU_MSG_ALREADY_IN, skipped)
+    end
+    print(msg)
+end
+
+-- rankSet is 0-based rankIndex -> true, the same index GetGuildRosterInfo returns (0 = guild master).
+-- GuildControlGetRankName is 1-based; callers that need a name use index + 1.
+function KART.CollectOnlineGuildNamesByRanks(rankSet)
+    if not IsInGuild() then return {} end
+    if type(rankSet) ~= "table" then return {} end
+    local out = {}
+    local n = GetNumGuildMembers() or 0
+    for i = 1, n do
+        local name, _, rankIndex, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+        if name and name ~= "" and isOnline and rankSet[rankIndex] then
+            out[#out + 1] = name
+        end
+    end
+    return out
+end
+
+function KART.SelectedGuildRankLabel(rankSet)
+    rankSet = rankSet or (KART_Settings and KART_Settings.inviteGuildRanks) or {}
+    local parts = {}
+    local n = GuildControlGetNumRanks and GuildControlGetNumRanks() or 0
+    for i = 1, n do
+        if rankSet[i - 1] then
+            local name = GuildControlGetRankName(i)
+            if type(name) == "string" and name ~= "" then
+                parts[#parts + 1] = name:gsub("|", "||")
+            end
+        end
+    end
+    return table.concat(parts, ", ")
+end
+
+local function PendingGuildInviteNames(rankSet)
+    local collected = KART.CollectOnlineGuildNamesByRanks(rankSet)
+    local alreadyIn = GroupNameSet()
+    local pending = {}
+    for _, name in ipairs(collected) do
+        if not NameAlreadyIn(alreadyIn, name) then
+            pending[#pending + 1] = name
+        end
+    end
+    return pending
+end
+
+KART.guildRosterRequestedAt = 0
+
+function KART.RequestGuildRoster()
+    if not IsInGuild() then return end
+    if not (C_GuildInfo and C_GuildInfo.GuildRoster) then return end
+    local now = GetTime()
+    if (now - (KART.guildRosterRequestedAt or 0)) < 10 then return end
+    KART.guildRosterRequestedAt = now
+    C_GuildInfo.GuildRoster()
+end
+
+function KART.HandleGuildRosterUpdate()
+    if KART.RefreshGuildRankChips then KART.RefreshGuildRankChips() end
+    if KART.pendingGuildRankInvite then
+        KART.InviteGuildRanks()
+    end
+end
+
+function KART.InviteGuildRanks()
+    if KART_Settings.autoModuleEnabled == false then
+        print("|cff00ff00KART:|r " .. KART.L.AUTO_MODULE_DISABLED_MSG)
+        return
+    end
+    if not IsInGuild() then
+        print("|cff00ff00KART:|r " .. KART.L.GI_MSG_NOT_GUILD)
+        return
+    end
+    if IsInGroup() and not KAUtil.HasGroupPermissions() then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
+        return
+    end
+    if InCombatLockdown() then
+        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
+        return
+    end
+
+    local n = GetNumGuildMembers() or 0
+    if n == 0 then
+        if KART.pendingGuildRankInvite then
+            KART.pendingGuildRankInvite = false
+            print("|cff00ff00KART:|r " .. KART.L.GI_MSG_NONE)
+            return
+        end
+        KART.pendingGuildRankInvite = true
+        KART.RequestGuildRoster()
+        return
+    end
+    KART.pendingGuildRankInvite = false
+
+    local rankSet = (KART_Settings and KART_Settings.inviteGuildRanks) or {}
+    local pending = PendingGuildInviteNames(rankSet)
+    if #pending == 0 then
+        print("|cff00ff00KART:|r " .. KART.L.GI_MSG_NONE)
+        return
+    end
+
+    local rankLabel = KART.SelectedGuildRankLabel(rankSet)
+    local dlg = StaticPopupDialogs["KART_GI_CONFIRM"]
+    dlg.text = KART.L.GI_CONFIRM_TEXT
+    dlg.button1, dlg.button2 = KART.L.BTN_ACCEPT, KART.L.BTN_CANCEL
+    StaticPopup_Show("KART_GI_CONFIRM", #pending, rankLabel, { names = pending, label = rankLabel })
+end
+
+KART.UI:RegisterStaticPopup("KART_GI_CONFIRM", {
+    text = "Invite %d online guild members (%s)?",
+    button1 = ACCEPT,
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        if not (data and data.names) then return end
+        if IsInGroup() and not KAUtil.HasGroupPermissions() then
+            print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
+            return
+        end
+        if InCombatLockdown() then
+            print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
+            return
+        end
+        KART.InviteNameList(data.names, data.label)
+    end,
+})
+
 function WU.IndexForEncounter(encID, difficulty)
     encID = tonumber(encID)
     if not encID or type(difficulty) ~= "string" or difficulty == "" then return nil end
@@ -269,71 +447,7 @@ function WU.InviteBoss(idx)
     local boss = WU.bosses[idx]
     if not boss then return end
     WU.activeBossIdx = idx
-    -- "Not in a group at all" is not a lack of permission, it is the ordinary starting point: open
-    -- the tab before the evening, click the first boss, and the invites go out. HasGroupPermissions
-    -- answers false while ungrouped -- correctly, there is no group to lead -- so gating on it alone
-    -- refused this feature at its main use, with a "you are not the leader" that made no sense to
-    -- somebody standing alone. Same shape KART.HandleChatInvite has always used for the same reason.
-    --
-    -- The deferred raid conversion further down (KART.pendingBulkRaidConvert) exists only for the
-    -- solo case and could never be reached, which is what gave this away.
-    if IsInGroup() and not KAUtil.HasGroupPermissions() then
-        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_NOT_LEADER)
-        return
-    end
-    if InCombatLockdown() then
-        print("|cff00ff00KART:|r " .. KART.L.WU_MSG_COMBAT)
-        return
-    end
-
-    -- Same lookup Invite and the tonight strip share, including the solo self-seed: EachGroupUnit
-    -- yields nothing while solo, so without it a bulk invite started alone would try to invite the
-    -- player themselves.
-    local alreadyIn = GroupNameSet()
-
-    -- Count who we'd actually invite (not already present) so we can decide up front whether the
-    -- roster needs to be a raid. A party caps at 5, so without converting, invites past slot 5
-    -- silently fail. Convert an existing party right now; if we're still solo, flag Core's
-    -- GROUP_ROSTER_UPDATE handler to convert the moment the invitees fill the party — see
-    -- KART.pendingBulkRaidConvert in Core.lua. An explicit bulk invite always intends a raid, so
-    -- this ignores the autoConvertToRaid preference. (In-combat already returned above.)
-    local toInvite = 0
-    for _, player in ipairs(boss.players) do
-        local short = player:match("([^%-]+)") or player
-        if not (alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)]) then toInvite = toInvite + 1 end
-    end
-    -- Solo counts too: UnitIsGroupLeader("player") is false when ungrouped, which would skip the
-    -- else-branch that flags the deferred conversion — so gate on "solo OR party leader" instead.
-    -- (A party non-leader can't convert anyway, and a raid needs no conversion.)
-    if (not IsInGroup() or UnitIsGroupLeader("player")) and not IsInRaid() and (GetNumGroupMembers() + toInvite) > 5 then
-        if IsInGroup() then
-            C_PartyInfo.ConvertToRaid()
-        else
-            KART.pendingBulkRaidConvert = true
-            -- Expire the flag if the invites never land. It is otherwise only cleared once we're in
-            -- a raid or out of a group, so a bulk invite nobody accepts would leave it armed for the
-            -- session and silently convert some unrelated 5-man party an hour later.
-            C_Timer.After(120, function() KART.pendingBulkRaidConvert = false end)
-        end
-    end
-
-    local invited = 0
-    local skipped = 0
-    for _, player in ipairs(boss.players) do
-        local short = player:match("([^%-]+)") or player
-        if alreadyIn[KAUtil.CaseFold(player)] or alreadyIn[KAUtil.CaseFold(short)] then
-            skipped = skipped + 1
-        else
-            C_PartyInfo.InviteUnit(player)
-            invited = invited + 1
-        end
-    end
-
-    local msg = string.format("|cff00ff00KART:|r " .. KART.L.WU_MSG_INVITED, invited, boss.name)
-    if skipped > 0 then
-        msg = msg .. string.format(" " .. KART.L.WU_MSG_ALREADY_IN, skipped)
-    end
-    print(msg)
+    KART.InviteNameList(boss.players, boss.name)
 end
 
 -- Who WU.RemoveForBoss would uninvite, as full "Name-Realm" strings. Split out from the removing
