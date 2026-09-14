@@ -590,6 +590,19 @@ do
 end
 
 do
+    RaidTwoTanks()
+    KARTTEST.SetUnit("raid2pet", {
+        name = "Fluffy", realm = KARTTEST.realm,
+        guid = "Pet-1-CCCC", isPlayer = false,
+        ownerGuid = "Player-1-BBBB",
+    })
+    T.eq(UnitName("raid2pet"), "Fluffy", "pet unit resolves")
+    T.eq(UnitIsPlayer("raid2pet"), false, "pet is not a player")
+    T.eq(UnitIsPlayer("raid2"), true, "raid member is a player")
+    T.eq(UnitOwnerGUID("raid2pet"), "Player-1-BBBB", "pet owner guid")
+end
+
+do
     T.eq(KART.CT.FormatTauntMessage("Taunt: %t", { t = "Boss", s = "Taunt", n = "Other" }),
         "Taunt: Boss", "%t is what you taunted")
     T.eq(KART.CT.FormatTauntMessage("%n, please taunt!", { t = "Boss", s = "Taunt", n = "Other" }),

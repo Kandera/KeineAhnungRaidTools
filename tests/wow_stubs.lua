@@ -46,6 +46,10 @@ end
 -- scenario is read as "same people, but a party" without that.
 function KARTTEST.SetGroupIsRaid(value) isRaid = value end
 
+function KARTTEST.SetUnit(unit, member)
+    roster[unit] = member
+end
+
 function KARTTEST.SetNSAPI(enabled)
     _G.NSAPI = enabled and {
         GetName = function(_, unit)
@@ -187,6 +191,17 @@ function _G.UnitGUID(unit)
     if KARTTEST.guidBlackout[unit] then return nil end
     local m = resolve(unit)
     return m and m.guid or nil
+end
+function _G.UnitIsPlayer(unit)
+    local m = resolve(unit)
+    if not m then return false end
+    if m.isPlayer == false then return false end
+    return true
+end
+
+function _G.UnitOwnerGUID(unit)
+    local m = resolve(unit)
+    return m and m.ownerGuid or nil
 end
 -- A client that reads itself as ungrouped is not a raid leader either. Leaving the leader flag on
 -- during a simulated blip produced a state the game cannot be in -- no group, no members, still

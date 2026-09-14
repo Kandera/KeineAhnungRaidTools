@@ -23,7 +23,8 @@ ignore = { "211/addonName", "611", "612" }
 -- without a require. Declared here rather than excluding tests/ from linting altogether.
 files["tests/"] = {
     globals = { "T", "KARTTEST", "NSAPI", "UIParent", "C_ChatInfo", "C_Item", "strmatch",
-                "wipe", "UnitExists", "UnitName", "UnitGUID", "UnitIsGroupLeader",
+                "wipe", "UnitExists", "UnitName", "UnitGUID", "UnitIsPlayer", "UnitOwnerGUID",
+                "UnitIsGroupLeader",
                 "UnitIsGroupAssistant", "IsInRaid", "IsInGroup", "GetNumGroupMembers",
                 "Ambiguate", "GetRealmName", "GetNormalizedRealmName", "GetTime",
                 "GetInventoryItemLink", "GetWeaponEnchantInfo", "GetAverageItemLevel",
@@ -86,7 +87,8 @@ read_globals = {
     "C_GuildInfo",
     "UISpecialFrames", "UIErrorsFrame", "ShoppingTooltip1", "ShoppingTooltip2",
     -- Unit / group API
-    "UnitName", "UnitGUID", "UnitExists", "UnitClass", "UnitIsGroupLeader", "UnitIsGroupAssistant",
+    "UnitName", "UnitGUID", "UnitExists", "UnitClass", "UnitIsPlayer", "UnitOwnerGUID",
+    "UnitIsGroupLeader", "UnitIsGroupAssistant",
     "UnitIsUnit", "UnitIsConnected", "UnitIsDeadOrGhost", "UnitInRange", "UnitGroupRolesAssigned",
     "UnitHealth", "UnitHealthMax", "UnitGetTotalAbsorbs", "UnitGetTotalHealAbsorbs",
     "IsInRaid", "IsInGroup", "IsInGuild", "IsInInstance", "GetNumGroupMembers", "GetNumSubgroupMembers",
