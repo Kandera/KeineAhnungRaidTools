@@ -1422,6 +1422,7 @@ function CT.Refresh()
         CT.RefreshAskButton()
         CT.RefreshPreview()
         CT.RefreshSwapLine()
+        CT.RefreshAlertLine()
         return
     end
     CT.pendingHide = nil
@@ -1460,6 +1461,7 @@ function CT.Refresh()
     CT.RefreshAskButton()
     CT.RefreshPreview()
     CT.RefreshSwapLine()
+    CT.RefreshAlertLine()
     if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
         KART.RefreshEditModeChrome()
     end
@@ -2117,6 +2119,210 @@ if KASC and not KASC._kartCtAsk then
     KASC:RegisterMessage("CT_ASK", { payload = true, group = true }, function(payload)
         if CT.ShowSwapLine then CT.ShowSwapLine(payload) end
     end)
+end
+
+-- ===== Taunt alert line ---------------------------------------------------------------------
+local ALERT_LINE_DEFAULTS = {
+    enabled = false,
+    fontSize = 24,
+    duration = 3,
+    outline = true,
+    testMode = false,
+    color = { r = 1, g = 0.82, b = 0 },
+    point = "CENTER", relativePoint = "CENTER", x = 0, y = 160,
+}
+
+local function AlertCfg()
+    local t = TauntCfg()
+    local a = t and t.alert
+    if type(a) ~= "table" then return {} end
+    return a
+end
+
+local function AlertOpt(key)
+    local a = AlertCfg()
+    if a[key] ~= nil then return a[key] end
+    return ALERT_LINE_DEFAULTS[key]
+end
+
+local function AlertPreviewing()
+    if KART.IsEditModeActive and KART.IsEditModeActive() then return true end
+    return AlertOpt("testMode") == true
+end
+
+local function CancelAlertLineTimer()
+    if CT.alertLineTimer and CT.alertLineTimer.Cancel then
+        CT.alertLineTimer:Cancel()
+    end
+    CT.alertLineTimer = nil
+end
+
+local function AlertLineColor()
+    local c = AlertOpt("color")
+    if type(c) ~= "table" then c = ALERT_LINE_DEFAULTS.color end
+    return c.r or 1, c.g or 0.82, c.b or 0
+end
+
+local function AlertLineSafeText(msg)
+    if type(msg) ~= "string" then return "" end
+    return msg:gsub("|", "||")
+end
+
+function CT.EnsureAlertLine()
+    local f = CT.alertLine
+    if f and f.GetWidth then return f end
+    f = CreateFrame("Frame", "KART_TauntAlert", UIParent)
+    f:SetSize(400, 32)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    if f.SetClampedToScreen then f:SetClampedToScreen(true) end
+    local caster = f:CreateFontString(nil, "OVERLAY")
+    caster:SetJustifyH("CENTER")
+    f.caster = caster
+    local verb = f:CreateFontString(nil, "OVERLAY")
+    verb:SetJustifyH("CENTER")
+    f.verb = verb
+    local icon = f:CreateTexture(nil, "ARTWORK")
+    f.icon = icon
+    local target = f:CreateFontString(nil, "OVERLAY")
+    target:SetJustifyH("CENTER")
+    f.target = target
+    -- A FontString has no pixels of its own. Without a region, EnableMouse still lets
+    -- clicks fall through to the Edit Mode dim.
+    local hit = f:CreateTexture(nil, "BACKGROUND")
+    hit:SetAllPoints(f)
+    if hit.SetColorTexture then hit:SetColorTexture(0, 0, 0, 0.01) end
+    f.hit = hit
+    f:SetScript("OnDragStart", function(self)
+        if AlertPreviewing() and not InCombatLockdown() then
+            self:StartMoving()
+        end
+    end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
+        local t = TauntCfg()
+        if not t then return end
+        t.alert = t.alert or {}
+        t.alert.point = point
+        t.alert.relativePoint = relativePoint
+        t.alert.x = xOfs
+        t.alert.y = yOfs
+    end)
+    CT.alertLine = f
+    if KART.RegisterEditModeFrame then
+        KART.RegisterEditModeFrame(f, "EDIT_MODE_LABEL_TAUNT_ALERT")
+    end
+    return f
+end
+
+function CT.StyleAlertLine()
+    local f = CT.EnsureAlertLine()
+    local size = tonumber(AlertOpt("fontSize")) or ALERT_LINE_DEFAULTS.fontSize
+    if size < 12 then size = 12 end
+    if size > 48 then size = 48 end
+    local outline = AlertOpt("outline")
+    if outline == nil then outline = true end
+    local flags = outline ~= false and "OUTLINE" or ""
+    local cfg = AlertCfg()
+    local fontName = cfg.fontName
+    if not fontName and KART_Settings then fontName = KART_Settings.fontName end
+    local path = "Fonts\\FRIZQT__.TTF"
+    local ui = KART.UI
+    if ui and ui.GetFontPath then
+        path = ui:GetFontPath(fontName) or path
+    end
+    if f.caster.SetFont then f.caster:SetFont(path, size, flags) end
+    if f.verb.SetFont then f.verb:SetFont(path, size, flags) end
+    if f.target.SetFont then f.target:SetFont(path, size, flags) end
+    f.caster:SetTextColor(AlertLineColor())
+    f.verb:SetTextColor(AlertLineColor())
+    f.target:SetTextColor(AlertLineColor())
+    f.icon:SetSize(size, size)
+
+    local pad = 8
+    local casterW = (f.caster.GetStringWidth and f.caster:GetStringWidth()) or 0
+    local verbW = (f.verb.GetStringWidth and f.verb:GetStringWidth()) or 0
+    local targetW = (f.target.GetStringWidth and f.target:GetStringWidth()) or 0
+    local w = math.max(200, casterW + pad + verbW + pad + size + pad + targetW + pad * 2)
+    f:SetSize(w, size + 8)
+
+    f.caster:ClearAllPoints()
+    f.caster:SetPoint("LEFT", f, "LEFT", pad, 0)
+    f.verb:ClearAllPoints()
+    f.verb:SetPoint("LEFT", f.caster, "RIGHT", pad, 0)
+    f.icon:ClearAllPoints()
+    f.icon:SetPoint("LEFT", f.verb, "RIGHT", pad, 0)
+    f.target:ClearAllPoints()
+    f.target:SetPoint("LEFT", f.icon, "RIGHT", pad, 0)
+
+    local point = AlertOpt("point")
+    local rel = AlertOpt("relativePoint")
+    local x = AlertOpt("x")
+    local y = AlertOpt("y")
+    f:ClearAllPoints()
+    f:SetPoint(point or "CENTER", UIParent, rel or "CENTER", x or 0, y or 160)
+    local edit = AlertPreviewing()
+    f:EnableMouse(edit and true or false)
+    if f.hit then
+        if edit then f.hit:Show() else f.hit:Hide() end
+    end
+    return f
+end
+
+function CT.RefreshAlertLine()
+    if AlertOpt("enabled") == false then
+        CancelAlertLineTimer()
+        if CT.alertLine then CT.alertLine:Hide() end
+        return
+    end
+    local preview = AlertPreviewing()
+    if not preview and not (CT.alertLine and CT.alertLine:IsShown() and CT.alertLineTimer) then
+        if CT.alertLine then CT.alertLine:Hide() end
+        return
+    end
+    local f = CT.StyleAlertLine()
+    if preview then
+        CancelAlertLineTimer()
+        local verb = (KART.L and KART.L.CT_TAUNT_ALERT_VERB) or "Taunted"
+        f.caster:SetText(AlertLineSafeText("Tank (Pet)"))
+        f.verb:SetText(verb)
+        f.icon:SetTexture((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(355)) or 132270)
+        f.target:SetText(AlertLineSafeText("Boss"))
+        CT.StyleAlertLine()
+        f:Show()
+        if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
+            KART.RefreshEditModeChrome()
+        end
+    end
+end
+
+function CT.ShowAlertLine(casterLabel, spellID, targetName)
+    if AlertOpt("enabled") == false then
+        CancelAlertLineTimer()
+        if CT.alertLine then CT.alertLine:Hide() end
+        return
+    end
+    local f = CT.StyleAlertLine()
+    local verb = (KART.L and KART.L.CT_TAUNT_ALERT_VERB) or "Taunted"
+    f.caster:SetText(AlertLineSafeText(casterLabel))
+    f.verb:SetText(verb)
+    f.icon:SetTexture((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID)) or 132270)
+    f.target:SetText(AlertLineSafeText(targetName))
+    CT.StyleAlertLine()
+    f:Show()
+    if AlertPreviewing() then return end
+    CancelAlertLineTimer()
+    local dur = tonumber(AlertOpt("duration")) or ALERT_LINE_DEFAULTS.duration
+    if dur < 1 then dur = 1 end
+    if dur > 10 then dur = 10 end
+    if C_Timer and C_Timer.NewTimer then
+        CT.alertLineTimer = C_Timer.NewTimer(dur, function()
+            CT.alertLineTimer = nil
+            if AlertPreviewing() then return end
+            if CT.alertLine then CT.alertLine:Hide() end
+        end)
+    end
 end
 
 function CT.TauntIcon()

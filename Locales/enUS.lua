@@ -471,6 +471,7 @@ KART.L_enUS = {
     SET_CT_SWAP_SOUND_OFF = "Off",
     SET_CT_SWAP_SOUND_WARNING = "Warning",
     SET_CT_SWAP_SOUND_READY = "Ready Check",
+    CT_TAUNT_ALERT_VERB = "Taunted",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",

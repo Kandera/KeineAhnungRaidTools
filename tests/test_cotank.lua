@@ -23,6 +23,7 @@ do
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
+        "ShowAlertLine", "RefreshAlertLine", "EnsureAlertLine",
         "BarPass", "AbsorbFill", "HealAbsorbSpan", "SyncStripUnits",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
@@ -829,6 +830,70 @@ do
     T.truthy(KART.CT.swapLine and KART.CT.swapLine:IsShown(),
         "CT_ASK still shows with Co-Tank off")
     T.eq(KART.CT.swapLine.text:GetText(), "take it", "with the ping text")
+end
+
+-- ===== Taunt alert line =================================================================
+local function AlertReady(extra)
+    RaidTwoTanks()
+    env.KART_Settings.ct.taunt = env.KART_Settings.ct.taunt or {}
+    env.KART_Settings.ct.taunt.alert = extra or { enabled = true, duration = 3, fontSize = 24, outline = true }
+    KART.L = KART.L or {}
+    KART.L.CT_TAUNT_ALERT_VERB = "Taunted"
+    KART.CT.alertLine = nil
+    KART.CT.alertLineTimer = nil
+end
+
+do
+    AlertReady()
+    KART.CT.ShowAlertLine("Other", 355, "Boss")
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(), "a taunt shows the alert line")
+    T.eq(KART.CT.alertLine.caster:GetText(), "Other", "caster name")
+    T.eq(KART.CT.alertLine.verb:GetText(), "Taunted", "locale verb")
+    T.eq(KART.CT.alertLine.target:GetText(), "Boss", "target name")
+    T.truthy(KART.CT.alertLine.icon:GetTexture(), "spell icon is set")
+    KARTTEST.AdvanceTime(2.9)
+    T.eq(KART.CT.alertLine:IsShown(), true, "still up before the duration")
+    KARTTEST.AdvanceTime(0.2)
+    T.eq(KART.CT.alertLine:IsShown(), false, "hides after 3 seconds")
+end
+
+do
+    AlertReady({ enabled = true, duration = 1 })
+    KART.CT.ShowAlertLine("Other", 355, "Boss")
+    KARTTEST.AdvanceTime(1.1)
+    T.eq(KART.CT.alertLine:IsShown(), false, "duration slider is honoured")
+end
+
+do
+    AlertReady({ enabled = false })
+    KART.CT.ShowAlertLine("Other", 355, "Boss")
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "disabled alert does not show")
+end
+
+do
+    AlertReady({ enabled = true, testMode = true })
+    KART.CT.RefreshAlertLine()
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(), "test mode shows the sample")
+    KARTTEST.AdvanceTime(10)
+    T.eq(KART.CT.alertLine:IsShown(), true, "and does not auto-hide")
+end
+
+do
+    AlertReady({ enabled = true })
+    KART.editModeActive = true
+    KART.CT.RefreshAlertLine()
+    T.eq(KART.CT.alertLine:IsMouseEnabled(), true, "edit mode enables mouse")
+    KART.editModeActive = false
+    KART.CT.RefreshAlertLine()
+    T.eq(KART.CT.alertLine:IsShown(), false, "leaving edit mode hides the sample")
+end
+
+do
+    AlertReady()
+    KART.CT.ShowAlertLine("|cff00ff00hi|r", 355, "Boss")
+    T.eq(KART.CT.alertLine.caster:GetText(), "||cff00ff00hi||r",
+        "caster pipes are escaped")
 end
 
 do
