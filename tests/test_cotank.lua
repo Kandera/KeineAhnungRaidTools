@@ -1193,6 +1193,7 @@ do
     KART.CT.MigrateProfile(world.ct)
     T.eq(world.ct.taunt.onlyInDungeon, false, "v3 world-announce still wins after MergeDefaults")
     T.eq(world.ct.taunt.onlyInRaid, false, "and raid stays off")
+    T.eq(old.ct.taunt.alert.enabled, false, "alert defaults off")
 end
 
 do
