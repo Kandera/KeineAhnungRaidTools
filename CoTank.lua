@@ -1527,7 +1527,7 @@ function CT.Disable()
         for _, event in ipairs(CT_EVENTS) do
             CT.events:UnregisterEvent(event)
         end
-        CT.events:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        CT.events:UnregisterEvent("UNIT_AURA")
         CT.events:UnregisterEvent("PLAYER_REGEN_ENABLED")
     end
     if CT.row then
@@ -1699,11 +1699,8 @@ function CT.Enable()
                 CT.OnInstance()
             elseif event == "PLAYER_TARGET_CHANGED" then
                 CT.Refresh()
-            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                local unit, _, spellID = ...
-                if unit == "player" then
-                    CT.OnTauntCast(spellID)
-                end
+            elseif event == "UNIT_AURA" then
+                CT.OnUnitAura(...)
             end
         end)
         CT.events = f
@@ -1711,7 +1708,7 @@ function CT.Enable()
     for _, event in ipairs(CT_EVENTS) do
         CT.events:RegisterEvent(event)
     end
-    CT.events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    CT.RefreshAlertWatcher()
     CT.Refresh()
     CT.RefreshAuraEngineNote()
 end
@@ -1742,9 +1739,7 @@ local CLASS_TAUNT = {
     DRUID = 6795,
     DEMONHUNTER = 185245,
 }
-local TAUNT_DEFAULT_MESSAGE = "Taunt: %t"
 local TAUNT_DEFAULT_ASK = "%n, please taunt!"
-local TAUNT_DEBOUNCE = 1.5
 local TAUNT_MACRO_NAME = "KART Ask Taunt"
 local ASK_BUTTON_DEFAULTS = {
     size = 44, locked = true,
@@ -1819,24 +1814,6 @@ function CT.TauntWantsRaid(t)
     return t.onlyInInstance ~= false
 end
 
-function CT.ShouldAnnounce()
-    local s = KART_Settings
-    if not s or s.ctModuleEnabled ~= true then return false end
-    local t = s.ct and s.ct.taunt
-    if not t or t.announce ~= true then return false end
-    if t.onlyInGroup ~= false and not IsInGroup() then return false end
-    local _, instanceType = IsInInstance()
-    if instanceType == "arena" or instanceType == "pvp" then return false end
-    local dungeon = CT.TauntWantsDungeon(t)
-    local raid = CT.TauntWantsRaid(t)
-    if dungeon or raid then
-        if instanceType == "party" then return dungeon end
-        if instanceType == "raid" then return raid end
-        return false
-    end
-    return true
-end
-
 local function WhisperDest(unit)
     if not unit then return nil end
     local name, realm = UnitName(unit)
@@ -1884,27 +1861,6 @@ function CT.SendTauntChat(msg, cotank)
     if ch.YELL then
         SendChatMessage(msg, "YELL")
     end
-end
-
-function CT.Announce(spellID)
-    local t = TauntCfg() or {}
-    local template = t.message
-    if not template or template == "" then template = TAUNT_DEFAULT_MESSAGE end
-    local cotank = CT.PickCoTank()
-    local msg = CT.FormatTauntMessage(template, FillTauntVars(spellID, cotank))
-    CT.SendTauntChat(msg, cotank)
-end
-
-function CT.OnTauntCast(spellID)
-    if spellID == nil or CT.IsSecret(spellID) then return end
-    if not CT.IsTaunt(spellID) then return end
-    if not CT.ShouldAnnounce() then return end
-    local now = GetTime()
-    if CT.lastTauntAt and (now - CT.lastTauntAt) < TAUNT_DEBOUNCE then
-        return
-    end
-    CT.lastTauntAt = now
-    CT.Announce(spellID)
 end
 
 function CT.Ask()
@@ -2322,6 +2278,56 @@ function CT.ShowAlertLine(casterLabel, spellID, targetName)
             if AlertPreviewing() then return end
             if CT.alertLine then CT.alertLine:Hide() end
         end)
+    end
+end
+
+-- ===== Taunt alert watcher -------------------------------------------------------------
+-- Driven by UNIT_AURA on a short allowlist of units: the current target and boss frames. No
+-- combat log: applied-aura events are enough to catch a taunt without the volume of CLEU.
+local ALERT_UNITS = {
+    target = true,
+    boss1 = true, boss2 = true, boss3 = true, boss4 = true,
+    boss5 = true, boss6 = true, boss7 = true, boss8 = true,
+}
+
+function CT.ShouldShowAlert()
+    local s = KART_Settings
+    if not s or s.ctModuleEnabled ~= true then return false end
+    if AlertOpt("enabled") ~= true then return false end
+    local _, instanceType = IsInInstance()
+    if instanceType == "arena" or instanceType == "pvp" then return false end
+    return true
+end
+
+function CT.OnUnitAura(unit, updateInfo)
+    if not CT.ShouldShowAlert() then return end
+    if not ALERT_UNITS[unit] then return end
+    if not updateInfo then return end
+    local added = updateInfo.addedAuras
+    if not added then return end
+    for _, aura in ipairs(added) do
+        if CT.IsTaunt(aura.spellId) and not CT.IsOwnSource(aura.sourceUnit) then
+            local casterLabel = CT.AlertCasterLabel(aura.sourceUnit)
+            if casterLabel then
+                local targetName = PublicString(UnitName(unit))
+                if targetName ~= "" then
+                    local id = aura.auraInstanceID
+                    if id == nil or id ~= CT.lastAlertAuraId then
+                        CT.lastAlertAuraId = id
+                        CT.ShowAlertLine(casterLabel, aura.spellId, targetName)
+                    end
+                end
+            end
+        end
+    end
+end
+
+function CT.RefreshAlertWatcher()
+    if not CT.events then return end
+    if KART_Settings and KART_Settings.ctModuleEnabled == true and AlertOpt("enabled") == true then
+        CT.events:RegisterEvent("UNIT_AURA")
+    else
+        CT.events:UnregisterEvent("UNIT_AURA")
     end
 end
 

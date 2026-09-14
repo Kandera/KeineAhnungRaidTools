@@ -18,12 +18,13 @@ do
         "OnUnitEvent", "SyncRowUnitEvents", "ReadInRange",
         "HostPreview", "ReleasePreview", "EnsurePreviewRow", "RefreshPreview",
         "SetPreviewState",
-        "IsTaunt", "FormatTauntMessage", "ShouldAnnounce",
+        "IsTaunt", "FormatTauntMessage",
         "IsOwnSource", "AlertCasterLabel",
-        "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
+        "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
         "ShowAlertLine", "RefreshAlertLine", "EnsureAlertLine",
+        "ShouldShowAlert", "OnUnitAura", "RefreshAlertWatcher",
         "BarPass", "AbsorbFill", "HealAbsorbSpan", "SyncStripUnits",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
@@ -338,11 +339,23 @@ do
     KART.CT.row = nil
     RaidTwoTanks()
     KART.CT.Enable()
-    T.eq(CountCtEvents(KART.CT.events), 5, "first enable registers roster, instance, roles, target, and own casts")
+    T.eq(CountCtEvents(KART.CT.events), 4, "first enable registers roster, instance, roles, and target")
     KART.CT.Disable()
     T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters all events")
     KART.CT.Enable()
-    T.eq(CountCtEvents(KART.CT.events), 5, "second enable re-registers the same events")
+    T.eq(CountCtEvents(KART.CT.events), 4, "second enable re-registers the same events")
+end
+
+do
+    KART.CT.events = nil
+    KART.CT.row = nil
+    RaidTwoTanks()
+    env.KART_Settings.ct.taunt = { alert = { enabled = true } }
+    KART.CT.Enable()
+    T.eq(CountCtEvents(KART.CT.events), 5,
+        "enabling the taunt alert adds UNIT_AURA to the registered events")
+    KART.CT.Disable()
+    T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters UNIT_AURA too")
 end
 
 do
@@ -573,7 +586,6 @@ local function TauntReady(extra)
     KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
     KARTTEST.ClearChat()
     KARTTEST.ClearMacros()
-    KART.CT.lastTauntAt = nil
     KARTTEST.specId = 71
 end
 
@@ -637,98 +649,6 @@ do
         "Other, please taunt!", "%n is the other tank")
     T.eq(KART.CT.FormatTauntMessage("%s on %t", { t = "Boss", s = "Taunt", n = "Other" }),
         "Taunt on Boss", "%s is the spell name")
-end
-
-do
-    TauntReady()
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 1, "a taunt whispers once")
-    T.eq(KARTTEST.chat[1].channel, "WHISPER", "on whisper")
-    T.eq(KARTTEST.chat[1].target, "Other", "to the co-tank")
-    T.eq(KARTTEST.chat[1].msg, "Taunt: Boss", "with the template filled")
-end
-
-do
-    TauntReady({ announce = true, channels = { GROUP = true },
-        message = "Taunt: %t", onlyInGroup = true, onlyInInstance = true })
-    KART.CT.OnTauntCast(355)
-    T.eq(KARTTEST.chat[1].channel, "RAID", "party-or-raid in a raid is RAID")
-end
-
-do
-    TauntReady({ announce = true, channels = { GROUP = true },
-        message = "Taunt: %t", onlyInGroup = true, onlyInInstance = true })
-    KARTTEST.SetGroupIsRaid(false)
-    KART.CT.OnTauntCast(355)
-    T.eq(KARTTEST.chat[1].channel, "PARTY", "party-or-raid in a party is PARTY")
-end
-
-do
-    TauntReady()
-    env.KART_Settings.ctModuleEnabled = false
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "module off never announces")
-end
-
-do
-    TauntReady({ announce = false, channels = { WHISPER = true },
-        message = "Taunt: %t", onlyInGroup = true, onlyInInstance = true })
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "announce off never announces")
-end
-
-do
-    TauntReady()
-    KARTTEST.instance.instanceType = "none"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "open world does not announce when instance filter is on")
-end
-
-do
-    TauntReady({ announce = true, channels = { WHISPER = true },
-        message = "Taunt: %t", onlyInGroup = true,
-        onlyInDungeon = true, onlyInRaid = false })
-    KARTTEST.instance.instanceType = "party"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 1, "dungeon-only announces in a 5-man")
-    KARTTEST.ClearChat()
-    KART.CT.lastTauntAt = nil
-    KARTTEST.instance.instanceType = "raid"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "and stays quiet in a raid")
-end
-
-do
-    TauntReady({ announce = true, channels = { WHISPER = true },
-        message = "Taunt: %t", onlyInGroup = true,
-        onlyInDungeon = false, onlyInRaid = true })
-    KARTTEST.instance.instanceType = "raid"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 1, "raid-only announces in a raid")
-    KARTTEST.ClearChat()
-    KART.CT.lastTauntAt = nil
-    KARTTEST.instance.instanceType = "party"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "and stays quiet in a 5-man")
-end
-
-do
-    TauntReady({ announce = true, channels = { WHISPER = true },
-        message = "Taunt: %t", onlyInGroup = true,
-        onlyInDungeon = false, onlyInRaid = false })
-    KARTTEST.instance.instanceType = "none"
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 1, "both instance filters off announce in the open world")
-end
-
-do
-    TauntReady()
-    KART.CT.OnTauntCast(355)
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 1, "a double-cast is debounced")
-    KARTTEST.now = KARTTEST.now + 2
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 2, "and announces again after the debounce")
 end
 
 do
@@ -896,6 +816,84 @@ do
         "caster pipes are escaped")
 end
 
+-- ===== Taunt alert watcher (UNIT_AURA) ==================================================
+local function FireAura(unit, aura)
+    KART.CT.OnUnitAura(unit, { addedAuras = { aura } })
+end
+
+do
+    AlertReady({ enabled = false })
+    FireAura("target", { spellId = 355, sourceUnit = "raid2", auraInstanceID = 1 })
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "alert off ignores a matching aura")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    FireAura("target", { spellId = 355, sourceUnit = "raid2", auraInstanceID = 2 })
+    T.eq(KART.CT.alertLine.caster:GetText(), "Other", "group member taunt shows")
+    T.eq(KART.CT.alertLine.target:GetText(), "Boss", "on the target unit name")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    FireAura("target", { spellId = 355, sourceUnit = "raid1", auraInstanceID = 3 })
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "own taunt does not show")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.SetUnit("boss1", { name = "Fyrakk", realm = KARTTEST.realm, guid = "Creature-1" })
+    KARTTEST.SetUnit("raid2pet", {
+        name = "Fluffy", realm = KARTTEST.realm, guid = "Pet-1-CCCC",
+        isPlayer = false, ownerGuid = "Player-1-BBBB",
+    })
+    FireAura("boss1", { spellId = 2649, sourceUnit = "raid2pet", auraInstanceID = 4 })
+    T.eq(KART.CT.alertLine.caster:GetText(), "Other (Fluffy)", "pet taunt on a boss frame")
+    T.eq(KART.CT.alertLine.target:GetText(), "Fyrakk", "dest is the boss unit")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.OnUnitAura("target", { isFullUpdate = true })
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "full update without addedAuras does not toast")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    local ok = pcall(FireAura, "target", { spellId = secret, sourceUnit = "raid2", auraInstanceID = 5 })
+    T.eq(ok, true, "secret spell id does not throw")
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "and does not show")
+    KARTTEST.secretValues[secret] = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.instance.instanceType = "arena"
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    FireAura("target", { spellId = 355, sourceUnit = "raid2", auraInstanceID = 6 })
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "arena does not toast")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    FireAura("target", { spellId = 355, sourceUnit = "raid2", auraInstanceID = 7 })
+    KART.CT.alertLine:Hide()
+    FireAura("target", { spellId = 355, sourceUnit = "raid2", auraInstanceID = 7 })
+    T.eq(KART.CT.alertLine:IsShown(), false, "a repeat of the same aura instance does not re-show")
+end
+
 do
     TauntReady()
     local KASC = LibStub("KASC-1.0")
@@ -938,47 +936,11 @@ do
 end
 
 do
-    TauntReady()
-    local secret = {}
-    KARTTEST.secretValues[secret] = true
-    KARTTEST.target = { name = secret, realm = KARTTEST.realm }
-    KART.CT.OnTauntCast(355)
-    T.eq(KARTTEST.chat[1].msg, "Taunt: ", "secret target name is omitted from the line")
-    KARTTEST.ClearChat()
-    KART.CT.lastTauntAt = nil
-    KART.CT.OnTauntCast(secret)
-    T.eq(#KARTTEST.chat, 0, "secret spell id is not announced")
-    KARTTEST.secretValues[secret] = nil
-end
-
-do
     TauntReady({ button = true, locked = false, announce = false,
         channels = { WHISPER = true } })
     env.KART_Settings.ct.taunt.locked = false
     KARTTEST.instance.instanceType = "arena"
     T.eq(KART.CT.ShouldShowAskButton(), false, "unlock does not show the ask button in an arena")
-end
-
-do
-    TauntReady({ announce = true, channels = { RAID_WARNING = true },
-        message = "Taunt: %t", onlyInGroup = true, onlyInInstance = true })
-    KART.CT.OnTauntCast(355)
-    T.eq(#KARTTEST.chat, 0, "raid warning is skipped without lead or assist")
-end
-
-do
-    TauntReady({ announce = true, channels = { RAID_WARNING = true },
-        message = "Taunt: %t", onlyInGroup = true, onlyInInstance = true })
-    KARTTEST.SetRaid({
-        { name = "Me", realm = KARTTEST.realm, guid = "Player-1-AAAA", role = "TANK",
-          class = "WARRIOR", classFile = "WARRIOR", leader = true },
-        { name = "Other", realm = KARTTEST.realm, guid = "Player-1-BBBB", role = "TANK",
-          class = "PALADIN", classFile = "PALADIN" },
-    })
-    KARTTEST.activeUnit = "raid1"
-    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
-    KART.CT.OnTauntCast(355)
-    T.eq(KARTTEST.chat[1].channel, "RAID_WARNING", "raid lead can send raid warning")
 end
 
 do
