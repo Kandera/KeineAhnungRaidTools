@@ -38,7 +38,7 @@ Fenster zur Raid-Vorbereitung:
 *   Aus, bis du es im Co-Tank-Tab einschaltest. Der Tab zeigt eine Vorschau in der Stadt. Der Testmodus lässt die erfundene Zeile nach dem Schließen stehen.
 *   Live: Leben, Debuffs und Buffs des anderen Tanks. Optionale Gruppen-/Instanzfilter (Dungeons bleiben aus; Raids standardmäßig an). Entsperren zum Platzieren ohne Gruppe. Linksklick zielt den anderen Tank an.
 *   Look, Text und Auren öffnen sich in einem Begleitfenster (Balkentextur und optionaler Verlauf, LibSharedMedia wenn installiert).
-*   Optional: eigenen Taunt sagen, ein **Übernehmen**-Button (oder Aktionsleisten-Makro) und eine kurze Taunt-Swap-Zeile beim anderen Tank. Alles aus, bis du es einschaltest. Testmodus für die Zeile in der Stadt.
+*   Optional: **Taunt-Anzeige** auf dem Bildschirm, **Übernehmen**-Button und Taunt-Swap-Zeile.
 
 ### 6. NSRT Notes
 Nach einem Kill — und wenn der Lead den Raid betritt — lädt KART die nächste Northern-Sky-**Shared-Note** und sendet sie, damit Heiler nicht auf dem vorherigen Boss hängen bleiben.

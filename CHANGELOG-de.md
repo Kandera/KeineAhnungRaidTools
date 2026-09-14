@@ -8,6 +8,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
+- **Eine Taunt-Anzeige** zeigt, wer dein Ziel oder einen Boss getaunt hat, mit eigenen Look-Einstellungen.
+- **Die Chat-Taunt-Ansage ist weg.** Der Übernehmen-Button und die Taunt-Swap-Zeile bleiben.
 - **Online-Gildenmitglieder nach Rang einladen** im Automation-Tab. Einen oder mehrere Ränge wählen, dann den Invite bestätigen.
 
 ## [4.3.0] - 2026-09-04

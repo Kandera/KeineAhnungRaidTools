@@ -74,8 +74,11 @@ end
 do
     T.truthy(type(KART.InGameChangelog) == "table", "in-game changelog table exists")
     T.truthy(#KART.InGameChangelog >= 2, "changelog covers the current release and a prior version")
-    T.eq(KART.InGameChangelog[1].version, "4.3.0", "first block is the current release")
-    T.truthy(KART.InGameChangelog[1].entries[1]:find("break window", 1, true),
+    T.eq(KART.InGameChangelog[1].version, "Unreleased", "first block is unreleased work")
+    T.truthy(KART.InGameChangelog[1].entries[1]:find("Taunt Alert", 1, true),
+        "unreleased list starts with the taunt alert line")
+    T.eq(KART.InGameChangelog[2].version, "4.3.0", "second block is the current release")
+    T.truthy(KART.InGameChangelog[2].entries[1]:find("break window", 1, true),
         "in-game 4.3.0 list starts with the break window")
     local lead, rest = KART.ParseChangelogLine("**Lead** rest of the line")
     T.eq(lead, "Lead", "changelog lead is the starred span")

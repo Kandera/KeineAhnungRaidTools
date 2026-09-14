@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **A Taunt Alert line** shows who taunted your target or a boss, with its own look settings.
+- **Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.
 - **Invite online guild members by rank** from the Automation tab. Select one or more ranks, then confirm the invite.
 
 ## [4.3.0] - 2026-09-04

@@ -218,6 +218,13 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "Unreleased",
+        entries = {
+            "**A Taunt Alert line** shows who taunted your target or a boss, with its own look settings.",
+            "**Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.",
+        },
+    },
+    {
         version = "4.3.0",
         entries = {
             "**A break window opens on `/break`**, with the length, the local end time, and optional guild pictures.",

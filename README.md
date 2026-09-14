@@ -38,7 +38,7 @@ Raid-readiness window:
 *   Off until you enable it on the Co-Tank tab. The tab previews the row in town. Test mode keeps the invented row after you close the window.
 *   Live: other tank's health, debuffs and buffs. Optional group/instance filters (dungeons stay off; raids on by default). Unlock to place it without a group. Left-click targets the other tank.
 *   Look, Text and Auras open in a companion panel (bar texture and optional gradient, LibSharedMedia when installed).
-*   Optional: say when you taunt, an on-screen **take it** button (or action-bar macro), and a short Taunt Swap line on the other tank. All off until you turn them on. Test mode for the line in town.
+*   Optional: on-screen **taunt alert**, **take it** button, and Taunt Swap line.
 
 ### 6. NSRT Notes
 After a kill — and when the lead zones into the raid — KART loads and shares the next Northern Sky **shared** note so healers are not stuck on the previous boss.
