@@ -1716,15 +1716,21 @@ end
 
 -- ===== Taunt announce / ask -----------------------------------------------------------
 -- Only the player's own taunt is visible on this patch (instant casts are not announced
--- for other people). Spell IDs are game data. Death Grip counts only in Blood (spec 250).
+-- for other people). Spell IDs are game data.
+-- Patch-bound applied-aura IDs (GOOD_ENCHANTS class). Cast and aura both listed when they differ.
 local TAUNT_SPELLS = {
     [355] = true,      -- Warrior: Taunt
+    [1161] = true,     -- Warrior: Challenging Shout
     [56222] = true,    -- Death Knight: Dark Command
-    [49576] = 250,     -- Death Knight: Death Grip (Blood)
+    [49576] = true,    -- Death Knight: Death Grip (cast)
+    [51399] = true,    -- Death Knight: Death Grip (applied taunt)
     [62124] = true,    -- Paladin: Hand of Reckoning
     [115546] = true,   -- Monk: Provoke
     [6795] = true,     -- Druid: Growl
     [185245] = true,   -- Demon Hunter: Torment
+    [2649] = true,      -- Pet: Growl
+    [19577] = true,     -- Hunter: Intimidation (cast)
+    [24394] = true,    -- Hunter: Intimidation (applied)
 }
 local CLASS_TAUNT = {
     WARRIOR = 355,
@@ -1755,23 +1761,9 @@ local function PublicString(value)
     return value
 end
 
-function CT.PlayerSpecId()
-    local info = C_SpecializationInfo
-    if not info or not info.GetSpecialization or not info.GetSpecializationInfo then
-        return 0
-    end
-    local idx = info.GetSpecialization()
-    if not idx then return 0 end
-    local specId = info.GetSpecializationInfo(idx)
-    return specId or 0
-end
-
 function CT.IsTaunt(spellID)
     if spellID == nil or CT.IsSecret(spellID) then return false end
-    local spec = TAUNT_SPELLS[spellID]
-    if spec == true then return true end
-    if spec == nil then return false end
-    return CT.PlayerSpecId() == spec
+    return TAUNT_SPELLS[spellID] == true
 end
 
 function CT.FormatTauntMessage(template, vars)

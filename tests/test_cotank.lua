@@ -18,7 +18,7 @@ do
         "OnUnitEvent", "SyncRowUnitEvents", "ReadInRange",
         "HostPreview", "ReleasePreview", "EnsurePreviewRow", "RefreshPreview",
         "SetPreviewState",
-        "IsTaunt", "PlayerSpecId", "FormatTauntMessage", "ShouldAnnounce",
+        "IsTaunt", "FormatTauntMessage", "ShouldAnnounce",
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
@@ -578,11 +578,15 @@ end
 do
     T.eq(KART.CT.IsTaunt(355), true, "Warrior Taunt is a taunt")
     T.eq(KART.CT.IsTaunt(133), false, "Fireball is not")
-    KARTTEST.specId = 250
-    T.eq(KART.CT.IsTaunt(49576), true, "Death Grip is a taunt for Blood")
-    KARTTEST.specId = 251
-    T.eq(KART.CT.IsTaunt(49576), false, "and not for Frost")
-    KARTTEST.specId = 71
+    T.eq(KART.CT.IsTaunt(51399), true, "Death Grip applied aura is a taunt")
+    T.eq(KART.CT.IsTaunt(49576), true, "Death Grip cast id is listed")
+    T.eq(KART.CT.IsTaunt(2649), true, "pet Growl is a taunt")
+    T.eq(KART.CT.IsTaunt(24394), true, "Intimidation is a taunt")
+    T.eq(KART.CT.IsTaunt(1161), true, "Challenging Shout is a taunt")
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    T.eq(KART.CT.IsTaunt(secret), false, "secret spell id is not a taunt")
+    KARTTEST.secretValues[secret] = nil
 end
 
 do
