@@ -1641,26 +1641,27 @@ function CT.SyncWidgets()
 
     local taunt = ct.taunt
     if taunt then
-        setChecked(KART.CbCtTauntAnnounce, taunt.announce)
-        setChecked(KART.CbCtTauntOnlyGroup, taunt.onlyInGroup ~= false)
-        setChecked(KART.CbCtTauntOnlyDungeon, CT.TauntWantsDungeon(taunt))
-        setChecked(KART.CbCtTauntOnlyRaid, CT.TauntWantsRaid(taunt))
         setChecked(KART.CbCtTauntButton, taunt.button)
         setChecked(KART.CbCtTauntBtnLock, taunt.locked ~= false)
         setChecked(KART.CbCtTauntBtnGroup, taunt.buttonOnlyInGroup ~= false)
         setChecked(KART.CbCtTauntBtnRaid, taunt.buttonOnlyInRaid)
         setSlider(KART.SldCtTauntSize, taunt.size)
-        local ch = taunt.channels or {}
-        setChecked(KART.CbCtTauntWhisper, ch.WHISPER)
-        setChecked(KART.CbCtTauntGroup, ch.GROUP)
-        setChecked(KART.CbCtTauntRW, ch.RAID_WARNING)
-        setChecked(KART.CbCtTauntSay, ch.SAY)
-        setChecked(KART.CbCtTauntYell, ch.YELL)
-        if KART.EbCtTauntMessage and KART.EbCtTauntMessage.SetText then
-            KART.EbCtTauntMessage:SetText(taunt.message or "Taunt: %t")
-        end
         if KART.EbCtTauntAsk and KART.EbCtTauntAsk.SetText then
             KART.EbCtTauntAsk:SetText(taunt.ask or "%n, please taunt!")
+        end
+        local a = taunt.alert or {}
+        setSlider(KART.SldCtAlertDuration, a.duration or 3)
+        setSlider(KART.SldCtAlertFontSize, a.fontSize or 24)
+        setChecked(KART.CbCtAlertEnabled, a.enabled == true)
+        setChecked(KART.CbCtAlertTest, a.testMode == true)
+        setChecked(KART.CbCtAlertOutline, a.outline ~= false)
+        if KART.BtnCtAlertFont and KART.BtnCtAlertFont.text then
+            local fontName = a.fontName or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
+            KART.BtnCtAlertFont.text:SetText((KART.L and KART.L.BTN_FONT_PREFIX or "Font: ") .. fontName)
+        end
+        if KART.CtAlertColorPreview and a.color then
+            local c = a.color
+            KART.CtAlertColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
         end
         local sl = taunt.swapLine or {}
         setSlider(KART.SldCtSwapDuration, sl.duration or 3)

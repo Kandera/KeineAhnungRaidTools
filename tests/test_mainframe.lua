@@ -43,6 +43,7 @@ do
     T.eq(rel, KART.RC.SettingsCard, "break pictures card sits under the RC card")
 end
 T.truthy(KART.SldCtSwapDuration, "Taunt Swap duration lives on the Co-Tank tab")
+T.truthy(KART.SldCtAlertDuration, "Taunt Alert duration lives on the Co-Tank tab")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
 -- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or
@@ -352,17 +353,10 @@ do
 end
 
 do
-    -- CoTankSettings chips call KAUI.Lighten on hover; that file had no LibStub, so the live
-    -- client threw as soon as the mouse entered Group / Dungeons / Raids.
-    local chip = KART.CbCtTauntOnlyGroup
-    T.truthy(chip and chip.GetScript, "taunt filter chips exist")
-    local ok, err = pcall(function()
-        As(function()
-            chip:GetScript("OnEnter")(chip)
-            chip:GetScript("OnLeave")(chip)
-        end)
-    end)
-    T.truthy(ok, "hovering a taunt filter chip does not error: " .. tostring(err))
+    -- The chat-announce card (filter chips + announce checkbox) was replaced by the taunt-alert
+    -- look card; both are gone from the Co-Tank settings tab now.
+    T.eq(KART.CbCtTauntOnlyGroup, nil, "announce filter chips are gone")
+    T.eq(KART.CbCtTauntAnnounce, nil, "announce checkbox is gone")
 end
 
 -- Keybinds -----------------------------------------------------------------------------------------

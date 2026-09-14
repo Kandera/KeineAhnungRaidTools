@@ -443,7 +443,7 @@ local PANEL_CONTENT_HEIGHTS = {
     [2] = 520, -- Raidlead: bar card + Keybinds heading + bind card
     [3] = 190, -- BuffCheck: one 160 card
     [4] = 780, -- Settings: interface + accent/profiles + addon versions + RC companion + break pictures
-    [6] = 1484, -- Co-Tank: preview + module + size + taunt/swap + swap-line settings
+    [6] = 1560, -- Co-Tank: preview + module + size + taunt/swap + alert + swap-line settings
     [7] = 558, -- Notes: enable (share+invite) + operator + import + boss list + share
 }
 function KART.UpdateScrollRange()

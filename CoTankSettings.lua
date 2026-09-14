@@ -1125,193 +1125,113 @@ local function CtTaunt()
     ct.taunt = ct.taunt or {}
     return ct.taunt
 end
-local function CtTauntChannels()
-    local t = CtTaunt()
-    t.channels = t.channels or {}
-    return t.channels
-end
 local function CtTauntChanged()
     if KART.CT and KART.CT.RefreshAskButton then KART.CT.RefreshAskButton() end
 end
 
+local function CtAlert()
+    local t = CtTaunt()
+    t.alert = t.alert or {}
+    local a = t.alert
+    a.color = a.color or { r = 1, g = 0.82, b = 0 }
+    if a.outline == nil then a.outline = true end
+    if a.duration == nil then a.duration = 3 end
+    if a.fontSize == nil then a.fontSize = 24 end
+    return a
+end
+local function CtAlertChanged()
+    if CT.RefreshAlertLine then CT.RefreshAlertLine() end
+    if CT.RefreshAlertWatcher then CT.RefreshAlertWatcher() end
+end
+
 local ctTauntTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctTauntTitle:SetPoint("TOPLEFT", ctRowCard, "BOTTOMLEFT", 0, -18)
-ctTauntTitle:SetText(L.LABEL_CT_TAUNT)
+ctTauntTitle:SetText(L.LABEL_CT_TAUNT_ALERT)
 KART.UI:RegisterLabel(ctTauntTitle)
 
 local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctTauntCard:SetPoint("TOPLEFT", ctTauntTitle, "BOTTOMLEFT", 0, -10)
-ctTauntCard:SetSize(500, 234)
+ctTauntCard:SetSize(500, 310)
 
-KART.CbCtTauntAnnounce = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtTauntAnnounce", label = L.SET_CT_TAUNT_ANNOUNCE,
-    store = CtTaunt, key = "announce", y = -32,
-    tooltip = L.DESC_CT_TAUNT_ANNOUNCE,
+KART.CbCtAlertEnabled = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtAlertEnabled", label = L.SET_CT_ALERT_ENABLED,
+    store = CtAlert, key = "enabled", y = -20,
+    tooltip = L.DESC_CT_ALERT_ENABLED,
+    onChanged = CtAlertChanged,
 })
-KART.CbCtTauntAnnounce.text:SetWidth(430)
-KART.CbCtTauntAnnounce.text:SetJustifyH("LEFT")
+KART.CbCtAlertEnabled.text:SetWidth(430)
+KART.CbCtAlertEnabled.text:SetJustifyH("LEFT")
 
--- Group / Dungeons / Raids: same packed ON/OFF chips as the channel row below.
-local tauntFilterHost = CreateFrame("Frame", nil, ctTauntCard)
-tauntFilterHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -54)
-tauntFilterHost:SetSize(460, 22)
+KART.CbCtAlertTest = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtAlertTest", label = L.SET_CT_ALERT_TEST,
+    store = CtAlert, key = "testMode", y = -54,
+    tooltip = L.DESC_CT_ALERT_TEST,
+    onChanged = CtAlertChanged,
+})
+KART.CbCtAlertTest.text:SetWidth(430)
+KART.CbCtAlertTest.text:SetJustifyH("LEFT")
 
-local ctTauntChanTitle = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-ctTauntChanTitle:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -82)
-ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS)
-KART.UI:RegisterLabel(ctTauntChanTitle)
+KART.SldCtAlertDuration = KART.UI:CreateSettingsSlider(ctTauntCard, {
+    name = "KART_CtAlertDurationSlider", label = L.SET_CT_ALERT_DURATION,
+    min = 1, max = 10, store = CtAlert, key = "duration", y = -88,
+    onChanged = CtAlertChanged,
+})
+KART.SldCtAlertFontSize = KART.UI:CreateSettingsSlider(ctTauntCard, {
+    name = "KART_CtAlertFontSizeSlider", label = L.SET_CT_ALERT_FONT_SIZE,
+    min = 12, max = 48, store = CtAlert, key = "fontSize", y = -128,
+    onChanged = CtAlertChanged,
+})
 
-local tauntChipHost = CreateFrame("Frame", nil, ctTauntCard)
-tauntChipHost:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -100)
-tauntChipHost:SetSize(460, 22)
-
-local function PaintTauntChip(btn, on)
-    local r, g, b = KART.UI:AccentColor()
-    if on then
-        btn:SetBackdropColor(r, g, b, 0.55)
-        btn:SetBackdropBorderColor(r, g, b, 1)
-        btn.text:SetTextColor(1, 1, 1)
-    else
-        btn:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
-        btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
-        btn.text:SetTextColor(0.55, 0.55, 0.55)
-    end
-end
-
-local function LayoutChipRow(chips, host)
-    local n = #chips
-    local gap, maxW, h = 4, 460, 22
-    local w = math.floor((maxW - gap * (n - 1)) / n)
-    local font = KART.UI.lastFont or "Fonts\\FRIZQT__.TTF"
-    for i, chip in ipairs(chips) do
-        chip:SetSize(w, h)
-        chip.text:SetFont(font, 9, "")
-        chip:ClearAllPoints()
-        chip:SetPoint("TOPLEFT", host, "TOPLEFT", (i - 1) * (w + gap), 0)
-    end
-    host:SetHeight(h)
-end
-
-local function CreateTauntToggleChip(label, readOn, toggle, tooltip)
-    local btn = KART.UI:CreateModernButton(ctTauntCard, label)
-    btn:SetHeight(22)
-    btn.tooltipText = tooltip
-    local function refresh()
-        if not KART_Settings then
-            btn.chipOn = false
-            PaintTauntChip(btn, false)
-            return
-        end
-        btn.chipOn = not not readOn()
-        PaintTauntChip(btn, btn.chipOn)
-    end
-    function btn:SetChecked(value)
-        self.chipOn = not not value
-        PaintTauntChip(self, self.chipOn)
-    end
-    function btn:GetChecked()
-        return self.chipOn
-    end
-    btn:SetScript("OnClick", function()
-        if not KART_Settings then return end
-        toggle()
-        refresh()
-    end)
-    btn:SetScript("OnEnter", function(self)
-        local r, g, b = KART.UI:AccentColor()
-        if self.chipOn then
-            local lr, lg, lb = KAUI.Lighten(r, g, b, 0.12)
-            self:SetBackdropColor(lr, lg, lb, 0.75)
+KART.BtnCtAlertFont = KART.UI:CreateModernButton(ctTauntCard, L.BTN_SELECT_FONT)
+KART.BtnCtAlertFont:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -174)
+KART.BtnCtAlertFont:SetSize(220, 22)
+KART.BtnCtAlertFont:SetScript("OnClick", function(self)
+    MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
+        rootDescription:CreateTitle(L.SET_CT_ALERT_FONT)
+        if LSM then
+            local fonts = LSM:List("font")
+            for _, name in ipairs(fonts) do
+                rootDescription:CreateButton(name, function()
+                    CtAlert().fontName = name
+                    self.text:SetText(L.BTN_FONT_PREFIX .. name)
+                    CtAlertChanged()
+                end)
+            end
         else
-            self:SetBackdropColor(0.18, 0.18, 0.18, 1)
-        end
-        if self.tooltipText then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(self.text:GetText() or "", 1, 1, 1)
-            GameTooltip:AddLine(self.tooltipText, nil, nil, nil, true)
-            GameTooltip:Show()
+            rootDescription:CreateButton("Friz Quadrata", function()
+                CtAlert().fontName = "Friz Quadrata"
+                self.text:SetText(L.BTN_FONT_PREFIX .. "Friz Quadrata")
+                CtAlertChanged()
+            end)
         end
     end)
-    btn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-        refresh()
-    end)
-    btn.Refresh = refresh
-    refresh()
-    return btn
-end
-
-local function FilterChipOn(key)
-    local t = CtTaunt()
-    if key == "onlyInGroup" then return t.onlyInGroup ~= false end
-    if key == "onlyInDungeon" then return CT.TauntWantsDungeon(t) end
-    if key == "onlyInRaid" then return CT.TauntWantsRaid(t) end
-    return false
-end
-
-local function CreateTauntFilterChip(label, key, tooltip)
-    return CreateTauntToggleChip(label, function()
-        return FilterChipOn(key)
-    end, function()
-        CtTaunt()[key] = not FilterChipOn(key)
-    end, tooltip)
-end
-
-local function CreateTauntChannelChip(label, key)
-    return CreateTauntToggleChip(label, function()
-        return CtTauntChannels()[key] == true
-    end, function()
-        local ch = CtTauntChannels()
-        ch[key] = not ch[key]
-    end)
-end
-
-KART.CbCtTauntOnlyGroup = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_GROUP, "onlyInGroup", L.DESC_CT_TAUNT_ONLY_GROUP)
-KART.CbCtTauntOnlyDungeon = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_DUNGEON, "onlyInDungeon", L.DESC_CT_TAUNT_ONLY_DUNGEON)
-KART.CbCtTauntOnlyRaid = CreateTauntFilterChip(L.SET_CT_TAUNT_ONLY_RAID, "onlyInRaid", L.DESC_CT_TAUNT_ONLY_RAID)
-KART.TauntFilterChips = {
-    KART.CbCtTauntOnlyGroup, KART.CbCtTauntOnlyDungeon, KART.CbCtTauntOnlyRaid,
-}
-
-KART.CbCtTauntWhisper = CreateTauntChannelChip(L.SET_CT_TAUNT_WHISPER, "WHISPER")
-KART.CbCtTauntGroup = CreateTauntChannelChip(L.SET_CT_TAUNT_GROUP, "GROUP")
-KART.CbCtTauntRW = CreateTauntChannelChip(L.SET_CT_TAUNT_RW, "RAID_WARNING")
-KART.CbCtTauntSay = CreateTauntChannelChip(L.SET_CT_TAUNT_SAY, "SAY")
-KART.CbCtTauntYell = CreateTauntChannelChip(L.SET_CT_TAUNT_YELL, "YELL")
-KART.TauntChannelChips = {
-    KART.CbCtTauntWhisper, KART.CbCtTauntGroup, KART.CbCtTauntRW,
-    KART.CbCtTauntSay, KART.CbCtTauntYell,
-}
-
-function KART.LayoutTauntFilterChips()
-    LayoutChipRow(KART.TauntFilterChips, tauntFilterHost)
-end
-function KART.LayoutTauntChannelChips()
-    -- One row of equal chips; wrapping left Yell on its own line and a hole on the right.
-    LayoutChipRow(KART.TauntChannelChips, tauntChipHost)
-end
-KART.LayoutTauntFilterChips()
-KART.LayoutTauntChannelChips()
-
-local ctTauntMsgLabel = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-ctTauntMsgLabel:SetPoint("TOPLEFT", tauntChipHost, "BOTTOMLEFT", 0, -12)
-ctTauntMsgLabel:SetText(L.SET_CT_TAUNT_MESSAGE)
-KART.UI:RegisterLabel(ctTauntMsgLabel)
-
-KART.EbCtTauntMessage = KART.UI:CreateStyledEditBox(ctTauntCard, "KART_CtTauntMessage")
-KART.EbCtTauntMessage:SetSize(460, 28)
-KART.EbCtTauntMessage:SetPoint("TOPLEFT", ctTauntMsgLabel, "BOTTOMLEFT", 0, -6)
-KART.EbCtTauntMessage:SetMaxLetters(200)
-KART.EbCtTauntMessage:SetScript("OnTextChanged", function(self)
-    CtTaunt().message = self:GetText()
 end)
 
-local ctTauntPlace = ctTauntCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-ctTauntPlace:SetPoint("TOPLEFT", KART.EbCtTauntMessage, "BOTTOMLEFT", 0, -6)
-ctTauntPlace:SetWidth(460)
-ctTauntPlace:SetJustifyH("LEFT")
-ctTauntPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS)
-KART.UI:RegisterLabel(ctTauntPlace)
+KART.BtnCtAlertColor = KART.UI:CreateModernButton(ctTauntCard, L.SET_CT_ALERT_COLOR)
+KART.BtnCtAlertColor:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -174)
+KART.BtnCtAlertColor:SetSize(180, 22)
+local function RefreshCtAlertColorPreview()
+    local c = CtAlert().color
+    KART.CtAlertColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
+end
+KART.BtnCtAlertColor:SetScript("OnClick", function()
+    CtPickColor(CtAlert().color, function()
+        RefreshCtAlertColorPreview()
+        CtAlertChanged()
+    end)
+end)
+KART.CtAlertColorPreview = ctTauntCard:CreateTexture(nil, "OVERLAY")
+KART.CtAlertColorPreview:SetSize(22, 22)
+KART.CtAlertColorPreview:SetPoint("LEFT", KART.BtnCtAlertColor, "RIGHT", 8, 0)
+RefreshCtAlertColorPreview()
+
+KART.CbCtAlertOutline = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtAlertOutline", label = L.SET_CT_ALERT_OUTLINE,
+    store = CtAlert, key = "outline", y = -206,
+    onChanged = CtAlertChanged,
+})
+KART.CbCtAlertOutline.text:SetWidth(430)
+KART.CbCtAlertOutline.text:SetJustifyH("LEFT")
 
 local ctAskTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctAskTitle:SetPoint("TOPLEFT", ctTauntCard, "BOTTOMLEFT", 0, -18)
@@ -1724,36 +1644,28 @@ KART.UI:RegisterLocaleRefresher(function()
     KART.BtnCtBuffGrowth.tooltipText = L.DESC_CT_AURA_GROWTH
     RefreshCtBuffAnchorBtn()
     RefreshCtBuffGrowthBtn()
-    if ctTauntTitle then ctTauntTitle:SetText(L.LABEL_CT_TAUNT) end
-    if ctTauntChanTitle then ctTauntChanTitle:SetText(L.SET_CT_TAUNT_CHANNELS) end
-    if ctTauntMsgLabel then ctTauntMsgLabel:SetText(L.SET_CT_TAUNT_MESSAGE) end
-    if ctTauntPlace then ctTauntPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS) end
+    if ctTauntTitle then ctTauntTitle:SetText(L.LABEL_CT_TAUNT_ALERT) end
     if ctAskTitle then ctAskTitle:SetText(L.LABEL_CT_TAUNT_ASK) end
     if ctAskMsgLabel then ctAskMsgLabel:SetText(L.SET_CT_TAUNT_ASK) end
     if ctAskPlace then ctAskPlace:SetText(L.SET_CT_TAUNT_PLACEHOLDERS) end
-    if KART.CbCtTauntAnnounce then
-        KART.CbCtTauntAnnounce.text:SetText(L.SET_CT_TAUNT_ANNOUNCE)
-        KART.CbCtTauntAnnounce.tooltipText = L.DESC_CT_TAUNT_ANNOUNCE
+    if KART.CbCtAlertEnabled then
+        KART.CbCtAlertEnabled.text:SetText(L.SET_CT_ALERT_ENABLED)
+        KART.CbCtAlertEnabled.tooltipText = L.DESC_CT_ALERT_ENABLED
     end
-    if KART.CbCtTauntOnlyGroup then
-        KART.CbCtTauntOnlyGroup.text:SetText(L.SET_CT_TAUNT_ONLY_GROUP)
-        KART.CbCtTauntOnlyGroup.tooltipText = L.DESC_CT_TAUNT_ONLY_GROUP
+    if KART.CbCtAlertTest then
+        KART.CbCtAlertTest.text:SetText(L.SET_CT_ALERT_TEST)
+        KART.CbCtAlertTest.tooltipText = L.DESC_CT_ALERT_TEST
     end
-    if KART.CbCtTauntOnlyDungeon then
-        KART.CbCtTauntOnlyDungeon.text:SetText(L.SET_CT_TAUNT_ONLY_DUNGEON)
-        KART.CbCtTauntOnlyDungeon.tooltipText = L.DESC_CT_TAUNT_ONLY_DUNGEON
+    if KART.SldCtAlertDuration then KART.SldCtAlertDuration.title:SetText(L.SET_CT_ALERT_DURATION) end
+    if KART.SldCtAlertFontSize then KART.SldCtAlertFontSize.title:SetText(L.SET_CT_ALERT_FONT_SIZE) end
+    if KART.BtnCtAlertColor then KART.BtnCtAlertColor.text:SetText(L.SET_CT_ALERT_COLOR) end
+    if KART.CbCtAlertOutline then KART.CbCtAlertOutline.text:SetText(L.SET_CT_ALERT_OUTLINE) end
+    if KART.BtnCtAlertFont and KART.BtnCtAlertFont.text then
+        local name = (KART_Settings and KART_Settings.ct and KART_Settings.ct.taunt
+            and KART_Settings.ct.taunt.alert and KART_Settings.ct.taunt.alert.fontName)
+            or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
+        KART.BtnCtAlertFont.text:SetText(L.BTN_FONT_PREFIX .. name)
     end
-    if KART.CbCtTauntOnlyRaid then
-        KART.CbCtTauntOnlyRaid.text:SetText(L.SET_CT_TAUNT_ONLY_RAID)
-        KART.CbCtTauntOnlyRaid.tooltipText = L.DESC_CT_TAUNT_ONLY_RAID
-    end
-    if KART.CbCtTauntWhisper then KART.CbCtTauntWhisper.text:SetText(L.SET_CT_TAUNT_WHISPER) end
-    if KART.CbCtTauntGroup then KART.CbCtTauntGroup.text:SetText(L.SET_CT_TAUNT_GROUP) end
-    if KART.CbCtTauntRW then KART.CbCtTauntRW.text:SetText(L.SET_CT_TAUNT_RW) end
-    if KART.CbCtTauntSay then KART.CbCtTauntSay.text:SetText(L.SET_CT_TAUNT_SAY) end
-    if KART.CbCtTauntYell then KART.CbCtTauntYell.text:SetText(L.SET_CT_TAUNT_YELL) end
-    if KART.LayoutTauntFilterChips then KART.LayoutTauntFilterChips() end
-    if KART.LayoutTauntChannelChips then KART.LayoutTauntChannelChips() end
     if KART.CbCtTauntButton then
         KART.CbCtTauntButton.text:SetText(L.SET_CT_TAUNT_BUTTON)
         KART.CbCtTauntButton.tooltipText = L.DESC_CT_TAUNT_BUTTON
