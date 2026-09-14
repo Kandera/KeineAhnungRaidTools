@@ -1761,6 +1761,30 @@ local function PublicString(value)
     return value
 end
 
+function CT.IsOwnSource(unit)
+    if not unit then return true end
+    if UnitIsUnit(unit, "player") then return true end
+    if UnitExists("pet") and UnitIsUnit(unit, "pet") then return true end
+    return false
+end
+
+function CT.AlertCasterLabel(sourceUnit)
+    if not sourceUnit or CT.IsSecret(sourceUnit) then return nil end
+    local name = PublicString(UnitName(sourceUnit))
+    if name == "" then return nil end
+    if UnitIsPlayer(sourceUnit) then return name end
+    local ownerGuid = UnitOwnerGUID and UnitOwnerGUID(sourceUnit)
+    if not ownerGuid or CT.IsSecret(ownerGuid) then return nil end
+    for _, u in ipairs(GroupUnits()) do
+        if UnitGUID(u) == ownerGuid then
+            local ownerName = PublicString(UnitName(u))
+            if ownerName == "" then return nil end
+            return ownerName .. " (" .. name .. ")"
+        end
+    end
+    return nil
+end
+
 function CT.IsTaunt(spellID)
     if spellID == nil or CT.IsSecret(spellID) then return false end
     return TAUNT_SPELLS[spellID] == true

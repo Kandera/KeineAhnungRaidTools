@@ -19,6 +19,7 @@ do
         "HostPreview", "ReleasePreview", "EnsurePreviewRow", "RefreshPreview",
         "SetPreviewState",
         "IsTaunt", "FormatTauntMessage", "ShouldAnnounce",
+        "IsOwnSource", "AlertCasterLabel",
         "Announce", "OnTauntCast", "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
@@ -600,6 +601,32 @@ do
     T.eq(UnitIsPlayer("raid2pet"), false, "pet is not a player")
     T.eq(UnitIsPlayer("raid2"), true, "raid member is a player")
     T.eq(UnitOwnerGUID("raid2pet"), "Player-1-BBBB", "pet owner guid")
+end
+
+do
+    RaidTwoTanks()
+    T.eq(KART.CT.IsOwnSource("raid1"), true, "player token is own")
+    T.eq(KART.CT.IsOwnSource("raid2"), false, "co-tank is not own")
+    KARTTEST.SetUnit("pet", {
+        name = "Mine", realm = KARTTEST.realm, guid = "Pet-1-MINE",
+        isPlayer = false, ownerGuid = "Player-1-AAAA",
+    })
+    T.eq(KART.CT.IsOwnSource("pet"), true, "player pet is own")
+    KARTTEST.SetUnit("raid2pet", {
+        name = "Fluffy", realm = KARTTEST.realm, guid = "Pet-1-CCCC",
+        isPlayer = false, ownerGuid = "Player-1-BBBB",
+    })
+    T.eq(KART.CT.IsOwnSource("raid2pet"), false, "other pet is not own")
+    T.eq(KART.CT.AlertCasterLabel("raid2"), "Other", "player caster is the name")
+    T.eq(KART.CT.AlertCasterLabel("raid2pet"), "Other (Fluffy)", "pet is owner plus pet")
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    KARTTEST.SetUnit("raid2pet", {
+        name = secret, realm = KARTTEST.realm, guid = "Pet-1-CCCC",
+        isPlayer = false, ownerGuid = "Player-1-BBBB",
+    })
+    T.eq(KART.CT.AlertCasterLabel("raid2pet"), nil, "secret pet name skips")
+    KARTTEST.secretValues[secret] = nil
 end
 
 do
