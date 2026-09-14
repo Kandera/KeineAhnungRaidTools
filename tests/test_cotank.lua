@@ -23,7 +23,7 @@ do
         "Ask", "CreateAskMacro",
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
-        "ShowAlertLine", "RefreshAlertLine", "EnsureAlertLine",
+        "ShowAlertLine", "RefreshAlertLine", "EnsureAlertLine", "HideAlertLine",
         "ShouldShowAlert", "OnUnitAura", "RefreshAlertWatcher",
         "BarPass", "AbsorbFill", "HealAbsorbSpan", "SyncStripUnits",
     }) do
@@ -810,10 +810,40 @@ do
 end
 
 do
+    AlertReady({ enabled = true, testMode = true })
+    env.KART_Settings.ctModuleEnabled = false
+    KART.editModeActive = true
+    KART.CT.RefreshAlertLine()
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "module off hides the sample even in edit mode")
+    KART.editModeActive = false
+end
+
+do
     AlertReady()
     KART.CT.ShowAlertLine("|cff00ff00hi|r", 355, "Boss")
     T.eq(KART.CT.alertLine.caster:GetText(), "||cff00ff00hi||r",
         "caster pipes are escaped")
+end
+
+-- ===== Module off hides the alert (CT.Disable) ==========================================
+do
+    AlertReady({ enabled = true, testMode = true })
+    KART.CT.RefreshAlertLine()
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(), "alert shown before module disable")
+    KART.CT.Disable()
+    T.eq(KART.CT.alertLine:IsShown(), false, "CT.Disable hides the alert line")
+    T.eq(KART.CT.alertLineTimer, nil, "CT.Disable cancels the alert timer")
+end
+
+do
+    AlertReady({ enabled = true, duration = 3 })
+    KART.CT.ShowAlertLine("Other", 355, "Boss")
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(), "alert shown before module disable")
+    KART.CT.Disable()
+    T.eq(KART.CT.alertLine:IsShown(), false, "CT.Disable hides a live (non-preview) alert too")
+    T.eq(KART.CT.alertLineTimer, nil, "CT.Disable cancels the live alert timer")
+    T.eq(KART.CT.lastAlertAuraId, nil, "CT.Disable clears the last-seen aura id")
 end
 
 -- ===== Taunt alert watcher (UNIT_AURA) ==================================================

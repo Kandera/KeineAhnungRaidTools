@@ -1547,6 +1547,7 @@ function CT.Disable()
     if CT.askBtn then
         CT.askBtn:Hide()
     end
+    CT.HideAlertLine()
 end
 
 function CT.SyncWidgets()
@@ -1714,9 +1715,7 @@ function CT.Enable()
     CT.RefreshAuraEngineNote()
 end
 
--- ===== Taunt announce / ask -----------------------------------------------------------
--- Only the player's own taunt is visible on this patch (instant casts are not announced
--- for other people). Spell IDs are game data.
+-- ===== Taunt ask / swap line -----------------------------------------------------------
 -- Patch-bound applied-aura IDs (GOOD_ENCHANTS class). Cast and aura both listed when they differ.
 local TAUNT_SPELLS = {
     [355] = true,      -- Warrior: Taunt
@@ -2114,6 +2113,14 @@ local function CancelAlertLineTimer()
     CT.alertLineTimer = nil
 end
 
+-- Module or alert off: events off, frame hidden, timer cancelled. Called from CT.Disable and
+-- from RefreshAlertLine so both paths land on the same clean state.
+function CT.HideAlertLine()
+    CancelAlertLineTimer()
+    CT.lastAlertAuraId = nil
+    if CT.alertLine then CT.alertLine:Hide() end
+end
+
 local function AlertLineColor()
     local c = AlertOpt("color")
     if type(c) ~= "table" then c = ALERT_LINE_DEFAULTS.color end
@@ -2228,9 +2235,11 @@ function CT.StyleAlertLine()
 end
 
 function CT.RefreshAlertLine()
-    if AlertOpt("enabled") == false then
-        CancelAlertLineTimer()
-        if CT.alertLine then CT.alertLine:Hide() end
+    local s = KART_Settings
+    if not s or s.ctModuleEnabled ~= true or AlertOpt("enabled") == false then
+        -- Module off hides even in Edit Mode: unlike CT_ASK, the alert has no reason to
+        -- survive module-off, so it never falls through to the preview branch below.
+        CT.HideAlertLine()
         return
     end
     local preview = AlertPreviewing()
@@ -2301,8 +2310,8 @@ function CT.ShouldShowAlert()
 end
 
 function CT.OnUnitAura(unit, updateInfo)
-    if not CT.ShouldShowAlert() then return end
     if not ALERT_UNITS[unit] then return end
+    if not CT.ShouldShowAlert() then return end
     if not updateInfo then return end
     local added = updateInfo.addedAuras
     if not added then return end
