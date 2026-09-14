@@ -482,7 +482,7 @@ KART.L_deDE = {
     SET_CT_SWAP_SOUND_OFF = "Aus",
     SET_CT_SWAP_SOUND_WARNING = "Warnung",
     SET_CT_SWAP_SOUND_READY = "Ready Check",
-    CT_TAUNT_ALERT_VERB = "Provoziert",
+    CT_TAUNT_ALERT_VERB = "hat getaunt",
 
     -- WoWUtils Import
     TAB_WOWUTILS           = "WoWUtils",
