@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.4.0] - 2026-09-20
 ### Hinzugefügt
 - **Eine Taunt-Anzeige** zeigt ein Taunt-Symbol auf deinem Ziel oder einem Boss, mit Größenregler.
 - **Die Taunt-Anzeige kann deinen eigenen Taunt ausblenden.**
@@ -18,9 +20,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Der Co-Tank-Tab wirft beim Laden keinen Fehler mehr.**
 - **Die Taunt-Anzeige wirft keinen Fehler mehr, wenn sich eine Boss-Aura ändert.**
 - **Die Taunt-Anzeige wirft keinen Fehler mehr, wenn die Spellcast-Unit geheim ist (z. B. targettarget).**
-- **Die Taunt-Anzeige ist ein Symbol auf dem Bildschirm, mit Größenregler.**
 - **Die Taunt-Anzeige zeigt nur das Taunt-Icon, keine anderen Auren auf dem Boss.**
-- **Die Taunt-Anzeige erscheint wieder, wenn ein Taunt auf deinem Ziel oder einem Boss liegt.**
 - **Die Taunt-Anzeige erscheint auf deinem Ziel oder einem Boss, ohne dass der andere Tank KART braucht.**
 
 ## [4.3.0] - 2026-09-04
@@ -934,7 +934,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
+[4.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.0.0...v4.0.1
