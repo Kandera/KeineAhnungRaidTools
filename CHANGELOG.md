@@ -8,9 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- **A Taunt Alert line** shows who taunted your target or a boss, with its own look settings.
+- **A Taunt Alert symbol** shows a taunt on your target or a boss, with a size slider.
+- **The Taunt Alert can hide your own taunt.**
 - **Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.
 - **Invite online guild members by rank** from the Automation tab. Select one or more ranks, then confirm the invite.
+
+### Fixed
+- **The Co-Tank tab no longer errors as the addon loads.**
+- **The Taunt Alert no longer errors when a boss aura updates.**
+- **The Taunt Alert no longer errors when a spellcast unit is secret (for example targettarget).**
+- **Taunt Alert is an on-screen symbol with a size slider.**
+- **The Taunt Alert shows only the taunt icon, not other auras on the boss.**
+- **The Taunt Alert shows again when a taunt is on your target or a boss.**
+- **The Taunt Alert shows a taunt on your target or a boss without the other tank needing KART.**
 
 ## [4.3.0] - 2026-09-04
 ### Added

@@ -43,7 +43,8 @@ do
     T.eq(rel, KART.RC.SettingsCard, "break pictures card sits under the RC card")
 end
 T.truthy(KART.SldCtSwapDuration, "Taunt Swap duration lives on the Co-Tank tab")
-T.truthy(KART.SldCtAlertDuration, "Taunt Alert duration lives on the Co-Tank tab")
+T.truthy(KART.SldCtAlertFontSize, "Taunt Alert icon size lives on the Co-Tank tab")
+T.truthy(KART.CbCtAlertHideOwn, "Taunt Alert hide-own lives on the Co-Tank tab")
 
 -- The locale refreshers, run the way Core.lua runs them: on load, and again whenever the language
 -- is switched. Each one re-labels its widgets by hand, so it goes stale silently -- a renamed or
@@ -320,6 +321,7 @@ end
 
 do
     -- Swap-line color preview and sound chips paint at file load, before ADDON_LOADED.
+    -- Taunt Alert color preview does the same via CtAlert().
     local saved = me.env.KART_Settings
     me.env.KART_Settings = nil
     local ok, err = pcall(function()

@@ -220,8 +220,16 @@ KART.InGameChangelog = {
     {
         version = "Unreleased",
         entries = {
-            "**A Taunt Alert line** shows who taunted your target or a boss, with its own look settings.",
+            "**A Taunt Alert symbol** shows a taunt on your target or a boss, with a size slider.",
+            "**The Taunt Alert can hide your own taunt.**",
             "**Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.",
+            "**The Co-Tank tab no longer errors as the addon loads.**",
+            "**The Taunt Alert no longer errors when a boss aura updates.**",
+            "**The Taunt Alert no longer errors when a spellcast unit is secret (for example targettarget).**",
+            "**Taunt Alert is an on-screen symbol with a size slider.**",
+            "**The Taunt Alert shows only the taunt icon, not other auras on the boss.**",
+            "**The Taunt Alert shows again when a taunt is on your target or a boss.**",
+            "**The Taunt Alert shows a taunt on your target or a boss without the other tank needing KART.**",
         },
     },
     {
@@ -653,10 +661,11 @@ KART.Defaults = {
             },
             alert = {
                 enabled = false,
-                fontSize = 24,
+                fontSize = 48,
                 duration = 3,
                 outline = true,
                 testMode = false,
+                hideOwn = true,
                 fontName = nil,
                 color = { r = 1, g = 0.82, b = 0 },
                 point = "CENTER", relativePoint = "CENTER", x = 0, y = 160,

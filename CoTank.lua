@@ -30,8 +30,9 @@ end
 -- ===== Co-tank picker ---------------------------------------------------------------------
 function CT.PickCoTank()
     for _, unit in ipairs(GroupUnits()) do
-        if UnitExists(unit) and UnitGroupRolesAssigned(unit) == "TANK"
-            and not UnitIsUnit(unit, "player") then
+        if CT.SafeTruthy(UnitExists(unit), false)
+            and UnitGroupRolesAssigned(unit) == "TANK"
+            and not CT.SafeTruthy(UnitIsUnit(unit, "player"), true) then
             return unit
         end
     end
@@ -1328,7 +1329,8 @@ function CT.Paint(snap, row)
     local tb = Nested(ct, "targetBorder", TARGET_BORDER_DEFAULTS)
     -- Preview and test mode cannot target Testtank, so they demo the border whenever it is on.
     local demo = row == CT.previewRow or CT.Invented()
-    local targeted = tb.show and (demo or (CT.watchedUnit and UnitIsUnit("target", CT.watchedUnit)))
+    local targeted = tb.show and (demo or (CT.watchedUnit
+        and CT.SafeTruthy(UnitIsUnit("target", CT.watchedUnit), false)))
     local tr, tg, tbcol = ColorRGB(tb.color, TARGET_BORDER_DEFAULTS.color)
     StyleEdgeSet(row.targetEdges, tb.size or TARGET_BORDER_DEFAULTS.size, tr, tg, tbcol, targeted and true or false)
 
@@ -1347,8 +1349,9 @@ local ROW_UNIT_EVENTS = {
 
 function CT.EventUnitMatchesWatched(eventUnit)
     if not CT.watchedUnit or not eventUnit then return false end
-    if UnitIsUnit(eventUnit, CT.watchedUnit) then return true end
-    if UnitIsUnit(eventUnit, "player") and UnitIsUnit(CT.watchedUnit, "player") then
+    if CT.SafeTruthy(UnitIsUnit(eventUnit, CT.watchedUnit), false) then return true end
+    if CT.SafeTruthy(UnitIsUnit(eventUnit, "player"), false)
+        and CT.SafeTruthy(UnitIsUnit(CT.watchedUnit, "player"), false) then
         return true
     end
     return false
@@ -1428,6 +1431,7 @@ function CT.Refresh()
     CT.pendingHide = nil
     if combat and not CT.row then
         CT.RefreshPreview()
+        CT.RefreshAlertLine()
         return
     end
     local row = CT.EnsureRow()
@@ -1528,6 +1532,7 @@ function CT.Disable()
             CT.events:UnregisterEvent(event)
         end
         CT.events:UnregisterEvent("UNIT_AURA")
+        CT.events:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         CT.events:UnregisterEvent("PLAYER_REGEN_ENABLED")
     end
     if CT.row then
@@ -1651,19 +1656,10 @@ function CT.SyncWidgets()
             KART.EbCtTauntAsk:SetText(taunt.ask or "%n, please taunt!")
         end
         local a = taunt.alert or {}
-        setSlider(KART.SldCtAlertDuration, a.duration or 3)
-        setSlider(KART.SldCtAlertFontSize, a.fontSize or 24)
+        setSlider(KART.SldCtAlertFontSize, a.fontSize or 48)
         setChecked(KART.CbCtAlertEnabled, a.enabled == true)
+        setChecked(KART.CbCtAlertHideOwn, a.hideOwn ~= false)
         setChecked(KART.CbCtAlertTest, a.testMode == true)
-        setChecked(KART.CbCtAlertOutline, a.outline ~= false)
-        if KART.BtnCtAlertFont and KART.BtnCtAlertFont.text then
-            local fontName = a.fontName or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
-            KART.BtnCtAlertFont.text:SetText((KART.L and KART.L.BTN_FONT_PREFIX or "Font: ") .. fontName)
-        end
-        if KART.CtAlertColorPreview and a.color then
-            local c = a.color
-            KART.CtAlertColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
-        end
         local sl = taunt.swapLine or {}
         setSlider(KART.SldCtSwapDuration, sl.duration or 3)
         setSlider(KART.SldCtSwapFontSize, sl.fontSize or 24)
@@ -1703,6 +1699,8 @@ function CT.Enable()
                 CT.Refresh()
             elseif event == "UNIT_AURA" then
                 CT.OnUnitAura(...)
+            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+                CT.OnSpellcastSucceeded(...)
             end
         end)
         CT.events = f
@@ -1759,9 +1757,20 @@ local function PublicString(value)
 end
 
 function CT.IsOwnSource(unit)
-    if not unit then return true end
-    if UnitIsUnit(unit, "player") then return true end
-    if UnitExists("pet") and UnitIsUnit(unit, "pet") then return true end
+    if not unit or CT.IsSecret(unit) then return true end
+    -- UnitIsUnit is a secret boolean on tokens like targettarget in combat (12.1).
+    -- Unknown is treated as own so we do not toast ourselves.
+    if CT.SafeTruthy(UnitIsUnit(unit, "player"), true) then return true end
+    if CT.SafeTruthy(UnitIsUnit(unit, "pet"), true) then return true end
+    return false
+end
+
+-- Aura sourceUnit is often secret in combat. Unknown is not own: skipping
+-- unknown would hide the co-tank's taunt, which is the whole alert.
+local function IsDefinitelyOwn(unit)
+    if not unit or CT.IsSecret(unit) then return false end
+    if CT.SafeTruthy(UnitIsUnit(unit, "player"), false) then return true end
+    if CT.SafeTruthy(UnitIsUnit(unit, "pet"), false) then return true end
     return false
 end
 
@@ -1769,7 +1778,7 @@ function CT.AlertCasterLabel(sourceUnit)
     if not sourceUnit or CT.IsSecret(sourceUnit) then return nil end
     local name = PublicString(UnitName(sourceUnit))
     if name == "" then return nil end
-    if UnitIsPlayer(sourceUnit) then return name end
+    if CT.SafeTruthy(UnitIsPlayer(sourceUnit), false) then return name end
     local ownerGuid = UnitOwnerGUID and UnitOwnerGUID(sourceUnit)
     if not ownerGuid or CT.IsSecret(ownerGuid) then return nil end
     for _, u in ipairs(GroupUnits()) do
@@ -2080,10 +2089,11 @@ end
 -- ===== Taunt alert line ---------------------------------------------------------------------
 local ALERT_LINE_DEFAULTS = {
     enabled = false,
-    fontSize = 24,
+    fontSize = 48,
     duration = 3,
     outline = true,
     testMode = false,
+    hideOwn = true,
     color = { r = 1, g = 0.82, b = 0 },
     point = "CENTER", relativePoint = "CENTER", x = 0, y = 160,
 }
@@ -2101,6 +2111,23 @@ local function AlertOpt(key)
     return ALERT_LINE_DEFAULTS[key]
 end
 
+local function AlertIconSize()
+    local size = tonumber(AlertOpt("fontSize")) or ALERT_LINE_DEFAULTS.fontSize
+    if size < 16 then size = 16 end
+    if size > 96 then size = 96 end
+    return size
+end
+
+local function AlertSpellTexture(spellID)
+    local fallback = 132270
+    if not spellID or CT.IsSecret(spellID) then return fallback end
+    local fn = C_Spell and C_Spell.GetSpellTexture
+    if not fn then return fallback end
+    local ok, tex = pcall(fn, spellID)
+    if ok and tex then return tex end
+    return fallback
+end
+
 local function AlertPreviewing()
     if KART.IsEditModeActive and KART.IsEditModeActive() then return true end
     return AlertOpt("testMode") == true
@@ -2113,18 +2140,25 @@ local function CancelAlertLineTimer()
     CT.alertLineTimer = nil
 end
 
+-- Park alert AuraContainers (module off / test mode). Frames cannot be destroyed.
+local function HideAlertAuras(f)
+    local strips = f and f.auras
+    if not strips then return end
+    for i = 1, #strips do
+        local strip = strips[i]
+        if strip.SetEnabled then pcall(strip.SetEnabled, strip, false) end
+        if strip.Hide then pcall(strip.Hide, strip) end
+    end
+end
+
 -- Module or alert off: events off, frame hidden, timer cancelled. Called from CT.Disable and
 -- from RefreshAlertLine so both paths land on the same clean state.
 function CT.HideAlertLine()
     CancelAlertLineTimer()
     CT.lastAlertAuraId = nil
-    if CT.alertLine then CT.alertLine:Hide() end
-end
-
-local function AlertLineColor()
-    local c = AlertOpt("color")
-    if type(c) ~= "table" then c = ALERT_LINE_DEFAULTS.color end
-    return c.r or 1, c.g or 0.82, c.b or 0
+    local f = CT.alertLine
+    HideAlertAuras(f)
+    if f then f:Hide() end
 end
 
 local function AlertLineSafeText(msg)
@@ -2137,6 +2171,7 @@ function CT.EnsureAlertLine()
     if f and f.GetWidth then return f end
     f = CreateFrame("Frame", "KART_TauntAlert", UIParent)
     f:SetSize(400, 32)
+    if f.SetFrameStrata then f:SetFrameStrata("HIGH") end
     f:SetMovable(true)
     f:RegisterForDrag("LeftButton")
     if f.SetClampedToScreen then f:SetClampedToScreen(true) end
@@ -2180,45 +2215,181 @@ function CT.EnsureAlertLine()
     return f
 end
 
+-- One AuraContainer per unit: SetUnit is singular, so target plus boss1-8.
+local ALERT_AURA_UNITS = {
+    "target",
+    "boss1", "boss2", "boss3", "boss4",
+    "boss5", "boss6", "boss7", "boss8",
+}
+
+function CT.AlertWatchUnits()
+    return ALERT_AURA_UNITS
+end
+
+function CT.AlertHideOwn()
+    return AlertOpt("hideOwn") ~= false
+end
+
+function CT.AlertAuraFilterString()
+    -- HARMFUL on an enemy: includeSpellIDs is applied (identity gate).
+    -- PLAYER would keep only the player's own taunt. !PLAYER drops it.
+    if CT.AlertHideOwn() then
+        return "HARMFUL|!PLAYER"
+    end
+    return "HARMFUL"
+end
+
+function CT.AlertAuraFilters()
+    local ids = {}
+    for id in pairs(TAUNT_SPELLS) do
+        ids[id] = true
+    end
+    return { includeSpellIDs = ids, excludeSpellIDs = {} }
+end
+
+local function AlertStripCfg()
+    local size = AlertIconSize()
+    return {
+        size = size, spacing = 0, swipe = false, countdown = false, stacks = false,
+        max = 1, perRow = 1, anchor = "CENTER",
+    }
+end
+
+local function AlertUnitExists(unit)
+    if not unit then return false end
+    local ok, exists = pcall(UnitExists, unit)
+    if not ok or CT.IsSecret(exists) then return true end
+    return exists == true
+end
+
+-- NSRT AuraTracking path: CustomAuraContainer, group before SetUnit, spell-ID
+-- map on AddAuraGroup. Blizzard paints; Lua never reads the caster.
+local function EnsureAlertAuras()
+    local f = CT.EnsureAlertLine()
+    if f.auras then return f.auras end
+    if InCombatLockdown() then return nil end
+    if not EnsureAuraAddon() then return nil end
+    if f.SetClipsChildren then f:SetClipsChildren(false) end
+    local methods, dirs = _G.AuraContainerSortMethod, _G.AuraContainerSortDirection
+    local sortMethod, sortDirection
+    if type(methods) == "table" then
+        sortMethod = methods.Default or methods.AuraInstanceIDOnly or methods.ExpirationOnly
+    end
+    if type(dirs) == "table" then
+        sortDirection = dirs.Normal
+    end
+    local cfg = AlertStripCfg()
+    local filters = CT.AlertAuraFilters()
+    local out = {}
+    for i = 1, #ALERT_AURA_UNITS do
+        local unit = ALERT_AURA_UNITS[i]
+        local ok, strip = pcall(CreateFrame, "AuraContainer", nil, f, AURA_TEMPLATE)
+        if ok and AuraEngineFrame(strip) then
+            strip.isAuraEngine = true
+            pcall(strip.EnableMouse, strip, false)
+            if strip.SetClipsChildren then strip:SetClipsChildren(false) end
+            local added = pcall(function()
+                strip:AddAuraGroup("taunt", CT.AlertAuraFilterString(), {
+                    maxFrameCount = 1,
+                    sortMethod = sortMethod,
+                    sortDirection = sortDirection,
+                    candidateFilters = filters,
+                    layout = AuraGroupLayout(cfg),
+                    initializeFrame = function(button)
+                        pcall(SkinAuraButton, button, AlertStripCfg())
+                    end,
+                })
+            end)
+            if added then
+                strip._alertUnit = unit
+                out[#out + 1] = strip
+            end
+        end
+    end
+    if #out == 0 then return nil end
+    f.auras = out
+    return out
+end
+
+local function PlaceAlertAura(show)
+    local f = CT.alertLine
+    local strips = f and f.auras
+    if show then strips = EnsureAlertAuras() end
+    if not strips then return end
+    if not show then
+        HideAlertAuras(f)
+        return
+    end
+    local cfg = AlertStripCfg()
+    local size = cfg.size
+    local filters = CT.AlertAuraFilters()
+    local layout = AuraGroupLayout(cfg)
+    local filterString = CT.AlertAuraFilterString()
+    for i = 1, #strips do
+        local strip = strips[i]
+        local unit = strip._alertUnit
+        local live = AlertUnitExists(unit)
+        strip:SetSize(size, size)
+        strip:ClearAllPoints()
+        strip:SetPoint("CENTER", f, "CENTER")
+        pcall(ApplyStripFlow, strip, cfg)
+        if strip.SetAuraGroupFilterString then
+            pcall(strip.SetAuraGroupFilterString, strip, "taunt", filterString)
+        end
+        if strip.SetAuraGroupLayout then
+            pcall(strip.SetAuraGroupLayout, strip, "taunt", layout)
+        end
+        if strip.SetAuraGroupCandidateFilters then
+            pcall(strip.SetAuraGroupCandidateFilters, strip, "taunt", filters)
+        end
+        if strip.SetAuraGroupMaxFrameCount then
+            pcall(strip.SetAuraGroupMaxFrameCount, strip, "taunt", 1)
+            -- Leftover groups from the two-group hideOwn build. Frames cannot be
+            -- destroyed; park them so they cannot paint non-taunt HARMFUL auras.
+            pcall(strip.SetAuraGroupMaxFrameCount, strip, "tauntAll", 0)
+            pcall(strip.SetAuraGroupMaxFrameCount, strip, "tauntOthers", 0)
+        end
+        if live and strip.SetUnit then
+            pcall(strip.SetUnit, strip, unit)
+        end
+        if strip.SetEnabled then pcall(strip.SetEnabled, strip, live) end
+        if live then
+            strip:Show()
+            if strip.UpdateAllAuras then pcall(strip.UpdateAllAuras, strip) end
+        else
+            strip:Hide()
+        end
+    end
+end
+
+local function AlertUsesEngine()
+    local f = CT.alertLine
+    return f and f.auras and #f.auras > 0
+end
+
+local function SetAlertChromeShown(f, shown)
+    local vis = shown and "Show" or "Hide"
+    if f.caster then f.caster[vis](f.caster) end
+    if f.verb then f.verb[vis](f.verb) end
+    if f.icon then f.icon[vis](f.icon) end
+    if f.target then f.target[vis](f.target) end
+end
+
 function CT.StyleAlertLine()
     local f = CT.EnsureAlertLine()
-    local size = tonumber(AlertOpt("fontSize")) or ALERT_LINE_DEFAULTS.fontSize
-    if size < 12 then size = 12 end
-    if size > 48 then size = 48 end
-    local outline = AlertOpt("outline")
-    if outline == nil then outline = true end
-    local flags = outline ~= false and "OUTLINE" or ""
-    local cfg = AlertCfg()
-    local fontName = cfg.fontName
-    if not fontName and KART_Settings then fontName = KART_Settings.fontName end
-    local path = "Fonts\\FRIZQT__.TTF"
-    local ui = KART.UI
-    if ui and ui.GetFontPath then
-        path = ui:GetFontPath(fontName) or path
-    end
-    if f.caster.SetFont then f.caster:SetFont(path, size, flags) end
-    if f.verb.SetFont then f.verb:SetFont(path, size, flags) end
-    if f.target.SetFont then f.target:SetFont(path, size, flags) end
-    f.caster:SetTextColor(AlertLineColor())
-    f.verb:SetTextColor(AlertLineColor())
-    f.target:SetTextColor(AlertLineColor())
+    local size = AlertIconSize()
     f.icon:SetSize(size, size)
 
-    local pad = 8
-    local casterW = (f.caster.GetStringWidth and f.caster:GetStringWidth()) or 0
-    local verbW = (f.verb.GetStringWidth and f.verb:GetStringWidth()) or 0
-    local targetW = (f.target.GetStringWidth and f.target:GetStringWidth()) or 0
-    local w = math.max(200, casterW + pad + verbW + pad + size + pad + targetW + pad * 2)
-    f:SetSize(w, size + 8)
+    f:SetSize(size, size)
 
     f.caster:ClearAllPoints()
-    f.caster:SetPoint("LEFT", f, "LEFT", pad, 0)
+    f.caster:SetPoint("CENTER", f, "CENTER")
     f.verb:ClearAllPoints()
-    f.verb:SetPoint("LEFT", f.caster, "RIGHT", pad, 0)
+    f.verb:SetPoint("CENTER", f, "CENTER")
     f.icon:ClearAllPoints()
-    f.icon:SetPoint("LEFT", f.verb, "RIGHT", pad, 0)
+    f.icon:SetPoint("CENTER", f, "CENTER")
     f.target:ClearAllPoints()
-    f.target:SetPoint("LEFT", f.icon, "RIGHT", pad, 0)
+    f.target:SetPoint("CENTER", f, "CENTER")
 
     local point = AlertOpt("point")
     local rel = AlertOpt("relativePoint")
@@ -2243,24 +2414,46 @@ function CT.RefreshAlertLine()
         return
     end
     local preview = AlertPreviewing()
-    if not preview and not (CT.alertLine and CT.alertLine:IsShown() and CT.alertLineTimer) then
-        if CT.alertLine then CT.alertLine:Hide() end
-        return
-    end
+    local named = CT.alertLineTimer ~= nil
     local f = CT.StyleAlertLine()
     if preview then
         CancelAlertLineTimer()
-        local verb = (KART.L and KART.L.CT_TAUNT_ALERT_VERB) or "Taunted"
-        f.caster:SetText(AlertLineSafeText("Tank (Pet)"))
-        f.verb:SetText(verb)
-        f.icon:SetTexture((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(355)) or 132270)
-        f.target:SetText(AlertLineSafeText("Boss"))
-        CT.StyleAlertLine()
+        HideAlertAuras(f)
+        SetAlertChromeShown(f, false)
+        local size = AlertIconSize()
+        f.icon:SetTexture(AlertSpellTexture(355))
+        f.icon:SetSize(size, size)
+        f.icon:ClearAllPoints()
+        f.icon:SetPoint("CENTER", f, "CENTER")
+        f.icon:Show()
+        f:SetSize(size, size)
         f:Show()
         if KART.IsEditModeActive and KART.IsEditModeActive() and KART.RefreshEditModeChrome then
             KART.RefreshEditModeChrome()
         end
+        return
     end
+    -- Live: AuraContainer paints only includeSpellIDs taunts. No name line.
+    SetAlertChromeShown(f, false)
+    local strips = EnsureAlertAuras()
+    if strips then
+        f:Show()
+        PlaceAlertAura(true)
+        return
+    end
+    local liveSpell = CT.FindAlertTauntSpell()
+    if liveSpell then
+        f.icon:SetTexture(AlertSpellTexture(liveSpell))
+        f.icon:Show()
+        f:Show()
+        return
+    end
+    if named then
+        f.icon:Show()
+        f:Show()
+        return
+    end
+    f:Hide()
 end
 
 function CT.ShowAlertLine(casterLabel, spellID, targetName)
@@ -2269,36 +2462,41 @@ function CT.ShowAlertLine(casterLabel, spellID, targetName)
         if CT.alertLine then CT.alertLine:Hide() end
         return
     end
+    if AlertPreviewing() then
+        CT.RefreshAlertLine()
+        return
+    end
+    if AlertUsesEngine() then return end
     local f = CT.StyleAlertLine()
     local verb = (KART.L and KART.L.CT_TAUNT_ALERT_VERB) or "Taunted"
     f.caster:SetText(AlertLineSafeText(casterLabel))
     f.verb:SetText(verb)
-    f.icon:SetTexture((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID)) or 132270)
+    f.icon:SetTexture(AlertSpellTexture(spellID))
     f.target:SetText(AlertLineSafeText(targetName))
     CT.StyleAlertLine()
+    HideAlertAuras(f)
+    SetAlertChromeShown(f, false)
+    f.icon:Show()
     f:Show()
     if AlertPreviewing() then return end
     CancelAlertLineTimer()
-    local dur = tonumber(AlertOpt("duration")) or ALERT_LINE_DEFAULTS.duration
-    if dur < 1 then dur = 1 end
-    if dur > 10 then dur = 10 end
+    local dur = ALERT_LINE_DEFAULTS.duration
     if C_Timer and C_Timer.NewTimer then
         CT.alertLineTimer = C_Timer.NewTimer(dur, function()
             CT.alertLineTimer = nil
             if AlertPreviewing() then return end
-            if CT.alertLine then CT.alertLine:Hide() end
+            CT.RefreshAlertLine()
         end)
     end
 end
 
 -- ===== Taunt alert watcher -------------------------------------------------------------
--- Driven by UNIT_AURA on a short allowlist of units: the current target and boss frames. No
--- combat log: applied-aura events are enough to catch a taunt without the volume of CLEU.
-local ALERT_UNITS = {
-    target = true,
-    boss1 = true, boss2 = true, boss3 = true, boss4 = true,
-    boss5 = true, boss6 = true, boss7 = true, boss8 = true,
-}
+-- Live icon: AuraContainer on target and boss1-8 (NS aura-list path).
+-- UNIT_AURA / spellcast fill the Texture only when the engine is missing.
+local ALERT_UNITS = {}
+for i = 1, #ALERT_AURA_UNITS do
+    ALERT_UNITS[ALERT_AURA_UNITS[i]] = true
+end
 
 function CT.ShouldShowAlert()
     local s = KART_Settings
@@ -2309,35 +2507,99 @@ function CT.ShouldShowAlert()
     return true
 end
 
-function CT.OnUnitAura(unit, updateInfo)
-    if not ALERT_UNITS[unit] then return end
-    if not CT.ShouldShowAlert() then return end
-    if not updateInfo then return end
-    local added = updateInfo.addedAuras
-    if not added then return end
-    for _, aura in ipairs(added) do
-        if CT.IsTaunt(aura.spellId) and not CT.IsOwnSource(aura.sourceUnit) then
-            local casterLabel = CT.AlertCasterLabel(aura.sourceUnit)
-            if casterLabel then
-                local targetName = PublicString(UnitName(unit))
-                if targetName ~= "" then
-                    local id = aura.auraInstanceID
-                    if id == nil or id ~= CT.lastAlertAuraId then
-                        CT.lastAlertAuraId = id
-                        CT.ShowAlertLine(casterLabel, aura.spellId, targetName)
-                    end
+local function AlertDestName(casterUnit)
+    local tokens = { "target", "boss1", "boss2", "boss3", "boss4", "boss5", "boss6", "boss7", "boss8" }
+    if casterUnit and not CT.IsSecret(casterUnit) then
+        tokens[1] = casterUnit .. "target"
+        tokens[#tokens + 1] = "target"
+    end
+    for i = 1, #tokens do
+        local n = PublicString(UnitName(tokens[i]))
+        if n ~= "" then return n end
+    end
+    return ""
+end
+
+local function ConsiderAlertAura(unit, aura)
+    if not aura or CT.IsSecret(aura) then return end
+    if not CT.IsTaunt(aura.spellId) then return end
+    if CT.AlertHideOwn() and IsDefinitelyOwn(aura.sourceUnit) then return end
+    -- Names are often secret in combat; the icon does not need them.
+    local casterLabel = CT.AlertCasterLabel(aura.sourceUnit) or ""
+    local targetName = PublicString(UnitName(unit))
+    local id = aura.auraInstanceID
+    if not CT.IsSecret(id) and id ~= nil and id == CT.lastAlertAuraId then return end
+    if not CT.IsSecret(id) then CT.lastAlertAuraId = id end
+    CT.ShowAlertLine(casterLabel, aura.spellId, targetName)
+end
+
+function CT.FindAlertTauntSpell()
+    local fn = C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID
+    if not fn then return nil end
+    for i = 1, #ALERT_AURA_UNITS do
+        local unit = ALERT_AURA_UNITS[i]
+        for spellID in pairs(TAUNT_SPELLS) do
+            local ok, aura = pcall(fn, unit, spellID)
+            if ok and aura ~= nil then
+                local source
+                if type(aura) == "table" and not CT.IsSecret(aura) then
+                    local okSource, value = pcall(function() return aura.sourceUnit end)
+                    if okSource then source = value end
+                end
+                if not (CT.AlertHideOwn() and IsDefinitelyOwn(source)) then
+                    return spellID, source, unit
                 end
             end
         end
     end
+    return nil
+end
+
+function CT.OnUnitAura(unit, updateInfo)
+    if not ALERT_UNITS[unit] then return end
+    if not CT.ShouldShowAlert() then return end
+    if AlertUsesEngine() then return end
+    -- 12.1: addedAuras is a secret table in combat; ipairs throws ("got secret").
+    -- Full updates omit addedAuras — still scan known taunt IDs.
+    if updateInfo and not CT.IsSecret(updateInfo) then
+        local added = updateInfo.addedAuras
+        if type(added) == "table" and not CT.IsSecret(added) then
+            pcall(function()
+                for _, aura in ipairs(added) do
+                    ConsiderAlertAura(unit, aura)
+                end
+            end)
+        end
+    end
+    if CT.alertLine and CT.alertLine:IsShown() then return end
+    local spellID, source, foundUnit = CT.FindAlertTauntSpell()
+    if spellID then
+        CT.ShowAlertLine(CT.AlertCasterLabel(source) or "", spellID, PublicString(UnitName(foundUnit or unit)))
+    end
+end
+
+function CT.OnSpellcastSucceeded(unit, _, spellID)
+    if AlertUsesEngine() then return end
+    if CT.IsSecret(spellID) or not CT.IsTaunt(spellID) then return end
+    if CT.AlertHideOwn() and CT.IsOwnSource(unit) then return end
+    if not CT.ShouldShowAlert() then return end
+    local casterLabel = CT.AlertCasterLabel(unit) or ""
+    CT.ShowAlertLine(casterLabel, spellID, AlertDestName(unit))
 end
 
 function CT.RefreshAlertWatcher()
     if not CT.events then return end
-    if KART_Settings and KART_Settings.ctModuleEnabled == true and AlertOpt("enabled") == true then
-        CT.events:RegisterEvent("UNIT_AURA")
+    local s = KART_Settings
+    if s and s.ctModuleEnabled == true then
+        CT.events:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        if AlertOpt("enabled") == true then
+            CT.events:RegisterEvent("UNIT_AURA")
+        else
+            CT.events:UnregisterEvent("UNIT_AURA")
+        end
     else
         CT.events:UnregisterEvent("UNIT_AURA")
+        CT.events:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     end
 end
 

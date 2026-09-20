@@ -1130,13 +1130,14 @@ local function CtTauntChanged()
 end
 
 local function CtAlert()
+    if not KART_Settings then
+        return { fontSize = 48, enabled = false, hideOwn = true }
+    end
     local t = CtTaunt()
     t.alert = t.alert or {}
     local a = t.alert
-    a.color = a.color or { r = 1, g = 0.82, b = 0 }
-    if a.outline == nil then a.outline = true end
-    if a.duration == nil then a.duration = 3 end
-    if a.fontSize == nil then a.fontSize = 24 end
+    if a.fontSize == nil then a.fontSize = 48 end
+    if a.hideOwn == nil then a.hideOwn = true end
     return a
 end
 local function CtAlertChanged()
@@ -1151,7 +1152,7 @@ KART.UI:RegisterLabel(ctTauntTitle)
 
 local ctTauntCard = KART.UI:CreateCard(KART.CoTankPanel)
 ctTauntCard:SetPoint("TOPLEFT", ctTauntTitle, "BOTTOMLEFT", 0, -10)
-ctTauntCard:SetSize(500, 310)
+ctTauntCard:SetSize(500, 186)
 
 KART.CbCtAlertEnabled = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
     name = "KART_CtAlertEnabled", label = L.SET_CT_ALERT_ENABLED,
@@ -1162,76 +1163,29 @@ KART.CbCtAlertEnabled = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
 KART.CbCtAlertEnabled.text:SetWidth(430)
 KART.CbCtAlertEnabled.text:SetJustifyH("LEFT")
 
+KART.CbCtAlertHideOwn = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
+    name = "KART_CtAlertHideOwn", label = L.SET_CT_ALERT_HIDE_OWN,
+    store = CtAlert, key = "hideOwn", y = -54,
+    tooltip = L.DESC_CT_ALERT_HIDE_OWN,
+    onChanged = CtAlertChanged,
+})
+KART.CbCtAlertHideOwn.text:SetWidth(430)
+KART.CbCtAlertHideOwn.text:SetJustifyH("LEFT")
+
 KART.CbCtAlertTest = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
     name = "KART_CtAlertTest", label = L.SET_CT_ALERT_TEST,
-    store = CtAlert, key = "testMode", y = -54,
+    store = CtAlert, key = "testMode", y = -88,
     tooltip = L.DESC_CT_ALERT_TEST,
     onChanged = CtAlertChanged,
 })
 KART.CbCtAlertTest.text:SetWidth(430)
 KART.CbCtAlertTest.text:SetJustifyH("LEFT")
 
-KART.SldCtAlertDuration = KART.UI:CreateSettingsSlider(ctTauntCard, {
-    name = "KART_CtAlertDurationSlider", label = L.SET_CT_ALERT_DURATION,
-    min = 1, max = 10, store = CtAlert, key = "duration", y = -88,
-    onChanged = CtAlertChanged,
-})
 KART.SldCtAlertFontSize = KART.UI:CreateSettingsSlider(ctTauntCard, {
     name = "KART_CtAlertFontSizeSlider", label = L.SET_CT_ALERT_FONT_SIZE,
-    min = 12, max = 48, store = CtAlert, key = "fontSize", y = -128,
+    min = 16, max = 96, store = CtAlert, key = "fontSize", y = -130,
     onChanged = CtAlertChanged,
 })
-
-KART.BtnCtAlertFont = KART.UI:CreateModernButton(ctTauntCard, L.BTN_SELECT_FONT)
-KART.BtnCtAlertFont:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 20, -174)
-KART.BtnCtAlertFont:SetSize(220, 22)
-KART.BtnCtAlertFont:SetScript("OnClick", function(self)
-    MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
-        rootDescription:CreateTitle(L.SET_CT_ALERT_FONT)
-        if LSM then
-            local fonts = LSM:List("font")
-            for _, name in ipairs(fonts) do
-                rootDescription:CreateButton(name, function()
-                    CtAlert().fontName = name
-                    self.text:SetText(L.BTN_FONT_PREFIX .. name)
-                    CtAlertChanged()
-                end)
-            end
-        else
-            rootDescription:CreateButton("Friz Quadrata", function()
-                CtAlert().fontName = "Friz Quadrata"
-                self.text:SetText(L.BTN_FONT_PREFIX .. "Friz Quadrata")
-                CtAlertChanged()
-            end)
-        end
-    end)
-end)
-
-KART.BtnCtAlertColor = KART.UI:CreateModernButton(ctTauntCard, L.SET_CT_ALERT_COLOR)
-KART.BtnCtAlertColor:SetPoint("TOPLEFT", ctTauntCard, "TOPLEFT", 260, -174)
-KART.BtnCtAlertColor:SetSize(180, 22)
-local function RefreshCtAlertColorPreview()
-    local c = CtAlert().color
-    KART.CtAlertColorPreview:SetColorTexture(c.r or 1, c.g or 0.82, c.b or 0, 1)
-end
-KART.BtnCtAlertColor:SetScript("OnClick", function()
-    CtPickColor(CtAlert().color, function()
-        RefreshCtAlertColorPreview()
-        CtAlertChanged()
-    end)
-end)
-KART.CtAlertColorPreview = ctTauntCard:CreateTexture(nil, "OVERLAY")
-KART.CtAlertColorPreview:SetSize(22, 22)
-KART.CtAlertColorPreview:SetPoint("LEFT", KART.BtnCtAlertColor, "RIGHT", 8, 0)
-RefreshCtAlertColorPreview()
-
-KART.CbCtAlertOutline = KART.UI:CreateSettingsCheckbox(ctTauntCard, {
-    name = "KART_CtAlertOutline", label = L.SET_CT_ALERT_OUTLINE,
-    store = CtAlert, key = "outline", y = -206,
-    onChanged = CtAlertChanged,
-})
-KART.CbCtAlertOutline.text:SetWidth(430)
-KART.CbCtAlertOutline.text:SetJustifyH("LEFT")
 
 local ctAskTitle = KART.CoTankPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 ctAskTitle:SetPoint("TOPLEFT", ctTauntCard, "BOTTOMLEFT", 0, -18)
@@ -1652,20 +1606,15 @@ KART.UI:RegisterLocaleRefresher(function()
         KART.CbCtAlertEnabled.text:SetText(L.SET_CT_ALERT_ENABLED)
         KART.CbCtAlertEnabled.tooltipText = L.DESC_CT_ALERT_ENABLED
     end
+    if KART.CbCtAlertHideOwn then
+        KART.CbCtAlertHideOwn.text:SetText(L.SET_CT_ALERT_HIDE_OWN)
+        KART.CbCtAlertHideOwn.tooltipText = L.DESC_CT_ALERT_HIDE_OWN
+    end
     if KART.CbCtAlertTest then
         KART.CbCtAlertTest.text:SetText(L.SET_CT_ALERT_TEST)
         KART.CbCtAlertTest.tooltipText = L.DESC_CT_ALERT_TEST
     end
-    if KART.SldCtAlertDuration then KART.SldCtAlertDuration.title:SetText(L.SET_CT_ALERT_DURATION) end
     if KART.SldCtAlertFontSize then KART.SldCtAlertFontSize.title:SetText(L.SET_CT_ALERT_FONT_SIZE) end
-    if KART.BtnCtAlertColor then KART.BtnCtAlertColor.text:SetText(L.SET_CT_ALERT_COLOR) end
-    if KART.CbCtAlertOutline then KART.CbCtAlertOutline.text:SetText(L.SET_CT_ALERT_OUTLINE) end
-    if KART.BtnCtAlertFont and KART.BtnCtAlertFont.text then
-        local name = (KART_Settings and KART_Settings.ct and KART_Settings.ct.taunt
-            and KART_Settings.ct.taunt.alert and KART_Settings.ct.taunt.alert.fontName)
-            or (KART_Settings and KART_Settings.fontName) or "Friz Quadrata"
-        KART.BtnCtAlertFont.text:SetText(L.BTN_FONT_PREFIX .. name)
-    end
     if KART.CbCtTauntButton then
         KART.CbCtTauntButton.text:SetText(L.SET_CT_TAUNT_BUTTON)
         KART.CbCtTauntButton.tooltipText = L.DESC_CT_TAUNT_BUTTON

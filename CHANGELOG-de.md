@@ -8,9 +8,19 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 ### Hinzugefügt
-- **Eine Taunt-Anzeige** zeigt, wer dein Ziel oder einen Boss getaunt hat, mit eigenen Look-Einstellungen.
+- **Eine Taunt-Anzeige** zeigt ein Taunt-Symbol auf deinem Ziel oder einem Boss, mit Größenregler.
+- **Die Taunt-Anzeige kann deinen eigenen Taunt ausblenden.**
 - **Die Chat-Taunt-Ansage ist weg.** Der Übernehmen-Button und die Taunt-Swap-Zeile bleiben.
 - **Online-Gildenmitglieder nach Rang einladen** im Automation-Tab. Einen oder mehrere Ränge wählen, dann den Invite bestätigen.
+
+### Behoben
+- **Der Co-Tank-Tab wirft beim Laden keinen Fehler mehr.**
+- **Die Taunt-Anzeige wirft keinen Fehler mehr, wenn sich eine Boss-Aura ändert.**
+- **Die Taunt-Anzeige wirft keinen Fehler mehr, wenn die Spellcast-Unit geheim ist (z. B. targettarget).**
+- **Die Taunt-Anzeige ist ein Symbol auf dem Bildschirm, mit Größenregler.**
+- **Die Taunt-Anzeige zeigt nur das Taunt-Icon, keine anderen Auren auf dem Boss.**
+- **Die Taunt-Anzeige erscheint wieder, wenn ein Taunt auf deinem Ziel oder einem Boss liegt.**
+- **Die Taunt-Anzeige erscheint auf deinem Ziel oder einem Boss, ohne dass der andere Tank KART braucht.**
 
 ## [4.3.0] - 2026-09-04
 ### Hinzugefügt

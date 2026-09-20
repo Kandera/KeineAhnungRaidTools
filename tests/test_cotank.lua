@@ -24,7 +24,10 @@ do
         "ShouldShowAskButton", "EnsureAskButton", "RefreshAskButton", "TauntIcon",
         "ShowSwapLine", "RefreshSwapLine", "EnsureSwapLine",
         "ShowAlertLine", "RefreshAlertLine", "EnsureAlertLine", "HideAlertLine",
-        "ShouldShowAlert", "OnUnitAura", "RefreshAlertWatcher",
+        "StyleAlertLine",
+        "ShouldShowAlert", "OnUnitAura", "OnSpellcastSucceeded", "RefreshAlertWatcher",
+        "AlertWatchUnits", "FindAlertTauntSpell",
+        "AlertAuraFilterString", "AlertAuraFilters", "AlertHideOwn",
         "BarPass", "AbsorbFill", "HealAbsorbSpan", "SyncStripUnits",
     }) do
         if KART.CT[name] then setfenv(KART.CT[name], env) end
@@ -339,11 +342,11 @@ do
     KART.CT.row = nil
     RaidTwoTanks()
     KART.CT.Enable()
-    T.eq(CountCtEvents(KART.CT.events), 4, "first enable registers roster, instance, roles, and target")
+    T.eq(CountCtEvents(KART.CT.events), 5, "first enable registers roster, instance, roles, target, and taunt casts")
     KART.CT.Disable()
     T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters all events")
     KART.CT.Enable()
-    T.eq(CountCtEvents(KART.CT.events), 4, "second enable re-registers the same events")
+    T.eq(CountCtEvents(KART.CT.events), 5, "second enable re-registers the same events")
 end
 
 do
@@ -352,7 +355,7 @@ do
     RaidTwoTanks()
     env.KART_Settings.ct.taunt = { alert = { enabled = true } }
     KART.CT.Enable()
-    T.eq(CountCtEvents(KART.CT.events), 5,
+    T.eq(CountCtEvents(KART.CT.events), 6,
         "enabling the taunt alert adds UNIT_AURA to the registered events")
     KART.CT.Disable()
     T.eq(CountCtEvents(KART.CT.events), 0, "disable unregisters UNIT_AURA too")
@@ -643,6 +646,22 @@ do
 end
 
 do
+    RaidTwoTanks()
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    local origIsUnit = UnitIsUnit
+    _G.UnitIsUnit = function(a, b)
+        if a == "targettarget" or b == "targettarget" then return secret end
+        return origIsUnit(a, b)
+    end
+    local ok, own = pcall(KART.CT.IsOwnSource, "targettarget")
+    T.eq(ok, true, "secret UnitIsUnit does not throw")
+    T.eq(own, true, "and treats unknown as own")
+    _G.UnitIsUnit = origIsUnit
+    KARTTEST.secretValues[secret] = nil
+end
+
+do
     T.eq(KART.CT.FormatTauntMessage("Taunt: %t", { t = "Boss", s = "Taunt", n = "Other" }),
         "Taunt: Boss", "%t is what you taunted")
     T.eq(KART.CT.FormatTauntMessage("%n, please taunt!", { t = "Boss", s = "Taunt", n = "Other" }),
@@ -771,6 +790,8 @@ do
     T.eq(KART.CT.alertLine.verb:GetText(), "Taunted", "locale verb")
     T.eq(KART.CT.alertLine.target:GetText(), "Boss", "target name")
     T.truthy(KART.CT.alertLine.icon:GetTexture(), "spell icon is set")
+    T.eq(KART.CT.alertLine.caster:IsShown(), false, "live alert is icon-only")
+    T.eq(KART.CT.alertLine.icon:IsShown(), true, "with the taunt icon shown")
     KARTTEST.AdvanceTime(2.9)
     T.eq(KART.CT.alertLine:IsShown(), true, "still up before the duration")
     KARTTEST.AdvanceTime(0.2)
@@ -781,7 +802,9 @@ do
     AlertReady({ enabled = true, duration = 1 })
     KART.CT.ShowAlertLine("Other", 355, "Boss")
     KARTTEST.AdvanceTime(1.1)
-    T.eq(KART.CT.alertLine:IsShown(), false, "duration slider is honoured")
+    T.eq(KART.CT.alertLine:IsShown(), true, "leftover duration is unread")
+    KARTTEST.AdvanceTime(2.0)
+    T.eq(KART.CT.alertLine:IsShown(), false, "named toast uses the default 3s")
 end
 
 do
@@ -795,6 +818,11 @@ do
     AlertReady({ enabled = true, testMode = true })
     KART.CT.RefreshAlertLine()
     T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(), "test mode shows the sample")
+    T.eq(KART.CT.alertLine.caster:IsShown(), false, "without the name line")
+    T.eq(KART.CT.alertLine.icon:IsShown(), true, "and with the taunt icon")
+    T.truthy(KART.CT.alertLine.icon:GetTexture(), "sample icon has a texture")
+    T.eq(KART.CT.alertLine:GetWidth(), 48, "sample is icon-sized")
+    T.eq(KART.CT.alertLine:GetHeight(), 48, "and square")
     KARTTEST.AdvanceTime(10)
     T.eq(KART.CT.alertLine:IsShown(), true, "and does not auto-hide")
 end
@@ -875,6 +903,14 @@ do
 end
 
 do
+    AlertReady({ enabled = true, hideOwn = false })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    FireAura("target", { spellId = 355, sourceUnit = "raid1", auraInstanceID = 31 })
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(),
+        "own taunt shows when hide-own is off")
+end
+
+do
     AlertReady({ enabled = true })
     KARTTEST.SetUnit("boss1", { name = "Fyrakk", realm = KARTTEST.realm, guid = "Creature-1" })
     KARTTEST.SetUnit("raid2pet", {
@@ -891,7 +927,34 @@ do
     KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
     KART.CT.OnUnitAura("target", { isFullUpdate = true })
     T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
-        "full update without addedAuras does not toast")
+        "full update without a matching aura does not toast")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KARTTEST.auras.target = {
+        { name = "Taunt", spellId = 355, sourceUnit = "raid2", auraInstanceID = 80 },
+    }
+    KART.CT.OnUnitAura("target", { isFullUpdate = true })
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(),
+        "full update still finds a co-tank taunt by spell id")
+    KARTTEST.auras.target = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    KARTTEST.auras.target = {
+        { name = "Taunt", spellId = 355, sourceUnit = secret, auraInstanceID = 81 },
+    }
+    KART.CT.OnUnitAura("target", { isFullUpdate = true })
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(),
+        "secret caster still shows the taunt icon from the spell id")
+    KARTTEST.secretValues[secret] = nil
+    KARTTEST.auras.target = nil
 end
 
 do
@@ -904,6 +967,119 @@ do
     T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
         "and does not show")
     KARTTEST.secretValues[secret] = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.lastAlertAuraId = nil
+    local added = { { spellId = 355, sourceUnit = "raid2", auraInstanceID = 50 } }
+    KARTTEST.secretValues[added] = true
+    local ok, err = pcall(KART.CT.OnUnitAura, "target", { addedAuras = added })
+    T.eq(ok, true, "secret addedAuras table does not throw: " .. tostring(err))
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "secret addedAuras is not iterated")
+    KARTTEST.secretValues[added] = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.lastAlertAuraId = nil
+    KARTTEST.auras.target = {
+        { name = "Taunt", spellId = 355, sourceUnit = "raid2", auraInstanceID = 51 },
+    }
+    local added = {}
+    KARTTEST.secretValues[added] = true
+    KART.CT.OnUnitAura("target", { addedAuras = added })
+    T.eq(KART.CT.alertLine.caster:GetText(), "Other", "secret payload still toasts via spell id")
+    KARTTEST.secretValues[added] = nil
+    KARTTEST.auras.target = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.OnSpellcastSucceeded("raid2", "Cast-1", 355)
+    T.eq(KART.CT.alertLine.caster:GetText(), "Other", "co-tank spellcast shows")
+    T.eq(KART.CT.alertLine.target:GetText(), "Boss", "dest is the current target")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.OnSpellcastSucceeded("raid1", "Cast-2", 355)
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "own taunt does not toast locally")
+end
+
+do
+    AlertReady({ enabled = true, hideOwn = false })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    KART.CT.OnSpellcastSucceeded("raid1", "Cast-own", 355)
+    T.truthy(KART.CT.alertLine and KART.CT.alertLine:IsShown(),
+        "own spellcast toasts when hide-own is off")
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    local secret = {}
+    KARTTEST.secretValues[secret] = true
+    local origIsUnit = UnitIsUnit
+    _G.UnitIsUnit = function(a, b)
+        if a == "targettarget" or b == "targettarget" then return secret end
+        return origIsUnit(a, b)
+    end
+    local ok = pcall(KART.CT.OnSpellcastSucceeded, "targettarget", "Cast-tt", 355)
+    T.eq(ok, true, "targettarget spellcast does not throw")
+    T.eq(KART.CT.alertLine == nil or not KART.CT.alertLine:IsShown(), true,
+        "and does not toast when own-ness is secret")
+    _G.UnitIsUnit = origIsUnit
+    KARTTEST.secretValues[secret] = nil
+end
+
+do
+    AlertReady({ enabled = true })
+    KARTTEST.target = { name = "Boss", realm = KARTTEST.realm }
+    T.eq(KART.CT.AlertWatchUnits()[1], "target", "target is watched")
+    T.eq(KART.CT.AlertWatchUnits()[3], "boss2", "and boss2, not only boss1")
+end
+
+do
+    AlertReady({ enabled = true, fontSize = 28 })
+    local f = KART.CT.StyleAlertLine()
+    T.eq(f:GetWidth(), 28, "live frame is icon-sized, not a name line")
+    T.eq(f:GetHeight(), 28, "and square like test mode")
+end
+
+do
+    AlertReady({ enabled = true, fontSize = 80 })
+    local f = KART.CT.StyleAlertLine()
+    T.eq(f:GetWidth(), 80, "icon size goes past the old 48 cap")
+end
+
+do
+    AlertReady({ enabled = true })
+    local f = KART.CT.EnsureAlertLine()
+    f:Hide()
+    f.auras = { {} }
+    KART.CT.ShowAlertLine("Other", 355, "Boss")
+    T.eq(f:IsShown(), false, "named toast does not overlay live aura strips")
+end
+
+do
+    T.eq(KART.CT.AlertHideOwn(), true, "own taunt is hidden until opted out")
+    T.eq(KART.CT.AlertAuraFilterString(), "HARMFUL|!PLAYER", "default filter drops own casts")
+    local f = KART.CT.AlertAuraFilters()
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[355], "Warrior Taunt is allowed")
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[56222], "Dark Command is allowed")
+    T.truthy(f.includeSpellIDs and f.includeSpellIDs[51399], "Death Grip aura is allowed")
+    T.eq(f.includeSpellIDs and f.includeSpellIDs[871], nil, "Shield Wall is not a taunt")
+    T.eq(f.includeSpellIDs and f.includeSpellIDs[188389], nil, "Flame Shock is not a taunt")
+    AlertReady({ enabled = true, hideOwn = false })
+    T.eq(KART.CT.AlertHideOwn(), false, "hide-own can be switched off")
+    T.eq(KART.CT.AlertAuraFilterString(), "HARMFUL", "showing own uses HARMFUL")
 end
 
 do
@@ -1224,6 +1400,7 @@ do
     T.eq(world.ct.taunt.onlyInDungeon, false, "v3 world-announce still wins after MergeDefaults")
     T.eq(world.ct.taunt.onlyInRaid, false, "and raid stays off")
     T.eq(old.ct.taunt.alert.enabled, false, "alert defaults off")
+    T.eq(old.ct.taunt.alert.hideOwn, true, "alert hides own taunt by default")
 end
 
 do
