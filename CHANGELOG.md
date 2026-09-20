@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Taunt Alert can hide your own taunt.**
 - **Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.
 - **Invite online guild members by rank** from the Automation tab. Select one or more ranks, then confirm the invite.
+- **Another guild picture** in the break window.
 
 ### Fixed
 - **The Co-Tank tab no longer errors as the addon loads.**

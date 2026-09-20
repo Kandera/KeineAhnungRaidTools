@@ -199,6 +199,9 @@ end
 
 do
     T.truthy(BT.POOL and #BT.POOL >= 1, "the pool lists at least one file after media ships")
+    local files = {}
+    for _, entry in ipairs(BT.POOL) do files[entry.file] = true end
+    T.truthy(files["8.png"], "pool includes 8.png")
     local saved = BT.POOL
     BT.POOL = {}
     T.is_nil(BT.PickImage(), "empty pool picks nothing")

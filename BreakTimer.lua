@@ -50,6 +50,7 @@ BT.POOL = {
     { file = "5.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
     { file = "6.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
     { file = "7.png", contentW = 1024, contentH = 576, texW = 1024, texH = 1024 },
+    { file = "8.png", contentW = 1024, contentH = 1024, texW = 1024, texH = 1024 },
 }
 
 local function MediaBreak(file)

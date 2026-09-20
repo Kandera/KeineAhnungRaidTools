@@ -12,6 +12,7 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - **Die Taunt-Anzeige kann deinen eigenen Taunt ausblenden.**
 - **Die Chat-Taunt-Ansage ist weg.** Der Übernehmen-Button und die Taunt-Swap-Zeile bleiben.
 - **Online-Gildenmitglieder nach Rang einladen** im Automation-Tab. Einen oder mehrere Ränge wählen, dann den Invite bestätigen.
+- **Noch ein Gildenbild** im Pausenfenster.
 
 ### Behoben
 - **Der Co-Tank-Tab wirft beim Laden keinen Fehler mehr.**

@@ -223,6 +223,7 @@ KART.InGameChangelog = {
             "**A Taunt Alert symbol** shows a taunt on your target or a boss, with a size slider.",
             "**The Taunt Alert can hide your own taunt.**",
             "**Chat taunt announce is gone.** The take-it button and Taunt Swap line stay.",
+            "**Another guild picture** in the break window.",
             "**The Co-Tank tab no longer errors as the addon loads.**",
             "**The Taunt Alert no longer errors when a boss aura updates.**",
             "**The Taunt Alert no longer errors when a spellcast unit is secret (for example targettarget).**",
