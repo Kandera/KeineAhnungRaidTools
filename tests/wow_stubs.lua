@@ -839,7 +839,7 @@ end
 function C_AddOns.GetAddOnMetadata(name, field)
     if field ~= "Version" then return nil end
     if KARTTEST.addonVersions[name] then return KARTTEST.addonVersions[name] end
-    if name == "KeineAhnungRaidTools" then return "4.4.0" end
+    if name == "KeineAhnungRaidTools" then return "4.5.0" end
     return nil
 end
 

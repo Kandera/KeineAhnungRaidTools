@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-09-22
 ### Added
-- **Loot history records every RC award** and syncs it to the other assistants.
+- **Loot history records every RC award** and syncs it to the other assistants, even when RC's own history drops the row.
+- **The loot history window is back** (`/kart history`), with filters, JSON export, a scale slider, and a button that hides bonus rolls. Search matches the item and the winner's name.
+- **`/rc history` opens KART's history.** `/rclc history` still opens RC's.
+- **RC's voting frame lists what that player already received**, from KART, and follows the more-info arrow. Bonus loot stays out of that list.
 
 ## [4.4.0] - 2026-09-20
 ### Added
@@ -937,7 +941,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...HEAD
+[4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...v4.2.0

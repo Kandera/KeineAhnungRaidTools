@@ -218,9 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
-        version = "Unreleased",
+        version = "4.5.0",
         entries = {
-            "**Loot history records every RC award** and syncs it to the other assistants.",
+            "**Loot history records every RC award** and syncs it to the other assistants, even when RC's own history drops the row.",
+            "**The loot history window is back** (`/kart history`), with filters, JSON export, a scale slider, and a button that hides bonus rolls. Search matches the item and the winner's name.",
+            "**`/rc history` opens KART's history.** `/rclc history` still opens RC's.",
+            "**RC's voting frame lists what that player already received**, from KART, and follows the more-info arrow. Bonus loot stays out of that list.",
         },
     },
     {

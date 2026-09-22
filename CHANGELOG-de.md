@@ -8,8 +8,12 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-09-22
 ### Hinzugefügt
-- **Die Loot-Historie protokolliert jede RC-Vergabe** und gleicht sie mit den anderen Assists ab.
+- **Die Loot-Historie protokolliert jede RC-Vergabe** und gleicht sie mit den anderen Assists ab, auch wenn RCs eigene Historie die Zeile verliert.
+- **Das Loot-Historie-Fenster ist zurück** (`/kart history`), mit Filtern, JSON-Export, Größenregler und einem Knopf, der Bonuswürfe ausblendet. Die Suche trifft Item und Gewinnernamen.
+- **`/rc history` öffnet die KART-Historie.** `/rclc history` öffnet weiter die von RC.
+- **RCs Voting-Frame zeigt, was der Spieler schon bekommen hat**, aus KART, und folgt dem Pfeil für mehr Infos. Bonus-Loot bleibt in der Liste aus.
 
 ## [4.4.0] - 2026-09-20
 ### Hinzugefügt
@@ -937,7 +941,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...HEAD
+[4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.1.0...v4.2.0
