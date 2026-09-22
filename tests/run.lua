@@ -248,6 +248,8 @@ dofile("tests/test_rc_companion.lua")
 
 dofile("tests/test_rc_owed.lua")
 
+dofile("tests/test_loot_history.lua")
+
 
 
 print(string.format("\n%d assertions, %d failures", total, failures))

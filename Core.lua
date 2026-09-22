@@ -663,12 +663,15 @@ SlashCmdList["KART"] = function(msg) -- Slash-Befehl zum Öffnen/Schließen des 
         KART.PrintClientProbe()
     elseif cmd == "owed" then
         if KART.RC and KART.RC.OpenOwedWindow then KART.RC.OpenOwedWindow() end
+    elseif cmd == "history" then
+        if KART.LH and KART.LH.Toggle then KART.LH.Toggle() end
     elseif cmd == "help" or cmd == "h" then
         print(KART.L.HELP_HEADER)
         print("  /kart - " .. KART.L.HELP_TOGGLE)
         print("  /kart version (v) - " .. KART.L.HELP_VERSION)
         print("  /kart ench [raid] - " .. KART.L.HELP_ENCH)
         print("  /kart owed - " .. KART.L.HELP_OWED)
+        print("  /kart history - " .. KART.L.HELP_HISTORY)
         print("  /kart help (h) - " .. KART.L.HELP_HELP)
     else
         -- Sicherheitscheck: Falls das MainFrame (noch) nicht existiert, Fehler verhindern

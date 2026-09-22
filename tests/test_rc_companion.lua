@@ -292,3 +292,49 @@ KARTTEST.RemoveRC()
 T.eq(RC.ForcePushCouncil(), false, "force-push without RC refuses")
 KARTTEST.InstallRC()
 
+-- Voting tooltip reads KART, without editing RC ---------------------------------------
+KART.LH = {
+    RecentFor = function()
+        return { { item = "|Hitem:9|h[Blade]|h", reason = "Offspec", dateStr = "2026/09/01", color = { 0, 1, 0 } } }
+    end,
+    WinnersOf = function()
+        return { Ann = { { lootWon = "|Hitem:9|h[Blade]|h", response = "Offspec", color = { 0, 1, 0 } } } }
+    end,
+}
+local lines = {}
+local tip = {
+    ClearLines = function() lines = {} end,
+    AddLine = function(_, text) lines[#lines + 1] = text end,
+    AddDoubleLine = function(_, left, right) lines[#lines + 1] = left .. "|" .. right end,
+    SetOwner = function() end,
+    Show = function(self) self.shown = true end,
+}
+local calls = 0
+local fake = {
+    frame = {
+        moreInfo = tip,
+        content = {},
+        itemText = { GetText = function() return "|Hitem:9|h[Blade]|h" end },
+    },
+    UpdateMoreInfo = function() calls = calls + 1 end,
+    GetItemAwardHistory = function() return { from = "rc" } end,
+}
+RC.HookVotingHistory(fake)
+local history = fake:GetItemAwardHistory("|Hitem:9|h[Blade]|h")
+T.eq(history.Ann[1].response, "Offspec", "voting history prefers KART when KART has the item")
+fake:UpdateMoreInfo(1, { { name = "Ann" } })
+T.eq(calls, 1, "RC's own more-info still runs")
+T.eq(tip.shown, true, "KART redraws the voting tooltip")
+T.eq(lines[2], "Latest items won", "the tooltip lists latest items from KART")
+tip.Hide = function(self) self.shown = false end
+RCLootCouncil.Getdb = function()
+    return { modules = { RCVotingFrame = { moreInfo = false } } }
+end
+fake:UpdateMoreInfo(1, { { name = "Ann" } })
+T.eq(tip.shown, false, "the voting arrow hides KART's tooltip with RC's")
+RCLootCouncil.Getdb = function()
+    return { modules = { RCVotingFrame = { moreInfo = true } } }
+end
+fake:UpdateMoreInfo(1, { { name = "Ann" } })
+T.eq(tip.shown, true, "the voting arrow shows KART's tooltip with RC's")
+

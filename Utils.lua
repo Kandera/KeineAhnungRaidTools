@@ -218,6 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "Unreleased",
+        entries = {
+            "**Loot history records every RC award** and syncs it to the other assistants.",
+        },
+    },
+    {
         version = "4.4.0",
         entries = {
             "**A Taunt Alert symbol** shows a taunt on your target or a boss, with a size slider.",
@@ -684,6 +690,7 @@ KART.Defaults = {
     contentFontSize = 12,
     bgAlpha = 85,
     uiScale = 110, -- whole-window scale in percent (PNG-artwork window is not freely resizable)
+    lcHistoryScale = 100, -- loot history window scale in percent
     fontName = "Friz Quadrata",
     accentR = 0, accentG = 60, accentB = 100,
     bgR = 10, bgG = 10, bgB = 10,

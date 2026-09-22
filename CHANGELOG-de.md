@@ -8,6 +8,9 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **Die Loot-Historie protokolliert jede RC-Vergabe** und gleicht sie mit den anderen Assists ab.
+
 ## [4.4.0] - 2026-09-20
 ### Hinzugefügt
 - **Eine Taunt-Anzeige** zeigt ein Taunt-Symbol auf deinem Ziel oder einem Boss, mit Größenregler.

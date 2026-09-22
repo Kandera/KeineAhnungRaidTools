@@ -47,6 +47,7 @@ files["MainFrame.lua"] = { ignore = { "431" } }
 globals = {
     -- SavedVariables
     "KART_Settings", "KART_Profiles", "KART_PlayerCache", "KART_RCOwed",
+    "KART_LootHistory", "KART_LootHistoryEpoch", "KART_LootHistoryDeleted",
     -- Named frames created by the addon and reached through _G
     "KART_GearScanTooltip",
     -- Addon-owned slash command registration
@@ -64,6 +65,7 @@ read_globals = {
     "strmatch", "wipe", "time", "date",
     -- Core API
     "CreateFrame", "UIParent", "GameTooltip", "GameFontHighlightSmall", "Item", "PixelUtil",
+    "TooltipComparisonManager", "GameTooltip_SuppressAutomaticCompareItem",
     "InCombatLockdown", "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown",
     -- Secret values (Midnight): data the client refuses to let an addon read. Absent on older
     -- clients, which is why KAUtil.IsSecret tests for it rather than calling it outright.

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Loot history records every RC award** and syncs it to the other assistants.
+
 ## [4.4.0] - 2026-09-20
 ### Added
 - **A Taunt Alert symbol** shows a taunt on your target or a boss, with a size slider.

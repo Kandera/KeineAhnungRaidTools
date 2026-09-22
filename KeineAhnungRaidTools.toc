@@ -4,7 +4,7 @@
 ## Author: Kandera
 ## Version: 4.4.0
 ## IconTexture: Interface\AddOns\KeineAhnungRaidTools\KAimg.png
-## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache
+## SavedVariables: KART_Settings, KART_Profiles, KART_PlayerCache, KART_LootHistory, KART_LootHistoryEpoch, KART_LootHistoryDeleted
 ## SavedVariablesPerCharacter: KART_RCOwed
 ## OptionalDeps: NorthernSkyRaidTools, RCLootCouncil, wowutils, BigWigs, DBM-Core
 ## X-Curse-Project-ID: 1603461
@@ -37,3 +37,4 @@ Core.lua
 RCCompanion.lua
 BreakTimer.lua
 RCOwed.lua
+LootHistory.lua

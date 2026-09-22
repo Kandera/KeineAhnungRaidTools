@@ -83,6 +83,8 @@ Wired("KART.RC.OnRosterUpdate()", "RC council is pushed on roster change")
 Wired("KART.RC.Enable()", "RC companion Enable is wired from Core.lua")
 Wired("KART.RC.OnOwedOutOfCombat()", "owed reminder reappears after combat")
 Wired("KART.RC.OpenOwedWindow()", "/kart owed opens the winner reminder")
+Wired('cmd == "history"', "/kart history is a slash command")
+Wired("KART.LH.Toggle", "/kart history opens the loot history")
 
 T.truthy(toc:find("CoTank%.lua"), "toc lists CoTank.lua")
 T.truthy(toc:find("CoTankSettings%.lua"), "toc lists CoTankSettings.lua")

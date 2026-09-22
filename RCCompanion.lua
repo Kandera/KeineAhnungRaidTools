@@ -164,8 +164,96 @@ function RC.HookVotingFrame()
     -- lootTable[session] as nil. The taint sits on the UI until reload — TradeFrame opens
     -- black and the loot session dies. RC initializes on the actual right-click.
     HookSetCellName(vf)
+    RC.HookVotingHistory(vf)
     votingFrameHooked = true
     RC.SyncAwardWrap()
+end
+
+-- nil when RC does not expose the arrow flag. true/false is db.modules.RCVotingFrame.moreInfo,
+-- the same switch the voting frame's arrow button writes.
+local function VotingMoreInfoOpen(addon)
+    if not (addon and addon.Getdb) then return nil end
+    local ok, db = pcall(addon.Getdb, addon)
+    if not ok or type(db) ~= "table" then return nil end
+    local mod = db.modules and db.modules.RCVotingFrame
+    if type(mod) ~= "table" or mod.moreInfo == nil then return nil end
+    return mod.moreInfo and true or false
+end
+
+-- RC's voting tooltip reads RC's own history, which is the one with the gaps.
+-- We do not edit RC. After its tooltip runs, if KART has rows we redraw that
+-- same tooltip from KART. The arrow button collapses that tooltip; we follow it.
+-- A failure here leaves RC's tooltip as it was.
+function RC.ShowKartAwards(vf, row, data)
+    if not (KART.LH and vf and vf.frame and vf.frame.moreInfo) then return end
+    local tip = vf.frame.moreInfo
+    if VotingMoreInfoOpen(RC.GetAddon()) == false then
+        if tip.Hide then tip:Hide() end
+        return
+    end
+    local name
+    if data and row and data[row] then name = data[row].name end
+    if not name and vf.frame.st and vf.frame.st.GetSelection and vf.frame.st.GetRow then
+        local sel = vf.frame.st:GetSelection()
+        local srow = sel and vf.frame.st:GetRow(sel)
+        name = srow and srow.name
+    end
+    if not name then return end
+    local link = vf.frame.itemText and vf.frame.itemText.GetText and vf.frame.itemText:GetText()
+    local recent = KART.LH.RecentFor and KART.LH.RecentFor(name, 5) or {}
+    local winners = (link and KART.LH.WinnersOf and KART.LH.WinnersOf(link)) or {}
+    if #recent == 0 and not next(winners) then return end
+    if tip.ClearLines then tip:ClearLines() end
+    if tip.SetOwner and vf.frame.content then tip:SetOwner(vf.frame.content, "ANCHOR_RIGHT") end
+    local addon = RC.GetAddon()
+    local header = name
+    if addon and addon.GetClassIconAndColoredName then
+        local coloredOk, colored = pcall(addon.GetClassIconAndColoredName, addon, name, 16)
+        if coloredOk and type(colored) == "string" then header = colored end
+    end
+    tip:AddLine(header)
+    local L = KART.L
+    if #recent > 0 then
+        tip:AddLine(L and L.LH_VOTE_LATEST or "Latest items won")
+        for _, e in ipairs(recent) do
+            local c = e.color or {}
+            tip:AddDoubleLine(e.item or "", (e.dateStr or "") .. "  " .. (e.reason or ""),
+                1, 1, 1, c[1] or c.r or 1, c[2] or c.g or 1, c[3] or c.b or 1)
+        end
+    end
+    if next(winners) then
+        tip:AddLine(" ")
+        tip:AddLine((L and L.LH_VOTE_WINNERS or "Already awarded") .. "  " .. (link or ""))
+        for wname, entries in pairs(winners) do
+            for _, entry in ipairs(entries) do
+                local c = entry.color or {}
+                tip:AddDoubleLine(wname, entry.response or "", 1, 1, 1, c[1] or 1, c[2] or 1, c[3] or 1)
+            end
+        end
+    end
+    if tip.Show then tip:Show() end
+end
+
+function RC.HookVotingHistory(vf)
+    if not vf or vf._kartHistoryHooked then return end
+    if type(vf.GetItemAwardHistory) == "function" then
+        local original = vf.GetItemAwardHistory
+        vf.GetItemAwardHistory = function(self, item)
+            local ok, kart = pcall(function()
+                return KART.LH and KART.LH.WinnersOf and KART.LH.WinnersOf(item)
+            end)
+            if ok and type(kart) == "table" and next(kart) then return kart end
+            return original(self, item)
+        end
+    end
+    if type(vf.UpdateMoreInfo) == "function" then
+        local original = vf.UpdateMoreInfo
+        vf.UpdateMoreInfo = function(self, row, data)
+            pcall(original, self, row, data)
+            pcall(RC.ShowKartAwards, self, row, data)
+        end
+    end
+    vf._kartHistoryHooked = true
 end
 
 function RC.GetAddon()
