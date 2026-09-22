@@ -429,6 +429,7 @@ function RC.OnRosterUpdate()
         if not votingFrameHooked then
             RC.HookVotingFrame()
         end
+        RC.RedirectRcHistory()
     end
 end
 
@@ -554,4 +555,29 @@ function RC.Enable()
         return
     end
     RC.HookVotingFrame()
+    RC.RedirectRcHistory()
+end
+
+-- /rc history opens KART. /rclc history stays on RC's own handler (ACECONSOLE_RCLC).
+local rcHistoryRedirected = false
+
+local function IsRcHistoryCommand(input)
+    local cmd = ((input or ""):match("^%s*(%S*)") or ""):lower()
+    if cmd == "history" or cmd == "h" or cmd == "his" or cmd == "hist" then return true end
+    local localized = _G.HISTORY
+    return type(localized) == "string" and cmd == localized:lower()
+end
+
+function RC.RedirectRcHistory()
+    if rcHistoryRedirected then return end
+    local handler = SlashCmdList and SlashCmdList.ACECONSOLE_RC
+    if type(handler) ~= "function" then return end
+    SlashCmdList.ACECONSOLE_RC = function(input, editBox)
+        if IsRcHistoryCommand(input) and KART.LH and KART.LH.Toggle then
+            KART.LH.Toggle()
+            return
+        end
+        return handler(input, editBox)
+    end
+    rcHistoryRedirected = true
 end

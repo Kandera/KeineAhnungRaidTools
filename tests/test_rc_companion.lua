@@ -326,6 +326,25 @@ fake:UpdateMoreInfo(1, { { name = "Ann" } })
 T.eq(calls, 1, "RC's own more-info still runs")
 T.eq(tip.shown, true, "KART redraws the voting tooltip")
 T.eq(lines[2], "Latest items won", "the tooltip lists latest items from KART")
+
+local rcCalls = {}
+local previousRc = SlashCmdList and SlashCmdList.ACECONSOLE_RC
+SlashCmdList = SlashCmdList or {}
+SlashCmdList.ACECONSOLE_RC = function(input) rcCalls[#rcCalls + 1] = input end
+local rclcCalls = {}
+SlashCmdList.ACECONSOLE_RCLC = function(input) rclcCalls[#rclcCalls + 1] = input end
+local toggles = 0
+KART.LH = KART.LH or {}
+KART.LH.Toggle = function() toggles = toggles + 1 end
+RC.RedirectRcHistory()
+SlashCmdList.ACECONSOLE_RC("history")
+T.eq(toggles, 1, "/rc history opens the KART history")
+T.eq(#rcCalls, 0, "/rc history does not open RC's history")
+SlashCmdList.ACECONSOLE_RC("version")
+T.eq(rcCalls[1], "version", "/rc version still reaches RC")
+SlashCmdList.ACECONSOLE_RCLC("history")
+T.eq(rclcCalls[1], "history", "/rclc history still opens RC's history")
+SlashCmdList.ACECONSOLE_RC = previousRc
 tip.Hide = function(self) self.shown = false end
 RCLootCouncil.Getdb = function()
     return { modules = { RCVotingFrame = { moreInfo = false } } }
