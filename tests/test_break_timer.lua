@@ -202,6 +202,7 @@ do
     local files = {}
     for _, entry in ipairs(BT.POOL) do files[entry.file] = true end
     T.truthy(files["8.png"], "pool includes 8.png")
+    T.truthy(files["9.png"], "pool includes 9.png")
     local saved = BT.POOL
     BT.POOL = {}
     T.is_nil(BT.PickImage(), "empty pool picks nothing")
