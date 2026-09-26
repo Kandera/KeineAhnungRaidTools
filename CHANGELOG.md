@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-09-27
+### Added
+- **Another guild picture** in the break window.
+
+### Fixed
+- **A council award writes RC's history.** The relay uses the same callback as RC's own Yes button, so the row is not missing from RC or from KART.
+- **KART loot history is taken from that RC award again**, including the response.
+
 ## [4.5.0] - 2026-09-22
 ### Added
 - **Loot history records every RC award** and syncs it to the other assistants, even when RC's own history drops the row.
@@ -941,7 +949,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...HEAD
+[4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0
 [4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...v4.3.0

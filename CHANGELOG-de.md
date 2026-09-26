@@ -8,6 +8,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-09-27
+### Hinzugefügt
+- **Noch ein Gildenbild** im Pausenfenster.
+
+### Behoben
+- **Eine Council-Vergabe schreibt RCs Historie.** Der Relay nutzt denselben Callback wie RCs eigener Yes-Button, die Zeile fehlt also nicht in RC und nicht in KART.
+- **Die KART-Loot-Historie kommt wieder von dieser RC-Vergabe**, inklusive der Antwort.
+
 ## [4.5.0] - 2026-09-22
 ### Hinzugefügt
 - **Die Loot-Historie protokolliert jede RC-Vergabe** und gleicht sie mit den anderen Assists ab, auch wenn RCs eigene Historie die Zeile verliert.
@@ -941,7 +949,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...HEAD
+[4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0
 [4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.2.0...v4.3.0

@@ -218,6 +218,14 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.6.0",
+        entries = {
+            "**Another guild picture** in the break window.",
+            "**A council award writes RC's history.** The relay uses the same callback as RC's own Yes button, so the row is not missing from RC or from KART.",
+            "**KART loot history is taken from that RC award again**, including the response.",
+        },
+    },
+    {
         version = "4.5.0",
         entries = {
             "**Loot history records every RC award** and syncs it to the other assistants, even when RC's own history drops the row.",
