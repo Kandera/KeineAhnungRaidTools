@@ -371,6 +371,36 @@ function RC.RequestAward(session, winnerName, response, ...)
         "WHISPER", mlName, { prio = "ALERT" })
 end
 
+local function CandidateField(addon, session, winner, field)
+    if not addon or type(addon.GetActiveModule) ~= "function" then return nil end
+    local ok, vf = pcall(addon.GetActiveModule, addon, "votingframe")
+    if not ok or type(vf) ~= "table" or type(vf.GetCandidateData) ~= "function" then return nil end
+    local got, value = pcall(vf.GetCandidateData, vf, session, winner, field)
+    if got then return value end
+end
+
+-- RC logs history only inside AwardPopupOnClickYesCallback. Award() itself opens
+-- the trade and returns. A relay that calls Award(session, winner, response) with
+-- no callback hands the item out and leaves RC's history empty.
+local function HistoryDataForRelay(addon, ml, session, winner)
+    local loot = ml.lootTable and ml.lootTable[session]
+    if type(loot) ~= "table" or not loot.link then return nil end
+    return {
+        session = session,
+        winner = winner,
+        responseID = CandidateField(addon, session, winner, "real_response")
+            or CandidateField(addon, session, winner, "response"),
+        votes = CandidateField(addon, session, winner, "votes"),
+        gear1 = CandidateField(addon, session, winner, "gear1"),
+        gear2 = CandidateField(addon, session, winner, "gear2"),
+        note = CandidateField(addon, session, winner, "note"),
+        link = loot.link,
+        equipLoc = loot.equipLoc,
+        typeCode = loot.typeCode,
+        boss = loot.boss,
+    }
+end
+
 function RC.HandleAwardRequest(payload, ctx)
     if ctx.channel ~= "WHISPER" then return end
     local addon = RC.GetAddon()
@@ -389,7 +419,14 @@ function RC.HandleAwardRequest(payload, ctx)
         end
         return
     end
-    pcall(ml.Award, ml, session, winner, response)
+    local data = HistoryDataForRelay(addon, ml, session, winner)
+    local log = ml.AwardPopupOnClickYesCallback
+    if data and type(log) == "function" then
+        -- reason stays nil so Award uses the candidate response, same as RC's Yes button.
+        pcall(ml.Award, ml, session, winner, response, nil, log, data)
+    else
+        pcall(ml.Award, ml, session, winner, response)
+    end
 end
 
 function RC.PushCouncilToRC()

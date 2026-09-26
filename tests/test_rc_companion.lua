@@ -107,6 +107,36 @@ KARTTEST.rcAwards = {}
 RC.HandleAwardRequest("1:Ann-TarrenMill:Mainspec", ctx)
 T.eq(#KARTTEST.rcAwards, 1, "ML client accepts response text")
 T.eq(KARTTEST.rcAwards[1].response, "Mainspec", "response text is forwarded not tonumber")
+T.eq(#KARTTEST.rcAwards[1].extra, 0, "without a session item the relay does not invent a history callback")
+
+KARTTEST.rcAwards = {}
+RCLootCouncilML.lootTable = {
+    [1] = { link = "item:9", boss = "Sentinels", equipLoc = "INVTYPE_HEAD", typeCode = "default" },
+}
+RCLootCouncilML.AwardPopupOnClickYesCallback = function() end
+local prevModule = RCLootCouncil.GetActiveModule
+RCLootCouncil.GetActiveModule = function(_, name)
+    if name ~= "votingframe" then return nil end
+    return {
+        GetCandidateData = function(_, _, _, field)
+            local cand = { response = 2, real_response = 2, votes = 3, gear1 = "old", note = "bis" }
+            return cand[field]
+        end,
+    }
+end
+RC.HandleAwardRequest("1:Ann-TarrenMill:Upgrade", ctx)
+T.eq(#KARTTEST.rcAwards, 1, "a session award is still one Award call")
+T.eq(KARTTEST.rcAwards[1].response, "Upgrade", "the announced response stays the relay text")
+T.eq(KARTTEST.rcAwards[1].extra[1], nil, "relay does not pass an award reason")
+T.eq(KARTTEST.rcAwards[1].extra[2], RCLootCouncilML.AwardPopupOnClickYesCallback,
+    "relay uses RC's history callback")
+T.eq(KARTTEST.rcAwards[1].extra[3].responseID, 2, "history keeps the candidate response id")
+T.eq(KARTTEST.rcAwards[1].extra[3].link, "item:9", "history keeps the session item")
+T.eq(KARTTEST.rcAwards[1].extra[3].votes, 3, "history keeps the vote count")
+T.eq(KARTTEST.rcAwards[1].extra[3].note, "bis", "history keeps the council note")
+RCLootCouncil.GetActiveModule = prevModule
+RCLootCouncilML.lootTable = nil
+RCLootCouncilML.AwardPopupOnClickYesCallback = nil
 
 KARTTEST.rcAwards = {}
 ctx.sender = "Eve-TarrenMill"

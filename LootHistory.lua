@@ -237,7 +237,7 @@ end
 
 local function NewId()
     awardCounter = (awardCounter + 1) % 0x1000
-    return string.format("%d-%03x", time(), awardCounter)
+    return string.format("%d-%d", time(), awardCounter)
 end
 
 -- Fields RC's own JSON export reads off the history entry. Copied from the
@@ -319,6 +319,8 @@ function LH.Flush()
     if pending.rcId then row.id = pending.rcId end
     LH.Put(row)
     SendRow(row, replaced)
+    LH._loggedThisCall = true
+    print("|cffffd100KART:|r " .. (row.winner or "") .. " " .. (row.item or ""))
     if LH.historyWindow and LH.historyWindow:IsShown() and LH.Refresh then LH.Refresh() end
 end
 
@@ -342,6 +344,7 @@ function LH.OnHistorySend(history, winner, session)
         and stash.item == item
     if same then
         CopyHistoryFields(stash, history)
+        LH._loggedThisCall = true
         return
     end
     -- A bonus roll or auto-award is its own row. Leave a council award that is still
@@ -380,6 +383,8 @@ function LH.OnHistorySend(history, winner, session)
     if history.id then row.id = history.id end
     LH.Put(row)
     SendRow(row, nil)
+    LH._loggedThisCall = true
+    print("|cffffd100KART:|r " .. (row.winner or "") .. " " .. (row.item or ""))
 end
 
 -- RC drops the history event when logging is off or the award reason says log = false.
@@ -428,18 +433,23 @@ function LH.OnTrackWithoutHistory(winner, link, responseID, boss, reason, sessio
 end
 
 function LH.HookTrackAndLog(ml)
-    if not ml or ml._kartTrackHooked or type(ml.TrackAndLogLoot) ~= "function" then return end
+    if not ml or type(ml.TrackAndLogLoot) ~= "function" then return end
+    if ml.TrackAndLogLoot == LH._trackWrapper then return end
     local orig = ml.TrackAndLogLoot
-    ml.TrackAndLogLoot = function(self, winner, link, responseID, boss, reason, session, candData, owner)
-        LH._historyNoted = false
+    local function wrapper(self, winner, link, responseID, boss, reason, session, candData, owner)
+        LH._loggedThisCall = false
         local ok, result = pcall(orig, self, winner, link, responseID, boss, reason, session, candData, owner)
-        if not LH._historyNoted then
-            LH.OnTrackWithoutHistory(winner, link, responseID, boss, reason, session, candData, owner)
+        if not LH._loggedThisCall then
+            local logged, err = pcall(LH.OnTrackWithoutHistory, winner, link, responseID, boss, reason, session, candData, owner)
+            if not logged then
+                print("|cffff0000KART:|r loot history: " .. tostring(err))
+            end
         end
         if not ok then error(result, 0) end
         return result
     end
-    ml._kartTrackHooked = true
+    LH._trackWrapper = wrapper
+    ml.TrackAndLogLoot = wrapper
 end
 
 local function UnitForSender(fullName)
@@ -749,6 +759,17 @@ function LH.RegisterRC(target)
     end)
     LH.HookTrackAndLog(_G.RCLootCouncilML)
     LH._rcListening = true
+end
+
+function LH.TryBindRC()
+    if not _G.RCLootCouncil then return end
+    local AceEvent = LibStub("AceEvent-3.0", true)
+    if AceEvent and not LH._rcListening then
+        local listener = {}
+        AceEvent:Embed(listener)
+        LH.RegisterRC(listener)
+    end
+    LH.HookTrackAndLog(_G.RCLootCouncilML)
 end
 
 
@@ -1840,21 +1861,19 @@ end
 function LH.InstallEvents()
     local frame = CreateFrame("Frame")
     frame:RegisterEvent("ADDON_LOADED")
+    frame:RegisterEvent("PLAYER_LOGIN")
     frame:RegisterEvent("GROUP_ROSTER_UPDATE")
     frame:SetScript("OnEvent", function(_, event, name)
         if event == "GROUP_ROSTER_UPDATE" then
             LH.OnGroupUpdate()
             return
         end
-        if name ~= "RCLootCouncil" then return end
-        local AceEvent = LibStub("AceEvent-3.0", true)
-        if not AceEvent then return end
-        local listener = {}
-        AceEvent:Embed(listener)
-        LH.RegisterRC(listener)
-        LH.HookTrackAndLog(_G.RCLootCouncilML)
+        if event == "PLAYER_LOGIN" or name == "RCLootCouncil" then
+            LH.TryBindRC()
+        end
     end)
     LH.eventFrame = frame
+    LH.TryBindRC()
 end
 
 KASC:RegisterMessage("LH_ADD", { payload = true, group = true }, LH.AcceptAdd)
@@ -1865,4 +1884,3 @@ KASC:RegisterMessage("LH_EPOCH", { payload = true, group = true }, LH.AcceptEpoc
 KASC:RegisterMessage("LH_DEL", { payload = true, group = true }, LH.AcceptDelete)
 
 LH.InstallEvents()
-LH.HookTrackAndLog(_G.RCLootCouncilML)

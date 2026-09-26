@@ -456,6 +456,17 @@ T.eq(winners["Ann-TarrenMill"] and winners["Ann-TarrenMill"][1].response, "Offsp
 T.is_nil(winners["Bob-TarrenMill"], "a different item is not a winner of this one")
 T.eq(#winners["Ann-TarrenMill"], 1, "bonus loot is not listed as an award of this item")
 
+ResetLog()
+KARTTEST.SetUnit("raid1", { name = "Bob", realm = KARTTEST.realm })
+KARTTEST.tradePartnerUnit = "raid1"
+KARTTEST.tradePlayerItems = { [1] = "|cffa335ee|Hitem:99::::::::::::|h[Cloak]|h|r" }
+KARTTEST.FireEvent("TRADE_SHOW")
+KARTTEST.FireEvent("TRADE_PLAYER_ITEM_CHANGED", 1)
+KARTTEST.FireEvent("UI_INFO_MESSAGE", _G.LE_GAME_ERR_TRADE_COMPLETE, "trade complete")
+T.eq(#KART_LootHistory, 0, "a completed trade writes nothing; the row comes from RC")
+KARTTEST.tradePlayerItems = {}
+KARTTEST.tradePartnerUnit = nil
+
 local companion = assert(io.open("RCCompanion.lua", "r")):read("*a")
 T.truthy(not companion:find("LH_ADD", 1, true), "the companion award wrap does not send history")
 T.truthy(not companion:find("OnAwardSuccess", 1, true), "the companion award wrap does not record history")
