@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- **Break pictures follow the raid lead's checkbox.** Starting a break tells every KART client to roll its own picture from the pool. Only the raid lead's checkbox has to be on.
 
 ## [4.6.0] - 2026-09-27
 ### Added

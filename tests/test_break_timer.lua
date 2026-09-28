@@ -274,12 +274,12 @@ do
     T.eq(BT.image:IsShown(), false, "failed SetTexture hides the image")
     T.eq(BT.frame:GetHeight(), 28, "failed SetTexture uses bar-only height")
     BT.OnCancel()
-    -- Live path: nil return, texture never binds.
+    -- Live client: nil return, GetTexture still empty, file is on its way.
     BT.image.SetTexture = function() return nil end
     BT.image.GetTexture = function() return nil end
     BT.OnStart(720, 1)
-    T.eq(BT.image:IsShown(), false, "nil SetTexture with no texture is text-only")
-    T.eq(BT.frame:GetHeight(), 28, "nil SetTexture uses bar-only height")
+    T.eq(BT.image:IsShown(), true, "nil SetTexture still shows the picture")
+    T.truthy(BT.frame:GetHeight() > 28, "nil SetTexture keeps the picture height")
     BT.image.SetTexture = origSetTexture
     BT.image.GetTexture = origGetTexture
     BT.OnCancel()
@@ -303,7 +303,8 @@ do
     env._brkSent = {}
     BT.OnBossModStart(720, "Ann")
     T.eq(BT.frame:IsShown(), true, "boss-mod start opens the window")
-    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "starter sends the picture flag")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "starter sends the picture flag and no file")
+    T.truthy(BT.currentImage and BT.currentImage.file, "starter rolls its own picture")
     BT.OnCancel()
 end
 
@@ -326,7 +327,7 @@ do
     env._brkSent = {}
     env._bw.BigWigs_StartBreak("BigWigs_StartBreak", {}, 720, "Ann")
     T.eq(BT.frame:IsShown(), true, "live BW callback opens the window")
-    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "live BW starter sends BRK")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "live BW starter sends the picture flag")
     BT.OnCancel()
     env._brkSent = {}
     env._bw.BigWigs_StartBreak({}, 300, "Ann")
@@ -389,7 +390,7 @@ do
     env._brkSent = {}
     env._dbm.DBM_TimerBegin("DBM_TimerBegin", "break-1", "Break", 720, "icon", "break")
     T.eq(BT.frame:IsShown(), true, "DBM break begin opens the window")
-    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "DBM lead starter sends BRK")
+    T.eq(env._brkSent[#env._brkSent], "BRK:720:1", "DBM lead starter sends the picture flag")
     env._dbm.DBM_TimerStop("DBM_TimerStop", "other-timer")
     T.eq(BT.frame:IsShown(), true, "unrelated TimerStop does not close the break")
     env._dbm.DBM_TimerStop("DBM_TimerStop", "break-1")
@@ -498,5 +499,71 @@ do
     T.eq(rawget(env, "SLASH_KARTBREAK1"), nil, "drops /break when BW loads later")
     T.truthy(env._bwLate.BigWigs_StartBreak, "hooks BW that loaded after KART")
     env.BigWigsLoader = nil
+end
+
+do
+    BT.OnCancel()
+    env.IsInGroup = function() return true end
+    env.KART_Settings.breakShowImages = true
+    local n = 0
+    env.math = setmetatable({
+        random = function(a)
+            if a == 1 then
+                n = n + 1
+                return n
+            end
+            return 0.1
+        end,
+    }, { __index = math })
+    env._brkSent = {}
+    BT.SendBreak(60, 1)
+    local firstFile = BT.currentImage and BT.currentImage.file
+    T.eq(env._brkSent[1], "BRK:60:1", "the break message names no file")
+    BT.SendBreak(90, 1)
+    local secondFile = BT.currentImage and BT.currentImage.file
+    env.math = nil
+    T.eq(env._brkSent[2], "BRK:90:1", "the next break message still names no file")
+    T.eq(firstFile, "1.png", "this client rolls 1.png")
+    T.eq(secondFile, "2.png", "the next start on this client rolls again")
+    BT.OnCancel()
+end
+
+do
+    BT.OnCancel()
+    env.KART_Settings.breakShowImages = false
+    local snap = KARTTEST.SnapshotRoster()
+    KARTTEST.realm = "TarrenMill"
+    KARTTEST.SetRaid({ { name = "Ann", leader = true }, { name = "Pug" } })
+    local savedUnitName = env.UnitName
+    env.UnitName = function(unit)
+        if unit == "player" then return "Pug", "TarrenMill" end
+        if unit == "raid1" then return "Ann", nil end
+        if unit == "raid2" then return "Pug", nil end
+        return savedUnitName and savedUnitName(unit)
+    end
+    KART.UnitLeads = function(unit) return unit == "raid1" end
+    KART.UnitAssists = function() return false end
+    BT.OnBossModStart(180, "Ann")
+    T.eq(BT.wantPictures, false, "a raider's boss-mod event does not arm pictures")
+    T.eq(BT.image:IsShown(), false, "a raider's boss-mod event shows no picture")
+    local n = 0
+    env.math = setmetatable({
+        random = function(a)
+            if a == 1 then
+                n = n + 1
+                return 3
+            end
+            return 0.1
+        end,
+    }, { __index = math })
+    env._brkHandlers.BRK("180:1", { sender = "Ann-TarrenMill", shortName = "Ann" })
+    env.math = nil
+    T.eq(BT.wantPictures, true, "the lead's BRK arms pictures without the local checkbox")
+    T.eq(BT.currentImage and BT.currentImage.file, "3.png", "this client rolls its own picture")
+    T.eq(n >= 1, true, "the roll happens on this client")
+    T.eq(BT.image:IsShown(), true, "the raid shows the picture")
+    BT.OnCancel()
+    env.UnitName = savedUnitName
+    KARTTEST.RestoreRoster(snap)
 end
 

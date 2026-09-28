@@ -58,9 +58,28 @@ local function MediaBreak(file)
     return "Interface\\AddOns\\" .. addonName .. "\\media\\break\\" .. file
 end
 
+local breakRandomSeeded = false
+
+local function seedBreakRandom()
+    if breakRandomSeeded then return end
+    breakRandomSeeded = true
+    -- A fresh UI state repeats math.random until something seeds it, so the
+    -- first break of every login was the same file. Seed once. The first
+    -- results after randomseed track the seed, so they are discarded.
+    local seed = time()
+    if type(GetTime) == "function" then
+        seed = seed + math.floor((GetTime() % 1) * 1000000)
+    end
+    math.randomseed(seed % 2147483647)
+    math.random()
+    math.random()
+    math.random()
+end
+
 function BT.PickImage()
     local n = BT.POOL and #BT.POOL or 0
     if n == 0 then return nil end
+    seedBreakRandom()
     return BT.POOL[math.random(1, n)]
 end
 
@@ -121,8 +140,11 @@ function BT.ApplyLayout()
                 attempts = attempts + 1
                 failed[tryEntry.file] = true
                 local tex = BT.image:SetTexture(MediaBreak(tryEntry.file))
-                -- false per ketho; nil return plus unset GetTexture is a failed live load.
-                if tex ~= false and BT.image:GetTexture() then
+                -- false is the missing-file answer. nil with GetTexture still
+                -- empty is a live client that has not bound the file yet;
+                -- requiring GetTexture hid the picture on every client that
+                -- had not already shown that file.
+                if tex ~= false then
                     loadedEntry = tryEntry
                     break
                 end
@@ -260,17 +282,17 @@ function BT.OnStart(seconds, showImages)
     if seconds > 3600 then return end
     BT.EnsureFrame()
     -- A later text-only start must not hide a picture already shown from BRK:1.
+    -- A picture start drops the old file so this client rolls again. The message
+    -- carries only the flag; every client draws its own file from the pool.
     local incomingPictures = showImages == true or showImages == 1
     if incomingPictures then
         BT.wantPictures = true
+        BT.currentImage = nil
     elseif not (BT.frame:IsShown() and BT.wantPictures) then
         BT.wantPictures = false
-    end
-    BT.minimized = false
-    -- Keep the already-shown file; a later text-only start must not re-roll it.
-    if not (BT.frame:IsShown() and BT.currentImage) then
         BT.currentImage = nil
     end
+    BT.minimized = false
     applyMinimize()
     BT.ApplyLayout()
     restorePosition(BT.frame)
@@ -289,9 +311,9 @@ end
 function BT.SendBreak(seconds, showImages)
     local flag = (showImages == true or showImages == 1) and 1 or 0
     if IsInGroup() then
-        KASC:Send("BRK:" .. tostring(seconds) .. ":" .. tostring(flag))
+        KASC:Send("BRK:" .. tostring(seconds) .. ":" .. tostring(flag), nil, nil, { prio = "ALERT", guaranteed = true })
     end
-    BT.OnStart(seconds, showImages)
+    BT.OnStart(seconds, flag)
 end
 
 function BT.SenderMayControl(ctx)

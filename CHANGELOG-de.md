@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Behoben
+- **Pausenbilder folgen dem Haken des Raidleads.** Ein Pausenstart lässt jeden KART-Client sein eigenes Bild aus dem Pool ziehen. Nur der Haken des Raidleads muss an sein.
 
 ## [4.6.0] - 2026-09-27
 ### Hinzugefügt
