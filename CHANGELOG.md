@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.6.2] - 2026-09-28
 ### Fixed
 - **Starting a break no longer errors.** The picture roll no longer calls `math.randomseed`, which WoW does not provide.
 
@@ -955,7 +957,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk invite system for raid compositions.
 - Auto-promote system for assistant roles.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.2...HEAD
+[4.6.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...v4.6.1
 [4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0
 [4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0

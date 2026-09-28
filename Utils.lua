@@ -218,6 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.6.2",
+        entries = {
+            "**Starting a break no longer errors.** The picture roll no longer calls `math.randomseed`, which WoW does not provide.",
+        },
+    },
+    {
         version = "4.6.1",
         entries = {
             "**Break pictures follow the raid lead's checkbox.** Starting a break tells every KART client to roll its own picture from the pool. Only the raid lead's checkbox has to be on.",

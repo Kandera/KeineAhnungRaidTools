@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.6.2] - 2026-09-28
 ### Behoben
 - **Ein Pausenstart wirft keinen Fehler mehr.** Der Bildwurf ruft kein `math.randomseed` mehr auf, das WoW nicht hat.
 
@@ -955,7 +957,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.2...HEAD
+[4.6.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...v4.6.1
 [4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0
 [4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
