@@ -218,6 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.6.1",
+        entries = {
+            "**Break pictures follow the raid lead's checkbox.** Starting a break tells every KART client to roll its own picture from the pool. Only the raid lead's checkbox has to be on.",
+        },
+    },
+    {
         version = "4.6.0",
         entries = {
             "**Another guild picture** in the break window.",

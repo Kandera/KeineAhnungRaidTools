@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.6.1] - 2026-09-28
 ### Behoben
 - **Pausenbilder folgen dem Haken des Raidleads.** Ein Pausenstart lässt jeden KART-Client sein eigenes Bild aus dem Pool ziehen. Nur der Haken des Raidleads muss an sein.
 
@@ -951,7 +953,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...HEAD
+[4.6.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...v4.6.1
 [4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0
 [4.5.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.3.0...v4.4.0
