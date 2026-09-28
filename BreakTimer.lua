@@ -58,28 +58,11 @@ local function MediaBreak(file)
     return "Interface\\AddOns\\" .. addonName .. "\\media\\break\\" .. file
 end
 
-local breakRandomSeeded = false
-
-local function seedBreakRandom()
-    if breakRandomSeeded then return end
-    breakRandomSeeded = true
-    -- A fresh UI state repeats math.random until something seeds it, so the
-    -- first break of every login was the same file. Seed once. The first
-    -- results after randomseed track the seed, so they are discarded.
-    local seed = time()
-    if type(GetTime) == "function" then
-        seed = seed + math.floor((GetTime() % 1) * 1000000)
-    end
-    math.randomseed(seed % 2147483647)
-    math.random()
-    math.random()
-    math.random()
-end
-
 function BT.PickImage()
     local n = BT.POOL and #BT.POOL or 0
     if n == 0 then return nil end
-    seedBreakRandom()
+    -- WoW does not provide math.randomseed; calling it errors the break start.
+    -- The client seeds math.random itself, and each start draws again.
     return BT.POOL[math.random(1, n)]
 end
 

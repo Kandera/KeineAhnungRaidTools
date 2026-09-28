@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Behoben
+- **Ein Pausenstart wirft keinen Fehler mehr.** Der Bildwurf ruft kein `math.randomseed` mehr auf, das WoW nicht hat.
 
 ## [4.6.1] - 2026-09-28
 ### Behoben
