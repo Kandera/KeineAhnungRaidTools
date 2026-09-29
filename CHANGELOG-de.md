@@ -7,6 +7,8 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Hinzugefügt
+- **Noch ein Gildenbild** im Pausenfenster.
 
 ## [4.6.2] - 2026-09-28
 ### Behoben
