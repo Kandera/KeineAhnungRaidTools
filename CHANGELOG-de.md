@@ -8,6 +8,10 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 
 ## [Unreleased]
 
+## [4.6.3] - 2026-10-14
+### Geändert
+- **Kompatibilität mit Retail-Patch 12.1.5 erklärt:** Interface-Version `120105` zur TOC hinzugefügt.
+
 ## [4.6.2] - 2026-09-28
 ### Behoben
 - **Ein Pausenstart wirft keinen Fehler mehr.** Der Bildwurf ruft kein `math.randomseed` mehr auf, das WoW nicht hat.
@@ -957,7 +961,8 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 - Bulk-Invite System für Raid-Zusammenstellungen.
 - Auto-Promote System für Assistenten-Rollen.
 
-[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.2...HEAD
+[Unreleased]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.3...HEAD
+[4.6.3]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.6.0...v4.6.1
 [4.6.0]: https://github.com/Kandera/KeineAhnungRaidTools/compare/v4.5.0...v4.6.0

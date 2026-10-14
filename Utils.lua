@@ -218,6 +218,12 @@ end
 -- Short player-facing history for the sidebar changelog panel. Full history stays in CHANGELOG.md.
 KART.InGameChangelog = {
     {
+        version = "4.6.3",
+        entries = {
+            "**Declared compatibility with retail patch 12.1.5:** Added Interface version `120105` to the TOC.",
+        },
+    },
+    {
         version = "4.6.2",
         entries = {
             "**Starting a break no longer errors.** The picture roll no longer calls `math.randomseed`, which WoW does not provide.",
